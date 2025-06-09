@@ -114,7 +114,7 @@
 
   /* Ensure all text elements have proper color inheritance */
   h1, h2, h3, h4, h5, h6, p, span, div, label {
-    color: inherit;
+    color: black;
   }
 }
 
