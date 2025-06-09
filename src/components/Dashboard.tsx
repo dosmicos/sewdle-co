@@ -34,58 +34,58 @@ const Dashboard = () => {
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Dashboard</h1>
+        <p className="text-gray-600">
           Resumen general de tu operación textil
         </p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="apple-card p-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-blue-50 rounded-xl">
               <FileText className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Órdenes Activas</p>
-              <p className="text-2xl font-bold text-foreground">24</p>
+              <p className="text-sm font-medium text-gray-600">Órdenes Activas</p>
+              <p className="text-2xl font-bold text-gray-900">24</p>
             </div>
           </div>
         </Card>
 
-        <Card className="apple-card p-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-green-50 rounded-xl">
               <Building2 className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Talleres</p>
-              <p className="text-2xl font-bold text-foreground">8</p>
+              <p className="text-sm font-medium text-gray-600">Talleres</p>
+              <p className="text-2xl font-bold text-gray-900">8</p>
             </div>
           </div>
         </Card>
 
-        <Card className="apple-card p-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-purple-50 rounded-xl">
               <Package className="w-6 h-6 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Productos</p>
-              <p className="text-2xl font-bold text-foreground">156</p>
+              <p className="text-sm font-medium text-gray-600">Productos</p>
+              <p className="text-2xl font-bold text-gray-900">156</p>
             </div>
           </div>
         </Card>
 
-        <Card className="apple-card p-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-orange-50 rounded-xl">
               <Truck className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Entregas Pendientes</p>
-              <p className="text-2xl font-bold text-foreground">12</p>
+              <p className="text-sm font-medium text-gray-600">Entregas Pendientes</p>
+              <p className="text-2xl font-bold text-gray-900">12</p>
             </div>
           </div>
         </Card>
@@ -93,29 +93,29 @@ const Dashboard = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="apple-card p-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">Órdenes por Mes</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Órdenes por Mes</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ordersData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis 
                     dataKey="name" 
-                    stroke="hsl(var(--muted-foreground))"
+                    stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
                   />
                   <YAxis 
-                    stroke="hsl(var(--muted-foreground))"
+                    stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
                   />
                   <Bar 
                     dataKey="orders" 
-                    fill="hsl(var(--primary))" 
+                    fill="#3b82f6" 
                     radius={[8, 8, 0, 0]} 
                   />
                 </BarChart>
@@ -124,9 +124,9 @@ const Dashboard = () => {
           </div>
         </Card>
 
-        <Card className="apple-card p-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-foreground">Estado de Órdenes</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Estado de Órdenes</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -153,7 +153,7 @@ const Dashboard = () => {
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-sm text-foreground">{item.name}: {item.value}%</span>
+                  <span className="text-sm text-gray-700">{item.name}: {item.value}%</span>
                 </div>
               ))}
             </div>
@@ -162,9 +162,9 @@ const Dashboard = () => {
       </div>
 
       {/* Recent Activity */}
-      <Card className="apple-card p-6">
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-foreground">Actividad Reciente</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Actividad Reciente</h3>
           <div className="space-y-4">
             {[
               {
@@ -196,13 +196,13 @@ const Dashboard = () => {
                 time: 'Ayer'
               }
             ].map((activity, index) => (
-              <div key={index} className="flex items-start space-x-4 p-4 bg-muted/30 rounded-xl">
+              <div key={index} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl">
                 <activity.icon className={`w-5 h-5 mt-0.5 ${activity.color}`} />
                 <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium text-foreground">{activity.title}</p>
-                  <p className="text-xs text-muted-foreground">{activity.description}</p>
+                  <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                  <p className="text-xs text-gray-600">{activity.description}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">{activity.time}</p>
+                <p className="text-xs text-gray-500">{activity.time}</p>
               </div>
             ))}
           </div>

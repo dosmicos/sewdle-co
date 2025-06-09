@@ -104,15 +104,15 @@
 /* Apple-style custom components */
 @layer components {
   .apple-card {
-    @apply bg-card border border-border shadow-sm rounded-2xl backdrop-blur-sm;
+    @apply bg-white border border-gray-200 shadow-sm rounded-2xl;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
   }
   
   .apple-button {
-    @apply bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98];
+    @apply bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98];
   }
   
   .apple-input {
-    @apply bg-input border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/20 focus:border-primary focus:ring-offset-0 transition-all duration-200;
+    @apply bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200;
   }
 }
