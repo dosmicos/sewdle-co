@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Search } from 'lucide-react';
 const OrdersPage = () => {
   return <div className="p-6 space-y-8 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between text-gray-900">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Órdenes de Producción</h1>
           <p className="text-muted-foreground">Gestiona todas las órdenes de producción</p>
