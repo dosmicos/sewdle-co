@@ -109,12 +109,57 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: rgb(29 29 31); /* Force black text */
+    color: rgb(29 29 31) !important;
   }
 
   /* Ensure all text elements have proper color inheritance */
-  h1, h2, h3, h4, h5, h6, p, span, div, label {
-    color: black;
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground;
+    color: rgb(29 29 31) !important;
+    font-weight: 600;
+  }
+
+  p, span, div, label, input, textarea, button {
+    @apply text-foreground;
+    color: rgb(29 29 31) !important;
+  }
+
+  /* Force proper colors for form elements */
+  input, textarea, select {
+    @apply bg-background text-foreground border-border;
+    color: rgb(29 29 31) !important;
+    background-color: rgb(255 255 255) !important;
+  }
+
+  /* Placeholder colors */
+  input::placeholder, textarea::placeholder {
+    color: rgb(99 99 102) !important;
+  }
+
+  /* Button colors */
+  button {
+    color: inherit;
+  }
+
+  /* Card and modal colors */
+  .card, [role="dialog"] {
+    @apply bg-card text-card-foreground;
+    background-color: rgb(255 255 255) !important;
+    color: rgb(29 29 31) !important;
+  }
+
+  /* Tabs colors */
+  [role="tablist"], [role="tab"], [role="tabpanel"] {
+    color: rgb(29 29 31) !important;
+  }
+
+  /* Override any conflicting styles */
+  .text-muted-foreground {
+    color: rgb(99 99 102) !important;
+  }
+
+  .text-foreground {
+    color: rgb(29 29 31) !important;
   }
 }
 
@@ -123,7 +168,8 @@
   .apple-card {
     @apply bg-white border border-gray-200 shadow-sm rounded-2xl;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    color: rgb(29 29 31);
+    color: rgb(29 29 31) !important;
+    background-color: rgb(255 255 255) !important;
   }
   
   .apple-button {
@@ -132,6 +178,8 @@
   
   .apple-input {
     @apply bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200;
+    color: rgb(29 29 31) !important;
+    background-color: rgb(255 255 255) !important;
   }
 
   /* Fix for chart text visibility */
@@ -145,5 +193,20 @@
 
   .recharts-legend-item-text {
     color: rgb(29 29 31) !important;
+  }
+
+  /* Ensure form components follow Apple design */
+  .form-input, .form-textarea, .form-select {
+    @apply apple-input;
+  }
+
+  /* Tab styling consistency */
+  .tabs-trigger {
+    color: rgb(29 29 31) !important;
+  }
+
+  .tabs-trigger[data-state="active"] {
+    color: rgb(29 29 31) !important;
+    background-color: rgb(255 255 255) !important;
   }
 }
