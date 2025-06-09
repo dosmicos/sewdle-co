@@ -51,97 +51,95 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-8">
+      <div className="w-full max-w-sm space-y-6">
         {/* Logo and title */}
-        <div className="text-center space-y-3">
-          <div className="mx-auto w-20 h-20 bg-foreground rounded-3xl flex items-center justify-center">
-            <Building2 className="w-10 h-10 text-background" />
+        <div className="text-center space-y-4">
+          <div className="mx-auto w-16 h-16 bg-foreground rounded-2xl flex items-center justify-center">
+            <Building2 className="w-8 h-8 text-background" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-3xl font-semibold text-foreground tracking-tight">TextilFlow</h1>
-            <p className="text-sm text-muted-foreground font-medium">Sistema de Gestión de Talleres Textiles</p>
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight">TextilFlow</h1>
+            <p className="text-sm text-muted-foreground">Sistema de Gestión de Talleres Textiles</p>
           </div>
         </div>
 
         {/* Login form */}
-        <Card className="bg-card border-0 shadow-xl rounded-3xl overflow-hidden">
-          <div className="p-8 space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-3">
-                <Input
-                  type="email"
-                  placeholder="Correo electrónico"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 border-0 bg-muted/30 rounded-2xl px-4 text-base font-medium placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0"
-                  disabled={isLoading}
-                />
-                <Input
-                  type="password"
-                  placeholder="Contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 border-0 bg-muted/30 rounded-2xl px-4 text-base font-medium placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0"
-                  disabled={isLoading}
-                />
-              </div>
+        <Card className="apple-card p-6 space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-3">
+              <Input
+                type="email"
+                placeholder="Correo electrónico"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12 apple-input text-foreground placeholder:text-muted-foreground"
+                disabled={isLoading}
+              />
+              <Input
+                type="password"
+                placeholder="Contraseña"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-12 apple-input text-foreground placeholder:text-muted-foreground"
+                disabled={isLoading}
+              />
+            </div>
 
+            <Button
+              type="submit"
+              className="w-full h-12 apple-button text-primary-foreground"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Iniciando sesión...
+                </>
+              ) : (
+                'Iniciar sesión'
+              )}
+            </Button>
+          </form>
+
+          {/* Test users */}
+          <div className="space-y-4">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-3 text-muted-foreground">Usuarios de prueba</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <Button
-                type="submit"
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-2xl transition-all duration-200 active:scale-[0.98]"
+                type="button"
+                variant="outline"
+                onClick={fillAdminCredentials}
+                className="h-10 border-border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground rounded-xl transition-all duration-200"
                 disabled={isLoading}
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Iniciando sesión...
-                  </>
-                ) : (
-                  'Iniciar sesión'
-                )}
+                <User className="w-4 h-4 mr-2" />
+                Admin
               </Button>
-            </form>
-
-            {/* Test users */}
-            <div className="space-y-4">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-muted/30" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-3 text-muted-foreground font-medium">Usuarios de prueba</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={fillAdminCredentials}
-                  className="h-11 border-muted/30 bg-muted/10 hover:bg-muted/20 rounded-xl font-medium transition-all duration-200"
-                  disabled={isLoading}
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  Admin
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={fillWorkshopCredentials}
-                  className="h-11 border-muted/30 bg-muted/10 hover:bg-muted/20 rounded-xl font-medium transition-all duration-200"
-                  disabled={isLoading}
-                >
-                  <Building2 className="w-4 h-4 mr-2" />
-                  Taller
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={fillWorkshopCredentials}
+                className="h-10 border-border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground rounded-xl transition-all duration-200"
+                disabled={isLoading}
+              >
+                <Building2 className="w-4 h-4 mr-2" />
+                Taller
+              </Button>
             </div>
           </div>
         </Card>
 
         {/* Footer */}
         <div className="text-center">
-          <p className="text-xs text-muted-foreground font-medium">© 2024 TextilFlow. Todos los derechos reservados.</p>
+          <p className="text-xs text-muted-foreground">© 2024 TextilFlow. Todos los derechos reservados.</p>
         </div>
       </div>
     </div>
