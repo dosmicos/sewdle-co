@@ -7,55 +7,55 @@
 
 @layer base {
   :root {
-    --background: 250 250 250;
-    --foreground: 17 17 17;
+    --background: 255 255 255;
+    --foreground: 29 29 31;
 
     --card: 255 255 255;
-    --card-foreground: 17 17 17;
+    --card-foreground: 29 29 31;
 
     --popover: 255 255 255;
-    --popover-foreground: 17 17 17;
+    --popover-foreground: 29 29 31;
 
     --primary: 0 122 255;
     --primary-foreground: 255 255 255;
 
-    --secondary: 248 248 248;
-    --secondary-foreground: 51 51 51;
+    --secondary: 242 242 247;
+    --secondary-foreground: 60 60 67;
 
-    --muted: 245 245 245;
-    --muted-foreground: 102 102 102;
+    --muted: 242 242 247;
+    --muted-foreground: 142 142 147;
 
-    --accent: 240 240 240;
-    --accent-foreground: 51 51 51;
+    --accent: 242 242 247;
+    --accent-foreground: 60 60 67;
 
     --destructive: 255 59 48;
     --destructive-foreground: 255 255 255;
 
-    --border: 229 229 234;
-    --input: 248 248 248;
+    --border: 216 216 220;
+    --input: 255 255 255;
     --ring: 0 122 255;
 
     --radius: 0.75rem;
 
     --sidebar-background: 255 255 255;
-    --sidebar-foreground: 51 51 51;
+    --sidebar-foreground: 60 60 67;
     --sidebar-primary: 0 122 255;
     --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 245 245 245;
-    --sidebar-accent-foreground: 51 51 51;
-    --sidebar-border: 229 229 234;
+    --sidebar-accent: 242 242 247;
+    --sidebar-accent-foreground: 60 60 67;
+    --sidebar-border: 216 216 220;
     --sidebar-ring: 0 122 255;
   }
 
   .dark {
-    --background: 17 17 17;
-    --foreground: 245 245 247;
+    --background: 0 0 0;
+    --foreground: 255 255 255;
 
     --card: 28 28 30;
-    --card-foreground: 245 245 247;
+    --card-foreground: 255 255 255;
 
     --popover: 28 28 30;
-    --popover-foreground: 245 245 247;
+    --popover-foreground: 255 255 255;
 
     --primary: 10 132 255;
     --primary-foreground: 255 255 255;
@@ -93,29 +93,26 @@
   }
 
   body {
-    @apply bg-background text-foreground font-system;
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-
-  .font-system {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
   }
 }
 
 /* Apple-style custom components */
 @layer components {
   .apple-card {
-    @apply bg-card border-0 shadow-sm rounded-2xl backdrop-blur-sm;
+    @apply bg-white border border-gray-200 shadow-sm rounded-2xl backdrop-blur-sm;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
   }
   
   .apple-button {
-    @apply bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98];
+    @apply bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98];
   }
   
   .apple-input {
-    @apply bg-input border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 focus:ring-offset-0 transition-all duration-200;
+    @apply bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200;
   }
 }

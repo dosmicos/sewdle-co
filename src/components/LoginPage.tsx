@@ -50,21 +50,21 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-sm space-y-6">
         {/* Logo and title */}
         <div className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-foreground rounded-2xl flex items-center justify-center">
-            <Building2 className="w-8 h-8 text-background" />
+          <div className="mx-auto w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center">
+            <Building2 className="w-8 h-8 text-white" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">TextilFlow</h1>
-            <p className="text-sm text-muted-foreground">Sistema de Gestión de Talleres Textiles</p>
+            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">TextilFlow</h1>
+            <p className="text-sm text-gray-600">Sistema de Gestión de Talleres Textiles</p>
           </div>
         </div>
 
         {/* Login form */}
-        <Card className="apple-card p-6 space-y-6">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 space-y-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-3">
               <Input
@@ -72,7 +72,7 @@ const LoginPage = () => {
                 placeholder="Correo electrónico"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-12 apple-input text-foreground placeholder:text-muted-foreground"
+                className="h-12 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                 disabled={isLoading}
               />
               <Input
@@ -80,14 +80,14 @@ const LoginPage = () => {
                 placeholder="Contraseña"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="h-12 apple-input text-foreground placeholder:text-muted-foreground"
+                className="h-12 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                 disabled={isLoading}
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full h-12 apple-button text-primary-foreground"
+              className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-all duration-200 active:scale-[0.98]"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -105,10 +105,10 @@ const LoginPage = () => {
           <div className="space-y-4">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
+                <span className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-3 text-muted-foreground">Usuarios de prueba</span>
+                <span className="bg-white px-3 text-gray-500">Usuarios de prueba</span>
               </div>
             </div>
 
@@ -117,7 +117,7 @@ const LoginPage = () => {
                 type="button"
                 variant="outline"
                 onClick={fillAdminCredentials}
-                className="h-10 border-border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground rounded-xl transition-all duration-200"
+                className="h-10 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 rounded-xl transition-all duration-200"
                 disabled={isLoading}
               >
                 <User className="w-4 h-4 mr-2" />
@@ -127,7 +127,7 @@ const LoginPage = () => {
                 type="button"
                 variant="outline"
                 onClick={fillWorkshopCredentials}
-                className="h-10 border-border bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground rounded-xl transition-all duration-200"
+                className="h-10 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 rounded-xl transition-all duration-200"
                 disabled={isLoading}
               >
                 <Building2 className="w-4 h-4 mr-2" />
@@ -139,7 +139,7 @@ const LoginPage = () => {
 
         {/* Footer */}
         <div className="text-center">
-          <p className="text-xs text-muted-foreground">© 2024 TextilFlow. Todos los derechos reservados.</p>
+          <p className="text-xs text-gray-500">© 2024 TextilFlow. Todos los derechos reservados.</p>
         </div>
       </div>
     </div>
