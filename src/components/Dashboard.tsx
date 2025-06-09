@@ -34,8 +34,10 @@ const Dashboard = () => {
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">
+        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'rgb(29 29 31)' }}>
+          Dashboard
+        </h1>
+        <p style={{ color: 'rgb(99 99 102)' }}>
           Resumen general de tu operación textil
         </p>
       </div>
@@ -48,8 +50,12 @@ const Dashboard = () => {
               <FileText className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Órdenes Activas</p>
-              <p className="text-2xl font-bold text-gray-900">24</p>
+              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                Órdenes Activas
+              </p>
+              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+                24
+              </p>
             </div>
           </div>
         </Card>
@@ -60,8 +66,12 @@ const Dashboard = () => {
               <Building2 className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Talleres</p>
-              <p className="text-2xl font-bold text-gray-900">8</p>
+              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                Talleres
+              </p>
+              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+                8
+              </p>
             </div>
           </div>
         </Card>
@@ -72,8 +82,12 @@ const Dashboard = () => {
               <Package className="w-6 h-6 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Productos</p>
-              <p className="text-2xl font-bold text-gray-900">156</p>
+              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                Productos
+              </p>
+              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+                156
+              </p>
             </div>
           </div>
         </Card>
@@ -84,8 +98,12 @@ const Dashboard = () => {
               <Truck className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Entregas Pendientes</p>
-              <p className="text-2xl font-bold text-gray-900">12</p>
+              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                Entregas Pendientes
+              </p>
+              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+                12
+              </p>
             </div>
           </div>
         </Card>
@@ -95,7 +113,9 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Órdenes por Mes</h3>
+            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+              Órdenes por Mes
+            </h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ordersData}>
@@ -106,16 +126,18 @@ const Dashboard = () => {
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
+                    tick={{ fill: '#6b7280' }}
                   />
                   <YAxis 
                     stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
+                    tick={{ fill: '#6b7280' }}
                   />
                   <Bar 
                     dataKey="orders" 
-                    fill="#3b82f6" 
+                    fill="#007AFF" 
                     radius={[8, 8, 0, 0]} 
                   />
                 </BarChart>
@@ -126,7 +148,9 @@ const Dashboard = () => {
 
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Estado de Órdenes</h3>
+            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+              Estado de Órdenes
+            </h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -153,7 +177,9 @@ const Dashboard = () => {
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-sm text-gray-700">{item.name}: {item.value}%</span>
+                  <span className="text-sm" style={{ color: 'rgb(29 29 31)' }}>
+                    {item.name}: {item.value}%
+                  </span>
                 </div>
               ))}
             </div>
@@ -164,7 +190,9 @@ const Dashboard = () => {
       {/* Recent Activity */}
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">Actividad Reciente</h3>
+          <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+            Actividad Reciente
+          </h3>
           <div className="space-y-4">
             {[
               {
@@ -199,10 +227,16 @@ const Dashboard = () => {
               <div key={index} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl">
                 <activity.icon className={`w-5 h-5 mt-0.5 ${activity.color}`} />
                 <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                  <p className="text-xs text-gray-600">{activity.description}</p>
+                  <p className="text-sm font-medium" style={{ color: 'rgb(29 29 31)' }}>
+                    {activity.title}
+                  </p>
+                  <p className="text-xs" style={{ color: 'rgb(99 99 102)' }}>
+                    {activity.description}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500">{activity.time}</p>
+                <p className="text-xs" style={{ color: 'rgb(142 142 147)' }}>
+                  {activity.time}
+                </p>
               </div>
             ))}
           </div>

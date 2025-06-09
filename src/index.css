@@ -7,47 +7,58 @@
 
 @layer base {
   :root {
+    /* Main background and foreground - Apple style */
     --background: 255 255 255;
     --foreground: 29 29 31;
 
+    /* Card components */
     --card: 255 255 255;
     --card-foreground: 29 29 31;
 
+    /* Popover components */
     --popover: 255 255 255;
     --popover-foreground: 29 29 31;
 
+    /* Primary blue - Apple system blue */
     --primary: 0 122 255;
     --primary-foreground: 255 255 255;
 
+    /* Secondary grays - Apple neutral palette */
     --secondary: 245 245 247;
-    --secondary-foreground: 60 60 67;
+    --secondary-foreground: 29 29 31;
 
+    /* Muted elements */
     --muted: 245 245 247;
-    --muted-foreground: 142 142 147;
+    --muted-foreground: 99 99 102;
 
+    /* Accent elements */
     --accent: 245 245 247;
-    --accent-foreground: 60 60 67;
+    --accent-foreground: 29 29 31;
 
+    /* Destructive - Apple red */
     --destructive: 255 59 48;
     --destructive-foreground: 255 255 255;
 
+    /* Borders and inputs */
     --border: 209 213 219;
     --input: 255 255 255;
     --ring: 0 122 255;
 
     --radius: 0.75rem;
 
+    /* Sidebar - Clean Apple style with proper contrast */
     --sidebar-background: 255 255 255;
-    --sidebar-foreground: 60 60 67;
+    --sidebar-foreground: 29 29 31;
     --sidebar-primary: 0 122 255;
     --sidebar-primary-foreground: 255 255 255;
     --sidebar-accent: 245 245 247;
-    --sidebar-accent-foreground: 60 60 67;
+    --sidebar-accent-foreground: 29 29 31;
     --sidebar-border: 209 213 219;
     --sidebar-ring: 0 122 255;
   }
 
   .dark {
+    /* Dark mode - Apple dark theme */
     --background: 0 0 0;
     --foreground: 255 255 255;
 
@@ -61,13 +72,13 @@
     --primary-foreground: 255 255 255;
 
     --secondary: 44 44 46;
-    --secondary-foreground: 174 174 178;
+    --secondary-foreground: 255 255 255;
 
     --muted: 44 44 46;
     --muted-foreground: 174 174 178;
 
     --accent: 44 44 46;
-    --accent-foreground: 174 174 178;
+    --accent-foreground: 255 255 255;
 
     --destructive: 255 69 58;
     --destructive-foreground: 255 255 255;
@@ -77,11 +88,11 @@
     --ring: 10 132 255;
 
     --sidebar-background: 28 28 30;
-    --sidebar-foreground: 174 174 178;
+    --sidebar-foreground: 255 255 255;
     --sidebar-primary: 10 132 255;
     --sidebar-primary-foreground: 255 255 255;
     --sidebar-accent: 44 44 46;
-    --sidebar-accent-foreground: 174 174 178;
+    --sidebar-accent-foreground: 255 255 255;
     --sidebar-border: 58 58 60;
     --sidebar-ring: 10 132 255;
   }
@@ -98,6 +109,12 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    color: rgb(29 29 31); /* Force black text */
+  }
+
+  /* Ensure all text elements have proper color inheritance */
+  h1, h2, h3, h4, h5, h6, p, span, div, label {
+    color: inherit;
   }
 }
 
@@ -106,6 +123,7 @@
   .apple-card {
     @apply bg-white border border-gray-200 shadow-sm rounded-2xl;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    color: rgb(29 29 31);
   }
   
   .apple-button {
@@ -114,5 +132,18 @@
   
   .apple-input {
     @apply bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200;
+  }
+
+  /* Fix for chart text visibility */
+  .recharts-text {
+    fill: rgb(29 29 31) !important;
+  }
+
+  .recharts-cartesian-axis-tick-value {
+    fill: rgb(99 99 102) !important;
+  }
+
+  .recharts-legend-item-text {
+    color: rgb(29 29 31) !important;
   }
 }
