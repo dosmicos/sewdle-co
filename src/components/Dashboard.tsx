@@ -34,7 +34,7 @@ const Dashboard = () => {
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">
           Resumen general de tu operación textil
         </p>
@@ -44,48 +44,48 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="apple-card p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-blue-100 rounded-xl">
+            <div className="p-3 bg-blue-50 rounded-xl">
               <FileText className="w-6 h-6 text-blue-600" />
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Órdenes Activas</p>
-              <p className="text-2xl font-bold">24</p>
+              <p className="text-2xl font-bold text-foreground">24</p>
             </div>
           </div>
         </Card>
 
         <Card className="apple-card p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-green-100 rounded-xl">
+            <div className="p-3 bg-green-50 rounded-xl">
               <Building2 className="w-6 h-6 text-green-600" />
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Talleres</p>
-              <p className="text-2xl font-bold">8</p>
+              <p className="text-2xl font-bold text-foreground">8</p>
             </div>
           </div>
         </Card>
 
         <Card className="apple-card p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-purple-100 rounded-xl">
+            <div className="p-3 bg-purple-50 rounded-xl">
               <Package className="w-6 h-6 text-purple-600" />
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Productos</p>
-              <p className="text-2xl font-bold">156</p>
+              <p className="text-2xl font-bold text-foreground">156</p>
             </div>
           </div>
         </Card>
 
         <Card className="apple-card p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-orange-100 rounded-xl">
+            <div className="p-3 bg-orange-50 rounded-xl">
               <Truck className="w-6 h-6 text-orange-600" />
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Entregas Pendientes</p>
-              <p className="text-2xl font-bold">12</p>
+              <p className="text-2xl font-bold text-foreground">12</p>
             </div>
           </div>
         </Card>
@@ -95,14 +95,29 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="apple-card p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Órdenes por Mes</h3>
+            <h3 className="text-lg font-semibold text-foreground">Órdenes por Mes</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ordersData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                  <XAxis dataKey="name" stroke="#6B7280" />
-                  <YAxis stroke="#6B7280" />
-                  <Bar dataKey="orders" fill="#007AFF" radius={[8, 8, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Bar 
+                    dataKey="orders" 
+                    fill="hsl(var(--primary))" 
+                    radius={[8, 8, 0, 0]} 
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -111,7 +126,7 @@ const Dashboard = () => {
 
         <Card className="apple-card p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Estado de Órdenes</h3>
+            <h3 className="text-lg font-semibold text-foreground">Estado de Órdenes</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -138,7 +153,7 @@ const Dashboard = () => {
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-sm">{item.name}: {item.value}%</span>
+                  <span className="text-sm text-foreground">{item.name}: {item.value}%</span>
                 </div>
               ))}
             </div>
@@ -149,7 +164,7 @@ const Dashboard = () => {
       {/* Recent Activity */}
       <Card className="apple-card p-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Actividad Reciente</h3>
+          <h3 className="text-lg font-semibold text-foreground">Actividad Reciente</h3>
           <div className="space-y-4">
             {[
               {
@@ -184,7 +199,7 @@ const Dashboard = () => {
               <div key={index} className="flex items-start space-x-4 p-4 bg-muted/30 rounded-xl">
                 <activity.icon className={`w-5 h-5 mt-0.5 ${activity.color}`} />
                 <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium">{activity.title}</p>
+                  <p className="text-sm font-medium text-foreground">{activity.title}</p>
                   <p className="text-xs text-muted-foreground">{activity.description}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">{activity.time}</p>
