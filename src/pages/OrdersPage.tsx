@@ -1,18 +1,15 @@
-
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search } from 'lucide-react';
-
 const OrdersPage = () => {
-  return (
-    <div className="p-6 space-y-8 animate-fade-in">
+  return <div className="p-6 space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Órdenes de Producción</h1>
           <p className="text-muted-foreground">Gestiona todas las órdenes de producción</p>
         </div>
-        <Button className="apple-button">
+        <Button className="apple-button bg-blue-500">
           <Plus className="w-4 h-4 mr-2" />
           Nueva Orden
         </Button>
@@ -22,11 +19,7 @@ const OrdersPage = () => {
         <div className="flex items-center space-x-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Buscar órdenes..."
-              className="w-full pl-10 apple-input"
-            />
+            <input type="text" placeholder="Buscar órdenes..." className="w-full pl-10 apple-input" />
           </div>
         </div>
 
@@ -42,8 +35,6 @@ const OrdersPage = () => {
           </Button>
         </div>
       </Card>
-    </div>
-  );
+    </div>;
 };
-
 export default OrdersPage;
