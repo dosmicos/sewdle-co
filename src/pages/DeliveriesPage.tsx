@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Truck, Search } from 'lucide-react';
 const DeliveriesPage = () => {
   return <div className="p-6 space-y-8 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between text-gray-800">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Entregas</h1>
           <p className="text-muted-foreground">Gestión de entregas y recepciones</p>
