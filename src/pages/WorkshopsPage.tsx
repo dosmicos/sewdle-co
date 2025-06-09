@@ -34,10 +34,10 @@ const WorkshopsPage = () => {
     <div className="p-6 space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Talleres</h1>
-          <p className="text-muted-foreground">Gestiona y supervisa todos los talleres</p>
+          <h1 className="text-3xl font-bold tracking-tight text-black">Talleres</h1>
+          <p className="text-gray-600">Gestiona y supervisa todos los talleres</p>
         </div>
-        <Button className="apple-button">
+        <Button className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]">
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Taller
         </Button>
@@ -45,54 +45,54 @@ const WorkshopsPage = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {mockWorkshops.map((workshop) => (
-          <Card key={workshop.id} className="apple-card p-6 hover:shadow-lg transition-shadow duration-200">
+          <Card key={workshop.id} className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hover:shadow-lg transition-shadow duration-200">
             <div className="space-y-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                    <Building2 className="w-6 h-6 text-primary" />
+                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-blue-500" />
                   </div>
                   <div>
-                    <h3 className="font-semibold">{workshop.name}</h3>
-                    <p className="text-sm text-muted-foreground">{workshop.email}</p>
+                    <h3 className="font-semibold text-black">{workshop.name}</h3>
+                    <p className="text-sm text-gray-600">{workshop.email}</p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">{workshop.address}</p>
-                <p className="text-sm text-muted-foreground">{workshop.phone}</p>
+                <p className="text-sm text-gray-600">{workshop.address}</p>
+                <p className="text-sm text-gray-600">{workshop.phone}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-muted/30 rounded-xl">
-                  <p className="text-lg font-bold">{workshop.activeOrders}</p>
-                  <p className="text-xs text-muted-foreground">Órdenes Activas</p>
+                <div className="text-center p-3 bg-gray-50 rounded-xl">
+                  <p className="text-lg font-bold text-black">{workshop.activeOrders}</p>
+                  <p className="text-xs text-gray-600">Órdenes Activas</p>
                 </div>
-                <div className="text-center p-3 bg-muted/30 rounded-xl">
-                  <p className="text-lg font-bold">{workshop.completionRate}%</p>
-                  <p className="text-xs text-muted-foreground">Finalización</p>
+                <div className="text-center p-3 bg-gray-50 rounded-xl">
+                  <p className="text-lg font-bold text-black">{workshop.completionRate}%</p>
+                  <p className="text-xs text-gray-600">Finalización</p>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center space-x-1">
+                  <span className="flex items-center space-x-1 text-gray-700">
                     <Star className="w-4 h-4 text-yellow-500" />
                     <span>Calidad</span>
                   </span>
-                  <span className="font-medium">{workshop.qualityScore}/5</span>
+                  <span className="font-medium text-black">{workshop.qualityScore}/5</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center space-x-1">
+                  <span className="flex items-center space-x-1 text-gray-700">
                     <Calendar className="w-4 h-4 text-green-500" />
                     <span>Puntualidad</span>
                   </span>
-                  <span className="font-medium">{workshop.onTimeDelivery}%</span>
+                  <span className="font-medium text-black">{workshop.onTimeDelivery}%</span>
                 </div>
               </div>
 
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-black rounded-xl py-2">
                 Ver Detalles
               </Button>
             </div>
