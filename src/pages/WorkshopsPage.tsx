@@ -1,10 +1,13 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Building2, Star, Calendar } from 'lucide-react';
+import { Plus, Building2, Star, Calendar, ArrowLeft } from 'lucide-react';
+import WorkshopForm from '@/components/WorkshopForm';
 
 const WorkshopsPage = () => {
+  const [showForm, setShowForm] = useState(false);
+
   const mockWorkshops = [
     {
       id: 1,
@@ -30,6 +33,24 @@ const WorkshopsPage = () => {
     }
   ];
 
+  if (showForm) {
+    return (
+      <div className="animate-fade-in">
+        <div className="p-6 mb-6">
+          <Button 
+            onClick={() => setShowForm(false)}
+            variant="outline"
+            className="border border-gray-300 bg-white hover:bg-gray-50 text-black rounded-xl px-4 py-2 mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Volver a Talleres
+          </Button>
+        </div>
+        <WorkshopForm />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -37,7 +58,10 @@ const WorkshopsPage = () => {
           <h1 className="text-3xl font-bold tracking-tight text-black">Talleres</h1>
           <p className="text-gray-600">Gestiona y supervisa todos los talleres</p>
         </div>
-        <Button className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]">
+        <Button 
+          onClick={() => setShowForm(true)}
+          className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Taller
         </Button>
