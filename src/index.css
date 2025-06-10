@@ -3,98 +3,80 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Apple-inspired minimalist design system */
-
+/* Sistema de colores limpio y consistente */
 @layer base {
   :root {
-    /* Main background and foreground - Apple style */
+    /* Colores principales - Apple inspired */
     --background: 255 255 255;
-    --foreground: 29 29 31;
-
-    /* Card components */
+    --foreground: 17 24 39;
     --card: 255 255 255;
-    --card-foreground: 29 29 31;
-
-    /* Popover components */
+    --card-foreground: 17 24 39;
     --popover: 255 255 255;
-    --popover-foreground: 29 29 31;
-
-    /* Primary blue - Apple system blue */
-    --primary: 0 122 255;
+    --popover-foreground: 17 24 39;
+    
+    /* Colores de acción */
+    --primary: 59 130 246;
     --primary-foreground: 255 255 255;
-
-    /* Secondary grays - Apple neutral palette */
-    --secondary: 245 245 247;
-    --secondary-foreground: 29 29 31;
-
-    /* Muted elements */
-    --muted: 245 245 247;
-    --muted-foreground: 99 99 102;
-
-    /* Accent elements */
-    --accent: 245 245 247;
-    --accent-foreground: 29 29 31;
-
-    /* Destructive - Apple red */
-    --destructive: 255 59 48;
+    --secondary: 243 244 246;
+    --secondary-foreground: 17 24 39;
+    
+    /* Colores de estado */
+    --muted: 249 250 251;
+    --muted-foreground: 107 114 128;
+    --accent: 243 244 246;
+    --accent-foreground: 17 24 39;
+    --destructive: 239 68 68;
     --destructive-foreground: 255 255 255;
-
-    /* Borders and inputs */
-    --border: 209 213 219;
+    
+    /* Bordes e inputs */
+    --border: 229 231 235;
     --input: 255 255 255;
-    --ring: 0 122 255;
-
-    --radius: 0.75rem;
-
-    /* Sidebar - Clean Apple style with proper contrast */
+    --ring: 59 130 246;
+    --radius: 0.5rem;
+    
+    /* Sidebar */
     --sidebar-background: 255 255 255;
-    --sidebar-foreground: 29 29 31;
-    --sidebar-primary: 0 122 255;
+    --sidebar-foreground: 17 24 39;
+    --sidebar-primary: 59 130 246;
     --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 245 245 247;
-    --sidebar-accent-foreground: 29 29 31;
-    --sidebar-border: 209 213 219;
-    --sidebar-ring: 0 122 255;
+    --sidebar-accent: 243 244 246;
+    --sidebar-accent-foreground: 17 24 39;
+    --sidebar-border: 229 231 235;
+    --sidebar-ring: 59 130 246;
   }
 
   .dark {
-    /* Dark mode - Apple dark theme */
-    --background: 0 0 0;
-    --foreground: 255 255 255;
-
-    --card: 28 28 30;
-    --card-foreground: 255 255 255;
-
-    --popover: 28 28 30;
-    --popover-foreground: 255 255 255;
-
-    --primary: 10 132 255;
-    --primary-foreground: 255 255 255;
-
-    --secondary: 44 44 46;
-    --secondary-foreground: 255 255 255;
-
-    --muted: 44 44 46;
-    --muted-foreground: 174 174 178;
-
-    --accent: 44 44 46;
-    --accent-foreground: 255 255 255;
-
-    --destructive: 255 69 58;
-    --destructive-foreground: 255 255 255;
-
-    --border: 58 58 60;
-    --input: 44 44 46;
-    --ring: 10 132 255;
-
-    --sidebar-background: 28 28 30;
-    --sidebar-foreground: 255 255 255;
-    --sidebar-primary: 10 132 255;
-    --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 44 44 46;
-    --sidebar-accent-foreground: 255 255 255;
-    --sidebar-border: 58 58 60;
-    --sidebar-ring: 10 132 255;
+    --background: 3 7 18;
+    --foreground: 248 250 252;
+    --card: 15 23 42;
+    --card-foreground: 248 250 252;
+    --popover: 15 23 42;
+    --popover-foreground: 248 250 252;
+    
+    --primary: 99 102 241;
+    --primary-foreground: 248 250 252;
+    --secondary: 30 41 59;
+    --secondary-foreground: 248 250 252;
+    
+    --muted: 30 41 59;
+    --muted-foreground: 148 163 184;
+    --accent: 30 41 59;
+    --accent-foreground: 248 250 252;
+    --destructive: 220 38 38;
+    --destructive-foreground: 248 250 252;
+    
+    --border: 51 65 85;
+    --input: 30 41 59;
+    --ring: 99 102 241;
+    
+    --sidebar-background: 15 23 42;
+    --sidebar-foreground: 248 250 252;
+    --sidebar-primary: 99 102 241;
+    --sidebar-primary-foreground: 248 250 252;
+    --sidebar-accent: 30 41 59;
+    --sidebar-accent-foreground: 248 250 252;
+    --sidebar-border: 51 65 85;
+    --sidebar-ring: 99 102 241;
   }
 }
 
@@ -102,111 +84,234 @@
   * {
     @apply border-border;
   }
-
+  
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: rgb(29 29 31) !important;
-  }
-
-  /* Ensure all text elements have proper color inheritance */
-  h1, h2, h3, h4, h5, h6 {
-    @apply text-foreground;
-    color: rgb(29 29 31) !important;
-    font-weight: 600;
-  }
-
-  p, span, div, label, input, textarea, button {
-    @apply text-foreground;
-    color: rgb(29 29 31) !important;
-  }
-
-  /* Force proper colors for form elements */
-  input, textarea, select {
-    @apply bg-background text-foreground border-border;
-    color: rgb(29 29 31) !important;
-    background-color: rgb(255 255 255) !important;
-  }
-
-  /* Placeholder colors */
-  input::placeholder, textarea::placeholder {
-    color: rgb(99 99 102) !important;
-  }
-
-  /* Button colors */
-  button {
-    color: inherit;
-  }
-
-  /* Card and modal colors */
-  .card, [role="dialog"] {
-    @apply bg-card text-card-foreground;
-    background-color: rgb(255 255 255) !important;
-    color: rgb(29 29 31) !important;
-  }
-
-  /* Tabs colors */
-  [role="tablist"], [role="tab"], [role="tabpanel"] {
-    color: rgb(29 29 31) !important;
-  }
-
-  /* Override any conflicting styles */
-  .text-muted-foreground {
-    color: rgb(99 99 102) !important;
-  }
-
-  .text-foreground {
-    color: rgb(29 29 31) !important;
   }
 }
 
-/* Apple-style custom components */
 @layer components {
-  .apple-card {
-    @apply bg-white border border-gray-200 shadow-sm rounded-2xl;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    color: rgb(29 29 31) !important;
-    background-color: rgb(255 255 255) !important;
+  /* Componentes de formulario mejorados */
+  .form-input {
+    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply transition-colors;
   }
   
-  .apple-button {
-    @apply bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98];
+  .form-textarea {
+    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply resize-none transition-colors;
+    min-height: 80px;
   }
   
-  .apple-input {
-    @apply bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200;
-    color: rgb(29 29 31) !important;
-    background-color: rgb(255 255 255) !important;
+  .form-select {
+    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply transition-colors;
   }
-
-  /* Fix for chart text visibility */
-  .recharts-text {
-    fill: rgb(29 29 31) !important;
+  
+  /* Botones mejorados */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply transition-colors;
   }
-
-  .recharts-cartesian-axis-tick-value {
-    fill: rgb(99 99 102) !important;
+  
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+    @apply h-10 px-4 py-2;
   }
-
-  .recharts-legend-item-text {
-    color: rgb(29 29 31) !important;
+  
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+    @apply h-10 px-4 py-2;
   }
-
-  /* Ensure form components follow Apple design */
-  .form-input, .form-textarea, .form-select {
-    @apply apple-input;
+  
+  .btn-outline {
+    @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+    @apply h-10 px-4 py-2;
   }
-
-  /* Tab styling consistency */
+  
+  .btn-ghost {
+    @apply hover:bg-accent hover:text-accent-foreground;
+    @apply h-10 px-4 py-2;
+  }
+  
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+    @apply h-10 px-4 py-2;
+  }
+  
+  /* Cards mejoradas */
+  .card {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm;
+  }
+  
+  .card-header {
+    @apply flex flex-col space-y-1.5 p-6;
+  }
+  
+  .card-title {
+    @apply text-2xl font-semibold leading-none tracking-tight;
+  }
+  
+  .card-description {
+    @apply text-sm text-muted-foreground;
+  }
+  
+  .card-content {
+    @apply p-6 pt-0;
+  }
+  
+  .card-footer {
+    @apply flex items-center p-6 pt-0;
+  }
+  
+  /* Labels mejorados */
+  .label {
+    @apply text-sm font-medium leading-none;
+    @apply peer-disabled:cursor-not-allowed peer-disabled:opacity-70;
+  }
+  
+  /* Dialog/Modal mejorados */
+  .dialog-content {
+    @apply fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%];
+    @apply gap-4 border bg-background p-6 shadow-lg duration-200;
+    @apply sm:rounded-lg;
+  }
+  
+  .dialog-header {
+    @apply flex flex-col space-y-1.5 text-center sm:text-left;
+  }
+  
+  .dialog-title {
+    @apply text-lg font-semibold leading-none tracking-tight;
+  }
+  
+  .dialog-description {
+    @apply text-sm text-muted-foreground;
+  }
+  
+  .dialog-footer {
+    @apply flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2;
+  }
+  
+  /* Tabs mejorados */
+  .tabs-list {
+    @apply inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground;
+  }
+  
   .tabs-trigger {
-    color: rgb(29 29 31) !important;
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5;
+    @apply text-sm font-medium ring-offset-background transition-all;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm;
   }
-
-  .tabs-trigger[data-state="active"] {
-    color: rgb(29 29 31) !important;
-    background-color: rgb(255 255 255) !important;
+  
+  .tabs-content {
+    @apply mt-2 ring-offset-background;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+  
+  /* Sidebar mejorado */
+  .sidebar {
+    @apply flex h-full w-64 flex-col bg-sidebar-background border-r border-sidebar-border;
+  }
+  
+  .sidebar-header {
+    @apply flex h-16 items-center border-b border-sidebar-border px-6;
+  }
+  
+  .sidebar-content {
+    @apply flex-1 overflow-auto p-4;
+  }
+  
+  .sidebar-nav {
+    @apply space-y-2;
+  }
+  
+  .sidebar-nav-item {
+    @apply flex items-center rounded-md px-3 py-2 text-sm font-medium;
+    @apply text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+    @apply transition-colors;
+  }
+  
+  .sidebar-nav-item.active {
+    @apply bg-sidebar-primary text-sidebar-primary-foreground;
+  }
+  
+  /* Utilidades adicionales */
+  .text-gradient {
+    @apply bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
+  }
+  
+  .shadow-soft {
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.1);
+  }
+  
+  .border-dashed {
+    border-style: dashed;
+  }
+  
+  /* Animaciones suaves */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Fixes específicos para formularios */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea,
+  select {
+    @apply form-input;
+  }
+  
+  /* Asegurar que los placeholders se vean correctamente */
+  ::placeholder {
+    color: rgb(107 114 128) !important;
+    opacity: 1;
+  }
+  
+  /* Fix para botones de Lovable */
+  button:not(.btn) {
+    @apply transition-colors;
+  }
+  
+  /* Fix para modales y overlays */
+  [data-radix-popper-content-wrapper] {
+    @apply z-50;
   }
 }
