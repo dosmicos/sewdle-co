@@ -373,9 +373,4 @@ button:hover {
   box-shadow: none !important;
 }
 
-/* Override para cualquier elemento que pueda mostrar amarillo */
-*:focus,
-*:active {
-  outline: none !important;
-  box-shadow: 0 0 0 2px rgb(209 213 219) !important; /* Gris claro */
-}
+
