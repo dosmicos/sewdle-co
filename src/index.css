@@ -104,7 +104,7 @@
   }
   
   .form-textarea {
-    @apply w-full px-3 py-2 text-sm bg-background border rounded-md;
+    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
     @apply placeholder:text-muted-foreground;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
@@ -224,33 +224,6 @@
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
   
-  /* Sidebar mejorado */
-  .sidebar {
-    @apply flex h-full w-64 flex-col bg-sidebar-background border-r border-sidebar-border;
-  }
-  
-  .sidebar-header {
-    @apply flex h-16 items-center border-b border-sidebar-border px-6;
-  }
-  
-  .sidebar-content {
-    @apply flex-1 overflow-auto p-4;
-  }
-  
-  .sidebar-nav {
-    @apply space-y-2;
-  }
-  
-  .sidebar-nav-item {
-    @apply flex items-center rounded-md px-3 py-2 text-sm font-medium;
-    @apply text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
-    @apply transition-colors;
-  }
-  
-  .sidebar-nav-item.active {
-    @apply bg-sidebar-primary text-sidebar-primary-foreground;
-  }
-  
   /* Utilidades adicionales */
   .text-gradient {
     @apply bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
@@ -313,6 +286,31 @@
   /* Fix para modales y overlays */
   [data-radix-popper-content-wrapper] {
     @apply z-50;
+  }
+  
+  /* Asegurar colores correctos en todos los elementos */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground !important;
+  }
+  
+  p, span, div {
+    @apply text-foreground;
+  }
+  
+  /* Fix para inputs y formularios */
+  input, textarea, select {
+    @apply text-foreground !important;
+    background-color: white !important;
+  }
+  
+  /* Fix para labels */
+  label {
+    @apply text-foreground !important;
+  }
+  
+  /* Fix para botones */
+  button {
+    @apply text-current;
   }
 }
 
