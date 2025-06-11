@@ -361,13 +361,7 @@ textarea:active,
 select:active,
 input:focus,
 textarea:focus,
-select:focus {
-  background-color: white !important;
-  background: white !important;
-  color: black !important;
-  border-color: rgb(209 213 219) !important; /* Gris claro */
-  outline: 2px solid rgb(209 213 219) !important; /* Gris claro */
-}
+
 
 /* Botones - eliminar completamente el amarillo */
 button:focus,
