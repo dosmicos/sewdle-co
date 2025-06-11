@@ -8,41 +8,41 @@
   :root {
     /* Colores principales - Apple inspired */
     --background: 255 255 255;
-    --foreground: 17 24 39;
+    --foreground: 0 0 0; /* Negro estándar para texto */
     --card: 255 255 255;
-    --card-foreground: 17 24 39;
+    --card-foreground: 0 0 0; /* Negro estándar para texto */
     --popover: 255 255 255;
-    --popover-foreground: 17 24 39;
+    --popover-foreground: 0 0 0; /* Negro estándar para texto */
     
     /* Colores de acción */
     --primary: 59 130 246;
     --primary-foreground: 255 255 255;
     --secondary: 243 244 246;
-    --secondary-foreground: 17 24 39;
+    --secondary-foreground: 0 0 0; /* Negro estándar para texto */
     
     /* Colores de estado */
     --muted: 249 250 251;
-    --muted-foreground: 107 114 128;
-    --accent: 243 244 246;
-    --accent-foreground: 17 24 39;
+    --muted-foreground: 75 85 99; /* Gris más oscuro para mejor contraste */
+    --accent: 229 231 235; /* Gris claro para hover */
+    --accent-foreground: 0 0 0; /* Negro estándar para texto */
     --destructive: 239 68 68;
     --destructive-foreground: 255 255 255;
     
     /* Bordes e inputs */
-    --border: 229 231 235;
+    --border: 209 213 219; /* Gris claro para bordes */
     --input: 255 255 255;
-    --ring: 59 130 246;
+    --ring: 209 213 219; /* Gris claro para focus ring */
     --radius: 0.5rem;
     
     /* Sidebar */
     --sidebar-background: 255 255 255;
-    --sidebar-foreground: 17 24 39;
+    --sidebar-foreground: 0 0 0; /* Negro estándar para texto */
     --sidebar-primary: 59 130 246;
     --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 243 244 246;
-    --sidebar-accent-foreground: 17 24 39;
-    --sidebar-border: 229 231 235;
-    --sidebar-ring: 59 130 246;
+    --sidebar-accent: 229 231 235; /* Gris claro */
+    --sidebar-accent-foreground: 0 0 0; /* Negro estándar para texto */
+    --sidebar-border: 209 213 219; /* Gris claro para bordes */
+    --sidebar-ring: 209 213 219; /* Gris claro */
   }
 
   .dark {
@@ -101,6 +101,8 @@
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply transition-colors;
+    color: black !important;
+    border-color: rgb(209 213 219) !important; /* Gris claro */
   }
   
   .form-textarea {
@@ -110,6 +112,8 @@
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply resize-none transition-colors;
     min-height: 80px;
+    color: black !important;
+    border-color: rgb(209 213 219) !important; /* Gris claro */
   }
   
   .form-select {
@@ -117,6 +121,8 @@
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply transition-colors;
+    color: black !important;
+    border-color: rgb(209 213 219) !important; /* Gris claro */
   }
   
   /* Botones mejorados */
@@ -290,27 +296,40 @@
   
   /* Asegurar colores correctos en todos los elementos */
   h1, h2, h3, h4, h5, h6 {
-    @apply text-foreground !important;
+    color: black !important;
   }
   
   p, span, div {
-    @apply text-foreground;
+    color: black !important;
   }
   
   /* Fix para inputs y formularios */
   input, textarea, select {
-    @apply text-foreground !important;
+    color: black !important;
     background-color: white !important;
+    border-color: rgb(209 213 219) !important; /* Gris claro */
   }
   
   /* Fix para labels */
   label {
-    @apply text-foreground !important;
+    color: black !important;
   }
   
-  /* Fix para botones */
+  /* Fix para botones - eliminar amarillo y usar gris claro */
   button {
-    @apply text-current;
+    color: inherit;
+  }
+  
+  button:focus,
+  button:active {
+    background-color: rgb(229 231 235) !important; /* Gris claro en lugar de amarillo */
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Fix para hover states */
+  button:hover {
+    background-color: rgb(229 231 235) !important; /* Gris claro */
   }
 }
 
@@ -318,9 +337,11 @@
 input,
 textarea,
 select,
+button,
 input[data-state="active"],
 textarea[data-state="active"],
 select[data-state="active"],
+button[data-state="active"],
 .bg-background[data-state="active"],
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
@@ -329,9 +350,12 @@ input:-webkit-autofill:active {
   background-color: white !important;
   background: white !important;
   -webkit-box-shadow: 0 0 0 30px white inset !important;
-  -webkit-text-fill-color: rgb(17, 24, 39) !important;
+  -webkit-text-fill-color: black !important;
+  color: black !important;
+  border-color: rgb(209 213 219) !important; /* Gris claro */
 }
 
+/* Estados activos y focus sin amarillo */
 input:active,
 textarea:active,
 select:active,
@@ -340,4 +364,24 @@ textarea:focus,
 select:focus {
   background-color: white !important;
   background: white !important;
+  color: black !important;
+  border-color: rgb(209 213 219) !important; /* Gris claro */
+  outline: 2px solid rgb(209 213 219) !important; /* Gris claro */
+}
+
+/* Botones - eliminar completamente el amarillo */
+button:focus,
+button:active,
+button:hover {
+  background-color: rgb(229 231 235) !important; /* Gris claro */
+  color: black !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Override para cualquier elemento que pueda mostrar amarillo */
+*:focus,
+*:active {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgb(209 213 219) !important; /* Gris claro */
 }
