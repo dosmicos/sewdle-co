@@ -315,3 +315,31 @@
     @apply z-50;
   }
 }
+
+/* OVERRIDE AGRESIVO: Eliminar CUALQUIER fondo amarillo */
+input,
+textarea,
+select,
+input[data-state="active"],
+textarea[data-state="active"],
+select[data-state="active"],
+.bg-background[data-state="active"],
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  background-color: white !important;
+  background: white !important;
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  -webkit-text-fill-color: rgb(17, 24, 39) !important;
+}
+
+input:active,
+textarea:active,
+select:active,
+input:focus,
+textarea:focus,
+select:focus {
+  background-color: white !important;
+  background: white !important;
+}
