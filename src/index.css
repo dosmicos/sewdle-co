@@ -490,3 +490,17 @@ form button[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600) {
 [role="dialog"] *[data-active="true"]:not(.bg-blue-500):not(.bg-blue-600) {
   background-color: white !important;
 }
+
+
+/* Fix para iconos y textos invisibles */
+.text-muted-foreground {
+  color: rgb(107, 114, 128) !important; /* gray-500 */
+}
+
+/* Asegurar que los headers de tabla se vean */
+.table th,
+.table td,
+table th,
+table td {
+  color: rgb(17, 24, 39) !important; /* gray-900 */
+}
