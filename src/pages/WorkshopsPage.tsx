@@ -46,11 +46,11 @@ const WorkshopsPage = () => {
   if (showForm) {
     return (
       <div className="animate-fade-in">
-        <div className="px-6 pb-3 pt-6 h-auto">
+        <div className="px-6 pb-3 pt-6">
           <Button 
             onClick={() => setShowForm(false)}
             variant="outline"
-            className="border border-gray-300 bg-white hover:bg-gray-50 text-black rounded-xl px-4 py-2 mb-4"
+            className="border border-gray-300 bg-white hover:bg-gray-50 text-black rounded-xl px-4 py-2"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver a Talleres
