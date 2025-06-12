@@ -355,3 +355,18 @@ button:hover {
   outline: none !important;
   box-shadow: none !important;
 }
+
+
+/* OVERRIDE ESPECÍFICO PARA EL PROBLEMA */
+.data-\[state\=active\]\:bg-background[data-state=active] {
+  background-color: white !important;
+}
+
+[data-state=active] {
+  background-color: white !important;
+}
+
+input[data-state=active],
+textarea[data-state=active] {
+  background-color: white !important;
+}
