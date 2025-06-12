@@ -12,6 +12,7 @@ import OrdersPage from "@/pages/OrdersPage";
 import WorkshopsPage from "@/pages/WorkshopsPage";
 import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
+import UsersRolesPage from "@/pages/UsersRolesPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Componente para rutas que requieren rol de administrador
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
   }
   
   return <>{children}</>;
@@ -60,6 +72,11 @@ const AppContent = () => {
         <Route path="workshops" element={<WorkshopsPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="deliveries" element={<DeliveriesPage />} />
+        <Route path="users-roles" element={
+          <AdminRoute>
+            <UsersRolesPage />
+          </AdminRoute>
+        } />
       </Route>
       
       <Route path="*" element={<NotFound />} />
