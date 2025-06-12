@@ -513,3 +513,22 @@ tr.transition-colors,
   transition-property: none !important;
   background-color: transparent !important;
 }
+
+/* Asegurar que las filas de tabla tengan fondo blanco */
+table tr,
+table tr:hover,
+.table tr,
+.table tr:hover {
+  background-color: white !important;
+  transition: none !important;
+}
+
+/* Override para TableRow específicamente */
+[data-component-name="TableRow"] {
+  background-color: white !important;
+  transition: none !important;
+}
+
+[data-component-name="TableRow"]:hover {
+  background-color: #f9fafb !important; /* gray-50 para hover suave */
+}
