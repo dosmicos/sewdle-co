@@ -76,7 +76,7 @@ const WorkshopForm = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto px-6 pt-4 pb-6">
       <Card className="apple-card">
         <CardHeader>
           <CardTitle className="flex items-center space-x-3">
