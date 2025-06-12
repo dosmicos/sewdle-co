@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,9 +24,12 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     generalNotes: ''
   });
 
-  const handleQualityAction = (action: 'approve' | 'return') => {
-    console.log(`${action} delivery:`, delivery.id);
+  const handleQualityReview = () => {
+    console.log('Processing quality review:', delivery.id, qualityData);
     // Here you would normally send the data to your backend
+    // The system will automatically:
+    // - Approve the quantities marked as approved
+    // - Return the quantities marked as defective with their reasons
   };
 
   const handleVariantQuality = (variant: string, field: string, value: string | number) => {
@@ -206,6 +208,13 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             
             {isQCLeader ? (
               <div className="space-y-4">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Instrucciones:</strong> Especifica las cantidades aprobadas y defectuosas para cada variante. 
+                    Las cantidades aprobadas se procesarán automáticamente y las defectuosas se devolverán al taller con el motivo especificado.
+                  </p>
+                </div>
+
                 <div className="space-y-3">
                   <h4 className="font-medium">Resultado por Variante</h4>
                   {mockVariants.map((variant) => (
@@ -276,21 +285,13 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   />
                 </div>
 
-                <div className="flex space-x-3 pt-4">
+                <div className="pt-4">
                   <Button
-                    onClick={() => handleQualityAction('approve')}
-                    className="flex-1 bg-green-500 hover:bg-green-600"
+                    onClick={handleQualityReview}
+                    className="w-full bg-blue-500 hover:bg-blue-600"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Aprobar
-                  </Button>
-                  <Button
-                    onClick={() => handleQualityAction('return')}
-                    variant="outline"
-                    className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Devolver
+                    Procesar Revisión de Calidad
                   </Button>
                 </div>
               </div>
