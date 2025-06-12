@@ -4,9 +4,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Building2, Star, Calendar, ArrowLeft } from 'lucide-react';
 import WorkshopForm from '@/components/WorkshopForm';
+import WorkshopDetails from '@/components/WorkshopDetails';
 
 const WorkshopsPage = () => {
   const [showForm, setShowForm] = useState(false);
+  const [selectedWorkshop, setSelectedWorkshop] = useState<any>(null);
 
   const mockWorkshops = [
     {
@@ -33,6 +35,14 @@ const WorkshopsPage = () => {
     }
   ];
 
+  const handleWorkshopClick = (workshop: any) => {
+    setSelectedWorkshop(workshop);
+  };
+
+  const handleBackToList = () => {
+    setSelectedWorkshop(null);
+  };
+
   if (showForm) {
     return (
       <div className="animate-fade-in">
@@ -48,6 +58,15 @@ const WorkshopsPage = () => {
         </div>
         <WorkshopForm />
       </div>
+    );
+  }
+
+  if (selectedWorkshop) {
+    return (
+      <WorkshopDetails 
+        workshop={selectedWorkshop} 
+        onBack={handleBackToList}
+      />
     );
   }
 
@@ -69,7 +88,11 @@ const WorkshopsPage = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {mockWorkshops.map((workshop) => (
-          <Card key={workshop.id} className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hover:shadow-lg transition-shadow duration-200">
+          <Card 
+            key={workshop.id} 
+            className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+            onClick={() => handleWorkshopClick(workshop)}
+          >
             <div className="space-y-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
