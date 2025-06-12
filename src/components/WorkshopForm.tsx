@@ -229,40 +229,6 @@ const WorkshopForm = () => {
 
             <Separator />
 
-            {/* Horarios de Trabajo */}
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold flex items-center space-x-2">
-                <Clock className="w-5 h-5 text-purple-500" />
-                <span>Horarios de Trabajo</span>
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="startTime">Hora de Inicio</Label>
-                  <Input
-                    id="startTime"
-                    type="time"
-                    value={formData.workingHours.start}
-                    onChange={(e) => handleWorkingHoursChange('start', e.target.value)}
-                    className="apple-input"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="endTime">Hora de Fin</Label>
-                  <Input
-                    id="endTime"
-                    type="time"
-                    value={formData.workingHours.end}
-                    onChange={(e) => handleWorkingHoursChange('end', e.target.value)}
-                    className="apple-input"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
             {/* Notas Adicionales */}
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Notas Adicionales</h3>
