@@ -370,3 +370,11 @@ input[data-state=active],
 textarea[data-state=active] {
   background-color: white !important;
 }
+
+*[data-active="true"] {
+  background-color: white !important;
+}
+
+*[data-active="true"]:not(input):not(textarea):not(select) {
+  background-color: rgb(243, 244, 246) !important;
+}
