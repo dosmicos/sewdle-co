@@ -32,7 +32,7 @@ const OrdersPage = () => {
               <input 
                 type="text" 
                 placeholder="Buscar órdenes..." 
-                className="w-full pl-10 bg-white border border-gray-300 rounded-xl px-4 py-3 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200" 
+                className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200" 
               />
             </div>
           </div>
