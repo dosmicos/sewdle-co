@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -217,11 +216,20 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
             </div>
           )}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+          <DialogFooter className="gap-2 pt-4">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onClose}
+              className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
               Cancelar
             </Button>
-            <Button type="submit" disabled={!!emailError}>
+            <Button 
+              type="submit" 
+              disabled={!!emailError}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-medium min-w-[120px]"
+            >
               {user ? 'Actualizar' : 'Crear Usuario'}
             </Button>
           </DialogFooter>
