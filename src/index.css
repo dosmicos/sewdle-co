@@ -333,16 +333,18 @@
   }
 }
 
-/* OVERRIDE AGRESIVO: Eliminar CUALQUIER fondo amarillo */
-
-
 /* Estados activos y focus sin amarillo */
 input:active,
 textarea:active,
 select:active,
 input:focus,
 textarea:focus,
-
+select:focus {
+  background-color: white !important; /* Mantener fondo blanco */
+  border-color: rgb(209 213 219) !important; /* Gris claro */
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgb(209 213 219) !important; /* Gris claro para el ring */
+}
 
 /* Botones - eliminar completamente el amarillo */
 button:focus,
@@ -353,5 +355,3 @@ button:hover {
   outline: none !important;
   box-shadow: none !important;
 }
-
-
