@@ -506,29 +506,50 @@ table td {
 }
 
 
-/* Eliminar transiciones de color problemáticas */
-.transition-colors,
-tr.transition-colors,
-[class*="transition-colors"] {
+/* Eliminar transiciones problemáticas SOLO en tablas */
+table tr,
+table tbody tr,
+.table tr,
+.table tbody tr,
+[role="row"] {
   transition-property: none !important;
-  background-color: transparent !important;
+  background-color: white !important;
 }
 
-/* Asegurar que las filas de tabla tengan fondo blanco */
-table tr,
 table tr:hover,
-.table tr,
-.table tr:hover {
-  background-color: white !important;
+table tbody tr:hover,
+.table tr:hover,
+.table tbody tr:hover,
+[role="row"]:hover {
+  background-color: #f9fafb !important; /* gray-50 para hover suave */
   transition: none !important;
 }
 
-/* Override para TableRow específicamente */
+/* Override específico para TableRow */
 [data-component-name="TableRow"] {
   background-color: white !important;
   transition: none !important;
 }
 
 [data-component-name="TableRow"]:hover {
-  background-color: #f9fafb !important; /* gray-50 para hover suave */
+  background-color: #f9fafb !important;
+}
+
+/* PRESERVAR botones - no tocar estos */
+button,
+.btn,
+[role="button"] {
+  transition: all 0.2s ease-in-out !important;
+  background-color: initial !important;
+}
+
+/* Restaurar botones específicos */
+button.bg-blue-500,
+.bg-blue-500 {
+  background-color: #3b82f6 !important;
+}
+
+button.bg-blue-500:hover,
+.bg-blue-500:hover {
+  background-color: #2563eb !important;
 }
