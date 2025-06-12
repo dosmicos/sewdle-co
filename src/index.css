@@ -441,61 +441,52 @@ textarea[data-state=active] {
 
 
 
-/* Fix específico para botones en formularios */
-button,
-button[type="button"],
-button[type="submit"],
-.btn,
-[role="button"] {
+/* Fix específico para botones en formularios - SIN afectar overlay */
+.dialog button:not(.bg-blue-500):not(.bg-blue-600),
+[role="dialog"] button:not(.bg-blue-500):not(.bg-blue-600),
+form button:not(.bg-blue-500):not(.bg-blue-600) {
   background-color: transparent !important;
 }
 
-button:hover,
-button[type="button"]:hover,
-button[type="submit"]:hover,
-.btn:hover,
-[role="button"]:hover {
-  background-color: transparent !important;
+.dialog button:not(.bg-blue-500):not(.bg-blue-600):hover,
+[role="dialog"] button:not(.bg-blue-500):not(.bg-blue-600):hover,
+form button:not(.bg-blue-500):not(.bg-blue-600):hover {
+  background-color: rgba(243, 244, 246, 0.5) !important;
 }
 
-/* Fix para botones con variantes específicas */
-button[data-state="active"],
-button:active,
-[role="button"][data-state="active"] {
-  background-color: transparent !important;
-}
-
-/* Preservar colores de botones con clases específicas */
-.bg-blue-500,
-.bg-blue-600,
-button.bg-blue-500,
-button.bg-blue-600 {
-  background-color: #3b82f6 !important;
-}
-
-.bg-blue-500:hover,
-.bg-blue-600:hover,
-button.bg-blue-500:hover,
-button.bg-blue-600:hover {
-  background-color: #2563eb !important;
-}
-
-/* Fix para SelectTrigger y otros componentes de UI */
-[data-radix-select-trigger],
-[data-radix-select-trigger]:hover,
-[data-radix-select-trigger][data-state="open"] {
+/* Fix para botones con data-state dentro de formularios */
+[role="dialog"] button[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
+[role="dialog"] [role="button"][data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
+form button[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600) {
   background-color: white !important;
 }
 
-/* Fix para Cards y contenedores */
-.card,
+/* Fix para SelectTrigger específicamente */
+[role="dialog"] [data-radix-select-trigger],
+[role="dialog"] [data-radix-select-trigger]:hover,
+[role="dialog"] [data-radix-select-trigger][data-state="open"] {
+  background-color: white !important;
+}
+
+/* Preservar colores de botones azules */
+[role="dialog"] .bg-blue-500,
+[role="dialog"] .bg-blue-600 {
+  background-color: #3b82f6 !important;
+}
+
+[role="dialog"] .bg-blue-500:hover,
+[role="dialog"] .bg-blue-600:hover {
+  background-color: #2563eb !important;
+}
+
+/* Fix solo para Cards dentro de dialogs */
 [role="dialog"] .card {
   background-color: white !important;
 }
 
-/* Override general para elementos con data-state */
-*[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
-*[data-state="open"]:not(.bg-blue-500):not(.bg-blue-600),
-*[data-active="true"]:not(.bg-blue-500):not(.bg-blue-600) {
+/* Override específico para elementos con data-state SOLO dentro de dialogs */
+[role="dialog"] *[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
+[role="dialog"] *[data-state="open"]:not(.bg-blue-500):not(.bg-blue-600),
+[role="dialog"] *[data-active="true"]:not(.bg-blue-500):not(.bg-blue-600) {
   background-color: white !important;
 }
