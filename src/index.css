@@ -378,3 +378,63 @@ textarea[data-state=active] {
 *[data-active="true"]:not(input):not(textarea):not(select) {
   background-color: rgb(243, 244, 246) !important;
 }
+
+
+
+/* Agregar al final de tu index.css */
+
+/* Input con icono izquierdo - estilo Apple */
+.input-with-icon {
+  @apply relative flex items-center;
+}
+
+.input-with-icon input {
+  @apply w-full pl-10 pr-3 py-2.5 text-sm bg-background rounded-xl;
+  @apply placeholder:text-muted-foreground;
+  @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0;
+  @apply disabled:cursor-not-allowed disabled:opacity-50;
+  @apply transition-all duration-200;
+  border: 1px solid rgb(var(--border));
+}
+
+.input-with-icon input:focus {
+  @apply border-primary;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-with-icon .icon {
+  @apply absolute left-3 top-1/2 transform -translate-y-1/2;
+  @apply w-4 h-4 text-muted-foreground;
+  @apply transition-colors duration-200;
+  pointer-events: none;
+}
+
+/* Búsqueda específica - estilo Apple */
+.search-input {
+  @apply relative flex items-center max-w-md;
+}
+
+.search-input input {
+  @apply w-full pl-10 pr-4 py-2.5 text-sm;
+  @apply bg-background border border-border rounded-xl;
+  @apply placeholder:text-muted-foreground;
+  @apply focus:outline-none focus:border-primary;
+  @apply transition-all duration-200 ease-in-out;
+  font-weight: 400;
+}
+
+.search-input input:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+  border-color: rgb(var(--primary));
+}
+
+.search-input .search-icon {
+  @apply absolute left-3 top-1/2 transform -translate-y-1/2;
+  @apply w-4 h-4 text-gray-400;
+  @apply transition-colors duration-200;
+  pointer-events: none;
+}
+
+.search-input input:focus ~ .search-icon {
+  @apply text-primary;
+}
