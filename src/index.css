@@ -350,6 +350,7 @@ input:-webkit-autofill:active {
   background-color: white !important;
   background: white !important;
   -webkit-text-fill-color: black !important;
+  color: black !important;
   border-color: rgb(209 213 219) !important; /* Gris claro */
 }
 
