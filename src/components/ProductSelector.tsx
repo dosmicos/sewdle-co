@@ -106,13 +106,14 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                   Producto
                 </label>
                 <Select
-                  value={product.productId}
-                  onValueChange={(value) => updateProduct(index, 'productId', value)}
+                  value={product.productId || "none"}
+                  onValueChange={(value) => updateProduct(index, 'productId', value === "none" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar producto..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Seleccionar producto...</SelectItem>
                     {availableProducts.map((prod) => (
                       <SelectItem key={prod.id} value={prod.id}>
                         {prod.name}
