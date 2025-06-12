@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,12 +74,40 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     }
   };
 
-  // Mock delivery details
+  // Mock delivery details with comprehensive quantities
   const mockVariants = [
-    { name: 'S', delivered: 30, pending: 20 },
-    { name: 'M', delivered: 60, pending: 40 },
-    { name: 'L', delivered: 45, pending: 30 },
-    { name: 'XL', delivered: 15, pending: 10 }
+    { 
+      name: 'S', 
+      totalOrdered: 80,
+      delivered: 30, 
+      approved: 25,
+      returnedDefective: 5,
+      pendingNotDelivered: 50
+    },
+    { 
+      name: 'M', 
+      totalOrdered: 120,
+      delivered: 60, 
+      approved: 55,
+      returnedDefective: 5,
+      pendingNotDelivered: 60
+    },
+    { 
+      name: 'L', 
+      totalOrdered: 100,
+      delivered: 45, 
+      approved: 40,
+      returnedDefective: 5,
+      pendingNotDelivered: 55
+    },
+    { 
+      name: 'XL', 
+      totalOrdered: 50,
+      delivered: 15, 
+      approved: 12,
+      returnedDefective: 3,
+      pendingNotDelivered: 35
+    }
   ];
 
   const mockFiles = [
@@ -89,6 +118,15 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
   const isQCLeader = currentUser.role === 'qc_leader';
   const isWorkshop = currentUser.role === 'workshop';
+
+  // Calculate totals
+  const totals = mockVariants.reduce((acc, variant) => ({
+    totalOrdered: acc.totalOrdered + variant.totalOrdered,
+    delivered: acc.delivered + variant.delivered,
+    approved: acc.approved + variant.approved,
+    returnedDefective: acc.returnedDefective + variant.returnedDefective,
+    pendingNotDelivered: acc.pendingNotDelivered + variant.pendingNotDelivered
+  }), { totalOrdered: 0, delivered: 0, approved: 0, returnedDefective: 0, pendingNotDelivered: 0 });
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -161,23 +199,49 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Detalle por Variante</h3>
-            <div className="space-y-3">
+            <h3 className="text-lg font-semibold mb-4">Resumen de Cantidades por Variante</h3>
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="grid grid-cols-6 gap-2 text-xs font-medium text-gray-600 pb-2 border-b">
+                <div>Variante</div>
+                <div className="text-center">Total</div>
+                <div className="text-center">Entregadas</div>
+                <div className="text-center">Aprobadas</div>
+                <div className="text-center">Devueltas</div>
+                <div className="text-center">Pendientes</div>
+              </div>
+              
+              {/* Variant rows */}
               {mockVariants.map((variant) => (
-                <div key={variant.name} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <span className="font-medium">{variant.name}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm">
-                      <span className="font-medium">{variant.delivered}</span> entregadas
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {variant.pending} pendientes
-                    </div>
-                  </div>
+                <div key={variant.name} className="grid grid-cols-6 gap-2 text-sm py-2 border-b border-gray-100">
+                  <div className="font-medium">{variant.name}</div>
+                  <div className="text-center">{variant.totalOrdered}</div>
+                  <div className="text-center">{variant.delivered}</div>
+                  <div className="text-center text-green-600 font-medium">{variant.approved}</div>
+                  <div className="text-center text-red-600 font-medium">{variant.returnedDefective}</div>
+                  <div className="text-center text-blue-600 font-medium">{variant.pendingNotDelivered}</div>
                 </div>
               ))}
+              
+              {/* Totals row */}
+              <div className="grid grid-cols-6 gap-2 text-sm font-semibold py-2 border-t-2 border-gray-300 bg-gray-50 rounded">
+                <div>TOTAL</div>
+                <div className="text-center">{totals.totalOrdered}</div>
+                <div className="text-center">{totals.delivered}</div>
+                <div className="text-center text-green-700">{totals.approved}</div>
+                <div className="text-center text-red-700">{totals.returnedDefective}</div>
+                <div className="text-center text-blue-700">{totals.pendingNotDelivered}</div>
+              </div>
+            </div>
+            
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-xs space-y-1">
+                <div><span className="font-medium">Total:</span> Cantidad total ordenada</div>
+                <div><span className="font-medium">Entregadas:</span> Cantidad recibida en esta entrega</div>
+                <div><span className="font-medium text-green-600">Aprobadas:</span> Cantidad que pasó control de calidad</div>
+                <div><span className="font-medium text-red-600">Devueltas:</span> Cantidad devuelta por defectos</div>
+                <div><span className="font-medium text-blue-600">Pendientes:</span> Cantidad aún no entregada</div>
+              </div>
             </div>
           </Card>
 
