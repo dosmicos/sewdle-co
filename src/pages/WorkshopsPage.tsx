@@ -46,7 +46,7 @@ const WorkshopsPage = () => {
   if (showForm) {
     return (
       <div className="animate-fade-in">
-        <div className="px-6 pb-3 pt-6 h-auto"">
+        <div className="px-6 pb-3 pt-6 h-auto">
           <Button 
             onClick={() => setShowForm(false)}
             variant="outline"
