@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
-import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users } from 'lucide-react';
+import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users, Package2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -14,6 +13,7 @@ const AppSidebar = () => {
   const adminMenuItems = [
     { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
     { title: 'Órdenes', url: '/orders', icon: FileText },
+    { title: 'Insumos', url: '/supplies', icon: Package2 },
     { title: 'Talleres', url: '/workshops', icon: Building2 },
     { title: 'Productos', url: '/products', icon: Package },
     { title: 'Entregas', url: '/deliveries', icon: Truck },
@@ -23,6 +23,7 @@ const AppSidebar = () => {
   const workshopMenuItems = [
     { title: 'Mi Dashboard', url: '/workshop-dashboard', icon: LayoutDashboard },
     { title: 'Mis Órdenes', url: '/my-orders', icon: FileText },
+    { title: 'Mis Insumos', url: '/my-supplies', icon: Package2 },
     { title: 'Entregas', url: '/my-deliveries', icon: Truck }
   ];
   

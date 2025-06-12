@@ -1,103 +1,199 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
 
-interface Supply {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
-
 interface SuppliesManagerProps {
-  supplies: Supply[];
-  onSuppliesChange: (supplies: Supply[]) => void;
+  supplies: any[];
+  onSuppliesChange: (supplies: any[]) => void;
 }
 
 const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) => {
+  // Diccionario de materiales disponibles
+  const availableMaterials = [
+    {
+      id: 'TEL001',
+      name: 'Tela Algodón Premium',
+      sku: 'TEL001',
+      unit: 'metros',
+      category: 'Telas'
+    },
+    {
+      id: 'AVI001',
+      name: 'Botones Plásticos',
+      sku: 'AVI001',
+      unit: 'unidades',
+      category: 'Avíos'
+    },
+    {
+      id: 'ETI001',
+      name: 'Etiquetas Marca',
+      sku: 'ETI001',
+      unit: 'unidades',
+      category: 'Etiquetas'
+    },
+    {
+      id: 'HIL001',
+      name: 'Hilo Algodón',
+      sku: 'HIL001',
+      unit: 'rollos',
+      category: 'Hilos'
+    },
+    {
+      id: 'CRE001',
+      name: 'Cremalleras 15cm',
+      sku: 'CRE001',
+      unit: 'unidades',
+      category: 'Cremalleras'
+    }
+  ];
+
   const addSupply = () => {
-    const newSupply: Supply = {
+    const newSupply = {
       id: Date.now().toString(),
-      name: '',
+      materialId: '',
       quantity: 0,
-      unit: 'unidades'
+      unit: '',
+      notes: ''
     };
     onSuppliesChange([...supplies, newSupply]);
   };
 
-  const removeSupply = (id: string) => {
-    onSuppliesChange(supplies.filter(supply => supply.id !== id));
+  const removeSupply = (index: number) => {
+    const updated = supplies.filter((_, i) => i !== index);
+    onSuppliesChange(updated);
   };
 
-  const updateSupply = (id: string, field: keyof Supply, value: string | number) => {
-    onSuppliesChange(
-      supplies.map(supply =>
-        supply.id === id ? { ...supply, [field]: value } : supply
-      )
-    );
+  const updateSupply = (index: number, field: string, value: any) => {
+    const updated = [...supplies];
+    updated[index] = { ...updated[index], [field]: value };
+    
+    // Si se cambia el material, actualizar automáticamente la unidad
+    if (field === 'materialId') {
+      const selectedMaterial = availableMaterials.find(m => m.id === value);
+      if (selectedMaterial) {
+        updated[index].unit = selectedMaterial.unit;
+      }
+    }
+    
+    onSuppliesChange(updated);
+  };
+
+  const getSelectedMaterial = (materialId: string) => {
+    return availableMaterials.find(m => m.id === materialId);
   };
 
   return (
-    <div className="space-y-4">
-      {supplies.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          <p>No hay insumos agregados</p>
-          <p className="text-sm">Haz clic en "Agregar Insumo" para comenzar</p>
-        </div>
-      )}
+    <div className="space-y-6">
+      {supplies.map((supply, index) => {
+        const selectedMaterial = getSelectedMaterial(supply.materialId);
+        
+        return (
+          <div key={supply.id} className="border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-semibold text-black">Insumo #{index + 1}</h4>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => removeSupply(index)}
+                className="text-red-500 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
 
-      {supplies.length > 0 && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-600">
-            <div className="col-span-5">Nombre</div>
-            <div className="col-span-3">Cantidad</div>
-            <div className="col-span-3">Unidad</div>
-            <div className="col-span-1">Acciones</div>
-          </div>
-
-          {supplies.map((supply) => (
-            <div key={supply.id} className="grid grid-cols-12 gap-4 items-center">
-              <div className="col-span-5">
-                <Input
-                  value={supply.name}
-                  onChange={(e) => updateSupply(supply.id, 'name', e.target.value)}
-                  placeholder="Ej: Paño lency fucsia"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Material
+                </label>
+                <Select
+                  value={supply.materialId}
+                  onValueChange={(value) => updateSupply(index, 'materialId', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar material..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMaterials.map((material) => (
+                      <SelectItem key={material.id} value={material.id}>
+                        {material.sku} - {material.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="col-span-3">
+
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Cantidad Necesaria
+                </label>
                 <Input
                   type="number"
                   min="0"
-                  step="0.1"
-                  value={supply.quantity}
-                  onChange={(e) => updateSupply(supply.id, 'quantity', parseFloat(e.target.value) || 0)}
-                  placeholder="Ej: 0.5"
+                  step="0.01"
+                  value={supply.quantity || ''}
+                  onChange={(e) => updateSupply(index, 'quantity', parseFloat(e.target.value) || 0)}
+                  placeholder="0"
                 />
               </div>
-              <div className="col-span-3">
+
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Unidad
+                </label>
                 <Input
                   value={supply.unit}
-                  onChange={(e) => updateSupply(supply.id, 'unit', e.target.value)}
-                  placeholder="metros, kg, unidades"
+                  readOnly
+                  className="bg-gray-50"
+                  placeholder="Selecciona material"
                 />
               </div>
-              <div className="col-span-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeSupply(supply.id)}
-                  className="text-red-500 hover:text-red-700 p-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
+                  Categoría
+                </label>
+                <Input
+                  value={selectedMaterial?.category || ''}
+                  readOnly
+                  className="bg-gray-50"
+                  placeholder="Selecciona material"
+                />
               </div>
             </div>
-          ))}
-        </div>
-      )}
+
+            {selectedMaterial && (
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Descripción del Material
+                  </label>
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="font-medium text-black">{selectedMaterial.name}</div>
+                    <div className="text-sm text-gray-600">SKU: {selectedMaterial.sku}</div>
+                    <div className="text-sm text-gray-600">Categoría: {selectedMaterial.category}</div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Notas Especiales
+                  </label>
+                  <Input
+                    value={supply.notes || ''}
+                    onChange={(e) => updateSupply(index, 'notes', e.target.value)}
+                    placeholder="Especificaciones adicionales, color específico, etc."
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       <Button
         type="button"
