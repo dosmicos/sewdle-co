@@ -504,3 +504,12 @@ table th,
 table td {
   color: rgb(17, 24, 39) !important; /* gray-900 */
 }
+
+
+/* Eliminar transiciones de color problemáticas */
+.transition-colors,
+tr.transition-colors,
+[class*="transition-colors"] {
+  transition-property: none !important;
+  background-color: transparent !important;
+}
