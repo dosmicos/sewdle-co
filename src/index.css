@@ -438,3 +438,64 @@ textarea[data-state=active] {
 .search-input input:focus ~ .search-icon {
   @apply text-primary;
 }
+
+
+
+/* Fix específico para botones en formularios */
+button,
+button[type="button"],
+button[type="submit"],
+.btn,
+[role="button"] {
+  background-color: transparent !important;
+}
+
+button:hover,
+button[type="button"]:hover,
+button[type="submit"]:hover,
+.btn:hover,
+[role="button"]:hover {
+  background-color: transparent !important;
+}
+
+/* Fix para botones con variantes específicas */
+button[data-state="active"],
+button:active,
+[role="button"][data-state="active"] {
+  background-color: transparent !important;
+}
+
+/* Preservar colores de botones con clases específicas */
+.bg-blue-500,
+.bg-blue-600,
+button.bg-blue-500,
+button.bg-blue-600 {
+  background-color: #3b82f6 !important;
+}
+
+.bg-blue-500:hover,
+.bg-blue-600:hover,
+button.bg-blue-500:hover,
+button.bg-blue-600:hover {
+  background-color: #2563eb !important;
+}
+
+/* Fix para SelectTrigger y otros componentes de UI */
+[data-radix-select-trigger],
+[data-radix-select-trigger]:hover,
+[data-radix-select-trigger][data-state="open"] {
+  background-color: white !important;
+}
+
+/* Fix para Cards y contenedores */
+.card,
+[role="dialog"] .card {
+  background-color: white !important;
+}
+
+/* Override general para elementos con data-state */
+*[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
+*[data-state="open"]:not(.bg-blue-500):not(.bg-blue-600),
+*[data-active="true"]:not(.bg-blue-500):not(.bg-blue-600) {
+  background-color: white !important;
+}
