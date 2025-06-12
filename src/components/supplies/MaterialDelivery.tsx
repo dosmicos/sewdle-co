@@ -30,7 +30,7 @@ interface MaterialDelivery {
 
 const MaterialDelivery = () => {
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
-  const [filterWorkshop, setFilterWorkshop] = useState('');
+  const [filterWorkshop, setFilterWorkshop] = useState('all');
   const [filterOrder, setFilterOrder] = useState('');
 
   // Mock data
@@ -80,7 +80,7 @@ const MaterialDelivery = () => {
   ];
 
   const filteredDeliveries = deliveries.filter(delivery => {
-    const matchesWorkshop = !filterWorkshop || delivery.workshopId === filterWorkshop;
+    const matchesWorkshop = filterWorkshop === 'all' || delivery.workshopId === filterWorkshop;
     const matchesOrder = !filterOrder || delivery.orderId.toLowerCase().includes(filterOrder.toLowerCase());
     return matchesWorkshop && matchesOrder;
   });
@@ -126,7 +126,7 @@ const MaterialDelivery = () => {
                 <SelectValue placeholder="Todos los talleres" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos los talleres</SelectItem>
+                <SelectItem value="all">Todos los talleres</SelectItem>
                 {workshops.map((workshop) => (
                   <SelectItem key={workshop.id} value={workshop.id}>
                     {workshop.name}
