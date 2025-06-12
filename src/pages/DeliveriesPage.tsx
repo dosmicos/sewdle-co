@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Filter, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -39,11 +39,15 @@ const mockDeliveries = [
   }
 ];
 
+// Extract unique workshops for the filter
+const workshopOptions = [...new Set(mockDeliveries.map(delivery => delivery.workshop))];
+
 const DeliveriesPage = () => {
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [selectedWorkshop, setSelectedWorkshop] = useState('all');
 
   const handleViewDeliveryDetails = (delivery) => {
     setSelectedDelivery(delivery);
@@ -53,7 +57,7 @@ const DeliveriesPage = () => {
     setSelectedDelivery(null);
   };
 
-  // Filter deliveries based on tab and search query
+  // Filter deliveries based on tab, search query, and workshop
   const filteredDeliveries = mockDeliveries.filter(delivery => {
     // Filter by tab
     if (activeTab !== 'all' && delivery.status !== activeTab) {
@@ -64,6 +68,11 @@ const DeliveriesPage = () => {
     if (searchQuery && 
         !delivery.orderId.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !delivery.workshop.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    
+    // Filter by workshop
+    if (selectedWorkshop !== 'all' && delivery.workshop !== selectedWorkshop) {
       return false;
     }
     
@@ -127,7 +136,6 @@ const DeliveriesPage = () => {
         </Button>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4 shadow-sm border-gray-200">
           <p className="text-sm font-medium text-gray-600">Total Entregas</p>
@@ -148,8 +156,7 @@ const DeliveriesPage = () => {
       </div>
 
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-        {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-4 mb-6">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-4 mb-6">
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
             <input 
@@ -160,9 +167,26 @@ const DeliveriesPage = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="w-full md:w-auto">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full md:w-auto">
-              <TabsList className="grid grid-cols-4 w-full md:w-auto">
+          
+          <div className="w-full lg:w-auto">
+            <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+              <SelectTrigger className="w-full lg:w-48">
+                <SelectValue placeholder="Filtrar por taller" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los talleres</SelectItem>
+                {workshopOptions.map((workshop) => (
+                  <SelectItem key={workshop} value={workshop}>
+                    {workshop}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="w-full lg:w-auto">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
+              <TabsList className="grid grid-cols-4 w-full lg:w-auto">
                 <TabsTrigger value="all">Todos</TabsTrigger>
                 <TabsTrigger value="en-calidad">En Calidad</TabsTrigger>
                 <TabsTrigger value="devuelto">Devueltos</TabsTrigger>
@@ -172,7 +196,6 @@ const DeliveriesPage = () => {
           </div>
         </div>
 
-        {/* Table */}
         {filteredDeliveries.length > 0 ? (
           <div className="overflow-x-auto">
             <Table>
