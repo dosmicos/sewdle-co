@@ -59,7 +59,7 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
         
         <CardContent className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-xl">
               <TabsTrigger value="import" className="flex items-center gap-2">
                 <ExternalLink className="w-4 h-4" />
                 Importar de Shopify
