@@ -1,11 +1,11 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import LoginPage from "@/components/LoginPage";
-import AuthPage from "@/components/AuthPage";
+import AuthPage from "@/pages/AuthPage";
 import MainLayout from "@/components/MainLayout";
 import DashboardPage from "@/pages/DashboardPage";
 import OrdersPage from "@/pages/OrdersPage";
@@ -15,7 +15,6 @@ import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import NotFound from "@/pages/NotFound";
-import ProfilePage from "@/components/ProfilePage";
 
 const queryClient = new QueryClient();
 
@@ -81,7 +80,6 @@ const AppContent = () => {
             <UsersRolesPage />
           </AdminRoute>
         } />
-        <Route path="profile" element={<ProfilePage />} />
       </Route>
       
       <Route path="*" element={<NotFound />} />
