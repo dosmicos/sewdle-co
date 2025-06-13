@@ -553,3 +553,67 @@ button.bg-blue-500:hover,
 .bg-blue-500:hover {
   background-color: #2563eb !important;
 }
+
+
+/* OVERRIDE AGRESIVO para eliminar amarillo de Lovable */
+* {
+  background-color: inherit !important;
+}
+
+*:not(button):not(.bg-blue-500):not(.bg-green-500):not(.bg-red-500):not(.bg-yellow-500):not(.bg-purple-500) {
+  background-color: transparent !important;
+}
+
+/* Forzar fondo blanco en elementos principales */
+body,
+html,
+#root,
+.main,
+main {
+  background-color: white !important;
+}
+
+/* Eliminar cualquier background amarillo automático */
+*[style*="background-color: rgb(255, 255, 0)"],
+*[style*="background: rgb(255, 255, 0)"],
+*[style*="background-color: yellow"],
+*[style*="background: yellow"],
+*[style*="hsl(60"],
+*[style*="hsl(255 255 0"] {
+  background-color: white !important;
+  background: white !important;
+}
+
+/* Override específico para elementos con data attributes */
+*[data-component-path],
+*[data-component-line],
+*[data-component-file] {
+  background-color: transparent !important;
+}
+
+/* Eliminar transiciones problemáticas */
+* {
+  transition-property: transform, opacity, box-shadow, border-color !important;
+}
+
+/* Restaurar solo los fondos que necesitas */
+.bg-blue-500 { background-color: #3b82f6 !important; }
+.bg-green-500 { background-color: #10b981 !important; }
+.bg-red-500 { background-color: #ef4444 !important; }
+.bg-gray-50 { background-color: #f9fafb !important; }
+.bg-gray-100 { background-color: #f3f4f6 !important; }
+
+/* Cards y containers */
+.card,
+[role="main"],
+main,
+.container {
+  background-color: white !important;
+}
+
+/* Override para elementos del dashboard */
+.dashboard *,
+.chart *,
+.graph * {
+  background-color: transparent !important;
+}
