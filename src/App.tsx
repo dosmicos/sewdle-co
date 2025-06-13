@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import LoginPage from "@/components/LoginPage";
+import AuthPage from "@/components/AuthPage";
 import MainLayout from "@/components/MainLayout";
 import DashboardPage from "@/pages/DashboardPage";
 import OrdersPage from "@/pages/OrdersPage";
@@ -14,6 +15,7 @@ import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import NotFound from "@/pages/NotFound";
+import ProfilePage from "@/components/ProfilePage";
 
 const queryClient = new QueryClient();
 
@@ -29,7 +31,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
   
   return <>{children}</>;
@@ -59,8 +61,9 @@ const AppContent = () => {
 
   return (
     <Routes>
-      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
-      <Route path="/" element={!user ? <Navigate to="/login" replace /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/auth" element={!user ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/login" element={<Navigate to="/auth" replace />} />
+      <Route path="/" element={!user ? <Navigate to="/auth" replace /> : <Navigate to="/dashboard" replace />} />
       
       <Route path="/" element={
         <ProtectedRoute>
@@ -78,6 +81,7 @@ const AppContent = () => {
             <UsersRolesPage />
           </AdminRoute>
         } />
+        <Route path="profile" element={<ProfilePage />} />
       </Route>
       
       <Route path="*" element={<NotFound />} />

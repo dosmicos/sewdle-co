@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { User, UserFormData } from '@/types/users';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UserModalProps {
   user: User | null;
@@ -24,6 +26,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
     requiresPasswordChange: true
   });
   const [emailError, setEmailError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const mockWorkshops = [
     { id: '1', name: 'Taller Principal' },
@@ -51,14 +54,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
       setEmailError('Formato de correo inválido');
       return false;
     }
-    
-    // Simulación de validación de correo único
-    const existingEmails = ['admin@textilflow.com', 'maria@ejemplo.com'];
-    if (existingEmails.includes(email) && (!user || user.email !== email)) {
-      setEmailError('Este correo ya está en uso');
-      return false;
-    }
-    
     setEmailError('');
     return true;
   };
@@ -81,7 +76,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
     return password;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.role) {
@@ -106,17 +101,70 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
       return;
     }
 
-    // Simular envío de invitación por correo
-    const tempPassword = generatePassword();
-    
-    onSave(formData);
-    
-    toast({
-      title: user ? "Usuario actualizado" : "Usuario creado",
-      description: user 
-        ? "Los cambios han sido guardados correctamente"
-        : `Usuario creado exitosamente. Se ha enviado una invitación a ${formData.email} con la contraseña temporal: ${tempPassword}`,
-    });
+    setIsLoading(true);
+
+    try {
+      if (!user) {
+        // Create new user
+        const tempPassword = generatePassword();
+        console.log('Creating user with:', { email: formData.email, password: tempPassword });
+        
+        const { data, error } = await supabase.auth.admin.createUser({
+          email: formData.email,
+          password: tempPassword,
+          email_confirm: true,
+          user_metadata: {
+            name: formData.name,
+            role: formData.role,
+            workshopId: formData.workshopId,
+            requiresPasswordChange: formData.requiresPasswordChange
+          }
+        });
+
+        if (error) {
+          console.error('Error creating user:', error);
+          throw error;
+        }
+
+        if (data.user) {
+          // Update the profile with additional data
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: data.user.id,
+              name: formData.name,
+              email: formData.email
+            });
+
+          if (profileError) {
+            console.error('Error updating profile:', profileError);
+          }
+
+          toast({
+            title: "Usuario creado exitosamente",
+            description: `Se ha creado el usuario para ${formData.email}. Contraseña temporal: ${tempPassword}`,
+          });
+        }
+      } else {
+        // Update existing user - for now just call the onSave callback
+        onSave(formData);
+        toast({
+          title: "Usuario actualizado",
+          description: "Los cambios han sido guardados correctamente",
+        });
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al procesar la solicitud",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -137,6 +185,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Ingresa el nombre completo"
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -149,6 +198,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               onChange={(e) => handleEmailChange(e.target.value)}
               placeholder="usuario@ejemplo.com"
               required
+              disabled={isLoading}
             />
             {emailError && (
               <p className="text-sm text-red-600">{emailError}</p>
@@ -160,6 +210,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
             <Select 
               value={formData.role} 
               onValueChange={(value) => setFormData({ ...formData, role: value, workshopId: value !== 'Taller' ? '' : formData.workshopId })}
+              disabled={isLoading}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecciona un rol" />
@@ -180,6 +231,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               <Select 
                 value={formData.workshopId} 
                 onValueChange={(value) => setFormData({ ...formData, workshopId: value })}
+                disabled={isLoading}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un taller" />
@@ -202,6 +254,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               onCheckedChange={(checked) => 
                 setFormData({ ...formData, requiresPasswordChange: checked as boolean })
               }
+              disabled={isLoading}
             />
             <Label htmlFor="requiresPasswordChange" className="text-sm">
               Requiere cambio de contraseña en primer ingreso
@@ -211,7 +264,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
           {!user && (
             <div className="bg-blue-50 p-4 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>Nota:</strong> Se generará una contraseña temporal de 12 caracteres y se enviará por correo electrónico al usuario.
+                <strong>Nota:</strong> Se generará una contraseña temporal de 12 caracteres que se mostrará después de crear el usuario.
               </p>
             </div>
           )}
@@ -222,15 +275,23 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               variant="outline" 
               onClick={onClose}
               className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+              disabled={isLoading}
             >
               Cancelar
             </Button>
             <Button 
               type="submit" 
-              disabled={!!emailError}
+              disabled={!!emailError || isLoading}
               className="bg-blue-500 hover:bg-blue-600 text-white font-medium min-w-[120px]"
             >
-              {user ? 'Actualizar' : 'Crear Usuario'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {user ? 'Actualizando...' : 'Creando...'}
+                </>
+              ) : (
+                user ? 'Actualizar' : 'Crear Usuario'
+              )}
             </Button>
           </DialogFooter>
         </form>
