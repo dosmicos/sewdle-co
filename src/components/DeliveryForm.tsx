@@ -440,10 +440,11 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
             </Button>
           ) : (
             <Button
-              onClick={handleSubmit}
-              className="bg-green-500 hover:bg-green-600"
+              onClick={() => setCurrentStep(currentStep + 1)}
+              disabled={!isStepValid(currentStep)}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
             >
-              Enviar Entrega
+              Siguiente
             </Button>
           )}
         </div>
