@@ -162,7 +162,7 @@ const DeliveriesPage = () => {
             <input 
               type="text" 
               placeholder="Buscar por orden o taller..." 
-              className="w-full pl-15 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
+              className="w-full pl-20 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
