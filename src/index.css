@@ -619,6 +619,8 @@ main,
 }
 
 
+  
+
 /* Fix para dropdown de Select */
 [data-radix-select-content] {
   background-color: white !important;
