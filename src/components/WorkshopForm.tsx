@@ -116,6 +116,7 @@ const WorkshopForm = () => {
                     <SelectContent>
                       <SelectItem value="bogota">Bogotá</SelectItem>
                       <SelectItem value="medellin">Medellín</SelectItem>
+                      <SelectItem value="soacha">Soacha</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
