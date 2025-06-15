@@ -29,14 +29,12 @@ const WorkshopForm = () => {
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
 
   const specialtyOptions = [
-    'Confección de Vestidos',
-    'Confección de Pantalones',
-    'Confección de Camisas',
-    'Confección de Ropa Interior',
-    'Bordados',
-    'Estampados',
-    'Acabados Premium',
-    'Reparaciones'
+    'Ruanas',
+    'Chaquetas',
+    'Sleepings',
+    'Camisetas',
+    'Sudaderas',
+    'Otros'
   ];
 
   const handleInputChange = (field: string, value: string) => {
@@ -116,11 +114,8 @@ const WorkshopForm = () => {
                       <SelectValue placeholder="Selecciona una ciudad" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="lima">Lima</SelectItem>
-                      <SelectItem value="arequipa">Arequipa</SelectItem>
-                      <SelectItem value="trujillo">Trujillo</SelectItem>
-                      <SelectItem value="chiclayo">Chiclayo</SelectItem>
-                      <SelectItem value="piura">Piura</SelectItem>
+                      <SelectItem value="bogota">Bogotá</SelectItem>
+                      <SelectItem value="medellin">Medellín</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
