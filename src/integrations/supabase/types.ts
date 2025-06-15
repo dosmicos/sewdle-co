@@ -9,6 +9,405 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      deliveries: {
+        Row: {
+          created_at: string
+          delivered_by: string | null
+          delivery_date: string | null
+          id: string
+          notes: string | null
+          order_id: string
+          recipient_address: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          status: string | null
+          tracking_number: string | null
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivered_by?: string | null
+          delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_id: string
+          recipient_address?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          status?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          delivered_by?: string | null
+          delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string
+          recipient_address?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          status?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_items: {
+        Row: {
+          created_at: string
+          delivery_id: string
+          id: string
+          notes: string | null
+          order_item_id: string
+          quality_status: string | null
+          quantity_delivered: number
+        }
+        Insert: {
+          created_at?: string
+          delivery_id: string
+          id?: string
+          notes?: string | null
+          order_item_id: string
+          quality_status?: string | null
+          quantity_delivered: number
+        }
+        Update: {
+          created_at?: string
+          delivery_id?: string
+          id?: string
+          notes?: string | null
+          order_item_id?: string
+          quality_status?: string | null
+          quantity_delivered?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_items_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_items_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_deliveries: {
+        Row: {
+          created_at: string
+          delivered_by: string | null
+          delivery_date: string | null
+          id: string
+          material_id: string
+          notes: string | null
+          order_id: string | null
+          quantity_consumed: number | null
+          quantity_delivered: number
+          quantity_remaining: number
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivered_by?: string | null
+          delivery_date?: string | null
+          id?: string
+          material_id: string
+          notes?: string | null
+          order_id?: string | null
+          quantity_consumed?: number | null
+          quantity_delivered: number
+          quantity_remaining: number
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          delivered_by?: string | null
+          delivery_date?: string | null
+          id?: string
+          material_id?: string
+          notes?: string | null
+          order_id?: string | null
+          quantity_consumed?: number | null
+          quantity_delivered?: number
+          quantity_remaining?: number
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_deliveries_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_deliveries_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materials: {
+        Row: {
+          category: string
+          color: string | null
+          created_at: string
+          current_stock: number | null
+          description: string | null
+          id: string
+          image_url: string | null
+          min_stock_alert: number | null
+          name: string
+          sku: string
+          supplier: string | null
+          unit: string
+          unit_cost: number | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          color?: string | null
+          created_at?: string
+          current_stock?: number | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          min_stock_alert?: number | null
+          name: string
+          sku: string
+          supplier?: string | null
+          unit: string
+          unit_cost?: number | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          color?: string | null
+          created_at?: string
+          current_stock?: number | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          min_stock_alert?: number | null
+          name?: string
+          sku?: string
+          supplier?: string | null
+          unit?: string
+          unit_cost?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          product_variant_id: string
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          product_variant_id: string
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          product_variant_id?: string
+          quantity?: number
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          client_email: string | null
+          client_name: string
+          client_phone: string | null
+          created_at: string
+          created_by: string | null
+          due_date: string | null
+          id: string
+          notes: string | null
+          order_number: string
+          status: string | null
+          total_amount: number | null
+          updated_at: string
+        }
+        Insert: {
+          client_email?: string | null
+          client_name: string
+          client_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          order_number: string
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Update: {
+          client_email?: string | null
+          client_name?: string
+          client_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      product_variants: {
+        Row: {
+          additional_price: number | null
+          color: string | null
+          created_at: string
+          id: string
+          product_id: string
+          size: string | null
+          sku_variant: string
+          stock_quantity: number | null
+        }
+        Insert: {
+          additional_price?: number | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          product_id: string
+          size?: string | null
+          sku_variant: string
+          stock_quantity?: number | null
+        }
+        Update: {
+          additional_price?: number | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          product_id?: string
+          size?: string | null
+          sku_variant?: string
+          stock_quantity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          base_price: number | null
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          name: string
+          sku: string
+          status: string | null
+          technical_file_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          base_price?: number | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          sku: string
+          status?: string | null
+          technical_file_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          base_price?: number | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          sku?: string
+          status?: string | null
+          technical_file_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -36,12 +435,140 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: string
+          updated_at: string | null
+          user_id: string
+          workshop_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: string
+          updated_at?: string | null
+          user_id: string
+          workshop_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: string
+          updated_at?: string | null
+          user_id?: string
+          workshop_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workshop_assignments: {
+        Row: {
+          assigned_by: string | null
+          assigned_date: string | null
+          created_at: string
+          expected_completion_date: string | null
+          id: string
+          notes: string | null
+          order_id: string
+          status: string | null
+          workshop_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          assigned_date?: string | null
+          created_at?: string
+          expected_completion_date?: string | null
+          id?: string
+          notes?: string | null
+          order_id: string
+          status?: string | null
+          workshop_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          assigned_date?: string | null
+          created_at?: string
+          expected_completion_date?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string
+          status?: string | null
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_assignments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workshop_assignments_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workshops: {
+        Row: {
+          address: string | null
+          capacity: number | null
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          capacity?: number | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          capacity?: number | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

@@ -17,7 +17,6 @@ const WorkshopForm = () => {
     phone: '',
     email: '',
     contactPerson: '',
-    contactPhone: '',
     specialties: [],
     workingHours: {
       start: '',
@@ -171,28 +170,15 @@ const WorkshopForm = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="contactPerson">Persona de Contacto</Label>
-                  <Input
-                    id="contactPerson"
-                    value={formData.contactPerson}
-                    onChange={(e) => handleInputChange('contactPerson', e.target.value)}
-                    placeholder="Ej: Juan Pérez"
-                    className="apple-input"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="contactPhone">Teléfono de Contacto</Label>
-                  <Input
-                    id="contactPhone"
-                    value={formData.contactPhone}
-                    onChange={(e) => handleInputChange('contactPhone', e.target.value)}
-                    placeholder="Ej: +51 988 777 666"
-                    className="apple-input"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="contactPerson">Persona de Contacto</Label>
+                <Input
+                  id="contactPerson"
+                  value={formData.contactPerson}
+                  onChange={(e) => handleInputChange('contactPerson', e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="apple-input"
+                />
               </div>
             </div>
 
