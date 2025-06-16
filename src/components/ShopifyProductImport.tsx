@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -153,10 +152,48 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     setShowSuggestions(false);
   };
 
+  // Función para generar SKU único
+  const generateUniqueSku = (baseTitle: string, productId: string) => {
+    const cleanTitle = baseTitle
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .replace(/\s+/g, '-')
+      .toUpperCase()
+      .substring(0, 10);
+    return `${cleanTitle}-${productId}-${Date.now()}`;
+  };
+
+  // Función para generar SKU de variante único
+  const generateUniqueVariantSku = (productSku: string, variantTitle: string, index: number) => {
+    const cleanVariant = variantTitle
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase()
+      .substring(0, 5);
+    return `${productSku}-V${index + 1}-${cleanVariant || 'DEF'}`;
+  };
+
   const importProduct = async (product: ShopifyProduct) => {
     setImporting(product.id);
     try {
       console.log('Importing product:', product);
+
+      // Generar SKU único para el producto
+      const uniqueProductSku = generateUniqueSku(product.title, product.id);
+
+      // Verificar si el producto ya existe por SKU
+      const { data: existingProduct } = await supabase
+        .from('products')
+        .select('id')
+        .eq('sku', uniqueProductSku)
+        .maybeSingle();
+
+      if (existingProduct) {
+        toast({
+          title: "Producto ya existe",
+          description: `${product.title} ya está en tu catálogo.`,
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Crear el producto principal
       const { data: createdProduct, error: productError } = await supabase
@@ -165,7 +202,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           {
             name: product.title,
             description: product.description || '',
-            sku: `SHOPIFY-${product.id}`,
+            sku: uniqueProductSku,
             base_price: product.price,
             image_url: product.image_url,
             category: 'Shopify Import',
@@ -184,13 +221,13 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
       // Crear las variantes del producto
       if (product.variants && product.variants.length > 0) {
-        const variants = product.variants.map(variant => ({
+        const variants = product.variants.map((variant, index) => ({
           product_id: createdProduct.id,
-          size: variant.size,
-          color: variant.color,
-          sku_variant: variant.sku,
-          additional_price: variant.price - product.price,
-          stock_quantity: variant.stock_quantity
+          size: variant.size || '',
+          color: variant.color || '',
+          sku_variant: generateUniqueVariantSku(uniqueProductSku, variant.size || variant.color || 'Default', index),
+          additional_price: Math.max(0, variant.price - product.price),
+          stock_quantity: variant.stock_quantity || 0
         }));
 
         console.log('Creating variants:', variants);
@@ -201,10 +238,11 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
         if (variantsError) {
           console.error('Error creating variants:', variantsError);
-          throw variantsError;
+          // Si hay error con variantes, no fallar completamente
+          console.warn('Continuing without variants due to error:', variantsError);
+        } else {
+          console.log('Successfully created variants');
         }
-
-        console.log('Successfully created variants');
       }
 
       toast({
@@ -215,11 +253,11 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
       // Llamar al callback para seleccionar el producto
       onProductSelect(product);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error importing product:', error);
       toast({
         title: "Error al importar producto",
-        description: "Hubo un problema al importar el producto de Shopify.",
+        description: error.message || "Hubo un problema al importar el producto de Shopify.",
         variant: "destructive",
       });
     } finally {
