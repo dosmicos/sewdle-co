@@ -52,6 +52,27 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     fetchProducts();
   }, []);
 
+  // Efecto para convertir los datos al formato esperado por OrderForm
+  useEffect(() => {
+    const formattedProducts = selectedProducts.flatMap((product: SelectedProduct) => {
+      if (!product.variants) return [];
+      
+      return Object.values(product.variants)
+        .filter((variant: any) => variant.quantity > 0)
+        .map((variant: any) => ({
+          productId: product.productId,
+          variantId: variant.id,
+          quantity: variant.quantity,
+          unitPrice: variant.price
+        }));
+    });
+
+    // Solo actualizar si hay cambios reales para evitar loops infinitos
+    if (JSON.stringify(formattedProducts) !== JSON.stringify(selectedProducts.filter(p => p.productId))) {
+      onProductsChange(formattedProducts);
+    }
+  }, [selectedProducts]);
+
   const fetchProducts = async () => {
     try {
       setLoading(true);
@@ -102,11 +123,14 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
       productName: '',
       variants: {}
     };
-    onProductsChange([...selectedProducts, newProduct]);
+    // Usar una estructura temporal para la UI interna
+    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
+    onProductsChange([...currentSelection, newProduct]);
   };
 
   const removeProduct = (index: number) => {
-    const updated = selectedProducts.filter((_, i) => i !== index);
+    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
+    const updated = currentSelection.filter((_, i) => i !== index);
     onProductsChange(updated);
   };
 
@@ -114,7 +138,8 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     const selectedProduct = availableProducts.find(p => p.id === productId);
     if (!selectedProduct) return;
 
-    const updated = [...selectedProducts];
+    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
+    const updated = [...currentSelection];
     const variants: any = {};
     
     // Inicializar todas las variantes con cantidad 0
@@ -140,7 +165,8 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
   };
 
   const updateVariantQuantity = (productIndex: number, variantId: string, quantity: number) => {
-    const updated = [...selectedProducts];
+    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
+    const updated = [...currentSelection];
     updated[productIndex].variants[variantId].quantity = Math.max(0, quantity);
     onProductsChange(updated);
   };
@@ -152,7 +178,8 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
   };
 
   const getTotalQuantities = () => {
-    return selectedProducts.reduce((total, product) => {
+    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
+    return currentSelection.reduce((total, product) => {
       return total + getProductQuantityTotal(product);
     }, 0);
   };
@@ -173,9 +200,12 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     );
   }
 
+  // Filtrar productos para mostrar solo los de la UI interna
+  const displayProducts = selectedProducts.filter(p => p.id || p.productId);
+
   return (
     <div className="space-y-6">
-      {selectedProducts.map((product: SelectedProduct, index) => {
+      {displayProducts.map((product: SelectedProduct, index) => {
         const selectedProductData = availableProducts.find(p => p.id === product.productId);
         
         return (
@@ -244,9 +274,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                     <TableBody>
                       {selectedProductData.variants.map((variant) => {
                         const variantData = product.variants[variant.id];
-                        const variantName = variant.size && variant.color 
-                          ? `${variant.size} - ${variant.color}`
-                          : variant.size || variant.color || 'Variante estándar';
+                        const variantName = [variant.size, variant.color].filter(Boolean).join(' - ') || 'Variante estándar';
                         
                         return (
                           <TableRow key={variant.id}>
@@ -324,7 +352,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
         Agregar Producto
       </Button>
 
-      {selectedProducts.length > 0 && (
+      {displayProducts.length > 0 && (
         <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
           <h4 className="font-bold text-blue-900 mb-4 text-lg">Resumen de la Orden</h4>
           
