@@ -654,6 +654,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_material_sku: {
+        Args: { category_name: string }
+        Returns: string
+      }
       generate_order_number: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -677,6 +681,25 @@ export type Database = {
       get_current_user_role_safe: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      get_materials_with_stock_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          sku: string
+          name: string
+          description: string
+          unit: string
+          color: string
+          category: string
+          min_stock_alert: number
+          current_stock: number
+          supplier: string
+          unit_cost: number
+          image_url: string
+          stock_status: string
+          created_at: string
+        }[]
       }
       get_user_role: {
         Args: { user_uuid: string }

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Upload, X } from 'lucide-react';
+import { useMaterials } from '@/hooks/useMaterials';
 
 interface Material {
   id: string;
@@ -15,10 +16,11 @@ interface Material {
   unit: string;
   color: string;
   category: string;
-  minStockAlert: number;
-  currentStock: number;
-  image?: string;
-  createdAt: string;
+  min_stock_alert: number;
+  current_stock: number;
+  supplier?: string;
+  unit_cost?: number;
+  image_url?: string;
 }
 
 interface MaterialFormProps {
@@ -27,14 +29,16 @@ interface MaterialFormProps {
 }
 
 const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
+  const { createMaterial, updateMaterial, loading } = useMaterials();
   const [formData, setFormData] = useState({
-    sku: material?.sku || '',
     name: material?.name || '',
     description: material?.description || '',
     unit: material?.unit || '',
     color: material?.color || '',
     category: material?.category || '',
-    minStockAlert: material?.minStockAlert || 0
+    min_stock_alert: material?.min_stock_alert || 0,
+    supplier: material?.supplier || '',
+    unit_cost: material?.unit_cost || 0
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -73,12 +77,55 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Material data:', formData);
-    console.log('Image file:', imageFile);
-    // Aquí iría la lógica para guardar el material
-    onClose();
+    
+    if (!formData.name.trim()) {
+      alert('El nombre del material es requerido');
+      return;
+    }
+
+    if (!formData.category) {
+      alert('La categoría es requerida');
+      return;
+    }
+
+    if (!formData.unit) {
+      alert('La unidad de medida es requerida');
+      return;
+    }
+
+    try {
+      if (material) {
+        // Actualizar material existente
+        await updateMaterial(material.id, {
+          name: formData.name.trim(),
+          description: formData.description.trim() || undefined,
+          category: formData.category,
+          unit: formData.unit,
+          color: formData.color.trim() || undefined,
+          min_stock_alert: Number(formData.min_stock_alert),
+          supplier: formData.supplier.trim() || undefined,
+          unit_cost: Number(formData.unit_cost) || undefined
+        });
+      } else {
+        // Crear nuevo material
+        await createMaterial({
+          name: formData.name.trim(),
+          description: formData.description.trim() || undefined,
+          category: formData.category,
+          unit: formData.unit,
+          color: formData.color.trim() || undefined,
+          min_stock_alert: Number(formData.min_stock_alert),
+          supplier: formData.supplier.trim() || undefined,
+          unit_cost: Number(formData.unit_cost) || undefined
+        });
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error('Error saving material:', error);
+    }
   };
 
   return (
@@ -94,18 +141,6 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-black mb-2">
-                SKU *
-              </label>
-              <Input
-                value={formData.sku}
-                onChange={(e) => handleInputChange('sku', e.target.value)}
-                placeholder="Ej: TEL001"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
                 Categoría *
               </label>
               <Select
@@ -119,6 +154,27 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
                   {categories.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-black mb-2">
+                Unidad de Medida *
+              </label>
+              <Select
+                value={formData.unit}
+                onValueChange={(value) => handleInputChange('unit', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar unidad..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {unit}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -153,27 +209,6 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-black mb-2">
-                Unidad de Medida *
-              </label>
-              <Select
-                value={formData.unit}
-                onValueChange={(value) => handleInputChange('unit', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar unidad..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {units.map((unit) => (
-                    <SelectItem key={unit} value={unit}>
-                      {unit}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
                 Color
               </label>
               <Input
@@ -190,11 +225,36 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
               <Input
                 type="number"
                 min="0"
-                value={formData.minStockAlert}
-                onChange={(e) => handleInputChange('minStockAlert', parseInt(e.target.value) || 0)}
+                value={formData.min_stock_alert}
+                onChange={(e) => handleInputChange('min_stock_alert', parseInt(e.target.value) || 0)}
                 placeholder="0"
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-black mb-2">
+                Costo Unitario
+              </label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.unit_cost}
+                onChange={(e) => handleInputChange('unit_cost', parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-black mb-2">
+              Proveedor
+            </label>
+            <Input
+              value={formData.supplier}
+              onChange={(e) => handleInputChange('supplier', e.target.value)}
+              placeholder="Nombre del proveedor"
+            />
           </div>
 
           <div>
@@ -246,14 +306,16 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
               type="button"
               variant="outline"
               onClick={onClose}
+              disabled={loading}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               className="bg-blue-500 hover:bg-blue-600 text-white"
+              disabled={loading}
             >
-              {material ? 'Actualizar' : 'Crear'} Material
+              {loading ? 'Guardando...' : (material ? 'Actualizar' : 'Crear')} Material
             </Button>
           </div>
         </form>

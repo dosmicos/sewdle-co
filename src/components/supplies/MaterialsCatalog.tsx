@@ -7,64 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Edit, Trash2, Package, AlertTriangle } from 'lucide-react';
 import MaterialForm from './MaterialForm';
-
-interface Material {
-  id: string;
-  sku: string;
-  name: string;
-  description: string;
-  unit: string;
-  color: string;
-  category: string;
-  minStockAlert: number;
-  currentStock: number;
-  image?: string;
-  createdAt: string;
-}
+import { useMaterials } from '@/hooks/useMaterials';
 
 const MaterialsCatalog = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-
-  // Mock data
-  const materials: Material[] = [
-    {
-      id: '1',
-      sku: 'TEL001',
-      name: 'Tela Algodón Premium',
-      description: 'Tela de algodón 100% para prendas infantiles',
-      unit: 'metros',
-      color: 'Azul Marino',
-      category: 'Telas',
-      minStockAlert: 50,
-      currentStock: 25,
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      sku: 'AVI001',
-      name: 'Botones Plásticos',
-      description: 'Botones redondos de 15mm',
-      unit: 'unidades',
-      color: 'Blanco',
-      category: 'Avíos',
-      minStockAlert: 100,
-      currentStock: 150,
-      createdAt: '2024-01-20'
-    },
-    {
-      id: '3',
-      sku: 'ETI001',
-      name: 'Etiquetas Marca',
-      description: 'Etiquetas bordadas con logo de marca',
-      unit: 'unidades',
-      color: 'Negro',
-      category: 'Etiquetas',
-      minStockAlert: 200,
-      currentStock: 50,
-      createdAt: '2024-01-25'
-    }
-  ];
+  const [editingMaterial, setEditingMaterial] = useState<any | null>(null);
+  const { materials, loading, deleteMaterial } = useMaterials();
 
   const filteredMaterials = materials.filter(material =>
     material.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -72,15 +20,33 @@ const MaterialsCatalog = () => {
     material.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getStockStatus = (material: Material) => {
-    if (material.currentStock <= material.minStockAlert) {
+  const getStockStatus = (material: any) => {
+    if (material.stock_status === 'critical') {
       return { status: 'critical', color: 'bg-red-500', text: 'Stock Crítico' };
     }
-    if (material.currentStock <= material.minStockAlert * 1.5) {
+    if (material.stock_status === 'warning') {
       return { status: 'warning', color: 'bg-yellow-500', text: 'Stock Bajo' };
     }
     return { status: 'good', color: 'bg-green-500', text: 'Stock OK' };
   };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este material?')) {
+      await deleteMaterial(id);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <div className="text-center py-12">
+          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2 text-black">Cargando materiales...</h3>
+          <p className="text-gray-600">Por favor espera mientras cargamos el catálogo</p>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -128,11 +94,11 @@ const MaterialsCatalog = () => {
                     <TableCell>
                       <Badge variant="outline">{material.category}</Badge>
                     </TableCell>
-                    <TableCell>{material.color}</TableCell>
+                    <TableCell>{material.color || '-'}</TableCell>
                     <TableCell>{material.unit}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <span className="font-medium">{material.currentStock}</span>
+                        <span className="font-medium">{material.current_stock}</span>
                         {stockStatus.status === 'critical' && (
                           <AlertTriangle className="w-4 h-4 text-red-500" />
                         )}
@@ -156,6 +122,7 @@ const MaterialsCatalog = () => {
                           variant="ghost"
                           size="sm"
                           className="text-red-500 hover:text-red-700"
+                          onClick={() => handleDelete(material.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>

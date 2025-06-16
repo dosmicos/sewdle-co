@@ -4,52 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useMaterials } from '@/hooks/useMaterials';
 
 interface SuppliesManagerProps {
   supplies: any[];
   onSuppliesChange: (supplies: any[]) => void;
 }
 
-interface Material {
-  id: string;
-  name: string;
-  sku: string;
-  unit: string;
-  category: string;
-  description?: string;
-}
-
 const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) => {
-  const [availableMaterials, setAvailableMaterials] = useState<Material[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
-
-  const fetchMaterials = async () => {
-    try {
-      setLoading(true);
-      
-      const { data: materials, error } = await supabase
-        .from('materials')
-        .select('id, name, sku, unit, category, description')
-        .order('name');
-
-      if (error) {
-        console.error('Error fetching materials:', error);
-        return;
-      }
-
-      console.log('Fetched materials from database:', materials);
-      setAvailableMaterials(materials || []);
-    } catch (error) {
-      console.error('Error fetching materials:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { materials, loading } = useMaterials();
 
   const addSupply = () => {
     const newSupply = {
@@ -73,7 +36,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
     
     // Si se cambia el material, actualizar automáticamente la unidad
     if (field === 'materialId') {
-      const selectedMaterial = availableMaterials.find(m => m.id === value);
+      const selectedMaterial = materials.find(m => m.id === value);
       if (selectedMaterial) {
         updated[index].unit = selectedMaterial.unit;
       }
@@ -83,7 +46,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
   };
 
   const getSelectedMaterial = (materialId: string) => {
-    return availableMaterials.find(m => m.id === materialId);
+    return materials.find(m => m.id === materialId);
   };
 
   if (loading) {
@@ -94,7 +57,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
     );
   }
 
-  if (availableMaterials.length === 0) {
+  if (materials.length === 0) {
     return (
       <div className="text-center py-4">
         <p className="text-gray-600">No hay materiales disponibles. Crea materiales primero en la sección de Insumos.</p>
@@ -135,7 +98,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                     <SelectValue placeholder="Seleccionar material..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableMaterials.map((material) => (
+                    {materials.map((material) => (
                       <SelectItem key={material.id} value={material.id}>
                         {material.sku} - {material.name}
                       </SelectItem>
@@ -195,6 +158,9 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                     <div className="text-sm text-gray-600">Categoría: {selectedMaterial.category}</div>
                     {selectedMaterial.description && (
                       <div className="text-sm text-gray-600 mt-1">{selectedMaterial.description}</div>
+                    )}
+                    {selectedMaterial.supplier && (
+                      <div className="text-sm text-gray-600">Proveedor: {selectedMaterial.supplier}</div>
                     )}
                   </div>
                 </div>
