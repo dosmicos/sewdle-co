@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ const LoginPage = () => {
   const { login } = useAuth();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast({
@@ -37,17 +37,17 @@ const LoginPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, password, login, toast]);
 
-  const fillAdminCredentials = () => {
+  const fillAdminCredentials = useCallback(() => {
     setEmail('admin@textilflow.com');
     setPassword('admin123456');
-  };
+  }, []);
 
-  const fillWorkshopCredentials = () => {
+  const fillWorkshopCredentials = useCallback(() => {
     setEmail('taller1@ejemplo.com');
     setPassword('password123');
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">

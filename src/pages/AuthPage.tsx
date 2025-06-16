@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ const AuthPage = () => {
   const { login } = useAuth();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast({
@@ -40,7 +40,6 @@ const AuthPage = () => {
     setIsLoading(true);
     try {
       if (isSignUp) {
-        // Sign up new user
         const redirectUrl = `${window.location.origin}/`;
         const { data, error } = await supabase.auth.signUp({
           email: email.toLowerCase().trim(),
@@ -60,12 +59,10 @@ const AuthPage = () => {
             title: "Registro exitoso",
             description: "Se ha enviado un enlace de confirmación a tu correo electrónico",
           });
-          // Switch to login mode
           setIsSignUp(false);
           setName('');
         }
       } else {
-        // Login existing user
         await login(email, password);
       }
     } catch (error) {
@@ -77,19 +74,24 @@ const AuthPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, password, name, isSignUp, login, toast]);
 
-  const fillAdminCredentials = () => {
+  const fillAdminCredentials = useCallback(() => {
     setEmail('admin@textilflow.com');
     setPassword('admin123456');
     setIsSignUp(false);
-  };
+  }, []);
 
-  const fillWorkshopCredentials = () => {
+  const fillWorkshopCredentials = useCallback(() => {
     setEmail('taller1@ejemplo.com');
     setPassword('password123');
     setIsSignUp(false);
-  };
+  }, []);
+
+  const toggleMode = useCallback(() => {
+    setIsSignUp(!isSignUp);
+    setName('');
+  }, [isSignUp]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -166,10 +168,7 @@ const AuthPage = () => {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setName('');
-              }}
+              onClick={toggleMode}
               className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
               disabled={isLoading}
             >
