@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, ExternalLink, Package, AlertCircle, X } from 'lucide-react';
+import { Search, ExternalLink, Package, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,6 +34,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
+  const [allProducts, setAllProducts] = useState<ShopifyProduct[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [shopifyCredentials, setShopifyCredentials] = useState({
     storeDomain: '',
@@ -54,6 +55,20 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
       loadInitialProducts(credentials);
     }
   }, []);
+
+  // Filtrar productos cuando cambie el término de búsqueda
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setProducts(allProducts);
+    } else {
+      const filtered = allProducts.filter(product =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.brand?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setProducts(filtered);
+    }
+  }, [searchTerm, allProducts]);
 
   const loadInitialProducts = async (credentials: { storeDomain: string; accessToken: string }) => {
     setIsLoading(true);
@@ -83,6 +98,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         status: product.status === 'active' ? 'active' : 'draft'
       }));
 
+      setAllProducts(shopifyProducts);
       setProducts(shopifyProducts);
     } catch (error) {
       console.error('Error loading initial products:', error);
@@ -150,6 +166,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         status: product.status === 'active' ? 'active' : 'draft'
       }));
 
+      setAllProducts(shopifyProducts);
       setProducts(shopifyProducts);
       setIsConnected(true);
       
@@ -177,6 +194,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   const disconnectShopify = () => {
     setIsConnected(false);
     setProducts([]);
+    setAllProducts([]);
     setShopifyCredentials({ storeDomain: '', accessToken: '' });
     setSearchTerm('');
     
@@ -188,58 +206,6 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
       title: "Desconectado",
       description: "Se ha desconectado de Shopify"
     });
-  };
-
-  const fetchShopifyProducts = async () => {
-    if (!isConnected) return;
-    
-    setIsLoading(true);
-    try {
-      const data = await callShopifyFunction(searchTerm);
-      
-      // Convertir productos de Shopify al formato interno
-      const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
-        id: product.id.toString(),
-        name: product.title,
-        description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : '',
-        price: product.variants?.[0]?.price || '0.00',
-        variants: product.variants?.map((variant: any) => ({
-          size: variant.option1 || variant.title || '',
-          color: variant.option2 || '',
-          price: variant.price || '0.00',
-          sku: variant.sku || ''
-        })) || [],
-        image: product.images?.[0]?.src || '',
-        sku: product.variants?.[0]?.sku || '',
-        category: product.product_type || '',
-        brand: product.vendor || '',
-        specifications: product.body_html || '',
-        status: product.status === 'active' ? 'active' : 'draft'
-      }));
-
-      setProducts(shopifyProducts);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      setIsLoading(false);
-      toast({
-        title: "Error al buscar productos",
-        description: "No se pudieron cargar los productos de Shopify",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleSearch = () => {
-    if (!isConnected) {
-      toast({
-        title: "No conectado",
-        description: "Primero debes conectarte a Shopify",
-        variant: "destructive"
-      });
-      return;
-    }
-    fetchShopifyProducts();
   };
 
   if (!isConnected) {
@@ -309,55 +275,47 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg text-black flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Productos de Shopify (Activos y Borrador)
-            </CardTitle>
-            <Button
-              onClick={disconnectShopify}
-              variant="outline"
-              size="sm"
-              className="text-red-600 hover:text-red-700 hover:border-red-300"
-            >
-              <X className="w-4 h-4 mr-1" />
-              Desconectar
-            </Button>
-          </div>
+          <CardTitle className="text-lg text-black flex items-center gap-2">
+            <Package className="w-5 h-5" />
+            Productos de Shopify (Activos y Borrador)
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex space-x-4 mb-6">
-            <div className="flex-1">
-              <Label htmlFor="search" className="text-black">Buscar productos</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-                <Input
-                  id="search"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Nombre del producto, SKU..."
-                  className="pl-10 text-black"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
-              </div>
-            </div>
-            <div className="flex items-end">
-              <Button 
-                onClick={handleSearch}
-                disabled={isLoading}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                {isLoading ? 'Buscando...' : 'Buscar'}
-              </Button>
+          <div className="mb-6">
+            <Label htmlFor="search" className="text-black">Buscar productos</Label>
+            <div className="relative mt-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+              <Input
+                id="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Nombre del producto, SKU, marca..."
+                className="pl-10 text-black"
+              />
             </div>
           </div>
 
-          {products.length > 0 && (
+          {isLoading && (
+            <div className="text-center py-8">
+              <p className="text-gray-600">Cargando productos...</p>
+            </div>
+          )}
+
+          {!isLoading && products.length > 0 && (
             <div className="space-y-4">
               {products.map((product) => (
                 <Card key={product.id} className="border border-gray-200 hover:border-blue-300 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex justify-between items-start">
+                    <div className="flex items-start gap-4">
+                      {product.image && (
+                        <div className="flex-shrink-0">
+                          <img 
+                            src={product.image} 
+                            alt={product.name}
+                            className="w-16 h-16 object-cover rounded-lg border"
+                          />
+                        </div>
+                      )}
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <h4 className="font-medium text-black">{product.name}</h4>
@@ -368,10 +326,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                             {product.status === 'active' ? 'Activo' : 'Borrador'}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{product.description}</p>
                         <div className="flex flex-wrap gap-2 mt-3">
                           <Badge variant="secondary" className="text-xs">
-                            SKU: {product.sku}
+                            SKU: {product.sku || 'N/A'}
                           </Badge>
                           <Badge variant="outline" className="text-xs">
                             {product.variants.length} variantes
@@ -379,6 +336,11 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                           <Badge variant="outline" className="text-xs">
                             ${product.price}
                           </Badge>
+                          {product.brand && (
+                            <Badge variant="outline" className="text-xs">
+                              {product.brand}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                       <Button
@@ -395,17 +357,17 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
             </div>
           )}
 
-          {products.length === 0 && !isLoading && searchTerm && (
+          {!isLoading && products.length === 0 && searchTerm && (
             <div className="text-center py-8">
               <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No se encontraron productos activos o en borrador</p>
+              <p className="text-gray-600">No se encontraron productos que coincidan con "{searchTerm}"</p>
             </div>
           )}
 
-          {products.length === 0 && !isLoading && !searchTerm && (
+          {!isLoading && products.length === 0 && !searchTerm && allProducts.length === 0 && (
             <div className="text-center py-8">
               <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">Haz clic en "Buscar" para cargar todos los productos</p>
+              <p className="text-gray-600">No hay productos disponibles</p>
             </div>
           )}
         </CardContent>
