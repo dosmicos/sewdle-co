@@ -1,21 +1,27 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Users, FileText, Calendar } from 'lucide-react';
+import { Plus, Search, Users, FileText, Calendar, Eye, Edit, Trash2 } from 'lucide-react';
 import OrderForm from '@/components/OrderForm';
 import WorkshopAssignmentForm from '@/components/WorkshopAssignmentForm';
 import WorkshopAssignmentsList from '@/components/WorkshopAssignmentsList';
 import WorkshopCapacityDashboard from '@/components/WorkshopCapacityDashboard';
+import OrderDetailsModal from '@/components/OrderDetailsModal';
+import OrderEditModal from '@/components/OrderEditModal';
 import { useOrders } from '@/hooks/useOrders';
+import { useOrderActions } from '@/hooks/useOrderActions';
 import { Badge } from '@/components/ui/badge';
 
 const OrdersPage = () => {
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const { fetchOrders, loading } = useOrders();
+  const { deleteOrder } = useOrderActions();
 
   useEffect(() => {
     loadOrders();
@@ -24,6 +30,24 @@ const OrdersPage = () => {
   const loadOrders = async () => {
     const ordersData = await fetchOrders();
     setOrders(ordersData || []);
+  };
+
+  const handleViewDetails = (order: any) => {
+    setSelectedOrder(order);
+    setShowDetailsModal(true);
+  };
+
+  const handleEdit = (order: any) => {
+    setSelectedOrder(order);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (orderId: string) => {
+    const success = await deleteOrder(orderId);
+    if (success) {
+      loadOrders(); // Recargar la lista
+      setShowDetailsModal(false); // Cerrar modal si está abierto
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -175,12 +199,12 @@ const OrdersPage = () => {
                               </div>
                             </div>
                           </div>
-                          <div className="text-right">
+                          <div className="flex items-center space-x-2">
                             <Badge className={getStatusColor(order.status)}>
                               {getStatusText(order.status)}
                             </Badge>
                             {order.total_amount && (
-                              <p className="text-lg font-semibold text-black mt-2">
+                              <p className="text-lg font-semibold text-black">
                                 {formatCurrency(order.total_amount)}
                               </p>
                             )}
@@ -193,24 +217,53 @@ const OrdersPage = () => {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <span className="font-medium text-gray-700">Productos: </span>
-                            <span className="text-gray-600">
-                              {order.order_items?.length || 0} items
-                            </span>
+                        <div className="flex items-center justify-between">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm flex-1">
+                            <div>
+                              <span className="font-medium text-gray-700">Productos: </span>
+                              <span className="text-gray-600">
+                                {order.order_items?.length || 0} items
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Insumos: </span>
+                              <span className="text-gray-600">
+                                {order.order_supplies?.length || 0} materiales
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Archivos: </span>
+                              <span className="text-gray-600">
+                                {order.order_files?.length || 0} adjuntos
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Insumos: </span>
-                            <span className="text-gray-600">
-                              {order.order_supplies?.length || 0} materiales
-                            </span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">Archivos: </span>
-                            <span className="text-gray-600">
-                              {order.order_files?.length || 0} adjuntos
-                            </span>
+                          
+                          <div className="flex items-center space-x-2 ml-4">
+                            <Button
+                              onClick={() => handleViewDetails(order)}
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleEdit(order)}
+                              variant="outline"
+                              size="sm"
+                              className="text-green-600 border-green-300 hover:bg-green-50"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDelete(order.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-300 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -242,6 +295,25 @@ const OrdersPage = () => {
         <WorkshopAssignmentForm 
           open={showAssignmentForm} 
           onClose={() => setShowAssignmentForm(false)} 
+        />
+      )}
+
+      {showDetailsModal && selectedOrder && (
+        <OrderDetailsModal
+          order={selectedOrder}
+          open={showDetailsModal}
+          onClose={() => setShowDetailsModal(false)}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {showEditModal && selectedOrder && (
+        <OrderEditModal
+          order={selectedOrder}
+          open={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={loadOrders}
         />
       )}
     </>

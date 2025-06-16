@@ -1,382 +1,419 @@
-
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, ExternalLink, Package, AlertCircle } from 'lucide-react';
+import { Loader2, Search, Package, Download, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ShopifyProduct {
-  id: string;
-  name: string;
-  description: string;
-  price: string;
-  variants: Array<{ size: string; color: string; price: string; sku: string }>;
-  image?: string;
-  sku?: string;
-  category?: string;
-  brand?: string;
-  specifications?: string;
-  status: 'active' | 'draft';
+  id: number;
+  title: string;
+  handle: string;
+  product_type: string;
+  vendor: string;
+  images: Array<{
+    src: string;
+    alt: string;
+  }>;
+  variants: Array<{
+    id: number;
+    title: string;
+    price: string;
+    sku: string;
+    inventory_quantity: number;
+    option1: string;
+    option2: string;
+    option3: string;
+    stock_quantity?: number;
+  }>;
+  options: Array<{
+    name: string;
+    values: string[];
+  }>;
 }
 
 interface ShopifyProductImportProps {
-  onProductSelect: (product: ShopifyProduct) => void;
+  open: boolean;
+  onClose: () => void;
+  onProductImported: () => void;
 }
 
-const SHOPIFY_CREDENTIALS_KEY = 'shopify_credentials';
-const SHOPIFY_CONNECTION_KEY = 'shopify_connected';
-
-const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) => {
+const ShopifyProductImport = ({ open, onClose, onProductImported }: ShopifyProductImportProps) => {
+  const [storeDomain, setStoreDomain] = useState('');
+  const [accessToken, setAccessToken] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
-  const [allProducts, setAllProducts] = useState<ShopifyProduct[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [shopifyCredentials, setShopifyCredentials] = useState({
-    storeDomain: '',
-    accessToken: ''
-  });
+  const [loading, setLoading] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [importing, setImporting] = useState<number | null>(null);
   const { toast } = useToast();
 
-  // Cargar credenciales y estado de conexión al inicializar
   useEffect(() => {
-    const savedCredentials = localStorage.getItem(SHOPIFY_CREDENTIALS_KEY);
-    const savedConnection = localStorage.getItem(SHOPIFY_CONNECTION_KEY);
-    
-    if (savedCredentials && savedConnection === 'true') {
-      const credentials = JSON.parse(savedCredentials);
-      setShopifyCredentials(credentials);
-      setIsConnected(true);
-      // Cargar productos automáticamente
-      loadInitialProducts(credentials);
+    // Cargar credenciales guardadas al abrir el modal
+    if (open) {
+      loadSavedCredentials();
     }
-  }, []);
+  }, [open]);
 
-  // Filtrar productos cuando cambie el término de búsqueda
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setProducts(allProducts);
-    } else {
-      const filtered = allProducts.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.brand?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setProducts(filtered);
-    }
-  }, [searchTerm, allProducts]);
-
-  const loadInitialProducts = async (credentials: { storeDomain: string; accessToken: string }) => {
-    setIsLoading(true);
+  const loadSavedCredentials = async () => {
     try {
-      const data = await callShopifyFunction('', credentials);
-      
-      if (!data.products) {
-        throw new Error('No se encontraron productos en la respuesta de Shopify');
+      const { data: secrets } = await supabase.functions.invoke('get-secrets');
+      if (secrets) {
+        setStoreDomain(secrets.SHOPIFY_STORE_DOMAIN || '');
+        setAccessToken(secrets.SHOPIFY_ACCESS_TOKEN || '');
+        if (secrets.SHOPIFY_STORE_DOMAIN && secrets.SHOPIFY_ACCESS_TOKEN) {
+          setConnected(true);
+        }
       }
-
-      const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
-        id: product.id.toString(),
-        name: product.title,
-        description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : '',
-        price: product.variants?.[0]?.price || '0.00',
-        variants: product.variants?.map((variant: any) => ({
-          size: variant.option1 || variant.title || '',
-          color: variant.option2 || '',
-          price: variant.price || '0.00',
-          sku: variant.sku || '',
-          stock_quantity: variant.stock_quantity || 0
-        })) || [],
-        image: product.images?.[0]?.src || '',
-        sku: product.variants?.[0]?.sku || '',
-        category: product.product_type || '',
-        brand: product.vendor || '',
-        specifications: product.body_html || '',
-        status: product.status === 'active' ? 'active' : 'draft'
-      }));
-
-      setAllProducts(shopifyProducts);
-      setProducts(shopifyProducts);
     } catch (error) {
-      console.error('Error loading initial products:', error);
-      disconnectShopify();
-    } finally {
-      setIsLoading(false);
+      console.log('No hay credenciales guardadas');
     }
-  };
-
-  const callShopifyFunction = async (searchTerm = '', credentials = shopifyCredentials) => {
-    const { data, error } = await supabase.functions.invoke('shopify-products', {
-      body: {
-        storeDomain: credentials.storeDomain,
-        accessToken: credentials.accessToken,
-        searchTerm: searchTerm
-      }
-    });
-
-    if (error) {
-      console.error('Supabase function error:', error);
-      throw new Error(error.message || 'Error calling Shopify function');
-    }
-
-    return data;
   };
 
   const connectToShopify = async () => {
-    if (!shopifyCredentials.storeDomain || !shopifyCredentials.accessToken) {
+    if (!storeDomain || !accessToken) {
       toast({
         title: "Credenciales requeridas",
-        description: "Por favor ingresa el dominio de la tienda y el token de acceso",
+        description: "Por favor ingresa el dominio de la tienda y el token de acceso.",
         variant: "destructive"
       });
       return;
     }
 
-    setIsLoading(true);
+    setLoading(true);
     try {
-      console.log('Connecting to Shopify via Edge function...');
-
-      const data = await callShopifyFunction();
-
-      if (!data.products) {
-        throw new Error('No se encontraron productos en la respuesta de Shopify');
-      }
-
-      // Convertir productos de Shopify al formato interno
-      const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
-        id: product.id.toString(),
-        name: product.title,
-        description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : '',
-        price: product.variants?.[0]?.price || '0.00',
-        variants: product.variants?.map((variant: any) => ({
-          size: variant.option1 || variant.title || '',
-          color: variant.option2 || '',
-          price: variant.price || '0.00',
-          sku: variant.sku || '',
-          stock_quantity: variant.stock_quantity || 0
-        })) || [],
-        image: product.images?.[0]?.src || '',
-        sku: product.variants?.[0]?.sku || '',
-        category: product.product_type || '',
-        brand: product.vendor || '',
-        specifications: product.body_html || '',
-        status: product.status === 'active' ? 'active' : 'draft'
-      }));
-
-      setAllProducts(shopifyProducts);
-      setProducts(shopifyProducts);
-      setIsConnected(true);
-      
-      // Guardar credenciales y estado de conexión
-      localStorage.setItem(SHOPIFY_CREDENTIALS_KEY, JSON.stringify(shopifyCredentials));
-      localStorage.setItem(SHOPIFY_CONNECTION_KEY, 'true');
-      
-      setIsLoading(false);
-      
-      toast({
-        title: "Conectado exitosamente",
-        description: `Se encontraron ${shopifyProducts.length} productos (activos y en borrador)`
+      const { data, error } = await supabase.functions.invoke('shopify-products', {
+        body: { 
+          storeDomain: storeDomain.trim(),
+          accessToken: accessToken.trim(),
+          searchTerm: ''
+        }
       });
+
+      if (error) throw error;
+
+      if (data.products) {
+        setProducts(data.products);
+        setConnected(true);
+        toast({
+          title: "Conectado exitosamente",
+          description: `Se encontraron ${data.products.length} productos en tu tienda Shopify.`
+        });
+      }
     } catch (error) {
       console.error('Error connecting to Shopify:', error);
-      setIsLoading(false);
       toast({
         title: "Error de conexión",
-        description: error instanceof Error ? error.message : "No se pudo conectar con Shopify. Verifica tus credenciales.",
+        description: "No se pudo conectar a Shopify. Verifica tus credenciales.",
         variant: "destructive"
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const disconnectShopify = () => {
-    setIsConnected(false);
-    setProducts([]);
-    setAllProducts([]);
-    setShopifyCredentials({ storeDomain: '', accessToken: '' });
-    setSearchTerm('');
-    
-    // Limpiar localStorage
-    localStorage.removeItem(SHOPIFY_CREDENTIALS_KEY);
-    localStorage.removeItem(SHOPIFY_CONNECTION_KEY);
-    
-    toast({
-      title: "Desconectado",
-      description: "Se ha desconectado de Shopify"
-    });
+  const searchProducts = async () => {
+    if (!connected) {
+      await connectToShopify();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('shopify-products', {
+        body: { 
+          storeDomain: storeDomain.trim(),
+          accessToken: accessToken.trim(),
+          searchTerm: searchTerm.trim()
+        }
+      });
+
+      if (error) throw error;
+
+      setProducts(data.products || []);
+    } catch (error) {
+      console.error('Error searching products:', error);
+      toast({
+        title: "Error en la búsqueda",
+        description: "No se pudieron buscar los productos.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!isConnected) {
-    return (
-      <Card className="bg-gray-50 border-2 border-dashed border-gray-300">
-        <CardContent className="p-8">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ExternalLink className="w-8 h-8 text-gray-500" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2 text-black">Conectar con Shopify</h3>
-            <p className="text-gray-600 mb-6">
-              Conecta tu tienda de Shopify para importar productos activos y en borrador
-            </p>
-          </div>
+  const importProduct = async (product: ShopifyProduct) => {
+    setImporting(product.id);
+    
+    try {
+      console.log('Importing product:', product);
 
-          <div className="space-y-4 max-w-md mx-auto">
-            <div>
-              <Label htmlFor="storeDomain" className="text-black">Dominio de la tienda</Label>
-              <Input
-                id="storeDomain"
-                value={shopifyCredentials.storeDomain}
-                onChange={(e) => setShopifyCredentials(prev => ({ ...prev, storeDomain: e.target.value }))}
-                placeholder="mitienda.myshopify.com"
-                className="text-black"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="accessToken" className="text-black">Token de acceso privado</Label>
-              <Input
-                id="accessToken"
-                type="password"
-                value={shopifyCredentials.accessToken}
-                onChange={(e) => setShopifyCredentials(prev => ({ ...prev, accessToken: e.target.value }))}
-                placeholder="shppa_..."
-                className="text-black"
-              />
-            </div>
+      // Crear el producto en la base de datos
+      const { data: createdProduct, error: productError } = await supabase
+        .from('products')
+        .insert([
+          {
+            name: product.title,
+            description: `Producto importado desde Shopify - ${product.product_type}`,
+            sku: product.handle,
+            category: product.product_type || 'General',
+            price: parseFloat(product.variants[0]?.price || '0'),
+            image_url: product.images[0]?.src || null,
+            shopify_product_id: product.id.toString(),
+            vendor: product.vendor || null
+          }
+        ])
+        .select()
+        .single();
 
-            <Button 
-              onClick={connectToShopify}
-              disabled={isLoading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-            >
-              {isLoading ? 'Conectando...' : 'Conectar Shopify'}
-            </Button>
-          </div>
+      if (productError) {
+        console.error('Error creating product:', productError);
+        throw productError;
+      }
+
+      console.log('Created product:', createdProduct);
+
+      // Crear las variantes del producto
+      if (product.variants && product.variants.length > 0) {
+        const variants = product.variants.map(variant => {
+          // Obtener las opciones de la variante
+          const options = product.options || [];
+          const variantOptions: { [key: string]: string } = {};
           
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <div className="flex items-start space-x-3">
-              <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5" />
-              <div className="text-left">
-                <p className="text-sm font-medium text-blue-900">Configuración requerida</p>
-                <p className="text-sm text-blue-700 mt-1">
-                  Necesitas un token de acceso privado con permisos de lectura de productos desde tu panel de Shopify.
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+          if (options[0] && variant.option1) variantOptions[options[0].name.toLowerCase()] = variant.option1;
+          if (options[1] && variant.option2) variantOptions[options[1].name.toLowerCase()] = variant.option2;
+          if (options[2] && variant.option3) variantOptions[options[2].name.toLowerCase()] = variant.option3;
+
+          return {
+            product_id: createdProduct.id,
+            size: variantOptions['size'] || variantOptions['talla'] || variant.option1 || 'Única',
+            color: variantOptions['color'] || variantOptions['colour'] || variant.option2 || 'Único',
+            sku: variant.sku || `${product.handle}-${variant.id}`,
+            price: parseFloat(variant.price || '0'),
+            stock_quantity: variant.stock_quantity || variant.inventory_quantity || 0,
+            shopify_variant_id: variant.id.toString()
+          };
+        });
+
+        console.log('Creating variants:', variants);
+
+        const { error: variantsError } = await supabase
+          .from('product_variants')
+          .insert(variants);
+
+        if (variantsError) {
+          console.error('Error creating variants:', variantsError);
+          throw variantsError;
+        }
+
+        console.log('Successfully created variants');
+      }
+
+      toast({
+        title: "Producto importado",
+        description: `${product.title} ha sido importado exitosamente con ${product.variants.length} variantes.`
+      });
+
+      onProductImported();
+
+    } catch (error) {
+      console.error('Error importing product:', error);
+      toast({
+        title: "Error al importar",
+        description: "No se pudo importar el producto. Intenta de nuevo.",
+        variant: "destructive"
+      });
+    } finally {
+      setImporting(null);
+    }
+  };
+
+  const formatPrice = (price: string) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP'
+    }).format(parseFloat(price) * 1000); // Asumiendo conversión aproximada
+  };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-black flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Productos de Shopify (Activos y Borrador)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-6">
-            <Label htmlFor="search" className="text-black">Buscar productos</Label>
-            <div className="relative mt-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <Input
-                id="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Nombre del producto, SKU, marca..."
-                className="pl-10 text-black"
-              />
-            </div>
-          </div>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold text-black">
+            Importar Productos desde Shopify
+          </DialogTitle>
+        </DialogHeader>
 
-          {isLoading && (
-            <div className="text-center py-8">
-              <p className="text-gray-600">Cargando productos...</p>
-            </div>
-          )}
+        <div className="space-y-6">
+          {!connected ? (
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 text-black">Conectar con Shopify</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="storeDomain">Dominio de la tienda</Label>
+                  <Input
+                    id="storeDomain"
+                    placeholder="mi-tienda.myshopify.com"
+                    value={storeDomain}
+                    onChange={(e) => setStoreDomain(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="accessToken">Token de acceso privado</Label>
+                  <Input
+                    id="accessToken"
+                    type="password"
+                    placeholder="shpat_..."
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                  />
+                </div>
+                <Button 
+                  onClick={connectToShopify}
+                  disabled={loading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Conectando...
+                    </>
+                  ) : (
+                    <>
+                      <Package className="w-4 h-4 mr-2" />
+                      Conectar con Shopify
+                    </>
+                  )}
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card className="p-4 bg-green-50 border-green-200">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="text-green-800 font-medium">
+                    Conectado a {storeDomain}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConnected(false)}
+                    className="ml-auto text-green-700 hover:text-green-900"
+                  >
+                    Cambiar credenciales
+                  </Button>
+                </div>
+              </Card>
 
-          {!isLoading && products.length > 0 && (
-            <div className="space-y-4">
-              {products.map((product) => (
-                <Card key={product.id} className="border border-gray-200 hover:border-blue-300 transition-colors">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      {product.image && (
-                        <div className="flex-shrink-0">
+              <div className="flex space-x-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Buscar productos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && searchProducts()}
+                  />
+                </div>
+                <Button 
+                  onClick={searchProducts}
+                  disabled={loading}
+                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+
+              {products.length > 0 && (
+                <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                  {products.map((product) => (
+                    <Card key={product.id} className="p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start space-x-4">
+                        {product.images[0] && (
                           <img 
-                            src={product.image} 
-                            alt={product.name}
-                            className="w-16 h-16 object-cover rounded-lg border"
+                            src={product.images[0].src} 
+                            alt={product.title}
+                            className="w-16 h-16 object-cover rounded-lg"
                           />
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-medium text-black">{product.name}</h4>
-                          <Badge 
-                            variant={product.status === 'active' ? 'default' : 'secondary'}
-                            className={product.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
-                          >
-                            {product.status === 'active' ? 'Activo' : 'Borrador'}
-                          </Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <Badge variant="secondary" className="text-xs">
-                            SKU: {product.sku || 'N/A'}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {product.variants.length} variantes
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            ${product.price}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                            Stock: {product.variants.reduce((total, variant) => total + (variant.stock_quantity || 0), 0)}
-                          </Badge>
-                          {product.brand && (
-                            <Badge variant="outline" className="text-xs">
-                              {product.brand}
-                            </Badge>
-                          )}
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="font-semibold text-black">{product.title}</h3>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <Badge variant="secondary">{product.product_type}</Badge>
+                                <Badge variant="outline">{product.vendor}</Badge>
+                              </div>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {product.variants.length} variante(s) • 
+                                Desde {formatPrice(product.variants[0]?.price || '0')}
+                              </p>
+                            </div>
+                            <Button
+                              onClick={() => importProduct(product)}
+                              disabled={importing === product.id}
+                              className="bg-blue-500 hover:bg-blue-600 text-white"
+                            >
+                              {importing === product.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Importando...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Importar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          
+                          <div className="mt-3 space-y-2">
+                            <p className="text-sm font-medium text-gray-700">Variantes:</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {product.variants.slice(0, 4).map((variant, index) => (
+                                <div key={index} className="text-xs bg-gray-50 p-2 rounded">
+                                  <div className="flex justify-between">
+                                    <span className="font-medium">
+                                      {variant.option1}{variant.option2 ? ` - ${variant.option2}` : ''}
+                                    </span>
+                                    <span className="text-gray-600">
+                                      Stock: {variant.stock_quantity || variant.inventory_quantity || 0}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between mt-1">
+                                    <span className="text-gray-600">SKU: {variant.sku}</span>
+                                    <span className="font-medium">{formatPrice(variant.price)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                              {product.variants.length > 4 && (
+                                <div className="text-xs text-gray-500 p-2">
+                                  +{product.variants.length - 4} variantes más...
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <Button
-                        onClick={() => onProductSelect(product)}
-                        size="sm"
-                        className="bg-blue-500 hover:bg-blue-600 text-white ml-4"
-                      >
-                        Seleccionar
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
           )}
-
-          {!isLoading && products.length === 0 && searchTerm && (
-            <div className="text-center py-8">
-              <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No se encontraron productos que coincidan con "{searchTerm}"</p>
-            </div>
-          )}
-
-          {!isLoading && products.length === 0 && !searchTerm && allProducts.length === 0 && (
-            <div className="text-center py-8">
-              <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No hay productos disponibles</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
