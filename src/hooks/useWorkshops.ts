@@ -58,25 +58,42 @@ export const useWorkshops = () => {
 
   const createWorkshop = async (workshopData: WorkshopInsert) => {
     try {
-      console.log('Creating workshop with data:', workshopData);
+      console.log('=== STARTING WORKSHOP CREATION ===');
+      console.log('Workshop data received:', workshopData);
       
-      // Check if user is authenticated
-      const { data: { session } } = await supabase.auth.getSession();
+      // Check authentication status in detail
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Session check:', { 
+        hasSession: !!session, 
+        userId: session?.user?.id,
+        userEmail: session?.user?.email,
+        sessionError 
+      });
+      
       if (!session?.user) {
         throw new Error('Usuario no autenticado');
       }
-      console.log('User authenticated:', session.user.id);
 
-      // Simplified approach - just try to create the workshop
-      // The RLS policies will handle the permissions
+      // Log the exact data being sent
+      console.log('Data being inserted:', JSON.stringify(workshopData, null, 2));
+      
+      // Try the insert with detailed error logging
+      console.log('Attempting to insert workshop...');
       const { data, error } = await supabase
         .from('workshops')
         .insert(workshopData)
         .select()
         .single();
 
+      console.log('Insert result:', { data, error });
+
       if (error) {
-        console.error('Supabase insert error:', error);
+        console.error('=== SUPABASE INSERT ERROR ===');
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        console.error('Error hint:', error.hint);
+        console.error('Full error object:', JSON.stringify(error, null, 2));
         throw error;
       }
 
@@ -88,13 +105,19 @@ export const useWorkshops = () => {
       });
       return { data, error: null };
     } catch (error: any) {
-      console.error('Error creating workshop:', error);
+      console.error('=== WORKSHOP CREATION ERROR ===');
+      console.error('Error type:', typeof error);
+      console.error('Error message:', error?.message);
+      console.error('Full error:', error);
+      
       let errorMessage = "No se pudo crear el taller";
       
       if (error.message?.includes('Usuario no autenticado')) {
         errorMessage = "Debes iniciar sesión para crear talleres.";
       } else if (error.message?.includes('policy')) {
         errorMessage = "Error de permisos. Verifica tu rol de usuario.";
+      } else if (error.code) {
+        errorMessage = `Error de base de datos: ${error.message}`;
       }
       
       toast({
