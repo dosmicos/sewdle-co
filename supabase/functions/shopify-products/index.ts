@@ -9,17 +9,24 @@ serve(async (req) => {
   }
 
   try {
-    const { storeDomain, accessToken, searchTerm } = await req.json()
+    // Obtener credenciales desde los secretos de Supabase
+    const storeDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    const accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
 
     if (!storeDomain || !accessToken) {
+      console.error('Missing Shopify credentials in environment variables')
       return new Response(
-        JSON.stringify({ error: 'Store domain and access token are required' }),
+        JSON.stringify({ 
+          error: 'Credenciales de Shopify no configuradas. Por favor contacta al administrador.' 
+        }),
         { 
-          status: 400, 
+          status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
+
+    const { searchTerm } = await req.json().catch(() => ({ searchTerm: '' }))
 
     // Limpiar el dominio para asegurar formato correcto
     const cleanDomain = storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
@@ -41,11 +48,13 @@ serve(async (req) => {
     })
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status} - ${response.statusText}`)
+      const errorText = await response.text()
+      console.error(`Shopify API Error: ${response.status} - ${response.statusText}`, errorText)
+      throw new Error(`Error de Shopify: ${response.status} - ${response.statusText}`)
     }
 
     const data = await response.json()
-    console.log('Shopify API Response:', data)
+    console.log(`Successfully fetched ${data.products?.length || 0} products from Shopify`)
 
     // Para cada producto, obtener información de inventario
     if (data.products && data.products.length > 0) {
@@ -100,7 +109,7 @@ serve(async (req) => {
     console.error('Error in shopify-products function:', error)
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to fetch products from Shopify',
+        error: 'Error al conectar con Shopify',
         details: error.message 
       }),
       { 

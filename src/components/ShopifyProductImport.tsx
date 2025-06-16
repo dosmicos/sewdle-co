@@ -1,6 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Package, ExternalLink, Download } from 'lucide-react';
@@ -29,71 +29,77 @@ interface ShopifyProductImportProps {
 }
 
 const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) => {
-  const [storeDomain, setStoreDomain] = useState('');
-  const [accessToken, setAccessToken] = useState('');
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
-    // Cargar las credenciales desde localStorage al montar el componente
-    const storedDomain = localStorage.getItem('shopifyStoreDomain');
-    const storedToken = localStorage.getItem('shopifyAccessToken');
-
-    if (storedDomain) setStoreDomain(storedDomain);
-    if (storedToken) setAccessToken(storedToken);
+    // Cargar productos automáticamente al montar el componente
+    fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (search = '') => {
     setLoading(true);
     try {
-      // Guardar las credenciales en localStorage
-      localStorage.setItem('shopifyStoreDomain', storeDomain);
-      localStorage.setItem('shopifyAccessToken', accessToken);
+      console.log('Fetching products with search term:', search);
 
-      const response = await fetch(`https://${storeDomain}/admin/api/2023-10/products.json`, {
-        method: 'GET',
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json',
-        },
+      const { data, error } = await supabase.functions.invoke('shopify-products', {
+        body: { 
+          searchTerm: search 
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status} - ${response.statusText}`);
+      if (error) {
+        console.error('Error calling shopify-products function:', error);
+        throw new Error(error.message);
       }
 
-      const data = await response.json();
-      console.log('Products from Shopify:', data.products);
+      console.log('Response from shopify-products function:', data);
 
-      const formattedProducts = data.products.map((product: any) => ({
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const formattedProducts = data.products?.map((product: any) => ({
         id: product.id,
         title: product.title,
-        description: product.body_html,
-        price: parseFloat(product.variants[0].price),
-        image_url: product.image?.src || '',
-        variants: product.variants.map((variant: any) => ({
+        description: product.body_html || '',
+        price: parseFloat(product.variants?.[0]?.price || '0'),
+        image_url: product.image?.src || product.images?.[0]?.src || '',
+        variants: product.variants?.map((variant: any) => ({
           size: variant.title !== 'Default Title' ? variant.title : '',
           color: variant.option2 || '',
-          sku: variant.sku,
-          price: parseFloat(variant.price),
-          stock_quantity: variant.inventory_quantity || 0
-        }))
-      }));
+          sku: variant.sku || '',
+          price: parseFloat(variant.price || '0'),
+          stock_quantity: variant.stock_quantity || variant.inventory_quantity || 0
+        })) || []
+      })) || [];
 
       setProducts(formattedProducts);
+
+      if (formattedProducts.length === 0) {
+        toast({
+          title: "Sin resultados",
+          description: "No se encontraron productos con ese término de búsqueda.",
+        });
+      }
 
     } catch (error: any) {
       console.error('Error fetching products from Shopify:', error);
       toast({
         title: "Error al obtener productos de Shopify",
-        description: error.message || "Credenciales inválidas o error en la conexión.",
+        description: error.message || "Error en la conexión con Shopify.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = () => {
+    fetchProducts(searchTerm);
   };
 
   const importProduct = async (product: ShopifyProduct) => {
@@ -177,35 +183,33 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         Conecta tu tienda Shopify para importar productos directamente a tu catálogo.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Dominio de la tienda</label>
-          <Input
-            type="text"
-            placeholder="ejemplo.myshopify.com"
-            value={storeDomain}
-            onChange={(e) => setStoreDomain(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Access Token</label>
-          <Input
-            type="password"
-            placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            value={accessToken}
-            onChange={(e) => setAccessToken(e.target.value)}
-          />
-        </div>
+      {/* Barra de búsqueda */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Buscar productos en Shopify..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+        />
+        <Button onClick={handleSearch} disabled={loading}>
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            "Buscar"
+          )}
+        </Button>
       </div>
 
-      <Button onClick={fetchProducts} disabled={loading} className="w-full">
+      <Button onClick={() => fetchProducts()} disabled={loading} className="w-full">
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Cargando productos...
           </>
         ) : (
-          "Obtener Productos"
+          "Obtener Todos los Productos"
         )}
       </Button>
 
@@ -218,9 +222,17 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                   <Loader2 className="mr-2 h-6 w-6 animate-spin" />
                 </div>
               )}
-              <img src={product.image_url} alt={product.title} className="rounded-md mb-2 h-32 w-full object-cover" />
-              <h4 className="text-md font-semibold text-gray-800">{product.title}</h4>
-              <p className="text-gray-600 text-sm mb-2">{product.description.substring(0, 50)}...</p>
+              {product.image_url && (
+                <img 
+                  src={product.image_url} 
+                  alt={product.title} 
+                  className="rounded-md mb-2 h-32 w-full object-cover" 
+                />
+              )}
+              <h4 className="text-md font-semibold text-gray-800 mb-1">{product.title}</h4>
+              <p className="text-gray-600 text-sm mb-2 line-clamp-2">
+                {product.description.replace(/<[^>]*>/g, '').substring(0, 100)}...
+              </p>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-bold text-green-600">${product.price.toFixed(2)}</span>
                 <Button
@@ -233,21 +245,20 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                   Importar
                 </Button>
               </div>
+              {product.variants && product.variants.length > 1 && (
+                <Badge variant="secondary" className="mt-2">
+                  {product.variants.length} variantes
+                </Badge>
+              )}
             </Card>
           ))}
         </div>
       )}
 
       <div className="text-center text-gray-500">
-        <a
-          href="https://shopify.dev/docs/api/usage/access-tokens"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 hover:underline"
-        >
-          <ExternalLink className="w-4 h-4" />
-          ¿Cómo obtener un Access Token de Shopify?
-        </a>
+        <p className="text-sm">
+          ✅ Conectado automáticamente a Shopify usando credenciales seguras
+        </p>
       </div>
     </Card>
   );
