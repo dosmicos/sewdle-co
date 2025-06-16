@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Search, ExternalLink, Package, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ShopifyProduct {
   id: string;
@@ -37,6 +37,23 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   });
   const { toast } = useToast();
 
+  const callShopifyFunction = async (searchTerm = '') => {
+    const { data, error } = await supabase.functions.invoke('shopify-products', {
+      body: {
+        storeDomain: shopifyCredentials.storeDomain,
+        accessToken: shopifyCredentials.accessToken,
+        searchTerm: searchTerm
+      }
+    });
+
+    if (error) {
+      console.error('Supabase function error:', error);
+      throw new Error(error.message || 'Error calling Shopify function');
+    }
+
+    return data;
+  };
+
   const connectToShopify = async () => {
     if (!shopifyCredentials.storeDomain || !shopifyCredentials.accessToken) {
       toast({
@@ -49,26 +66,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
     setIsLoading(true);
     try {
-      // Limpiar el dominio para asegurar formato correcto
-      const cleanDomain = shopifyCredentials.storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250`;
+      console.log('Connecting to Shopify via Edge function...');
 
-      console.log('Connecting to Shopify API:', apiUrl);
-
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'X-Shopify-Access-Token': shopifyCredentials.accessToken,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Shopify API Response:', data);
+      const data = await callShopifyFunction();
 
       if (!data.products) {
         throw new Error('No se encontraron productos en la respuesta de Shopify');
@@ -118,27 +118,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     
     setIsLoading(true);
     try {
-      const cleanDomain = shopifyCredentials.storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      let apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250`;
-      
-      // Agregar filtro de búsqueda si hay término de búsqueda
-      if (searchTerm.trim()) {
-        apiUrl += `&title=${encodeURIComponent(searchTerm)}`;
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'X-Shopify-Access-Token': shopifyCredentials.accessToken,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await callShopifyFunction(searchTerm);
       
       // Convertir productos de Shopify al formato interno
       const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
