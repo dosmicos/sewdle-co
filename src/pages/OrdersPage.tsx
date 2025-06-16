@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Users, FileText, Calendar, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Users, FileText, Calendar, Eye, Edit, Trash2, Package, Factory } from 'lucide-react';
 import OrderForm from '@/components/OrderForm';
 import WorkshopAssignmentForm from '@/components/WorkshopAssignmentForm';
 import WorkshopAssignmentsList from '@/components/WorkshopAssignmentsList';
@@ -92,11 +93,16 @@ const OrdersPage = () => {
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP'
-    }).format(amount);
+  const getTotalQuantity = (order: any) => {
+    if (!order.order_items) return 0;
+    return order.order_items.reduce((total: number, item: any) => total + item.quantity, 0);
+  };
+
+  const getAssignedWorkshop = (order: any) => {
+    if (order.workshop_assignments && order.workshop_assignments.length > 0) {
+      return order.workshop_assignments[0].workshops?.name;
+    }
+    return null;
   };
 
   return (
@@ -176,99 +182,115 @@ const OrdersPage = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {orders.map((order) => (
-                    <Card key={order.id} className="border border-gray-200 hover:shadow-md transition-shadow">
-                      <div className="p-6">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-start space-x-4">
-                            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-                              <FileText className="w-6 h-6 text-blue-500" />
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-semibold text-black">{order.order_number}</h3>
-                              <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                                <span className="flex items-center">
-                                  <Calendar className="w-4 h-4 mr-1" />
-                                  {formatDate(order.created_at)}
-                                </span>
-                                {order.due_date && (
+                  {orders.map((order) => {
+                    const totalQuantity = getTotalQuantity(order);
+                    const assignedWorkshop = getAssignedWorkshop(order);
+                    
+                    return (
+                      <Card key={order.id} className="border border-gray-200 hover:shadow-md transition-shadow">
+                        <div className="p-6">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-start space-x-4">
+                              <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                                <FileText className="w-6 h-6 text-blue-500" />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-semibold text-black">{order.order_number}</h3>
+                                <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                                   <span className="flex items-center">
-                                    Entrega: {formatDate(order.due_date)}
+                                    <Calendar className="w-4 h-4 mr-1" />
+                                    {formatDate(order.created_at)}
                                   </span>
-                                )}
+                                  {order.due_date && (
+                                    <span className="flex items-center">
+                                      Entrega: {formatDate(order.due_date)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Badge className={getStatusColor(order.status)}>
+                                {getStatusText(order.status)}
+                              </Badge>
+                              <div className="text-right">
+                                <p className="text-lg font-semibold text-blue-600">
+                                  {totalQuantity} unidades
+                                </p>
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getStatusColor(order.status)}>
-                              {getStatusText(order.status)}
-                            </Badge>
-                            {order.total_amount && (
-                              <p className="text-lg font-semibold text-black">
-                                {formatCurrency(order.total_amount)}
-                              </p>
-                            )}
+
+                          {/* Mostrar taller asignado */}
+                          {assignedWorkshop && (
+                            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                              <div className="flex items-center space-x-2">
+                                <Factory className="w-4 h-4 text-blue-600" />
+                                <span className="text-sm font-medium text-blue-600">Taller:</span>
+                                <span className="text-sm text-blue-800">{assignedWorkshop}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {order.notes && (
+                            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                              <p className="text-sm text-gray-700">{order.notes}</p>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm flex-1">
+                              <div>
+                                <span className="font-medium text-gray-700">Productos: </span>
+                                <span className="text-gray-600">
+                                  {order.order_items?.length || 0} items
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-700">Insumos: </span>
+                                <span className="text-gray-600">
+                                  {order.order_supplies?.length || 0} materiales
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-700">Archivos: </span>
+                                <span className="text-gray-600">
+                                  {order.order_files?.length || 0} adjuntos
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center space-x-2 ml-4">
+                              <Button
+                                onClick={() => handleViewDetails(order)}
+                                variant="outline"
+                                size="sm"
+                                className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleEdit(order)}
+                                variant="outline"
+                                size="sm"
+                                className="text-green-600 border-green-300 hover:bg-green-50"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDelete(order.id)}
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 border-red-300 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-
-                        {order.notes && (
-                          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                            <p className="text-sm text-gray-700">{order.notes}</p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm flex-1">
-                            <div>
-                              <span className="font-medium text-gray-700">Productos: </span>
-                              <span className="text-gray-600">
-                                {order.order_items?.length || 0} items
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Insumos: </span>
-                              <span className="text-gray-600">
-                                {order.order_supplies?.length || 0} materiales
-                              </span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Archivos: </span>
-                              <span className="text-gray-600">
-                                {order.order_files?.length || 0} adjuntos
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center space-x-2 ml-4">
-                            <Button
-                              onClick={() => handleViewDetails(order)}
-                              variant="outline"
-                              size="sm"
-                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              onClick={() => handleEdit(order)}
-                              variant="outline"
-                              size="sm"
-                              className="text-green-600 border-green-300 hover:bg-green-50"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              onClick={() => handleDelete(order.id)}
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-300 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </Card>

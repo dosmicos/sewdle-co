@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -197,7 +196,13 @@ export const useOrders = () => {
             *,
             materials (*)
           ),
-          order_files (*)
+          order_files (*),
+          workshop_assignments (
+            *,
+            workshops (
+              name
+            )
+          )
         `)
         .order('created_at', { ascending: false });
 

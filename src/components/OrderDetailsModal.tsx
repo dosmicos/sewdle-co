@@ -1,10 +1,9 @@
-
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2 } from 'lucide-react';
+import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 interface OrderDetailsModalProps {
@@ -60,11 +59,9 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP'
-    }).format(amount);
+  const getTotalQuantity = () => {
+    if (!order.order_items) return 0;
+    return order.order_items.reduce((total: number, item: any) => total + item.quantity, 0);
   };
 
   return (
@@ -155,16 +152,26 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                     </div>
                   </div>
                 )}
-                {order.total_amount && (
-                  <div className="flex items-center space-x-2">
-                    <span className="w-4 h-4 text-gray-500">$</span>
-                    <div>
-                      <p className="text-sm text-gray-600">Valor Total</p>
-                      <p className="font-medium text-green-600">{formatCurrency(order.total_amount)}</p>
-                    </div>
+                <div className="flex items-center space-x-2">
+                  <Package className="w-4 h-4 text-gray-500" />
+                  <div>
+                    <p className="text-sm text-gray-600">Cantidad Total</p>
+                    <p className="font-medium text-blue-600">{getTotalQuantity()} unidades</p>
                   </div>
-                )}
+                </div>
               </div>
+
+              {/* Mostrar taller asignado si existe */}
+              {order.workshop_assignments && order.workshop_assignments.length > 0 && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Factory className="w-4 h-4 text-blue-600" />
+                    <p className="text-sm text-blue-600 font-medium">Taller Asignado:</p>
+                    <p className="text-sm text-blue-800">{order.workshop_assignments[0].workshops?.name}</p>
+                  </div>
+                </div>
+              )}
+
               {order.notes && (
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600 font-medium mb-1">Notas:</p>
@@ -199,13 +206,7 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">Cantidad: {item.quantity}</p>
-                        <p className="text-sm text-gray-600">
-                          Precio unitario: {formatCurrency(item.unit_price)}
-                        </p>
-                        <p className="font-semibold text-green-600">
-                          Total: {formatCurrency(item.total_price)}
-                        </p>
+                        <p className="font-medium text-lg text-blue-600">Cantidad: {item.quantity}</p>
                       </div>
                     </div>
                   ))}
