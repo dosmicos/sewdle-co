@@ -8,13 +8,33 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { X, Plus, Upload, Package, ExternalLink, FileText } from 'lucide-react';
+import { X, Plus, Upload, Package, ExternalLink, FileText, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import ShopifyProductImport from './ShopifyProductImport';
 import ProductVariants from './ProductVariants';
 import TechnicalFileUpload from './TechnicalFileUpload';
 
+interface ShopifyProduct {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  variants: Array<{ size: string; color: string; price: string; sku: string }>;
+  image?: string;
+  sku?: string;
+  category?: string;
+  brand?: string;
+  specifications?: string;
+  status: 'active' | 'draft';
+}
+
 const ProductForm = ({ onClose }: { onClose: () => void }) => {
   const [activeTab, setActiveTab] = useState('import');
+  const [selectedShopifyProduct, setSelectedShopifyProduct] = useState<ShopifyProduct | null>(null);
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const { toast } = useToast();
+  
   const [productData, setProductData] = useState({
     name: '',
     description: '',
@@ -36,10 +56,90 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
     setProductData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleShopifyProductSelect = (product: ShopifyProduct) => {
+    console.log('Producto seleccionado de Shopify:', product);
+    setSelectedShopifyProduct(product);
+  };
+
+  const createProductFromShopify = async () => {
+    if (!selectedShopifyProduct) return;
+
+    setIsCreatingProduct(true);
+    try {
+      console.log('Creando producto desde Shopify:', selectedShopifyProduct);
+
+      // Crear el producto principal
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .insert([
+          {
+            name: selectedShopifyProduct.name,
+            description: selectedShopifyProduct.description,
+            sku: selectedShopifyProduct.sku || `SHOPIFY-${selectedShopifyProduct.id}`,
+            category: selectedShopifyProduct.category || '',
+            base_price: parseFloat(selectedShopifyProduct.price) || 0,
+            image_url: selectedShopifyProduct.image || '',
+            status: 'active'
+          }
+        ])
+        .select()
+        .single();
+
+      if (productError) {
+        console.error('Error creando producto:', productError);
+        throw productError;
+      }
+
+      console.log('Producto creado:', product);
+
+      // Crear las variantes del producto
+      if (selectedShopifyProduct.variants && selectedShopifyProduct.variants.length > 0) {
+        const variantsToInsert = selectedShopifyProduct.variants.map(variant => ({
+          product_id: product.id,
+          size: variant.size || '',
+          color: variant.color || '',
+          sku_variant: variant.sku || `${product.sku}-${variant.size || 'DEFAULT'}`,
+          additional_price: parseFloat(variant.price) - parseFloat(selectedShopifyProduct.price) || 0,
+          stock_quantity: 0
+        }));
+
+        console.log('Creando variantes:', variantsToInsert);
+
+        const { error: variantsError } = await supabase
+          .from('product_variants')
+          .insert(variantsToInsert);
+
+        if (variantsError) {
+          console.error('Error creando variantes:', variantsError);
+          throw variantsError;
+        }
+
+        console.log('Variantes creadas exitosamente');
+      }
+
+      toast({
+        title: "¡Producto creado exitosamente!",
+        description: `${selectedShopifyProduct.name} ha sido importado desde Shopify con ${selectedShopifyProduct.variants.length} variantes.`,
+      });
+
+      onClose();
+
+    } catch (error) {
+      console.error('Error creando producto desde Shopify:', error);
+      toast({
+        title: "Error al crear el producto",
+        description: "Hubo un problema al importar el producto desde Shopify. Por favor intenta de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingProduct(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Submitting product:', { productData, variants, technicalFiles });
-    // Aquí se implementará la lógica de envío
+    // Aquí se implementará la lógica de envío para productos creados manualmente
   };
 
   return (
@@ -71,17 +171,95 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
             </TabsList>
             
             <TabsContent value="import" className="mt-6">
-              <ShopifyProductImport onProductSelect={(product) => {
-                setProductData({
-                  name: product.name,
-                  description: product.description,
-                  specifications: product.specifications || '',
-                  category: product.category || '',
-                  brand: product.brand || '',
-                  sku: product.sku || ''
-                });
-                setVariants(product.variants || variants);
-              }} />
+              {!selectedShopifyProduct ? (
+                <ShopifyProductImport onProductSelect={handleShopifyProductSelect} />
+              ) : (
+                <div className="space-y-6">
+                  <Card className="border border-green-200 bg-green-50">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        {selectedShopifyProduct.image && (
+                          <div className="flex-shrink-0">
+                            <img 
+                              src={selectedShopifyProduct.image} 
+                              alt={selectedShopifyProduct.name}
+                              className="w-20 h-20 object-cover rounded-lg border"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-medium text-black">{selectedShopifyProduct.name}</h3>
+                            <Badge 
+                              variant={selectedShopifyProduct.status === 'active' ? 'default' : 'secondary'}
+                              className={selectedShopifyProduct.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
+                            >
+                              {selectedShopifyProduct.status === 'active' ? 'Activo' : 'Borrador'}
+                            </Badge>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                            <div>
+                              <span className="font-medium text-gray-700">SKU:</span>
+                              <span className="ml-2 text-gray-600">{selectedShopifyProduct.sku || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Precio base:</span>
+                              <span className="ml-2 text-gray-600">${selectedShopifyProduct.price}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Categoría:</span>
+                              <span className="ml-2 text-gray-600">{selectedShopifyProduct.category || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Marca:</span>
+                              <span className="ml-2 text-gray-600">{selectedShopifyProduct.brand || 'N/A'}</span>
+                            </div>
+                          </div>
+
+                          <div className="mb-4">
+                            <span className="font-medium text-gray-700">Variantes ({selectedShopifyProduct.variants.length}):</span>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {selectedShopifyProduct.variants.map((variant, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {variant.size} {variant.color && `- ${variant.color}`} (${variant.price})
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center mt-6 pt-4 border-t border-green-200">
+                        <Button
+                          variant="outline"
+                          onClick={() => setSelectedShopifyProduct(null)}
+                          className="text-gray-600"
+                        >
+                          Seleccionar Otro Producto
+                        </Button>
+                        <Button
+                          onClick={createProductFromShopify}
+                          disabled={isCreatingProduct}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          {isCreatingProduct ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                              Creando...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 mr-2" />
+                              Confirmar e Importar Producto
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </TabsContent>
             
             <TabsContent value="create" className="mt-6">
