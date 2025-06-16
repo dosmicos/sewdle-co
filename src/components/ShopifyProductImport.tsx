@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Package, ExternalLink, Download } from 'lucide-react';
+import { Loader2, Package, ExternalLink, Download, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -33,6 +33,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,6 +43,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
   const fetchProducts = async (search = '') => {
     setLoading(true);
+    setError(null);
     try {
       console.log('Fetching products with search term:', search);
 
@@ -53,16 +55,20 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
       if (error) {
         console.error('Error calling shopify-products function:', error);
-        throw new Error(error.message);
+        throw new Error(error.message || 'Error en la conexión con Shopify');
       }
 
       console.log('Response from shopify-products function:', data);
 
-      if (data.error) {
+      if (data?.error) {
         throw new Error(data.error);
       }
 
-      const formattedProducts = data.products?.map((product: any) => ({
+      if (!data?.products) {
+        throw new Error('Respuesta inválida de Shopify');
+      }
+
+      const formattedProducts = data.products.map((product: any) => ({
         id: product.id,
         title: product.title,
         description: product.body_html || '',
@@ -73,24 +79,31 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           color: variant.option2 || '',
           sku: variant.sku || '',
           price: parseFloat(variant.price || '0'),
-          stock_quantity: variant.stock_quantity || variant.inventory_quantity || 0
+          stock_quantity: variant.stock_quantity || 0
         })) || []
-      })) || [];
+      }));
 
       setProducts(formattedProducts);
 
       if (formattedProducts.length === 0) {
         toast({
           title: "Sin resultados",
-          description: "No se encontraron productos con ese término de búsqueda.",
+          description: search ? "No se encontraron productos con ese término de búsqueda." : "No hay productos disponibles en tu tienda Shopify.",
+        });
+      } else {
+        toast({
+          title: "Productos cargados",
+          description: `Se encontraron ${formattedProducts.length} productos.`,
         });
       }
 
     } catch (error: any) {
       console.error('Error fetching products from Shopify:', error);
+      const errorMessage = error.message || "Error en la conexión con Shopify.";
+      setError(errorMessage);
       toast({
         title: "Error al obtener productos de Shopify",
-        description: error.message || "Error en la conexión con Shopify.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -212,6 +225,14 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           "Obtener Todos los Productos"
         )}
       </Button>
+
+      {/* Mostrar error si existe */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
+          <AlertCircle className="h-4 w-4 text-red-500" />
+          <span className="text-red-700 text-sm">{error}</span>
+        </div>
+      )}
 
       {products.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

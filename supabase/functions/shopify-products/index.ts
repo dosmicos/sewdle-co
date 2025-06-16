@@ -30,7 +30,9 @@ serve(async (req) => {
 
     // Limpiar el dominio para asegurar formato correcto
     const cleanDomain = storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-    let apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250`
+    
+    // Solo obtener productos activos y borrador (draft)
+    let apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250&published_status=any`
     
     // Agregar filtro de búsqueda si hay término de búsqueda
     if (searchTerm && searchTerm.trim()) {
@@ -56,44 +58,12 @@ serve(async (req) => {
     const data = await response.json()
     console.log(`Successfully fetched ${data.products?.length || 0} products from Shopify`)
 
-    // Para cada producto, obtener información de inventario
+    // Simplificar el manejo de inventario - solo usar la cantidad de inventario básica
     if (data.products && data.products.length > 0) {
       for (const product of data.products) {
         for (const variant of product.variants || []) {
-          if (variant.inventory_item_id) {
-            try {
-              // Obtener información del inventario para cada variante
-              const inventoryUrl = `https://${cleanDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${variant.inventory_item_id}`
-              
-              const inventoryResponse = await fetch(inventoryUrl, {
-                method: 'GET',
-                headers: {
-                  'X-Shopify-Access-Token': accessToken,
-                  'Content-Type': 'application/json'
-                }
-              })
-
-              if (inventoryResponse.ok) {
-                const inventoryData = await inventoryResponse.json()
-                
-                // Calcular el stock total disponible para esta variante
-                const totalAvailable = inventoryData.inventory_levels?.reduce((total: number, level: any) => {
-                  return total + (level.available || 0)
-                }, 0) || 0
-
-                // Agregar el stock disponible a la variante
-                variant.stock_quantity = totalAvailable
-              } else {
-                console.log(`Failed to fetch inventory for variant ${variant.id}`)
-                variant.stock_quantity = 0
-              }
-            } catch (inventoryError) {
-              console.error(`Error fetching inventory for variant ${variant.id}:`, inventoryError)
-              variant.stock_quantity = 0
-            }
-          } else {
-            variant.stock_quantity = 0
-          }
+          // Usar la cantidad de inventario básica disponible en la variante
+          variant.stock_quantity = variant.inventory_quantity || 0
         }
       }
     }
