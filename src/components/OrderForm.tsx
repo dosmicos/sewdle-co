@@ -47,26 +47,43 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
       return;
     }
 
+    console.log('Products data before submit:', selectedProducts);
+    console.log('Supplies data before submit:', supplies);
+
+    // Validar que los productos tengan variantId válido
+    const validProducts = selectedProducts.filter(product => 
+      product.variantId && 
+      product.variantId !== 'undefined' && 
+      product.quantity && 
+      product.quantity > 0
+    );
+
+    if (validProducts.length === 0 && selectedProducts.length > 0) {
+      alert('Por favor asegúrate de seleccionar variantes y cantidades válidas para los productos');
+      return;
+    }
+
     try {
       const orderData = {
         workshopId: selectedWorkshop,
         dueDate: dueDate || undefined,
-        products: selectedProducts.map(product => ({
+        products: validProducts.map(product => ({
           productId: product.productId,
           variantId: product.variantId,
-          quantity: product.quantity,
-          unitPrice: product.unitPrice || 0
+          quantity: Number(product.quantity),
+          unitPrice: Number(product.unitPrice) || 0
         })),
-        supplies: supplies.map(supply => ({
+        supplies: supplies.filter(supply => supply.materialId && supply.quantity > 0).map(supply => ({
           materialId: supply.materialId,
-          quantity: supply.quantity,
+          quantity: Number(supply.quantity),
           unit: supply.unit,
-          notes: supply.notes
+          notes: supply.notes || undefined
         })),
         notes: notes.trim() || undefined,
         cuttingOrderFile: cuttingOrderFile || undefined
       };
 
+      console.log('Final order data to send:', orderData);
       await createOrder(orderData);
       onClose();
     } catch (error) {
@@ -129,6 +146,16 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
               selectedProducts={selectedProducts}
               onProductsChange={setSelectedProducts}
             />
+            {selectedProducts.length > 0 && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">Productos seleccionados:</h4>
+                {selectedProducts.map((product, index) => (
+                  <div key={index} className="text-sm text-blue-800">
+                    Producto ID: {product.productId}, Variante: {product.variantId}, Cantidad: {product.quantity}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           {/* Módulo de Insumos */}

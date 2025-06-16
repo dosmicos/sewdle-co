@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -35,11 +34,17 @@ export const useOrders = () => {
     try {
       console.log('Creating order with data:', orderData);
 
+      // Validar que hay datos válidos
+      if (orderData.products.length === 0 && orderData.supplies.length === 0) {
+        throw new Error('Debe agregar al menos un producto o insumo a la orden');
+      }
+
       // Generar número de orden único
       const { data: orderNumber, error: orderNumberError } = await supabase
         .rpc('generate_order_number');
 
       if (orderNumberError) {
+        console.error('Error generating order number:', orderNumberError);
         throw orderNumberError;
       }
 
@@ -57,7 +62,7 @@ export const useOrders = () => {
           {
             order_number: orderNumber,
             due_date: orderData.dueDate,
-            total_amount: totalAmount,
+            total_amount: totalAmount > 0 ? totalAmount : null,
             notes: orderData.notes,
             status: 'pending'
           }
@@ -66,34 +71,45 @@ export const useOrders = () => {
         .single();
 
       if (orderError) {
+        console.error('Error creating order:', orderError);
         throw orderError;
       }
 
       console.log('Created order:', order);
 
-      // Crear items de la orden
+      // Crear items de la orden solo si hay productos válidos
       if (orderData.products.length > 0) {
-        const orderItems = orderData.products.map(item => ({
-          order_id: order.id,
-          product_variant_id: item.variantId,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_price: item.quantity * item.unitPrice
-        }));
+        console.log('Creating order items for products:', orderData.products);
+        
+        const orderItems = orderData.products.map(item => {
+          console.log('Processing product item:', item);
+          return {
+            order_id: order.id,
+            product_variant_id: item.variantId,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            total_price: item.quantity * item.unitPrice
+          };
+        });
+
+        console.log('Order items to insert:', orderItems);
 
         const { error: itemsError } = await supabase
           .from('order_items')
           .insert(orderItems);
 
         if (itemsError) {
+          console.error('Error creating order items:', itemsError);
           throw itemsError;
         }
 
-        console.log('Created order items');
+        console.log('Successfully created order items');
       }
 
-      // Crear insumos de la orden
+      // Crear insumos de la orden solo si hay insumos válidos
       if (orderData.supplies.length > 0) {
+        console.log('Creating order supplies:', orderData.supplies);
+        
         const orderSupplies = orderData.supplies.map(supply => ({
           order_id: order.id,
           material_id: supply.materialId,
@@ -102,19 +118,24 @@ export const useOrders = () => {
           notes: supply.notes
         }));
 
+        console.log('Order supplies to insert:', orderSupplies);
+
         const { error: suppliesError } = await supabase
           .from('order_supplies')
           .insert(orderSupplies);
 
         if (suppliesError) {
+          console.error('Error creating order supplies:', suppliesError);
           throw suppliesError;
         }
 
-        console.log('Created order supplies');
+        console.log('Successfully created order supplies');
       }
 
       // Manejar archivo de orden de corte (simulado por ahora)
       if (orderData.cuttingOrderFile) {
+        console.log('Processing cutting order file:', orderData.cuttingOrderFile.name);
+        
         // En un entorno real, aquí subirías el archivo a Supabase Storage
         // y luego guardarías la referencia en order_files
         const fileData = {
@@ -130,10 +151,11 @@ export const useOrders = () => {
           .insert([fileData]);
 
         if (fileError) {
+          console.error('Error creating order file:', fileError);
           throw fileError;
         }
 
-        console.log('Created order file reference');
+        console.log('Successfully created order file reference');
       }
 
       toast({
