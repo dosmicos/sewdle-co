@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -130,6 +131,33 @@ export const useOrders = () => {
         }
 
         console.log('Successfully created order supplies');
+      }
+
+      // Crear asignación de taller si se seleccionó un taller
+      if (orderData.workshopId) {
+        console.log('Creating workshop assignment for workshop:', orderData.workshopId);
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        const { error: assignmentError } = await supabase
+          .from('workshop_assignments')
+          .insert([
+            {
+              order_id: order.id,
+              workshop_id: orderData.workshopId,
+              assigned_by: session?.user?.id || null,
+              status: 'assigned',
+              assigned_date: new Date().toISOString().split('T')[0],
+              expected_completion_date: orderData.dueDate || null
+            }
+          ]);
+
+        if (assignmentError) {
+          console.error('Error creating workshop assignment:', assignmentError);
+          throw assignmentError;
+        }
+
+        console.log('Successfully created workshop assignment');
       }
 
       // Manejar archivo de orden de corte (simulado por ahora)
