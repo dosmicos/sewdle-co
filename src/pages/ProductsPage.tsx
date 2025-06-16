@@ -18,7 +18,7 @@ const ProductsPage = () => {
     (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleProductFormClose = () => {
+  const handleProductFormSuccess = () => {
     setShowProductForm(false);
     refetch(); // Recargar productos cuando se cierra el formulario
   };
@@ -63,7 +63,7 @@ const ProductsPage = () => {
       </div>
 
       {showProductForm && (
-        <ProductForm onClose={handleProductFormClose} />
+        <ProductForm onSuccess={handleProductFormSuccess} />
       )}
     </>
   );
