@@ -45,7 +45,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
   });
 
   const [variants, setVariants] = useState<any[]>([]);
-  const [technicalFile, setTechnicalFile] = useState<File | null>(null);
+  const [technicalFiles, setTechnicalFiles] = useState<File[]>([]);
   const [showShopifyImport, setShowShopifyImport] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -56,7 +56,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
   };
 
   const handleFilesChange = (files: File[]) => {
-    setTechnicalFile(files[0] || null);
+    setTechnicalFiles(files);
   };
 
   const addVariant = () => {
@@ -81,7 +81,8 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
     try {
       // Subir primero el archivo técnico si existe
       let technicalFileUrl = null;
-      if (technicalFile) {
+      if (technicalFiles.length > 0) {
+        const technicalFile = technicalFiles[0];
         const { data, error } = await supabase.storage
           .from('product-files')
           .upload(`${formData.sku}/${technicalFile.name}`, technicalFile, {
@@ -264,7 +265,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
         </div>
 
         {/* Subida de archivo técnico */}
-        <TechnicalFileUpload onFilesChange={handleFilesChange} />
+        <TechnicalFileUpload files={technicalFiles} onFilesChange={handleFilesChange} />
 
         {/* Sección de variantes */}
         <div className="space-y-2">

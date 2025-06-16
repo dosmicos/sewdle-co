@@ -6,11 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Upload, X, Download } from 'lucide-react';
 
 interface TechnicalFileUploadProps {
-  files: File[];
+  files?: File[];
   onFilesChange: (files: File[]) => void;
 }
 
-const TechnicalFileUpload = ({ files, onFilesChange }: TechnicalFileUploadProps) => {
+const TechnicalFileUpload = ({ files = [], onFilesChange }: TechnicalFileUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
