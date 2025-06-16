@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Package, ExternalLink, Download, AlertCircle } from 'lucide-react';
+import { Loader2, Package, AlertCircle, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -29,27 +29,26 @@ interface ShopifyProductImportProps {
 }
 
 const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) => {
-  const [products, setProducts] = useState<ShopifyProduct[]>([]);
+  const [allProducts, setAllProducts] = useState<ShopifyProduct[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<ShopifyProduct[]>([]);
+  const [suggestions, setSuggestions] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Cargar productos automáticamente al montar el componente
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async (search = '') => {
+  // Función para obtener todos los productos al inicio
+  const fetchAllProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('Fetching products with search term:', search);
+      console.log('Fetching all products from Shopify');
 
       const { data, error } = await supabase.functions.invoke('shopify-products', {
         body: { 
-          searchTerm: search 
+          searchTerm: '' // Obtener todos los productos
         }
       });
 
@@ -57,8 +56,6 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         console.error('Error calling shopify-products function:', error);
         throw new Error(error.message || 'Error en la conexión con Shopify');
       }
-
-      console.log('Response from shopify-products function:', data);
 
       if (data?.error) {
         throw new Error(data.error);
@@ -83,19 +80,13 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         })) || []
       }));
 
-      setProducts(formattedProducts);
+      setAllProducts(formattedProducts);
+      setFilteredProducts(formattedProducts);
 
-      if (formattedProducts.length === 0) {
-        toast({
-          title: "Sin resultados",
-          description: search ? "No se encontraron productos con ese término de búsqueda." : "No hay productos disponibles en tu tienda Shopify.",
-        });
-      } else {
-        toast({
-          title: "Productos cargados",
-          description: `Se encontraron ${formattedProducts.length} productos.`,
-        });
-      }
+      toast({
+        title: "Productos cargados",
+        description: `Se encontraron ${formattedProducts.length} productos.`,
+      });
 
     } catch (error: any) {
       console.error('Error fetching products from Shopify:', error);
@@ -109,10 +100,57 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     } finally {
       setLoading(false);
     }
+  }, [toast]);
+
+  // Cargar productos al montar el componente
+  useEffect(() => {
+    fetchAllProducts();
+  }, [fetchAllProducts]);
+
+  // Función para filtrar productos localmente
+  const filterProducts = useCallback((term: string) => {
+    if (!term.trim()) {
+      setFilteredProducts(allProducts);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const filtered = allProducts.filter(product =>
+      product.title.toLowerCase().includes(term.toLowerCase()) ||
+      product.description.toLowerCase().includes(term.toLowerCase()) ||
+      product.variants.some(variant => 
+        variant.sku.toLowerCase().includes(term.toLowerCase())
+      )
+    );
+
+    setFilteredProducts(filtered);
+    
+    // Mostrar sugerencias (máximo 5)
+    setSuggestions(filtered.slice(0, 5));
+    setShowSuggestions(true);
+  }, [allProducts]);
+
+  // Manejar cambios en el término de búsqueda
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    filterProducts(term);
   };
 
-  const handleSearch = () => {
-    fetchProducts(searchTerm);
+  // Seleccionar una sugerencia
+  const handleSuggestionClick = (suggestion: ShopifyProduct) => {
+    setSearchTerm(suggestion.title);
+    setFilteredProducts([suggestion]);
+    setShowSuggestions(false);
+  };
+
+  // Limpiar búsqueda
+  const clearSearch = () => {
+    setSearchTerm('');
+    setFilteredProducts(allProducts);
+    setSuggestions([]);
+    setShowSuggestions(false);
   };
 
   const importProduct = async (product: ShopifyProduct) => {
@@ -196,33 +234,64 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         Conecta tu tienda Shopify para importar productos directamente a tu catálogo.
       </p>
 
-      {/* Barra de búsqueda */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Buscar productos en Shopify..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-        />
-        <Button onClick={handleSearch} disabled={loading}>
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Buscar"
-          )}
-        </Button>
+      {/* Barra de búsqueda con autocompletar */}
+      <div className="relative">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Buscar productos en Shopify..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              onFocus={() => searchTerm && setShowSuggestions(true)}
+              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sugerencias */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+            {suggestions.map((suggestion) => (
+              <div
+                key={suggestion.id}
+                onClick={() => handleSuggestionClick(suggestion)}
+                className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+              >
+                {suggestion.image_url && (
+                  <img 
+                    src={suggestion.image_url} 
+                    alt={suggestion.title} 
+                    className="w-10 h-10 rounded object-cover" 
+                  />
+                )}
+                <div className="flex-1">
+                  <div className="font-medium text-sm">{suggestion.title}</div>
+                  <div className="text-xs text-gray-500">${suggestion.price.toFixed(2)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <Button onClick={() => fetchProducts()} disabled={loading} className="w-full">
+      <Button onClick={fetchAllProducts} disabled={loading} className="w-full">
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Cargando productos...
           </>
         ) : (
-          "Obtener Todos los Productos"
+          "Recargar Productos"
         )}
       </Button>
 
@@ -234,45 +303,71 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         </div>
       )}
 
-      {products.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((product) => (
-            <Card key={product.id} className="p-4 relative">
-              {importing === product.id && (
-                <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-md">
-                  <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+      {/* Resultados */}
+      {filteredProducts.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-medium">
+              {searchTerm ? `Resultados para "${searchTerm}"` : 'Todos los productos'}
+            </h4>
+            <span className="text-sm text-gray-500">
+              {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredProducts.map((product) => (
+              <Card key={product.id} className="p-4 relative">
+                {importing === product.id && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-md">
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                  </div>
+                )}
+                {product.image_url && (
+                  <img 
+                    src={product.image_url} 
+                    alt={product.title} 
+                    className="rounded-md mb-2 h-32 w-full object-cover" 
+                  />
+                )}
+                <h4 className="text-md font-semibold text-gray-800 mb-1">{product.title}</h4>
+                <p className="text-gray-600 text-sm mb-2 line-clamp-2">
+                  {product.description.replace(/<[^>]*>/g, '').substring(0, 100)}...
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-green-600">${product.price.toFixed(2)}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => importProduct(product)}
+                    disabled={importing !== null}
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    Importar
+                  </Button>
                 </div>
-              )}
-              {product.image_url && (
-                <img 
-                  src={product.image_url} 
-                  alt={product.title} 
-                  className="rounded-md mb-2 h-32 w-full object-cover" 
-                />
-              )}
-              <h4 className="text-md font-semibold text-gray-800 mb-1">{product.title}</h4>
-              <p className="text-gray-600 text-sm mb-2 line-clamp-2">
-                {product.description.replace(/<[^>]*>/g, '').substring(0, 100)}...
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-bold text-green-600">${product.price.toFixed(2)}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => importProduct(product)}
-                  disabled={importing !== null}
-                >
-                  <Package className="w-4 h-4 mr-2" />
-                  Importar
-                </Button>
-              </div>
-              {product.variants && product.variants.length > 1 && (
-                <Badge variant="secondary" className="mt-2">
-                  {product.variants.length} variantes
-                </Badge>
-              )}
-            </Card>
-          ))}
+                {product.variants && product.variants.length > 1 && (
+                  <Badge variant="secondary" className="mt-2">
+                    {product.variants.length} variantes
+                  </Badge>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mensaje cuando no hay resultados */}
+      {!loading && filteredProducts.length === 0 && searchTerm && (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No se encontraron productos con "{searchTerm}"</p>
+          <Button 
+            variant="outline" 
+            onClick={clearSearch}
+            className="mt-2"
+          >
+            Mostrar todos los productos
+          </Button>
         </div>
       )}
 
