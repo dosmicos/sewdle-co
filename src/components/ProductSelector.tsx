@@ -145,21 +145,9 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     onProductsChange(updated);
   };
 
-  const getProductTotal = (product: SelectedProduct) => {
-    return Object.values(product.variants).reduce((total: number, variant: any) => {
-      return total + (variant.quantity * variant.price);
-    }, 0);
-  };
-
   const getProductQuantityTotal = (product: SelectedProduct) => {
     return Object.values(product.variants).reduce((total: number, variant: any) => {
       return total + variant.quantity;
-    }, 0);
-  };
-
-  const getOrderTotal = () => {
-    return selectedProducts.reduce((total, product) => {
-      return total + getProductTotal(product);
     }, 0);
   };
 
@@ -234,11 +222,13 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
               <div className="space-y-4">
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-sm text-gray-700">
-                    <strong>Descripción:</strong> {selectedProductData.description}
-                  </p>
-                  <p className="text-sm text-gray-700 mt-1">
                     <strong>Precio Base:</strong> ${selectedProductData.base_price.toLocaleString()}
                   </p>
+                  {selectedProductData.description && (
+                    <p className="text-sm text-gray-700 mt-1">
+                      <strong>Descripción:</strong> {selectedProductData.description}
+                    </p>
+                  )}
                 </div>
 
                 <div className="border rounded-lg overflow-hidden">
@@ -254,21 +244,20 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                     <TableBody>
                       {selectedProductData.variants.map((variant) => {
                         const variantData = product.variants[variant.id];
+                        const variantName = variant.size && variant.color 
+                          ? `${variant.size} - ${variant.color}`
+                          : variant.size || variant.color || 'Variante estándar';
+                        
                         return (
                           <TableRow key={variant.id}>
                             <TableCell>
                               <div className="flex items-center space-x-2">
                                 <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                                   <span className="text-xs text-blue-600 font-medium">
-                                    {variant.size || variant.color?.charAt(0) || 'V'}
+                                    {variant.size?.charAt(0) || variant.color?.charAt(0) || 'V'}
                                   </span>
                                 </div>
-                                <span>
-                                  {variant.size && variant.color 
-                                    ? `${variant.size} - ${variant.color}`
-                                    : variant.size || variant.color || 'Variante'
-                                  }
-                                </span>
+                                <span>{variantName}</span>
                               </div>
                             </TableCell>
                             <TableCell className="font-medium">
@@ -305,12 +294,9 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                 </div>
 
                 <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center text-sm">
+                  <div className="flex justify-center">
                     <span className="font-medium text-blue-900">
                       Total de cantidades: {getProductQuantityTotal(product)} unidades
-                    </span>
-                    <span className="font-bold text-blue-900 text-lg">
-                      ${getProductTotal(product).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -342,22 +328,11 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
         <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
           <h4 className="font-bold text-blue-900 mb-4 text-lg">Resumen de la Orden</h4>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <p className="text-sm text-gray-600">Total de productos</p>
-              <p className="text-2xl font-bold text-gray-900">{selectedProducts.length}</p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <p className="text-sm text-gray-600">Total de unidades</p>
-              <p className="text-2xl font-bold text-blue-600">{getTotalQuantities()}</p>
-            </div>
-          </div>
-
           <div className="bg-white p-4 rounded-lg shadow-sm">
             <div className="flex justify-between items-center">
-              <span className="text-lg font-semibold text-gray-900">Total de la Orden:</span>
-              <span className="text-3xl font-bold text-green-600">
-                ${getOrderTotal().toLocaleString()}
+              <span className="text-lg font-semibold text-gray-900">Total de unidades a producir:</span>
+              <span className="text-3xl font-bold text-blue-600">
+                {getTotalQuantities()} unidades
               </span>
             </div>
           </div>

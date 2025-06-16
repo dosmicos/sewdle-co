@@ -55,8 +55,8 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (file: File | null) => {
-    setTechnicalFile(file);
+  const handleFilesChange = (files: File[]) => {
+    setTechnicalFile(files[0] || null);
   };
 
   const addVariant = () => {
@@ -264,7 +264,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
         </div>
 
         {/* Subida de archivo técnico */}
-        <TechnicalFileUpload onFileChange={handleFileChange} />
+        <TechnicalFileUpload onFilesChange={handleFilesChange} />
 
         {/* Sección de variantes */}
         <div className="space-y-2">
