@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, ExternalLink, Package, AlertCircle } from 'lucide-react';
+import { Search, ExternalLink, Package, AlertCircle, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,6 +27,9 @@ interface ShopifyProductImportProps {
   onProductSelect: (product: ShopifyProduct) => void;
 }
 
+const SHOPIFY_CREDENTIALS_KEY = 'shopify_credentials';
+const SHOPIFY_CONNECTION_KEY = 'shopify_connected';
+
 const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -37,11 +41,63 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   });
   const { toast } = useToast();
 
-  const callShopifyFunction = async (searchTerm = '') => {
+  // Cargar credenciales y estado de conexión al inicializar
+  useEffect(() => {
+    const savedCredentials = localStorage.getItem(SHOPIFY_CREDENTIALS_KEY);
+    const savedConnection = localStorage.getItem(SHOPIFY_CONNECTION_KEY);
+    
+    if (savedCredentials && savedConnection === 'true') {
+      const credentials = JSON.parse(savedCredentials);
+      setShopifyCredentials(credentials);
+      setIsConnected(true);
+      // Cargar productos automáticamente
+      loadInitialProducts(credentials);
+    }
+  }, []);
+
+  const loadInitialProducts = async (credentials: { storeDomain: string; accessToken: string }) => {
+    setIsLoading(true);
+    try {
+      const data = await callShopifyFunction('', credentials);
+      
+      if (!data.products) {
+        throw new Error('No se encontraron productos en la respuesta de Shopify');
+      }
+
+      const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
+        id: product.id.toString(),
+        name: product.title,
+        description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : '',
+        price: product.variants?.[0]?.price || '0.00',
+        variants: product.variants?.map((variant: any) => ({
+          size: variant.option1 || variant.title || '',
+          color: variant.option2 || '',
+          price: variant.price || '0.00',
+          sku: variant.sku || ''
+        })) || [],
+        image: product.images?.[0]?.src || '',
+        sku: product.variants?.[0]?.sku || '',
+        category: product.product_type || '',
+        brand: product.vendor || '',
+        specifications: product.body_html || '',
+        status: product.status === 'active' ? 'active' : 'draft'
+      }));
+
+      setProducts(shopifyProducts);
+    } catch (error) {
+      console.error('Error loading initial products:', error);
+      // Si hay error, limpiar la conexión guardada
+      disconnectShopify();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const callShopifyFunction = async (searchTerm = '', credentials = shopifyCredentials) => {
     const { data, error } = await supabase.functions.invoke('shopify-products', {
       body: {
-        storeDomain: shopifyCredentials.storeDomain,
-        accessToken: shopifyCredentials.accessToken,
+        storeDomain: credentials.storeDomain,
+        accessToken: credentials.accessToken,
         searchTerm: searchTerm
       }
     });
@@ -96,6 +152,11 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
       setProducts(shopifyProducts);
       setIsConnected(true);
+      
+      // Guardar credenciales y estado de conexión
+      localStorage.setItem(SHOPIFY_CREDENTIALS_KEY, JSON.stringify(shopifyCredentials));
+      localStorage.setItem(SHOPIFY_CONNECTION_KEY, 'true');
+      
       setIsLoading(false);
       
       toast({
@@ -111,6 +172,22 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         variant: "destructive"
       });
     }
+  };
+
+  const disconnectShopify = () => {
+    setIsConnected(false);
+    setProducts([]);
+    setShopifyCredentials({ storeDomain: '', accessToken: '' });
+    setSearchTerm('');
+    
+    // Limpiar localStorage
+    localStorage.removeItem(SHOPIFY_CREDENTIALS_KEY);
+    localStorage.removeItem(SHOPIFY_CONNECTION_KEY);
+    
+    toast({
+      title: "Desconectado",
+      description: "Se ha desconectado de Shopify"
+    });
   };
 
   const fetchShopifyProducts = async () => {
@@ -232,10 +309,21 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg text-black flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Productos de Shopify (Activos y Borrador)
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg text-black flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Productos de Shopify (Activos y Borrador)
+            </CardTitle>
+            <Button
+              onClick={disconnectShopify}
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 hover:border-red-300"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Desconectar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex space-x-4 mb-6">
