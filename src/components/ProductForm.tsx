@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +57,10 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
 
   const handleFilesChange = (files: File[]) => {
     setTechnicalFiles(files);
+  };
+
+  const handleVariantsChange = (newVariants: any[]) => {
+    setVariants(newVariants);
   };
 
   const addVariant = () => {
@@ -295,88 +298,11 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
                 />
               </div>
 
-              {/* Variantes */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-black">Variantes</h3>
-                  <Button type="button" variant="outline" onClick={addVariant} className="flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    Agregar variante
-                  </Button>
-                </div>
-                
-                {variants.length > 0 && (
-                  <div className="space-y-4">
-                    {variants.map((variant, index) => (
-                      <div key={index} className="border border-gray-200 rounded-lg p-4">
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                          <div>
-                            <Label htmlFor={`size-${index}`} className="text-sm font-medium text-black">Talla</Label>
-                            <Input
-                              type="text"
-                              id={`size-${index}`}
-                              value={variant.size}
-                              onChange={(e) => updateVariant(index, 'size', e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`color-${index}`} className="text-sm font-medium text-black">Color</Label>
-                            <Input
-                              type="text"
-                              id={`color-${index}`}
-                              value={variant.color}
-                              onChange={(e) => updateVariant(index, 'color', e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`skuVariant-${index}`} className="text-sm font-medium text-black">SKU Variante</Label>
-                            <Input
-                              type="text"
-                              id={`skuVariant-${index}`}
-                              value={variant.skuVariant}
-                              onChange={(e) => updateVariant(index, 'skuVariant', e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`additionalPrice-${index}`} className="text-sm font-medium text-black">Precio Adicional</Label>
-                            <Input
-                              type="number"
-                              id={`additionalPrice-${index}`}
-                              value={variant.additionalPrice}
-                              onChange={(e) => updateVariant(index, 'additionalPrice', parseFloat(e.target.value) || 0)}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`stockQuantity-${index}`} className="text-sm font-medium text-black">Stock</Label>
-                            <div className="flex gap-2 mt-1">
-                              <Input
-                                type="number"
-                                id={`stockQuantity-${index}`}
-                                value={variant.stockQuantity}
-                                onChange={(e) => updateVariant(index, 'stockQuantity', parseInt(e.target.value) || 0)}
-                                className="flex-1"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeVariant(index)}
-                                className="text-red-500 hover:text-red-700 px-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Variantes usando ProductVariants */}
+              <ProductVariants 
+                variants={variants} 
+                onVariantsChange={handleVariantsChange} 
+              />
 
               {/* Ficha Técnica */}
               <div>
