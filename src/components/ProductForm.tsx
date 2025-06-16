@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Upload, Trash2, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,7 @@ interface ShopifyProduct {
 }
 
 const ProductForm = ({ onSuccess }: ProductFormProps) => {
+  const [open, setOpen] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -46,7 +48,6 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
 
   const [variants, setVariants] = useState<any[]>([]);
   const [technicalFiles, setTechnicalFiles] = useState<File[]>([]);
-  const [showShopifyImport, setShowShopifyImport] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -151,7 +152,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
         description: `${formData.name} ha sido añadido a tu catálogo.`,
       });
 
-      onSuccess();
+      handleClose();
 
     } catch (error: any) {
       console.error('Error creating product:', error);
@@ -183,177 +184,191 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
       additionalPrice: 0,
       stockQuantity: variant.stock_quantity
     })));
-    
-    setShowShopifyImport(false);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    onSuccess();
   };
 
   return (
-    <Card className="p-6 space-y-6">
-      <h2 className="text-2xl font-bold text-black">Nuevo Producto</h2>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold text-black">Nuevo Producto</DialogTitle>
+        </DialogHeader>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Información básica */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="name">Nombre del Producto</Label>
-            <Input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="sku">SKU</Label>
-            <Input
-              type="text"
-              id="sku"
-              name="sku"
-              value={formData.sku}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-        </div>
+        <Tabs defaultValue="manual" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="manual">Crear Manualmente</TabsTrigger>
+            <TabsTrigger value="shopify">Importar de Shopify</TabsTrigger>
+          </TabsList>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="basePrice">Precio Base</Label>
-            <Input
-              type="number"
-              id="basePrice"
-              name="basePrice"
-              value={formData.basePrice}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="category">Categoría</Label>
-            <Input
-              type="text"
-              id="category"
-              name="category"
-              value={formData.category}
-              onChange={handleInputChange}
-            />
-          </div>
-        </div>
+          <TabsContent value="manual" className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Información básica */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="name">Nombre del Producto</Label>
+                  <Input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sku">SKU</Label>
+                  <Input
+                    type="text"
+                    id="sku"
+                    name="sku"
+                    value={formData.sku}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+              </div>
 
-        <div>
-          <Label htmlFor="description">Descripción</Label>
-          <Textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleInputChange}
-            className="min-h-[80px]"
-          />
-        </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="basePrice">Precio Base</Label>
+                  <Input
+                    type="number"
+                    id="basePrice"
+                    name="basePrice"
+                    value={formData.basePrice}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="category">Categoría</Label>
+                  <Input
+                    type="text"
+                    id="category"
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
 
-        <div>
-          <Label htmlFor="imageUrl">URL de la Imagen</Label>
-          <Input
-            type="url"
-            id="imageUrl"
-            name="imageUrl"
-            value={formData.imageUrl}
-            onChange={handleInputChange}
-          />
-        </div>
-
-        {/* Subida de archivo técnico */}
-        <TechnicalFileUpload files={technicalFiles} onFilesChange={handleFilesChange} />
-
-        {/* Sección de variantes */}
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-black">Variantes</h3>
-          {variants.map((variant, index) => (
-            <div key={index} className="grid grid-cols-3 md:grid-cols-5 gap-4 items-center">
               <div>
-                <Label htmlFor={`size-${index}`}>Talla</Label>
-                <Input
-                  type="text"
-                  id={`size-${index}`}
-                  value={variant.size}
-                  onChange={(e) => updateVariant(index, 'size', e.target.value)}
+                <Label htmlFor="description">Descripción</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  className="min-h-[80px]"
                 />
               </div>
+
               <div>
-                <Label htmlFor={`color-${index}`}>Color</Label>
+                <Label htmlFor="imageUrl">URL de la Imagen</Label>
                 <Input
-                  type="text"
-                  id={`color-${index}`}
-                  value={variant.color}
-                  onChange={(e) => updateVariant(index, 'color', e.target.value)}
+                  type="url"
+                  id="imageUrl"
+                  name="imageUrl"
+                  value={formData.imageUrl}
+                  onChange={handleInputChange}
                 />
               </div>
-              <div>
-                <Label htmlFor={`skuVariant-${index}`}>SKU Variante</Label>
-                <Input
-                  type="text"
-                  id={`skuVariant-${index}`}
-                  value={variant.skuVariant}
-                  onChange={(e) => updateVariant(index, 'skuVariant', e.target.value)}
-                />
+
+              {/* Subida de archivo técnico */}
+              <TechnicalFileUpload files={technicalFiles} onFilesChange={handleFilesChange} />
+
+              {/* Sección de variantes */}
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-black">Variantes</h3>
+                {variants.map((variant, index) => (
+                  <div key={index} className="grid grid-cols-3 md:grid-cols-5 gap-4 items-center">
+                    <div>
+                      <Label htmlFor={`size-${index}`}>Talla</Label>
+                      <Input
+                        type="text"
+                        id={`size-${index}`}
+                        value={variant.size}
+                        onChange={(e) => updateVariant(index, 'size', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`color-${index}`}>Color</Label>
+                      <Input
+                        type="text"
+                        id={`color-${index}`}
+                        value={variant.color}
+                        onChange={(e) => updateVariant(index, 'color', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`skuVariant-${index}`}>SKU Variante</Label>
+                      <Input
+                        type="text"
+                        id={`skuVariant-${index}`}
+                        value={variant.skuVariant}
+                        onChange={(e) => updateVariant(index, 'skuVariant', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`additionalPrice-${index}`}>Precio Adicional</Label>
+                      <Input
+                        type="number"
+                        id={`additionalPrice-${index}`}
+                        value={variant.additionalPrice}
+                        onChange={(e) => updateVariant(index, 'additionalPrice', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`stockQuantity-${index}`}>Stock</Label>
+                      <Input
+                        type="number"
+                        id={`stockQuantity-${index}`}
+                        value={variant.stockQuantity}
+                        onChange={(e) => updateVariant(index, 'stockQuantity', e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeVariant(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" onClick={addVariant}>
+                  Añadir Variante
+                </Button>
               </div>
-              <div>
-                <Label htmlFor={`additionalPrice-${index}`}>Precio Adicional</Label>
-                <Input
-                  type="number"
-                  id={`additionalPrice-${index}`}
-                  value={variant.additionalPrice}
-                  onChange={(e) => updateVariant(index, 'additionalPrice', e.target.value)}
-                />
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={handleClose}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Creando...' : 'Crear Producto'}
+                </Button>
               </div>
-              <div>
-                <Label htmlFor={`stockQuantity-${index}`}>Stock</Label>
-                <Input
-                  type="number"
-                  id={`stockQuantity-${index}`}
-                  value={variant.stockQuantity}
-                  onChange={(e) => updateVariant(index, 'stockQuantity', e.target.value)}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => removeVariant(index)}
-                className="text-red-500 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4" />
+            </form>
+          </TabsContent>
+
+          <TabsContent value="shopify" className="space-y-6">
+            <ShopifyProductImport onProductSelect={handleShopifyImport} />
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={handleClose}>
+                Cerrar
               </Button>
             </div>
-          ))}
-          <Button type="button" variant="outline" onClick={addVariant}>
-            Añadir Variante
-          </Button>
-        </div>
-
-        {/* Importar desde Shopify */}
-        <div>
-          <Button type="button" variant="secondary" onClick={() => setShowShopifyImport(true)}>
-            Importar desde Shopify
-          </Button>
-        </div>
-
-        <div className="flex justify-end">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Creando...' : 'Crear Producto'}
-          </Button>
-        </div>
-      </form>
-
-      {/* Modal de importación desde Shopify */}
-      {showShopifyImport && (
-        <ShopifyProductImport
-          onProductSelect={handleShopifyImport}
-        />
-      )}
-    </Card>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 };
 
