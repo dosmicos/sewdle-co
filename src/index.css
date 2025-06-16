@@ -8,41 +8,41 @@
   :root {
     /* Colores principales - Apple inspired */
     --background: 255 255 255;
-    --foreground: 0 0 0; /* Negro estándar para texto */
+    --foreground: 0 0 0;
     --card: 255 255 255;
-    --card-foreground: 0 0 0; /* Negro estándar para texto */
+    --card-foreground: 0 0 0;
     --popover: 255 255 255;
-    --popover-foreground: 0 0 0; /* Negro estándar para texto */
+    --popover-foreground: 0 0 0;
     
     /* Colores de acción */
     --primary: 59 130 246;
     --primary-foreground: 255 255 255;
     --secondary: 243 244 246;
-    --secondary-foreground: 0 0 0; /* Negro estándar para texto */
+    --secondary-foreground: 0 0 0;
     
     /* Colores de estado */
     --muted: 249 250 251;
-    --muted-foreground: 75 85 99; /* Gris más oscuro para mejor contraste */
-    --accent: 229 231 235; /* Gris claro para hover */
-    --accent-foreground: 0 0 0; /* Negro estándar para texto */
+    --muted-foreground: 75 85 99;
+    --accent: 229 231 235;
+    --accent-foreground: 0 0 0;
     --destructive: 239 68 68;
     --destructive-foreground: 255 255 255;
     
     /* Bordes e inputs */
-    --border: 209 213 219; /* Gris claro para bordes */
+    --border: 209 213 219;
     --input: 255 255 255;
-    --ring: 209 213 219; /* Gris claro para focus ring */
+    --ring: 209 213 219;
     --radius: 0.5rem;
     
     /* Sidebar */
     --sidebar-background: 255 255 255;
-    --sidebar-foreground: 0 0 0; /* Negro estándar para texto */
+    --sidebar-foreground: 0 0 0;
     --sidebar-primary: 59 130 246;
     --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 229 231 235; /* Gris claro */
-    --sidebar-accent-foreground: 0 0 0; /* Negro estándar para texto */
-    --sidebar-border: 209 213 219; /* Gris claro para bordes */
-    --sidebar-ring: 209 213 219; /* Gris claro */
+    --sidebar-accent: 229 231 235;
+    --sidebar-accent-foreground: 0 0 0;
+    --sidebar-border: 209 213 219;
+    --sidebar-ring: 209 213 219;
   }
 
   .dark {
@@ -78,9 +78,7 @@
     --sidebar-border: 51 65 85;
     --sidebar-ring: 99 102 241;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
@@ -91,18 +89,23 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Prevenir fondos amarillos automáticos */
+  html, body, #root {
+    background-color: rgb(var(--background));
+  }
 }
 
 @layer components {
-  /* Componentes de formulario mejorados */
+  /* Componentes de formulario */
   .form-input {
     @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
     @apply placeholder:text-muted-foreground;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply transition-colors;
-    color: black !important;
-    border-color: rgb(209 213 219) !important; /* Gris claro */
+    color: rgb(var(--foreground));
+    border-color: rgb(var(--border));
   }
   
   .form-textarea {
@@ -112,8 +115,8 @@
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply resize-none transition-colors;
     min-height: 80px;
-    color: black !important;
-    border-color: rgb(209 213 219) !important; /* Gris claro */
+    color: rgb(var(--foreground));
+    border-color: rgb(var(--border));
   }
   
   .form-select {
@@ -121,11 +124,11 @@
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply transition-colors;
-    color: black !important;
-    border-color: rgb(209 213 219) !important; /* Gris claro */
+    color: rgb(var(--foreground));
+    border-color: rgb(var(--border));
   }
-  
-  /* Botones mejorados */
+
+  /* Botones */
   .btn {
     @apply inline-flex items-center justify-center rounded-md text-sm font-medium;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
@@ -157,8 +160,8 @@
     @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
     @apply h-10 px-4 py-2;
   }
-  
-  /* Cards mejoradas */
+
+  /* Cards */
   .card {
     @apply rounded-lg border bg-card text-card-foreground shadow-sm;
   }
@@ -182,14 +185,14 @@
   .card-footer {
     @apply flex items-center p-6 pt-0;
   }
-  
-  /* Labels mejorados */
+
+  /* Labels */
   .label {
     @apply text-sm font-medium leading-none;
     @apply peer-disabled:cursor-not-allowed peer-disabled:opacity-70;
   }
-  
-  /* Dialog/Modal mejorados */
+
+  /* Dialog/Modal */
   .dialog-content {
     @apply fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%];
     @apply gap-4 border bg-background p-6 shadow-lg duration-200;
@@ -211,8 +214,8 @@
   .dialog-footer {
     @apply flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2;
   }
-  
-  /* Tabs mejorados */
+
+  /* Tabs */
   .tabs-list {
     @apply inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground;
   }
@@ -229,8 +232,64 @@
     @apply mt-2 ring-offset-background;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
-  
-  /* Utilidades adicionales */
+
+  /* Input con icono */
+  .input-with-icon {
+    @apply relative flex items-center;
+  }
+
+  .input-with-icon input {
+    @apply w-full pl-10 pr-3 py-2.5 text-sm bg-background rounded-xl;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply transition-all duration-200;
+    border: 1px solid rgb(var(--border));
+  }
+
+  .input-with-icon input:focus {
+    @apply border-primary;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  .input-with-icon .icon {
+    @apply absolute left-3 top-1/2 transform -translate-y-1/2;
+    @apply w-4 h-4 text-muted-foreground;
+    @apply transition-colors duration-200;
+    pointer-events: none;
+  }
+
+  /* Búsqueda específica */
+  .search-input {
+    @apply relative flex items-center max-w-md;
+  }
+
+  .search-input input {
+    @apply w-full pl-10 pr-4 py-2.5 text-sm;
+    @apply bg-background border border-border rounded-xl;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:border-primary;
+    @apply transition-all duration-200 ease-in-out;
+    font-weight: 400;
+  }
+
+  .search-input input:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+    border-color: rgb(var(--primary));
+  }
+
+  .search-input .search-icon {
+    @apply absolute left-3 top-1/2 transform -translate-y-1/2;
+    @apply w-4 h-4 text-gray-400;
+    @apply transition-colors duration-200;
+    pointer-events: none;
+  }
+
+  .search-input input:focus ~ .search-icon {
+    @apply text-primary;
+  }
+
+  /* Utilidades */
   .text-gradient {
     @apply bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
   }
@@ -242,8 +301,8 @@
   .border-dashed {
     border-style: dashed;
   }
-  
-  /* Animaciones suaves */
+
+  /* Animaciones */
   .animate-fade-in {
     animation: fadeIn 0.3s ease-in-out;
   }
@@ -267,8 +326,10 @@
       transform: translateY(0);
     }
   }
-  
-  /* Fixes específicos para formularios */
+}
+
+@layer utilities {
+  /* Fixes específicos sin !important */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -278,376 +339,98 @@
     @apply form-input;
   }
   
-  /* Asegurar que los placeholders se vean correctamente */
   ::placeholder {
-    color: rgb(107 114 128) !important;
+    color: rgb(107 114 128);
     opacity: 1;
   }
-  
-  /* Fix para botones de Lovable */
-  button:not(.btn) {
-    @apply transition-colors;
+
+  /* Elementos de formulario con estilos específicos */
+  .lovable-override input,
+  .lovable-override textarea,
+  .lovable-override select {
+    color: rgb(var(--foreground));
+    background-color: rgb(var(--background));
+    border-color: rgb(var(--border));
   }
-  
-  /* Fix para modales y overlays */
-  [data-radix-popper-content-wrapper] {
-    @apply z-50;
+
+  /* Botones con estados */
+  .lovable-override button:not(.bg-blue-500):not(.bg-blue-600) {
+    background-color: transparent;
   }
-  
-  /* Asegurar colores correctos en todos los elementos */
-  h1, h2, h3, h4, h5, h6 {
-    color: black !important;
+
+  .lovable-override button:not(.bg-blue-500):not(.bg-blue-600):hover {
+    background-color: rgba(243, 244, 246, 0.5);
   }
-  
-  p, span, div {
-    color: black !important;
+
+  /* Select dropdowns */
+  [data-radix-select-content] {
+    background-color: rgb(var(--background));
+    border: 1px solid rgb(var(--border));
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
-  
-  /* Fix para inputs y formularios */
-  input, textarea, select {
-    color: black !important;
-    background-color: white !important;
-    border-color: rgb(209 213 219) !important; /* Gris claro */
+
+  [data-radix-select-item] {
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
   }
-  
-  /* Fix para labels */
-  label {
-    color: black !important;
+
+  [data-radix-select-item]:hover {
+    background-color: rgb(var(--accent));
   }
-  
-  /* Fix para botones - eliminar amarillo y usar gris claro */
-  button {
-    color: inherit;
+
+  [data-radix-select-item][data-highlighted] {
+    background-color: rgb(var(--primary));
+    color: rgb(var(--primary-foreground));
   }
-  
-  button:focus,
-  button:active {
-    background-color: rgb(229 231 235) !important; /* Gris claro en lugar de amarillo */
-    outline: none !important;
-    box-shadow: none !important;
+
+  /* Tables */
+  table th,
+  table td {
+    color: rgb(var(--foreground));
   }
-  
-  /* Fix para hover states */
-  button:hover {
-    background-color: rgb(229 231 235) !important; /* Gris claro */
+
+  table tr:hover {
+    background-color: rgb(var(--muted));
+  }
+
+  /* Texto */
+  .text-muted-foreground {
+    color: rgb(var(--muted-foreground));
+  }
+
+  /* Prevenir amarillo específico de Lovable */
+  .no-yellow {
+    background-color: rgb(var(--background));
   }
 }
 
-/* Estados activos y focus sin amarillo */
-input:active,
-textarea:active,
-select:active,
-input:focus,
-textarea:focus,
-select:focus {
-  background-color: white !important; /* Mantener fondo blanco */
-  border-color: rgb(209 213 219) !important; /* Gris claro */
-  outline: none !important;
-  box-shadow: 0 0 0 2px rgb(209 213 219) !important; /* Gris claro para el ring */
+/* Clase wrapper para aplicar en el componente principal */
+.clean-layout {
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
 }
 
-/* Botones - eliminar completamente el amarillo */
-button:focus,
-button:active,
-button:hover {
-  background-color: rgb(229 231 235) !important; /* Gris claro */
-  color: black !important;
-  outline: none !important;
-  box-shadow: none !important;
+.clean-layout * {
+  background-color: inherit;
 }
 
-
-/* OVERRIDE ESPECÍFICO PARA EL PROBLEMA */
-.data-\[state\=active\]\:bg-background[data-state=active] {
-  background-color: white !important;
+.clean-layout input,
+.clean-layout textarea,
+.clean-layout select {
+  background-color: rgb(var(--input));
+  border-color: rgb(var(--border));
+  color: rgb(var(--foreground));
 }
 
-[data-state=active] {
-  background-color: white !important;
+.clean-layout .card {
+  background-color: rgb(var(--card));
 }
 
-input[data-state=active],
-textarea[data-state=active] {
-  background-color: white !important;
+.clean-layout button.bg-blue-500 {
+  background-color: #3b82f6;
 }
 
-*[data-active="true"] {
-  background-color: white !important;
-}
-
-*[data-active="true"]:not(input):not(textarea):not(select) {
-  background-color: rgb(243, 244, 246) !important;
-}
-
-
-
-/* Agregar al final de tu index.css */
-
-/* Input con icono izquierdo - estilo Apple */
-.input-with-icon {
-  @apply relative flex items-center;
-}
-
-.input-with-icon input {
-  @apply w-full pl-10 pr-3 py-2.5 text-sm bg-background rounded-xl;
-  @apply placeholder:text-muted-foreground;
-  @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0;
-  @apply disabled:cursor-not-allowed disabled:opacity-50;
-  @apply transition-all duration-200;
-  border: 1px solid rgb(var(--border));
-}
-
-.input-with-icon input:focus {
-  @apply border-primary;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.input-with-icon .icon {
-  @apply absolute left-3 top-1/2 transform -translate-y-1/2;
-  @apply w-4 h-4 text-muted-foreground;
-  @apply transition-colors duration-200;
-  pointer-events: none;
-}
-
-/* Búsqueda específica - estilo Apple */
-.search-input {
-  @apply relative flex items-center max-w-md;
-}
-
-.search-input input {
-  @apply w-full pl-10 pr-4 py-2.5 text-sm;
-  @apply bg-background border border-border rounded-xl;
-  @apply placeholder:text-muted-foreground;
-  @apply focus:outline-none focus:border-primary;
-  @apply transition-all duration-200 ease-in-out;
-  font-weight: 400;
-}
-
-.search-input input:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
-  border-color: rgb(var(--primary));
-}
-
-.search-input .search-icon {
-  @apply absolute left-3 top-1/2 transform -translate-y-1/2;
-  @apply w-4 h-4 text-gray-400;
-  @apply transition-colors duration-200;
-  pointer-events: none;
-}
-
-.search-input input:focus ~ .search-icon {
-  @apply text-primary;
-}
-
-
-
-/* Fix específico para botones en formularios - SIN afectar overlay */
-.dialog button:not(.bg-blue-500):not(.bg-blue-600),
-[role="dialog"] button:not(.bg-blue-500):not(.bg-blue-600),
-form button:not(.bg-blue-500):not(.bg-blue-600) {
-  background-color: transparent !important;
-}
-
-.dialog button:not(.bg-blue-500):not(.bg-blue-600):hover,
-[role="dialog"] button:not(.bg-blue-500):not(.bg-blue-600):hover,
-form button:not(.bg-blue-500):not(.bg-blue-600):hover {
-  background-color: rgba(243, 244, 246, 0.5) !important;
-}
-
-/* Fix para botones con data-state dentro de formularios */
-[role="dialog"] button[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
-[role="dialog"] [role="button"][data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
-form button[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600) {
-  background-color: white !important;
-}
-
-/* Fix para SelectTrigger específicamente */
-[role="dialog"] [data-radix-select-trigger],
-[role="dialog"] [data-radix-select-trigger]:hover,
-[role="dialog"] [data-radix-select-trigger][data-state="open"] {
-  background-color: white !important;
-}
-
-/* Preservar colores de botones azules */
-[role="dialog"] .bg-blue-500,
-[role="dialog"] .bg-blue-600 {
-  background-color: #3b82f6 !important;
-}
-
-[role="dialog"] .bg-blue-500:hover,
-[role="dialog"] .bg-blue-600:hover {
-  background-color: #2563eb !important;
-}
-
-/* Fix solo para Cards dentro de dialogs */
-[role="dialog"] .card {
-  background-color: white !important;
-}
-
-/* Override específico para elementos con data-state SOLO dentro de dialogs */
-[role="dialog"] *[data-state="active"]:not(.bg-blue-500):not(.bg-blue-600),
-[role="dialog"] *[data-state="open"]:not(.bg-blue-500):not(.bg-blue-600),
-[role="dialog"] *[data-active="true"]:not(.bg-blue-500):not(.bg-blue-600) {
-  background-color: white !important;
-}
-
-
-/* Fix para iconos y textos invisibles */
-.text-muted-foreground {
-  color: rgb(107, 114, 128) !important; /* gray-500 */
-}
-
-/* Asegurar que los headers de tabla se vean */
-.table th,
-.table td,
-table th,
-table td {
-  color: rgb(17, 24, 39) !important; /* gray-900 */
-}
-
-
-/* Eliminar transiciones problemáticas SOLO en tablas */
-table tr,
-table tbody tr,
-.table tr,
-.table tbody tr,
-[role="row"] {
-  transition-property: none !important;
-  background-color: white !important;
-}
-
-table tr:hover,
-table tbody tr:hover,
-.table tr:hover,
-.table tbody tr:hover,
-[role="row"]:hover {
-  background-color: #f9fafb !important; /* gray-50 para hover suave */
-  transition: none !important;
-}
-
-/* Override específico para TableRow */
-[data-component-name="TableRow"] {
-  background-color: white !important;
-  transition: none !important;
-}
-
-[data-component-name="TableRow"]:hover {
-  background-color: #f9fafb !important;
-}
-
-/* PRESERVAR botones - no tocar estos */
-button,
-.btn,
-[role="button"] {
-  transition: all 0.2s ease-in-out !important;
-  background-color: initial !important;
-}
-
-/* Restaurar botones específicos */
-button.bg-blue-500,
-.bg-blue-500 {
-  background-color: #3b82f6 !important;
-}
-
-button.bg-blue-500:hover,
-.bg-blue-500:hover {
-  background-color: #2563eb !important;
-}
-
-
-/* OVERRIDE AGRESIVO para eliminar amarillo de Lovable */
-* {
-  background-color: inherit !important;
-}
-
-*:not(button):not(.bg-blue-500):not(.bg-green-500):not(.bg-red-500):not(.bg-yellow-500):not(.bg-purple-500) {
-  background-color: transparent !important;
-}
-
-/* Forzar fondo blanco en elementos principales */
-body,
-html,
-#root,
-.main,
-main {
-  background-color: white !important;
-}
-
-/* Eliminar cualquier background amarillo automático */
-*[style*="background-color: rgb(255, 255, 0)"],
-*[style*="background: rgb(255, 255, 0)"],
-*[style*="background-color: yellow"],
-*[style*="background: yellow"],
-*[style*="hsl(60"],
-*[style*="hsl(255 255 0"] {
-  background-color: white !important;
-  background: white !important;
-}
-
-/* Override específico para elementos con data attributes */
-*[data-component-path],
-*[data-component-line],
-*[data-component-file] {
-  background-color: transparent !important;
-}
-
-/* Eliminar transiciones problemáticas */
-* {
-  transition-property: transform, opacity, box-shadow, border-color !important;
-}
-
-/* Restaurar solo los fondos que necesitas */
-.bg-blue-500 { background-color: #3b82f6 !important; }
-.bg-green-500 { background-color: #10b981 !important; }
-.bg-red-500 { background-color: #ef4444 !important; }
-.bg-gray-50 { background-color: #f9fafb !important; }
-.bg-gray-100 { background-color: #f3f4f6 !important; }
-
-/* Cards y containers */
-.card,
-[role="main"],
-main,
-.container {
-  background-color: white !important;
-}
-
-/* Override para elementos del dashboard */
-.dashboard *,
-.chart *,
-.graph * {
-  background-color: transparent !important;
-}
-
-
-  
-
-/* Fix para dropdown de Select */
-[data-radix-select-content] {
-  background-color: white !important;
-  border: 1px solid rgb(229, 231, 235) !important;
-  border-radius: 0.75rem !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
-  backdrop-filter: none !important;
-}
-
-/* Items del dropdown */
-[data-radix-select-item] {
-  background-color: white !important;
-  color: rgb(17, 24, 39) !important;
-}
-
-[data-radix-select-item]:hover {
-  background-color: rgb(243, 244, 246) !important;
-}
-
-[data-radix-select-item][data-highlighted] {
-  background-color: rgb(59, 130, 246) !important;
-  color: white !important;
-}
-
-/* Asegurar que no haya transparencia */
-.select-content,
-[role="listbox"] {
-  background-color: white !important;
-  opacity: 1 !important;
+.clean-layout button.bg-blue-500:hover {
+  background-color: #2563eb;
 }
