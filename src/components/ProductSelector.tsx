@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, Trash2, Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ProductSelectorProps {
@@ -25,6 +26,22 @@ interface ProductVariant {
   color: string;
   additional_price: number;
   stock_quantity: number;
+}
+
+interface SelectedProduct {
+  id: string;
+  productId: string;
+  productName: string;
+  variants: {
+    [variantId: string]: {
+      id: string;
+      size: string;
+      color: string;
+      price: number;
+      stock: number;
+      quantity: number;
+    };
+  };
 }
 
 const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelectorProps) => {
@@ -79,12 +96,11 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
   };
 
   const addProduct = () => {
-    const newProduct = {
+    const newProduct: SelectedProduct = {
       id: Date.now().toString(),
       productId: '',
-      variantId: '',
-      quantity: 1,
-      unitPrice: 0
+      productName: '',
+      variants: {}
     };
     onProductsChange([...selectedProducts, newProduct]);
   };
@@ -94,37 +110,63 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     onProductsChange(updated);
   };
 
-  const updateProduct = (index: number, field: string, value: any) => {
+  const updateProductSelection = (index: number, productId: string) => {
+    const selectedProduct = availableProducts.find(p => p.id === productId);
+    if (!selectedProduct) return;
+
     const updated = [...selectedProducts];
-    updated[index] = { ...updated[index], [field]: value };
+    const variants: any = {};
     
-    // Si se cambia el producto, resetear variante y precio
-    if (field === 'productId') {
-      updated[index].variantId = '';
-      updated[index].unitPrice = 0;
-    }
-    
-    // Si se cambia la variante, actualizar el precio
-    if (field === 'variantId') {
-      const selectedProduct = getSelectedProduct(updated[index].productId);
-      if (selectedProduct) {
-        const selectedVariant = selectedProduct.variants.find(v => v.id === value);
-        if (selectedVariant) {
-          updated[index].unitPrice = selectedProduct.base_price + (selectedVariant.additional_price || 0);
-        }
-      }
-    }
+    // Inicializar todas las variantes con cantidad 0
+    selectedProduct.variants.forEach(variant => {
+      variants[variant.id] = {
+        id: variant.id,
+        size: variant.size || '',
+        color: variant.color || '',
+        price: selectedProduct.base_price + (variant.additional_price || 0),
+        stock: variant.stock_quantity || 0,
+        quantity: 0
+      };
+    });
+
+    updated[index] = {
+      ...updated[index],
+      productId,
+      productName: selectedProduct.name,
+      variants
+    };
     
     onProductsChange(updated);
   };
 
-  const getSelectedProduct = (productId: string) => {
-    return availableProducts.find(p => p.id === productId);
+  const updateVariantQuantity = (productIndex: number, variantId: string, quantity: number) => {
+    const updated = [...selectedProducts];
+    updated[productIndex].variants[variantId].quantity = Math.max(0, quantity);
+    onProductsChange(updated);
   };
 
-  const getSelectedVariant = (productId: string, variantId: string) => {
-    const product = getSelectedProduct(productId);
-    return product?.variants.find(v => v.id === variantId);
+  const getProductTotal = (product: SelectedProduct) => {
+    return Object.values(product.variants).reduce((total: number, variant: any) => {
+      return total + (variant.quantity * variant.price);
+    }, 0);
+  };
+
+  const getProductQuantityTotal = (product: SelectedProduct) => {
+    return Object.values(product.variants).reduce((total: number, variant: any) => {
+      return total + variant.quantity;
+    }, 0);
+  };
+
+  const getOrderTotal = () => {
+    return selectedProducts.reduce((total, product) => {
+      return total + getProductTotal(product);
+    }, 0);
+  };
+
+  const getTotalQuantities = () => {
+    return selectedProducts.reduce((total, product) => {
+      return total + getProductQuantityTotal(product);
+    }, 0);
   };
 
   if (loading) {
@@ -145,14 +187,16 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
 
   return (
     <div className="space-y-6">
-      {selectedProducts.map((product, index) => {
-        const selectedProductData = getSelectedProduct(product.productId);
-        const selectedVariant = getSelectedVariant(product.productId, product.variantId);
+      {selectedProducts.map((product: SelectedProduct, index) => {
+        const selectedProductData = availableProducts.find(p => p.id === product.productId);
         
         return (
           <div key={product.id} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-black">Producto #{index + 1}</h4>
+              <h4 className="font-semibold text-black flex items-center">
+                <Package className="w-4 h-4 mr-2" />
+                Producto #{index + 1}
+              </h4>
               <Button
                 type="button"
                 variant="ghost"
@@ -164,131 +208,111 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Producto
-                </label>
-                <Select
-                  value={product.productId || "none"}
-                  onValueChange={(value) => updateProduct(index, 'productId', value === "none" ? "" : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar producto..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Seleccionar producto...</SelectItem>
-                    {availableProducts.map((prod) => (
-                      <SelectItem key={prod.id} value={prod.id}>
-                        {prod.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedProductData && selectedProductData.variants.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Variante (Talla/Color)
-                  </label>
-                  <Select
-                    value={product.variantId || "none"}
-                    onValueChange={(value) => updateProduct(index, 'variantId', value === "none" ? "" : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar variante..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Seleccionar variante...</SelectItem>
-                      {selectedProductData.variants.map((variant) => (
-                        <SelectItem key={variant.id} value={variant.id}>
-                          {variant.size && variant.color 
-                            ? `${variant.size} - ${variant.color} - $${(selectedProductData.base_price + (variant.additional_price || 0)).toLocaleString()}`
-                            : variant.size || variant.color || `Variante - $${(selectedProductData.base_price + (variant.additional_price || 0)).toLocaleString()}`
-                          }
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-black mb-2">
+                Seleccionar Producto
+              </label>
+              <Select
+                value={product.productId || "none"}
+                onValueChange={(value) => updateProductSelection(index, value === "none" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar producto..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Seleccionar producto...</SelectItem>
+                  {availableProducts.map((prod) => (
+                    <SelectItem key={prod.id} value={prod.id}>
+                      {prod.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {selectedProductData && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Descripción
-                  </label>
-                  <Input
-                    value={selectedProductData.description}
-                    readOnly
-                    className="bg-gray-50"
-                  />
+            {selectedProductData && selectedProductData.variants.length > 0 && (
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    <strong>Descripción:</strong> {selectedProductData.description}
+                  </p>
+                  <p className="text-sm text-gray-700 mt-1">
+                    <strong>Precio Base:</strong> ${selectedProductData.base_price.toLocaleString()}
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Precio Base
-                  </label>
-                  <Input
-                    value={`$${selectedProductData.base_price.toLocaleString()}`}
-                    readOnly
-                    className="bg-gray-50"
-                  />
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="text-black font-semibold">Variante</TableHead>
+                        <TableHead className="text-black font-semibold">Precio</TableHead>
+                        <TableHead className="text-black font-semibold">Disponible</TableHead>
+                        <TableHead className="text-black font-semibold">Cantidad</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedProductData.variants.map((variant) => {
+                        const variantData = product.variants[variant.id];
+                        return (
+                          <TableRow key={variant.id}>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <span className="text-xs text-blue-600 font-medium">
+                                    {variant.size || variant.color?.charAt(0) || 'V'}
+                                  </span>
+                                </div>
+                                <span>
+                                  {variant.size && variant.color 
+                                    ? `${variant.size} - ${variant.color}`
+                                    : variant.size || variant.color || 'Variante'
+                                  }
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              ${(selectedProductData.base_price + (variant.additional_price || 0)).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                variant.stock_quantity > 0 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {variant.stock_quantity || 0}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={variant.stock_quantity || 999}
+                                value={variantData?.quantity || 0}
+                                onChange={(e) => updateVariantQuantity(
+                                  index, 
+                                  variant.id, 
+                                  parseInt(e.target.value) || 0
+                                )}
+                                className="w-20"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Precio Final
-                  </label>
-                  <Input
-                    value={product.unitPrice ? `$${product.unitPrice.toLocaleString()}` : ''}
-                    readOnly
-                    className="bg-gray-50"
-                  />
-                </div>
-              </div>
-            )}
-
-            {selectedVariant && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Cantidad
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max={selectedVariant.stock_quantity || 999}
-                    value={product.quantity || ''}
-                    onChange={(e) => updateProduct(index, 'quantity', parseInt(e.target.value) || 1)}
-                    placeholder="Ingresa la cantidad"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Stock Disponible
-                  </label>
-                  <Input
-                    value={selectedVariant.stock_quantity || 0}
-                    readOnly
-                    className="bg-gray-50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Total
-                  </label>
-                  <Input
-                    value={product.quantity && product.unitPrice ? 
-                      `$${(product.quantity * product.unitPrice).toLocaleString()}` : '$0'}
-                    readOnly
-                    className="bg-gray-50 font-semibold"
-                  />
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-medium text-blue-900">
+                      Total de cantidades: {getProductQuantityTotal(product)} unidades
+                    </span>
+                    <span className="font-bold text-blue-900 text-lg">
+                      ${getProductTotal(product).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -315,20 +339,28 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
       </Button>
 
       {selectedProducts.length > 0 && (
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-          <h4 className="font-medium text-blue-900 mb-2">Resumen de productos:</h4>
-          {selectedProducts.map((product, index) => {
-            const productData = getSelectedProduct(product.productId);
-            const variantData = getSelectedVariant(product.productId, product.variantId);
-            
-            if (!productData || !variantData) return null;
-            
-            return (
-              <div key={index} className="text-sm text-blue-800">
-                {productData.name} - {variantData.size || 'Sin talla'} {variantData.color || ''} - Cantidad: {product.quantity} - Total: ${(product.quantity * product.unitPrice).toLocaleString()}
-              </div>
-            );
-          })}
+        <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+          <h4 className="font-bold text-blue-900 mb-4 text-lg">Resumen de la Orden</h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <p className="text-sm text-gray-600">Total de productos</p>
+              <p className="text-2xl font-bold text-gray-900">{selectedProducts.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <p className="text-sm text-gray-600">Total de unidades</p>
+              <p className="text-2xl font-bold text-blue-600">{getTotalQuantities()}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <div className="flex justify-between items-center">
+              <span className="text-lg font-semibold text-gray-900">Total de la Orden:</span>
+              <span className="text-3xl font-bold text-green-600">
+                ${getOrderTotal().toLocaleString()}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>
