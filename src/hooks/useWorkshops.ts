@@ -58,42 +58,23 @@ export const useWorkshops = () => {
 
   const createWorkshop = async (workshopData: WorkshopInsert) => {
     try {
-      console.log('=== STARTING WORKSHOP CREATION ===');
-      console.log('Workshop data received:', workshopData);
+      console.log('Creating workshop with data:', workshopData);
       
-      // Check authentication status in detail
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log('Session check:', { 
-        hasSession: !!session, 
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        sessionError 
-      });
+      // Check if user is authenticated
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.user) {
         throw new Error('Usuario no autenticado');
       }
 
-      // Log the exact data being sent
-      console.log('Data being inserted:', JSON.stringify(workshopData, null, 2));
-      
-      // Try the insert with detailed error logging
-      console.log('Attempting to insert workshop...');
       const { data, error } = await supabase
         .from('workshops')
         .insert(workshopData)
         .select()
         .single();
 
-      console.log('Insert result:', { data, error });
-
       if (error) {
-        console.error('=== SUPABASE INSERT ERROR ===');
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        console.error('Error hint:', error.hint);
-        console.error('Full error object:', JSON.stringify(error, null, 2));
+        console.error('Supabase insert error:', error);
         throw error;
       }
 
@@ -105,10 +86,7 @@ export const useWorkshops = () => {
       });
       return { data, error: null };
     } catch (error: any) {
-      console.error('=== WORKSHOP CREATION ERROR ===');
-      console.error('Error type:', typeof error);
-      console.error('Error message:', error?.message);
-      console.error('Full error:', error);
+      console.error('Error creating workshop:', error);
       
       let errorMessage = "No se pudo crear el taller";
       
