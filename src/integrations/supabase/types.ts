@@ -525,38 +525,53 @@ export type Database = {
         Row: {
           address: string | null
           capacity: number | null
+          city: string | null
           contact_person: string | null
           created_at: string
           email: string | null
           id: string
           name: string
+          notes: string | null
           phone: string | null
+          specialties: string[] | null
           status: string | null
           updated_at: string
+          working_hours_end: string | null
+          working_hours_start: string | null
         }
         Insert: {
           address?: string | null
           capacity?: number | null
+          city?: string | null
           contact_person?: string | null
           created_at?: string
           email?: string | null
           id?: string
           name: string
+          notes?: string | null
           phone?: string | null
+          specialties?: string[] | null
           status?: string | null
           updated_at?: string
+          working_hours_end?: string | null
+          working_hours_start?: string | null
         }
         Update: {
           address?: string | null
           capacity?: number | null
+          city?: string | null
           contact_person?: string | null
           created_at?: string
           email?: string | null
           id?: string
           name?: string
+          notes?: string | null
           phone?: string | null
+          specialties?: string[] | null
           status?: string | null
           updated_at?: string
+          working_hours_end?: string | null
+          working_hours_start?: string | null
         }
         Relationships: []
       }

@@ -7,21 +7,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Building2, MapPin, Phone, Mail, User, Clock, Star } from 'lucide-react';
+import { Building2, Phone, Star } from 'lucide-react';
+import { useWorkshops } from '@/hooks/useWorkshops';
 
-const WorkshopForm = () => {
+interface WorkshopFormProps {
+  onSuccess?: () => void;
+}
+
+const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
+  const { createWorkshop } = useWorkshops();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     address: '',
     city: '',
     phone: '',
     email: '',
-    contactPerson: '',
-    specialties: [],
-    workingHours: {
-      start: '',
-      end: ''
-    },
+    contact_person: '',
     notes: ''
   });
 
@@ -43,16 +45,6 @@ const WorkshopForm = () => {
     }));
   };
 
-  const handleWorkingHoursChange = (type: 'start' | 'end', value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      workingHours: {
-        ...prev.workingHours,
-        [type]: value
-      }
-    }));
-  };
-
   const toggleSpecialty = (specialty: string) => {
     setSelectedSpecialties(prev => {
       if (prev.includes(specialty)) {
@@ -63,13 +55,40 @@ const WorkshopForm = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Datos del taller:', {
-      ...formData,
-      specialties: selectedSpecialties
-    });
-    // Aquí iría la lógica para enviar los datos
+    setLoading(true);
+
+    const workshopData = {
+      name: formData.name,
+      address: formData.address,
+      city: formData.city,
+      phone: formData.phone,
+      email: formData.email,
+      contact_person: formData.contact_person,
+      specialties: selectedSpecialties,
+      notes: formData.notes,
+      status: 'active' as const
+    };
+
+    const { error } = await createWorkshop(workshopData);
+    
+    if (!error) {
+      // Reset form
+      setFormData({
+        name: '',
+        address: '',
+        city: '',
+        phone: '',
+        email: '',
+        contact_person: '',
+        notes: ''
+      });
+      setSelectedSpecialties([]);
+      onSuccess?.();
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -171,11 +190,11 @@ const WorkshopForm = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="contactPerson">Persona de Contacto</Label>
+                <Label htmlFor="contact_person">Persona de Contacto</Label>
                 <Input
-                  id="contactPerson"
-                  value={formData.contactPerson}
-                  onChange={(e) => handleInputChange('contactPerson', e.target.value)}
+                  id="contact_person"
+                  value={formData.contact_person}
+                  onChange={(e) => handleInputChange('contact_person', e.target.value)}
                   placeholder="Ej: Juan Pérez"
                   className="apple-input"
                 />
@@ -233,14 +252,16 @@ const WorkshopForm = () => {
                 type="button" 
                 variant="outline"
                 className="border border-gray-300 bg-white hover:bg-gray-50 text-black rounded-xl px-6 py-3"
+                onClick={() => onSuccess?.()}
               >
                 Cancelar
               </Button>
               <Button 
                 type="submit"
-                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]"
+                disabled={loading}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
               >
-                Crear Taller
+                {loading ? 'Creando...' : 'Crear Taller'}
               </Button>
             </div>
           </form>
