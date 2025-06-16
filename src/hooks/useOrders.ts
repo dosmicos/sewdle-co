@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -63,7 +64,7 @@ export const useOrders = () => {
             order_number: orderNumber,
             due_date: orderData.dueDate,
             total_amount: totalAmount > 0 ? totalAmount : null,
-            notes: orderData.notes,
+            notes: orderData.notes || null,
             status: 'pending'
           }
         ])
@@ -115,7 +116,7 @@ export const useOrders = () => {
           material_id: supply.materialId,
           quantity: supply.quantity,
           unit: supply.unit,
-          notes: supply.notes
+          notes: supply.notes || null
         }));
 
         console.log('Order supplies to insert:', orderSupplies);

@@ -63,6 +63,14 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
       return;
     }
 
+    // Validar que los insumos tengan materialId válido
+    const validSupplies = supplies.filter(supply => 
+      supply.materialId && 
+      supply.materialId !== '' && 
+      supply.quantity && 
+      supply.quantity > 0
+    );
+
     try {
       const orderData = {
         workshopId: selectedWorkshop,
@@ -73,7 +81,7 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
           quantity: Number(product.quantity),
           unitPrice: Number(product.unitPrice) || 0
         })),
-        supplies: supplies.filter(supply => supply.materialId && supply.quantity > 0).map(supply => ({
+        supplies: validSupplies.map(supply => ({
           materialId: supply.materialId,
           quantity: Number(supply.quantity),
           unit: supply.unit,
