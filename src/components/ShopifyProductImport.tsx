@@ -49,70 +49,65 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
     setIsLoading(true);
     try {
-      // Aquí se conectaría realmente con Shopify
-      // Por ahora simularemos la conexión con productos de ejemplo que incluyen status
-      const mockShopifyProducts: ShopifyProduct[] = [
-        {
-          id: '1',
-          name: 'Camiseta Premium Cotton',
-          description: 'Camiseta de algodón premium con corte regular',
-          price: '$29.99',
-          variants: [
-            { size: 'S', color: 'Blanco', price: '$29.99', sku: 'CAM-001-S-W' },
-            { size: 'M', color: 'Blanco', price: '$29.99', sku: 'CAM-001-M-W' },
-            { size: 'L', color: 'Negro', price: '$29.99', sku: 'CAM-001-L-B' }
-          ],
-          sku: 'CAM-001',
-          category: 'Ropa',
-          brand: 'Mi Marca',
-          status: 'active'
-        },
-        {
-          id: '2',
-          name: 'Sudadera Con Capucha',
-          description: 'Sudadera cómoda con capucha y bolsillo frontal',
-          price: '$45.99',
-          variants: [
-            { size: 'S', color: 'Gris', price: '$45.99', sku: 'SUD-002-S-G' },
-            { size: 'M', color: 'Gris', price: '$45.99', sku: 'SUD-002-M-G' },
-            { size: 'L', color: 'Negro', price: '$45.99', sku: 'SUD-002-L-B' }
-          ],
-          sku: 'SUD-002',
-          category: 'Ropa',
-          brand: 'Mi Marca',
-          status: 'draft'
-        },
-        {
-          id: '3',
-          name: 'Pantalón Deportivo',
-          description: 'Pantalón deportivo de material transpirable',
-          price: '$35.99',
-          variants: [
-            { size: 'S', color: 'Negro', price: '$35.99', sku: 'PAN-003-S-B' },
-            { size: 'M', color: 'Azul', price: '$35.99', sku: 'PAN-003-M-A' },
-            { size: 'L', color: 'Gris', price: '$35.99', sku: 'PAN-003-L-G' }
-          ],
-          sku: 'PAN-003',
-          category: 'Ropa',
-          brand: 'Mi Marca',
-          status: 'active'
-        }
-      ];
+      // Limpiar el dominio para asegurar formato correcto
+      const cleanDomain = shopifyCredentials.storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250`;
 
-      setTimeout(() => {
-        setProducts(mockShopifyProducts);
-        setIsConnected(true);
-        setIsLoading(false);
-        toast({
-          title: "Conectado exitosamente",
-          description: `Se encontraron ${mockShopifyProducts.length} productos activos y en borrador`
-        });
-      }, 2000);
+      console.log('Connecting to Shopify API:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'X-Shopify-Access-Token': shopifyCredentials.accessToken,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Shopify API Response:', data);
+
+      if (!data.products) {
+        throw new Error('No se encontraron productos en la respuesta de Shopify');
+      }
+
+      // Convertir productos de Shopify al formato interno
+      const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
+        id: product.id.toString(),
+        name: product.title,
+        description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : '',
+        price: product.variants?.[0]?.price || '0.00',
+        variants: product.variants?.map((variant: any) => ({
+          size: variant.option1 || variant.title || '',
+          color: variant.option2 || '',
+          price: variant.price || '0.00',
+          sku: variant.sku || ''
+        })) || [],
+        image: product.images?.[0]?.src || '',
+        sku: product.variants?.[0]?.sku || '',
+        category: product.product_type || '',
+        brand: product.vendor || '',
+        specifications: product.body_html || '',
+        status: product.status === 'active' ? 'active' : 'draft'
+      }));
+
+      setProducts(shopifyProducts);
+      setIsConnected(true);
+      setIsLoading(false);
+      
+      toast({
+        title: "Conectado exitosamente",
+        description: `Se encontraron ${shopifyProducts.length} productos (activos y en borrador)`
+      });
     } catch (error) {
+      console.error('Error connecting to Shopify:', error);
       setIsLoading(false);
       toast({
         title: "Error de conexión",
-        description: "No se pudo conectar con Shopify. Verifica tus credenciales.",
+        description: error instanceof Error ? error.message : "No se pudo conectar con Shopify. Verifica tus credenciales.",
         variant: "destructive"
       });
     }
@@ -123,18 +118,52 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     
     setIsLoading(true);
     try {
-      // En una implementación real, aquí haríamos la llamada a la API de Shopify
-      // con filtros para productos activos y en borrador
-      const filteredProducts = products.filter(product => 
-        (product.status === 'active' || product.status === 'draft') &&
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const cleanDomain = shopifyCredentials.storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      let apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250`;
       
-      setTimeout(() => {
-        setProducts(filteredProducts);
-        setIsLoading(false);
-      }, 1000);
+      // Agregar filtro de búsqueda si hay término de búsqueda
+      if (searchTerm.trim()) {
+        apiUrl += `&title=${encodeURIComponent(searchTerm)}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'X-Shopify-Access-Token': shopifyCredentials.accessToken,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Convertir productos de Shopify al formato interno
+      const shopifyProducts: ShopifyProduct[] = data.products.map((product: any) => ({
+        id: product.id.toString(),
+        name: product.title,
+        description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : '',
+        price: product.variants?.[0]?.price || '0.00',
+        variants: product.variants?.map((variant: any) => ({
+          size: variant.option1 || variant.title || '',
+          color: variant.option2 || '',
+          price: variant.price || '0.00',
+          sku: variant.sku || ''
+        })) || [],
+        image: product.images?.[0]?.src || '',
+        sku: product.variants?.[0]?.sku || '',
+        category: product.product_type || '',
+        brand: product.vendor || '',
+        specifications: product.body_html || '',
+        status: product.status === 'active' ? 'active' : 'draft'
+      }));
+
+      setProducts(shopifyProducts);
+      setIsLoading(false);
     } catch (error) {
+      console.error('Error fetching products:', error);
       setIsLoading(false);
       toast({
         title: "Error al buscar productos",
@@ -280,7 +309,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                             {product.variants.length} variantes
                           </Badge>
                           <Badge variant="outline" className="text-xs">
-                            {product.price}
+                            ${product.price}
                           </Badge>
                         </div>
                       </div>
@@ -308,7 +337,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           {products.length === 0 && !isLoading && !searchTerm && (
             <div className="text-center py-8">
               <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">Busca productos para ver los resultados</p>
+              <p className="text-gray-600">Haz clic en "Buscar" para cargar todos los productos</p>
             </div>
           )}
         </CardContent>
