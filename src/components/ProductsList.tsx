@@ -1,9 +1,21 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Edit, Trash2, Package } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Product {
   id: string;
@@ -21,9 +33,79 @@ interface ProductsListProps {
   products: Product[];
   loading: boolean;
   error: string | null;
+  onProductUpdate?: () => void;
 }
 
-const ProductsList = ({ products, loading, error }: ProductsListProps) => {
+const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsListProps) => {
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
+
+  const handleEditProduct = (product: Product) => {
+    // TODO: Implementar modal de edición o navegación
+    toast({
+      title: "Función en desarrollo",
+      description: `Edición de ${product.name} estará disponible próximamente.`,
+    });
+  };
+
+  const handleDeleteClick = (product: Product) => {
+    setProductToDelete(product);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return;
+
+    setDeleting(true);
+    try {
+      // Primero eliminar las variantes del producto
+      const { error: variantsError } = await supabase
+        .from('product_variants')
+        .delete()
+        .eq('product_id', productToDelete.id);
+
+      if (variantsError) {
+        console.error('Error deleting product variants:', variantsError);
+        throw variantsError;
+      }
+
+      // Luego eliminar el producto
+      const { error: productError } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productToDelete.id);
+
+      if (productError) {
+        console.error('Error deleting product:', productError);
+        throw productError;
+      }
+
+      toast({
+        title: "Producto eliminado",
+        description: `${productToDelete.name} ha sido eliminado exitosamente.`,
+      });
+
+      // Actualizar la lista de productos
+      if (onProductUpdate) {
+        onProductUpdate();
+      }
+
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: "Error al eliminar producto",
+        description: error.message || "Hubo un problema al eliminar el producto.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmOpen(false);
+      setProductToDelete(null);
+    }
+  };
+
   if (loading) {
     return (
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
@@ -64,62 +146,91 @@ const ProductsList = ({ products, loading, error }: ProductsListProps) => {
   }
 
   return (
-    <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {products.map((product) => (
-          <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-            {product.image_url && (
-              <div className="mb-4">
-                <img 
-                  src={product.image_url} 
-                  alt={product.name}
-                  className="w-full h-48 object-cover rounded-lg"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <div className="flex items-start justify-between">
-                <h3 className="font-semibold text-black text-lg">{product.name}</h3>
-                <Badge variant="outline" className="ml-2">
-                  {product.category || 'Sin categoría'}
-                </Badge>
-              </div>
+    <>
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map((product) => (
+            <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+              {product.image_url && (
+                <div className="mb-4">
+                  <img 
+                    src={product.image_url} 
+                    alt={product.name}
+                    className="w-full h-48 object-cover rounded-lg"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
               
-              <div className="text-sm text-gray-600">
-                <span className="font-medium">SKU:</span> {product.sku}
-              </div>
-              
-              <div className="text-lg font-semibold text-green-600">
-                ${product.base_price.toLocaleString('es-CO')}
-              </div>
-              
-              <div className="flex space-x-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                >
-                  <Edit className="w-4 h-4 mr-1" />
-                  Editar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-500 hover:text-red-700"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+              <div className="space-y-2">
+                <div className="flex items-start justify-between">
+                  <h3 className="font-semibold text-black text-lg">{product.name}</h3>
+                  <Badge variant="outline" className="ml-2">
+                    {product.category || 'Sin categoría'}
+                  </Badge>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">SKU:</span> {product.sku}
+                </div>
+                
+                <div className="text-lg font-semibold text-green-600">
+                  ${product.base_price.toLocaleString('es-CO')}
+                </div>
+                
+                <div className="flex space-x-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handleEditProduct(product)}
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Editar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => handleDeleteClick(product)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-    </Card>
+          ))}
+        </div>
+      </Card>
+
+      {/* Modal de confirmación para eliminar */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar "{productToDelete?.name}"? 
+              Esta acción no se puede deshacer y también eliminará todas las variantes del producto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

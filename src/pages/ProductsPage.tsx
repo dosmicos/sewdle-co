@@ -23,6 +23,10 @@ const ProductsPage = () => {
     refetch(); // Recargar productos cuando se cierra el formulario
   };
 
+  const handleProductUpdate = () => {
+    refetch(); // Recargar productos cuando se actualiza/elimina un producto
+  };
+
   return (
     <>
       <div className="p-6 space-y-8 animate-fade-in">
@@ -58,7 +62,8 @@ const ProductsPage = () => {
         <ProductsList 
           products={filteredProducts} 
           loading={loading} 
-          error={error} 
+          error={error}
+          onProductUpdate={handleProductUpdate}
         />
       </div>
 
