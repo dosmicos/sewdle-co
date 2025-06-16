@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Package, AlertCircle, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import ProductImportConfirmation from '@/components/ProductImportConfirmation';
 
 interface ProductVariant {
   size: string;
@@ -36,6 +37,8 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmationProduct, setConfirmationProduct] = useState<ShopifyProduct | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
 
   // Función para obtener todos los productos al inicio
@@ -171,6 +174,21 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     return `${productSku}-V${index + 1}-${cleanVariant || 'DEF'}`;
   };
 
+  // Mostrar confirmación antes de importar
+  const handleImportClick = (product: ShopifyProduct) => {
+    setConfirmationProduct(product);
+    setShowConfirmation(true);
+  };
+
+  // Confirmar importación
+  const handleConfirmImport = () => {
+    if (confirmationProduct) {
+      importProduct(confirmationProduct);
+      setShowConfirmation(false);
+      setConfirmationProduct(null);
+    }
+  };
+
   const importProduct = async (product: ShopifyProduct) => {
     setImporting(product.id);
     try {
@@ -266,155 +284,166 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   };
 
   return (
-    <Card className="space-y-4 p-6">
-      <h3 className="text-xl font-semibold text-gray-800">Importar desde Shopify</h3>
-      <p className="text-gray-500">
-        Conecta tu tienda Shopify para importar productos directamente a tu catálogo.
-      </p>
-
-      {/* Barra de búsqueda con autocompletar */}
-      <div className="relative">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Buscar productos en Shopify..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onFocus={() => searchTerm && setShowSuggestions(true)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {searchTerm && (
-              <button
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Sugerencias */}
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-            {suggestions.map((suggestion) => (
-              <div
-                key={suggestion.id}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-              >
-                {suggestion.image_url && (
-                  <img 
-                    src={suggestion.image_url} 
-                    alt={suggestion.title} 
-                    className="w-10 h-10 rounded object-cover" 
-                  />
-                )}
-                <div className="flex-1">
-                  <div className="font-medium text-sm">{suggestion.title}</div>
-                  <div className="text-xs text-gray-500">${suggestion.price.toFixed(2)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <Button onClick={fetchAllProducts} disabled={loading} className="w-full">
-        {loading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Cargando productos...
-          </>
-        ) : (
-          "Recargar Productos"
-        )}
-      </Button>
-
-      {/* Mostrar error si existe */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
-          <AlertCircle className="h-4 w-4 text-red-500" />
-          <span className="text-red-700 text-sm">{error}</span>
-        </div>
-      )}
-
-      {/* Resultados */}
-      {filteredProducts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-lg font-medium">
-              {searchTerm ? `Resultados para "${searchTerm}"` : 'Todos los productos'}
-            </h4>
-            <span className="text-sm text-gray-500">
-              {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredProducts.map((product) => (
-              <Card key={product.id} className="p-4 relative">
-                {importing === product.id && (
-                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-md">
-                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                  </div>
-                )}
-                {product.image_url && (
-                  <img 
-                    src={product.image_url} 
-                    alt={product.title} 
-                    className="rounded-md mb-2 h-32 w-full object-cover" 
-                  />
-                )}
-                <h4 className="text-md font-semibold text-gray-800 mb-1">{product.title}</h4>
-                <p className="text-gray-600 text-sm mb-2 line-clamp-2">
-                  {product.description.replace(/<[^>]*>/g, '').substring(0, 100)}...
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-green-600">${product.price.toFixed(2)}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => importProduct(product)}
-                    disabled={importing !== null}
-                  >
-                    <Package className="w-4 h-4 mr-2" />
-                    Importar
-                  </Button>
-                </div>
-                {product.variants && product.variants.length > 1 && (
-                  <Badge variant="secondary" className="mt-2">
-                    {product.variants.length} variantes
-                  </Badge>
-                )}
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Mensaje cuando no hay resultados */}
-      {!loading && filteredProducts.length === 0 && searchTerm && (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No se encontraron productos con "{searchTerm}"</p>
-          <Button 
-            variant="outline" 
-            onClick={clearSearch}
-            className="mt-2"
-          >
-            Mostrar todos los productos
-          </Button>
-        </div>
-      )}
-
-      <div className="text-center text-gray-500">
-        <p className="text-sm">
-          ✅ Conectado automáticamente a Shopify usando credenciales seguras
+    <>
+      <Card className="space-y-4 p-6">
+        <h3 className="text-xl font-semibold text-gray-800">Importar desde Shopify</h3>
+        <p className="text-gray-500">
+          Conecta tu tienda Shopify para importar productos directamente a tu catálogo.
         </p>
-      </div>
-    </Card>
+
+        {/* Barra de búsqueda con autocompletar */}
+        <div className="relative">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar productos en Shopify..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onFocus={() => searchTerm && setShowSuggestions(true)}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Sugerencias */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+              {suggestions.map((suggestion) => (
+                <div
+                  key={suggestion.id}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                >
+                  {suggestion.image_url && (
+                    <img 
+                      src={suggestion.image_url} 
+                      alt={suggestion.title} 
+                      className="w-10 h-10 rounded object-cover" 
+                    />
+                  )}
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{suggestion.title}</div>
+                    <div className="text-xs text-gray-500">${suggestion.price.toFixed(2)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <Button onClick={fetchAllProducts} disabled={loading} className="w-full">
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Cargando productos...
+            </>
+          ) : (
+            "Recargar Productos"
+          )}
+        </Button>
+
+        {/* Mostrar error si existe */}
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <span className="text-red-700 text-sm">{error}</span>
+          </div>
+        )}
+
+        {/* Resultados */}
+        {filteredProducts.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-medium">
+                {searchTerm ? `Resultados para "${searchTerm}"` : 'Todos los productos'}
+              </h4>
+              <span className="text-sm text-gray-500">
+                {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredProducts.map((product) => (
+                <Card key={product.id} className="p-4 relative">
+                  {importing === product.id && (
+                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-md">
+                      <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                    </div>
+                  )}
+                  {product.image_url && (
+                    <img 
+                      src={product.image_url} 
+                      alt={product.title} 
+                      className="rounded-md mb-2 h-32 w-full object-cover" 
+                    />
+                  )}
+                  <h4 className="text-md font-semibold text-gray-800 mb-1">{product.title}</h4>
+                  <p className="text-gray-600 text-sm mb-2 line-clamp-2">
+                    {product.description.replace(/<[^>]*>/g, '').substring(0, 100)}...
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-green-600">${product.price.toFixed(2)}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleImportClick(product)}
+                      disabled={importing !== null}
+                    >
+                      <Package className="w-4 h-4 mr-2" />
+                      Importar
+                    </Button>
+                  </div>
+                  {product.variants && product.variants.length > 1 && (
+                    <Badge variant="secondary" className="mt-2">
+                      {product.variants.length} variantes
+                    </Badge>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Mensaje cuando no hay resultados */}
+        {!loading && filteredProducts.length === 0 && searchTerm && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No se encontraron productos con "{searchTerm}"</p>
+            <Button 
+              variant="outline" 
+              onClick={clearSearch}
+              className="mt-2"
+            >
+              Mostrar todos los productos
+            </Button>
+          </div>
+        )}
+
+        <div className="text-center text-gray-500">
+          <p className="text-sm">
+            ✅ Conectado automáticamente a Shopify usando credenciales seguras
+          </p>
+        </div>
+      </Card>
+
+      {/* Modal de confirmación */}
+      <ProductImportConfirmation
+        open={showConfirmation}
+        onOpenChange={setShowConfirmation}
+        product={confirmationProduct}
+        onConfirm={handleConfirmImport}
+        loading={importing !== null}
+      />
+    </>
   );
 };
 
