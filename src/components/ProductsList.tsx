@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Edit, Trash2, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import ProductEditModal from '@/components/ProductEditModal';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,15 +39,22 @@ interface ProductsListProps {
 const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsListProps) => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   const handleEditProduct = (product: Product) => {
-    // TODO: Implementar modal de edición o navegación
-    toast({
-      title: "Función en desarrollo",
-      description: `Edición de ${product.name} estará disponible próximamente.`,
-    });
+    setProductToEdit(product);
+    setEditModalOpen(true);
+  };
+
+  const handleEditSuccess = () => {
+    setEditModalOpen(false);
+    setProductToEdit(null);
+    if (onProductUpdate) {
+      onProductUpdate();
+    }
   };
 
   const handleDeleteClick = (product: Product) => {
@@ -205,6 +212,19 @@ const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsLis
           ))}
         </div>
       </Card>
+
+      {/* Modal de edición */}
+      {productToEdit && (
+        <ProductEditModal
+          product={productToEdit}
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setProductToEdit(null);
+          }}
+          onSuccess={handleEditSuccess}
+        />
+      )}
 
       {/* Modal de confirmación para eliminar */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
