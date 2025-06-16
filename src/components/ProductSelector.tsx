@@ -28,8 +28,8 @@ interface ProductVariant {
   stock_quantity: number;
 }
 
-interface SelectedProduct {
-  id: string;
+interface InternalSelectedProduct {
+  tempId: string;
   productId: string;
   productName: string;
   variants: {
@@ -47,31 +47,19 @@ interface SelectedProduct {
 const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelectorProps) => {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [internalProducts, setInternalProducts] = useState<InternalSelectedProduct[]>([]);
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  // Efecto para convertir los datos al formato esperado por OrderForm
+  // Sincronizar productos internos con los externos cuando cambian los productos seleccionados
   useEffect(() => {
-    const formattedProducts = selectedProducts.flatMap((product: SelectedProduct) => {
-      if (!product.variants) return [];
-      
-      return Object.values(product.variants)
-        .filter((variant: any) => variant.quantity > 0)
-        .map((variant: any) => ({
-          productId: product.productId,
-          variantId: variant.id,
-          quantity: variant.quantity,
-          unitPrice: variant.price
-        }));
-    });
-
-    // Solo actualizar si hay cambios reales para evitar loops infinitos
-    if (JSON.stringify(formattedProducts) !== JSON.stringify(selectedProducts.filter(p => p.productId))) {
-      onProductsChange(formattedProducts);
+    // Solo actualizar si los productos seleccionados externos no tienen la estructura interna
+    if (selectedProducts.length === 0 || !selectedProducts.some(p => p.tempId)) {
+      updateExternalProducts();
     }
-  }, [selectedProducts]);
+  }, [internalProducts]);
 
   const fetchProducts = async () => {
     try {
@@ -116,70 +104,90 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     }
   };
 
+  const updateExternalProducts = () => {
+    const formattedProducts = internalProducts.flatMap((product: InternalSelectedProduct) => {
+      if (!product.variants) return [];
+      
+      return Object.values(product.variants)
+        .filter((variant: any) => variant.quantity > 0)
+        .map((variant: any) => ({
+          productId: product.productId,
+          variantId: variant.id,
+          quantity: variant.quantity,
+          unitPrice: variant.price
+        }));
+    });
+
+    console.log('Updating external products:', formattedProducts);
+    onProductsChange(formattedProducts);
+  };
+
   const addProduct = () => {
-    const newProduct: SelectedProduct = {
-      id: Date.now().toString(),
+    const newProduct: InternalSelectedProduct = {
+      tempId: `temp_${Date.now()}`,
       productId: '',
       productName: '',
       variants: {}
     };
-    // Usar una estructura temporal para la UI interna
-    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
-    onProductsChange([...currentSelection, newProduct]);
+    setInternalProducts(prev => [...prev, newProduct]);
   };
 
   const removeProduct = (index: number) => {
-    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
-    const updated = currentSelection.filter((_, i) => i !== index);
-    onProductsChange(updated);
+    setInternalProducts(prev => prev.filter((_, i) => i !== index));
   };
 
   const updateProductSelection = (index: number, productId: string) => {
     const selectedProduct = availableProducts.find(p => p.id === productId);
     if (!selectedProduct) return;
 
-    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
-    const updated = [...currentSelection];
-    const variants: any = {};
-    
-    // Inicializar todas las variantes con cantidad 0
-    selectedProduct.variants.forEach(variant => {
-      variants[variant.id] = {
-        id: variant.id,
-        size: variant.size || '',
-        color: variant.color || '',
-        price: selectedProduct.base_price + (variant.additional_price || 0),
-        stock: variant.stock_quantity || 0,
-        quantity: 0
-      };
-    });
+    console.log('Selected product:', selectedProduct);
 
-    updated[index] = {
-      ...updated[index],
-      productId,
-      productName: selectedProduct.name,
-      variants
-    };
-    
-    onProductsChange(updated);
+    setInternalProducts(prev => {
+      const updated = [...prev];
+      const variants: any = {};
+      
+      // Inicializar todas las variantes con cantidad 0
+      selectedProduct.variants.forEach(variant => {
+        variants[variant.id] = {
+          id: variant.id,
+          size: variant.size || '',
+          color: variant.color || '',
+          price: selectedProduct.base_price + (variant.additional_price || 0),
+          stock: variant.stock_quantity || 0,
+          quantity: 0
+        };
+      });
+
+      updated[index] = {
+        ...updated[index],
+        productId,
+        productName: selectedProduct.name,
+        variants
+      };
+      
+      console.log('Updated internal products:', updated);
+      return updated;
+    });
   };
 
   const updateVariantQuantity = (productIndex: number, variantId: string, quantity: number) => {
-    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
-    const updated = [...currentSelection];
-    updated[productIndex].variants[variantId].quantity = Math.max(0, quantity);
-    onProductsChange(updated);
+    setInternalProducts(prev => {
+      const updated = [...prev];
+      if (updated[productIndex].variants[variantId]) {
+        updated[productIndex].variants[variantId].quantity = Math.max(0, quantity);
+      }
+      return updated;
+    });
   };
 
-  const getProductQuantityTotal = (product: SelectedProduct) => {
+  const getProductQuantityTotal = (product: InternalSelectedProduct) => {
     return Object.values(product.variants).reduce((total: number, variant: any) => {
       return total + variant.quantity;
     }, 0);
   };
 
   const getTotalQuantities = () => {
-    const currentSelection = selectedProducts.filter(p => p.id || p.productId);
-    return currentSelection.reduce((total, product) => {
+    return internalProducts.reduce((total, product) => {
       return total + getProductQuantityTotal(product);
     }, 0);
   };
@@ -200,16 +208,13 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     );
   }
 
-  // Filtrar productos para mostrar solo los de la UI interna
-  const displayProducts = selectedProducts.filter(p => p.id || p.productId);
-
   return (
     <div className="space-y-6">
-      {displayProducts.map((product: SelectedProduct, index) => {
+      {internalProducts.map((product: InternalSelectedProduct, index) => {
         const selectedProductData = availableProducts.find(p => p.id === product.productId);
         
         return (
-          <div key={product.id} className="border border-gray-200 rounded-lg p-4">
+          <div key={product.tempId} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold text-black flex items-center">
                 <Package className="w-4 h-4 mr-2" />
@@ -231,14 +236,13 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                 Seleccionar Producto
               </label>
               <Select
-                value={product.productId || "none"}
-                onValueChange={(value) => updateProductSelection(index, value === "none" ? "" : value)}
+                value={product.productId || ""}
+                onValueChange={(value) => updateProductSelection(index, value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar producto..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Seleccionar producto...</SelectItem>
                   {availableProducts.map((prod) => (
                     <SelectItem key={prod.id} value={prod.id}>
                       {prod.name}
@@ -352,7 +356,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
         Agregar Producto
       </Button>
 
-      {displayProducts.length > 0 && (
+      {internalProducts.length > 0 && (
         <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
           <h4 className="font-bold text-blue-900 mb-4 text-lg">Resumen de la Orden</h4>
           
