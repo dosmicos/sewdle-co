@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { X, Plus, Upload, Trash2 } from 'lucide-react';
 import ProductSelector from '@/components/ProductSelector';
 import SuppliesManager from '@/components/SuppliesManager';
+import { useWorkshops } from '@/hooks/useWorkshops';
 
 interface OrderFormProps {
   onClose: () => void;
@@ -21,12 +22,7 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
   const [notes, setNotes] = useState('');
   const [cuttingOrderFile, setCuttingOrderFile] = useState<File | null>(null);
 
-  // Mock data for workshops
-  const workshops = [
-    { id: '1', name: 'Taller Principal' },
-    { id: '2', name: 'Taller Norte' },
-    { id: '3', name: 'Taller Sur' }
-  ];
+  const { workshops, loading: workshopsLoading } = useWorkshops();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -65,9 +61,9 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
           {/* Selección de Taller */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 text-black">Taller Asignado</h3>
-            <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+            <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop} disabled={workshopsLoading}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Seleccionar taller..." />
+                <SelectValue placeholder={workshopsLoading ? "Cargando talleres..." : "Seleccionar taller..."} />
               </SelectTrigger>
               <SelectContent>
                 {workshops.map((workshop) => (
@@ -77,6 +73,11 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
                 ))}
               </SelectContent>
             </Select>
+            {workshops.length === 0 && !workshopsLoading && (
+              <p className="text-sm text-gray-500 mt-2">
+                No hay talleres disponibles. Crea un taller primero en la sección de Talleres.
+              </p>
+            )}
           </Card>
 
           {/* Módulo de Productos */}
