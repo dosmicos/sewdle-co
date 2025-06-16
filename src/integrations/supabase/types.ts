@@ -580,6 +580,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_available_orders: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          order_number: string
+          client_name: string
+          due_date: string
+          total_amount: number
+          status: string
+          created_at: string
+        }[]
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -591,6 +603,17 @@ export type Database = {
       get_user_role: {
         Args: { user_uuid: string }
         Returns: string
+      }
+      get_workshop_capacity_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          workshop_id: string
+          workshop_name: string
+          total_capacity: number
+          current_assignments: number
+          available_capacity: number
+          completion_rate: number
+        }[]
       }
       make_user_admin: {
         Args: { user_email: string }
