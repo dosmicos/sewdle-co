@@ -88,7 +88,8 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           size: variant.option1 || variant.title || '',
           color: variant.option2 || '',
           price: variant.price || '0.00',
-          sku: variant.sku || ''
+          sku: variant.sku || '',
+          stock_quantity: variant.stock_quantity || 0
         })) || [],
         image: product.images?.[0]?.src || '',
         sku: product.variants?.[0]?.sku || '',
@@ -102,7 +103,6 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
       setProducts(shopifyProducts);
     } catch (error) {
       console.error('Error loading initial products:', error);
-      // Si hay error, limpiar la conexión guardada
       disconnectShopify();
     } finally {
       setIsLoading(false);
@@ -156,7 +156,8 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           size: variant.option1 || variant.title || '',
           color: variant.option2 || '',
           price: variant.price || '0.00',
-          sku: variant.sku || ''
+          sku: variant.sku || '',
+          stock_quantity: variant.stock_quantity || 0
         })) || [],
         image: product.images?.[0]?.src || '',
         sku: product.variants?.[0]?.sku || '',
@@ -335,6 +336,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                           </Badge>
                           <Badge variant="outline" className="text-xs">
                             ${product.price}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                            Stock: {product.variants.reduce((total, variant) => total + (variant.stock_quantity || 0), 0)}
                           </Badge>
                           {product.brand && (
                             <Badge variant="outline" className="text-xs">

@@ -20,7 +20,13 @@ interface ShopifyProduct {
   name: string;
   description: string;
   price: string;
-  variants: Array<{ size: string; color: string; price: string; sku: string }>;
+  variants: Array<{ 
+    size: string; 
+    color: string; 
+    price: string; 
+    sku: string;
+    stock_quantity?: number;
+  }>;
   image?: string;
   sku?: string;
   category?: string;
@@ -92,7 +98,7 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
 
       console.log('Producto creado:', product);
 
-      // Crear las variantes del producto
+      // Crear las variantes del producto con inventario
       if (selectedShopifyProduct.variants && selectedShopifyProduct.variants.length > 0) {
         const variantsToInsert = selectedShopifyProduct.variants.map(variant => ({
           product_id: product.id,
@@ -100,10 +106,10 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
           color: variant.color || '',
           sku_variant: variant.sku || `${product.sku}-${variant.size || 'DEFAULT'}`,
           additional_price: parseFloat(variant.price) - parseFloat(selectedShopifyProduct.price) || 0,
-          stock_quantity: 0
+          stock_quantity: variant.stock_quantity || 0
         }));
 
-        console.log('Creando variantes:', variantsToInsert);
+        console.log('Creando variantes con inventario:', variantsToInsert);
 
         const { error: variantsError } = await supabase
           .from('product_variants')
@@ -114,12 +120,12 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
           throw variantsError;
         }
 
-        console.log('Variantes creadas exitosamente');
+        console.log('Variantes creadas exitosamente con inventario');
       }
 
       toast({
         title: "¡Producto creado exitosamente!",
-        description: `${selectedShopifyProduct.name} ha sido importado desde Shopify con ${selectedShopifyProduct.variants.length} variantes.`,
+        description: `${selectedShopifyProduct.name} ha sido importado desde Shopify con ${selectedShopifyProduct.variants.length} variantes y su inventario.`,
       });
 
       onClose();
@@ -212,8 +218,10 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
                               <span className="ml-2 text-gray-600">{selectedShopifyProduct.category || 'N/A'}</span>
                             </div>
                             <div>
-                              <span className="font-medium text-gray-700">Marca:</span>
-                              <span className="ml-2 text-gray-600">{selectedShopifyProduct.brand || 'N/A'}</span>
+                              <span className="font-medium text-gray-700">Stock Total:</span>
+                              <span className="ml-2 text-gray-600">
+                                {selectedShopifyProduct.variants.reduce((total, variant) => total + (variant.stock_quantity || 0), 0)} unidades
+                              </span>
                             </div>
                           </div>
 
@@ -222,7 +230,9 @@ const ProductForm = ({ onClose }: { onClose: () => void }) => {
                             <div className="flex flex-wrap gap-2 mt-2">
                               {selectedShopifyProduct.variants.map((variant, index) => (
                                 <Badge key={index} variant="outline" className="text-xs">
-                                  {variant.size} {variant.color && `- ${variant.color}`} (${variant.price})
+                                  {variant.size} {variant.color && `- ${variant.color}`} 
+                                  (${variant.price}) 
+                                  - Stock: {variant.stock_quantity || 0}
                                 </Badge>
                               ))}
                             </div>
