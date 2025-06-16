@@ -16,12 +16,23 @@ export const useWorkshops = () => {
   const fetchWorkshops = async () => {
     try {
       setLoading(true);
+      console.log('Fetching workshops...');
+      
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current user:', user?.id);
+      
       const { data, error } = await supabase
         .from('workshops')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Workshops fetched:', data?.length);
       setWorkshops(data || []);
     } catch (error) {
       console.error('Error fetching workshops:', error);
@@ -37,14 +48,27 @@ export const useWorkshops = () => {
 
   const createWorkshop = async (workshopData: WorkshopInsert) => {
     try {
+      console.log('Creating workshop with data:', workshopData);
+      
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      console.log('User authenticated:', user.id);
+
       const { data, error } = await supabase
         .from('workshops')
         .insert(workshopData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
+      }
 
+      console.log('Workshop created successfully:', data);
       setWorkshops(prev => [data, ...prev]);
       toast({
         title: "Éxito",
@@ -53,9 +77,18 @@ export const useWorkshops = () => {
       return { data, error: null };
     } catch (error) {
       console.error('Error creating workshop:', error);
+      let errorMessage = "No se pudo crear el taller";
+      
+      // More specific error messages
+      if (error.message?.includes('policy')) {
+        errorMessage = "Error de permisos. Verifica que estés autenticado.";
+      } else if (error.message?.includes('not authenticated')) {
+        errorMessage = "Debes iniciar sesión para crear talleres.";
+      }
+      
       toast({
         title: "Error",
-        description: "No se pudo crear el taller",
+        description: errorMessage,
         variant: "destructive",
       });
       return { data: null, error };
@@ -64,6 +97,8 @@ export const useWorkshops = () => {
 
   const updateWorkshop = async (id: string, updates: WorkshopUpdate) => {
     try {
+      console.log('Updating workshop:', id, updates);
+      
       const { data, error } = await supabase
         .from('workshops')
         .update(updates)
@@ -71,7 +106,10 @@ export const useWorkshops = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase update error:', error);
+        throw error;
+      }
 
       setWorkshops(prev => 
         prev.map(workshop => 
@@ -96,12 +134,17 @@ export const useWorkshops = () => {
 
   const deleteWorkshop = async (id: string) => {
     try {
+      console.log('Deleting workshop:', id);
+      
       const { error } = await supabase
         .from('workshops')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase delete error:', error);
+        throw error;
+      }
 
       setWorkshops(prev => prev.filter(workshop => workshop.id !== id));
       toast({
