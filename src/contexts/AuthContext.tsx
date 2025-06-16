@@ -36,40 +36,102 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const createUserProfile = useCallback((session: Session): UserProfile => {
-    return {
-      id: session.user.id,
-      email: session.user.email || '',
-      role: 'admin',
-      name: session.user.user_metadata?.name || session.user.email,
-    };
+  const createUserProfile = useCallback(async (session: Session): Promise<UserProfile> => {
+    console.log('Creating user profile for:', session.user.id);
+    
+    try {
+      // Verificar si el usuario ya tiene un perfil
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('Error fetching profile:', profileError);
+      }
+
+      // Si no existe perfil, crearlo
+      if (!profile) {
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.name || session.user.email,
+          });
+
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        }
+      }
+
+      // Verificar si el usuario ya tiene rol
+      const { data: userRole, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (roleError && roleError.code !== 'PGRST116') {
+        console.error('Error fetching user role:', roleError);
+      }
+
+      let role = userRole?.role || 'admin';
+
+      // Si no tiene rol, asignar admin por defecto
+      if (!userRole) {
+        console.log('Assigning admin role to user:', session.user.id);
+        const { error: roleInsertError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: session.user.id,
+            role: 'admin'
+          });
+
+        if (roleInsertError) {
+          console.error('Error assigning role:', roleInsertError);
+          role = 'admin'; // Fallback
+        } else {
+          role = 'admin';
+        }
+      }
+
+      return {
+        id: session.user.id,
+        email: session.user.email || '',
+        role: role as 'admin' | 'workshop',
+        name: profile?.name || session.user.user_metadata?.name || session.user.email,
+      };
+    } catch (error) {
+      console.error('Error in createUserProfile:', error);
+      // Fallback profile
+      return {
+        id: session.user.id,
+        email: session.user.email || '',
+        role: 'admin',
+        name: session.user.user_metadata?.name || session.user.email,
+      };
+    }
   }, []);
 
   const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
-    console.log('Auth state changed:', event, session);
+    console.log('Auth state changed:', event, session?.user?.id);
     setSession(session);
     
     if (session?.user) {
       try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (profile && !error) {
-          setUser({
-            id: profile.id,
-            email: profile.email || session.user.email || '',
-            role: 'admin',
-            name: profile.name,
-          });
-        } else {
-          setUser(createUserProfile(session));
-        }
+        const userProfile = await createUserProfile(session);
+        setUser(userProfile);
+        console.log('User profile set:', userProfile);
       } catch (error) {
-        console.error('Error fetching profile:', error);
-        setUser(createUserProfile(session));
+        console.error('Error creating user profile:', error);
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          role: 'admin',
+          name: session.user.email,
+        });
       }
     } else {
       setUser(null);
@@ -83,7 +145,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
-        // Use setTimeout to prevent potential deadlocks
         setTimeout(() => {
           if (mounted) {
             handleAuthStateChange(event, session);

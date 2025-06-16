@@ -588,6 +588,14 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: string
       }
+      make_user_admin: {
+        Args: { user_email: string }
+        Returns: undefined
+      }
+      user_has_workshop_permissions: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
