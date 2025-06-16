@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Users, BarChart3, FileText, Calendar } from 'lucide-react';
+import { Plus, Search, Users, FileText, Calendar } from 'lucide-react';
 import OrderForm from '@/components/OrderForm';
 import WorkshopAssignmentForm from '@/components/WorkshopAssignmentForm';
 import WorkshopAssignmentsList from '@/components/WorkshopAssignmentsList';
@@ -162,7 +162,6 @@ const OrdersPage = () => {
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold text-black">{order.order_number}</h3>
-                              <p className="text-gray-600">{order.client_name}</p>
                               <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                                 <span className="flex items-center">
                                   <Calendar className="w-4 h-4 mr-1" />

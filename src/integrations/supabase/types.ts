@@ -365,9 +365,6 @@ export type Database = {
       }
       orders: {
         Row: {
-          client_email: string | null
-          client_name: string
-          client_phone: string | null
           created_at: string
           created_by: string | null
           due_date: string | null
@@ -379,9 +376,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          client_email?: string | null
-          client_name: string
-          client_phone?: string | null
           created_at?: string
           created_by?: string | null
           due_date?: string | null
@@ -393,9 +387,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          client_email?: string | null
-          client_name?: string
-          client_phone?: string | null
           created_at?: string
           created_by?: string | null
           due_date?: string | null

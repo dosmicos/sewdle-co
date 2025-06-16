@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { X, Plus, Upload, Trash2 } from 'lucide-react';
+import { Upload, Trash2 } from 'lucide-react';
 import ProductSelector from '@/components/ProductSelector';
 import SuppliesManager from '@/components/SuppliesManager';
 import { useWorkshops } from '@/hooks/useWorkshops';
@@ -19,9 +19,6 @@ interface OrderFormProps {
 
 const OrderForm = ({ onClose }: OrderFormProps) => {
   const [selectedWorkshop, setSelectedWorkshop] = useState('');
-  const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [supplies, setSupplies] = useState<any[]>([]);
@@ -50,17 +47,9 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
       return;
     }
 
-    if (!clientName.trim()) {
-      alert('Por favor ingresa el nombre del cliente');
-      return;
-    }
-
     try {
       const orderData = {
         workshopId: selectedWorkshop,
-        clientName: clientName.trim(),
-        clientEmail: clientEmail.trim() || undefined,
-        clientPhone: clientPhone.trim() || undefined,
         dueDate: dueDate || undefined,
         products: selectedProducts.map(product => ({
           productId: product.productId,
@@ -95,39 +84,10 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Información del Cliente */}
+          {/* Información General */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4 text-black">Información del Cliente</h3>
+            <h3 className="text-lg font-semibold mb-4 text-black">Información General</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="clientName">Nombre del Cliente *</Label>
-                <Input
-                  id="clientName"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Nombre completo del cliente"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientEmail">Email</Label>
-                <Input
-                  id="clientEmail"
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="email@ejemplo.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientPhone">Teléfono</Label>
-                <Input
-                  id="clientPhone"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="Número de teléfono"
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="dueDate">Fecha de Entrega</Label>
                 <Input

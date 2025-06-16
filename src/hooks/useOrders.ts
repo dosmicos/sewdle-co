@@ -19,9 +19,6 @@ interface OrderSupply {
 
 interface CreateOrderData {
   workshopId: string;
-  clientName: string;
-  clientEmail?: string;
-  clientPhone?: string;
   dueDate?: string;
   products: OrderItem[];
   supplies: OrderSupply[];
@@ -59,9 +56,6 @@ export const useOrders = () => {
         .insert([
           {
             order_number: orderNumber,
-            client_name: orderData.clientName,
-            client_email: orderData.clientEmail,
-            client_phone: orderData.clientPhone,
             due_date: orderData.dueDate,
             total_amount: totalAmount,
             notes: orderData.notes,
