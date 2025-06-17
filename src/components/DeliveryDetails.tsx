@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 
@@ -128,7 +128,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   }
 
   const isQCLeader = currentUser.role === 'qc_leader';
-  const isWorkshop = currentUser.role === 'workshop';
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -292,51 +291,66 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
                 <div className="space-y-3">
                   <h4 className="font-medium">Resultado por Item</h4>
-                  {deliveryData.delivery_items?.map((item, index) => (
-                    <div key={index} className="p-4 border rounded-lg space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">
-                          {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
-                        </span>
-                        <span className="text-sm text-gray-600">{item.quantity_delivered} entregadas</span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label htmlFor={`approved-${index}`}>Aprobadas</Label>
-                          <Input
-                            id={`approved-${index}`}
-                            type="number"
-                            min="0"
-                            max={item.quantity_delivered}
-                            value={qualityData.variants[`item-${index}`]?.approved || ''}
-                            onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor={`defective-${index}`}>Defectuosas</Label>
-                          <Input
-                            id={`defective-${index}`}
-                            type="number"
-                            min="0"
-                            max={item.quantity_delivered}
-                            value={qualityData.variants[`item-${index}`]?.defective || ''}
-                            onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor={`reason-${index}`}>Motivo (si hay defectos)</Label>
-                        <Input
-                          id={`reason-${index}`}
-                          placeholder="Describir defectos encontrados..."
-                          value={qualityData.variants[`item-${index}`]?.reason || ''}
-                          onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                  
+                  {/* Quality Review Table */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Variante</TableHead>
+                          <TableHead className="text-center">Entregadas</TableHead>
+                          <TableHead className="text-center">Aprobadas</TableHead>
+                          <TableHead className="text-center">Defectuosas</TableHead>
+                          <TableHead>Motivo (si hay defectos)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {deliveryData.delivery_items?.map((item, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{item.order_items?.product_variants?.products?.name}</p>
+                                <p className="text-sm text-gray-600">
+                                  {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className="font-medium text-blue-600">{item.quantity_delivered}</span>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={item.quantity_delivered}
+                                value={qualityData.variants[`item-${index}`]?.approved || ''}
+                                onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
+                                className="w-20 text-center"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={item.quantity_delivered}
+                                value={qualityData.variants[`item-${index}`]?.defective || ''}
+                                onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
+                                className="w-20 text-center"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                placeholder="Describir defectos..."
+                                value={qualityData.variants[`item-${index}`]?.reason || ''}
+                                onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
+                                className="min-w-[200px]"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
