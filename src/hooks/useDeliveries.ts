@@ -55,6 +55,20 @@ export const useDeliveries = () => {
         throw new Error('Debe agregar al menos un item a la entrega');
       }
 
+      // Verificar si podemos acceder a la tabla deliveries primero
+      console.log('Testing deliveries table access...');
+      const { data: testAccess, error: accessError } = await supabase
+        .from('deliveries')
+        .select('id')
+        .limit(1);
+
+      if (accessError) {
+        console.error('Cannot access deliveries table:', accessError);
+        throw new Error('No tienes permisos para acceder a las entregas');
+      }
+
+      console.log('Deliveries table access confirmed');
+
       // Generar número de tracking único
       const { data: trackingNumber, error: trackingError } = await supabase
         .rpc('generate_delivery_number');
@@ -66,23 +80,23 @@ export const useDeliveries = () => {
 
       console.log('Generated tracking number:', trackingNumber);
 
-      // Preparar datos de la entrega
+      // Preparar datos de la entrega con valores explícitos
       const deliveryInsertData = {
         tracking_number: trackingNumber,
         order_id: deliveryData.orderId,
         workshop_id: deliveryData.workshopId,
         delivery_date: deliveryData.deliveryDate || new Date().toISOString().split('T')[0],
         delivered_by: session.user.id,
-        recipient_name: deliveryData.recipientName || null,
-        recipient_phone: deliveryData.recipientPhone || null,
-        recipient_address: deliveryData.recipientAddress || null,
-        notes: deliveryData.notes || null,
+        recipient_name: deliveryData.recipientName || '',
+        recipient_phone: deliveryData.recipientPhone || '',
+        recipient_address: deliveryData.recipientAddress || '',
+        notes: deliveryData.notes || '',
         status: 'pending'
       };
 
       console.log('Inserting delivery with data:', deliveryInsertData);
 
-      // Crear la entrega principal
+      // Intentar la inserción con manejo de errores más específico
       const { data: delivery, error: deliveryError } = await supabase
         .from('deliveries')
         .insert([deliveryInsertData])
@@ -97,6 +111,12 @@ export const useDeliveries = () => {
           hint: deliveryError.hint,
           code: deliveryError.code
         });
+
+        // Error específico para RLS
+        if (deliveryError.message.includes('row-level security')) {
+          throw new Error('Error de permisos: No tienes autorización para crear entregas. Contacta al administrador.');
+        }
+
         throw deliveryError;
       }
 
@@ -110,7 +130,7 @@ export const useDeliveries = () => {
         order_item_id: item.orderItemId,
         quantity_delivered: item.quantityDelivered,
         quality_status: item.qualityStatus || 'pending',
-        notes: item.notes || null
+        notes: item.notes || ''
       }));
 
       console.log('Delivery items to insert:', deliveryItems);
@@ -121,6 +141,14 @@ export const useDeliveries = () => {
 
       if (itemsError) {
         console.error('Error creating delivery items:', itemsError);
+        
+        // Si falla la creación de items, intentar limpiar la entrega creada
+        await supabase.from('deliveries').delete().eq('id', delivery.id);
+        
+        if (itemsError.message.includes('row-level security')) {
+          throw new Error('Error de permisos: No tienes autorización para crear items de entrega. Contacta al administrador.');
+        }
+        
         throw itemsError;
       }
 
