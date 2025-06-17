@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -192,12 +193,6 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     }, 0);
   };
 
-  const getMaxQuantityForVariant = (stockQuantity: number) => {
-    // Si el stock es negativo o cero, permitir máximo 999 unidades
-    // Esto permite crear órdenes incluso con stock negativo
-    return stockQuantity <= 0 ? 999 : stockQuantity;
-  };
-
   const getStockDisplayClass = (stockQuantity: number) => {
     if (stockQuantity < 0) {
       return 'bg-red-100 text-red-800';
@@ -305,7 +300,6 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                       {selectedProductData.variants.map((variant) => {
                         const variantData = product.variants[variant.id];
                         const variantName = [variant.size, variant.color].filter(Boolean).join(' - ') || 'Variante estándar';
-                        const maxQuantity = getMaxQuantityForVariant(variant.stock_quantity);
                         
                         return (
                           <TableRow key={variant.id}>
@@ -336,7 +330,6 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                               <Input
                                 type="number"
                                 min="0"
-                                max={maxQuantity}
                                 value={variantData?.quantity || 0}
                                 onChange={(e) => updateVariantQuantity(
                                   index, 
