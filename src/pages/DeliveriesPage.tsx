@@ -134,6 +134,13 @@ const DeliveriesPage = () => {
             Aprobado
           </span>
         );
+      case 'partial_approved':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <div className="w-2 h-2 rounded-full bg-yellow-500 mr-1"></div>
+            Parcialmente Aprobado
+          </span>
+        );
       default:
         return null;
     }

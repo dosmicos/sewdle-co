@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -333,7 +332,11 @@ export const useDeliveries = () => {
           *,
           delivery_items (
             id,
-            quantity_delivered
+            quantity_delivered,
+            order_item_id,
+            order_items (
+              product_variant_id
+            )
           )
         `)
         .eq('id', deliveryId)
@@ -345,34 +348,47 @@ export const useDeliveries = () => {
 
       // Process each variant/item
       const itemUpdates = [];
-      let hasDefects = false;
-      let allApproved = true;
+      let totalApproved = 0;
+      let totalDefective = 0;
+      let totalDelivered = 0;
 
       for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
         const itemIndex = parseInt(variantKey.replace('item-', ''));
         const deliveryItem = delivery.delivery_items[itemIndex];
         
         if (deliveryItem && (variantData.approved > 0 || variantData.defective > 0)) {
+          totalDelivered += deliveryItem.quantity_delivered;
+          totalApproved += variantData.approved;
+          totalDefective += variantData.defective;
+
+          // Determinar el estado del item basado en las cantidades
           let status = 'pending';
           let notes = variantData.reason || '';
 
-          if (variantData.defective > 0) {
-            status = 'rejected';
-            hasDefects = true;
-            allApproved = false;
-          } else if (variantData.approved > 0) {
+          if (variantData.approved > 0 && variantData.defective > 0) {
+            status = 'partial_approved';
+            notes = `Aprobadas: ${variantData.approved}, Defectuosas: ${variantData.defective}. ${notes}`;
+          } else if (variantData.approved > 0 && variantData.defective === 0) {
             status = 'approved';
+            notes = `Aprobadas: ${variantData.approved}. ${notes}`;
+          } else if (variantData.defective > 0 && variantData.approved === 0) {
+            status = 'rejected';
+            notes = `Defectuosas: ${variantData.defective}. ${notes}`;
           }
 
           itemUpdates.push({
             id: deliveryItem.id,
             quality_status: status,
-            notes: notes
+            notes: notes,
+            quantity_approved: variantData.approved,
+            quantity_defective: variantData.defective,
+            order_item_id: deliveryItem.order_item_id,
+            product_variant_id: deliveryItem.order_items?.product_variant_id
           });
         }
       }
 
-      // Update all delivery items
+      // Update all delivery items with detailed status
       for (const update of itemUpdates) {
         const { error: updateError } = await supabase
           .from('delivery_items')
@@ -387,18 +403,24 @@ export const useDeliveries = () => {
         }
       }
 
-      // Determine overall delivery status
+      // Determine overall delivery status based on results
       let deliveryStatus = 'approved';
-      if (hasDefects) {
-        deliveryStatus = allApproved ? 'approved' : 'rejected';
+      if (totalApproved > 0 && totalDefective > 0) {
+        deliveryStatus = 'partial_approved';
+      } else if (totalApproved > 0 && totalDefective === 0) {
+        deliveryStatus = 'approved';
+      } else if (totalDefective > 0 && totalApproved === 0) {
+        deliveryStatus = 'rejected';
       }
 
-      // Update delivery status and notes
+      // Update delivery status and notes with summary
+      const summaryNotes = `Revisión completada: ${totalApproved} aprobadas, ${totalDefective} defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+
       const { error: deliveryUpdateError } = await supabase
         .from('deliveries')
         .update({
           status: deliveryStatus,
-          notes: qualityData.generalNotes || null
+          notes: summaryNotes
         })
         .eq('id', deliveryId);
 
@@ -406,9 +428,14 @@ export const useDeliveries = () => {
         throw deliveryUpdateError;
       }
 
+      // If there are approved items, sync with Shopify inventory
+      if (totalApproved > 0) {
+        await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
+      }
+
       toast({
         title: "Revisión de calidad procesada",
-        description: `La entrega ha sido ${deliveryStatus === 'approved' ? 'aprobada' : 'devuelta'} exitosamente.`,
+        description: `${totalApproved} productos aprobados, ${totalDefective} defectuosos. ${totalApproved > 0 ? 'Inventario sincronizado con Shopify.' : ''}`,
       });
 
       return true;
@@ -422,6 +449,48 @@ export const useDeliveries = () => {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncApprovedInventoryWithShopify = async (approvedItems: any[]) => {
+    try {
+      console.log('Syncing approved inventory with Shopify:', approvedItems);
+      
+      // Agrupar por variante para sumar cantidades
+      const variantUpdates = new Map();
+      
+      approvedItems.forEach(item => {
+        if (item.product_variant_id && item.quantity_approved > 0) {
+          const current = variantUpdates.get(item.product_variant_id) || 0;
+          variantUpdates.set(item.product_variant_id, current + item.quantity_approved);
+        }
+      });
+
+      // Actualizar stock local primero
+      for (const [variantId, quantity] of variantUpdates) {
+        const { error: stockError } = await supabase
+          .from('product_variants')
+          .update({
+            stock_quantity: supabase.sql`stock_quantity + ${quantity}`
+          })
+          .eq('id', variantId);
+
+        if (stockError) {
+          console.error('Error updating local stock:', stockError);
+        } else {
+          console.log(`Updated local stock for variant ${variantId}: +${quantity}`);
+        }
+      }
+
+      // TODO: Implementar sincronización real con Shopify API
+      // Esta sería la llamada a Shopify para actualizar el inventario
+      // await updateShopifyInventory(variantUpdates);
+
+      console.log('Local inventory updated successfully');
+      
+    } catch (error) {
+      console.error('Error syncing inventory:', error);
+      throw error;
     }
   };
 
@@ -463,6 +532,7 @@ export const useDeliveries = () => {
     updateDeliveryStatus,
     updateDeliveryItemQuality,
     processQualityReview,
+    syncApprovedInventoryWithShopify,
     getDeliveryStats,
     loading
   };

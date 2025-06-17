@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText, AlertCircle } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 
 interface DeliveryDetailsProps {
@@ -101,6 +101,13 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             Aprobado
           </span>
         );
+      case 'partial_approved':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+            <AlertCircle className="w-4 h-4 mr-1" />
+            Parcialmente Aprobado
+          </span>
+        );
       default:
         return (
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
@@ -109,6 +116,71 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </span>
         );
     }
+  };
+
+  const renderItemStatusBadge = (status: string, notes: string) => {
+    switch (status) {
+      case 'approved':
+        return (
+          <div>
+            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Aprobado
+            </span>
+            {notes && <p className="text-xs text-gray-600 mt-1">{notes}</p>}
+          </div>
+        );
+      case 'rejected':
+        return (
+          <div>
+            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700">
+              <XCircle className="w-3 h-3 mr-1" />
+              Rechazado
+            </span>
+            {notes && <p className="text-xs text-gray-600 mt-1">{notes}</p>}
+          </div>
+        );
+      case 'partial_approved':
+        return (
+          <div>
+            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              Parcial
+            </span>
+            {notes && <p className="text-xs text-gray-600 mt-1">{notes}</p>}
+          </div>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
+            <AlertTriangle className="w-3 h-3 mr-1" />
+            Pendiente
+          </span>
+        );
+    }
+  };
+
+  // Calculate summary statistics
+  const calculateSummaryStats = () => {
+    if (!deliveryData?.delivery_items) return { totalDelivered: 0, totalApproved: 0, totalDefective: 0 };
+    
+    let totalDelivered = 0;
+    let totalApproved = 0;
+    let totalDefective = 0;
+    
+    deliveryData.delivery_items.forEach(item => {
+      totalDelivered += item.quantity_delivered;
+      
+      if (item.notes) {
+        const approvedMatch = item.notes.match(/Aprobadas: (\d+)/);
+        const defectiveMatch = item.notes.match(/Defectuosas: (\d+)/);
+        
+        if (approvedMatch) totalApproved += parseInt(approvedMatch[1]);
+        if (defectiveMatch) totalDefective += parseInt(defectiveMatch[1]);
+      }
+    });
+    
+    return { totalDelivered, totalApproved, totalDefective };
   };
 
   if (loading || !deliveryData) {
@@ -128,6 +200,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   }
 
   const isQCLeader = currentUser.role === 'qc_leader';
+  const summaryStats = calculateSummaryStats();
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -146,6 +219,34 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         {renderStatusBadge(deliveryData.status)}
       </div>
 
+      {/* Summary Stats */}
+      {(deliveryData.status === 'approved' || deliveryData.status === 'partial_approved' || deliveryData.status === 'rejected') && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <h3 className="font-semibold text-blue-900 mb-2">Resumen de Revisión</h3>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-blue-600">{summaryStats.totalDelivered}</p>
+              <p className="text-sm text-blue-700">Total Entregadas</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-green-600">{summaryStats.totalApproved}</p>
+              <p className="text-sm text-green-700">Aprobadas</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-red-600">{summaryStats.totalDefective}</p>
+              <p className="text-sm text-red-700">Defectuosas</p>
+            </div>
+          </div>
+          {summaryStats.totalDelivered > 0 && (
+            <div className="mt-3 text-center">
+              <p className="text-sm text-gray-600">
+                Tasa de Aprobación: {Math.round((summaryStats.totalApproved / summaryStats.totalDelivered) * 100)}%
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Timeline */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -163,9 +264,15 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
           <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${deliveryData.status === 'approved' ? 'bg-green-500' : deliveryData.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${
+              deliveryData.status === 'approved' ? 'bg-green-500' : 
+              deliveryData.status === 'partial_approved' ? 'bg-yellow-500' :
+              deliveryData.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'
+            }`}></div>
             <span className="text-sm">
-              {deliveryData.status === 'approved' ? 'Aprobada' : deliveryData.status === 'rejected' ? 'Devuelta' : 'Pendiente'}
+              {deliveryData.status === 'approved' ? 'Aprobada' : 
+               deliveryData.status === 'partial_approved' ? 'Parcialmente Aprobada' :
+               deliveryData.status === 'rejected' ? 'Devuelta' : 'Pendiente'}
             </span>
           </div>
         </div>
@@ -247,24 +354,8 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                       </div>
                       
                       <div className="flex items-center justify-between pt-2">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          item.quality_status === 'approved' ? 'bg-green-100 text-green-700' :
-                          item.quality_status === 'rejected' ? 'bg-red-100 text-red-700' :
-                          item.quality_status === 'rework_needed' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {item.quality_status === 'approved' ? 'Aprobado' :
-                           item.quality_status === 'rejected' ? 'Rechazado' :
-                           item.quality_status === 'rework_needed' ? 'Requiere Reelaboración' :
-                           'Pendiente'}
-                        </span>
+                        {renderItemStatusBadge(item.quality_status, item.notes)}
                       </div>
-
-                      {item.notes && (
-                        <div className="pt-2 border-t">
-                          <p className="text-sm text-gray-600">{item.notes}</p>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
