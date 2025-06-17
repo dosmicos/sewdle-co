@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText } from 'lucide-react';
+import { useDeliveries } from '@/hooks/useDeliveries';
 
 interface DeliveryDetailsProps {
   delivery: any;
@@ -19,11 +20,24 @@ const currentUser = {
 };
 
 const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) => {
+  const [deliveryData, setDeliveryData] = useState(null);
   const [qualityData, setQualityData] = useState({
     variants: {} as Record<string, { approved: number; defective: number; reason: string }>,
     evidenceFiles: null as FileList | null,
     generalNotes: ''
   });
+  const { fetchDeliveryById, loading } = useDeliveries();
+
+  useEffect(() => {
+    if (delivery?.id) {
+      loadDeliveryDetails();
+    }
+  }, [delivery?.id]);
+
+  const loadDeliveryDetails = async () => {
+    const details = await fetchDeliveryById(delivery.id);
+    setDeliveryData(details);
+  };
 
   const handleQualityReview = () => {
     console.log('Processing quality review:', delivery.id, qualityData);
@@ -48,21 +62,21 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
   const renderStatusBadge = (status: string) => {
     switch (status) {
-      case 'en-calidad':
+      case 'in_quality':
         return (
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
             <AlertTriangle className="w-4 h-4 mr-1" />
             En Calidad
           </span>
         );
-      case 'devuelto':
+      case 'rejected':
         return (
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
             <XCircle className="w-4 h-4 mr-1" />
             Devuelto
           </span>
         );
-      case 'aprobado':
+      case 'approved':
         return (
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
             <CheckCircle className="w-4 h-4 mr-1" />
@@ -70,63 +84,33 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </span>
         );
       default:
-        return null;
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+            <Package className="w-4 h-4 mr-1" />
+            {status}
+          </span>
+        );
     }
   };
 
-  // Mock delivery details with comprehensive quantities
-  const mockVariants = [
-    { 
-      name: 'S', 
-      totalOrdered: 80,
-      delivered: 30, 
-      approved: 25,
-      returnedDefective: 5,
-      pendingNotDelivered: 50
-    },
-    { 
-      name: 'M', 
-      totalOrdered: 120,
-      delivered: 60, 
-      approved: 55,
-      returnedDefective: 5,
-      pendingNotDelivered: 60
-    },
-    { 
-      name: 'L', 
-      totalOrdered: 100,
-      delivered: 45, 
-      approved: 40,
-      returnedDefective: 5,
-      pendingNotDelivered: 55
-    },
-    { 
-      name: 'XL', 
-      totalOrdered: 50,
-      delivered: 15, 
-      approved: 12,
-      returnedDefective: 3,
-      pendingNotDelivered: 35
-    }
-  ];
-
-  const mockFiles = [
-    { name: 'entrega_foto_1.jpg', type: 'image' },
-    { name: 'entrega_foto_2.jpg', type: 'image' },
-    { name: 'documento_entrega.pdf', type: 'document' }
-  ];
+  if (loading || !deliveryData) {
+    return (
+      <div className="p-6 space-y-6 animate-fade-in">
+        <div className="flex items-center space-x-4">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Volver
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Cargando...</h1>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isQCLeader = currentUser.role === 'qc_leader';
   const isWorkshop = currentUser.role === 'workshop';
-
-  // Calculate totals
-  const totals = mockVariants.reduce((acc, variant) => ({
-    totalOrdered: acc.totalOrdered + variant.totalOrdered,
-    delivered: acc.delivered + variant.delivered,
-    approved: acc.approved + variant.approved,
-    returnedDefective: acc.returnedDefective + variant.returnedDefective,
-    pendingNotDelivered: acc.pendingNotDelivered + variant.pendingNotDelivered
-  }), { totalOrdered: 0, delivered: 0, approved: 0, returnedDefective: 0, pendingNotDelivered: 0 });
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -138,11 +122,11 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             Volver
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{delivery.id}</h1>
-            <p className="text-gray-600">Orden: {delivery.orderId}</p>
+            <h1 className="text-2xl font-bold">{deliveryData.tracking_number}</h1>
+            <p className="text-gray-600">Orden: {deliveryData.orders?.order_number}</p>
           </div>
         </div>
-        {renderStatusBadge(delivery.status)}
+        {renderStatusBadge(deliveryData.status)}
       </div>
 
       {/* Timeline */}
@@ -157,14 +141,14 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
           <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${delivery.status !== 'en-calidad' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${deliveryData.status !== 'in_quality' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
             <span className="text-sm">Revisión de Calidad</span>
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
           <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${delivery.status === 'aprobado' ? 'bg-green-500' : delivery.status === 'devuelto' ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${deliveryData.status === 'approved' ? 'bg-green-500' : deliveryData.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'}`}></div>
             <span className="text-sm">
-              {delivery.status === 'aprobado' ? 'Aprobada' : delivery.status === 'devuelto' ? 'Devuelta' : 'Pendiente'}
+              {deliveryData.status === 'approved' ? 'Aprobada' : deliveryData.status === 'rejected' ? 'Devuelta' : 'Pendiente'}
             </span>
           </div>
         </div>
@@ -179,88 +163,97 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
               <div className="flex items-center text-sm">
                 <Package className="w-4 h-4 mr-2 text-gray-500" />
                 <span className="font-medium">Orden:</span>
-                <span className="ml-2">{delivery.orderId}</span>
+                <span className="ml-2">{deliveryData.orders?.order_number}</span>
               </div>
               <div className="flex items-center text-sm">
                 <User className="w-4 h-4 mr-2 text-gray-500" />
                 <span className="font-medium">Taller:</span>
-                <span className="ml-2">{delivery.workshop}</span>
+                <span className="ml-2">{deliveryData.workshops?.name}</span>
               </div>
               <div className="flex items-center text-sm">
                 <Calendar className="w-4 h-4 mr-2 text-gray-500" />
                 <span className="font-medium">Fecha:</span>
-                <span className="ml-2">{new Date(delivery.date).toLocaleDateString()}</span>
+                <span className="ml-2">{new Date(deliveryData.delivery_date).toLocaleDateString()}</span>
               </div>
               <div className="flex items-center text-sm">
                 <span className="font-medium">Entrega #:</span>
-                <span className="ml-2">{delivery.deliveryNumber}</span>
+                <span className="ml-2">{deliveryData.tracking_number}</span>
               </div>
+              {deliveryData.recipient_name && (
+                <div className="flex items-center text-sm">
+                  <span className="font-medium">Receptor:</span>
+                  <span className="ml-2">{deliveryData.recipient_name}</span>
+                </div>
+              )}
+              {deliveryData.recipient_phone && (
+                <div className="flex items-center text-sm">
+                  <span className="font-medium">Teléfono:</span>
+                  <span className="ml-2">{deliveryData.recipient_phone}</span>
+                </div>
+              )}
+              {deliveryData.notes && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600 font-medium mb-1">Notas:</p>
+                  <p className="text-sm text-gray-700">{deliveryData.notes}</p>
+                </div>
+              )}
             </div>
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Resumen de Cantidades por Variante</h3>
+            <h3 className="text-lg font-semibold mb-4">Items de la Entrega</h3>
             <div className="space-y-4">
-              {/* Header */}
-              <div className="grid grid-cols-6 gap-2 text-xs font-medium text-gray-600 pb-2 border-b">
-                <div>Variante</div>
-                <div className="text-center">Total</div>
-                <div className="text-center">Entregadas</div>
-                <div className="text-center">Aprobadas</div>
-                <div className="text-center">Devueltas</div>
-                <div className="text-center">Pendientes</div>
-              </div>
-              
-              {/* Variant rows */}
-              {mockVariants.map((variant) => (
-                <div key={variant.name} className="grid grid-cols-6 gap-2 text-sm py-2 border-b border-gray-100">
-                  <div className="font-medium">{variant.name}</div>
-                  <div className="text-center">{variant.totalOrdered}</div>
-                  <div className="text-center">{variant.delivered}</div>
-                  <div className="text-center text-green-600 font-medium">{variant.approved}</div>
-                  <div className="text-center text-red-600 font-medium">{variant.returnedDefective}</div>
-                  <div className="text-center text-blue-600 font-medium">{variant.pendingNotDelivered}</div>
-                </div>
-              ))}
-              
-              {/* Totals row */}
-              <div className="grid grid-cols-6 gap-2 text-sm font-semibold py-2 border-t-2 border-gray-300 bg-gray-50 rounded">
-                <div>TOTAL</div>
-                <div className="text-center">{totals.totalOrdered}</div>
-                <div className="text-center">{totals.delivered}</div>
-                <div className="text-center text-green-700">{totals.approved}</div>
-                <div className="text-center text-red-700">{totals.returnedDefective}</div>
-                <div className="text-center text-blue-700">{totals.pendingNotDelivered}</div>
-              </div>
-            </div>
-            
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-xs space-y-1">
-                <div><span className="font-medium">Total:</span> Cantidad total ordenada</div>
-                <div><span className="font-medium">Entregadas:</span> Cantidad recibida en esta entrega</div>
-                <div><span className="font-medium text-green-600">Aprobadas:</span> Cantidad que pasó control de calidad</div>
-                <div><span className="font-medium text-red-600">Devueltas:</span> Cantidad devuelta por defectos</div>
-                <div><span className="font-medium text-blue-600">Pendientes:</span> Cantidad aún no entregada</div>
-              </div>
-            </div>
-          </Card>
+              {deliveryData.delivery_items && deliveryData.delivery_items.length > 0 ? (
+                <div className="space-y-3">
+                  {deliveryData.delivery_items.map((item, index) => (
+                    <div key={index} className="p-4 border rounded-lg space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">
+                            {item.order_items?.product_variants?.products?.name || 'Producto'}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            Variante: {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            SKU: {item.order_items?.product_variants?.sku_variant}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-lg text-blue-600">
+                            {item.quantity_delivered} entregadas
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            de {item.order_items?.quantity} solicitadas
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between pt-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          item.quality_status === 'approved' ? 'bg-green-100 text-green-700' :
+                          item.quality_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          item.quality_status === 'rework_needed' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {item.quality_status === 'approved' ? 'Aprobado' :
+                           item.quality_status === 'rejected' ? 'Rechazado' :
+                           item.quality_status === 'rework_needed' ? 'Requiere Reelaboración' :
+                           'Pendiente'}
+                        </span>
+                      </div>
 
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Archivos Adjuntos</h3>
-            <div className="space-y-2">
-              {mockFiles.map((file, index) => (
-                <div key={index} className="flex items-center p-2 border rounded-lg">
-                  {file.type === 'image' ? (
-                    <Camera className="w-4 h-4 mr-2 text-blue-500" />
-                  ) : (
-                    <FileText className="w-4 h-4 mr-2 text-red-500" />
-                  )}
-                  <span className="text-sm">{file.name}</span>
-                  <Button variant="ghost" size="sm" className="ml-auto">
-                    Ver
-                  </Button>
+                      {item.notes && (
+                        <div className="pt-2 border-t">
+                          <p className="text-sm text-gray-600">{item.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p className="text-gray-500">No hay items registrados para esta entrega</p>
+              )}
             </div>
           </Card>
         </div>
@@ -280,46 +273,48 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="font-medium">Resultado por Variante</h4>
-                  {mockVariants.map((variant) => (
-                    <div key={variant.name} className="p-4 border rounded-lg space-y-3">
+                  <h4 className="font-medium">Resultado por Item</h4>
+                  {deliveryData.delivery_items?.map((item, index) => (
+                    <div key={index} className="p-4 border rounded-lg space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">{variant.name}</span>
-                        <span className="text-sm text-gray-600">{variant.delivered} entregadas</span>
+                        <span className="font-medium">
+                          {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                        </span>
+                        <span className="text-sm text-gray-600">{item.quantity_delivered} entregadas</span>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label htmlFor={`approved-${variant.name}`}>Aprobadas</Label>
+                          <Label htmlFor={`approved-${index}`}>Aprobadas</Label>
                           <Input
-                            id={`approved-${variant.name}`}
+                            id={`approved-${index}`}
                             type="number"
                             min="0"
-                            max={variant.delivered}
-                            value={qualityData.variants[variant.name]?.approved || ''}
-                            onChange={(e) => handleVariantQuality(variant.name, 'approved', parseInt(e.target.value) || 0)}
+                            max={item.quantity_delivered}
+                            value={qualityData.variants[`item-${index}`]?.approved || ''}
+                            onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
                           />
                         </div>
                         <div>
-                          <Label htmlFor={`defective-${variant.name}`}>Defectuosas</Label>
+                          <Label htmlFor={`defective-${index}`}>Defectuosas</Label>
                           <Input
-                            id={`defective-${variant.name}`}
+                            id={`defective-${index}`}
                             type="number"
                             min="0"
-                            max={variant.delivered}
-                            value={qualityData.variants[variant.name]?.defective || ''}
-                            onChange={(e) => handleVariantQuality(variant.name, 'defective', parseInt(e.target.value) || 0)}
+                            max={item.quantity_delivered}
+                            value={qualityData.variants[`item-${index}`]?.defective || ''}
+                            onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
                           />
                         </div>
                       </div>
                       
                       <div>
-                        <Label htmlFor={`reason-${variant.name}`}>Motivo (si hay defectos)</Label>
+                        <Label htmlFor={`reason-${index}`}>Motivo (si hay defectos)</Label>
                         <Input
-                          id={`reason-${variant.name}`}
+                          id={`reason-${index}`}
                           placeholder="Describir defectos encontrados..."
-                          value={qualityData.variants[variant.name]?.reason || ''}
-                          onChange={(e) => handleVariantQuality(variant.name, 'reason', e.target.value)}
+                          value={qualityData.variants[`item-${index}`]?.reason || ''}
+                          onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
                         />
                       </div>
                     </div>
@@ -369,15 +364,30 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
           {/* History */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Historial de Correcciones</h3>
+            <h3 className="text-lg font-semibold mb-4">Historial de la Entrega</h3>
             <div className="space-y-3">
               <div className="p-3 border-l-4 border-blue-500 bg-blue-50">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Entrega 1</span>
-                  <span className="text-sm text-gray-600">{new Date(delivery.date).toLocaleDateString()}</span>
+                  <span className="font-medium">Entrega Creada</span>
+                  <span className="text-sm text-gray-600">{new Date(deliveryData.created_at).toLocaleDateString()}</span>
                 </div>
-                <p className="text-sm text-gray-700 mt-1">Entrega inicial registrada</p>
+                <p className="text-sm text-gray-700 mt-1">Entrega registrada en el sistema</p>
               </div>
+              
+              {deliveryData.status !== 'pending' && (
+                <div className="p-3 border-l-4 border-green-500 bg-green-50">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Estado Actual</span>
+                    <span className="text-sm text-gray-600">{new Date().toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1">
+                    {deliveryData.status === 'approved' ? 'Entrega aprobada' :
+                     deliveryData.status === 'rejected' ? 'Entrega rechazada' :
+                     deliveryData.status === 'in_quality' ? 'En proceso de revisión de calidad' :
+                     'Estado actualizado'}
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         </div>
