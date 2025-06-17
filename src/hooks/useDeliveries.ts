@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -400,6 +399,7 @@ export const useDeliveries = () => {
           .eq('id', update.id);
 
         if (updateError) {
+          console.error('Error updating delivery item:', updateError);
           throw updateError;
         }
       }
@@ -426,6 +426,7 @@ export const useDeliveries = () => {
         .eq('id', deliveryId);
 
       if (deliveryUpdateError) {
+        console.error('Error updating delivery status:', deliveryUpdateError);
         throw deliveryUpdateError;
       }
 
@@ -444,7 +445,7 @@ export const useDeliveries = () => {
       console.error('Error processing quality review:', error);
       toast({
         title: "Error al procesar revisión",
-        description: "No se pudo procesar la revisión de calidad.",
+        description: error instanceof Error ? error.message : "No se pudo procesar la revisión de calidad.",
         variant: "destructive",
       });
       return false;
