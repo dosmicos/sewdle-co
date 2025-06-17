@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,6 +75,19 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         }
       }
     }));
+  };
+
+  // Calculate quality review totals
+  const calculateQualityTotals = () => {
+    let totalApproved = 0;
+    let totalDefective = 0;
+    
+    Object.values(qualityData.variants).forEach(variant => {
+      totalApproved += variant.approved || 0;
+      totalDefective += variant.defective || 0;
+    });
+    
+    return { totalApproved, totalDefective };
   };
 
   const renderStatusBadge = (status: string) => {
@@ -201,6 +213,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
   const isQCLeader = currentUser.role === 'qc_leader';
   const summaryStats = calculateSummaryStats();
+  const qualityTotals = calculateQualityTotals();
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -443,6 +456,28 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                     </Table>
                   </div>
                 </div>
+
+                {/* Quality Review Summary */}
+                <Card className="p-4 bg-gray-50 border border-gray-200">
+                  <h4 className="font-medium text-gray-900 mb-3">Resumen de Revisión</h4>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-xl font-bold text-green-600">{qualityTotals.totalApproved}</p>
+                      <p className="text-sm text-green-700">Total Aprobadas</p>
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-red-600">{qualityTotals.totalDefective}</p>
+                      <p className="text-sm text-red-700">Total Defectuosas</p>
+                    </div>
+                  </div>
+                  {(qualityTotals.totalApproved + qualityTotals.totalDefective) > 0 && (
+                    <div className="mt-3 text-center">
+                      <p className="text-sm text-gray-600">
+                        Total Revisadas: {qualityTotals.totalApproved + qualityTotals.totalDefective}
+                      </p>
+                    </div>
+                  )}
+                </Card>
 
                 <div className="space-y-3">
                   <Label htmlFor="evidence">Fotos de Evidencia</Label>
