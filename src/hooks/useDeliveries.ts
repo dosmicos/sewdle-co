@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -468,17 +469,31 @@ export const useDeliveries = () => {
 
       // Actualizar stock local primero
       for (const [variantId, quantity] of variantUpdates) {
+        // Get current stock first
+        const { data: currentVariant, error: fetchError } = await supabase
+          .from('product_variants')
+          .select('stock_quantity')
+          .eq('id', variantId)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching current stock:', fetchError);
+          continue;
+        }
+
+        const newStockQuantity = (currentVariant.stock_quantity || 0) + quantity;
+
         const { error: stockError } = await supabase
           .from('product_variants')
           .update({
-            stock_quantity: supabase.sql`stock_quantity + ${quantity}`
+            stock_quantity: newStockQuantity
           })
           .eq('id', variantId);
 
         if (stockError) {
           console.error('Error updating local stock:', stockError);
         } else {
-          console.log(`Updated local stock for variant ${variantId}: +${quantity}`);
+          console.log(`Updated local stock for variant ${variantId}: +${quantity} (new total: ${newStockQuantity})`);
         }
       }
 
