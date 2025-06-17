@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +25,12 @@ export interface UpdateDeliveryStatusData {
   deliveryId: string;
   status: 'pending' | 'in_transit' | 'delivered' | 'in_quality' | 'approved' | 'rejected' | 'returned';
   notes?: string;
+}
+
+export interface QualityReviewData {
+  variants: Record<string, { approved: number; defective: number; reason: string }>;
+  evidenceFiles: FileList | null;
+  generalNotes: string;
 }
 
 export const useDeliveries = () => {
@@ -313,6 +320,111 @@ export const useDeliveries = () => {
     }
   };
 
+  const processQualityReview = async (deliveryId: string, qualityData: QualityReviewData) => {
+    setLoading(true);
+    try {
+      console.log('Processing quality review for delivery:', deliveryId);
+      console.log('Quality data:', qualityData);
+
+      // First, get the delivery items to update them
+      const { data: delivery, error: fetchError } = await supabase
+        .from('deliveries')
+        .select(`
+          *,
+          delivery_items (
+            id,
+            quantity_delivered
+          )
+        `)
+        .eq('id', deliveryId)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      // Process each variant/item
+      const itemUpdates = [];
+      let hasDefects = false;
+      let allApproved = true;
+
+      for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
+        const itemIndex = parseInt(variantKey.replace('item-', ''));
+        const deliveryItem = delivery.delivery_items[itemIndex];
+        
+        if (deliveryItem && (variantData.approved > 0 || variantData.defective > 0)) {
+          let status = 'pending';
+          let notes = variantData.reason || '';
+
+          if (variantData.defective > 0) {
+            status = 'rejected';
+            hasDefects = true;
+            allApproved = false;
+          } else if (variantData.approved > 0) {
+            status = 'approved';
+          }
+
+          itemUpdates.push({
+            id: deliveryItem.id,
+            quality_status: status,
+            notes: notes
+          });
+        }
+      }
+
+      // Update all delivery items
+      for (const update of itemUpdates) {
+        const { error: updateError } = await supabase
+          .from('delivery_items')
+          .update({
+            quality_status: update.quality_status,
+            notes: update.notes
+          })
+          .eq('id', update.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+      }
+
+      // Determine overall delivery status
+      let deliveryStatus = 'approved';
+      if (hasDefects) {
+        deliveryStatus = allApproved ? 'approved' : 'rejected';
+      }
+
+      // Update delivery status and notes
+      const { error: deliveryUpdateError } = await supabase
+        .from('deliveries')
+        .update({
+          status: deliveryStatus,
+          notes: qualityData.generalNotes || null
+        })
+        .eq('id', deliveryId);
+
+      if (deliveryUpdateError) {
+        throw deliveryUpdateError;
+      }
+
+      toast({
+        title: "Revisión de calidad procesada",
+        description: `La entrega ha sido ${deliveryStatus === 'approved' ? 'aprobada' : 'devuelta'} exitosamente.`,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error processing quality review:', error);
+      toast({
+        title: "Error al procesar revisión",
+        description: "No se pudo procesar la revisión de calidad.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getDeliveryStats = async () => {
     setLoading(true);
     try {
@@ -350,6 +462,7 @@ export const useDeliveries = () => {
     fetchDeliveryById,
     updateDeliveryStatus,
     updateDeliveryItemQuality,
+    processQualityReview,
     getDeliveryStats,
     loading
   };

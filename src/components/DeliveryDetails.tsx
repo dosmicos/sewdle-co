@@ -26,7 +26,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     evidenceFiles: null as FileList | null,
     generalNotes: ''
   });
-  const { fetchDeliveryById, loading } = useDeliveries();
+  const { fetchDeliveryById, processQualityReview, loading } = useDeliveries();
 
   useEffect(() => {
     if (delivery?.id) {
@@ -39,12 +39,30 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     setDeliveryData(details);
   };
 
-  const handleQualityReview = () => {
+  const handleQualityReview = async () => {
     console.log('Processing quality review:', delivery.id, qualityData);
-    // Here you would normally send the data to your backend
-    // The system will automatically:
-    // - Approve the quantities marked as approved
-    // - Return the quantities marked as defective with their reasons
+    
+    // Validate that quantities are entered
+    const hasValidData = Object.values(qualityData.variants).some(variant => 
+      variant.approved > 0 || variant.defective > 0
+    );
+
+    if (!hasValidData) {
+      alert('Por favor, ingresa las cantidades aprobadas y/o defectuosas para al menos un item.');
+      return;
+    }
+
+    const success = await processQualityReview(delivery.id, qualityData);
+    if (success) {
+      // Reload the delivery details to show updated status
+      await loadDeliveryDetails();
+      // Reset the form
+      setQualityData({
+        variants: {},
+        evidenceFiles: null,
+        generalNotes: ''
+      });
+    }
   };
 
   const handleVariantQuality = (variant: string, field: string, value: string | number) => {
@@ -141,7 +159,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
           <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${deliveryData.status !== 'in_quality' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${deliveryData.status !== 'pending' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
             <span className="text-sm">Revisión de Calidad</span>
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
@@ -263,7 +281,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Control de Calidad</h3>
             
-            {isQCLeader ? (
+            {isQCLeader && deliveryData.status !== 'approved' && deliveryData.status !== 'rejected' ? (
               <div className="space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
@@ -347,12 +365,20 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                 <div className="pt-4">
                   <Button
                     onClick={handleQualityReview}
+                    disabled={loading}
                     className="w-full bg-blue-500 hover:bg-blue-600"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Procesar Revisión de Calidad
+                    {loading ? 'Procesando...' : 'Procesar Revisión de Calidad'}
                   </Button>
                 </div>
+              </div>
+            ) : deliveryData.status === 'approved' || deliveryData.status === 'rejected' ? (
+              <div className="text-center py-8">
+                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                <p className="text-gray-600">
+                  Esta entrega ya ha sido {deliveryData.status === 'approved' ? 'aprobada' : 'devuelta'}
+                </p>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
