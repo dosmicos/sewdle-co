@@ -30,7 +30,7 @@ export const useDeliveryOrders = () => {
           )
         `)
         .in('status', ['assigned', 'in_progress'])
-        .order('due_date', { ascending: true, nullsLast: true });
+        .order('due_date', { ascending: true, nullsFirst: false });
 
       if (error) {
         throw error;

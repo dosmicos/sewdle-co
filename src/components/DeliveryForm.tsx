@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, Upload, FileText, Image, CheckCircle } from 'lucide-react';
+import { useDeliveryOrders } from '@/hooks/useDeliveryOrders';
+import { useDeliveries } from '@/hooks/useDeliveries';
 
 interface DeliveryFormProps {
   onClose: () => void;
@@ -14,6 +16,7 @@ interface DeliveryFormProps {
 
 interface FormData {
   orderId: string;
+  workshopId: string;
   products: Record<string, Record<string, number>>; // productId -> { variant: quantity }
   general: {
     observations: string;
@@ -21,85 +24,56 @@ interface FormData {
   files: FileList | null;
 }
 
-// Mock data for orders with multiple products
-const mockOrders = [
-  { 
-    id: 'ORD-123', 
-    name: 'Orden Mixta Primavera', 
-    products: [
-      {
-        id: 'prod-1',
-        name: 'Camisetas Básicas',
-        variants: { 'S': 50, 'M': 100, 'L': 75, 'XL': 25 }
-      },
-      {
-        id: 'prod-2', 
-        name: 'Pantalones Jogger',
-        variants: { 'S': 30, 'M': 80, 'L': 60, 'XL': 20 }
-      }
-    ]
-  },
-  { 
-    id: 'ORD-124', 
-    name: 'Colección Infantil', 
-    products: [
-      {
-        id: 'prod-3',
-        name: 'Sudaderas Premium',
-        variants: { 'S': 25, 'M': 60, 'L': 45, 'XL': 15 }
-      }
-    ]
-  },
-  { 
-    id: 'ORD-125', 
-    name: 'Línea Deportiva', 
-    products: [
-      {
-        id: 'prod-4',
-        name: 'Shorts Deportivos',
-        variants: { 'S': 40, 'M': 70, 'L': 50, 'XL': 30 }
-      },
-      {
-        id: 'prod-5',
-        name: 'Camisetas Deportivas',
-        variants: { 'S': 35, 'M': 85, 'L': 65, 'XL': 25 }
-      }
-    ]
-  }
-];
-
 const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
     orderId: '',
+    workshopId: '',
     products: {},
     general: {
       observations: ''
     },
     files: null
   });
-  const [selectedOrder, setSelectedOrder] = useState<typeof mockOrders[0] | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
+  
+  const { fetchAvailableOrders, loading: ordersLoading } = useDeliveryOrders();
+  const { createDelivery, loading: deliveryLoading } = useDeliveries();
 
-  const handleOrderSelect = (orderId: string) => {
-    const order = mockOrders.find(o => o.id === orderId);
-    setSelectedOrder(order || null);
-    setFormData(prev => ({
-      ...prev,
-      orderId,
-      products: {}
-    }));
+  useEffect(() => {
+    loadAvailableOrders();
+  }, []);
+
+  const loadAvailableOrders = async () => {
+    const orders = await fetchAvailableOrders();
+    setAvailableOrders(orders);
   };
 
-  const handleVariantChange = (productId: string, variant: string, value: string) => {
+  const handleOrderSelect = (orderId: string) => {
+    const order = availableOrders.find(o => o.id === orderId);
+    setSelectedOrder(order || null);
+    
+    if (order) {
+      // Obtener workshop_id de la primera asignación
+      const workshopId = order.workshop_assignments?.[0]?.workshop_id || '';
+      
+      setFormData(prev => ({
+        ...prev,
+        orderId,
+        workshopId,
+        products: {}
+      }));
+    }
+  };
+
+  const handleVariantChange = (orderItemId: string, value: string) => {
     const numValue = parseInt(value) || 0;
     setFormData(prev => ({
       ...prev,
       products: {
         ...prev.products,
-        [productId]: {
-          ...prev.products[productId],
-          [variant]: numValue
-        }
+        [orderItemId]: numValue
       }
     }));
   };
@@ -138,20 +112,37 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
     }));
   };
 
-  const handleSubmit = () => {
-    console.log('Submitting delivery:', formData);
-    onClose();
-  };
+  const handleSubmit = async () => {
+    try {
+      // Preparar los items para la entrega
+      const deliveryItems = Object.entries(formData.products)
+        .filter(([_, quantity]) => quantity > 0)
+        .map(([orderItemId, quantity]) => ({
+          orderItemId,
+          quantityDelivered: quantity
+        }));
 
-  const getProductTotal = (productId: string) => {
-    const productQuantities = formData.products[productId] || {};
-    return Object.values(productQuantities).reduce((total: number, quantity) => total + (quantity || 0), 0);
+      if (deliveryItems.length === 0) {
+        alert('Debe especificar al menos una cantidad a entregar');
+        return;
+      }
+
+      const deliveryData = {
+        orderId: formData.orderId,
+        workshopId: formData.workshopId,
+        notes: formData.general.observations,
+        items: deliveryItems
+      };
+
+      await createDelivery(deliveryData);
+      onClose();
+    } catch (error) {
+      console.error('Error creating delivery:', error);
+    }
   };
 
   const getTotalDelivered = () => {
-    return Object.keys(formData.products).reduce((total, productId) => {
-      return total + getProductTotal(productId);
-    }, 0);
+    return Object.values(formData.products).reduce((total: number, quantity) => total + (quantity || 0), 0);
   };
 
   const isStepValid = (step: number) => {
@@ -159,7 +150,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
       case 1:
         return formData.orderId !== '';
       case 2:
-        return Object.keys(formData.products).length > 0 && getTotalDelivered() > 0;
+        return getTotalDelivered() > 0;
       case 3:
         return true;
       default:
@@ -174,33 +165,31 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
           <div className="space-y-4">
             <div>
               <Label htmlFor="order">Seleccionar Orden</Label>
-              <Select value={formData.orderId} onValueChange={handleOrderSelect}>
+              <Select value={formData.orderId} onValueChange={handleOrderSelect} disabled={ordersLoading}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccione una orden..." />
+                  <SelectValue placeholder={ordersLoading ? "Cargando órdenes..." : "Seleccione una orden..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockOrders.map((order) => (
+                  {availableOrders.map((order) => (
                     <SelectItem key={order.id} value={order.id}>
-                      {order.id} - {order.name}
+                      {order.order_number} - {order.workshop_assignments?.[0]?.workshops?.name || 'Sin taller'}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            
             {selectedOrder && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-3">Productos en la orden:</h4>
+                <h4 className="font-medium mb-3">Items en la orden:</h4>
                 <div className="space-y-3">
-                  {selectedOrder.products.map((product) => (
-                    <div key={product.id} className="border-l-4 border-blue-500 pl-3">
-                      <h5 className="font-medium">{product.name}</h5>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        {Object.entries(product.variants).map(([variant, quantity]) => (
-                          <div key={variant} className="flex justify-between text-sm">
-                            <span>{variant}:</span>
-                            <span className="font-medium">{quantity} pendientes</span>
-                          </div>
-                        ))}
+                  {selectedOrder.order_items?.map((item: any) => (
+                    <div key={item.id} className="border-l-4 border-blue-500 pl-3">
+                      <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
+                      <div className="text-sm text-gray-600">
+                        <span>Variante: {item.product_variants?.size} - {item.product_variants?.color}</span>
+                        <br />
+                        <span className="font-medium">Cantidad: {item.quantity}</span>
                       </div>
                     </div>
                   ))}
@@ -214,43 +203,40 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
         return (
           <div className="space-y-6">
             <h3 className="font-medium text-lg">Cantidades a Entregar</h3>
-            {selectedOrder && (
-              <div className="space-y-6">
-                {selectedOrder.products.map((product) => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg p-4">
+            {selectedOrder && selectedOrder.order_items && (
+              <div className="space-y-4">
+                {selectedOrder.order_items.map((item: any) => (
+                  <div key={item.id} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-lg">{product.name}</h4>
+                      <div>
+                        <h4 className="font-semibold">{item.product_variants?.products?.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {item.product_variants?.size} - {item.product_variants?.color}
+                        </p>
+                      </div>
                       <span className="text-sm font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        Total: {getProductTotal(product.id)}
+                        Disponible: {item.quantity}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {Object.entries(product.variants).map(([variant, pendingQty]) => (
-                        <div key={variant} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div className="flex-1">
-                            <span className="font-medium">{variant}</span>
-                            <div className="text-sm text-gray-600">({pendingQty} pendientes)</div>
-                          </div>
-                          <div className="w-20">
-                            <Input
-                              type="number"
-                              min="0"
-                              max={pendingQty}
-                              value={formData.products[product.id]?.[variant] || ''}
-                              onChange={(e) => handleVariantChange(product.id, variant, e.target.value)}
-                              placeholder="0"
-                              className="text-center"
-                            />
-                          </div>
-                        </div>
-                      ))}
+                    <div className="flex items-center space-x-3">
+                      <Label htmlFor={`quantity-${item.id}`}>Cantidad a entregar:</Label>
+                      <Input
+                        id={`quantity-${item.id}`}
+                        type="number"
+                        min="0"
+                        max={item.quantity}
+                        value={formData.products[item.id] || ''}
+                        onChange={(e) => handleVariantChange(item.id, e.target.value)}
+                        placeholder="0"
+                        className="w-24"
+                      />
                     </div>
                   </div>
                 ))}
                 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-semibold text-blue-800">Total General a Entregar:</span>
+                    <span className="text-lg font-semibold text-blue-800">Total a Entregar:</span>
                     <span className="text-2xl font-bold text-blue-900">{getTotalDelivered()}</span>
                   </div>
                 </div>
@@ -320,28 +306,22 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
 
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-3">Orden: {formData.orderId}</h4>
+                <h4 className="font-medium mb-3">Orden: {selectedOrder?.order_number}</h4>
                 <div className="space-y-3">
-                  {selectedOrder?.products.map((product) => {
-                    const productTotal = getProductTotal(product.id);
-                    if (productTotal === 0) return null;
+                  {selectedOrder?.order_items?.map((item: any) => {
+                    const quantity = formData.products[item.id];
+                    if (!quantity || quantity === 0) return null;
                     
                     return (
-                      <div key={product.id} className="border-l-4 border-blue-500 pl-3">
-                        <div className="flex justify-between items-center mb-2">
-                          <h5 className="font-medium">{product.name}</h5>
-                          <span className="font-semibold text-blue-700">{productTotal} unidades</span>
-                        </div>
-                        <div className="space-y-1">
-                          {Object.entries(formData.products[product.id] || {}).map(([variant, quantity]) => {
-                            if (quantity === 0) return null;
-                            return (
-                              <div key={variant} className="flex justify-between text-sm">
-                                <span>{variant}:</span>
-                                <span>{quantity} unidades</span>
-                              </div>
-                            );
-                          })}
+                      <div key={item.id} className="border-l-4 border-blue-500 pl-3">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
+                            <p className="text-sm text-gray-600">
+                              {item.product_variants?.size} - {item.product_variants?.color}
+                            </p>
+                          </div>
+                          <span className="font-semibold text-blue-700">{quantity} unidades</span>
                         </div>
                       </div>
                     );
@@ -441,11 +421,11 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
             </Button>
           ) : (
             <Button
-              onClick={() => setCurrentStep(currentStep + 1)}
-              disabled={!isStepValid(currentStep)}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              onClick={handleSubmit}
+              disabled={!isStepValid(currentStep) || deliveryLoading}
+              className="bg-green-500 hover:bg-green-600 text-white"
             >
-              Siguiente
+              {deliveryLoading ? 'Registrando...' : 'Registrar Entrega'}
             </Button>
           )}
         </div>

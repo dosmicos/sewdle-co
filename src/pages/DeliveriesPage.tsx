@@ -202,10 +202,9 @@ const DeliveriesPage = () => {
             <input 
               type="text" 
               placeholder="Buscar por orden o taller..." 
-              className="w-full pl-20 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
+              className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: '2rem' }}
             />
           </div>
           
@@ -296,8 +295,7 @@ const DeliveriesPage = () => {
 
       {showDeliveryForm && (
         <DeliveryForm 
-          onClose={() => setShowDeliveryForm(false)} 
-          onDeliveryCreated={handleDeliveryCreated}
+          onClose={() => setShowDeliveryForm(false)}
         />
       )}
     </div>
