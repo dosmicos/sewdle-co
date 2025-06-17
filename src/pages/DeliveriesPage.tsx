@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Filter, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight } from 'lucide-react';
@@ -7,40 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-// Mock data for deliveries
-const mockDeliveries = [
-  {
-    id: 'ORD-123-E1',
-    orderId: 'ORD-123',
-    workshop: 'Taller Central',
-    deliveryNumber: 1,
-    percentageDelivered: 60,
-    status: 'en-calidad',
-    date: '2023-06-10T10:30:00'
-  },
-  {
-    id: 'ORD-125-E1',
-    orderId: 'ORD-125',
-    workshop: 'Textiles Norte',
-    deliveryNumber: 1,
-    percentageDelivered: 100,
-    status: 'aprobado',
-    date: '2023-06-09T14:20:00'
-  },
-  {
-    id: 'ORD-124-E2',
-    orderId: 'ORD-124',
-    workshop: 'Costura Rápida',
-    deliveryNumber: 2,
-    percentageDelivered: 40,
-    status: 'devuelto',
-    date: '2023-06-08T09:15:00'
-  }
-];
-
-// Extract unique workshops for the filter
-const workshopOptions = [...new Set(mockDeliveries.map(delivery => delivery.workshop))];
+import { useDeliveries } from '@/hooks/useDeliveries';
 
 const DeliveriesPage = () => {
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
@@ -48,6 +16,31 @@ const DeliveriesPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [selectedWorkshop, setSelectedWorkshop] = useState('all');
+  const [deliveries, setDeliveries] = useState([]);
+  const [stats, setStats] = useState({
+    total_deliveries: 0,
+    pending_deliveries: 0,
+    in_quality_deliveries: 0,
+    approved_deliveries: 0,
+    rejected_deliveries: 0
+  });
+
+  const { fetchDeliveries, getDeliveryStats, loading } = useDeliveries();
+
+  useEffect(() => {
+    loadDeliveries();
+    loadStats();
+  }, []);
+
+  const loadDeliveries = async () => {
+    const data = await fetchDeliveries();
+    setDeliveries(data || []);
+  };
+
+  const loadStats = async () => {
+    const statsData = await getDeliveryStats();
+    setStats(statsData);
+  };
 
   const handleViewDeliveryDetails = (delivery) => {
     setSelectedDelivery(delivery);
@@ -57,53 +50,84 @@ const DeliveriesPage = () => {
     setSelectedDelivery(null);
   };
 
+  const handleDeliveryCreated = () => {
+    setShowDeliveryForm(false);
+    loadDeliveries();
+    loadStats();
+  };
+
+  // Extract unique workshops for the filter
+  const workshopOptions = [...new Set(deliveries.map(delivery => delivery.workshop_name).filter(Boolean))];
+
   // Filter deliveries based on tab, search query, and workshop
-  const filteredDeliveries = mockDeliveries.filter(delivery => {
+  const filteredDeliveries = deliveries.filter(delivery => {
     // Filter by tab
-    if (activeTab !== 'all' && delivery.status !== activeTab) {
-      return false;
+    if (activeTab !== 'all') {
+      const statusMap = {
+        'en-calidad': 'in_quality',
+        'devuelto': 'rejected',
+        'aprobado': 'approved'
+      };
+      const mappedStatus = statusMap[activeTab];
+      if (mappedStatus && delivery.status !== mappedStatus) {
+        return false;
+      }
     }
     
     // Filter by search
     if (searchQuery && 
-        !delivery.orderId.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !delivery.workshop.toLowerCase().includes(searchQuery.toLowerCase())) {
+        !delivery.order_number?.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !delivery.workshop_name?.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !delivery.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
     
     // Filter by workshop
-    if (selectedWorkshop !== 'all' && delivery.workshop !== selectedWorkshop) {
+    if (selectedWorkshop !== 'all' && delivery.workshop_name !== selectedWorkshop) {
       return false;
     }
     
     return true;
   });
 
-  // Count deliveries by status
-  const counts = {
-    total: mockDeliveries.length,
-    enCalidad: mockDeliveries.filter(d => d.status === 'en-calidad').length,
-    devuelto: mockDeliveries.filter(d => d.status === 'devuelto').length,
-    aprobado: mockDeliveries.filter(d => d.status === 'aprobado').length,
-  };
-
   const renderStatusBadge = (status) => {
     switch (status) {
-      case 'en-calidad':
+      case 'pending':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            <div className="w-2 h-2 rounded-full bg-gray-500 mr-1"></div>
+            Pendiente
+          </span>
+        );
+      case 'in_transit':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <div className="w-2 h-2 rounded-full bg-yellow-500 mr-1"></div>
+            En Tránsito
+          </span>
+        );
+      case 'delivered':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            <div className="w-2 h-2 rounded-full bg-blue-500 mr-1"></div>
+            Entregado
+          </span>
+        );
+      case 'in_quality':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
             <div className="w-2 h-2 rounded-full bg-blue-500 mr-1"></div>
             En Calidad
           </span>
         );
-      case 'devuelto':
+      case 'rejected':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
             <div className="w-2 h-2 rounded-full bg-red-500 mr-1"></div>
             Devuelto
           </span>
         );
-      case 'aprobado':
+      case 'approved':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
             <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
@@ -118,6 +142,22 @@ const DeliveriesPage = () => {
   // If showing delivery details
   if (selectedDelivery) {
     return <DeliveryDetails delivery={selectedDelivery} onBack={handleBackToList} />;
+  }
+
+  if (loading && deliveries.length === 0) {
+    return (
+      <div className="p-6 space-y-8 animate-fade-in">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+              <CheckCircle className="w-8 h-8 text-gray-600" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2 text-black">Cargando entregas...</h3>
+            <p className="text-gray-600">Por favor espera mientras cargamos los datos</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -139,19 +179,19 @@ const DeliveriesPage = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4 shadow-sm border-gray-200">
           <p className="text-sm font-medium text-gray-600">Total Entregas</p>
-          <p className="text-2xl font-bold">{counts.total}</p>
+          <p className="text-2xl font-bold">{stats.total_deliveries}</p>
         </Card>
         <Card className="p-4 shadow-sm border-gray-200">
           <p className="text-sm font-medium text-blue-600">En Calidad</p>
-          <p className="text-2xl font-bold text-blue-700">{counts.enCalidad}</p>
+          <p className="text-2xl font-bold text-blue-700">{stats.in_quality_deliveries}</p>
         </Card>
         <Card className="p-4 shadow-sm border-gray-200">
-          <p className="text-sm font-medium text-red-600">Devuelto</p>
-          <p className="text-2xl font-bold text-red-700">{counts.devuelto}</p>
+          <p className="text-sm font-medium text-red-600">Devueltos</p>
+          <p className="text-2xl font-bold text-red-700">{stats.rejected_deliveries}</p>
         </Card>
         <Card className="p-4 shadow-sm border-gray-200">
-          <p className="text-sm font-medium text-green-600">Aprobado</p>
-          <p className="text-2xl font-bold text-green-700">{counts.aprobado}</p>
+          <p className="text-sm font-medium text-green-600">Aprobados</p>
+          <p className="text-2xl font-bold text-green-700">{stats.approved_deliveries}</p>
         </Card>
       </div>
 
@@ -202,10 +242,10 @@ const DeliveriesPage = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Número de Seguimiento</TableHead>
                   <TableHead>Orden</TableHead>
                   <TableHead>Taller</TableHead>
-                  <TableHead>Entrega #</TableHead>
-                  <TableHead>% Entregado</TableHead>
+                  <TableHead>Cantidad Total</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead></TableHead>
@@ -214,22 +254,14 @@ const DeliveriesPage = () => {
               <TableBody>
                 {filteredDeliveries.map((delivery) => (
                   <TableRow key={delivery.id}>
-                    <TableCell className="font-medium">{delivery.orderId}</TableCell>
-                    <TableCell>{delivery.workshop}</TableCell>
-                    <TableCell>{delivery.deliveryNumber}</TableCell>
+                    <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
+                    <TableCell>{delivery.order_number}</TableCell>
+                    <TableCell>{delivery.workshop_name}</TableCell>
                     <TableCell>
-                      <div className="flex items-center">
-                        <div className="w-24 bg-gray-200 rounded-full h-2 mr-2">
-                          <div 
-                            className="h-2 rounded-full bg-blue-500" 
-                            style={{ width: `${delivery.percentageDelivered}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm">{delivery.percentageDelivered}%</span>
-                      </div>
+                      <span className="text-sm font-medium">{delivery.total_quantity} unidades</span>
                     </TableCell>
                     <TableCell>{renderStatusBadge(delivery.status)}</TableCell>
-                    <TableCell>{new Date(delivery.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Button 
                         variant="outline"
@@ -263,7 +295,10 @@ const DeliveriesPage = () => {
       </Card>
 
       {showDeliveryForm && (
-        <DeliveryForm onClose={() => setShowDeliveryForm(false)} />
+        <DeliveryForm 
+          onClose={() => setShowDeliveryForm(false)} 
+          onDeliveryCreated={handleDeliveryCreated}
+        />
       )}
     </div>
   );

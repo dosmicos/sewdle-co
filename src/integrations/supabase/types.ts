@@ -654,6 +654,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_delivery_number: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       generate_material_sku: {
         Args: { category_name: string }
         Returns: string
@@ -681,6 +685,38 @@ export type Database = {
       get_current_user_role_safe: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      get_deliveries_with_details: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          tracking_number: string
+          order_id: string
+          order_number: string
+          workshop_id: string
+          workshop_name: string
+          delivery_date: string
+          status: string
+          delivered_by: string
+          delivered_by_name: string
+          recipient_name: string
+          recipient_phone: string
+          recipient_address: string
+          notes: string
+          created_at: string
+          items_count: number
+          total_quantity: number
+        }[]
+      }
+      get_delivery_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_deliveries: number
+          pending_deliveries: number
+          in_quality_deliveries: number
+          approved_deliveries: number
+          rejected_deliveries: number
+        }[]
       }
       get_materials_with_stock_status: {
         Args: Record<PropertyKey, never>
