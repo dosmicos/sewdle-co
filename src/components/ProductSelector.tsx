@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,6 +173,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     setInternalProducts(prev => {
       const updated = [...prev];
       if (updated[productIndex].variants[variantId]) {
+        // Asegurar que la cantidad no sea negativa
         updated[productIndex].variants[variantId].quantity = Math.max(0, quantity);
       }
       return updated;
@@ -190,6 +190,32 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     return internalProducts.reduce((total, product) => {
       return total + getProductQuantityTotal(product);
     }, 0);
+  };
+
+  const getMaxQuantityForVariant = (stockQuantity: number) => {
+    // Si el stock es negativo o cero, permitir máximo 999 unidades
+    // Esto permite crear órdenes incluso con stock negativo
+    return stockQuantity <= 0 ? 999 : stockQuantity;
+  };
+
+  const getStockDisplayClass = (stockQuantity: number) => {
+    if (stockQuantity < 0) {
+      return 'bg-red-100 text-red-800';
+    } else if (stockQuantity === 0) {
+      return 'bg-orange-100 text-orange-800';
+    } else {
+      return 'bg-green-100 text-green-800';
+    }
+  };
+
+  const getStockDisplayText = (stockQuantity: number) => {
+    if (stockQuantity < 0) {
+      return `${stockQuantity} (Stock negativo)`;
+    } else if (stockQuantity === 0) {
+      return '0 (Agotado)';
+    } else {
+      return stockQuantity.toString();
+    }
   };
 
   if (loading) {
@@ -279,6 +305,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                       {selectedProductData.variants.map((variant) => {
                         const variantData = product.variants[variant.id];
                         const variantName = [variant.size, variant.color].filter(Boolean).join(' - ') || 'Variante estándar';
+                        const maxQuantity = getMaxQuantityForVariant(variant.stock_quantity);
                         
                         return (
                           <TableRow key={variant.id}>
@@ -296,19 +323,20 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
                               ${(selectedProductData.base_price + (variant.additional_price || 0)).toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                variant.stock_quantity > 0 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {variant.stock_quantity || 0}
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStockDisplayClass(variant.stock_quantity)}`}>
+                                {getStockDisplayText(variant.stock_quantity)}
                               </span>
+                              {variant.stock_quantity <= 0 && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Se puede ordenar sin stock
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Input
                                 type="number"
                                 min="0"
-                                max={variant.stock_quantity || 999}
+                                max={maxQuantity}
                                 value={variantData?.quantity || 0}
                                 onChange={(e) => updateVariantQuantity(
                                   index, 
