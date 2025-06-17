@@ -17,7 +17,7 @@ interface DeliveryFormProps {
 interface FormData {
   orderId: string;
   workshopId: string;
-  products: Record<string, Record<string, number>>; // productId -> { variant: quantity }
+  products: Record<string, number>; // Simplificado: orderItemId -> quantity
   general: {
     observations: string;
   };
@@ -142,7 +142,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
   };
 
   const getTotalDelivered = () => {
-    return Object.values(formData.products).reduce((total: number, quantity) => total + (quantity || 0), 0);
+    return Object.values(formData.products).reduce((total: number, quantity) => total + quantity, 0);
   };
 
   const isStepValid = (step: number) => {
@@ -225,7 +225,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
                         type="number"
                         min="0"
                         max={item.quantity}
-                        value={formData.products[item.id] || ''}
+                        value={formData.products[item.id] || 0}
                         onChange={(e) => handleVariantChange(item.id, e.target.value)}
                         placeholder="0"
                         className="w-24"
