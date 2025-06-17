@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -36,6 +35,21 @@ export const useDeliveries = () => {
     try {
       console.log('Creating delivery with data:', deliveryData);
 
+      // Verificar autenticación primero
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Error de autenticación');
+      }
+
+      if (!session?.user) {
+        console.error('No user session found');
+        throw new Error('Usuario no autenticado');
+      }
+
+      console.log('User authenticated:', session.user.id);
+
       // Validar que hay items válidos
       if (deliveryData.items.length === 0) {
         throw new Error('Debe agregar al menos un item a la entrega');
@@ -52,31 +66,37 @@ export const useDeliveries = () => {
 
       console.log('Generated tracking number:', trackingNumber);
 
-      // Obtener el usuario actual para delivered_by
-      const { data: { session } } = await supabase.auth.getSession();
+      // Preparar datos de la entrega
+      const deliveryInsertData = {
+        tracking_number: trackingNumber,
+        order_id: deliveryData.orderId,
+        workshop_id: deliveryData.workshopId,
+        delivery_date: deliveryData.deliveryDate || new Date().toISOString().split('T')[0],
+        delivered_by: session.user.id,
+        recipient_name: deliveryData.recipientName || null,
+        recipient_phone: deliveryData.recipientPhone || null,
+        recipient_address: deliveryData.recipientAddress || null,
+        notes: deliveryData.notes || null,
+        status: 'pending'
+      };
+
+      console.log('Inserting delivery with data:', deliveryInsertData);
 
       // Crear la entrega principal
       const { data: delivery, error: deliveryError } = await supabase
         .from('deliveries')
-        .insert([
-          {
-            tracking_number: trackingNumber,
-            order_id: deliveryData.orderId,
-            workshop_id: deliveryData.workshopId,
-            delivery_date: deliveryData.deliveryDate || new Date().toISOString().split('T')[0],
-            delivered_by: session?.user?.id || null,
-            recipient_name: deliveryData.recipientName || null,
-            recipient_phone: deliveryData.recipientPhone || null,
-            recipient_address: deliveryData.recipientAddress || null,
-            notes: deliveryData.notes || null,
-            status: 'pending'
-          }
-        ])
+        .insert([deliveryInsertData])
         .select()
         .single();
 
       if (deliveryError) {
         console.error('Error creating delivery:', deliveryError);
+        console.error('Delivery error details:', {
+          message: deliveryError.message,
+          details: deliveryError.details,
+          hint: deliveryError.hint,
+          code: deliveryError.code
+        });
         throw deliveryError;
       }
 
@@ -117,7 +137,7 @@ export const useDeliveries = () => {
       console.error('Error creating delivery:', error);
       toast({
         title: "Error al crear la entrega",
-        description: "Hubo un problema al registrar la entrega. Por favor intenta de nuevo.",
+        description: error instanceof Error ? error.message : "Hubo un problema al registrar la entrega. Por favor intenta de nuevo.",
         variant: "destructive",
       });
       throw error;
