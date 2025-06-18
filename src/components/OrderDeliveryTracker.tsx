@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Truck, Package, CheckCircle, XCircle, AlertTriangle, Calendar, Factory } from 'lucide-react';
+import { Truck, Package, CheckCircle, XCircle, AlertTriangle, Calendar, Factory, ShirtIcon } from 'lucide-react';
 import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
 
 interface OrderDeliveryTrackerProps {
@@ -15,20 +14,23 @@ interface OrderDeliveryTrackerProps {
 const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, orderNumber }) => {
   const [stats, setStats] = useState<any>(null);
   const [deliveries, setDeliveries] = useState<any[]>([]);
-  const { getOrderStats, getOrderDeliveriesBreakdown, loading } = useOrderDeliveryStats();
+  const [variants, setVariants] = useState<any[]>([]);
+  const { getOrderStats, getOrderDeliveriesBreakdown, getOrderVariantsBreakdown, loading } = useOrderDeliveryStats();
 
   useEffect(() => {
     loadData();
   }, [orderId]);
 
   const loadData = async () => {
-    const [orderStats, deliveriesData] = await Promise.all([
+    const [orderStats, deliveriesData, variantsData] = await Promise.all([
       getOrderStats(orderId),
-      getOrderDeliveriesBreakdown(orderId)
+      getOrderDeliveriesBreakdown(orderId),
+      getOrderVariantsBreakdown(orderId)
     ]);
     
     setStats(orderStats);
     setDeliveries(deliveriesData);
+    setVariants(variantsData);
   };
 
   const getStatusColor = (status: string) => {
@@ -138,6 +140,92 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
           </CardContent>
         </Card>
       )}
+
+      {/* Desglose por Variantes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <ShirtIcon className="w-5 h-5" />
+            <span>Desglose por Variante ({variants.length})</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {variants.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <ShirtIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No hay variantes registradas para esta orden</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Variante</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead className="text-center">Ordenadas</TableHead>
+                    <TableHead className="text-center">Aprobadas</TableHead>
+                    <TableHead className="text-center">Pendientes</TableHead>
+                    <TableHead className="text-center">Progreso</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {variants.map((variant, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">
+                        {variant.product_name}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{variant.variant_size}</span>
+                          <span className="text-sm text-gray-600">{variant.variant_color}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {variant.sku_variant}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center space-x-1">
+                          <Package className="w-4 h-4 text-blue-500" />
+                          <span className="font-medium text-blue-600">
+                            {variant.total_ordered}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center space-x-1">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="font-medium text-green-600">
+                            {variant.total_approved}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center space-x-1">
+                          <AlertTriangle className="w-4 h-4 text-orange-500" />
+                          <span className="font-medium text-orange-600">
+                            {variant.total_pending}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center space-x-2">
+                          <Progress value={variant.completion_percentage} className="w-16" />
+                          <span className="text-xs text-gray-600 font-medium">
+                            {variant.completion_percentage}%
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Desglose por Entregas */}
       <Card>

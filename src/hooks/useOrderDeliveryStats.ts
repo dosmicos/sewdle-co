@@ -24,6 +24,17 @@ interface DeliveryBreakdown {
   delivery_notes: string;
 }
 
+interface VariantBreakdown {
+  product_name: string;
+  variant_size: string;
+  variant_color: string;
+  sku_variant: string;
+  total_ordered: number;
+  total_approved: number;
+  total_pending: number;
+  completion_percentage: number;
+}
+
 export const useOrderDeliveryStats = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -78,9 +89,35 @@ export const useOrderDeliveryStats = () => {
     }
   };
 
+  const getOrderVariantsBreakdown = async (orderId: string): Promise<VariantBreakdown[]> => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('get_order_variants_breakdown', { order_id_param: orderId });
+
+      if (error) {
+        console.error('Error fetching variants breakdown:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error getting variants breakdown:', error);
+      toast({
+        title: "Error al cargar variantes",
+        description: "No se pudieron cargar las variantes de la orden.",
+        variant: "destructive",
+      });
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     getOrderStats,
     getOrderDeliveriesBreakdown,
+    getOrderVariantsBreakdown,
     loading
   };
 };
