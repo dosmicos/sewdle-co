@@ -661,6 +661,52 @@ export const useDeliveries = () => {
     }
   };
 
+  const deleteDelivery = async (deliveryId: string) => {
+    setLoading(true);
+    try {
+      console.log('Deleting delivery:', deliveryId);
+
+      // First delete delivery items
+      const { error: itemsError } = await supabase
+        .from('delivery_items')
+        .delete()
+        .eq('delivery_id', deliveryId);
+
+      if (itemsError) {
+        console.error('Error deleting delivery items:', itemsError);
+        throw itemsError;
+      }
+
+      // Then delete the delivery
+      const { error: deliveryError } = await supabase
+        .from('deliveries')
+        .delete()
+        .eq('id', deliveryId);
+
+      if (deliveryError) {
+        console.error('Error deleting delivery:', deliveryError);
+        throw deliveryError;
+      }
+
+      toast({
+        title: "Entrega eliminada",
+        description: "La entrega ha sido eliminada correctamente.",
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting delivery:', error);
+      toast({
+        title: "Error al eliminar entrega",
+        description: error instanceof Error ? error.message : "No se pudo eliminar la entrega.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     createDelivery,
     fetchDeliveries,
@@ -671,6 +717,7 @@ export const useDeliveries = () => {
     syncApprovedInventoryWithShopify,
     getDeliveryStats,
     updateOrderStatusBasedOnDeliveries,
+    deleteDelivery,
     loading
   };
 };

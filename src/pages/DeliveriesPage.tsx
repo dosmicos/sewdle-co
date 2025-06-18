@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Filter, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Search, Filter, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -25,7 +25,7 @@ const DeliveriesPage = () => {
     rejected_deliveries: 0
   });
 
-  const { fetchDeliveries, getDeliveryStats, loading } = useDeliveries();
+  const { fetchDeliveries, getDeliveryStats, deleteDelivery, loading } = useDeliveries();
 
   useEffect(() => {
     loadDeliveries();
@@ -54,6 +54,14 @@ const DeliveriesPage = () => {
     setShowDeliveryForm(false);
     loadDeliveries();
     loadStats();
+  };
+
+  const handleDeleteDelivery = async (deliveryId: string) => {
+    const success = await deleteDelivery(deliveryId);
+    if (success) {
+      loadDeliveries();
+      loadStats();
+    }
   };
 
   // Extract unique workshops for the filter
@@ -269,13 +277,44 @@ const DeliveriesPage = () => {
                     <TableCell>{renderStatusBadge(delivery.status)}</TableCell>
                     <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewDeliveryDetails(delivery)}
-                      >
-                        Detalles
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewDeliveryDetails(delivery)}
+                        >
+                          Detalles
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar entrega?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Se eliminará permanentemente la entrega 
+                                <strong> {delivery.tracking_number}</strong> y todos sus datos relacionados.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDeleteDelivery(delivery.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
