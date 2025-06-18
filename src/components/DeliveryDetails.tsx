@@ -215,6 +215,11 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   const summaryStats = calculateSummaryStats();
   const qualityTotals = calculateQualityTotals();
 
+  // Check if the delivery has been processed (not pending or in_quality)
+  const isDeliveryProcessed = deliveryData.status === 'approved' || 
+                             deliveryData.status === 'rejected' || 
+                             deliveryData.status === 'partial_approved';
+
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       {/* Header */}
@@ -233,7 +238,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
       </div>
 
       {/* Summary Stats */}
-      {(deliveryData.status === 'approved' || deliveryData.status === 'partial_approved' || deliveryData.status === 'rejected') && (
+      {isDeliveryProcessed && (
         <Card className="p-4 bg-blue-50 border-blue-200">
           <h3 className="font-semibold text-blue-900 mb-2">Resumen de Revisión</h3>
           <div className="grid grid-cols-3 gap-4 text-center">
@@ -272,7 +277,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
           <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${deliveryData.status !== 'pending' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${isDeliveryProcessed ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
             <span className="text-sm">Revisión de Calidad</span>
           </div>
           <div className="flex-1 h-px bg-gray-300"></div>
@@ -384,7 +389,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Control de Calidad</h3>
             
-            {isQCLeader && deliveryData.status !== 'approved' && deliveryData.status !== 'rejected' ? (
+            {isQCLeader && !isDeliveryProcessed ? (
               <div className="space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
@@ -513,12 +518,22 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   </Button>
                 </div>
               </div>
-            ) : deliveryData.status === 'approved' || deliveryData.status === 'rejected' ? (
+            ) : isDeliveryProcessed ? (
               <div className="text-center py-8">
                 <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
                 <p className="text-gray-600">
-                  Esta entrega ya ha sido {deliveryData.status === 'approved' ? 'aprobada' : 'devuelta'}
+                  Esta entrega ya ha sido {
+                    deliveryData.status === 'approved' ? 'aprobada completamente' : 
+                    deliveryData.status === 'partial_approved' ? 'parcialmente aprobada' :
+                    'devuelta'
+                  }
                 </p>
+                {deliveryData.notes && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg text-left">
+                    <p className="text-sm text-gray-600 font-medium mb-1">Resumen:</p>
+                    <p className="text-sm text-gray-700">{deliveryData.notes}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
@@ -540,16 +555,16 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                 <p className="text-sm text-gray-700 mt-1">Entrega registrada en el sistema</p>
               </div>
               
-              {deliveryData.status !== 'pending' && (
+              {isDeliveryProcessed && (
                 <div className="p-3 border-l-4 border-green-500 bg-green-50">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Estado Actual</span>
                     <span className="text-sm text-gray-600">{new Date().toLocaleDateString()}</span>
                   </div>
                   <p className="text-sm text-gray-700 mt-1">
-                    {deliveryData.status === 'approved' ? 'Entrega aprobada' :
+                    {deliveryData.status === 'approved' ? 'Entrega aprobada completamente' :
                      deliveryData.status === 'rejected' ? 'Entrega rechazada' :
-                     deliveryData.status === 'in_quality' ? 'En proceso de revisión de calidad' :
+                     deliveryData.status === 'partial_approved' ? 'Entrega parcialmente aprobada' :
                      'Estado actualizado'}
                   </p>
                 </div>
