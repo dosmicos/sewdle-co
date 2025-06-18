@@ -57,7 +57,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     const success = await processQualityReview(delivery.id, qualityData);
     
     if (success) {
-      console.log('Quality review processed successfully, forcing page reload...');
+      console.log('Quality review processed successfully, reloading delivery details...');
       
       // Reset the form first
       setQualityData({
@@ -66,8 +66,8 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         generalNotes: ''
       });
       
-      // Force a complete reload by refreshing the page
-      window.location.reload();
+      // Instead of forcing a page reload, just reload the delivery details
+      await loadDeliveryDetails();
     } else {
       console.log('Quality review failed');
     }
