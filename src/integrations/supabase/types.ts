@@ -737,6 +737,31 @@ export type Database = {
           created_at: string
         }[]
       }
+      get_order_deliveries_breakdown: {
+        Args: { order_id_param: string }
+        Returns: {
+          delivery_id: string
+          tracking_number: string
+          delivery_date: string
+          delivery_status: string
+          workshop_name: string
+          items_delivered: number
+          items_approved: number
+          items_defective: number
+          delivery_notes: string
+        }[]
+      }
+      get_order_delivery_stats: {
+        Args: { order_id_param: string }
+        Returns: {
+          total_ordered: number
+          total_delivered: number
+          total_approved: number
+          total_defective: number
+          total_pending: number
+          completion_percentage: number
+        }[]
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: string
