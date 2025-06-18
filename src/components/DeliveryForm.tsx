@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,13 +12,13 @@ import { useDeliveries } from '@/hooks/useDeliveries';
 
 interface DeliveryFormProps {
   onClose: () => void;
-  onDeliveryCreated?: () => void; // Nueva prop para notificar cuando se crea la entrega
+  onDeliveryCreated?: () => void;
 }
 
 interface FormData {
   orderId: string;
   workshopId: string;
-  products: Record<string, number>; // Simplificado: orderItemId -> quantity
+  products: Record<string, number>;
   general: {
     observations: string;
   };
@@ -55,7 +56,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
     setSelectedOrder(order || null);
     
     if (order) {
-      // Obtener workshop_id de la primera asignación
       const workshopId = order.workshop_assignments?.[0]?.workshop_id || '';
       
       setFormData(prev => ({
@@ -114,7 +114,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
   const handleSubmit = async () => {
     try {
-      // Preparar los items para la entrega
       const deliveryItems = Object.entries(formData.products)
         .filter(([_, quantity]) => quantity > 0)
         .map(([orderItemId, quantity]) => ({
@@ -136,7 +135,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
       await createDelivery(deliveryData);
       
-      // Notificar al componente padre que se creó la entrega
       if (onDeliveryCreated) {
         onDeliveryCreated();
       }
@@ -383,18 +381,18 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         <div className="px-6 py-4 border-b">
           <div className="flex items-center space-x-4">
             {[1, 2, 3].map((step) => (
-              <React.Fragment key={step}>
+              <div key={step} className="flex items-center">
                 <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
                   step <= currentStep ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'
                 }`}>
                   {step}
                 </div>
                 {step < 3 && (
-                  <div className={`flex-1 h-1 rounded ${
+                  <div className={`flex-1 h-1 rounded ml-4 ${
                     step < currentStep ? 'bg-blue-500' : 'bg-gray-200'
-                  }`} />
+                  }`} style={{ width: '60px' }} />
                 )}
-              </React.Fragment>
+              </div>
             ))}
           </div>
           <div className="flex justify-between mt-2 text-xs text-gray-600">
