@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -342,6 +343,7 @@ const DeliveriesPage = () => {
       {showDeliveryForm && (
         <DeliveryForm 
           onClose={() => setShowDeliveryForm(false)}
+          onDeliveryCreated={handleDeliveryCreated}
         />
       )}
     </div>

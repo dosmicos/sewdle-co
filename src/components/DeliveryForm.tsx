@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +11,7 @@ import { useDeliveries } from '@/hooks/useDeliveries';
 
 interface DeliveryFormProps {
   onClose: () => void;
+  onDeliveryCreated?: () => void; // Nueva prop para notificar cuando se crea la entrega
 }
 
 interface FormData {
@@ -24,7 +24,7 @@ interface FormData {
   files: FileList | null;
 }
 
-const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
+const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
     orderId: '',
@@ -135,6 +135,12 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose }) => {
       };
 
       await createDelivery(deliveryData);
+      
+      // Notificar al componente padre que se creó la entrega
+      if (onDeliveryCreated) {
+        onDeliveryCreated();
+      }
+      
       onClose();
     } catch (error) {
       console.error('Error creating delivery:', error);
