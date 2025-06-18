@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +11,7 @@ export interface DeliveryItem {
 
 export interface CreateDeliveryData {
   orderId: string;
-  workshopId: string;
+  workshopId: string | null; // Permitir null
   deliveryDate?: string;
   recipientName?: string;
   recipientPhone?: string;
@@ -42,7 +41,6 @@ export const useDeliveries = () => {
     try {
       console.log('Creating delivery with data:', deliveryData);
 
-      // Verificar autenticación primero
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
@@ -57,12 +55,10 @@ export const useDeliveries = () => {
 
       console.log('User authenticated:', session.user.id);
 
-      // Validar que hay items válidos
       if (deliveryData.items.length === 0) {
         throw new Error('Debe agregar al menos un item a la entrega');
       }
 
-      // Verificar si podemos acceder a la tabla deliveries primero
       console.log('Testing deliveries table access...');
       const { data: testAccess, error: accessError } = await supabase
         .from('deliveries')
@@ -76,7 +72,6 @@ export const useDeliveries = () => {
 
       console.log('Deliveries table access confirmed');
 
-      // Generar número de tracking único
       const { data: trackingNumber, error: trackingError } = await supabase
         .rpc('generate_delivery_number');
 
@@ -87,11 +82,10 @@ export const useDeliveries = () => {
 
       console.log('Generated tracking number:', trackingNumber);
 
-      // Preparar datos de la entrega con valores explícitos
       const deliveryInsertData = {
         tracking_number: trackingNumber,
         order_id: deliveryData.orderId,
-        workshop_id: deliveryData.workshopId,
+        workshop_id: deliveryData.workshopId, // Esto será null si no hay taller asignado
         delivery_date: deliveryData.deliveryDate || new Date().toISOString().split('T')[0],
         delivered_by: session.user.id,
         recipient_name: deliveryData.recipientName || '',
@@ -103,7 +97,6 @@ export const useDeliveries = () => {
 
       console.log('Inserting delivery with data:', deliveryInsertData);
 
-      // Intentar la inserción con manejo de errores más específico
       const { data: delivery, error: deliveryError } = await supabase
         .from('deliveries')
         .insert([deliveryInsertData])
@@ -119,7 +112,6 @@ export const useDeliveries = () => {
           code: deliveryError.code
         });
 
-        // Error específico para RLS
         if (deliveryError.message.includes('row-level security')) {
           throw new Error('Error de permisos: No tienes autorización para crear entregas. Contacta al administrador.');
         }
@@ -129,7 +121,6 @@ export const useDeliveries = () => {
 
       console.log('Created delivery:', delivery);
 
-      // Crear items de la entrega
       console.log('Creating delivery items:', deliveryData.items);
       
       const deliveryItems = deliveryData.items.map(item => ({
@@ -149,7 +140,6 @@ export const useDeliveries = () => {
       if (itemsError) {
         console.error('Error creating delivery items:', itemsError);
         
-        // Si falla la creación de items, intentar limpiar la entrega creada
         await supabase.from('deliveries').delete().eq('id', delivery.id);
         
         if (itemsError.message.includes('row-level security')) {
@@ -326,7 +316,6 @@ export const useDeliveries = () => {
       console.log('Processing quality review for delivery:', deliveryId);
       console.log('Quality data:', qualityData);
 
-      // First, get the delivery items to update them
       const { data: delivery, error: fetchError } = await supabase
         .from('deliveries')
         .select(`
@@ -350,7 +339,6 @@ export const useDeliveries = () => {
 
       console.log('Current delivery data:', delivery);
 
-      // Process each variant/item
       const itemUpdates = [];
       let totalApproved = 0;
       let totalDefective = 0;
@@ -367,7 +355,6 @@ export const useDeliveries = () => {
 
           console.log(`Item ${itemIndex}: Approved: ${variantData.approved}, Defective: ${variantData.defective}`);
 
-          // Determinar el estado del item basado en las cantidades
           let status = 'pending';
           let notes = variantData.reason || '';
 
@@ -396,7 +383,6 @@ export const useDeliveries = () => {
 
       console.log('Totals - Delivered:', totalDelivered, 'Approved:', totalApproved, 'Defective:', totalDefective);
 
-      // Update all delivery items with detailed status
       for (const update of itemUpdates) {
         const { error: updateError } = await supabase
           .from('delivery_items')
@@ -413,29 +399,23 @@ export const useDeliveries = () => {
         console.log('Updated delivery item:', update.id, 'with status:', update.quality_status);
       }
 
-      // Determine overall delivery status based on results
       let deliveryStatus = 'in_quality'; // Default status
       let deliveryNotes = '';
 
       console.log('Determining delivery status...');
 
-      // Si hay datos para procesar
       if (totalApproved > 0 || totalDefective > 0) {
         if (totalDefective > 0 && totalApproved === 0) {
-          // Solo defectuosas = devuelto
           deliveryStatus = 'rejected';
           deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
         } else if (totalDefective > 0 && totalApproved > 0) {
-          // Mixto = parcialmente aprobado
           deliveryStatus = 'partial_approved';
           deliveryNotes = `Entrega parcial: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
         } else if (totalApproved > 0 && totalDefective === 0) {
-          // Solo aprobadas = aprobado
           deliveryStatus = 'approved';
           deliveryNotes = `Entrega aprobada: ${totalApproved} unidades aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
         }
       } else {
-        // Sin procesamiento = mantener en proceso
         deliveryStatus = 'in_quality';
         deliveryNotes = `Entrega en revisión de calidad. ${qualityData.generalNotes || ''}`;
       }
@@ -443,7 +423,6 @@ export const useDeliveries = () => {
       console.log('Determined delivery status:', deliveryStatus);
       console.log('Delivery notes:', deliveryNotes);
 
-      // Update delivery status with detailed notes
       const { error: deliveryUpdateError } = await supabase
         .from('deliveries')
         .update({
@@ -459,12 +438,10 @@ export const useDeliveries = () => {
 
       console.log('Successfully updated delivery status to:', deliveryStatus);
 
-      // If there are approved items, sync with Shopify inventory
       if (totalApproved > 0) {
         await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
       }
 
-      // Después de procesar la entrega, verificar y actualizar el estado de la orden
       await updateOrderStatusBasedOnDeliveries(delivery.order_id);
 
       toast({
@@ -486,10 +463,8 @@ export const useDeliveries = () => {
     }
   };
 
-  // Nueva función para actualizar el estado de la orden basado en las entregas
   const updateOrderStatusBasedOnDeliveries = async (orderId: string) => {
     try {
-      // Obtener información completa de la orden y sus entregas
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
@@ -518,30 +493,25 @@ export const useDeliveries = () => {
         return;
       }
 
-      // Calcular estadísticas de la orden
       let totalOrdered = 0;
       let totalDelivered = 0;
       let totalApproved = 0;
       let totalDefective = 0;
       let totalPending = 0;
 
-      // Calcular totales por item de la orden
       orderData.order_items.forEach(orderItem => {
         totalOrdered += orderItem.quantity;
         
-        // Buscar entregas relacionadas a este item
         orderData.deliveries.forEach(delivery => {
           delivery.delivery_items.forEach(deliveryItem => {
             if (deliveryItem.order_item_id === orderItem.id) {
               totalDelivered += deliveryItem.quantity_delivered;
               
-              // Contar según el estado de calidad
               if (deliveryItem.quality_status === 'approved') {
                 totalApproved += deliveryItem.quantity_delivered;
               } else if (deliveryItem.quality_status === 'rejected') {
                 totalDefective += deliveryItem.quantity_delivered;
               } else if (deliveryItem.quality_status === 'partial_approved') {
-                // Extraer cantidades de las notas
                 const notes = deliveryItem.notes || '';
                 const approvedMatch = notes.match(/Aprobadas: (\d+)/);
                 const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
@@ -556,25 +526,20 @@ export const useDeliveries = () => {
 
       totalPending = totalOrdered - totalApproved - totalDefective;
 
-      // Determinar el estado de la orden
       let orderStatus = 'pending';
       let orderNotes = '';
 
       if (totalPending === 0 && totalDefective === 0 && totalApproved === totalOrdered) {
-        // Todas las unidades fueron entregadas y aprobadas
         orderStatus = 'completed';
         orderNotes = `Orden completada: ${totalApproved}/${totalOrdered} unidades aprobadas.`;
       } else if (totalPending === 0 && totalDefective > 0) {
-        // Todas fueron entregadas pero hay defectuosas
         orderStatus = 'partial_completed';
         orderNotes = `Orden parcialmente completada: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
       } else if (totalDelivered > 0) {
-        // Hay entregas en proceso
         orderStatus = 'in_progress';
         orderNotes = `Orden en progreso: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
       }
 
-      // Actualizar la orden solo si el estado ha cambiado
       if (orderStatus !== orderData.status || orderNotes !== orderData.notes) {
         const { error: updateError } = await supabase
           .from('orders')
@@ -600,7 +565,6 @@ export const useDeliveries = () => {
     try {
       console.log('Syncing approved inventory with Shopify:', approvedItems);
       
-      // Agrupar por variante para sumar cantidades
       const variantUpdates = new Map();
       
       approvedItems.forEach(item => {
@@ -610,9 +574,7 @@ export const useDeliveries = () => {
         }
       });
 
-      // Actualizar stock local primero
       for (const [variantId, quantity] of variantUpdates) {
-        // Get current stock first
         const { data: currentVariant, error: fetchError } = await supabase
           .from('product_variants')
           .select('stock_quantity')
@@ -639,10 +601,6 @@ export const useDeliveries = () => {
           console.log(`Updated local stock for variant ${variantId}: +${quantity} (new total: ${newStockQuantity})`);
         }
       }
-
-      // TODO: Implementar sincronización real con Shopify API
-      // Esta sería la llamada a Shopify para actualizar el inventario
-      // await updateShopifyInventory(variantUpdates);
 
       console.log('Local inventory updated successfully');
       
@@ -688,7 +646,6 @@ export const useDeliveries = () => {
     try {
       console.log('Deleting delivery:', deliveryId);
 
-      // First delete delivery items
       const { error: itemsError } = await supabase
         .from('delivery_items')
         .delete()
@@ -699,7 +656,6 @@ export const useDeliveries = () => {
         throw itemsError;
       }
 
-      // Then delete the delivery
       const { error: deliveryError } = await supabase
         .from('deliveries')
         .delete()

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,12 +57,12 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
     setSelectedOrder(order || null);
     
     if (order) {
-      const workshopId = order.workshop_assignments?.[0]?.workshop_id || '';
+      const workshopId = order.workshop_assignments?.[0]?.workshop_id || null;
       
       setFormData(prev => ({
         ...prev,
         orderId,
-        workshopId,
+        workshopId: workshopId || '',
         products: {}
       }));
     }
@@ -128,7 +129,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
       const deliveryData = {
         orderId: formData.orderId,
-        workshopId: formData.workshopId,
+        workshopId: formData.workshopId || null, // Enviar null en lugar de cadena vacía
         notes: formData.general.observations,
         items: deliveryItems
       };
@@ -439,3 +440,4 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 };
 
 export default DeliveryForm;
+
