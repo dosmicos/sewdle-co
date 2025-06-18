@@ -762,6 +762,19 @@ export type Database = {
           completion_percentage: number
         }[]
       }
+      get_order_variants_breakdown: {
+        Args: { order_id_param: string }
+        Returns: {
+          product_name: string
+          variant_size: string
+          variant_color: string
+          sku_variant: string
+          total_ordered: number
+          total_approved: number
+          total_pending: number
+          completion_percentage: number
+        }[]
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: string

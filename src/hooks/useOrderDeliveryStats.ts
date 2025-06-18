@@ -92,8 +92,10 @@ export const useOrderDeliveryStats = () => {
   const getOrderVariantsBreakdown = async (orderId: string): Promise<VariantBreakdown[]> => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .rpc('get_order_variants_breakdown', { order_id_param: orderId });
+      // Llamamos directamente a la función RPC con el tipo correcto
+      const { data, error } = await supabase.rpc('get_order_variants_breakdown', { 
+        order_id_param: orderId 
+      }) as { data: VariantBreakdown[] | null, error: any };
 
       if (error) {
         console.error('Error fetching variants breakdown:', error);
