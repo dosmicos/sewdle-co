@@ -34,7 +34,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   }, [delivery?.id]);
 
   const loadDeliveryDetails = async () => {
+    console.log('Loading delivery details for ID:', delivery.id);
     const details = await fetchDeliveryById(delivery.id);
+    console.log('Loaded delivery details:', details);
     setDeliveryData(details);
   };
 
@@ -53,14 +55,18 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
     const success = await processQualityReview(delivery.id, qualityData);
     if (success) {
-      // Reload the delivery details to show updated status
-      await loadDeliveryDetails();
-      // Reset the form
+      console.log('Quality review processed successfully, reloading delivery details...');
+      // Reset the form first
       setQualityData({
         variants: {},
         evidenceFiles: null,
         generalNotes: ''
       });
+      
+      // Force reload the delivery details to show updated status
+      await loadDeliveryDetails();
+      
+      console.log('Delivery details reloaded after quality review');
     }
   };
 
@@ -219,6 +225,8 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   const isDeliveryProcessed = deliveryData.status === 'approved' || 
                              deliveryData.status === 'rejected' || 
                              deliveryData.status === 'partial_approved';
+
+  console.log('Delivery status:', deliveryData.status, 'Is processed:', isDeliveryProcessed);
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
