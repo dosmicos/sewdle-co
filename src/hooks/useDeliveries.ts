@@ -335,7 +335,8 @@ export const useDeliveries = () => {
             quantity_delivered,
             order_item_id,
             order_items (
-              product_variant_id
+              product_variant_id,
+              quantity
             )
           )
         `)
@@ -404,24 +405,30 @@ export const useDeliveries = () => {
         }
       }
 
-      // Determine overall delivery status based on results
-      let deliveryStatus = 'approved';
-      if (totalApproved > 0 && totalDefective > 0) {
-        deliveryStatus = 'partial_approved';
-      } else if (totalApproved > 0 && totalDefective === 0) {
-        deliveryStatus = 'approved';
-      } else if (totalDefective > 0 && totalApproved === 0) {
+      // Determine overall delivery status based on results - NUEVA LÓGICA
+      let deliveryStatus = 'pending';
+      let deliveryNotes = '';
+
+      if (totalDefective > 0 && totalApproved === 0) {
+        // Solo defectuosas = devuelto
         deliveryStatus = 'rejected';
+        deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+      } else if (totalDefective > 0 && totalApproved > 0) {
+        // Mixto = parcialmente aprobado
+        deliveryStatus = 'partial_approved';
+        deliveryNotes = `Entrega parcial: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+      } else if (totalApproved > 0 && totalDefective === 0) {
+        // Solo aprobadas = aprobado
+        deliveryStatus = 'approved';
+        deliveryNotes = `Entrega aprobada: ${totalApproved} unidades aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
       }
 
-      // Update delivery status and notes with summary
-      const summaryNotes = `Revisión completada: ${totalApproved} aprobadas, ${totalDefective} defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-
+      // Update delivery status with detailed notes
       const { error: deliveryUpdateError } = await supabase
         .from('deliveries')
         .update({
           status: deliveryStatus,
-          notes: summaryNotes
+          notes: deliveryNotes
         })
         .eq('id', deliveryId);
 
@@ -435,9 +442,12 @@ export const useDeliveries = () => {
         await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
       }
 
+      // Después de procesar la entrega, verificar y actualizar el estado de la orden
+      await updateOrderStatusBasedOnDeliveries(delivery.order_id);
+
       toast({
         title: "Revisión de calidad procesada",
-        description: `${totalApproved} productos aprobados, ${totalDefective} defectuosos. ${totalApproved > 0 ? 'Inventario sincronizado con Shopify.' : ''}`,
+        description: `${totalApproved} productos aprobados, ${totalDefective} devueltos. ${totalApproved > 0 ? 'Inventario sincronizado.' : ''}`,
       });
 
       return true;
@@ -451,6 +461,116 @@ export const useDeliveries = () => {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Nueva función para actualizar el estado de la orden basado en las entregas
+  const updateOrderStatusBasedOnDeliveries = async (orderId: string) => {
+    try {
+      // Obtener información completa de la orden y sus entregas
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            quantity,
+            product_variant_id
+          ),
+          deliveries (
+            id,
+            status,
+            delivery_items (
+              quantity_delivered,
+              quality_status,
+              notes,
+              order_item_id
+            )
+          )
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (orderError) {
+        console.error('Error fetching order data:', orderError);
+        return;
+      }
+
+      // Calcular estadísticas de la orden
+      let totalOrdered = 0;
+      let totalDelivered = 0;
+      let totalApproved = 0;
+      let totalDefective = 0;
+      let totalPending = 0;
+
+      // Calcular totales por item de la orden
+      orderData.order_items.forEach(orderItem => {
+        totalOrdered += orderItem.quantity;
+        
+        // Buscar entregas relacionadas a este item
+        orderData.deliveries.forEach(delivery => {
+          delivery.delivery_items.forEach(deliveryItem => {
+            if (deliveryItem.order_item_id === orderItem.id) {
+              totalDelivered += deliveryItem.quantity_delivered;
+              
+              // Contar según el estado de calidad
+              if (deliveryItem.quality_status === 'approved') {
+                totalApproved += deliveryItem.quantity_delivered;
+              } else if (deliveryItem.quality_status === 'rejected') {
+                totalDefective += deliveryItem.quantity_delivered;
+              } else if (deliveryItem.quality_status === 'partial_approved') {
+                // Extraer cantidades de las notas
+                const notes = deliveryItem.notes || '';
+                const approvedMatch = notes.match(/Aprobadas: (\d+)/);
+                const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
+                
+                if (approvedMatch) totalApproved += parseInt(approvedMatch[1]);
+                if (defectiveMatch) totalDefective += parseInt(defectiveMatch[1]);
+              }
+            }
+          });
+        });
+      });
+
+      totalPending = totalOrdered - totalApproved - totalDefective;
+
+      // Determinar el estado de la orden
+      let orderStatus = 'pending';
+      let orderNotes = '';
+
+      if (totalPending === 0 && totalDefective === 0 && totalApproved === totalOrdered) {
+        // Todas las unidades fueron entregadas y aprobadas
+        orderStatus = 'completed';
+        orderNotes = `Orden completada: ${totalApproved}/${totalOrdered} unidades aprobadas.`;
+      } else if (totalPending === 0 && totalDefective > 0) {
+        // Todas fueron entregadas pero hay defectuosas
+        orderStatus = 'partial_completed';
+        orderNotes = `Orden parcialmente completada: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
+      } else if (totalDelivered > 0) {
+        // Hay entregas en proceso
+        orderStatus = 'in_progress';
+        orderNotes = `Orden en progreso: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
+      }
+
+      // Actualizar la orden solo si el estado ha cambiado
+      if (orderStatus !== orderData.status || orderNotes !== orderData.notes) {
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({
+            status: orderStatus,
+            notes: orderNotes
+          })
+          .eq('id', orderId);
+
+        if (updateError) {
+          console.error('Error updating order status:', updateError);
+        } else {
+          console.log(`Order ${orderId} status updated to: ${orderStatus}`);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error updating order status based on deliveries:', error);
     }
   };
 
@@ -550,6 +670,7 @@ export const useDeliveries = () => {
     processQualityReview,
     syncApprovedInventoryWithShopify,
     getDeliveryStats,
+    updateOrderStatusBasedOnDeliveries,
     loading
   };
 };
