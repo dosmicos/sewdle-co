@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -347,6 +348,8 @@ export const useDeliveries = () => {
         throw fetchError;
       }
 
+      console.log('Current delivery data:', delivery);
+
       // Process each variant/item
       const itemUpdates = [];
       let totalApproved = 0;
@@ -361,6 +364,8 @@ export const useDeliveries = () => {
           totalDelivered += deliveryItem.quantity_delivered;
           totalApproved += variantData.approved;
           totalDefective += variantData.defective;
+
+          console.log(`Item ${itemIndex}: Approved: ${variantData.approved}, Defective: ${variantData.defective}`);
 
           // Determinar el estado del item basado en las cantidades
           let status = 'pending';
@@ -389,6 +394,8 @@ export const useDeliveries = () => {
         }
       }
 
+      console.log('Totals - Delivered:', totalDelivered, 'Approved:', totalApproved, 'Defective:', totalDefective);
+
       // Update all delivery items with detailed status
       for (const update of itemUpdates) {
         const { error: updateError } = await supabase
@@ -403,11 +410,14 @@ export const useDeliveries = () => {
           console.error('Error updating delivery item:', updateError);
           throw updateError;
         }
+        console.log('Updated delivery item:', update.id, 'with status:', update.quality_status);
       }
 
-      // Determine overall delivery status based on results - NUEVA LÓGICA
+      // Determine overall delivery status based on results
       let deliveryStatus = 'pending';
       let deliveryNotes = '';
+
+      console.log('Determining delivery status...');
 
       if (totalDefective > 0 && totalApproved === 0) {
         // Solo defectuosas = devuelto
@@ -421,7 +431,14 @@ export const useDeliveries = () => {
         // Solo aprobadas = aprobado
         deliveryStatus = 'approved';
         deliveryNotes = `Entrega aprobada: ${totalApproved} unidades aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+      } else {
+        // Sin procesamiento = mantener en proceso
+        deliveryStatus = 'in_quality';
+        deliveryNotes = `Entrega en revisión de calidad. ${qualityData.generalNotes || ''}`;
       }
+
+      console.log('Determined delivery status:', deliveryStatus);
+      console.log('Delivery notes:', deliveryNotes);
 
       // Update delivery status with detailed notes
       const { error: deliveryUpdateError } = await supabase
@@ -436,6 +453,8 @@ export const useDeliveries = () => {
         console.error('Error updating delivery status:', deliveryUpdateError);
         throw deliveryUpdateError;
       }
+
+      console.log('Successfully updated delivery status to:', deliveryStatus);
 
       // If there are approved items, sync with Shopify inventory
       if (totalApproved > 0) {

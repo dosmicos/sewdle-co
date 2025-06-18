@@ -53,9 +53,12 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
       return;
     }
 
+    console.log('Validation passed, processing quality review...');
     const success = await processQualityReview(delivery.id, qualityData);
+    
     if (success) {
       console.log('Quality review processed successfully, reloading delivery details...');
+      
       // Reset the form first
       setQualityData({
         variants: {},
@@ -63,10 +66,14 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         generalNotes: ''
       });
       
-      // Force reload the delivery details to show updated status
-      await loadDeliveryDetails();
-      
-      console.log('Delivery details reloaded after quality review');
+      // Wait a moment before reloading to ensure database is updated
+      setTimeout(async () => {
+        console.log('Reloading delivery details after timeout...');
+        await loadDeliveryDetails();
+        console.log('Delivery details reloaded after quality review');
+      }, 1000);
+    } else {
+      console.log('Quality review failed');
     }
   };
 
