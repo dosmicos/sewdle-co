@@ -57,7 +57,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     const success = await processQualityReview(delivery.id, qualityData);
     
     if (success) {
-      console.log('Quality review processed successfully, reloading delivery details...');
+      console.log('Quality review processed successfully, forcing page reload...');
       
       // Reset the form first
       setQualityData({
@@ -66,12 +66,8 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         generalNotes: ''
       });
       
-      // Wait a moment before reloading to ensure database is updated
-      setTimeout(async () => {
-        console.log('Reloading delivery details after timeout...');
-        await loadDeliveryDetails();
-        console.log('Delivery details reloaded after quality review');
-      }, 1000);
+      // Force a complete reload by refreshing the page
+      window.location.reload();
     } else {
       console.log('Quality review failed');
     }

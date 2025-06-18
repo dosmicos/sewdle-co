@@ -414,23 +414,26 @@ export const useDeliveries = () => {
       }
 
       // Determine overall delivery status based on results
-      let deliveryStatus = 'pending';
+      let deliveryStatus = 'in_quality'; // Default status
       let deliveryNotes = '';
 
       console.log('Determining delivery status...');
 
-      if (totalDefective > 0 && totalApproved === 0) {
-        // Solo defectuosas = devuelto
-        deliveryStatus = 'rejected';
-        deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-      } else if (totalDefective > 0 && totalApproved > 0) {
-        // Mixto = parcialmente aprobado
-        deliveryStatus = 'partial_approved';
-        deliveryNotes = `Entrega parcial: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-      } else if (totalApproved > 0 && totalDefective === 0) {
-        // Solo aprobadas = aprobado
-        deliveryStatus = 'approved';
-        deliveryNotes = `Entrega aprobada: ${totalApproved} unidades aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+      // Si hay datos para procesar
+      if (totalApproved > 0 || totalDefective > 0) {
+        if (totalDefective > 0 && totalApproved === 0) {
+          // Solo defectuosas = devuelto
+          deliveryStatus = 'rejected';
+          deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+        } else if (totalDefective > 0 && totalApproved > 0) {
+          // Mixto = parcialmente aprobado
+          deliveryStatus = 'partial_approved';
+          deliveryNotes = `Entrega parcial: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+        } else if (totalApproved > 0 && totalDefective === 0) {
+          // Solo aprobadas = aprobado
+          deliveryStatus = 'approved';
+          deliveryNotes = `Entrega aprobada: ${totalApproved} unidades aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+        }
       } else {
         // Sin procesamiento = mantener en proceso
         deliveryStatus = 'in_quality';
