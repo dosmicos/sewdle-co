@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +31,16 @@ export interface QualityReviewData {
   variants: Record<string, { approved: number; defective: number; reason: string }>;
   evidenceFiles: FileList | null;
   generalNotes: string;
+}
+
+interface ItemUpdateData {
+  id: string;
+  quality_status: string;
+  notes: string;
+  quantity_approved: number;
+  quantity_defective: number;
+  order_item_id: string;
+  product_variant_id: string | null;
 }
 
 export const useDeliveries = () => {
@@ -345,7 +356,7 @@ export const useDeliveries = () => {
 
       console.log('Current delivery data:', delivery);
 
-      const itemUpdates = [];
+      const itemUpdates: ItemUpdateData[] = [];
       let totalApproved = 0;
       let totalDefective = 0;
       let totalDelivered = 0;
