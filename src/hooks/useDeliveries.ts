@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -334,7 +335,16 @@ export const useDeliveries = () => {
         .single();
 
       if (fetchError) {
+        console.error('Error fetching delivery:', fetchError);
         throw fetchError;
+      }
+
+      if (!delivery) {
+        throw new Error('No se encontró la entrega');
+      }
+
+      if (!delivery.delivery_items || !Array.isArray(delivery.delivery_items)) {
+        throw new Error('No se encontraron items en la entrega');
       }
 
       console.log('Current delivery data:', delivery);
@@ -345,45 +355,76 @@ export const useDeliveries = () => {
       let totalDelivered = 0;
 
       for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
+        if (!variantData || typeof variantData !== 'object') {
+          console.log(`Skipping invalid variant data for ${variantKey}`);
+          continue;
+        }
+
         const itemIndex = parseInt(variantKey.replace('item-', ''));
+        
+        if (isNaN(itemIndex) || itemIndex < 0 || itemIndex >= delivery.delivery_items.length) {
+          console.log(`Invalid item index ${itemIndex} for variant ${variantKey}`);
+          continue;
+        }
+
         const deliveryItem = delivery.delivery_items[itemIndex];
         
-        if (deliveryItem && (variantData.approved > 0 || variantData.defective > 0)) {
-          totalDelivered += deliveryItem.quantity_delivered;
-          totalApproved += variantData.approved;
-          totalDefective += variantData.defective;
+        if (!deliveryItem) {
+          console.log(`No delivery item found at index ${itemIndex}`);
+          continue;
+        }
 
-          console.log(`Item ${itemIndex}: Approved: ${variantData.approved}, Defective: ${variantData.defective}`);
+        const approved = Number(variantData.approved) || 0;
+        const defective = Number(variantData.defective) || 0;
+        
+        if (approved > 0 || defective > 0) {
+          totalDelivered += deliveryItem.quantity_delivered || 0;
+          totalApproved += approved;
+          totalDefective += defective;
+
+          console.log(`Item ${itemIndex}: Approved: ${approved}, Defective: ${defective}`);
 
           let status = 'pending';
           let notes = variantData.reason || '';
 
-          if (variantData.approved > 0 && variantData.defective > 0) {
+          if (approved > 0 && defective > 0) {
             status = 'partial_approved';
-            notes = `Aprobadas: ${variantData.approved}, Defectuosas: ${variantData.defective}. ${notes}`;
-          } else if (variantData.approved > 0 && variantData.defective === 0) {
+            notes = `Aprobadas: ${approved}, Defectuosas: ${defective}. ${notes}`;
+          } else if (approved > 0 && defective === 0) {
             status = 'approved';
-            notes = `Aprobadas: ${variantData.approved}. ${notes}`;
-          } else if (variantData.defective > 0 && variantData.approved === 0) {
+            notes = `Aprobadas: ${approved}. ${notes}`;
+          } else if (defective > 0 && approved === 0) {
             status = 'rejected';
-            notes = `Defectuosas: ${variantData.defective}. ${notes}`;
+            notes = `Defectuosas: ${defective}. ${notes}`;
           }
 
           itemUpdates.push({
             id: deliveryItem.id,
             quality_status: status,
             notes: notes,
-            quantity_approved: variantData.approved,
-            quantity_defective: variantData.defective,
+            quantity_approved: approved,
+            quantity_defective: defective,
             order_item_id: deliveryItem.order_item_id,
-            product_variant_id: deliveryItem.order_items?.product_variant_id
+            product_variant_id: deliveryItem.order_items?.product_variant_id || null
           });
         }
       }
 
       console.log('Totals - Delivered:', totalDelivered, 'Approved:', totalApproved, 'Defective:', totalDefective);
 
+      if (itemUpdates.length === 0) {
+        throw new Error('No se encontraron elementos válidos para procesar');
+      }
+
+      // Update delivery items
       for (const update of itemUpdates) {
+        if (!update.id) {
+          console.error('Missing delivery item ID:', update);
+          continue;
+        }
+
+        console.log('Updating delivery item:', update.id, 'with status:', update.quality_status);
+        
         const { error: updateError } = await supabase
           .from('delivery_items')
           .update({
@@ -393,13 +434,15 @@ export const useDeliveries = () => {
           .eq('id', update.id);
 
         if (updateError) {
-          console.error('Error updating delivery item:', updateError);
-          throw updateError;
+          console.error('Error updating delivery item:', update.id, updateError);
+          throw new Error(`Error al actualizar item de entrega: ${updateError.message}`);
         }
-        console.log('Updated delivery item:', update.id, 'with status:', update.quality_status);
+        
+        console.log('Successfully updated delivery item:', update.id);
       }
 
-      let deliveryStatus = 'in_quality'; // Default status
+      // Determine delivery status
+      let deliveryStatus = 'in_quality';
       let deliveryNotes = '';
 
       console.log('Determining delivery status...');
@@ -433,16 +476,28 @@ export const useDeliveries = () => {
 
       if (deliveryUpdateError) {
         console.error('Error updating delivery status:', deliveryUpdateError);
-        throw deliveryUpdateError;
+        throw new Error(`Error al actualizar estado de entrega: ${deliveryUpdateError.message}`);
       }
 
       console.log('Successfully updated delivery status to:', deliveryStatus);
 
+      // Sync inventory if items were approved
       if (totalApproved > 0) {
-        await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
+        try {
+          await syncApprovedInventoryWithShopify(itemUpdates.filter(item => (item.quantity_approved || 0) > 0));
+        } catch (syncError) {
+          console.error('Error syncing inventory:', syncError);
+          // Don't fail the entire process if inventory sync fails
+        }
       }
 
-      await updateOrderStatusBasedOnDeliveries(delivery.order_id);
+      // Update order status
+      try {
+        await updateOrderStatusBasedOnDeliveries(delivery.order_id);
+      } catch (orderError) {
+        console.error('Error updating order status:', orderError);
+        // Don't fail the entire process if order update fails
+      }
 
       toast({
         title: "Revisión de calidad procesada",
