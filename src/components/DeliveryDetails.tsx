@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -154,17 +153,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
     if (!hasValidData) {
       alert('Por favor, ingresa las cantidades aprobadas y/o defectuosas para al menos un item.');
-      return;
-    }
-
-    // Validate that reviewed quantities match delivered quantities
-    const quantityMismatches = getQuantityMismatches();
-    if (quantityMismatches.length > 0) {
-      const mismatchDetails = quantityMismatches.map(item => 
-        `${item.productName}: ${item.reviewed} revisadas de ${item.delivered} entregadas`
-      ).join('\n');
-      
-      alert(`Error: Las cantidades revisadas no coinciden con las entregadas:\n\n${mismatchDetails}\n\nPor favor, ajusta las cantidades antes de continuar.`);
       return;
     }
 
@@ -472,27 +460,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   </p>
                 </div>
 
-                {/* Quantity Validation Alert */}
-                {quantityMismatches.length > 0 && (
-                  <Alert variant="destructive" className="border-red-200 bg-red-50">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Error de Cantidades:</strong> Las cantidades revisadas no coinciden con las entregadas:
-                      <ul className="mt-2 ml-4 list-disc">
-                        {quantityMismatches.map((item, index) => (
-                          <li key={index} className="text-sm">
-                            <strong>{item.productName}:</strong> {item.reviewed} revisadas de {item.delivered} entregadas 
-                            ({item.difference > 0 ? `faltan ${item.difference}` : `sobran ${Math.abs(item.difference)}`})
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-sm mt-2">
-                        Por favor, ajusta las cantidades para que coincidan exactamente con las entregadas.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <div className="space-y-3">
                   <h4 className="font-medium">Resultado por Item</h4>
                   
@@ -515,10 +482,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                           const defective = variantData?.defective || 0;
                           const reviewed = approved + defective;
                           const delivered = item.quantity_delivered;
-                          const hasQuantityMismatch = reviewed > 0 && reviewed !== delivered;
                           
                           return (
-                            <TableRow key={index} className={hasQuantityMismatch ? 'bg-red-50' : ''}>
+                            <TableRow key={index}>
                               <TableCell>
                                 <div>
                                   <p className="font-medium">{item.order_items?.product_variants?.products?.name}</p>
@@ -537,7 +503,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                   max={delivered}
                                   value={approved || ''}
                                   onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
-                                  className={`w-20 text-center ${hasQuantityMismatch ? 'border-red-300' : ''}`}
+                                  className="w-20 text-center"
                                 />
                               </TableCell>
                               <TableCell>
@@ -547,7 +513,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                   max={delivered}
                                   value={defective || ''}
                                   onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
-                                  className={`w-20 text-center ${hasQuantityMismatch ? 'border-red-300' : ''}`}
+                                  className="w-20 text-center"
                                 />
                               </TableCell>
                               <TableCell>
@@ -557,9 +523,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                   onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
                                   className="min-w-[200px]"
                                 />
-                                {hasQuantityMismatch && (
-                                  <p className="text-xs text-red-600 mt-1">
-                                    Total revisadas: {reviewed} (debe ser {delivered})
+                                {reviewed > 0 && reviewed !== delivered && (
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    Total revisadas: {reviewed} (entregadas: {delivered})
                                   </p>
                                 )}
                               </TableCell>
@@ -616,16 +582,35 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   />
                 </div>
 
+                {/* Quantity Mismatch Warning Alert - Moved to bottom */}
+                {quantityMismatches.length > 0 && (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800">
+                      <strong>Discrepancia detectada:</strong> Las cantidades reportadas no coinciden con las entregadas:
+                      <ul className="mt-2 ml-4 list-disc">
+                        {quantityMismatches.map((item, index) => (
+                          <li key={index} className="text-sm">
+                            <strong>{item.productName}:</strong> {item.reviewed} revisadas de {item.delivered} entregadas 
+                            ({item.difference > 0 ? `faltan ${item.difference}` : `sobran ${Math.abs(item.difference)}`})
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-sm mt-2">
+                        Esta discrepancia será registrada en el sistema para seguimiento.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="pt-4">
                   <Button
                     onClick={handleQualityReview}
-                    disabled={loading || quantityMismatches.length > 0}
-                    className={`w-full ${quantityMismatches.length > 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    disabled={loading}
+                    className="w-full bg-blue-500 hover:bg-blue-600"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    {loading ? 'Procesando...' : 
-                     quantityMismatches.length > 0 ? 'Corrige las cantidades primero' :
-                     'Procesar Revisión de Calidad'}
+                    {loading ? 'Procesando...' : 'Procesar Revisión de Calidad'}
                   </Button>
                 </div>
               </div>

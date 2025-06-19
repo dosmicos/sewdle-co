@@ -32,16 +32,6 @@ export interface QualityReviewData {
   generalNotes: string;
 }
 
-interface ItemUpdateData {
-  id: string;
-  quality_status: string;
-  notes: string;
-  quantity_approved: number;
-  quantity_defective: number;
-  order_item_id: string;
-  product_variant_id: string | null;
-}
-
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -355,7 +345,15 @@ export const useDeliveries = () => {
 
       console.log('Current delivery data:', delivery);
 
-      const itemUpdates: ItemUpdateData[] = [];
+      const itemUpdates: Array<{
+        id: string;
+        quality_status: string;
+        notes: string;
+        quantity_approved: number;
+        quantity_defective: number;
+        order_item_id: string;
+        product_variant_id: string | null;
+      }> = [];
       let totalApproved = 0;
       let totalDefective = 0;
       let totalDelivered = 0;
