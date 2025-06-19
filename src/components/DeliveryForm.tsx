@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, Upload, FileText, Image, CheckCircle } from 'lucide-react';
 import { useDeliveryOrders } from '@/hooks/useDeliveryOrders';
 import { useDeliveries } from '@/hooks/useDeliveries';
+import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
 
 interface DeliveryFormProps {
   onClose: () => void;
@@ -39,9 +38,11 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
   });
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [availableOrders, setAvailableOrders] = useState<any[]>([]);
+  const [variantsBreakdown, setVariantsBreakdown] = useState<any[]>([]);
   
   const { fetchAvailableOrders, loading: ordersLoading } = useDeliveryOrders();
   const { createDelivery, loading: deliveryLoading } = useDeliveries();
+  const { getOrderVariantsBreakdown } = useOrderDeliveryStats();
 
   useEffect(() => {
     loadAvailableOrders();
@@ -52,7 +53,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
     setAvailableOrders(orders);
   };
 
-  const handleOrderSelect = (orderId: string) => {
+  const handleOrderSelect = async (orderId: string) => {
     const order = availableOrders.find(o => o.id === orderId);
     setSelectedOrder(order || null);
     
@@ -65,6 +66,10 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         workshopId: workshopId || '',
         products: {}
       }));
+
+      // Cargar el desglose por variantes para obtener los pendientes
+      const variants = await getOrderVariantsBreakdown(orderId);
+      setVariantsBreakdown(variants);
     }
   };
 
@@ -129,7 +134,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
       const deliveryData = {
         orderId: formData.orderId,
-        workshopId: formData.workshopId || null, // Enviar null en lugar de cadena vacía
+        workshopId: formData.workshopId || null,
         notes: formData.general.observations,
         items: deliveryItems
       };
@@ -161,6 +166,16 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
       default:
         return false;
     }
+  };
+
+  // Función para obtener las unidades pendientes por variante
+  const getPendingQuantityForVariant = (orderItem: any) => {
+    const variant = variantsBreakdown.find(v => 
+      v.product_name === orderItem.product_variants?.products?.name &&
+      v.variant_size === orderItem.product_variants?.size &&
+      v.variant_color === orderItem.product_variants?.color
+    );
+    return variant ? variant.total_pending : orderItem.quantity;
   };
 
   const renderStepContent = () => {
@@ -210,34 +225,37 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
             <h3 className="font-medium text-lg">Cantidades a Entregar</h3>
             {selectedOrder && selectedOrder.order_items && (
               <div className="space-y-4">
-                {selectedOrder.order_items.map((item: any) => (
-                  <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h4 className="font-semibold">{item.product_variants?.products?.name}</h4>
-                        <p className="text-sm text-gray-600">
-                          {item.product_variants?.size} - {item.product_variants?.color}
-                        </p>
+                {selectedOrder.order_items.map((item: any) => {
+                  const pendingQuantity = getPendingQuantityForVariant(item);
+                  return (
+                    <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="font-semibold">{item.product_variants?.products?.name}</h4>
+                          <p className="text-sm text-gray-600">
+                            {item.product_variants?.size} - {item.product_variants?.color}
+                          </p>
+                        </div>
+                        <span className="text-sm font-medium bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                          Pendientes: {pendingQuantity}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        Disponible: {item.quantity}
-                      </span>
+                      <div className="flex items-center space-x-3">
+                        <Label htmlFor={`quantity-${item.id}`}>Cantidad a entregar:</Label>
+                        <Input
+                          id={`quantity-${item.id}`}
+                          type="number"
+                          min="0"
+                          max={pendingQuantity}
+                          value={formData.products[item.id] || 0}
+                          onChange={(e) => handleVariantChange(item.id, e.target.value)}
+                          placeholder="0"
+                          className="w-24"
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <Label htmlFor={`quantity-${item.id}`}>Cantidad a entregar:</Label>
-                      <Input
-                        id={`quantity-${item.id}`}
-                        type="number"
-                        min="0"
-                        max={item.quantity}
-                        value={formData.products[item.id] || 0}
-                        onChange={(e) => handleVariantChange(item.id, e.target.value)}
-                        placeholder="0"
-                        className="w-24"
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex justify-between items-center">
@@ -440,4 +458,3 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 };
 
 export default DeliveryForm;
-
