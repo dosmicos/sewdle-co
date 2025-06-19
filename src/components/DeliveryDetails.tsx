@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText, AlertCircle } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 
@@ -50,6 +51,17 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
     if (!hasValidData) {
       alert('Por favor, ingresa las cantidades aprobadas y/o defectuosas para al menos un item.');
+      return;
+    }
+
+    // Validate that reviewed quantities match delivered quantities
+    const quantityMismatches = getQuantityMismatches();
+    if (quantityMismatches.length > 0) {
+      const mismatchDetails = quantityMismatches.map(item => 
+        `${item.productName}: ${item.reviewed} revisadas de ${item.delivered} entregadas`
+      ).join('\n');
+      
+      alert(`Error: Las cantidades revisadas no coinciden con las entregadas:\n\n${mismatchDetails}\n\nPor favor, ajusta las cantidades antes de continuar.`);
       return;
     }
 
@@ -99,86 +111,33 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     return { totalApproved, totalDefective };
   };
 
-  const renderStatusBadge = (status: string) => {
-    switch (status) {
-      case 'in_quality':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            <AlertTriangle className="w-4 h-4 mr-1" />
-            En Calidad
-          </span>
-        );
-      case 'rejected':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-            <XCircle className="w-4 h-4 mr-1" />
-            Devuelto
-          </span>
-        );
-      case 'approved':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-            <CheckCircle className="w-4 h-4 mr-1" />
-            Aprobado
-          </span>
-        );
-      case 'partial_approved':
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-            <AlertCircle className="w-4 h-4 mr-1" />
-            Parcialmente Aprobado
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
-            <Package className="w-4 h-4 mr-1" />
-            {status}
-          </span>
-        );
-    }
-  };
-
-  const renderItemStatusBadge = (status: string, notes: string) => {
-    switch (status) {
-      case 'approved':
-        return (
-          <div>
-            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              Aprobado
-            </span>
-            {notes && <p className="text-xs text-gray-600 mt-1">{notes}</p>}
-          </div>
-        );
-      case 'rejected':
-        return (
-          <div>
-            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700">
-              <XCircle className="w-3 h-3 mr-1" />
-              Rechazado
-            </span>
-            {notes && <p className="text-xs text-gray-600 mt-1">{notes}</p>}
-          </div>
-        );
-      case 'partial_approved':
-        return (
-          <div>
-            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700">
-              <AlertCircle className="w-3 h-3 mr-1" />
-              Parcial
-            </span>
-            {notes && <p className="text-xs text-gray-600 mt-1">{notes}</p>}
-          </div>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
-            <AlertTriangle className="w-3 h-3 mr-1" />
-            Pendiente
-          </span>
-        );
-    }
+  // Get quantity mismatches for validation
+  const getQuantityMismatches = () => {
+    const mismatches = [];
+    
+    if (!deliveryData?.delivery_items) return mismatches;
+    
+    deliveryData.delivery_items.forEach((item, index) => {
+      const variantData = qualityData.variants[`item-${index}`];
+      if (variantData) {
+        const approved = variantData.approved || 0;
+        const defective = variantData.defective || 0;
+        const reviewed = approved + defective;
+        const delivered = item.quantity_delivered;
+        
+        if (reviewed > 0 && reviewed !== delivered) {
+          mismatches.push({
+            index,
+            productName: `${item.order_items?.product_variants?.products?.name} (${item.order_items?.product_variants?.size} - ${item.order_items?.product_variants?.color})`,
+            reviewed,
+            delivered,
+            difference: delivered - reviewed
+          });
+        }
+      }
+    });
+    
+    return mismatches;
   };
 
   // Calculate summary statistics
@@ -223,6 +182,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   const isQCLeader = currentUser.role === 'qc_leader';
   const summaryStats = calculateSummaryStats();
   const qualityTotals = calculateQualityTotals();
+  const quantityMismatches = getQuantityMismatches();
 
   // Check if the delivery has been processed (not pending or in_quality)
   const isDeliveryProcessed = deliveryData.status === 'approved' || 
@@ -409,6 +369,27 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   </p>
                 </div>
 
+                {/* Quantity Validation Alert */}
+                {quantityMismatches.length > 0 && (
+                  <Alert variant="destructive" className="border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Error de Cantidades:</strong> Las cantidades revisadas no coinciden con las entregadas:
+                      <ul className="mt-2 ml-4 list-disc">
+                        {quantityMismatches.map((item, index) => (
+                          <li key={index} className="text-sm">
+                            <strong>{item.productName}:</strong> {item.reviewed} revisadas de {item.delivered} entregadas 
+                            ({item.difference > 0 ? `faltan ${item.difference}` : `sobran ${Math.abs(item.difference)}`})
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-sm mt-2">
+                        Por favor, ajusta las cantidades para que coincidan exactamente con las entregadas.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="space-y-3">
                   <h4 className="font-medium">Resultado por Item</h4>
                   
@@ -425,49 +406,63 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {deliveryData.delivery_items?.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{item.order_items?.product_variants?.products?.name}</p>
-                                <p className="text-sm text-gray-600">
-                                  {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <span className="font-medium text-blue-600">{item.quantity_delivered}</span>
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min="0"
-                                max={item.quantity_delivered}
-                                value={qualityData.variants[`item-${index}`]?.approved || ''}
-                                onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
-                                className="w-20 text-center"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min="0"
-                                max={item.quantity_delivered}
-                                value={qualityData.variants[`item-${index}`]?.defective || ''}
-                                onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
-                                className="w-20 text-center"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                placeholder="Describir defectos..."
-                                value={qualityData.variants[`item-${index}`]?.reason || ''}
-                                onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
-                                className="min-w-[200px]"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {deliveryData.delivery_items?.map((item, index) => {
+                          const variantData = qualityData.variants[`item-${index}`];
+                          const approved = variantData?.approved || 0;
+                          const defective = variantData?.defective || 0;
+                          const reviewed = approved + defective;
+                          const delivered = item.quantity_delivered;
+                          const hasQuantityMismatch = reviewed > 0 && reviewed !== delivered;
+                          
+                          return (
+                            <TableRow key={index} className={hasQuantityMismatch ? 'bg-red-50' : ''}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{item.order_items?.product_variants?.products?.name}</p>
+                                  <p className="text-sm text-gray-600">
+                                    {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span className="font-medium text-blue-600">{delivered}</span>
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max={delivered}
+                                  value={approved || ''}
+                                  onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
+                                  className={`w-20 text-center ${hasQuantityMismatch ? 'border-red-300' : ''}`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max={delivered}
+                                  value={defective || ''}
+                                  onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
+                                  className={`w-20 text-center ${hasQuantityMismatch ? 'border-red-300' : ''}`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  placeholder="Describir defectos..."
+                                  value={variantData?.reason || ''}
+                                  onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
+                                  className="min-w-[200px]"
+                                />
+                                {hasQuantityMismatch && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    Total revisadas: {reviewed} (debe ser {delivered})
+                                  </p>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -521,11 +516,13 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                 <div className="pt-4">
                   <Button
                     onClick={handleQualityReview}
-                    disabled={loading}
-                    className="w-full bg-blue-500 hover:bg-blue-600"
+                    disabled={loading || quantityMismatches.length > 0}
+                    className={`w-full ${quantityMismatches.length > 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    {loading ? 'Procesando...' : 'Procesar Revisión de Calidad'}
+                    {loading ? 'Procesando...' : 
+                     quantityMismatches.length > 0 ? 'Corrige las cantidades primero' :
+                     'Procesar Revisión de Calidad'}
                   </Button>
                 </div>
               </div>
