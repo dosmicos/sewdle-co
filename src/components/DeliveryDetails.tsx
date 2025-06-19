@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,108 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     const details = await fetchDeliveryById(delivery.id);
     console.log('Loaded delivery details:', details);
     setDeliveryData(details);
+  };
+
+  const renderStatusBadge = (status) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            <div className="w-2 h-2 rounded-full bg-gray-500 mr-1"></div>
+            Pendiente
+          </span>
+        );
+      case 'in_transit':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <div className="w-2 h-2 rounded-full bg-yellow-500 mr-1"></div>
+            En Tránsito
+          </span>
+        );
+      case 'delivered':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            <div className="w-2 h-2 rounded-full bg-blue-500 mr-1"></div>
+            Entregado
+          </span>
+        );
+      case 'in_quality':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            <div className="w-2 h-2 rounded-full bg-blue-500 mr-1"></div>
+            En Calidad
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            <div className="w-2 h-2 rounded-full bg-red-500 mr-1"></div>
+            Devuelto
+          </span>
+        );
+      case 'approved':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+            Aprobado
+          </span>
+        );
+      case 'partial_approved':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <div className="w-2 h-2 rounded-full bg-yellow-500 mr-1"></div>
+            Parcialmente Aprobado
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const renderItemStatusBadge = (qualityStatus, notes) => {
+    if (qualityStatus === 'approved') {
+      return (
+        <div className="flex items-center space-x-2">
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Aprobado
+          </span>
+          {notes && (
+            <span className="text-xs text-gray-600">{notes}</span>
+          )}
+        </div>
+      );
+    } else if (qualityStatus === 'rejected') {
+      return (
+        <div className="flex items-center space-x-2">
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            <XCircle className="w-3 h-3 mr-1" />
+            Rechazado
+          </span>
+          {notes && (
+            <span className="text-xs text-red-600">{notes}</span>
+          )}
+        </div>
+      );
+    } else if (qualityStatus === 'partial_approved') {
+      return (
+        <div className="flex items-center space-x-2">
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <AlertTriangle className="w-3 h-3 mr-1" />
+            Parcialmente Aprobado
+          </span>
+          {notes && (
+            <span className="text-xs text-yellow-600">{notes}</span>
+          )}
+        </div>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          Pendiente de Revisión
+        </span>
+      );
+    }
   };
 
   const handleQualityReview = async () => {
