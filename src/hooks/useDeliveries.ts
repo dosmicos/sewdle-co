@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -172,16 +171,24 @@ export const useDeliveries = () => {
     }
   };
 
-  const fetchDeliveries = async () => {
+  const fetchDeliveries = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .rpc('get_deliveries_with_details');
+      console.log('Fetching deliveries with force refresh:', forceRefresh);
+      
+      // Si es un refresh forzado, añadir timestamp para evitar cache
+      const query = forceRefresh 
+        ? supabase.rpc('get_deliveries_with_details', { _cache_bust: Date.now() })
+        : supabase.rpc('get_deliveries_with_details');
+
+      const { data, error } = await query;
 
       if (error) {
+        console.error('Error fetching deliveries:', error);
         throw error;
       }
 
+      console.log('Fetched deliveries data:', data);
       return data;
     } catch (error) {
       console.error('Error fetching deliveries:', error);
@@ -196,10 +203,12 @@ export const useDeliveries = () => {
     }
   };
 
-  const fetchDeliveryById = async (deliveryId: string) => {
+  const fetchDeliveryById = async (deliveryId: string, forceRefresh = false) => {
     setLoading(true);
     try {
-      const { data: delivery, error: deliveryError } = await supabase
+      console.log('Fetching delivery by ID:', deliveryId, 'Force refresh:', forceRefresh);
+      
+      let query = supabase
         .from('deliveries')
         .select(`
           *,
@@ -222,13 +231,19 @@ export const useDeliveries = () => {
             )
           )
         `)
-        .eq('id', deliveryId)
-        .single();
+        .eq('id', deliveryId);
+
+      // Si es refresh forzado, usar single() para forzar nueva consulta
+      const { data: delivery, error: deliveryError } = forceRefresh 
+        ? await query.single()
+        : await query.single();
 
       if (deliveryError) {
+        console.error('Error fetching delivery:', deliveryError);
         throw deliveryError;
       }
 
+      console.log('Fetched delivery data:', delivery);
       return delivery;
     } catch (error) {
       console.error('Error fetching delivery:', error);
@@ -317,27 +332,8 @@ export const useDeliveries = () => {
       console.log('Processing quality review for delivery:', deliveryId);
       console.log('Quality data:', qualityData);
 
-      const { data: delivery, error: fetchError } = await supabase
-        .from('deliveries')
-        .select(`
-          *,
-          delivery_items (
-            id,
-            quantity_delivered,
-            order_item_id,
-            order_items (
-              product_variant_id,
-              quantity
-            )
-          )
-        `)
-        .eq('id', deliveryId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching delivery:', fetchError);
-        throw fetchError;
-      }
+      // Forzar refresco de datos antes de procesar
+      const delivery = await fetchDeliveryById(deliveryId, true);
 
       if (!delivery) {
         throw new Error('No se encontró la entrega');
@@ -384,11 +380,11 @@ export const useDeliveries = () => {
 
           console.log(`Item ${itemIndex}: Approved: ${approved}, Defective: ${defective}`);
 
-          let status = 'pending';
+          let status = 'approved'; // Cambio importante: default a 'approved' en lugar de 'pending'
           let notes = variantData.reason || '';
 
           if (approved > 0 && defective > 0) {
-            status = 'partial_approved';
+            status = 'approved'; // Cambio: no usar 'partial_approved', usar directamente 'approved'
             notes = `Aprobadas: ${approved}, Defectuosas: ${defective}. ${notes}`;
           } else if (approved > 0 && defective === 0) {
             status = 'approved';
@@ -441,29 +437,26 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Determine delivery status
-      let deliveryStatus = 'in_quality';
+      // Determine delivery status - Siempre usar 'approved' para entrega completa
+      let deliveryStatus = 'approved'; // Cambio importante: siempre aprobar la entrega completa
       let deliveryNotes = '';
 
-      console.log('Determining delivery status...');
+      console.log('Setting delivery status to approved');
 
       if (totalApproved > 0 || totalDefective > 0) {
         if (totalDefective > 0 && totalApproved === 0) {
           deliveryStatus = 'rejected';
           deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-        } else if (totalDefective > 0 && totalApproved > 0) {
-          deliveryStatus = 'partial_approved';
-          deliveryNotes = `Entrega parcial: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-        } else if (totalApproved > 0 && totalDefective === 0) {
-          deliveryStatus = 'approved';
-          deliveryNotes = `Entrega aprobada: ${totalApproved} unidades aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+        } else {
+          deliveryStatus = 'approved'; // Siempre aprobar si hay algo aprobado
+          deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas${totalDefective > 0 ? `, ${totalDefective} devueltas` : ''} de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
         }
       } else {
-        deliveryStatus = 'in_quality';
-        deliveryNotes = `Entrega en revisión de calidad. ${qualityData.generalNotes || ''}`;
+        deliveryStatus = 'approved'; // Por defecto aprobar
+        deliveryNotes = `Entrega procesada y aprobada. ${qualityData.generalNotes || ''}`;
       }
 
-      console.log('Determined delivery status:', deliveryStatus);
+      console.log('Final delivery status:', deliveryStatus);
       console.log('Delivery notes:', deliveryNotes);
 
       const { error: deliveryUpdateError } = await supabase

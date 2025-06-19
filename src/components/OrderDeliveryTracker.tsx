@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Truck, Package, CheckCircle, XCircle, AlertTriangle, Calendar, Factory, ShirtIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Truck, Package, CheckCircle, XCircle, AlertTriangle, Calendar, Factory, ShirtIcon, RefreshCw } from 'lucide-react';
 import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
 
 interface OrderDeliveryTrackerProps {
@@ -16,22 +17,46 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
   const [stats, setStats] = useState<any>(null);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [variants, setVariants] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const { getOrderStats, getOrderDeliveriesBreakdown, getOrderVariantsBreakdown, loading } = useOrderDeliveryStats();
 
   useEffect(() => {
     loadData();
   }, [orderId]);
 
-  const loadData = async () => {
-    const [orderStats, deliveriesData, variantsData] = await Promise.all([
-      getOrderStats(orderId),
-      getOrderDeliveriesBreakdown(orderId),
-      getOrderVariantsBreakdown(orderId)
-    ]);
+  const loadData = async (forceRefresh = false) => {
+    if (forceRefresh) {
+      setRefreshing(true);
+    }
     
-    setStats(orderStats);
-    setDeliveries(deliveriesData);
-    setVariants(variantsData);
+    try {
+      console.log('Loading order delivery data for order:', orderId, 'Force refresh:', forceRefresh);
+      
+      const [orderStats, deliveriesData, variantsData] = await Promise.all([
+        getOrderStats(orderId),
+        getOrderDeliveriesBreakdown(orderId),
+        getOrderVariantsBreakdown(orderId)
+      ]);
+      
+      console.log('Loaded order stats:', orderStats);
+      console.log('Loaded deliveries data:', deliveriesData);
+      console.log('Loaded variants data:', variantsData);
+      
+      setStats(orderStats);
+      setDeliveries(deliveriesData);
+      setVariants(variantsData);
+    } catch (error) {
+      console.error('Error loading order delivery data:', error);
+    } finally {
+      if (forceRefresh) {
+        setRefreshing(false);
+      }
+    }
+  };
+
+  const handleRefresh = () => {
+    console.log('Manual refresh triggered');
+    loadData(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -92,11 +117,21 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
       {/* Estadísticas Generales */}
       {stats && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <Package className="w-5 h-5" />
               <span>Seguimiento de Entregas - {orderNumber}</span>
             </CardTitle>
+            <Button
+              onClick={handleRefresh}
+              variant="outline"
+              size="sm"
+              disabled={refreshing}
+              className="flex items-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>{refreshing ? 'Refrescando...' : 'Refrescar'}</span>
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
