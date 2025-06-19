@@ -334,7 +334,6 @@ export const useDeliveries = () => {
         .single();
 
       if (fetchError) {
-        console.error('Error fetching delivery data:', fetchError);
         throw fetchError;
       }
 
@@ -345,10 +344,9 @@ export const useDeliveries = () => {
       let totalDefective = 0;
       let totalDelivered = 0;
 
-      // Procesar cada variante de calidad
       for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
         const itemIndex = parseInt(variantKey.replace('item-', ''));
-        const deliveryItem = delivery.delivery_items?.[itemIndex];
+        const deliveryItem = delivery.delivery_items[itemIndex];
         
         if (deliveryItem && (variantData.approved > 0 || variantData.defective > 0)) {
           totalDelivered += deliveryItem.quantity_delivered;
@@ -385,7 +383,6 @@ export const useDeliveries = () => {
 
       console.log('Totals - Delivered:', totalDelivered, 'Approved:', totalApproved, 'Defective:', totalDefective);
 
-      // Actualizar cada item de entrega
       for (const update of itemUpdates) {
         const { error: updateError } = await supabase
           .from('delivery_items')
@@ -402,8 +399,7 @@ export const useDeliveries = () => {
         console.log('Updated delivery item:', update.id, 'with status:', update.quality_status);
       }
 
-      // Determinar el estado de la entrega
-      let deliveryStatus = 'in_quality';
+      let deliveryStatus = 'in_quality'; // Default status
       let deliveryNotes = '';
 
       console.log('Determining delivery status...');
@@ -427,7 +423,6 @@ export const useDeliveries = () => {
       console.log('Determined delivery status:', deliveryStatus);
       console.log('Delivery notes:', deliveryNotes);
 
-      // Actualizar el estado de la entrega
       const { error: deliveryUpdateError } = await supabase
         .from('deliveries')
         .update({
@@ -443,12 +438,10 @@ export const useDeliveries = () => {
 
       console.log('Successfully updated delivery status to:', deliveryStatus);
 
-      // Si hay productos aprobados, sincronizar inventario
       if (totalApproved > 0) {
         await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
       }
 
-      // Actualizar estado de la orden basado en las entregas
       await updateOrderStatusBasedOnDeliveries(delivery.order_id);
 
       toast({
