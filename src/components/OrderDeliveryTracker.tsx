@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -162,7 +163,6 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead>Variante</TableHead>
-                    <TableHead>SKU</TableHead>
                     <TableHead className="text-center">Ordenadas</TableHead>
                     <TableHead className="text-center">Aprobadas</TableHead>
                     <TableHead className="text-center">Pendientes</TableHead>
@@ -180,11 +180,6 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
                           <span className="font-medium">{variant.variant_size}</span>
                           <span className="text-sm text-gray-600">{variant.variant_color}</span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {variant.sku_variant}
-                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center space-x-1">
