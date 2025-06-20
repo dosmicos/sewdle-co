@@ -493,6 +493,9 @@ export const useDeliveries = () => {
         // Trigger manual order status update
         console.log('Triggering manual order status update');
         await forceOrderStatusUpdate(delivery.order_id);
+
+        // Check if order is now completed and update delivery accordingly
+        await checkAndUpdateDeliveryOnOrderCompletion(deliveryId, delivery.order_id);
       } catch (orderError) {
         console.error('Error updating order status:', orderError);
       }
@@ -513,6 +516,46 @@ export const useDeliveries = () => {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkAndUpdateDeliveryOnOrderCompletion = async (deliveryId: string, orderId: string) => {
+    try {
+      console.log('Checking if order is completed to update delivery status');
+      
+      // Get the current order status
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+
+      if (orderError) {
+        console.error('Error fetching order status:', orderError);
+        return;
+      }
+
+      console.log('Current order status:', orderData.status);
+
+      // If order is completed, update delivery to approved
+      if (orderData.status === 'completed') {
+        console.log('Order is completed, updating delivery to approved');
+        
+        const { error: deliveryUpdateError } = await supabase
+          .from('deliveries')
+          .update({
+            status: 'approved'
+          })
+          .eq('id', deliveryId);
+
+        if (deliveryUpdateError) {
+          console.error('Error updating delivery to approved:', deliveryUpdateError);
+        } else {
+          console.log('Successfully updated delivery to approved status');
+        }
+      }
+    } catch (error) {
+      console.error('Error in checkAndUpdateDeliveryOnOrderCompletion:', error);
     }
   };
 
