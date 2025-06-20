@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -682,40 +681,42 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Explicitly type all variables
-      let totalOrdered = 0;
-      let totalDelivered = 0;
-      let totalApproved = 0;
-      let totalDefective = 0;
-      let totalPending = 0;
+      // Initialize totals with explicit number types
+      const totals = {
+        ordered: 0 as number,
+        delivered: 0 as number,
+        approved: 0 as number,
+        defective: 0 as number,
+        pending: 0 as number
+      };
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
-        orderData.order_items.forEach((orderItem: any) => {
-          if (!orderItem) return;
+        for (const orderItem of orderData.order_items) {
+          if (!orderItem) continue;
           
           const itemQuantity = Number(orderItem.quantity) || 0;
-          totalOrdered += itemQuantity;
+          totals.ordered += itemQuantity;
           
           if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
-            orderData.deliveries.forEach((delivery: any) => {
+            for (const delivery of orderData.deliveries) {
               if (!delivery || !delivery.delivery_items || !Array.isArray(delivery.delivery_items)) {
-                return;
+                continue;
               }
               
-              delivery.delivery_items.forEach((deliveryItem: any) => {
+              for (const deliveryItem of delivery.delivery_items) {
                 if (!deliveryItem || deliveryItem.order_item_id !== orderItem.id) {
-                  return;
+                  continue;
                 }
                 
                 const deliveredQty = Number(deliveryItem.quantity_delivered) || 0;
-                totalDelivered += deliveredQty;
+                totals.delivered += deliveredQty;
                 
                 const qualityStatus = deliveryItem.quality_status;
                 
                 if (qualityStatus === 'approved') {
-                  totalApproved += deliveredQty;
+                  totals.approved += deliveredQty;
                 } else if (qualityStatus === 'rejected') {
-                  totalDefective += deliveredQty;
+                  totals.defective += deliveredQty;
                 } else if (qualityStatus === 'partial_approved') {
                   const notes = String(deliveryItem.notes || '');
                   const approvedMatch = notes.match(/Aprobadas: (\d+)/);
@@ -724,45 +725,45 @@ export const useDeliveries = () => {
                   if (approvedMatch && approvedMatch[1]) {
                     const approvedCount = parseInt(approvedMatch[1], 10);
                     if (!isNaN(approvedCount)) {
-                      totalApproved += approvedCount;
+                      totals.approved += approvedCount;
                     }
                   }
                   
                   if (defectiveMatch && defectiveMatch[1]) {
                     const defectiveCount = parseInt(defectiveMatch[1], 10);
                     if (!isNaN(defectiveCount)) {
-                      totalDefective += defectiveCount;
+                      totals.defective += defectiveCount;
                     }
                   }
                 }
-              });
-            });
+              }
+            }
           }
-        });
+        }
       }
 
-      totalPending = Math.max(0, totalOrdered - totalApproved - totalDefective);
+      totals.pending = Math.max(0, totals.ordered - totals.approved - totals.defective);
 
       console.log('Order status calculation:', {
-        totalOrdered,
-        totalDelivered,
-        totalApproved,
-        totalDefective,
-        totalPending,
+        totalOrdered: totals.ordered,
+        totalDelivered: totals.delivered,
+        totalApproved: totals.approved,
+        totalDefective: totals.defective,
+        totalPending: totals.pending,
         currentStatus: orderData.status
       });
 
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      const totalProcessed = totalApproved + totalDefective;
+      const totalProcessed = totals.approved + totals.defective;
       
-      if (totalProcessed >= totalOrdered) {
+      if (totalProcessed >= totals.ordered) {
         orderStatus = 'completed';
-        orderNotes = `Orden completada: ${totalApproved} aprobadas${totalDefective > 0 ? `, ${totalDefective} devueltas` : ''} de ${totalOrdered} total.`;
-      } else if (totalDelivered > 0) {
+        orderNotes = `Orden completada: ${totals.approved} aprobadas${totals.defective > 0 ? `, ${totals.defective} devueltas` : ''} de ${totals.ordered} total.`;
+      } else if (totals.delivered > 0) {
         orderStatus = 'in_progress';
-        orderNotes = `Orden en progreso: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
+        orderNotes = `Orden en progreso: ${totals.approved} aprobadas, ${totals.defective} devueltas, ${totals.pending} pendientes de ${totals.ordered} total.`;
       }
 
       console.log('New order status will be:', orderStatus);
@@ -923,9 +924,11 @@ export const useDeliveries = () => {
     updateDeliveryStatus,
     updateDeliveryItemQuality,
     processQualityReview,
+    checkAndUpdateDeliveryOnOrderCompletion,
+    forceOrderStatusUpdate,
+    updateOrderStatusBasedOnDeliveries,
     syncApprovedInventoryWithShopify,
     getDeliveryStats,
-    updateOrderStatusBasedOnDeliveries,
     deleteDelivery,
     loading
   };
