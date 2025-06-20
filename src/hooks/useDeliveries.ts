@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -681,40 +682,60 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      let totalOrdered: number = 0;
-      let totalDelivered: number = 0;
-      let totalApproved: number = 0;
-      let totalDefective: number = 0;
-      let totalPending: number = 0;
+      // Explicitly type all variables
+      let totalOrdered = 0;
+      let totalDelivered = 0;
+      let totalApproved = 0;
+      let totalDefective = 0;
+      let totalPending = 0;
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
         orderData.order_items.forEach((orderItem: any) => {
-          const itemQuantity = Number(orderItem?.quantity) || 0;
+          if (!orderItem) return;
+          
+          const itemQuantity = Number(orderItem.quantity) || 0;
           totalOrdered += itemQuantity;
           
           if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
             orderData.deliveries.forEach((delivery: any) => {
-              if (delivery.delivery_items && Array.isArray(delivery.delivery_items)) {
-                delivery.delivery_items.forEach((deliveryItem: any) => {
-                  if (deliveryItem.order_item_id === orderItem.id) {
-                    const deliveredQty = Number(deliveryItem?.quantity_delivered) || 0;
-                    totalDelivered += deliveredQty;
-                    
-                    if (deliveryItem.quality_status === 'approved') {
-                      totalApproved += deliveredQty;
-                    } else if (deliveryItem.quality_status === 'rejected') {
-                      totalDefective += deliveredQty;
-                    } else if (deliveryItem.quality_status === 'partial_approved') {
-                      const notes = deliveryItem.notes || '';
-                      const approvedMatch = notes.match(/Aprobadas: (\d+)/);
-                      const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
-                      
-                      if (approvedMatch) totalApproved += parseInt(approvedMatch[1]) || 0;
-                      if (defectiveMatch) totalDefective += parseInt(defectiveMatch[1]) || 0;
+              if (!delivery || !delivery.delivery_items || !Array.isArray(delivery.delivery_items)) {
+                return;
+              }
+              
+              delivery.delivery_items.forEach((deliveryItem: any) => {
+                if (!deliveryItem || deliveryItem.order_item_id !== orderItem.id) {
+                  return;
+                }
+                
+                const deliveredQty = Number(deliveryItem.quantity_delivered) || 0;
+                totalDelivered += deliveredQty;
+                
+                const qualityStatus = deliveryItem.quality_status;
+                
+                if (qualityStatus === 'approved') {
+                  totalApproved += deliveredQty;
+                } else if (qualityStatus === 'rejected') {
+                  totalDefective += deliveredQty;
+                } else if (qualityStatus === 'partial_approved') {
+                  const notes = String(deliveryItem.notes || '');
+                  const approvedMatch = notes.match(/Aprobadas: (\d+)/);
+                  const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
+                  
+                  if (approvedMatch && approvedMatch[1]) {
+                    const approvedCount = parseInt(approvedMatch[1], 10);
+                    if (!isNaN(approvedCount)) {
+                      totalApproved += approvedCount;
                     }
                   }
-                });
-              }
+                  
+                  if (defectiveMatch && defectiveMatch[1]) {
+                    const defectiveCount = parseInt(defectiveMatch[1], 10);
+                    if (!isNaN(defectiveCount)) {
+                      totalDefective += defectiveCount;
+                    }
+                  }
+                }
+              });
             });
           }
         });
