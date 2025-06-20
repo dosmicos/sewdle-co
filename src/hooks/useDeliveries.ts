@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -681,11 +682,11 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      let totalOrdered = 0;
-      let totalDelivered = 0;
-      let totalApproved = 0;
-      let totalDefective = 0;
-      let totalPending = 0;
+      let totalOrdered: number = 0;
+      let totalDelivered: number = 0;
+      let totalApproved: number = 0;
+      let totalDefective: number = 0;
+      let totalPending: number = 0;
 
       orderData.order_items.forEach(orderItem => {
         totalOrdered += orderItem.quantity;
