@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -689,20 +690,20 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals with explicit typing
-      const totals: OrderTotals = {
-        ordered: 0,
-        delivered: 0,
-        approved: 0,
-        defective: 0,
-        pending: 0
+      // Initialize totals with proper typing
+      const totals = {
+        ordered: 0 as number,
+        delivered: 0 as number,
+        approved: 0 as number,
+        defective: 0 as number,
+        pending: 0 as number
       };
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
         for (const orderItem of orderData.order_items) {
           if (!orderItem) continue;
           
-          const itemQuantity: number = Number(orderItem.quantity) || 0;
+          const itemQuantity = Number(orderItem.quantity) || 0;
           totals.ordered += itemQuantity;
           
           if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
@@ -716,7 +717,7 @@ export const useDeliveries = () => {
                   continue;
                 }
                 
-                const deliveredQty: number = Number(deliveryItem.quantity_delivered) || 0;
+                const deliveredQty = Number(deliveryItem.quantity_delivered) || 0;
                 totals.delivered += deliveredQty;
                 
                 const qualityStatus = deliveryItem.quality_status;
@@ -731,14 +732,14 @@ export const useDeliveries = () => {
                   const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
                   
                   if (approvedMatch && approvedMatch[1]) {
-                    const approvedCount: number = parseInt(approvedMatch[1], 10);
+                    const approvedCount = parseInt(approvedMatch[1], 10);
                     if (!isNaN(approvedCount)) {
                       totals.approved += approvedCount;
                     }
                   }
                   
                   if (defectiveMatch && defectiveMatch[1]) {
-                    const defectiveCount: number = parseInt(defectiveMatch[1], 10);
+                    const defectiveCount = parseInt(defectiveMatch[1], 10);
                     if (!isNaN(defectiveCount)) {
                       totals.defective += defectiveCount;
                     }
@@ -764,7 +765,7 @@ export const useDeliveries = () => {
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      const totalProcessed: number = totals.approved + totals.defective;
+      const totalProcessed = totals.approved + totals.defective;
       
       if (totalProcessed >= totals.ordered) {
         orderStatus = 'completed';
