@@ -690,13 +690,13 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals with proper typing
-      const totals = {
-        ordered: 0 as number,
-        delivered: 0 as number,
-        approved: 0 as number,
-        defective: 0 as number,
-        pending: 0 as number
+      // Initialize totals with OrderTotals interface
+      const totals: OrderTotals = {
+        ordered: 0,
+        delivered: 0,
+        approved: 0,
+        defective: 0,
+        pending: 0
       };
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
