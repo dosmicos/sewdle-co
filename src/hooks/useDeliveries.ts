@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -402,7 +401,7 @@ export const useDeliveries = () => {
             notes = `Defectuosas: ${defective}. ${notes}`;
           }
 
-          itemUpdates.push({
+          const itemUpdate: ItemUpdateData = {
             id: deliveryItem.id,
             quality_status: status,
             notes: notes,
@@ -410,7 +409,9 @@ export const useDeliveries = () => {
             quantity_defective: defective,
             order_item_id: deliveryItem.order_item_id,
             product_variant_id: deliveryItem.order_items?.product_variant_id || null
-          });
+          };
+
+          itemUpdates.push(itemUpdate);
         }
       }
 
