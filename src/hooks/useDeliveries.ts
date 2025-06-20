@@ -36,8 +36,8 @@ interface ItemUpdateData {
   id: string;
   quality_status: string;
   notes: string;
-  quantity_approved: number;
-  quantity_defective: number;
+  quantity_approved?: number;
+  quantity_defective?: number;
   order_item_id: string;
   product_variant_id: string | null;
 }
@@ -390,11 +390,11 @@ export const useDeliveries = () => {
 
           console.log(`Item ${itemIndex}: Approved: ${approved}, Defective: ${defective}`);
 
-          let status = 'approved'; // Cambio importante: default a 'approved' en lugar de 'pending'
+          let status = 'approved';
           let notes = variantData.reason || '';
 
           if (approved > 0 && defective > 0) {
-            status = 'approved'; // Cambio: no usar 'partial_approved', usar directamente 'approved'
+            status = 'approved';
             notes = `Aprobadas: ${approved}, Defectuosas: ${defective}. ${notes}`;
           } else if (approved > 0 && defective === 0) {
             status = 'approved';
@@ -447,23 +447,16 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Determine delivery status - Siempre usar 'approved' para entrega completa
-      let deliveryStatus = 'approved'; // Cambio importante: siempre aprobar la entrega completa
+      // Determine delivery status - SIEMPRE usar 'approved' cuando se complete
+      let deliveryStatus = 'approved';
       let deliveryNotes = '';
 
-      console.log('Setting delivery status to approved');
-
-      if (totalApproved > 0 || totalDefective > 0) {
-        if (totalDefective > 0 && totalApproved === 0) {
-          deliveryStatus = 'rejected';
-          deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-        } else {
-          deliveryStatus = 'approved'; // Siempre aprobar si hay algo aprobado
-          deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas${totalDefective > 0 ? `, ${totalDefective} devueltas` : ''} de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-        }
+      if (totalDefective > 0 && totalApproved === 0) {
+        deliveryStatus = 'rejected';
+        deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
       } else {
-        deliveryStatus = 'approved'; // Por defecto aprobar
-        deliveryNotes = `Entrega procesada y aprobada. ${qualityData.generalNotes || ''}`;
+        deliveryStatus = 'approved';
+        deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas${totalDefective > 0 ? `, ${totalDefective} devueltas` : ''} de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
       }
 
       console.log('Final delivery status:', deliveryStatus);
@@ -490,17 +483,19 @@ export const useDeliveries = () => {
           await syncApprovedInventoryWithShopify(itemUpdates.filter(item => (item.quantity_approved || 0) > 0));
         } catch (syncError) {
           console.error('Error syncing inventory:', syncError);
-          // Don't fail the entire process if inventory sync fails
         }
       }
 
-      // Update order status - IMPORTANTE: Esto debería activar el trigger automáticamente
+      // Update order status - FORZAR actualización inmediata
       try {
         console.log('About to update order status for order:', delivery.order_id);
         await updateOrderStatusBasedOnDeliveries(delivery.order_id);
+        
+        // Verificar si necesitamos forzar la actualización por el trigger
+        console.log('Triggering database function to update order completion status');
+        await supabase.rpc('update_order_completion_status');
       } catch (orderError) {
         console.error('Error updating order status:', orderError);
-        // Don't fail the entire process if order update fails
       }
 
       toast({
@@ -587,7 +582,7 @@ export const useDeliveries = () => {
         });
       });
 
-      totalPending = totalOrdered - totalApproved - totalDefective;
+      totalPending = Math.max(0, totalOrdered - totalApproved - totalDefective);
 
       console.log('Order status calculation:', {
         totalOrdered,
@@ -601,12 +596,12 @@ export const useDeliveries = () => {
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      if (totalPending <= 0 && totalApproved >= totalOrdered) {
+      // Si el total de unidades procesadas (aprobadas + defectuosas) >= total ordenadas
+      const totalProcessed = totalApproved + totalDefective;
+      
+      if (totalProcessed >= totalOrdered) {
         orderStatus = 'completed';
-        orderNotes = `Orden completada: ${totalApproved}/${totalOrdered} unidades aprobadas.`;
-      } else if (totalPending <= 0 && totalDefective > 0) {
-        orderStatus = 'completed'; // Cambio: marcar como completada incluso con defectuosas
-        orderNotes = `Orden completada: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalOrdered} total.`;
+        orderNotes = `Orden completada: ${totalApproved} aprobadas${totalDefective > 0 ? `, ${totalDefective} devueltas` : ''} de ${totalOrdered} total.`;
       } else if (totalDelivered > 0) {
         orderStatus = 'in_progress';
         orderNotes = `Orden en progreso: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
