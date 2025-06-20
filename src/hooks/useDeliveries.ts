@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -11,7 +12,7 @@ export interface DeliveryItem {
 
 export interface CreateDeliveryData {
   orderId: string;
-  workshopId: string | null; // Permitir null
+  workshopId: string | null;
   deliveryDate?: string;
   recipientName?: string;
   recipientPhone?: string;
@@ -36,8 +37,8 @@ interface ItemUpdateData {
   id: string;
   quality_status: string;
   notes: string;
-  quantity_approved?: number;
-  quantity_defective?: number;
+  quantity_approved: number;
+  quantity_defective: number;
   order_item_id: string;
   product_variant_id: string | null;
 }
@@ -95,7 +96,7 @@ export const useDeliveries = () => {
       const deliveryInsertData = {
         tracking_number: trackingNumber,
         order_id: deliveryData.orderId,
-        workshop_id: deliveryData.workshopId, // Esto será null si no hay taller asignado
+        workshop_id: deliveryData.workshopId,
         delivery_date: deliveryData.deliveryDate || new Date().toISOString().split('T')[0],
         delivered_by: session.user.id,
         recipient_name: deliveryData.recipientName || '',
@@ -186,7 +187,6 @@ export const useDeliveries = () => {
     try {
       console.log('Fetching deliveries with force refresh:', forceRefresh);
       
-      // Si es un refresh forzado, añadir timestamp para evitar cache
       const query = forceRefresh 
         ? supabase.rpc('get_deliveries_with_details', { _cache_bust: Date.now() })
         : supabase.rpc('get_deliveries_with_details');
@@ -243,7 +243,6 @@ export const useDeliveries = () => {
         `)
         .eq('id', deliveryId);
 
-      // Si es refresh forzado, usar single() para forzar nueva consulta
       const { data: delivery, error: deliveryError } = forceRefresh 
         ? await query.single()
         : await query.single();
@@ -342,7 +341,6 @@ export const useDeliveries = () => {
       console.log('Processing quality review for delivery:', deliveryId);
       console.log('Quality data:', qualityData);
 
-      // Forzar refresco de datos antes de procesar
       const delivery = await fetchDeliveryById(deliveryId, true);
 
       if (!delivery) {
@@ -447,7 +445,7 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Determine delivery status - SIEMPRE usar 'approved' cuando se complete
+      // Determine delivery status
       let deliveryStatus = 'approved';
       let deliveryNotes = '';
 
@@ -480,7 +478,7 @@ export const useDeliveries = () => {
       // Sync inventory if items were approved
       if (totalApproved > 0) {
         try {
-          await syncApprovedInventoryWithShopify(itemUpdates.filter(item => (item.quantity_approved || 0) > 0));
+          await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
         } catch (syncError) {
           console.error('Error syncing inventory:', syncError);
         }
@@ -491,9 +489,9 @@ export const useDeliveries = () => {
         console.log('About to update order status for order:', delivery.order_id);
         await updateOrderStatusBasedOnDeliveries(delivery.order_id);
         
-        // Verificar si necesitamos forzar la actualización por el trigger
-        console.log('Triggering database function to update order completion status');
-        await supabase.rpc('update_order_completion_status');
+        // Trigger manual order status update
+        console.log('Triggering manual order status update');
+        await forceOrderStatusUpdate(delivery.order_id);
       } catch (orderError) {
         console.error('Error updating order status:', orderError);
       }
@@ -514,6 +512,64 @@ export const useDeliveries = () => {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const forceOrderStatusUpdate = async (orderId: string) => {
+    try {
+      console.log('Force updating order status for:', orderId);
+      
+      // Get order stats directly
+      const { data: orderStats, error: statsError } = await supabase
+        .rpc('get_order_delivery_stats', { order_id_param: orderId });
+
+      if (statsError) {
+        console.error('Error getting order stats:', statsError);
+        return;
+      }
+
+      if (!orderStats || orderStats.length === 0) {
+        console.error('No order stats returned');
+        return;
+      }
+
+      const stats = orderStats[0];
+      console.log('Order stats for status update:', stats);
+
+      // Determine new status
+      let newStatus = 'pending';
+      let statusNotes = '';
+
+      const totalProcessed = stats.total_approved + stats.total_defective;
+      
+      if (totalProcessed >= stats.total_ordered && stats.total_ordered > 0) {
+        newStatus = 'completed';
+        statusNotes = `Orden completada: ${stats.total_approved} aprobadas${stats.total_defective > 0 ? `, ${stats.total_defective} devueltas` : ''} de ${stats.total_ordered} total.`;
+      } else if (stats.total_delivered > 0) {
+        newStatus = 'in_progress';
+        statusNotes = `Orden en progreso: ${stats.total_approved} aprobadas, ${stats.total_defective} devueltas, ${stats.total_pending} pendientes de ${stats.total_ordered} total.`;
+      }
+
+      console.log('Forcing order status to:', newStatus);
+
+      // Update order status directly
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: newStatus,
+          notes: statusNotes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (updateError) {
+        console.error('Error forcing order status update:', updateError);
+      } else {
+        console.log(`Order ${orderId} status forced to: ${newStatus}`);
+      }
+
+    } catch (error) {
+      console.error('Error in forceOrderStatusUpdate:', error);
     }
   };
 
@@ -596,7 +652,6 @@ export const useDeliveries = () => {
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      // Si el total de unidades procesadas (aprobadas + defectuosas) >= total ordenadas
       const totalProcessed = totalApproved + totalDefective;
       
       if (totalProcessed >= totalOrdered) {
@@ -634,7 +689,7 @@ export const useDeliveries = () => {
     }
   };
 
-  const syncApprovedInventoryWithShopify = async (approvedItems: any[]) => {
+  const syncApprovedInventoryWithShopify = async (approvedItems: ItemUpdateData[]) => {
     try {
       console.log('Syncing approved inventory with Shopify:', approvedItems);
       
