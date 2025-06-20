@@ -42,6 +42,14 @@ interface ItemUpdateData {
   product_variant_id: string | null;
 }
 
+interface OrderTotals {
+  ordered: number;
+  delivered: number;
+  approved: number;
+  defective: number;
+  pending: number;
+}
+
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -681,13 +689,13 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals with explicit number types
-      const totals = {
-        ordered: 0 as number,
-        delivered: 0 as number,
-        approved: 0 as number,
-        defective: 0 as number,
-        pending: 0 as number
+      // Initialize totals with proper typing
+      const totals: OrderTotals = {
+        ordered: 0,
+        delivered: 0,
+        approved: 0,
+        defective: 0,
+        pending: 0
       };
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
