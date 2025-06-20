@@ -540,14 +540,15 @@ export const useDeliveries = () => {
       let newStatus = 'pending';
       let statusNotes = '';
 
-      const totalProcessed = stats.total_approved + stats.total_defective;
+      const totalProcessed = (stats.total_approved || 0) + (stats.total_defective || 0);
+      const totalOrdered = stats.total_ordered || 0;
       
-      if (totalProcessed >= stats.total_ordered && stats.total_ordered > 0) {
+      if (totalProcessed >= totalOrdered && totalOrdered > 0) {
         newStatus = 'completed';
-        statusNotes = `Orden completada: ${stats.total_approved} aprobadas${stats.total_defective > 0 ? `, ${stats.total_defective} devueltas` : ''} de ${stats.total_ordered} total.`;
-      } else if (stats.total_delivered > 0) {
+        statusNotes = `Orden completada: ${stats.total_approved || 0} aprobadas${(stats.total_defective || 0) > 0 ? `, ${stats.total_defective} devueltas` : ''} de ${totalOrdered} total.`;
+      } else if ((stats.total_delivered || 0) > 0) {
         newStatus = 'in_progress';
-        statusNotes = `Orden en progreso: ${stats.total_approved} aprobadas, ${stats.total_defective} devueltas, ${stats.total_pending} pendientes de ${stats.total_ordered} total.`;
+        statusNotes = `Orden en progreso: ${stats.total_approved || 0} aprobadas, ${stats.total_defective || 0} devueltas, ${stats.total_pending || 0} pendientes de ${totalOrdered} total.`;
       }
 
       console.log('Forcing order status to:', newStatus);
