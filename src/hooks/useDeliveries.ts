@@ -32,6 +32,16 @@ export interface QualityReviewData {
   generalNotes: string;
 }
 
+interface ItemUpdateData {
+  id: string;
+  quality_status: string;
+  notes: string;
+  quantity_approved: number;
+  quantity_defective: number;
+  order_item_id: string;
+  product_variant_id: string | null;
+}
+
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -345,15 +355,7 @@ export const useDeliveries = () => {
 
       console.log('Current delivery data:', delivery);
 
-      const itemUpdates: Array<{
-        id: string;
-        quality_status: string;
-        notes: string;
-        quantity_approved: number;
-        quantity_defective: number;
-        order_item_id: string;
-        product_variant_id: string | null;
-      }> = [];
+      const itemUpdates: ItemUpdateData[] = [];
       let totalApproved = 0;
       let totalDefective = 0;
       let totalDelivered = 0;
@@ -492,8 +494,9 @@ export const useDeliveries = () => {
         }
       }
 
-      // Update order status
+      // Update order status - IMPORTANTE: Esto debería activar el trigger automáticamente
       try {
+        console.log('About to update order status for order:', delivery.order_id);
         await updateOrderStatusBasedOnDeliveries(delivery.order_id);
       } catch (orderError) {
         console.error('Error updating order status:', orderError);
@@ -521,6 +524,8 @@ export const useDeliveries = () => {
 
   const updateOrderStatusBasedOnDeliveries = async (orderId: string) => {
     try {
+      console.log('Updating order status for order:', orderId);
+      
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
@@ -548,6 +553,8 @@ export const useDeliveries = () => {
         console.error('Error fetching order data:', orderError);
         return;
       }
+
+      console.log('Order data for status update:', orderData);
 
       let totalOrdered = 0;
       let totalDelivered = 0;
@@ -582,21 +589,34 @@ export const useDeliveries = () => {
 
       totalPending = totalOrdered - totalApproved - totalDefective;
 
+      console.log('Order status calculation:', {
+        totalOrdered,
+        totalDelivered,
+        totalApproved,
+        totalDefective,
+        totalPending,
+        currentStatus: orderData.status
+      });
+
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      if (totalPending === 0 && totalDefective === 0 && totalApproved === totalOrdered) {
+      if (totalPending <= 0 && totalApproved >= totalOrdered) {
         orderStatus = 'completed';
         orderNotes = `Orden completada: ${totalApproved}/${totalOrdered} unidades aprobadas.`;
-      } else if (totalPending === 0 && totalDefective > 0) {
-        orderStatus = 'partial_completed';
-        orderNotes = `Orden parcialmente completada: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
+      } else if (totalPending <= 0 && totalDefective > 0) {
+        orderStatus = 'completed'; // Cambio: marcar como completada incluso con defectuosas
+        orderNotes = `Orden completada: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalOrdered} total.`;
       } else if (totalDelivered > 0) {
         orderStatus = 'in_progress';
         orderNotes = `Orden en progreso: ${totalApproved} aprobadas, ${totalDefective} devueltas, ${totalPending} pendientes de ${totalOrdered} total.`;
       }
 
+      console.log('New order status will be:', orderStatus);
+
       if (orderStatus !== orderData.status || orderNotes !== orderData.notes) {
+        console.log('Updating order status from', orderData.status, 'to', orderStatus);
+        
         const { error: updateError } = await supabase
           .from('orders')
           .update({
@@ -610,6 +630,8 @@ export const useDeliveries = () => {
         } else {
           console.log(`Order ${orderId} status updated to: ${orderStatus}`);
         }
+      } else {
+        console.log('Order status already up to date:', orderStatus);
       }
 
     } catch (error) {
