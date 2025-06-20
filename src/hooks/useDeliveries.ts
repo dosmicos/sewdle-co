@@ -495,10 +495,30 @@ export const useDeliveries = () => {
         console.log('Triggering manual order status update');
         await forceOrderStatusUpdate(delivery.order_id);
 
-        // Wait for order status to be updated, then check if delivery should be approved
-        setTimeout(async () => {
-          await checkAndUpdateDeliveryOnOrderCompletion(deliveryId, delivery.order_id);
-        }, 1000);
+        // Check order status and update delivery accordingly - immediately without timeout
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('status')
+          .eq('id', delivery.order_id)
+          .single();
+
+        if (!orderError && orderData && orderData.status === 'completed') {
+          console.log('Order is completed, updating delivery to approved immediately');
+          
+          const { error: deliveryFinalUpdateError } = await supabase
+            .from('deliveries')
+            .update({
+              status: 'approved'
+            })
+            .eq('id', deliveryId);
+
+          if (deliveryFinalUpdateError) {
+            console.error('Error updating delivery to approved:', deliveryFinalUpdateError);
+          } else {
+            console.log('Successfully updated delivery to approved status');
+          }
+        }
+
       } catch (orderError) {
         console.error('Error updating order status:', orderError);
       }
