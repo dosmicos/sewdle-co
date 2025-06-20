@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -494,8 +495,10 @@ export const useDeliveries = () => {
         console.log('Triggering manual order status update');
         await forceOrderStatusUpdate(delivery.order_id);
 
-        // Check if order is now completed and update delivery accordingly
-        await checkAndUpdateDeliveryOnOrderCompletion(deliveryId, delivery.order_id);
+        // Wait for order status to be updated, then check if delivery should be approved
+        setTimeout(async () => {
+          await checkAndUpdateDeliveryOnOrderCompletion(deliveryId, delivery.order_id);
+        }, 1000);
       } catch (orderError) {
         console.error('Error updating order status:', orderError);
       }
@@ -552,6 +555,12 @@ export const useDeliveries = () => {
           console.error('Error updating delivery to approved:', deliveryUpdateError);
         } else {
           console.log('Successfully updated delivery to approved status');
+          
+          // Show success toast
+          toast({
+            title: "Estado actualizado",
+            description: "La entrega ha sido marcada como aprobada porque la orden se completó.",
+          });
         }
       }
     } catch (error) {
