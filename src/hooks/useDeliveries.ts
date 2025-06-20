@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -491,11 +490,11 @@ export const useDeliveries = () => {
         console.log('About to update order status for order:', delivery.order_id);
         await updateOrderStatusBasedOnDeliveries(delivery.order_id);
         
-        // Trigger manual order status update
+        // Force manual order status update
         console.log('Triggering manual order status update');
         await forceOrderStatusUpdate(delivery.order_id);
 
-        // Check order status and update delivery accordingly - immediately without timeout
+        // Check if order is completed and update ALL deliveries of that order
         const { data: orderData, error: orderError } = await supabase
           .from('orders')
           .select('status')
@@ -503,19 +502,20 @@ export const useDeliveries = () => {
           .single();
 
         if (!orderError && orderData && orderData.status === 'completed') {
-          console.log('Order is completed, updating delivery to approved immediately');
+          console.log('Order is completed, updating ALL deliveries to approved');
           
-          const { error: deliveryFinalUpdateError } = await supabase
+          // Update ALL deliveries from this order to approved status
+          const { error: allDeliveriesUpdateError } = await supabase
             .from('deliveries')
             .update({
               status: 'approved'
             })
-            .eq('id', deliveryId);
+            .eq('order_id', delivery.order_id);
 
-          if (deliveryFinalUpdateError) {
-            console.error('Error updating delivery to approved:', deliveryFinalUpdateError);
+          if (allDeliveriesUpdateError) {
+            console.error('Error updating all deliveries to approved:', allDeliveriesUpdateError);
           } else {
-            console.log('Successfully updated delivery to approved status');
+            console.log('Successfully updated all deliveries to approved status');
           }
         }
 
