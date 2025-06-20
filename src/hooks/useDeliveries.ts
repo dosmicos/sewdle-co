@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -689,7 +690,7 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals with proper typing
+      // Initialize totals with explicit typing
       const totals: OrderTotals = {
         ordered: 0,
         delivered: 0,
