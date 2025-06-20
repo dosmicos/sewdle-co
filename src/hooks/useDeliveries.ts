@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -688,30 +687,38 @@ export const useDeliveries = () => {
       let totalDefective: number = 0;
       let totalPending: number = 0;
 
-      orderData.order_items.forEach(orderItem => {
-        totalOrdered += orderItem.quantity;
-        
-        orderData.deliveries.forEach(delivery => {
-          delivery.delivery_items.forEach(deliveryItem => {
-            if (deliveryItem.order_item_id === orderItem.id) {
-              totalDelivered += deliveryItem.quantity_delivered;
-              
-              if (deliveryItem.quality_status === 'approved') {
-                totalApproved += deliveryItem.quantity_delivered;
-              } else if (deliveryItem.quality_status === 'rejected') {
-                totalDefective += deliveryItem.quantity_delivered;
-              } else if (deliveryItem.quality_status === 'partial_approved') {
-                const notes = deliveryItem.notes || '';
-                const approvedMatch = notes.match(/Aprobadas: (\d+)/);
-                const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
-                
-                if (approvedMatch) totalApproved += parseInt(approvedMatch[1]);
-                if (defectiveMatch) totalDefective += parseInt(defectiveMatch[1]);
+      if (orderData.order_items && Array.isArray(orderData.order_items)) {
+        orderData.order_items.forEach((orderItem: any) => {
+          const itemQuantity = Number(orderItem?.quantity) || 0;
+          totalOrdered += itemQuantity;
+          
+          if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
+            orderData.deliveries.forEach((delivery: any) => {
+              if (delivery.delivery_items && Array.isArray(delivery.delivery_items)) {
+                delivery.delivery_items.forEach((deliveryItem: any) => {
+                  if (deliveryItem.order_item_id === orderItem.id) {
+                    const deliveredQty = Number(deliveryItem?.quantity_delivered) || 0;
+                    totalDelivered += deliveredQty;
+                    
+                    if (deliveryItem.quality_status === 'approved') {
+                      totalApproved += deliveredQty;
+                    } else if (deliveryItem.quality_status === 'rejected') {
+                      totalDefective += deliveredQty;
+                    } else if (deliveryItem.quality_status === 'partial_approved') {
+                      const notes = deliveryItem.notes || '';
+                      const approvedMatch = notes.match(/Aprobadas: (\d+)/);
+                      const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
+                      
+                      if (approvedMatch) totalApproved += parseInt(approvedMatch[1]) || 0;
+                      if (defectiveMatch) totalDefective += parseInt(defectiveMatch[1]) || 0;
+                    }
+                  }
+                });
               }
-            }
-          });
+            });
+          }
         });
-      });
+      }
 
       totalPending = Math.max(0, totalOrdered - totalApproved - totalDefective);
 
