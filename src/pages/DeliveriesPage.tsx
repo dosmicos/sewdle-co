@@ -99,6 +99,39 @@ const DeliveriesPage = () => {
     return true;
   });
 
+  // Function to calculate approved and defective quantities from delivery notes
+  const parseDeliveryStats = (notes: string, status: string) => {
+    if (!notes) {
+      return { approved: 0, defective: 0 };
+    }
+
+    const approvedMatch = notes.match(/(\d+)\s+aprobada/i);
+    const defectiveMatch = notes.match(/(\d+)\s+(?:devuelta|defectuosa)/i);
+
+    let approved = 0;
+    let defective = 0;
+
+    if (approvedMatch) {
+      approved = parseInt(approvedMatch[1]);
+    }
+
+    if (defectiveMatch) {
+      defective = parseInt(defectiveMatch[1]);
+    }
+
+    // If no specific numbers found but status indicates approval/rejection
+    if (approved === 0 && defective === 0) {
+      if (status === 'approved') {
+        // Assume all delivered items were approved if no specific breakdown
+        return { approved: 0, defective: 0 }; // Will show 0/0 until we have the actual numbers
+      } else if (status === 'rejected') {
+        return { approved: 0, defective: 0 }; // Will show 0/0 until we have the actual numbers
+      }
+    }
+
+    return { approved, defective };
+  };
+
   const renderStatusBadge = (status) => {
     switch (status) {
       case 'pending':
@@ -261,64 +294,79 @@ const DeliveriesPage = () => {
                   <TableHead>Orden</TableHead>
                   <TableHead>Taller</TableHead>
                   <TableHead>Cantidad Total</TableHead>
+                  <TableHead>Aprobadas</TableHead>
+                  <TableHead>Defectuosas</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDeliveries.map((delivery) => (
-                  <TableRow key={delivery.id}>
-                    <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
-                    <TableCell>{delivery.order_number}</TableCell>
-                    <TableCell>{delivery.workshop_name}</TableCell>
-                    <TableCell>
-                      <span className="text-sm font-medium">{delivery.total_quantity} unidades</span>
-                    </TableCell>
-                    <TableCell>{renderStatusBadge(delivery.status)}</TableCell>
-                    <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewDeliveryDetails(delivery)}
-                        >
-                          Detalles
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar entrega?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Se eliminará permanentemente la entrega 
-                                <strong> {delivery.tracking_number}</strong> y todos sus datos relacionados.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => handleDeleteDelivery(delivery.id)}
-                                className="bg-red-600 hover:bg-red-700"
+                {filteredDeliveries.map((delivery) => {
+                  const stats = parseDeliveryStats(delivery.notes || '', delivery.status);
+                  return (
+                    <TableRow key={delivery.id}>
+                      <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
+                      <TableCell>{delivery.order_number}</TableCell>
+                      <TableCell>{delivery.workshop_name}</TableCell>
+                      <TableCell>
+                        <span className="text-sm font-medium">{delivery.total_quantity} unidades</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-medium text-green-600">
+                          {stats.approved > 0 ? stats.approved : '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-medium text-red-600">
+                          {stats.defective > 0 ? stats.defective : '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell>{renderStatusBadge(delivery.status)}</TableCell>
+                      <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Button 
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewDeliveryDetails(delivery)}
+                          >
+                            Detalles
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
-                                Eliminar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar entrega?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta acción no se puede deshacer. Se eliminará permanentemente la entrega 
+                                  <strong> {delivery.tracking_number}</strong> y todos sus datos relacionados.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDeleteDelivery(delivery.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

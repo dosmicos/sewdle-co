@@ -353,9 +353,9 @@ export const useDeliveries = () => {
       console.log('Current delivery data:', delivery);
 
       const itemUpdates: ItemUpdateData[] = [];
-      let totalApproved: number = 0;
-      let totalDefective: number = 0;
-      let totalDelivered: number = 0;
+      let totalApproved = 0;
+      let totalDefective = 0;
+      let totalDelivered = 0;
 
       for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
         if (!variantData || typeof variantData !== 'object') {
@@ -377,8 +377,8 @@ export const useDeliveries = () => {
           continue;
         }
 
-        const approved: number = Number(variantData.approved) || 0;
-        const defective: number = Number(variantData.defective) || 0;
+        const approved = Number(variantData.approved) || 0;
+        const defective = Number(variantData.defective) || 0;
         
         if (approved > 0 || defective > 0) {
           totalDelivered += deliveryItem.quantity_delivered || 0;
@@ -446,16 +446,22 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Determine delivery status
+      // Determine delivery status - CORREGIDA LA LÓGICA
       let deliveryStatus = 'approved';
       let deliveryNotes = '';
 
       if (totalDefective > 0 && totalApproved === 0) {
+        // Solo hay defectuosas, sin aprobadas
         deliveryStatus = 'rejected';
         deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+      } else if (totalDefective > 0 && totalApproved > 0) {
+        // Hay tanto aprobadas como defectuosas - PARCIALMENTE APROBADO
+        deliveryStatus = 'partial_approved';
+        deliveryNotes = `Entrega parcialmente aprobada: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
       } else {
+        // Solo hay aprobadas
         deliveryStatus = 'approved';
-        deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas${totalDefective > 0 ? `, ${totalDefective} devueltas` : ''} de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+        deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
       }
 
       console.log('Final delivery status:', deliveryStatus);
