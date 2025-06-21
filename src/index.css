@@ -440,3 +440,10 @@ table tr:hover,
 tbody tr:hover {
   background-color: transparent !important;
 }
+
+/* Eliminar borde amarillo molesto en focus */
+input:focus, textarea:focus, select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: #3b82f6 !important;
+}
