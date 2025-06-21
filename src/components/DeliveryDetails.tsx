@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -358,9 +359,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column - Delivery Information */}
-        <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Delivery Information (Reduced width) */}
+        <div className="lg:col-span-1 space-y-6">
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Información de Entrega</h3>
             <div className="space-y-3">
@@ -404,50 +405,57 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             </div>
           </Card>
 
+          {/* Items Table */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Items de la Entrega</h3>
-            <div className="space-y-4">
-              {deliveryData.delivery_items && deliveryData.delivery_items.length > 0 ? (
-                <div className="space-y-3">
-                  {deliveryData.delivery_items.map((item, index) => (
-                    <div key={index} className="p-4 border rounded-lg space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">
-                            {item.order_items?.product_variants?.products?.name || 'Producto'}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            Variante: {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            SKU: {item.order_items?.product_variants?.sku_variant}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-lg text-blue-600">
-                            {item.quantity_delivered} entregadas
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            de {item.order_items?.quantity} solicitadas
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-2">
-                        {renderItemStatusBadge(item.quality_status, item.notes)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500">No hay items registrados para esta entrega</p>
-              )}
-            </div>
+            {deliveryData.delivery_items && deliveryData.delivery_items.length > 0 ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Producto</TableHead>
+                      <TableHead className="text-xs text-center">Cant.</TableHead>
+                      <TableHead className="text-xs text-center">Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deliveryData.delivery_items.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="py-2">
+                          <div>
+                            <p className="font-medium text-xs text-black">
+                              {item.order_items?.product_variants?.products?.name || 'Producto'}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {item.order_items?.product_variants?.sku_variant}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center py-2">
+                          <div className="text-xs">
+                            <span className="font-medium text-blue-600">{item.quantity_delivered}</span>
+                            <span className="text-gray-500">/{item.order_items?.quantity}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          {renderItemStatusBadge(item.quality_status, item.notes)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">No hay items registrados para esta entrega</p>
+            )}
           </Card>
         </div>
 
-        {/* Right Column - Quality Control */}
-        <div className="space-y-6">
+        {/* Right Column - Quality Control (Expanded width) */}
+        <div className="lg:col-span-2 space-y-6">
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Control de Calidad</h3>
             
@@ -582,7 +590,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   />
                 </div>
 
-                {/* Quantity Mismatch Warning Alert - Moved to bottom */}
+                {/* Quantity Mismatch Warning Alert */}
                 {quantityMismatches.length > 0 && (
                   <Alert className="border-amber-200 bg-amber-50">
                     <AlertTriangle className="h-4 w-4 text-amber-600" />

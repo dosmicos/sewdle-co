@@ -43,14 +43,6 @@ interface ItemUpdateData {
   product_variant_id: string | null;
 }
 
-interface OrderTotals {
-  ordered: number;
-  delivered: number;
-  approved: number;
-  defective: number;
-  pending: number;
-}
-
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -362,9 +354,9 @@ export const useDeliveries = () => {
       console.log('Current delivery data:', delivery);
 
       const itemUpdates: ItemUpdateData[] = [];
-      let totalApproved = 0;
-      let totalDefective = 0;
-      let totalDelivered = 0;
+      let totalApproved: number = 0;
+      let totalDefective: number = 0;
+      let totalDelivered: number = 0;
 
       for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
         if (!variantData || typeof variantData !== 'object') {
@@ -386,8 +378,8 @@ export const useDeliveries = () => {
           continue;
         }
 
-        const approved = Number(variantData.approved) || 0;
-        const defective = Number(variantData.defective) || 0;
+        const approved: number = Number(variantData.approved) || 0;
+        const defective: number = Number(variantData.defective) || 0;
         
         if (approved > 0 || defective > 0) {
           totalDelivered += deliveryItem.quantity_delivered || 0;
@@ -485,56 +477,9 @@ export const useDeliveries = () => {
 
       console.log('Successfully updated delivery status to:', deliveryStatus);
 
-      // Sync inventory if items were approved
-      if (totalApproved > 0) {
-        try {
-          await syncApprovedInventoryWithShopify(itemUpdates.filter(item => item.quantity_approved > 0));
-        } catch (syncError) {
-          console.error('Error syncing inventory:', syncError);
-        }
-      }
-
-      // Update order status - FORZAR actualización inmediata
-      try {
-        console.log('About to update order status for order:', delivery.order_id);
-        await updateOrderStatusBasedOnDeliveries(delivery.order_id);
-        
-        // Force manual order status update
-        console.log('Triggering manual order status update');
-        await forceOrderStatusUpdate(delivery.order_id);
-
-        // Check if order is completed and update ALL deliveries of that order
-        const { data: orderData, error: orderError } = await supabase
-          .from('orders')
-          .select('status')
-          .eq('id', delivery.order_id)
-          .single();
-
-        if (!orderError && orderData && orderData.status === 'completed') {
-          console.log('Order is completed, updating ALL deliveries to approved');
-          
-          // Update ALL deliveries from this order to approved status
-          const { error: allDeliveriesUpdateError } = await supabase
-            .from('deliveries')
-            .update({
-              status: 'approved'
-            })
-            .eq('order_id', delivery.order_id);
-
-          if (allDeliveriesUpdateError) {
-            console.error('Error updating all deliveries to approved:', allDeliveriesUpdateError);
-          } else {
-            console.log('Successfully updated all deliveries to approved status');
-          }
-        }
-
-      } catch (orderError) {
-        console.error('Error updating order status:', orderError);
-      }
-
       toast({
         title: "Revisión de calidad procesada",
-        description: `${totalApproved} productos aprobados, ${totalDefective} devueltos. ${totalApproved > 0 ? 'Inventario sincronizado.' : ''}`,
+        description: `${totalApproved} productos aprobados, ${totalDefective} devueltos.`,
       });
 
       return true;
@@ -551,323 +496,17 @@ export const useDeliveries = () => {
     }
   };
 
-  const checkAndUpdateDeliveryOnOrderCompletion = async (deliveryId: string, orderId: string) => {
-    try {
-      console.log('Checking if order is completed to update delivery status');
-      
-      // Get the current order status
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .select('status')
-        .eq('id', orderId)
-        .single();
-
-      if (orderError) {
-        console.error('Error fetching order status:', orderError);
-        return;
-      }
-
-      console.log('Current order status:', orderData.status);
-
-      // If order is completed, update delivery to approved
-      if (orderData.status === 'completed') {
-        console.log('Order is completed, updating delivery to approved');
-        
-        const { error: deliveryUpdateError } = await supabase
-          .from('deliveries')
-          .update({
-            status: 'approved'
-          })
-          .eq('id', deliveryId);
-
-        if (deliveryUpdateError) {
-          console.error('Error updating delivery to approved:', deliveryUpdateError);
-        } else {
-          console.log('Successfully updated delivery to approved status');
-          
-          // Show success toast
-          toast({
-            title: "Estado actualizado",
-            description: "La entrega ha sido marcada como aprobada porque la orden se completó.",
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error in checkAndUpdateDeliveryOnOrderCompletion:', error);
-    }
-  };
-
-  const forceOrderStatusUpdate = async (orderId: string) => {
-    try {
-      console.log('Force updating order status for:', orderId);
-      
-      // Get order stats directly
-      const { data: orderStats, error: statsError } = await supabase
-        .rpc('get_order_delivery_stats', { order_id_param: orderId });
-
-      if (statsError) {
-        console.error('Error getting order stats:', statsError);
-        return;
-      }
-
-      if (!orderStats || orderStats.length === 0) {
-        console.error('No order stats returned');
-        return;
-      }
-
-      const stats = orderStats[0];
-      console.log('Order stats for status update:', stats);
-
-      // Determine new status
-      let newStatus = 'pending';
-      let statusNotes = '';
-
-      const totalProcessed = (stats.total_approved || 0) + (stats.total_defective || 0);
-      const totalOrdered = stats.total_ordered || 0;
-      
-      if (totalProcessed >= totalOrdered && totalOrdered > 0) {
-        newStatus = 'completed';
-        statusNotes = `Orden completada: ${stats.total_approved || 0} aprobadas${(stats.total_defective || 0) > 0 ? `, ${stats.total_defective} devueltas` : ''} de ${totalOrdered} total.`;
-      } else if ((stats.total_delivered || 0) > 0) {
-        newStatus = 'in_progress';
-        statusNotes = `Orden en progreso: ${stats.total_approved || 0} aprobadas, ${stats.total_defective || 0} devueltas, ${stats.total_pending || 0} pendientes de ${totalOrdered} total.`;
-      }
-
-      console.log('Forcing order status to:', newStatus);
-
-      // Update order status directly
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          status: newStatus,
-          notes: statusNotes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId);
-
-      if (updateError) {
-        console.error('Error forcing order status update:', updateError);
-      } else {
-        console.log(`Order ${orderId} status forced to: ${newStatus}`);
-      }
-
-    } catch (error) {
-      console.error('Error in forceOrderStatusUpdate:', error);
-    }
-  };
-
-  const updateOrderStatusBasedOnDeliveries = async (orderId: string) => {
-    try {
-      console.log('Updating order status for order:', orderId);
-      
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            id,
-            quantity,
-            product_variant_id
-          ),
-          deliveries (
-            id,
-            status,
-            delivery_items (
-              quantity_delivered,
-              quality_status,
-              notes,
-              order_item_id
-            )
-          )
-        `)
-        .eq('id', orderId)
-        .single();
-
-      if (orderError) {
-        console.error('Error fetching order data:', orderError);
-        return;
-      }
-
-      console.log('Order data for status update:', orderData);
-
-      // Initialize totals with OrderTotals interface
-      const totals: OrderTotals = {
-        ordered: 0,
-        delivered: 0,
-        approved: 0,
-        defective: 0,
-        pending: 0
-      };
-
-      if (orderData.order_items && Array.isArray(orderData.order_items)) {
-        for (const orderItem of orderData.order_items) {
-          if (!orderItem) continue;
-          
-          const itemQuantity = Number(orderItem.quantity) || 0;
-          totals.ordered += itemQuantity;
-          
-          if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
-            for (const delivery of orderData.deliveries) {
-              if (!delivery || !delivery.delivery_items || !Array.isArray(delivery.delivery_items)) {
-                continue;
-              }
-              
-              for (const deliveryItem of delivery.delivery_items) {
-                if (!deliveryItem || deliveryItem.order_item_id !== orderItem.id) {
-                  continue;
-                }
-                
-                const deliveredQty = Number(deliveryItem.quantity_delivered) || 0;
-                totals.delivered += deliveredQty;
-                
-                const qualityStatus = deliveryItem.quality_status;
-                
-                if (qualityStatus === 'approved') {
-                  totals.approved += deliveredQty;
-                } else if (qualityStatus === 'rejected') {
-                  totals.defective += deliveredQty;
-                } else if (qualityStatus === 'partial_approved') {
-                  const notes = String(deliveryItem.notes || '');
-                  const approvedMatch = notes.match(/Aprobadas: (\d+)/);
-                  const defectiveMatch = notes.match(/Defectuosas: (\d+)/);
-                  
-                  if (approvedMatch && approvedMatch[1]) {
-                    const approvedCount = parseInt(approvedMatch[1], 10);
-                    if (!isNaN(approvedCount)) {
-                      totals.approved += approvedCount;
-                    }
-                  }
-                  
-                  if (defectiveMatch && defectiveMatch[1]) {
-                    const defectiveCount = parseInt(defectiveMatch[1], 10);
-                    if (!isNaN(defectiveCount)) {
-                      totals.defective += defectiveCount;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      totals.pending = Math.max(0, totals.ordered - totals.approved - totals.defective);
-
-      console.log('Order status calculation:', {
-        totalOrdered: totals.ordered,
-        totalDelivered: totals.delivered,
-        totalApproved: totals.approved,
-        totalDefective: totals.defective,
-        totalPending: totals.pending,
-        currentStatus: orderData.status
-      });
-
-      let orderStatus = 'pending';
-      let orderNotes = '';
-
-      const totalProcessed = totals.approved + totals.defective;
-      
-      if (totalProcessed >= totals.ordered) {
-        orderStatus = 'completed';
-        orderNotes = `Orden completada: ${totals.approved} aprobadas${totals.defective > 0 ? `, ${totals.defective} devueltas` : ''} de ${totals.ordered} total.`;
-      } else if (totals.delivered > 0) {
-        orderStatus = 'in_progress';
-        orderNotes = `Orden en progreso: ${totals.approved} aprobadas, ${totals.defective} devueltas, ${totals.pending} pendientes de ${totals.ordered} total.`;
-      }
-
-      console.log('New order status will be:', orderStatus);
-
-      if (orderStatus !== orderData.status || orderNotes !== orderData.notes) {
-        console.log('Updating order status from', orderData.status, 'to', orderStatus);
-        
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update({
-            status: orderStatus,
-            notes: orderNotes
-          })
-          .eq('id', orderId);
-
-        if (updateError) {
-          console.error('Error updating order status:', updateError);
-        } else {
-          console.log(`Order ${orderId} status updated to: ${orderStatus}`);
-        }
-      } else {
-        console.log('Order status already up to date:', orderStatus);
-      }
-
-    } catch (error) {
-      console.error('Error updating order status based on deliveries:', error);
-    }
-  };
-
-  const syncApprovedInventoryWithShopify = async (approvedItems: ItemUpdateData[]) => {
-    try {
-      console.log('Syncing approved inventory with Shopify:', approvedItems);
-      
-      const variantUpdates = new Map();
-      
-      approvedItems.forEach(item => {
-        if (item.product_variant_id && item.quantity_approved > 0) {
-          const current = variantUpdates.get(item.product_variant_id) || 0;
-          variantUpdates.set(item.product_variant_id, current + item.quantity_approved);
-        }
-      });
-
-      for (const [variantId, quantity] of variantUpdates) {
-        const { data: currentVariant, error: fetchError } = await supabase
-          .from('product_variants')
-          .select('stock_quantity')
-          .eq('id', variantId)
-          .single();
-
-        if (fetchError) {
-          console.error('Error fetching current stock:', fetchError);
-          continue;
-        }
-
-        const newStockQuantity = (currentVariant.stock_quantity || 0) + quantity;
-
-        const { error: stockError } = await supabase
-          .from('product_variants')
-          .update({
-            stock_quantity: newStockQuantity
-          })
-          .eq('id', variantId);
-
-        if (stockError) {
-          console.error('Error updating local stock:', stockError);
-        } else {
-          console.log(`Updated local stock for variant ${variantId}: +${quantity} (new total: ${newStockQuantity})`);
-        }
-      }
-
-      console.log('Local inventory updated successfully');
-      
-    } catch (error) {
-      console.error('Error syncing inventory:', error);
-      throw error;
-    }
-  };
-
   const getDeliveryStats = async () => {
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .rpc('get_delivery_stats');
 
       if (error) {
+        console.error('Error fetching delivery stats:', error);
         throw error;
       }
 
-      return data[0] || {
-        total_deliveries: 0,
-        pending_deliveries: 0,
-        in_quality_deliveries: 0,
-        approved_deliveries: 0,
-        rejected_deliveries: 0
-      };
+      return data;
     } catch (error) {
       console.error('Error fetching delivery stats:', error);
       return {
@@ -877,33 +516,29 @@ export const useDeliveries = () => {
         approved_deliveries: 0,
         rejected_deliveries: 0
       };
-    } finally {
-      setLoading(false);
     }
   };
 
   const deleteDelivery = async (deliveryId: string) => {
     setLoading(true);
     try {
-      console.log('Deleting delivery:', deliveryId);
-
+      // First delete delivery items
       const { error: itemsError } = await supabase
         .from('delivery_items')
         .delete()
         .eq('delivery_id', deliveryId);
 
       if (itemsError) {
-        console.error('Error deleting delivery items:', itemsError);
         throw itemsError;
       }
 
+      // Then delete the delivery
       const { error: deliveryError } = await supabase
         .from('deliveries')
         .delete()
         .eq('id', deliveryId);
 
       if (deliveryError) {
-        console.error('Error deleting delivery:', deliveryError);
         throw deliveryError;
       }
 
@@ -917,7 +552,7 @@ export const useDeliveries = () => {
       console.error('Error deleting delivery:', error);
       toast({
         title: "Error al eliminar entrega",
-        description: error instanceof Error ? error.message : "No se pudo eliminar la entrega.",
+        description: "No se pudo eliminar la entrega.",
         variant: "destructive",
       });
       return false;
@@ -933,10 +568,6 @@ export const useDeliveries = () => {
     updateDeliveryStatus,
     updateDeliveryItemQuality,
     processQualityReview,
-    checkAndUpdateDeliveryOnOrderCompletion,
-    forceOrderStatusUpdate,
-    updateOrderStatusBasedOnDeliveries,
-    syncApprovedInventoryWithShopify,
     getDeliveryStats,
     deleteDelivery,
     loading
