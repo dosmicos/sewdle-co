@@ -690,19 +690,21 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals properly with explicit number type
-      let totalsOrdered: number = 0;
-      let totalsDelivered: number = 0;
-      let totalsApproved: number = 0;
-      let totalsDefective: number = 0;
-      let totalsPending: number = 0;
+      // Initialize totals with OrderTotals interface
+      const totals: OrderTotals = {
+        ordered: 0,
+        delivered: 0,
+        approved: 0,
+        defective: 0,
+        pending: 0
+      };
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
         for (const orderItem of orderData.order_items) {
           if (!orderItem) continue;
           
           const itemQuantity = Number(orderItem.quantity) || 0;
-          totalsOrdered += itemQuantity;
+          totals.ordered += itemQuantity;
           
           if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
             for (const delivery of orderData.deliveries) {
@@ -716,14 +718,14 @@ export const useDeliveries = () => {
                 }
                 
                 const deliveredQty = Number(deliveryItem.quantity_delivered) || 0;
-                totalsDelivered += deliveredQty;
+                totals.delivered += deliveredQty;
                 
                 const qualityStatus = deliveryItem.quality_status;
                 
                 if (qualityStatus === 'approved') {
-                  totalsApproved += deliveredQty;
+                  totals.approved += deliveredQty;
                 } else if (qualityStatus === 'rejected') {
-                  totalsDefective += deliveredQty;
+                  totals.defective += deliveredQty;
                 } else if (qualityStatus === 'partial_approved') {
                   const notes = String(deliveryItem.notes || '');
                   const approvedMatch = notes.match(/Aprobadas: (\d+)/);
@@ -732,14 +734,14 @@ export const useDeliveries = () => {
                   if (approvedMatch && approvedMatch[1]) {
                     const approvedCount = parseInt(approvedMatch[1], 10);
                     if (!isNaN(approvedCount)) {
-                      totalsApproved += approvedCount;
+                      totals.approved += approvedCount;
                     }
                   }
                   
                   if (defectiveMatch && defectiveMatch[1]) {
                     const defectiveCount = parseInt(defectiveMatch[1], 10);
                     if (!isNaN(defectiveCount)) {
-                      totalsDefective += defectiveCount;
+                      totals.defective += defectiveCount;
                     }
                   }
                 }
@@ -749,28 +751,28 @@ export const useDeliveries = () => {
         }
       }
 
-      totalsPending = Math.max(0, totalsOrdered - totalsApproved - totalsDefective);
+      totals.pending = Math.max(0, totals.ordered - totals.approved - totals.defective);
 
       console.log('Order status calculation:', {
-        totalOrdered: totalsOrdered,
-        totalDelivered: totalsDelivered,
-        totalApproved: totalsApproved,
-        totalDefective: totalsDefective,
-        totalPending: totalsPending,
+        totalOrdered: totals.ordered,
+        totalDelivered: totals.delivered,
+        totalApproved: totals.approved,
+        totalDefective: totals.defective,
+        totalPending: totals.pending,
         currentStatus: orderData.status
       });
 
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      const totalProcessed = totalsApproved + totalsDefective;
+      const totalProcessed = totals.approved + totals.defective;
       
-      if (totalProcessed >= totalsOrdered) {
+      if (totalProcessed >= totals.ordered) {
         orderStatus = 'completed';
-        orderNotes = `Orden completada: ${totalsApproved} aprobadas${totalsDefective > 0 ? `, ${totalsDefective} devueltas` : ''} de ${totalsOrdered} total.`;
-      } else if (totalsDelivered > 0) {
+        orderNotes = `Orden completada: ${totals.approved} aprobadas${totals.defective > 0 ? `, ${totals.defective} devueltas` : ''} de ${totals.ordered} total.`;
+      } else if (totals.delivered > 0) {
         orderStatus = 'in_progress';
-        orderNotes = `Orden en progreso: ${totalsApproved} aprobadas, ${totalsDefective} devueltas, ${totalsPending} pendientes de ${totalsOrdered} total.`;
+        orderNotes = `Orden en progreso: ${totals.approved} aprobadas, ${totals.defective} devueltas, ${totals.pending} pendientes de ${totals.ordered} total.`;
       }
 
       console.log('New order status will be:', orderStatus);
