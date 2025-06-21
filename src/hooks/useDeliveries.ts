@@ -360,7 +360,6 @@ export const useDeliveries = () => {
       const itemUpdates: ItemUpdateData[] = [];
       let totalApproved = 0;
       let totalDefective = 0;
-      let totalDelivered = 0;
 
       for (const [variantKey, variantData] of Object.entries(qualityData.variants)) {
         if (!variantData || typeof variantData !== 'object') {
@@ -386,7 +385,6 @@ export const useDeliveries = () => {
         const defective = Number(variantData.defective) || 0;
         
         if (approved > 0 || defective > 0) {
-          totalDelivered += deliveryItem.quantity_delivered || 0;
           totalApproved += approved;
           totalDefective += defective;
 
@@ -420,7 +418,7 @@ export const useDeliveries = () => {
         }
       }
 
-      console.log('Totals - Delivered:', totalDelivered, 'Approved:', totalApproved, 'Defective:', totalDefective);
+      console.log('Totals - Approved:', totalApproved, 'Defective:', totalDefective);
 
       if (itemUpdates.length === 0) {
         throw new Error('No se encontraron elementos válidos para procesar');
@@ -549,8 +547,8 @@ export const useDeliveries = () => {
       return { approved: 0, defective: 0 };
     }
 
-    const approvedMatch = notes.match(/(\d+)\s+aprobada/i);
-    const defectiveMatch = notes.match(/(\d+)\s+(?:devuelta|defectuosa)/i);
+    const approvedMatch = notes.match(/Aprobadas: (\d+)/i);
+    const defectiveMatch = notes.match(/Defectuosas: (\d+)/i);
 
     let approved = 0;
     let defective = 0;
@@ -561,15 +559,6 @@ export const useDeliveries = () => {
 
     if (defectiveMatch) {
       defective = parseInt(defectiveMatch[1]);
-    }
-
-    // If no specific numbers found but status indicates approval/rejection
-    if (approved === 0 && defective === 0) {
-      if (status === 'approved') {
-        return { approved: 0, defective: 0 };
-      } else if (status === 'rejected') {
-        return { approved: 0, defective: 0 };
-      }
     }
 
     return { approved, defective };

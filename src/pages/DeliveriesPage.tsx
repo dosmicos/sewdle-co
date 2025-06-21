@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,7 +25,7 @@ const DeliveriesPage = () => {
     rejected_deliveries: 0
   });
 
-  const { fetchDeliveries, getDeliveryStats, deleteDelivery, loading } = useDeliveries();
+  const { fetchDeliveries, getDeliveryStats, deleteDelivery, parseDeliveryStats, loading } = useDeliveries();
 
   useEffect(() => {
     loadDeliveries();
@@ -98,39 +97,6 @@ const DeliveriesPage = () => {
     
     return true;
   });
-
-  // Function to calculate approved and defective quantities from delivery notes
-  const parseDeliveryStats = (notes: string, status: string) => {
-    if (!notes) {
-      return { approved: 0, defective: 0 };
-    }
-
-    const approvedMatch = notes.match(/(\d+)\s+aprobada/i);
-    const defectiveMatch = notes.match(/(\d+)\s+(?:devuelta|defectuosa)/i);
-
-    let approved = 0;
-    let defective = 0;
-
-    if (approvedMatch) {
-      approved = parseInt(approvedMatch[1]);
-    }
-
-    if (defectiveMatch) {
-      defective = parseInt(defectiveMatch[1]);
-    }
-
-    // If no specific numbers found but status indicates approval/rejection
-    if (approved === 0 && defective === 0) {
-      if (status === 'approved') {
-        // Assume all delivered items were approved if no specific breakdown
-        return { approved: 0, defective: 0 }; // Will show 0/0 until we have the actual numbers
-      } else if (status === 'rejected') {
-        return { approved: 0, defective: 0 }; // Will show 0/0 until we have the actual numbers
-      }
-    }
-
-    return { approved, defective };
-  };
 
   const renderStatusBadge = (status) => {
     switch (status) {
