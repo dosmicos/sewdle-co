@@ -21,7 +21,7 @@
     --secondary-foreground: 0 0 0;
     
     /* Colores de estado */
-    --muted: 245 245 245;
+    --muted: 249 250 251;
     --muted-foreground: 75 85 99;
     --accent: 229 231 235;
     --accent-foreground: 0 0 0;
@@ -431,4 +431,12 @@
 
 .clean-layout button.bg-blue-500:hover {
   background-color: #2563eb;
+}
+
+
+
+/* Fix para hover molesto de tablas */
+table tr:hover,
+tbody tr:hover {
+  background-color: transparent !important;
 }
