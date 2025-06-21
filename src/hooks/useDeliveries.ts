@@ -203,7 +203,7 @@ export const useDeliveries = () => {
       }
 
       console.log('Fetched deliveries data:', data);
-      return data;
+      return data || [];
     } catch (error) {
       console.error('Error fetching deliveries:', error);
       toast({
@@ -451,46 +451,8 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Determine delivery status - NUEVA LÓGICA
-      let deliveryStatus = 'approved';
-      let deliveryNotes = '';
-
-      if (totalDefective === 0 && totalApproved === totalDelivered) {
-        // Estado Aprobado: Si las unidades entregadas y las aprobadas son iguales y no hay defectuosas
-        deliveryStatus = 'approved';
-        deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-      } else if (totalDefective > 0) {
-        // Calcular tasa de aprobación
-        const approvalRate = totalDelivered > 0 ? (totalApproved / totalDelivered) * 100 : 0;
-        
-        if (approvalRate > 50) {
-          // Parcialmente aprobado: Si hay unidades defectuosas y la tasa de aprobación es mayor al 50%
-          deliveryStatus = 'partial_approved';
-          deliveryNotes = `Entrega parcialmente aprobada: ${totalApproved} aprobadas, ${totalDefective} defectuosas de ${totalDelivered} entregadas (${approvalRate.toFixed(1)}% aprobación). ${qualityData.generalNotes || ''}`;
-        } else {
-          // Devuelto: Si hay unidades defectuosas y la tasa de aprobación es menor al 50%
-          deliveryStatus = 'rejected';
-          deliveryNotes = `Entrega devuelta: ${totalApproved} aprobadas, ${totalDefective} defectuosas de ${totalDelivered} entregadas (${approvalRate.toFixed(1)}% aprobación). ${qualityData.generalNotes || ''}`;
-        }
-      }
-
-      console.log('Final delivery status:', deliveryStatus);
-      console.log('Delivery notes:', deliveryNotes);
-
-      const { error: deliveryUpdateError } = await supabase
-        .from('deliveries')
-        .update({
-          status: deliveryStatus,
-          notes: deliveryNotes
-        })
-        .eq('id', deliveryId);
-
-      if (deliveryUpdateError) {
-        console.error('Error updating delivery status:', deliveryUpdateError);
-        throw new Error(`Error al actualizar estado de entrega: ${deliveryUpdateError.message}`);
-      }
-
-      console.log('Successfully updated delivery status to:', deliveryStatus);
+      // Note: The delivery status will be automatically updated by the database trigger
+      // based on the new logic we implemented in the SQL migration
 
       toast({
         title: "Revisión de calidad procesada",
