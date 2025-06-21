@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -689,12 +690,12 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals properly
-      let totalsOrdered = 0;
-      let totalsDelivered = 0;
-      let totalsApproved = 0;
-      let totalsDefective = 0;
-      let totalsPending = 0;
+      // Initialize totals properly with explicit number type
+      let totalsOrdered: number = 0;
+      let totalsDelivered: number = 0;
+      let totalsApproved: number = 0;
+      let totalsDefective: number = 0;
+      let totalsPending: number = 0;
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
         for (const orderItem of orderData.order_items) {
