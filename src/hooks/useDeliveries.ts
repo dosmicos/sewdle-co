@@ -42,6 +42,11 @@ interface ItemUpdateData {
   product_variant_id: string | null;
 }
 
+interface DeliveryStats {
+  approved: number;
+  defective: number;
+}
+
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -446,22 +451,27 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Determine delivery status - CORREGIDA LA LÓGICA
+      // Determine delivery status - NUEVA LÓGICA
       let deliveryStatus = 'approved';
       let deliveryNotes = '';
 
-      if (totalDefective > 0 && totalApproved === 0) {
-        // Solo hay defectuosas, sin aprobadas
-        deliveryStatus = 'rejected';
-        deliveryNotes = `Entrega devuelta: ${totalDefective} unidades defectuosas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-      } else if (totalDefective > 0 && totalApproved > 0) {
-        // Hay tanto aprobadas como defectuosas - PARCIALMENTE APROBADO
-        deliveryStatus = 'partial_approved';
-        deliveryNotes = `Entrega parcialmente aprobada: ${totalApproved} aprobadas, ${totalDefective} devueltas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
-      } else {
-        // Solo hay aprobadas
+      if (totalDefective === 0 && totalApproved === totalDelivered) {
+        // Estado Aprobado: Si las unidades entregadas y las aprobadas son iguales y no hay defectuosas
         deliveryStatus = 'approved';
         deliveryNotes = `Entrega aprobada: ${totalApproved} aprobadas de ${totalDelivered} entregadas. ${qualityData.generalNotes || ''}`;
+      } else if (totalDefective > 0) {
+        // Calcular tasa de aprobación
+        const approvalRate = totalDelivered > 0 ? (totalApproved / totalDelivered) * 100 : 0;
+        
+        if (approvalRate > 50) {
+          // Parcialmente aprobado: Si hay unidades defectuosas y la tasa de aprobación es mayor al 50%
+          deliveryStatus = 'partial_approved';
+          deliveryNotes = `Entrega parcialmente aprobada: ${totalApproved} aprobadas, ${totalDefective} defectuosas de ${totalDelivered} entregadas (${approvalRate.toFixed(1)}% aprobación). ${qualityData.generalNotes || ''}`;
+        } else {
+          // Devuelto: Si hay unidades defectuosas y la tasa de aprobación es menor al 50%
+          deliveryStatus = 'rejected';
+          deliveryNotes = `Entrega devuelta: ${totalApproved} aprobadas, ${totalDefective} defectuosas de ${totalDelivered} entregadas (${approvalRate.toFixed(1)}% aprobación). ${qualityData.generalNotes || ''}`;
+        }
       }
 
       console.log('Final delivery status:', deliveryStatus);
@@ -572,6 +582,37 @@ export const useDeliveries = () => {
     }
   };
 
+  const parseDeliveryStats = (notes: string, status: string): DeliveryStats => {
+    if (!notes) {
+      return { approved: 0, defective: 0 };
+    }
+
+    const approvedMatch = notes.match(/(\d+)\s+aprobada/i);
+    const defectiveMatch = notes.match(/(\d+)\s+(?:devuelta|defectuosa)/i);
+
+    let approved = 0;
+    let defective = 0;
+
+    if (approvedMatch) {
+      approved = parseInt(approvedMatch[1]);
+    }
+
+    if (defectiveMatch) {
+      defective = parseInt(defectiveMatch[1]);
+    }
+
+    // If no specific numbers found but status indicates approval/rejection
+    if (approved === 0 && defective === 0) {
+      if (status === 'approved') {
+        return { approved: 0, defective: 0 };
+      } else if (status === 'rejected') {
+        return { approved: 0, defective: 0 };
+      }
+    }
+
+    return { approved, defective };
+  };
+
   return {
     createDelivery,
     fetchDeliveries,
@@ -581,6 +622,7 @@ export const useDeliveries = () => {
     processQualityReview,
     getDeliveryStats,
     deleteDelivery,
+    parseDeliveryStats,
     loading
   };
 };
