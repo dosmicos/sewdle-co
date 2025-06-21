@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -690,21 +689,19 @@ export const useDeliveries = () => {
 
       console.log('Order data for status update:', orderData);
 
-      // Initialize totals with OrderTotals interface
-      const totals: OrderTotals = {
-        ordered: 0,
-        delivered: 0,
-        approved: 0,
-        defective: 0,
-        pending: 0
-      };
+      // Initialize totals properly
+      let totalsOrdered = 0;
+      let totalsDelivered = 0;
+      let totalsApproved = 0;
+      let totalsDefective = 0;
+      let totalsPending = 0;
 
       if (orderData.order_items && Array.isArray(orderData.order_items)) {
         for (const orderItem of orderData.order_items) {
           if (!orderItem) continue;
           
           const itemQuantity = Number(orderItem.quantity) || 0;
-          totals.ordered += itemQuantity;
+          totalsOrdered += itemQuantity;
           
           if (orderData.deliveries && Array.isArray(orderData.deliveries)) {
             for (const delivery of orderData.deliveries) {
@@ -718,14 +715,14 @@ export const useDeliveries = () => {
                 }
                 
                 const deliveredQty = Number(deliveryItem.quantity_delivered) || 0;
-                totals.delivered += deliveredQty;
+                totalsDelivered += deliveredQty;
                 
                 const qualityStatus = deliveryItem.quality_status;
                 
                 if (qualityStatus === 'approved') {
-                  totals.approved += deliveredQty;
+                  totalsApproved += deliveredQty;
                 } else if (qualityStatus === 'rejected') {
-                  totals.defective += deliveredQty;
+                  totalsDefective += deliveredQty;
                 } else if (qualityStatus === 'partial_approved') {
                   const notes = String(deliveryItem.notes || '');
                   const approvedMatch = notes.match(/Aprobadas: (\d+)/);
@@ -734,14 +731,14 @@ export const useDeliveries = () => {
                   if (approvedMatch && approvedMatch[1]) {
                     const approvedCount = parseInt(approvedMatch[1], 10);
                     if (!isNaN(approvedCount)) {
-                      totals.approved += approvedCount;
+                      totalsApproved += approvedCount;
                     }
                   }
                   
                   if (defectiveMatch && defectiveMatch[1]) {
                     const defectiveCount = parseInt(defectiveMatch[1], 10);
                     if (!isNaN(defectiveCount)) {
-                      totals.defective += defectiveCount;
+                      totalsDefective += defectiveCount;
                     }
                   }
                 }
@@ -751,28 +748,28 @@ export const useDeliveries = () => {
         }
       }
 
-      totals.pending = Math.max(0, totals.ordered - totals.approved - totals.defective);
+      totalsPending = Math.max(0, totalsOrdered - totalsApproved - totalsDefective);
 
       console.log('Order status calculation:', {
-        totalOrdered: totals.ordered,
-        totalDelivered: totals.delivered,
-        totalApproved: totals.approved,
-        totalDefective: totals.defective,
-        totalPending: totals.pending,
+        totalOrdered: totalsOrdered,
+        totalDelivered: totalsDelivered,
+        totalApproved: totalsApproved,
+        totalDefective: totalsDefective,
+        totalPending: totalsPending,
         currentStatus: orderData.status
       });
 
       let orderStatus = 'pending';
       let orderNotes = '';
 
-      const totalProcessed = totals.approved + totals.defective;
+      const totalProcessed = totalsApproved + totalsDefective;
       
-      if (totalProcessed >= totals.ordered) {
+      if (totalProcessed >= totalsOrdered) {
         orderStatus = 'completed';
-        orderNotes = `Orden completada: ${totals.approved} aprobadas${totals.defective > 0 ? `, ${totals.defective} devueltas` : ''} de ${totals.ordered} total.`;
-      } else if (totals.delivered > 0) {
+        orderNotes = `Orden completada: ${totalsApproved} aprobadas${totalsDefective > 0 ? `, ${totalsDefective} devueltas` : ''} de ${totalsOrdered} total.`;
+      } else if (totalsDelivered > 0) {
         orderStatus = 'in_progress';
-        orderNotes = `Orden en progreso: ${totals.approved} aprobadas, ${totals.defective} devueltas, ${totals.pending} pendientes de ${totals.ordered} total.`;
+        orderNotes = `Orden en progreso: ${totalsApproved} aprobadas, ${totalsDefective} devueltas, ${totalsPending} pendientes de ${totalsOrdered} total.`;
       }
 
       console.log('New order status will be:', orderStatus);
