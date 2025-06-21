@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -506,7 +505,13 @@ export const useDeliveries = () => {
         throw error;
       }
 
-      return data;
+      return data?.[0] || {
+        total_deliveries: 0,
+        pending_deliveries: 0,
+        in_quality_deliveries: 0,
+        approved_deliveries: 0,
+        rejected_deliveries: 0
+      };
     } catch (error) {
       console.error('Error fetching delivery stats:', error);
       return {

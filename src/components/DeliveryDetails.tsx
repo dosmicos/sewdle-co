@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -203,6 +202,15 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     return { totalApproved, totalDefective };
   };
 
+  // Calculate total delivered quantity
+  const calculateTotalDelivered = () => {
+    if (!deliveryData?.delivery_items) return 0;
+    
+    return deliveryData.delivery_items.reduce((total, item) => {
+      return total + (item.quantity_delivered || 0);
+    }, 0);
+  };
+
   // Get quantity mismatches for validation
   const getQuantityMismatches = () => {
     const mismatches = [];
@@ -275,6 +283,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   const summaryStats = calculateSummaryStats();
   const qualityTotals = calculateQualityTotals();
   const quantityMismatches = getQuantityMismatches();
+  const totalDelivered = calculateTotalDelivered();
 
   // Check if the delivery has been processed (not pending or in_quality)
   const isDeliveryProcessed = deliveryData.status === 'approved' || 
@@ -295,6 +304,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           <div>
             <h1 className="text-2xl font-bold">{deliveryData.tracking_number}</h1>
             <p className="text-gray-600">Orden: {deliveryData.orders?.order_number}</p>
+            <p className="text-sm text-blue-600 font-medium">Total Entregado: {totalDelivered} unidades</p>
           </div>
         </div>
         {renderStatusBadge(deliveryData.status)}
@@ -360,7 +370,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Delivery Information (Reduced width) */}
+        {/* Left Column - Delivery Information */}
         <div className="lg:col-span-1 space-y-6">
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Información de Entrega</h3>
@@ -383,6 +393,10 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
               <div className="flex items-center text-sm">
                 <span className="font-medium">Entrega #:</span>
                 <span className="ml-2">{deliveryData.tracking_number}</span>
+              </div>
+              <div className="flex items-center text-sm">
+                <span className="font-medium">Total Entregado:</span>
+                <span className="ml-2 font-bold text-blue-600">{totalDelivered} unidades</span>
               </div>
               {deliveryData.recipient_name && (
                 <div className="flex items-center text-sm">
