@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2, Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { sortProductVariants } from '@/lib/variantSorting';
 
 interface ProductSelectorProps {
   selectedProducts: any[];
@@ -87,15 +87,21 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
         return;
       }
 
-      const formattedProducts = products?.map(product => ({
-        id: product.id,
-        name: product.name,
-        description: product.description || '',
-        base_price: product.base_price || 0,
-        variants: product.product_variants || []
-      })) || [];
+      const formattedProducts = products?.map(product => {
+        // Ordenar las variantes usando nuestra función utilitaria
+        const sortedVariants = product.product_variants ? 
+          sortProductVariants(product.product_variants) : [];
 
-      console.log('Fetched products from database:', formattedProducts);
+        return {
+          id: product.id,
+          name: product.name,
+          description: product.description || '',
+          base_price: product.base_price || 0,
+          variants: sortedVariants
+        };
+      }) || [];
+
+      console.log('Fetched products from database with sorted variants:', formattedProducts);
       setAvailableProducts(formattedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -140,13 +146,13 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     const selectedProduct = availableProducts.find(p => p.id === productId);
     if (!selectedProduct) return;
 
-    console.log('Selected product:', selectedProduct);
+    console.log('Selected product with sorted variants:', selectedProduct);
 
     setInternalProducts(prev => {
       const updated = [...prev];
       const variants: any = {};
       
-      // Inicializar todas las variantes con cantidad 0
+      // Las variantes ya vienen ordenadas desde fetchProducts
       selectedProduct.variants.forEach(variant => {
         variants[variant.id] = {
           id: variant.id,
@@ -165,7 +171,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
         variants
       };
       
-      console.log('Updated internal products:', updated);
+      console.log('Updated internal products with sorted variants:', updated);
       return updated;
     });
   };

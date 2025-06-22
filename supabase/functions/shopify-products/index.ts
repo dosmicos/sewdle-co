@@ -2,6 +2,86 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
 
+// Función de ordenamiento de variantes (copiada desde utils)
+const extractAgeRangeStart = (str: string): number => {
+  const lowerStr = str.toLowerCase();
+  
+  const agePatterns = [
+    /(\d+)\s*a\s*\d+\s*mes/i,
+    /(\d+)\s*-\s*\d+\s*mes/i,
+    /(\d+)\s*to\s*\d+\s*month/i,
+    /(\d+)\s*mes/i,
+    /(\d+)m/i,
+  ];
+
+  for (const pattern of agePatterns) {
+    const match = lowerStr.match(pattern);
+    if (match) {
+      return parseInt(match[1]);
+    }
+  }
+
+  const match = str.match(/\d+/);
+  return match ? parseInt(match[0]) : 0;
+};
+
+const getStandardSizeOrder = (size: string): number => {
+  const lowerSize = size.toLowerCase().trim();
+  const sizeOrder: { [key: string]: number } = {
+    'xxxs': 1, '3xs': 1, 'xxs': 2, '2xs': 2, 'xs': 3,
+    's': 4, 'small': 4, 'm': 5, 'medium': 5, 'l': 6, 'large': 6,
+    'xl': 7, 'xxl': 8, '2xl': 8, 'xxxl': 9, '3xl': 9, '4xl': 10
+  };
+  return sizeOrder[lowerSize] || 999;
+};
+
+const isAgeVariant = (str: string): boolean => {
+  const lowerStr = str.toLowerCase();
+  return /\d+\s*(a|to|-)\s*\d+\s*(mes|month|año|year)|^\d+\s*(mes|month|m|año|year|y)/.test(lowerStr);
+};
+
+const isStandardSize = (str: string): boolean => {
+  const lowerStr = str.toLowerCase().trim();
+  return ['xxxs', '3xs', 'xxs', '2xs', 'xs', 's', 'small', 'm', 'medium', 'l', 'large', 'xl', 'xxl', '2xl', 'xxxl', '3xl', '4xl'].includes(lowerStr);
+};
+
+const sortVariants = (variants: any[]): any[] => {
+  return [...variants].sort((a, b) => {
+    const aValue = a.title || a.size || '';
+    const bValue = b.title || b.size || '';
+
+    if (!aValue && !bValue) return 0;
+    if (!aValue) return 1;
+    if (!bValue) return -1;
+
+    if (isAgeVariant(aValue) && isAgeVariant(bValue)) {
+      const aAge = extractAgeRangeStart(aValue);
+      const bAge = extractAgeRangeStart(bValue);
+      return aAge - bAge;
+    }
+
+    if (isStandardSize(aValue) && isStandardSize(bValue)) {
+      const aOrder = getStandardSizeOrder(aValue);
+      const bOrder = getStandardSizeOrder(bValue);
+      return aOrder - bOrder;
+    }
+
+    const aNum = extractAgeRangeStart(aValue);
+    const bNum = extractAgeRangeStart(bValue);
+    if (aNum > 0 && bNum > 0) {
+      return aNum - bNum;
+    }
+
+    if (isAgeVariant(aValue) && !isAgeVariant(bValue)) return -1;
+    if (!isAgeVariant(aValue) && isAgeVariant(bValue)) return 1;
+
+    if (isStandardSize(aValue) && !isStandardSize(bValue)) return -1;
+    if (!isStandardSize(aValue) && isStandardSize(bValue)) return 1;
+
+    return aValue.localeCompare(bValue, 'es', { numeric: true });
+  });
+};
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -56,9 +136,14 @@ serve(async (req) => {
     // Procesar los productos
     if (data.products && data.products.length > 0) {
       for (const product of data.products) {
-        for (const variant of product.variants || []) {
-          // Usar la cantidad de inventario básica disponible en la variante
-          variant.stock_quantity = variant.inventory_quantity || 0
+        if (product.variants && product.variants.length > 0) {
+          // ORDENAR LAS VARIANTES ANTES DE PROCESARLAS
+          product.variants = sortVariants(product.variants);
+          
+          for (const variant of product.variants) {
+            // Usar la cantidad de inventario básica disponible en la variante
+            variant.stock_quantity = variant.inventory_quantity || 0
+          }
         }
       }
 

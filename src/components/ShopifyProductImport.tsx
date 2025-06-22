@@ -6,6 +6,7 @@ import { Loader2, Package, AlertCircle, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ProductImportConfirmation from '@/components/ProductImportConfirmation';
+import { sortShopifyVariants } from '@/lib/variantSorting';
 
 interface ProductVariant {
   size: string;
@@ -67,20 +68,25 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         throw new Error('Respuesta inválida de Shopify');
       }
 
-      const formattedProducts = data.products.map((product: any) => ({
-        id: product.id,
-        title: product.title,
-        description: product.body_html || '',
-        price: parseFloat(product.variants?.[0]?.price || '0'),
-        image_url: product.image?.src || product.images?.[0]?.src || '',
-        variants: product.variants?.map((variant: any) => ({
-          size: variant.title !== 'Default Title' ? variant.title : '',
-          color: variant.option2 || '',
-          sku: variant.sku || '',
-          price: parseFloat(variant.price || '0'),
-          stock_quantity: variant.stock_quantity || 0
-        })) || []
-      }));
+      const formattedProducts = data.products.map((product: any) => {
+        // Ordenar las variantes usando nuestra función utilitaria
+        const sortedVariants = product.variants ? sortShopifyVariants(product.variants) : [];
+        
+        return {
+          id: product.id,
+          title: product.title,
+          description: product.body_html || '',
+          price: parseFloat(sortedVariants[0]?.price || '0'),
+          image_url: product.image?.src || product.images?.[0]?.src || '',
+          variants: sortedVariants.map((variant: any) => ({
+            size: variant.title !== 'Default Title' ? variant.title : '',
+            color: variant.option2 || '',
+            sku: variant.sku || '',
+            price: parseFloat(variant.price || '0'),
+            stock_quantity: variant.stock_quantity || 0
+          }))
+        };
+      });
 
       setAllProducts(formattedProducts);
       setFilteredProducts(formattedProducts);
@@ -237,8 +243,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
       console.log('Created product:', createdProduct);
 
-      // Crear las variantes del producto
+      // Crear las variantes del producto CON ORDEN CORRECTO
       if (product.variants && product.variants.length > 0) {
+        // Las variantes ya vienen ordenadas desde fetchAllProducts
         const variants = product.variants.map((variant, index) => ({
           product_id: createdProduct.id,
           size: variant.size || '',
@@ -248,7 +255,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           stock_quantity: variant.stock_quantity || 0
         }));
 
-        console.log('Creating variants:', variants);
+        console.log('Creating variants in correct order:', variants);
 
         const { error: variantsError } = await supabase
           .from('product_variants')
@@ -256,10 +263,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
         if (variantsError) {
           console.error('Error creating variants:', variantsError);
-          // Si hay error con variantes, no fallar completamente
           console.warn('Continuing without variants due to error:', variantsError);
         } else {
-          console.log('Successfully created variants');
+          console.log('Successfully created variants in correct order');
         }
       }
 

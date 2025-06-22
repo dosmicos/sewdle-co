@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { sortProductVariants } from '@/lib/variantSorting';
 
 interface Product {
   id: string;
@@ -68,7 +68,11 @@ export const useProducts = () => {
         throw error;
       }
 
-      return data || [];
+      // Ordenar las variantes antes de devolverlas
+      const sortedVariants = data ? sortProductVariants(data) : [];
+      console.log('Fetched and sorted product variants:', sortedVariants);
+      
+      return sortedVariants;
     } catch (err) {
       console.error('Error in fetchProductVariants:', err);
       return [];
