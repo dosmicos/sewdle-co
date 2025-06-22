@@ -127,8 +127,9 @@ export const useDeliveryOrders = () => {
   const getOrderStats = async (orderId: string) => {
     setLoading(true);
     try {
+      // Usar la función corregida que usa los campos estructurados
       const { data, error } = await supabase
-        .rpc('get_order_delivery_stats', { order_id_param: orderId });
+        .rpc('get_order_delivery_stats_v2', { order_id_param: orderId });
 
       if (error) {
         throw error;
@@ -136,7 +137,7 @@ export const useDeliveryOrders = () => {
 
       return data?.[0] || null;
     } catch (error) {
-      console.error('Error fetching order stats:',  error);
+      console.error('Error fetching order stats:', error);
       return null;
     } finally {
       setLoading(false);
@@ -146,6 +147,7 @@ export const useDeliveryOrders = () => {
   const getOrderDeliveriesBreakdown = async (orderId: string) => {
     setLoading(true);
     try {
+      // Esta función ya fue actualizada para usar los nuevos campos estructurados
       const { data, error } = await supabase
         .rpc('get_order_deliveries_breakdown', { order_id_param: orderId });
 
