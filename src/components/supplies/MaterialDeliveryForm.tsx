@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,19 +29,34 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
   const [supportDocument, setSupportDocument] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [orders, setOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
 
   const { materials: availableMaterials, loading: materialsLoading } = useMaterials();
   const { workshops, loading: workshopsLoading } = useWorkshops();
-  const { fetchOrders, loading: ordersLoading } = useOrders();
+  const { fetchOrders } = useOrders();
   const { createMaterialDelivery, loading: deliveryLoading } = useMaterialDeliveries();
 
-  useEffect(() => {
-    const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
+    try {
+      setLoadingOrders(true);
+      setOrdersError(null);
+      console.log('Loading orders for material delivery form...');
       const ordersData = await fetchOrders();
+      console.log('Orders loaded successfully:', ordersData?.length || 0);
       setOrders(ordersData || []);
-    };
-    loadOrders();
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      setOrdersError('Error al cargar las órdenes. El formulario funcionará sin órdenes.');
+      setOrders([]);
+    } finally {
+      setLoadingOrders(false);
+    }
   }, [fetchOrders]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -134,7 +150,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
     try {
       const deliveryData = {
         workshopId: formData.workshopId,
-        orderId: formData.orderId || undefined,
+        orderId: formData.orderId === 'none' || !formData.orderId ? undefined : formData.orderId,
         deliveredBy: formData.deliveredBy,
         notes: formData.notes,
         materials: materials.filter(m => m.materialId && m.quantity > 0),
@@ -153,7 +169,8 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
     }
   };
 
-  if (materialsLoading || workshopsLoading || ordersLoading) {
+  // Show loading only if critical resources are loading
+  if (materialsLoading || workshopsLoading) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl">
@@ -194,7 +211,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
                   <SelectValue placeholder="Sin orden asignada" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin orden asignada</SelectItem>
+                  <SelectItem value="none">Sin orden asignada</SelectItem>
                   {orders.map((order) => (
                     <SelectItem key={order.id} value={order.id}>
                       {order.order_number}
@@ -202,9 +219,20 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-500 mt-1">
-                Deja vacío si los materiales son para órdenes futuras
-              </p>
+              {loadingOrders && (
+                <p className="text-xs text-blue-500 mt-1">Cargando órdenes...</p>
+              )}
+              {ordersError && (
+                <p className="text-xs text-orange-500 mt-1">{ordersError}</p>
+              )}
+              {!loadingOrders && !ordersError && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {orders.length === 0 
+                    ? 'No hay órdenes disponibles - puedes registrar entregas sin orden asignada'
+                    : 'Deja vacío si los materiales son para órdenes futuras'
+                  }
+                </p>
+              )}
             </div>
 
             <div>
