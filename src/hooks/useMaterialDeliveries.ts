@@ -27,39 +27,53 @@ export const useMaterialDeliveries = () => {
       console.log('Creating material delivery with data:', deliveryData);
 
       // Check if user is authenticated
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Error de autenticación');
+      }
       
       if (!session?.user) {
-        throw new Error('Usuario no autenticado');
+        console.error('No session found');
+        throw new Error('Usuario no autenticado. Por favor inicia sesión.');
       }
+
+      console.log('User authenticated:', session.user.id);
 
       // Create material deliveries for each material
       const deliveryPromises = deliveryData.materials.map(async (material) => {
+        const deliveryRecord = {
+          material_id: material.materialId,
+          workshop_id: deliveryData.workshopId,
+          order_id: deliveryData.orderId || null,
+          quantity_delivered: material.quantity,
+          quantity_remaining: material.quantity,
+          delivered_by: session.user.id,
+          notes: material.notes || deliveryData.notes || null
+        };
+
+        console.log('Inserting delivery record:', deliveryRecord);
+
         const { data, error } = await supabase
           .from('material_deliveries')
-          .insert({
-            material_id: material.materialId,
-            workshop_id: deliveryData.workshopId,
-            order_id: deliveryData.orderId || null,
-            quantity_delivered: material.quantity,
-            quantity_remaining: material.quantity,
-            delivered_by: session.user.id,
-            notes: material.notes || deliveryData.notes || null
-          })
+          .insert(deliveryRecord)
           .select()
           .single();
 
         if (error) {
           console.error('Error creating material delivery:', error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
           throw error;
         }
 
+        console.log('Material delivery created successfully:', data);
         return data;
       });
 
       const results = await Promise.all(deliveryPromises);
 
-      console.log('Material deliveries created successfully:', results);
+      console.log('All material deliveries created successfully:', results);
 
       toast({
         title: "¡Entrega registrada exitosamente!",
@@ -74,10 +88,14 @@ export const useMaterialDeliveries = () => {
       
       if (error.message?.includes('Usuario no autenticado')) {
         errorMessage = "Debes iniciar sesión para registrar entregas.";
-      } else if (error.message?.includes('policy')) {
-        errorMessage = "Error de permisos. Verifica tu rol de usuario.";
-      } else if (error.code) {
-        errorMessage = `Error de base de datos: ${error.message}`;
+      } else if (error.message?.includes('Error de autenticación')) {
+        errorMessage = "Error de autenticación. Por favor vuelve a iniciar sesión.";
+      } else if (error.code === 'PGRST301') {
+        errorMessage = "Error de permisos. Contacta al administrador del sistema.";
+      } else if (error.code === '42501') {
+        errorMessage = "No tienes permisos para realizar esta acción.";
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
       }
       
       toast({
@@ -94,6 +112,8 @@ export const useMaterialDeliveries = () => {
   const fetchMaterialDeliveries = async () => {
     setLoading(true);
     try {
+      console.log('Fetching material deliveries...');
+      
       const { data, error } = await supabase
         .from('material_deliveries')
         .select(`
@@ -102,7 +122,8 @@ export const useMaterialDeliveries = () => {
             name,
             sku,
             unit,
-            category
+            category,
+            color
           ),
           workshops (
             name
