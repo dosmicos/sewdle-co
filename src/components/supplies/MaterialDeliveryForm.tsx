@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,11 +27,20 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
   ]);
   const [supportDocument, setSupportDocument] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [orders, setOrders] = useState<any[]>([]);
 
   const { materials: availableMaterials, loading: materialsLoading } = useMaterials();
   const { workshops, loading: workshopsLoading } = useWorkshops();
-  const { orders } = useOrders();
+  const { fetchOrders, loading: ordersLoading } = useOrders();
   const { createMaterialDelivery, loading: deliveryLoading } = useMaterialDeliveries();
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      const ordersData = await fetchOrders();
+      setOrders(ordersData || []);
+    };
+    loadOrders();
+  }, [fetchOrders]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -145,7 +153,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
     }
   };
 
-  if (materialsLoading || workshopsLoading) {
+  if (materialsLoading || workshopsLoading || ordersLoading) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl">
