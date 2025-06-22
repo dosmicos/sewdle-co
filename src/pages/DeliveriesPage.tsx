@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +46,12 @@ const DeliveriesPage = () => {
     setSelectedDelivery(delivery);
   };
 
-  const handleBackToList = () => {
+  const handleBackToList = async (shouldRefresh = false) => {
+    if (shouldRefresh) {
+      console.log('Refreshing data after quality review...');
+      await loadDeliveries();
+      await loadStats();
+    }
     setSelectedDelivery(null);
   };
 

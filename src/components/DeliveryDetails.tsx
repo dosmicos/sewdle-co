@@ -11,7 +11,7 @@ import { useDeliveries } from '@/hooks/useDeliveries';
 
 interface DeliveryDetailsProps {
   delivery: any;
-  onBack: () => void;
+  onBack: (shouldRefresh?: boolean) => void;
 }
 
 // Mock user data for role checking
@@ -169,8 +169,12 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         generalNotes: ''
       });
       
-      // Instead of forcing a page reload, just reload the delivery details
+      // Reload the delivery details
       await loadDeliveryDetails();
+      
+      // Notify parent to refresh data and return to list
+      console.log('Calling onBack with refresh flag...');
+      onBack(true);
     } else {
       console.log('Quality review failed');
     }
@@ -267,7 +271,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     return (
       <div className="p-6 space-y-6 animate-fade-in">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={onBack}>
+          <Button variant="outline" onClick={() => onBack()}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver
           </Button>
@@ -297,7 +301,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={onBack}>
+          <Button variant="outline" onClick={() => onBack()}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver
           </Button>
