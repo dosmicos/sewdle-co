@@ -26,12 +26,12 @@ export const useMaterialDeliveries = () => {
     try {
       console.log('Creating material delivery with data:', deliveryData);
 
-      // Check if user is authenticated
+      // Enhanced authentication check
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
         console.error('Session error:', sessionError);
-        throw new Error('Error de autenticación');
+        throw new Error('Error de autenticación: ' + sessionError.message);
       }
       
       if (!session?.user) {
@@ -41,8 +41,21 @@ export const useMaterialDeliveries = () => {
 
       console.log('User authenticated:', session.user.id);
 
+      // Verify user role before proceeding
+      const { data: userRole, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (roleError && roleError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error checking user role:', roleError);
+      }
+
+      console.log('User role:', userRole?.role || 'no role assigned');
+
       // Create material deliveries for each material
-      const deliveryPromises = deliveryData.materials.map(async (material) => {
+      const deliveryPromises = deliveryData.materials.map(async (material, index) => {
         const deliveryRecord = {
           material_id: material.materialId,
           workshop_id: deliveryData.workshopId,
@@ -53,7 +66,7 @@ export const useMaterialDeliveries = () => {
           notes: material.notes || deliveryData.notes || null
         };
 
-        console.log('Inserting delivery record:', deliveryRecord);
+        console.log(`Creating delivery ${index + 1}/${deliveryData.materials.length}:`, deliveryRecord);
 
         const { data, error } = await supabase
           .from('material_deliveries')
@@ -62,12 +75,18 @@ export const useMaterialDeliveries = () => {
           .single();
 
         if (error) {
-          console.error('Error creating material delivery:', error);
-          console.error('Error details:', JSON.stringify(error, null, 2));
-          throw error;
+          console.error(`Error creating material delivery ${index + 1}:`, error);
+          console.error('Full error details:', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            deliveryRecord
+          });
+          throw new Error(`Error en entrega ${index + 1}: ${error.message}`);
         }
 
-        console.log('Material delivery created successfully:', data);
+        console.log(`Material delivery ${index + 1} created successfully:`, data);
         return data;
       });
 
@@ -86,20 +105,27 @@ export const useMaterialDeliveries = () => {
       
       let errorMessage = "No se pudo registrar la entrega de materiales";
       
+      // Enhanced error handling with more specific messages
       if (error.message?.includes('Usuario no autenticado')) {
         errorMessage = "Debes iniciar sesión para registrar entregas.";
       } else if (error.message?.includes('Error de autenticación')) {
         errorMessage = "Error de autenticación. Por favor vuelve a iniciar sesión.";
-      } else if (error.code === 'PGRST301') {
-        errorMessage = "Error de permisos. Contacta al administrador del sistema.";
+      } else if (error.code === 'PGRST301' || error.message?.includes('policy')) {
+        errorMessage = "Sin permisos: Tu usuario no tiene autorización para registrar entregas de materiales. Contacta al administrador.";
       } else if (error.code === '42501') {
-        errorMessage = "No tienes permisos para realizar esta acción.";
+        errorMessage = "Permisos insuficientes: No tienes autorización para realizar esta acción.";
+      } else if (error.code === 'PGRST116') {
+        errorMessage = "Datos no encontrados: Verifica que el taller y materiales seleccionados existan.";
+      } else if (error.message?.includes('foreign key constraint')) {
+        errorMessage = "Error de datos: Verifica que el taller, material u orden seleccionados sean válidos.";
+      } else if (error.message?.includes('violates not-null constraint')) {
+        errorMessage = "Datos incompletos: Faltan campos obligatorios en el formulario.";
       } else if (error.message) {
         errorMessage = `Error: ${error.message}`;
       }
       
       toast({
-        title: "Error",
+        title: "Error al registrar entrega",
         description: errorMessage,
         variant: "destructive",
       });
@@ -136,18 +162,29 @@ export const useMaterialDeliveries = () => {
 
       if (error) {
         console.error('Error fetching material deliveries:', error);
+        
+        // Enhanced error handling for fetch operations
+        let errorMessage = "No se pudieron cargar las entregas de materiales.";
+        
+        if (error.code === 'PGRST301' || error.message?.includes('policy')) {
+          errorMessage = "Sin permisos para ver las entregas. Contacta al administrador.";
+        } else if (error.message) {
+          errorMessage = `Error al cargar datos: ${error.message}`;
+        }
+        
+        toast({
+          title: "Error al cargar entregas",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        
         throw error;
       }
 
-      console.log('Fetched material deliveries:', data);
+      console.log('Fetched material deliveries:', data?.length || 0, 'records');
       return data || [];
     } catch (error) {
       console.error('Error fetching material deliveries:', error);
-      toast({
-        title: "Error al cargar entregas",
-        description: "No se pudieron cargar las entregas de materiales.",
-        variant: "destructive",
-      });
       return [];
     } finally {
       setLoading(false);
