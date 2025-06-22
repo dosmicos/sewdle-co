@@ -17,9 +17,15 @@ export const useMaterialConsumption = () => {
     try {
       console.log('Consuming materials for order:', orderId, consumptions);
 
+      // Convert to JSON-compatible format for the database function
+      const consumptionData = consumptions.map(item => ({
+        material_id: item.material_id,
+        quantity: item.quantity
+      }));
+
       const { error } = await supabase.rpc('consume_order_materials', {
         order_id_param: orderId,
-        consumption_data: consumptions
+        consumption_data: consumptionData
       });
 
       if (error) {

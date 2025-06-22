@@ -16,6 +16,7 @@ const SuppliesDashboard = () => {
     material: 'all'
   });
   const [deliveries, setDeliveries] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState({
     totalDelivered: 0,
     totalConsumed: 0,
@@ -25,20 +26,24 @@ const SuppliesDashboard = () => {
 
   const { materials, loading: materialsLoading } = useMaterials();
   const { workshops, loading: workshopsLoading } = useWorkshops();
-  const { orders, loading: ordersLoading } = useOrders();
+  const { fetchOrders, loading: ordersLoading } = useOrders();
   const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
 
   useEffect(() => {
-    loadDeliveries();
+    loadData();
   }, []);
 
   useEffect(() => {
     calculateStats();
   }, [deliveries, materials]);
 
-  const loadDeliveries = async () => {
-    const data = await fetchMaterialDeliveries();
-    setDeliveries(data || []);
+  const loadData = async () => {
+    const [deliveriesData, ordersData] = await Promise.all([
+      fetchMaterialDeliveries(),
+      fetchOrders()
+    ]);
+    setDeliveries(deliveriesData || []);
+    setOrders(ordersData || []);
   };
 
   const calculateStats = () => {
