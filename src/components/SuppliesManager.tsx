@@ -11,6 +11,42 @@ interface SuppliesManagerProps {
   onSuppliesChange: (supplies: any[]) => void;
 }
 
+// Helper function to format material display text
+const formatMaterialDisplay = (material: any) => {
+  const baseText = `${material.sku} - ${material.name}`;
+  return material.color ? `${baseText} (${material.color})` : baseText;
+};
+
+// Helper function to get color indicator
+const getColorIndicator = (color: string | null) => {
+  if (!color) return null;
+  
+  const colorMap: Record<string, string> = {
+    'rojo': '#ef4444',
+    'azul': '#3b82f6',
+    'verde': '#10b981',
+    'amarillo': '#f59e0b',
+    'negro': '#000000',
+    'blanco': '#ffffff',
+    'gris': '#6b7280',
+    'rosa': '#ec4899',
+    'morado': '#8b5cf6',
+    'naranja': '#f97316',
+    'café': '#a16207',
+    'beige': '#d6d3d1',
+    'crema': '#fef3c7'
+  };
+  
+  const colorValue = colorMap[color.toLowerCase()] || '#9ca3af';
+  
+  return (
+    <span 
+      className="inline-block w-3 h-3 rounded-full border border-gray-300 mr-2" 
+      style={{ backgroundColor: colorValue }}
+    />
+  );
+};
+
 const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) => {
   const { materials, loading } = useMaterials();
 
@@ -100,7 +136,10 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                   <SelectContent>
                     {materials.map((material) => (
                       <SelectItem key={material.id} value={material.id}>
-                        {material.sku} - {material.name}
+                        <div className="flex items-center">
+                          {getColorIndicator(material.color)}
+                          <span>{formatMaterialDisplay(material)}</span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -153,9 +192,15 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                     Descripción del Material
                   </label>
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="font-medium text-black">{selectedMaterial.name}</div>
+                    <div className="flex items-center mb-2">
+                      {getColorIndicator(selectedMaterial.color)}
+                      <div className="font-medium text-black">{selectedMaterial.name}</div>
+                    </div>
                     <div className="text-sm text-gray-600">SKU: {selectedMaterial.sku}</div>
                     <div className="text-sm text-gray-600">Categoría: {selectedMaterial.category}</div>
+                    {selectedMaterial.color && (
+                      <div className="text-sm text-gray-600">Color: {selectedMaterial.color}</div>
+                    )}
                     {selectedMaterial.description && (
                       <div className="text-sm text-gray-600 mt-1">{selectedMaterial.description}</div>
                     )}
