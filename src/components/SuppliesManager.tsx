@@ -124,6 +124,12 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
     }
   };
 
+  // Helper function to format material display name with color
+  const formatMaterialDisplayName = (material: any) => {
+    const baseName = `${material.name} (${material.sku})`;
+    return material.color ? `${baseName} - ${material.color}` : baseName;
+  };
+
   if (materialsLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -148,7 +154,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                     const mat = materials.find(m => m.id === material.materialId);
                     return (
                       <li key={index}>
-                        • {mat?.name}: faltan {material.quantity} {material.unit}
+                        • {formatMaterialDisplayName(mat)}: faltan {material.quantity} {material.unit}
                       </li>
                     );
                   })}
@@ -218,7 +224,12 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                       {materials.map((material) => (
                         <SelectItem key={material.id} value={material.id}>
                           <div className="flex items-center justify-between w-full">
-                            <span>{material.name} ({material.sku})</span>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{formatMaterialDisplayName(material)}</span>
+                              {material.color && (
+                                <span className="text-xs text-gray-500">Color: {material.color}</span>
+                              )}
+                            </div>
                             {selectedWorkshop && (
                               <Badge variant="outline" className="ml-2">
                                 {workshopStock[material.id] || 0} {material.unit}
@@ -281,7 +292,12 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                   <div className="text-sm text-gray-700">
                     <div><strong>Categoría:</strong> {selectedMaterial.category}</div>
                     {selectedMaterial.color && (
-                      <div><strong>Color:</strong> {selectedMaterial.color}</div>
+                      <div className="flex items-center">
+                        <strong>Color:</strong> 
+                        <Badge variant="outline" className="ml-2 font-medium text-blue-700 border-blue-200">
+                          {selectedMaterial.color}
+                        </Badge>
+                      </div>
                     )}
                     {selectedMaterial.supplier && (
                       <div><strong>Proveedor:</strong> {selectedMaterial.supplier}</div>

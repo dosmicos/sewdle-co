@@ -1,246 +1,126 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Trash2, Plus } from 'lucide-react';
-import { useMaterials } from '@/hooks/useMaterials';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Trash2, Package, Truck } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
+import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
-import { useOrders } from '@/hooks/useOrders';
+
+interface MaterialDeliveryItem {
+  materialId: string;
+  quantity: number;
+  unit: string;
+  notes?: string;
+}
+
+interface PrefilledData {
+  workshopId?: string;
+  materials?: MaterialDeliveryItem[];
+}
 
 interface MaterialDeliveryFormProps {
   onClose: () => void;
   onDeliveryCreated?: () => void;
-  prefilledData?: {
-    orderId?: string;
-    workshopId?: string;
-    materials?: {
-      materialId: string;
-      quantity: number;
-      unit: string;
-      notes?: string;
-    }[];
-  };
+  prefilledData?: PrefilledData;
 }
 
-// Helper function to format material display text
-const formatMaterialDisplay = (material: any) => {
-  const baseText = `${material.sku} - ${material.name}`;
-  return material.color ? `${baseText} (${material.color})` : baseText;
-};
-
-// Helper function to get color indicator
-const getColorIndicator = (color: string | null) => {
-  if (!color) return null;
-  
-  const colorMap: Record<string, string> = {
-    'rojo': '#ef4444',
-    'azul': '#3b82f6',
-    'verde': '#10b981',
-    'amarillo': '#f59e0b',
-    'negro': '#000000',
-    'blanco': '#ffffff',
-    'gris': '#6b7280',
-    'rosa': '#ec4899',
-    'morado': '#8b5cf6',
-    'naranja': '#f97316',
-    'café': '#a16207',
-    'beige': '#d6d3d1',
-    'crema': '#fef3c7'
-  };
-  
-  const colorValue = colorMap[color.toLowerCase()] || '#9ca3af';
-  
-  return (
-    <span 
-      className="inline-block w-3 h-3 rounded-full border border-gray-300 mr-2" 
-      style={{ backgroundColor: colorValue }}
-    />
-  );
-};
-
 const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: MaterialDeliveryFormProps) => {
-  const [formData, setFormData] = useState({
-    orderId: prefilledData?.orderId || '',
-    workshopId: prefilledData?.workshopId || '',
-    deliveredBy: '',
-    notes: ''
-  });
-  const [materials, setMaterials] = useState(
+  const [selectedWorkshop, setSelectedWorkshop] = useState(prefilledData?.workshopId || '');
+  const [deliveryItems, setDeliveryItems] = useState<MaterialDeliveryItem[]>(
     prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', notes: '' }]
   );
-  const [supportDocument, setSupportDocument] = useState<File | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [deliveryNotes, setDeliveryNotes] = useState('');
 
-  const { materials: availableMaterials, loading: materialsLoading } = useMaterials();
   const { workshops, loading: workshopsLoading } = useWorkshops();
-  const { fetchOrders } = useOrders();
-  const { createMaterialDelivery, loading: deliveryLoading } = useMaterialDeliveries();
+  const { materials, loading: materialsLoading } = useMaterials();
+  const { createMaterialDelivery, loading: creatingDelivery } = useMaterialDeliveries();
 
-  const loadOrders = useCallback(async () => {
-    try {
-      setLoadingOrders(true);
-      setOrdersError(null);
-      console.log('Loading orders for material delivery form...');
-      const ordersData = await fetchOrders();
-      console.log('Orders loaded successfully:', ordersData?.length || 0);
-      setOrders(ordersData || []);
-    } catch (error) {
-      console.error('Error loading orders:', error);
-      setOrdersError('Error al cargar las órdenes. El formulario funcionará sin órdenes.');
-      setOrders([]);
-    } finally {
-      setLoadingOrders(false);
-    }
-  }, [fetchOrders]);
+  // Helper function to format material display name with color
+  const formatMaterialDisplayName = (material: any) => {
+    const baseName = `${material.name} (${material.sku})`;
+    return material.color ? `${baseName} - ${material.color}` : baseName;
+  };
 
-  useEffect(() => {
-    if (prefilledData) {
-      setFormData(prev => ({
-        ...prev,
-        orderId: prefilledData.orderId || prev.orderId,
-        workshopId: prefilledData.workshopId || prev.workshopId
-      }));
-      
-      if (prefilledData.materials && prefilledData.materials.length > 0) {
-        setMaterials(prefilledData.materials);
-      }
-    }
-  }, [prefilledData]);
+  const addDeliveryItem = () => {
+    setDeliveryItems([...deliveryItems, { materialId: '', quantity: 0, unit: '', notes: '' }]);
+  };
 
-  useEffect(() => {
-    loadOrders();
-  }, [loadOrders]);
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+  const removeDeliveryItem = (index: number) => {
+    if (deliveryItems.length > 1) {
+      setDeliveryItems(deliveryItems.filter((_, i) => i !== index));
     }
   };
 
-  const handleMaterialChange = (index: number, field: string, value: string | number) => {
-    const updated = [...materials];
+  const updateDeliveryItem = (index: number, field: keyof MaterialDeliveryItem, value: string | number) => {
+    const updated = [...deliveryItems];
     updated[index] = { ...updated[index], [field]: value };
     
-    // Si se cambia el material, actualizar la unidad automáticamente
+    // Auto-update unit when material is selected
     if (field === 'materialId') {
-      const selectedMaterial = availableMaterials.find(m => m.id === value);
+      const selectedMaterial = materials.find(m => m.id === value);
       if (selectedMaterial) {
         updated[index].unit = selectedMaterial.unit;
       }
     }
     
-    setMaterials(updated);
-    
-    // Clear material errors
-    const errorKey = `material_${index}`;
-    if (errors[errorKey]) {
-      setErrors(prev => ({ ...prev, [errorKey]: '' }));
-    }
-  };
-
-  const addMaterial = () => {
-    setMaterials([...materials, { materialId: '', quantity: 0, unit: '', notes: '' }]);
-  };
-
-  const removeMaterial = (index: number) => {
-    if (materials.length > 1) {
-      setMaterials(materials.filter((_, i) => i !== index));
-    }
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSupportDocument(file);
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    // Validar taller (requerido)
-    if (!formData.workshopId) {
-      newErrors.workshopId = 'El taller destino es requerido';
-    }
-
-    // Validar persona que entrega (requerido)
-    if (!formData.deliveredBy.trim()) {
-      newErrors.deliveredBy = 'El nombre de quien entrega es requerido';
-    }
-
-    // Validar materiales
-    materials.forEach((material, index) => {
-      if (!material.materialId) {
-        newErrors[`material_${index}`] = 'Debe seleccionar un material';
-      }
-      if (material.quantity <= 0) {
-        newErrors[`quantity_${index}`] = 'La cantidad debe ser mayor a 0';
-      }
-    });
-
-    // Validar que tenga al menos un material válido
-    const validMaterials = materials.filter(m => m.materialId && m.quantity > 0);
-    if (validMaterials.length === 0) {
-      newErrors.materials = 'Debe agregar al menos un material válido';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setDeliveryItems(updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
+
+    if (!selectedWorkshop) {
+      alert('Por favor selecciona un taller');
+      return;
+    }
+
+    const validItems = deliveryItems.filter(item => 
+      item.materialId && item.quantity > 0
+    );
+
+    if (validItems.length === 0) {
+      alert('Debe agregar al menos un material válido');
       return;
     }
 
     try {
       const deliveryData = {
-        workshopId: formData.workshopId,
-        orderId: formData.orderId === 'none' || !formData.orderId ? undefined : formData.orderId,
-        deliveredBy: formData.deliveredBy,
-        notes: formData.notes,
-        materials: materials.filter(m => m.materialId && m.quantity > 0),
-        supportDocument: supportDocument || undefined
+        workshopId: selectedWorkshop,
+        items: validItems.map(item => ({
+          materialId: item.materialId,
+          quantity: Number(item.quantity),
+          unit: item.unit,
+          notes: item.notes || undefined
+        })),
+        notes: deliveryNotes.trim() || undefined
       };
 
-      console.log('Submitting material delivery:', deliveryData);
       await createMaterialDelivery(deliveryData);
       
       if (onDeliveryCreated) {
         onDeliveryCreated();
       }
+      
       onClose();
     } catch (error) {
       console.error('Error creating material delivery:', error);
     }
   };
 
-  // Show loading only if critical resources are loading
   if (materialsLoading || workshopsLoading) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-                <Upload className="w-8 h-8 text-gray-600" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2 text-black">Cargando datos...</h3>
-              <p className="text-gray-600">Obteniendo catálogo de materiales y talleres</p>
-            </div>
+          <div className="flex items-center justify-center py-8">
+            <Package className="w-8 h-8 text-gray-400 animate-pulse mr-2" />
+            <span className="text-gray-600">Cargando datos...</span>
           </div>
         </DialogContent>
       </Dialog>
@@ -249,99 +129,40 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-black">
-            Nueva Entrega de Materiales
+          <DialogTitle className="text-2xl font-bold text-black flex items-center">
+            <Truck className="w-6 h-6 mr-2" />
+            Crear Entrega de Materiales
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Orden de Producción (Opcional)
-              </label>
-              <Select
-                value={formData.orderId}
-                onValueChange={(value) => handleInputChange('orderId', value)}
-              >
-                <SelectTrigger className={errors.orderId ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Sin orden asignada" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin orden asignada</SelectItem>
-                  {orders.map((order) => (
-                    <SelectItem key={order.id} value={order.id}>
-                      {order.order_number}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {loadingOrders && (
-                <p className="text-xs text-blue-500 mt-1">Cargando órdenes...</p>
-              )}
-              {ordersError && (
-                <p className="text-xs text-orange-500 mt-1">{ordersError}</p>
-              )}
-              {!loadingOrders && !ordersError && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {orders.length === 0 
-                    ? 'No hay órdenes disponibles - puedes registrar entregas sin orden asignada'
-                    : 'Deja vacío si los materiales son para órdenes futuras'
-                  }
-                </p>
-              )}
-            </div>
+          {/* Selección de Taller */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4 text-black">Taller Destino</h3>
+            <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Seleccionar taller..." />
+              </SelectTrigger>
+              <SelectContent>
+                {workshops.map((workshop) => (
+                  <SelectItem key={workshop.id} value={workshop.id}>
+                    {workshop.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Card>
 
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Taller Destino *
-              </label>
-              <Select
-                value={formData.workshopId}
-                onValueChange={(value) => handleInputChange('workshopId', value)}
-              >
-                <SelectTrigger className={errors.workshopId ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Seleccionar taller..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {workshops.map((workshop) => (
-                    <SelectItem key={workshop.id} value={workshop.id}>
-                      {workshop.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.workshopId && (
-                <p className="text-red-500 text-xs mt-1">{errors.workshopId}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                Entregado por *
-              </label>
-              <Input
-                value={formData.deliveredBy}
-                onChange={(e) => handleInputChange('deliveredBy', e.target.value)}
-                placeholder="Nombre de quien entrega"
-                className={errors.deliveredBy ? 'border-red-500' : ''}
-                required
-              />
-              {errors.deliveredBy && (
-                <p className="text-red-500 text-xs mt-1">{errors.deliveredBy}</p>
-              )}
-            </div>
-          </div>
-
-          <div>
+          {/* Materiales a Entregar */}
+          <Card className="p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-black">Materiales a Entregar</h3>
               <Button
                 type="button"
                 variant="outline"
-                onClick={addMaterial}
+                onClick={addDeliveryItem}
                 className="border-dashed"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -349,25 +170,21 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
               </Button>
             </div>
 
-            {errors.materials && (
-              <p className="text-red-500 text-sm mb-4">{errors.materials}</p>
-            )}
-
             <div className="space-y-4">
-              {materials.map((material, index) => {
-                const selectedMaterial = availableMaterials.find(m => m.id === material.materialId);
+              {deliveryItems.map((item, index) => {
+                const selectedMaterial = materials.find(m => m.id === item.materialId);
                 
                 return (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <Card key={index} className="p-4 border-2">
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="font-medium text-black">Material #{index + 1}</h4>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => removeMaterial(index)}
+                        onClick={() => removeDeliveryItem(index)}
                         className="text-red-500 hover:text-red-700"
-                        disabled={materials.length === 1}
+                        disabled={deliveryItems.length === 1}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -375,56 +192,51 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-black mb-2">
+                        <Label className="text-sm font-medium text-black mb-2">
                           Material *
-                        </label>
+                        </Label>
                         <Select
-                          value={material.materialId}
-                          onValueChange={(value) => handleMaterialChange(index, 'materialId', value)}
+                          value={item.materialId}
+                          onValueChange={(value) => updateDeliveryItem(index, 'materialId', value)}
                         >
-                          <SelectTrigger className={errors[`material_${index}`] ? 'border-red-500' : ''}>
+                          <SelectTrigger>
                             <SelectValue placeholder="Seleccionar material..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableMaterials.map((mat) => (
-                              <SelectItem key={mat.id} value={mat.id}>
-                                <div className="flex items-center">
-                                  {getColorIndicator(mat.color)}
-                                  <span>{formatMaterialDisplay(mat)}</span>
+                            {materials.map((material) => (
+                              <SelectItem key={material.id} value={material.id}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{formatMaterialDisplayName(material)}</span>
+                                  {material.color && (
+                                    <span className="text-xs text-gray-500">Color: {material.color}</span>
+                                  )}
                                 </div>
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        {errors[`material_${index}`] && (
-                          <p className="text-red-500 text-xs mt-1">{errors[`material_${index}`]}</p>
-                        )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-black mb-2">
+                        <Label className="text-sm font-medium text-black mb-2">
                           Cantidad *
-                        </label>
+                        </Label>
                         <Input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={material.quantity || ''}
-                          onChange={(e) => handleMaterialChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                          value={item.quantity || ''}
+                          onChange={(e) => updateDeliveryItem(index, 'quantity', parseFloat(e.target.value) || 0)}
                           placeholder="0"
-                          className={errors[`quantity_${index}`] ? 'border-red-500' : ''}
                         />
-                        {errors[`quantity_${index}`] && (
-                          <p className="text-red-500 text-xs mt-1">{errors[`quantity_${index}`]}</p>
-                        )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-black mb-2">
+                        <Label className="text-sm font-medium text-black mb-2">
                           Unidad
-                        </label>
+                        </Label>
                         <Input
-                          value={material.unit}
+                          value={item.unit}
                           readOnly
                           className="bg-gray-50"
                           placeholder="Selecciona un material"
@@ -432,121 +244,70 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
                       </div>
                     </div>
 
+                    {/* Información del material seleccionado */}
                     {selectedMaterial && (
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium text-black mb-2">
-                          Información del Material
-                        </label>
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center mb-2">
-                            {getColorIndicator(selectedMaterial.color)}
-                            <div className="font-medium text-black">{selectedMaterial.name}</div>
-                          </div>
-                          <div className="text-sm text-gray-600">SKU: {selectedMaterial.sku}</div>
-                          <div className="text-sm text-gray-600">Categoría: {selectedMaterial.category}</div>
+                      <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="text-sm text-gray-700">
+                          <div><strong>Categoría:</strong> {selectedMaterial.category}</div>
                           {selectedMaterial.color && (
-                            <div className="text-sm text-gray-600">Color: {selectedMaterial.color}</div>
-                          )}
-                          {selectedMaterial.description && (
-                            <div className="text-sm text-gray-600 mt-1">{selectedMaterial.description}</div>
+                            <div className="flex items-center">
+                              <strong>Color:</strong> 
+                              <Badge variant="outline" className="ml-2 font-medium text-blue-700 border-blue-200">
+                                {selectedMaterial.color}
+                              </Badge>
+                            </div>
                           )}
                           {selectedMaterial.supplier && (
-                            <div className="text-sm text-gray-600">Proveedor: {selectedMaterial.supplier}</div>
+                            <div><strong>Proveedor:</strong> {selectedMaterial.supplier}</div>
                           )}
-                          <div className="text-sm text-gray-600">
-                            Stock actual: {selectedMaterial.current_stock} {selectedMaterial.unit}
-                          </div>
+                          <div><strong>Stock Global:</strong> {selectedMaterial.current_stock} {selectedMaterial.unit}</div>
                         </div>
                       </div>
                     )}
 
                     <div className="mt-4">
-                      <label className="block text-sm font-medium text-black mb-2">
+                      <Label className="text-sm font-medium text-black mb-2">
                         Notas del Material
-                      </label>
+                      </Label>
                       <Input
-                        value={material.notes || ''}
-                        onChange={(e) => handleMaterialChange(index, 'notes', e.target.value)}
-                        placeholder="Especificaciones adicionales para este material..."
+                        value={item.notes || ''}
+                        onChange={(e) => updateDeliveryItem(index, 'notes', e.target.value)}
+                        placeholder="Especificaciones adicionales..."
                       />
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
-          </div>
+          </Card>
 
-          <div>
-            <label className="block text-sm font-medium text-black mb-2">
-              Documento de Soporte (Opcional)
-            </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <input
-                type="file"
-                id="support-document"
-                className="hidden"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleFileUpload}
-              />
-              <label
-                htmlFor="support-document"
-                className="cursor-pointer flex flex-col items-center space-y-2"
-              >
-                <Upload className="w-8 h-8 text-gray-400" />
-                <span className="text-sm text-gray-600">
-                  Haz clic para subir guía de entrega
-                </span>
-                <span className="text-xs text-gray-500">
-                  PDF, JPG, PNG (máx 10MB)
-                </span>
-              </label>
-              
-              {supportDocument && (
-                <div className="mt-4 flex items-center justify-center">
-                  <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded">
-                    <span className="text-sm text-black">{supportDocument.name}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSupportDocument(null)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black mb-2">
-              Notas Generales
-            </label>
+          {/* Notas Generales */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4 text-black">Notas de la Entrega</h3>
             <Textarea
-              value={formData.notes}
-              onChange={(e) => handleInputChange('notes', e.target.value)}
+              value={deliveryNotes}
+              onChange={(e) => setDeliveryNotes(e.target.value)}
               placeholder="Comentarios adicionales sobre la entrega..."
-              className="min-h-[80px]"
+              className="min-h-[100px]"
             />
-          </div>
+          </Card>
 
+          {/* Botones de Acción */}
           <div className="flex justify-end space-x-4 pt-6">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={deliveryLoading}
+              disabled={creatingDelivery}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-blue-500 hover:bg-blue-600 text-white"
-              disabled={deliveryLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              disabled={creatingDelivery}
             >
-              {deliveryLoading ? 'Registrando...' : 'Registrar Entrega'}
+              {creatingDelivery ? 'Creando Entrega...' : 'Crear Entrega'}
             </Button>
           </div>
         </form>
