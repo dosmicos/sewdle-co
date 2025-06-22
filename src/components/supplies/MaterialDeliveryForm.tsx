@@ -13,6 +13,16 @@ import { useOrders } from '@/hooks/useOrders';
 interface MaterialDeliveryFormProps {
   onClose: () => void;
   onDeliveryCreated?: () => void;
+  prefilledData?: {
+    orderId?: string;
+    workshopId?: string;
+    materials?: {
+      materialId: string;
+      quantity: number;
+      unit: string;
+      notes?: string;
+    }[];
+  };
 }
 
 // Helper function to format material display text
@@ -51,16 +61,16 @@ const getColorIndicator = (color: string | null) => {
   );
 };
 
-const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFormProps) => {
+const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: MaterialDeliveryFormProps) => {
   const [formData, setFormData] = useState({
-    orderId: '',
-    workshopId: '',
+    orderId: prefilledData?.orderId || '',
+    workshopId: prefilledData?.workshopId || '',
     deliveredBy: '',
     notes: ''
   });
-  const [materials, setMaterials] = useState([
-    { materialId: '', quantity: 0, unit: '', notes: '' }
-  ]);
+  const [materials, setMaterials] = useState(
+    prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', notes: '' }]
+  );
   const [supportDocument, setSupportDocument] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [orders, setOrders] = useState<any[]>([]);
@@ -88,6 +98,20 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated }: MaterialDeliveryFo
       setLoadingOrders(false);
     }
   }, [fetchOrders]);
+
+  useEffect(() => {
+    if (prefilledData) {
+      setFormData(prev => ({
+        ...prev,
+        orderId: prefilledData.orderId || prev.orderId,
+        workshopId: prefilledData.workshopId || prev.workshopId
+      }));
+      
+      if (prefilledData.materials && prefilledData.materials.length > 0) {
+        setMaterials(prefilledData.materials);
+      }
+    }
+  }, [prefilledData]);
 
   useEffect(() => {
     loadOrders();

@@ -1,101 +1,100 @@
+
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, Trash2, AlertTriangle, Package, Truck } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
+import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 
-interface SuppliesManagerProps {
-  supplies: any[];
-  onSuppliesChange: (supplies: any[]) => void;
+interface Supply {
+  materialId: string;
+  quantity: number;
+  unit: string;
+  notes?: string;
 }
 
-// Helper function to format material display text
-const formatMaterialDisplay = (material: any) => {
-  const baseText = `${material.sku} - ${material.name}`;
-  return material.color ? `${baseText} (${material.color})` : baseText;
-};
+interface SuppliesManagerProps {
+  supplies: Supply[];
+  onSuppliesChange: (supplies: Supply[]) => void;
+  selectedWorkshop?: string;
+  onCreateDelivery?: (materials: Supply[]) => void;
+}
 
-// Helper function to get color indicator
-const getColorIndicator = (color: string | null) => {
-  if (!color) return null;
-  
-  const colorMap: Record<string, string> = {
-    'rojo': '#ef4444',
-    'azul': '#3b82f6',
-    'verde': '#10b981',
-    'amarillo': '#f59e0b',
-    'negro': '#000000',
-    'blanco': '#ffffff',
-    'gris': '#6b7280',
-    'rosa': '#ec4899',
-    'morado': '#8b5cf6',
-    'naranja': '#f97316',
-    'café': '#a16207',
-    'beige': '#d6d3d1',
-    'crema': '#fef3c7'
-  };
-  
-  const colorValue = colorMap[color.toLowerCase()] || '#9ca3af';
-  
-  return (
-    <span 
-      className="inline-block w-3 h-3 rounded-full border border-gray-300 mr-2" 
-      style={{ backgroundColor: colorValue }}
-    />
-  );
-};
+const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreateDelivery }: SuppliesManagerProps) => {
+  const [workshopStock, setWorkshopStock] = useState<Record<string, number>>({});
+  const [missingMaterials, setMissingMaterials] = useState<Supply[]>([]);
+  const { materials, loading: materialsLoading } = useMaterials();
+  const { fetchMaterialDeliveries } = useMaterialDeliveries();
 
-const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) => {
-  const { materials, loading } = useMaterials();
-  const [availability, setAvailability] = useState<Record<string, any>>({});
-
-  // Update availability when supplies or materials change
   useEffect(() => {
-    const newAvailability: Record<string, any> = {};
+    if (selectedWorkshop) {
+      loadWorkshopStock();
+    }
+  }, [selectedWorkshop]);
+
+  useEffect(() => {
+    if (selectedWorkshop && supplies.length > 0) {
+      checkMaterialAvailability();
+    }
+  }, [supplies, workshopStock, selectedWorkshop]);
+
+  const loadWorkshopStock = async () => {
+    if (!selectedWorkshop) return;
     
-    supplies.forEach((supply, index) => {
-      if (supply.materialId) {
-        const material = materials.find(m => m.id === supply.materialId);
-        if (material) {
-          const available = material.current_stock || 0;
-          const sufficient = available >= supply.quantity;
-          const isLowStock = available <= (material.min_stock_alert || 0);
-          
-          newAvailability[index] = {
-            available,
-            sufficient,
-            isLowStock,
-            material
-          };
-        }
+    try {
+      const deliveries = await fetchMaterialDeliveries();
+      const stock: Record<string, number> = {};
+      
+      // Calcular stock disponible por material en el taller seleccionado
+      deliveries
+        .filter(delivery => delivery.workshop_id === selectedWorkshop)
+        .forEach(delivery => {
+          const materialId = delivery.material_id;
+          const available = delivery.quantity_remaining || 0;
+          stock[materialId] = (stock[materialId] || 0) + available;
+        });
+      
+      setWorkshopStock(stock);
+    } catch (error) {
+      console.error('Error loading workshop stock:', error);
+    }
+  };
+
+  const checkMaterialAvailability = () => {
+    const missing: Supply[] = [];
+    
+    supplies.forEach(supply => {
+      const availableStock = workshopStock[supply.materialId] || 0;
+      if (availableStock < supply.quantity) {
+        missing.push({
+          ...supply,
+          quantity: supply.quantity - availableStock
+        });
       }
     });
     
-    setAvailability(newAvailability);
-  }, [supplies, materials]);
+    setMissingMaterials(missing);
+  };
 
   const addSupply = () => {
-    const newSupply = {
-      id: Date.now().toString(),
-      materialId: '',
-      quantity: 0,
-      unit: '',
-      notes: ''
-    };
-    onSuppliesChange([...supplies, newSupply]);
+    onSuppliesChange([...supplies, { materialId: '', quantity: 0, unit: '', notes: '' }]);
   };
 
   const removeSupply = (index: number) => {
-    const updated = supplies.filter((_, i) => i !== index);
-    onSuppliesChange(updated);
+    if (supplies.length > 1) {
+      onSuppliesChange(supplies.filter((_, i) => i !== index));
+    }
   };
 
-  const updateSupply = (index: number, field: string, value: any) => {
+  const updateSupply = (index: number, field: keyof Supply, value: string | number) => {
     const updated = [...supplies];
     updated[index] = { ...updated[index], [field]: value };
     
-    // Si se cambia el material, actualizar automáticamente la unidad
+    // Actualizar unidad automáticamente al seleccionar material
     if (field === 'materialId') {
       const selectedMaterial = materials.find(m => m.id === value);
       if (selectedMaterial) {
@@ -106,236 +105,222 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
     onSuppliesChange(updated);
   };
 
-  const getSelectedMaterial = (materialId: string) => {
-    return materials.find(m => m.id === materialId);
+  const getStockStatus = (materialId: string, requiredQuantity: number) => {
+    const availableStock = workshopStock[materialId] || 0;
+    const material = materials.find(m => m.id === materialId);
+    
+    if (availableStock >= requiredQuantity) {
+      return { status: 'sufficient', color: 'green', text: `${availableStock} ${material?.unit} disponibles` };
+    } else if (availableStock > 0) {
+      return { status: 'partial', color: 'yellow', text: `Solo ${availableStock} de ${requiredQuantity} ${material?.unit}` };
+    } else {
+      return { status: 'insufficient', color: 'red', text: `0 ${material?.unit} disponibles` };
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center py-4">
-        <p className="text-gray-600">Cargando materiales...</p>
-      </div>
-    );
-  }
+  const handleCreateDeliveryForMissing = () => {
+    if (onCreateDelivery && missingMaterials.length > 0) {
+      onCreateDelivery(missingMaterials);
+    }
+  };
 
-  if (materials.length === 0) {
+  if (materialsLoading) {
     return (
-      <div className="text-center py-4">
-        <p className="text-gray-600">No hay materiales disponibles. Crea materiales primero en la sección de Insumos.</p>
+      <div className="flex items-center justify-center py-8">
+        <Package className="w-8 h-8 text-gray-400 animate-pulse mr-2" />
+        <span className="text-gray-600">Cargando materiales...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {supplies.map((supply, index) => {
-        const selectedMaterial = getSelectedMaterial(supply.materialId);
-        const availabilityInfo = availability[index];
-        
-        return (
-          <div key={supply.id} className="border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-black">Insumo #{index + 1}</h4>
-              <div className="flex items-center space-x-2">
-                {availabilityInfo && (
-                  <div className="flex items-center space-x-1">
-                    {availabilityInfo.sufficient ? (
-                      availabilityInfo.isLowStock ? (
-                        <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                      ) : (
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                      )
-                    ) : (
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className={`text-xs ${
-                      availabilityInfo.sufficient 
-                        ? availabilityInfo.isLowStock ? 'text-yellow-600' : 'text-green-600'
-                        : 'text-red-600'
-                    }`}>
-                      Stock: {availabilityInfo.available} {selectedMaterial?.unit}
-                    </span>
-                  </div>
-                )}
+    <div className="space-y-4">
+      {/* Alertas de materiales faltantes */}
+      {selectedWorkshop && missingMaterials.length > 0 && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <strong>Materiales insuficientes en el taller:</strong>
+                <ul className="mt-1 text-sm">
+                  {missingMaterials.map((material, index) => {
+                    const mat = materials.find(m => m.id === material.materialId);
+                    return (
+                      <li key={index}>
+                        • {mat?.name}: faltan {material.quantity} {material.unit}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+              <Button
+                onClick={handleCreateDeliveryForMissing}
+                size="sm"
+                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+              >
+                <Truck className="w-4 h-4 mr-1" />
+                Crear Entrega
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex justify-between items-center">
+        <h4 className="font-medium text-black">Materiales Necesarios</h4>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addSupply}
+          className="border-dashed"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Agregar Material
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {supplies.map((supply, index) => {
+          const selectedMaterial = materials.find(m => m.id === supply.materialId);
+          const stockStatus = selectedWorkshop && supply.materialId ? 
+            getStockStatus(supply.materialId, supply.quantity) : null;
+          
+          return (
+            <Card key={index} className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h5 className="font-medium text-black">Material #{index + 1}</h5>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => removeSupply(index)}
                   className="text-red-500 hover:text-red-700"
+                  disabled={supplies.length === 1}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Material
-                </label>
-                <Select
-                  value={supply.materialId}
-                  onValueChange={(value) => updateSupply(index, 'materialId', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar material..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {materials.map((material) => (
-                      <SelectItem key={material.id} value={material.id}>
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center">
-                            {getColorIndicator(material.color)}
-                            <span>{formatMaterialDisplay(material)}</span>
-                          </div>
-                          <span className="text-xs text-gray-500 ml-2">
-                            Stock: {material.current_stock} {material.unit}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Cantidad Necesaria
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={supply.quantity || ''}
-                  onChange={(e) => updateSupply(index, 'quantity', parseFloat(e.target.value) || 0)}
-                  placeholder="0"
-                  className={availabilityInfo && !availabilityInfo.sufficient ? 'border-red-300' : ''}
-                />
-                {availabilityInfo && !availabilityInfo.sufficient && (
-                  <p className="text-red-500 text-xs mt-1">
-                    Stock insuficiente (disponible: {availabilityInfo.available} {selectedMaterial?.unit})
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Unidad
-                </label>
-                <Input
-                  value={supply.unit}
-                  readOnly
-                  className="bg-gray-50"
-                  placeholder="Selecciona material"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Categoría
-                </label>
-                <Input
-                  value={selectedMaterial?.category || ''}
-                  readOnly
-                  className="bg-gray-50"
-                  placeholder="Selecciona material"
-                />
-              </div>
-            </div>
-
-            {selectedMaterial && (
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-black mb-2">
-                    Descripción del Material
+                    Material *
                   </label>
-                  <div className={`p-3 rounded-lg ${
-                    availabilityInfo 
-                      ? availabilityInfo.sufficient 
-                        ? 'bg-green-50 border border-green-200' 
-                        : 'bg-red-50 border border-red-200'
-                      : 'bg-gray-50'
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center">
-                        {getColorIndicator(selectedMaterial.color)}
-                        <div className="font-medium text-black">{selectedMaterial.name}</div>
-                      </div>
-                      {availabilityInfo && (
-                        <div className="flex items-center space-x-1">
-                          {availabilityInfo.sufficient ? (
-                            availabilityInfo.isLowStock ? (
-                              <>
-                                <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                                <span className="text-yellow-600 text-sm font-medium">Stock Bajo</span>
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="w-4 h-4 text-green-500" />
-                                <span className="text-green-600 text-sm font-medium">Disponible</span>
-                              </>
-                            )
-                          ) : (
-                            <>
-                              <AlertTriangle className="w-4 h-4 text-red-500" />
-                              <span className="text-red-600 text-sm font-medium">Insuficiente</span>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-600">SKU: {selectedMaterial.sku}</div>
-                    <div className="text-sm text-gray-600">Categoría: {selectedMaterial.category}</div>
-                    {selectedMaterial.color && (
-                      <div className="text-sm text-gray-600">Color: {selectedMaterial.color}</div>
-                    )}
-                    {selectedMaterial.description && (
-                      <div className="text-sm text-gray-600 mt-1">{selectedMaterial.description}</div>
-                    )}
-                    {selectedMaterial.supplier && (
-                      <div className="text-sm text-gray-600">Proveedor: {selectedMaterial.supplier}</div>
-                    )}
-                    <div className="text-sm font-medium mt-2">
-                      Stock actual: 
-                      <span className={`ml-1 ${
-                        availabilityInfo 
-                          ? availabilityInfo.sufficient 
-                            ? availabilityInfo.isLowStock ? 'text-yellow-600' : 'text-green-600'
-                            : 'text-red-600'
-                          : 'text-gray-600'
-                      }`}>
-                        {selectedMaterial.current_stock} {selectedMaterial.unit}
-                      </span>
-                    </div>
-                  </div>
+                  <Select
+                    value={supply.materialId}
+                    onValueChange={(value) => updateSupply(index, 'materialId', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar material..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {materials.map((material) => (
+                        <SelectItem key={material.id} value={material.id}>
+                          <div className="flex items-center justify-between w-full">
+                            <span>{material.name} ({material.sku})</span>
+                            {selectedWorkshop && (
+                              <Badge variant="outline" className="ml-2">
+                                {workshopStock[material.id] || 0} {material.unit}
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-black mb-2">
-                    Notas Especiales
+                    Cantidad *
                   </label>
                   <Input
-                    value={supply.notes || ''}
-                    onChange={(e) => updateSupply(index, 'notes', e.target.value)}
-                    placeholder="Especificaciones adicionales, color específico, etc."
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={supply.quantity || ''}
+                    onChange={(e) => updateSupply(index, 'quantity', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Unidad
+                  </label>
+                  <Input
+                    value={supply.unit}
+                    readOnly
+                    className="bg-gray-50"
+                    placeholder="Selecciona un material"
                   />
                 </div>
               </div>
-            )}
-          </div>
-        );
-      })}
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={addSupply}
-        className="w-full border-dashed border-2 border-gray-300 text-gray-600 hover:text-black hover:border-gray-400"
-      >
-        <Plus className="w-4 h-4 mr-2" />
-        Agregar Insumo
-      </Button>
+              {/* Estado del stock en el taller */}
+              {selectedWorkshop && stockStatus && supply.materialId && (
+                <div className="mt-3">
+                  <div className={`p-2 rounded-lg border text-sm ${
+                    stockStatus.status === 'sufficient' ? 'bg-green-50 border-green-200 text-green-800' :
+                    stockStatus.status === 'partial' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                    'bg-red-50 border-red-200 text-red-800'
+                  }`}>
+                    <div className="flex items-center">
+                      <Package className="w-4 h-4 mr-2" />
+                      <span className="font-medium">Stock en taller:</span>
+                      <span className="ml-2">{stockStatus.text}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Información del material seleccionado */}
+              {selectedMaterial && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="text-sm text-gray-700">
+                    <div><strong>Categoría:</strong> {selectedMaterial.category}</div>
+                    {selectedMaterial.color && (
+                      <div><strong>Color:</strong> {selectedMaterial.color}</div>
+                    )}
+                    {selectedMaterial.supplier && (
+                      <div><strong>Proveedor:</strong> {selectedMaterial.supplier}</div>
+                    )}
+                    <div><strong>Stock Global:</strong> {selectedMaterial.current_stock} {selectedMaterial.unit}</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-black mb-2">
+                  Notas
+                </label>
+                <Input
+                  value={supply.notes || ''}
+                  onChange={(e) => updateSupply(index, 'notes', e.target.value)}
+                  placeholder="Especificaciones adicionales..."
+                />
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {supplies.length === 0 && (
+        <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
+          <Package className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+          <p className="text-gray-600 mb-4">No hay materiales agregados</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addSupply}
+            className="border-dashed"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Agregar Primer Material
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

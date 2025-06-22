@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 
 interface OrderItem {
   productId: string;
@@ -24,11 +25,13 @@ interface CreateOrderData {
   supplies: OrderSupply[];
   notes?: string;
   cuttingOrderFile?: File;
+  materialValidation?: any;
 }
 
 export const useOrders = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { consumeOrderMaterials } = useMaterialConsumption();
 
   const createOrder = async (orderData: CreateOrderData) => {
     setLoading(true);
@@ -131,6 +134,65 @@ export const useOrders = () => {
         }
 
         console.log('Successfully created order supplies');
+
+        // **NUEVO: Consumo inteligente de materiales**
+        const { materialValidation } = orderData;
+        
+        // Si hay materiales suficientes, consumir automáticamente
+        if (materialValidation?.canProceed) {
+          console.log('Sufficient materials available, consuming automatically...');
+          
+          const consumptions = orderData.supplies.map(supply => ({
+            material_id: supply.materialId,
+            quantity: supply.quantity
+          }));
+
+          try {
+            await consumeOrderMaterials(order.id, consumptions);
+            console.log('Materials consumed automatically for order:', order.id);
+            
+            toast({
+              title: "¡Orden creada y materiales consumidos!",
+              description: `La orden ${orderNumber} fue creada y los materiales fueron consumidos automáticamente del taller.`,
+            });
+          } catch (consumptionError) {
+            console.error('Error consuming materials:', consumptionError);
+            // No fallar la creación de la orden por error de consumo
+            toast({
+              title: "Orden creada con advertencia",
+              description: `La orden ${orderNumber} fue creada pero hubo un problema al consumir los materiales. Puedes consumirlos manualmente.`,
+              variant: "default",
+            });
+          }
+        } else if (materialValidation?.insufficientMaterials?.length > 0) {
+          console.log('Insufficient materials, order created but marked as pending materials');
+          
+          // Actualizar el estado de la orden para indicar que está pendiente de materiales
+          await supabase
+            .from('orders')
+            .update({ 
+              status: 'pending',
+              notes: (orderData.notes || '') + '\n[Sistema] Pendiente de entrega de materiales al taller.'
+            })
+            .eq('id', order.id);
+
+          toast({
+            title: "Orden creada - Materiales pendientes",
+            description: `La orden ${orderNumber} fue creada. Se necesita entregar ${materialValidation.insufficientMaterials.length} materiales al taller antes de iniciar producción.`,
+            variant: "default",
+          });
+        } else {
+          // Sin validación de materiales
+          toast({
+            title: "¡Orden creada exitosamente!",
+            description: `La orden ${orderNumber} ha sido creada correctamente.`,
+          });
+        }
+      } else {
+        toast({
+          title: "¡Orden creada exitosamente!",
+          description: `La orden ${orderNumber} ha sido creada correctamente.`,
+        });
       }
 
       // Crear asignación de taller si se seleccionó un taller
@@ -164,12 +226,10 @@ export const useOrders = () => {
       if (orderData.cuttingOrderFile) {
         console.log('Processing cutting order file:', orderData.cuttingOrderFile.name);
         
-        // En un entorno real, aquí subirías el archivo a Supabase Storage
-        // y luego guardarías la referencia en order_files
         const fileData = {
           order_id: order.id,
           file_name: orderData.cuttingOrderFile.name,
-          file_url: `mock-url/${orderData.cuttingOrderFile.name}`, // URL simulada
+          file_url: `mock-url/${orderData.cuttingOrderFile.name}`,
           file_type: orderData.cuttingOrderFile.type,
           file_size: orderData.cuttingOrderFile.size
         };
@@ -185,11 +245,6 @@ export const useOrders = () => {
 
         console.log('Successfully created order file reference');
       }
-
-      toast({
-        title: "¡Orden creada exitosamente!",
-        description: `La orden ${orderNumber} ha sido creada correctamente.`,
-      });
 
       return order;
 
