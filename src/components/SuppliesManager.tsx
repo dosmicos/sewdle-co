@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 
 interface SuppliesManagerProps {
@@ -49,6 +48,32 @@ const getColorIndicator = (color: string | null) => {
 
 const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) => {
   const { materials, loading } = useMaterials();
+  const [availability, setAvailability] = useState<Record<string, any>>({});
+
+  // Update availability when supplies or materials change
+  useEffect(() => {
+    const newAvailability: Record<string, any> = {};
+    
+    supplies.forEach((supply, index) => {
+      if (supply.materialId) {
+        const material = materials.find(m => m.id === supply.materialId);
+        if (material) {
+          const available = material.current_stock || 0;
+          const sufficient = available >= supply.quantity;
+          const isLowStock = available <= (material.min_stock_alert || 0);
+          
+          newAvailability[index] = {
+            available,
+            sufficient,
+            isLowStock,
+            material
+          };
+        }
+      }
+    });
+    
+    setAvailability(newAvailability);
+  }, [supplies, materials]);
 
   const addSupply = () => {
     const newSupply = {
@@ -105,20 +130,43 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
     <div className="space-y-6">
       {supplies.map((supply, index) => {
         const selectedMaterial = getSelectedMaterial(supply.materialId);
+        const availabilityInfo = availability[index];
         
         return (
           <div key={supply.id} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold text-black">Insumo #{index + 1}</h4>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => removeSupply(index)}
-                className="text-red-500 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center space-x-2">
+                {availabilityInfo && (
+                  <div className="flex items-center space-x-1">
+                    {availabilityInfo.sufficient ? (
+                      availabilityInfo.isLowStock ? (
+                        <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      )
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                    )}
+                    <span className={`text-xs ${
+                      availabilityInfo.sufficient 
+                        ? availabilityInfo.isLowStock ? 'text-yellow-600' : 'text-green-600'
+                        : 'text-red-600'
+                    }`}>
+                      Stock: {availabilityInfo.available} {selectedMaterial?.unit}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeSupply(index)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -136,9 +184,14 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                   <SelectContent>
                     {materials.map((material) => (
                       <SelectItem key={material.id} value={material.id}>
-                        <div className="flex items-center">
-                          {getColorIndicator(material.color)}
-                          <span>{formatMaterialDisplay(material)}</span>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center">
+                            {getColorIndicator(material.color)}
+                            <span>{formatMaterialDisplay(material)}</span>
+                          </div>
+                          <span className="text-xs text-gray-500 ml-2">
+                            Stock: {material.current_stock} {material.unit}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
@@ -157,7 +210,13 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                   value={supply.quantity || ''}
                   onChange={(e) => updateSupply(index, 'quantity', parseFloat(e.target.value) || 0)}
                   placeholder="0"
+                  className={availabilityInfo && !availabilityInfo.sufficient ? 'border-red-300' : ''}
                 />
+                {availabilityInfo && !availabilityInfo.sufficient && (
+                  <p className="text-red-500 text-xs mt-1">
+                    Stock insuficiente (disponible: {availabilityInfo.available} {selectedMaterial?.unit})
+                  </p>
+                )}
               </div>
 
               <div>
@@ -191,10 +250,40 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                   <label className="block text-sm font-medium text-black mb-2">
                     Descripción del Material
                   </label>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      {getColorIndicator(selectedMaterial.color)}
-                      <div className="font-medium text-black">{selectedMaterial.name}</div>
+                  <div className={`p-3 rounded-lg ${
+                    availabilityInfo 
+                      ? availabilityInfo.sufficient 
+                        ? 'bg-green-50 border border-green-200' 
+                        : 'bg-red-50 border border-red-200'
+                      : 'bg-gray-50'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center">
+                        {getColorIndicator(selectedMaterial.color)}
+                        <div className="font-medium text-black">{selectedMaterial.name}</div>
+                      </div>
+                      {availabilityInfo && (
+                        <div className="flex items-center space-x-1">
+                          {availabilityInfo.sufficient ? (
+                            availabilityInfo.isLowStock ? (
+                              <>
+                                <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                                <span className="text-yellow-600 text-sm font-medium">Stock Bajo</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <span className="text-green-600 text-sm font-medium">Disponible</span>
+                              </>
+                            )
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-4 h-4 text-red-500" />
+                              <span className="text-red-600 text-sm font-medium">Insuficiente</span>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="text-sm text-gray-600">SKU: {selectedMaterial.sku}</div>
                     <div className="text-sm text-gray-600">Categoría: {selectedMaterial.category}</div>
@@ -207,6 +296,18 @@ const SuppliesManager = ({ supplies, onSuppliesChange }: SuppliesManagerProps) =
                     {selectedMaterial.supplier && (
                       <div className="text-sm text-gray-600">Proveedor: {selectedMaterial.supplier}</div>
                     )}
+                    <div className="text-sm font-medium mt-2">
+                      Stock actual: 
+                      <span className={`ml-1 ${
+                        availabilityInfo 
+                          ? availabilityInfo.sufficient 
+                            ? availabilityInfo.isLowStock ? 'text-yellow-600' : 'text-green-600'
+                            : 'text-red-600'
+                          : 'text-gray-600'
+                      }`}>
+                        {selectedMaterial.current_stock} {selectedMaterial.unit}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

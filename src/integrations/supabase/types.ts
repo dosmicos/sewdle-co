@@ -663,6 +663,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_order_materials: {
+        Args: { order_id_param: string; consumption_data: Json }
+        Returns: undefined
+      }
       generate_delivery_number: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -836,6 +840,10 @@ export type Database = {
       }
       make_user_admin: {
         Args: { user_email: string }
+        Returns: undefined
+      }
+      recalculate_material_stock: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       user_has_workshop_permissions: {
