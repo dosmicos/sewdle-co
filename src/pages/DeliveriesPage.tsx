@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ const DeliveriesPage = () => {
     rejected_deliveries: 0
   });
 
-  const { fetchDeliveries, getDeliveryStats, deleteDelivery, parseDeliveryStats, loading } = useDeliveries();
+  const { fetchDeliveries, getDeliveryStats, deleteDelivery, loading } = useDeliveries();
 
   useEffect(() => {
     loadDeliveries();
@@ -269,7 +270,6 @@ const DeliveriesPage = () => {
               </TableHeader>
               <TableBody>
                 {filteredDeliveries.map((delivery) => {
-                  const stats = parseDeliveryStats(delivery.notes || '', delivery.status);
                   return (
                     <TableRow key={delivery.id}>
                       <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
@@ -280,12 +280,12 @@ const DeliveriesPage = () => {
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-medium text-green-600">
-                          {stats.approved > 0 ? stats.approved : '-'}
+                          {delivery.total_approved > 0 ? delivery.total_approved : '-'}
                         </span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-medium text-red-600">
-                          {stats.defective > 0 ? stats.defective : '-'}
+                          {delivery.total_defective > 0 ? delivery.total_defective : '-'}
                         </span>
                       </TableCell>
                       <TableCell>{renderStatusBadge(delivery.status)}</TableCell>

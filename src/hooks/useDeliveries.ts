@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -34,10 +35,9 @@ export interface QualityReviewData {
 
 interface ItemUpdateData {
   id: string;
-  quality_status: string;
-  notes: string;
   quantity_approved: number;
   quantity_defective: number;
+  quality_notes: string;
   order_item_id: string;
   product_variant_id: string | null;
 }
@@ -143,7 +143,9 @@ export const useDeliveries = () => {
         order_item_id: item.orderItemId,
         quantity_delivered: item.quantityDelivered,
         quality_status: item.qualityStatus || 'pending',
-        notes: item.notes || ''
+        notes: item.notes || '',
+        quantity_approved: 0,
+        quantity_defective: 0
       }));
 
       console.log('Delivery items to insert:', deliveryItems);
@@ -191,11 +193,8 @@ export const useDeliveries = () => {
     try {
       console.log('Fetching deliveries with force refresh:', forceRefresh);
       
-      const query = forceRefresh 
-        ? supabase.rpc('get_deliveries_with_details', { _cache_bust: Date.now() })
-        : supabase.rpc('get_deliveries_with_details');
-
-      const { data, error } = await query;
+      // Use the new function that includes approved and defective quantities
+      const { data, error } = await supabase.rpc('get_deliveries_with_details_v2');
 
       if (error) {
         console.error('Error fetching deliveries:', error);
@@ -247,9 +246,7 @@ export const useDeliveries = () => {
         `)
         .eq('id', deliveryId);
 
-      const { data: delivery, error: deliveryError } = forceRefresh 
-        ? await query.single()
-        : await query.single();
+      const { data: delivery, error: deliveryError } = await query.single();
 
       if (deliveryError) {
         console.error('Error fetching delivery:', deliveryError);
@@ -390,26 +387,11 @@ export const useDeliveries = () => {
 
           console.log(`Item ${itemIndex}: Approved: ${approved}, Defective: ${defective}`);
 
-          let status = 'approved';
-          let notes = variantData.reason || '';
-
-          if (approved > 0 && defective > 0) {
-            status = 'approved';
-            notes = `Aprobadas: ${approved}, Defectuosas: ${defective}. ${notes}`;
-          } else if (approved > 0 && defective === 0) {
-            status = 'approved';
-            notes = `Aprobadas: ${approved}. ${notes}`;
-          } else if (defective > 0 && approved === 0) {
-            status = 'rejected';
-            notes = `Defectuosas: ${defective}. ${notes}`;
-          }
-
           const itemUpdate: ItemUpdateData = {
             id: deliveryItem.id,
-            quality_status: status,
-            notes: notes,
             quantity_approved: approved,
             quantity_defective: defective,
+            quality_notes: variantData.reason || '',
             order_item_id: deliveryItem.order_item_id,
             product_variant_id: deliveryItem.order_items?.product_variant_id || null
           };
@@ -424,20 +406,21 @@ export const useDeliveries = () => {
         throw new Error('No se encontraron elementos válidos para procesar');
       }
 
-      // Update delivery items
+      // Update delivery items with the new structured fields
       for (const update of itemUpdates) {
         if (!update.id) {
           console.error('Missing delivery item ID:', update);
           continue;
         }
 
-        console.log('Updating delivery item:', update.id, 'with status:', update.quality_status);
+        console.log('Updating delivery item:', update.id, 'with approved:', update.quantity_approved, 'defective:', update.quantity_defective);
         
         const { error: updateError } = await supabase
           .from('delivery_items')
           .update({
-            quality_status: update.quality_status,
-            notes: update.notes
+            quantity_approved: update.quantity_approved,
+            quantity_defective: update.quantity_defective,
+            quality_notes: update.quality_notes
           })
           .eq('id', update.id);
 
@@ -449,8 +432,7 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // Note: The delivery status will be automatically updated by the database trigger
-      // based on the new logic we implemented in the SQL migration
+      // The delivery status will be automatically updated by the database trigger
 
       toast({
         title: "Revisión de calidad procesada",
@@ -542,26 +524,30 @@ export const useDeliveries = () => {
     }
   };
 
-  const parseDeliveryStats = (notes: string, status: string): DeliveryStats => {
-    if (!notes) {
-      return { approved: 0, defective: 0 };
+  // Simplified function that now reads directly from database fields
+  const parseDeliveryStats = (delivery: any): DeliveryStats => {
+    // Use the aggregated data from the new database function
+    if (delivery.total_approved !== undefined && delivery.total_defective !== undefined) {
+      return {
+        approved: delivery.total_approved || 0,
+        defective: delivery.total_defective || 0
+      };
     }
 
-    const approvedMatch = notes.match(/Aprobadas: (\d+)/i);
-    const defectiveMatch = notes.match(/Defectuosas: (\d+)/i);
-
-    let approved = 0;
-    let defective = 0;
-
-    if (approvedMatch) {
-      approved = parseInt(approvedMatch[1]);
+    // Fallback for individual delivery items (when viewing delivery details)
+    if (delivery.delivery_items && Array.isArray(delivery.delivery_items)) {
+      let approved = 0;
+      let defective = 0;
+      
+      delivery.delivery_items.forEach((item: any) => {
+        approved += item.quantity_approved || 0;
+        defective += item.quantity_defective || 0;
+      });
+      
+      return { approved, defective };
     }
 
-    if (defectiveMatch) {
-      defective = parseInt(defectiveMatch[1]);
-    }
-
-    return { approved, defective };
+    return { approved: 0, defective: 0 };
   };
 
   return {

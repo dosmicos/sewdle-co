@@ -79,7 +79,10 @@ export type Database = {
           id: string
           notes: string | null
           order_item_id: string
+          quality_notes: string | null
           quality_status: string | null
+          quantity_approved: number
+          quantity_defective: number
           quantity_delivered: number
         }
         Insert: {
@@ -88,7 +91,10 @@ export type Database = {
           id?: string
           notes?: string | null
           order_item_id: string
+          quality_notes?: string | null
           quality_status?: string | null
+          quantity_approved?: number
+          quantity_defective?: number
           quantity_delivered: number
         }
         Update: {
@@ -97,7 +103,10 @@ export type Database = {
           id?: string
           notes?: string | null
           order_item_id?: string
+          quality_notes?: string | null
           quality_status?: string | null
+          quantity_approved?: number
+          quantity_defective?: number
           quantity_delivered?: number
         }
         Relationships: [
@@ -708,6 +717,30 @@ export type Database = {
           total_quantity: number
         }[]
       }
+      get_deliveries_with_details_v2: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          tracking_number: string
+          order_id: string
+          order_number: string
+          workshop_id: string
+          workshop_name: string
+          delivery_date: string
+          status: string
+          delivered_by: string
+          delivered_by_name: string
+          recipient_name: string
+          recipient_phone: string
+          recipient_address: string
+          notes: string
+          created_at: string
+          items_count: number
+          total_quantity: number
+          total_approved: number
+          total_defective: number
+        }[]
+      }
       get_delivery_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -752,6 +785,17 @@ export type Database = {
         }[]
       }
       get_order_delivery_stats: {
+        Args: { order_id_param: string }
+        Returns: {
+          total_ordered: number
+          total_delivered: number
+          total_approved: number
+          total_defective: number
+          total_pending: number
+          completion_percentage: number
+        }[]
+      }
+      get_order_delivery_stats_v2: {
         Args: { order_id_param: string }
         Returns: {
           total_ordered: number
