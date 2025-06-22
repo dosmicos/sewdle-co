@@ -42,8 +42,9 @@ export const useOrderDeliveryStats = () => {
   const getOrderStats = async (orderId: string): Promise<OrderDeliveryStats | null> => {
     setLoading(true);
     try {
+      // Usar la nueva función mejorada que usa los campos estructurados
       const { data, error } = await supabase
-        .rpc('get_order_delivery_stats', { order_id_param: orderId });
+        .rpc('get_order_delivery_stats_v2', { order_id_param: orderId });
 
       if (error) {
         console.error('Error fetching order stats:', error);
@@ -67,6 +68,7 @@ export const useOrderDeliveryStats = () => {
   const getOrderDeliveriesBreakdown = async (orderId: string): Promise<DeliveryBreakdown[]> => {
     setLoading(true);
     try {
+      // Esta función ya fue actualizada para usar los nuevos campos estructurados
       const { data, error } = await supabase
         .rpc('get_order_deliveries_breakdown', { order_id_param: orderId });
 
@@ -92,7 +94,7 @@ export const useOrderDeliveryStats = () => {
   const getOrderVariantsBreakdown = async (orderId: string): Promise<VariantBreakdown[]> => {
     setLoading(true);
     try {
-      // Llamamos directamente a la función RPC con el tipo correcto
+      // Esta función ya fue actualizada para usar los nuevos campos estructurados
       const { data, error } = await supabase.rpc('get_order_variants_breakdown', { 
         order_id_param: orderId 
       }) as { data: VariantBreakdown[] | null, error: any };
