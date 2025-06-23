@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import ProductEditModal from '@/components/ProductEditModal';
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
 import SkuCorrectionTool from '@/components/SkuCorrectionTool';
+import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -145,6 +146,9 @@ const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsLis
     <>
       {/* Herramientas de diagnóstico y corrección */}
       <div className="mb-6 space-y-4">
+        {/* Nueva herramienta de asignación de SKUs */}
+        <ShopifySkuAssignment />
+        
         {/* Herramienta de corrección de SKUs */}
         <SkuCorrectionTool />
         

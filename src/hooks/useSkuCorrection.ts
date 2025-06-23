@@ -21,10 +21,22 @@ export const useSkuCorrection = () => {
         throw new Error('Error obteniendo productos de Shopify');
       }
 
-      // 2. Crear mapa de productos Shopify por título
+      // 2. Crear mapa de productos Shopify por título y por SKU
       const shopifyProductsMap = new Map();
+      const shopifySkuMap = new Map();
+      
       shopifyData.products.forEach((product: any) => {
         shopifyProductsMap.set(product.title.toLowerCase(), product);
+        
+        // También mapear por cada variante y su SKU
+        product.variants?.forEach((variant: any) => {
+          if (variant.sku) {
+            shopifySkuMap.set(variant.sku, {
+              product,
+              variant
+            });
+          }
+        });
       });
 
       // 3. Obtener productos locales con SKUs artificiales
@@ -57,9 +69,9 @@ export const useSkuCorrection = () => {
         if (shopifyProduct && shopifyProduct.variants?.length > 0) {
           console.log(`Corrigiendo producto: ${localProduct.name}`);
           
-          // Corregir SKU del producto principal
+          // Corregir SKU del producto principal usando el SKU de la primera variante
           const mainVariant = shopifyProduct.variants[0];
-          const originalProductSku = mainVariant.sku || `SHOPIFY-${shopifyProduct.id}`;
+          const originalProductSku = mainVariant.sku || mainVariant.id.toString();
           
           if (originalProductSku !== localProduct.sku) {
             const { error: updateProductError } = await supabase
@@ -77,21 +89,24 @@ export const useSkuCorrection = () => {
 
           // Corregir SKUs de variantes
           if (localProduct.product_variants?.length > 0) {
-            for (let i = 0; i < localProduct.product_variants.length; i++) {
+            for (let i = 0; i < localProduct.product_variants.length && i < shopifyProduct.variants.length; i++) {
               const localVariant = localProduct.product_variants[i];
               const shopifyVariant = shopifyProduct.variants[i];
               
-              if (shopifyVariant?.sku && shopifyVariant.sku !== localVariant.sku_variant) {
+              // Usar el SKU de Shopify o el ID de la variante como fallback
+              const correctSku = shopifyVariant.sku || shopifyVariant.id.toString();
+              
+              if (correctSku !== localVariant.sku_variant) {
                 const { error: updateVariantError } = await supabase
                   .from('product_variants')
-                  .update({ sku_variant: shopifyVariant.sku })
+                  .update({ sku_variant: correctSku })
                   .eq('id', localVariant.id);
                 
                 if (updateVariantError) {
                   console.error(`Error actualizando variante ${localVariant.id}:`, updateVariantError);
                 } else {
                   correctedVariants++;
-                  console.log(`SKU variante corregido: ${localVariant.sku_variant} → ${shopifyVariant.sku}`);
+                  console.log(`SKU variante corregido: ${localVariant.sku_variant} → ${correctSku}`);
                 }
               }
             }
