@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ProductEditModal from '@/components/ProductEditModal';
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
+import SkuCorrectionTool from '@/components/SkuCorrectionTool';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -143,12 +143,16 @@ const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsLis
 
   return (
     <>
-      {/* Herramienta de diagnóstico */}
-      <div className="mb-6">
+      {/* Herramientas de diagnóstico y corrección */}
+      <div className="mb-6 space-y-4">
+        {/* Herramienta de corrección de SKUs */}
+        <SkuCorrectionTool />
+        
+        {/* Herramienta de diagnóstico */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-5 h-5 text-blue-500" />
-            <h3 className="text-lg font-semibold">Diagnóstico de Shopify</h3>
+            <h3 className="text-lg font-semibold mb-2 text-black">Diagnóstico de Shopify</h3>
           </div>
           <Button
             onClick={() => setShowDiagnostic(!showDiagnostic)}
@@ -199,6 +203,12 @@ const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsLis
                   
                   <div className="text-sm text-gray-600">
                     <span className="font-medium">SKU:</span> {product.sku}
+                    {/* Indicador visual de SKU artificial */}
+                    {product.sku.includes('-') && product.sku.split('-').length > 2 && (
+                      <Badge variant="outline" className="ml-2 text-xs border-orange-500 text-orange-700">
+                        Artificial
+                      </Badge>
+                    )}
                   </div>
                   
                   <div className="text-lg font-semibold text-green-600">

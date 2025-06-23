@@ -26,7 +26,7 @@ serve(async (req) => {
       throw new Error('Credenciales de Shopify no configuradas')
     }
 
-    console.log('Iniciando diagnóstico de sincronización Shopify')
+    console.log('Iniciando diagnóstico MEJORADO de sincronización Shopify')
 
     // Obtener todos los productos locales con sus variantes
     const { data: localProducts, error: localError } = await supabase
@@ -49,7 +49,7 @@ serve(async (req) => {
 
     console.log(`Productos locales encontrados: ${localProducts.length}`)
 
-    // Obtener todos los productos de Shopify
+    // Obtener todos los productos de Shopify con información completa
     const shopifyProducts = []
     let hasNextPage = true
     let pageInfo = null
@@ -85,12 +85,17 @@ serve(async (req) => {
 
     console.log(`Productos de Shopify encontrados: ${shopifyProducts.length}`)
 
-    // Crear mapas de SKUs de Shopify
+    // Crear mapas mejorados de SKUs de Shopify
     const shopifySkuMap = new Map()
     const shopifyProductMap = new Map()
+    const shopifyProductsByTitle = new Map()
+    const shopifySkusByProductId = new Map()
 
     shopifyProducts.forEach(product => {
       shopifyProductMap.set(product.id, product)
+      shopifyProductsByTitle.set(product.title.toLowerCase(), product)
+      
+      const productSkus = []
       product.variants.forEach(variant => {
         if (variant.sku) {
           shopifySkuMap.set(variant.sku, {
@@ -100,11 +105,13 @@ serve(async (req) => {
             variantTitle: variant.title,
             inventory: variant.inventory_quantity
           })
+          productSkus.push(variant.sku)
         }
       })
+      shopifySkusByProductId.set(product.id, productSkus)
     })
 
-    // Análisis de productos locales
+    // Análisis mejorado de productos locales
     const analysis = {
       localProducts: localProducts.length,
       shopifyProducts: shopifyProducts.length,
@@ -112,10 +119,12 @@ serve(async (req) => {
       unmatchedSkus: [],
       duplicateSkus: [],
       emptySkus: [],
-      formatIssues: []
+      formatIssues: [],
+      titleMatches: [], // NUEVO: productos que coinciden por título pero no por SKU
+      potentialMatches: [] // NUEVO: posibles coincidencias por similitud
     }
 
-    // Verificar cada producto local
+    // Detectar SKUs artificiales y mapear con productos originales de Shopify
     localProducts.forEach(product => {
       if (!product.sku) {
         analysis.emptySkus.push({
@@ -126,22 +135,44 @@ serve(async (req) => {
         return
       }
 
-      // Verificar SKU principal
+      // NUEVO: Verificar si es un SKU artificial (contiene guiones y timestamp)
+      const isArtificialSku = product.sku.includes('-') && product.sku.split('-').length > 2
+      
+      // Verificar SKU principal exacto
       if (shopifySkuMap.has(product.sku)) {
         analysis.matchedSkus.push({
           localSku: product.sku,
           productName: product.name,
-          shopifyData: shopifySkuMap.get(product.sku)
+          shopifyData: shopifySkuMap.get(product.sku),
+          matchType: 'exact'
         })
       } else {
-        analysis.unmatchedSkus.push({
-          localSku: product.sku,
-          productName: product.name,
-          type: 'product'
-        })
+        // NUEVO: Si no hay coincidencia exacta, buscar por título de producto
+        const shopifyProductByTitle = shopifyProductsByTitle.get(product.name.toLowerCase())
+        
+        if (shopifyProductByTitle && shopifyProductByTitle.variants?.length > 0) {
+          analysis.titleMatches.push({
+            localSku: product.sku,
+            productName: product.name,
+            isArtificial: isArtificialSku,
+            shopifyProduct: {
+              id: shopifyProductByTitle.id,
+              title: shopifyProductByTitle.title,
+              originalSku: shopifyProductByTitle.variants[0].sku || null
+            },
+            suggestedAction: isArtificialSku ? 'Reemplazar SKU artificial con SKU original de Shopify' : 'Verificar diferencia de SKUs'
+          })
+        } else {
+          analysis.unmatchedSkus.push({
+            localSku: product.sku,
+            productName: product.name,
+            type: 'product',
+            isArtificial: isArtificialSku
+          })
+        }
       }
 
-      // Verificar variantes
+      // Verificar variantes con lógica mejorada
       if (product.product_variants) {
         product.product_variants.forEach(variant => {
           if (!variant.sku_variant) {
@@ -154,26 +185,30 @@ serve(async (req) => {
             return
           }
 
+          const isArtificialVariantSku = variant.sku_variant.includes('-') && variant.sku_variant.split('-').length > 2
+
           if (shopifySkuMap.has(variant.sku_variant)) {
             analysis.matchedSkus.push({
               localSku: variant.sku_variant,
               productName: product.name,
               variantInfo: `${variant.size || ''} - ${variant.color || ''}`,
-              shopifyData: shopifySkuMap.get(variant.sku_variant)
+              shopifyData: shopifySkuMap.get(variant.sku_variant),
+              matchType: 'exact'
             })
           } else {
             analysis.unmatchedSkus.push({
               localSku: variant.sku_variant,
               productName: product.name,
               variantInfo: `${variant.size || ''} - ${variant.color || ''}`,
-              type: 'variant'
+              type: 'variant',
+              isArtificial: isArtificialVariantSku
             })
           }
         })
       }
     })
 
-    // Detectar patrones de SKU
+    // Generar patrones mejorados
     const localSkus = []
     localProducts.forEach(product => {
       if (product.sku) localSkus.push(product.sku)
@@ -186,19 +221,37 @@ serve(async (req) => {
 
     const shopifySkus = Array.from(shopifySkuMap.keys())
 
-    // Análisis de patrones
     const patterns = {
       localPatterns: analyzeSkuPatterns(localSkus),
       shopifyPatterns: analyzeSkuPatterns(shopifySkus),
       suggestions: []
     }
 
-    // Generar sugerencias
+    // Generar sugerencias mejoradas
+    if (analysis.titleMatches.length > 0) {
+      patterns.suggestions.push({
+        type: 'title_matches',
+        message: `${analysis.titleMatches.length} productos coinciden por nombre pero tienen SKUs diferentes`,
+        action: 'Usar la herramienta de corrección de SKUs para actualizar con SKUs originales de Shopify',
+        priority: 'high'
+      })
+    }
+
+    if (analysis.unmatchedSkus.filter(item => item.isArtificial).length > 0) {
+      patterns.suggestions.push({
+        type: 'artificial_skus',
+        message: `${analysis.unmatchedSkus.filter(item => item.isArtificial).length} SKUs artificiales detectados`,
+        action: 'Ejecutar corrección automática de SKUs para usar los originales de Shopify',
+        priority: 'high'
+      })
+    }
+
     if (analysis.unmatchedSkus.length > 0) {
       patterns.suggestions.push({
         type: 'missing_products',
         message: `${analysis.unmatchedSkus.length} SKUs locales no encontrados en Shopify`,
-        action: 'Verificar si estos productos existen en Shopify con SKUs diferentes'
+        action: 'Verificar si estos productos existen en Shopify con SKUs diferentes o crear los productos faltantes',
+        priority: 'medium'
       })
     }
 
@@ -206,7 +259,8 @@ serve(async (req) => {
       patterns.suggestions.push({
         type: 'empty_skus',
         message: `${analysis.emptySkus.length} productos/variantes sin SKU`,
-        action: 'Asignar SKUs a estos productos antes de sincronizar'
+        action: 'Asignar SKUs a estos productos antes de sincronizar',
+        priority: 'medium'
       })
     }
 
@@ -220,11 +274,13 @@ serve(async (req) => {
         matchedSkus: analysis.matchedSkus.length,
         unmatchedSkus: analysis.unmatchedSkus.length,
         emptySkus: analysis.emptySkus.length,
+        titleMatches: analysis.titleMatches.length,
+        artificialSkus: analysis.unmatchedSkus.filter(item => item.isArtificial).length + analysis.titleMatches.filter(item => item.isArtificial).length,
         matchRate: localSkus.length > 0 ? (analysis.matchedSkus.length / localSkus.length * 100).toFixed(2) : 0
       }
     }
 
-    console.log('Diagnóstico completado:', result.summary)
+    console.log('Diagnóstico MEJORADO completado:', result.summary)
 
     return new Response(
       JSON.stringify(result),
@@ -252,10 +308,16 @@ function analyzeSkuPatterns(skus) {
     prefixes: {},
     lengths: {},
     formats: {},
-    examples: skus.slice(0, 10)
+    examples: skus.slice(0, 10),
+    artificialCount: 0
   }
 
   skus.forEach(sku => {
+    // Detectar SKUs artificiales
+    if (sku.includes('-') && sku.split('-').length > 2) {
+      patterns.artificialCount++
+    }
+
     // Analizar prefijos (primeros 3-4 caracteres)
     const prefix = sku.substring(0, Math.min(4, sku.length))
     patterns.prefixes[prefix] = (patterns.prefixes[prefix] || 0) + 1

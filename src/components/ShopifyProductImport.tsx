@@ -161,25 +161,6 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     setShowSuggestions(false);
   };
 
-  // Función para generar SKU único
-  const generateUniqueSku = (baseTitle: string, productId: string) => {
-    const cleanTitle = baseTitle
-      .replace(/[^a-zA-Z0-9\s]/g, '')
-      .replace(/\s+/g, '-')
-      .toUpperCase()
-      .substring(0, 10);
-    return `${cleanTitle}-${productId}-${Date.now()}`;
-  };
-
-  // Función para generar SKU de variante único
-  const generateUniqueVariantSku = (productSku: string, variantTitle: string, index: number) => {
-    const cleanVariant = variantTitle
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .toUpperCase()
-      .substring(0, 5);
-    return `${productSku}-V${index + 1}-${cleanVariant || 'DEF'}`;
-  };
-
   // Mostrar confirmación antes de importar
   const handleImportClick = (product: ShopifyProduct) => {
     setConfirmationProduct(product);
@@ -198,35 +179,38 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   const importProduct = async (product: ShopifyProduct) => {
     setImporting(product.id);
     try {
-      console.log('Importing product:', product);
+      console.log('Importing product with original Shopify data:', product);
 
-      // Generar SKU único para el producto
-      const uniqueProductSku = generateUniqueSku(product.title, product.id);
+      // CAMBIO CRÍTICO: Usar el SKU original de Shopify (primera variante)
+      const mainVariant = product.variants[0];
+      const originalProductSku = mainVariant?.sku || `SHOPIFY-${product.id}`;
 
-      // Verificar si el producto ya existe por SKU
+      console.log('Using original product SKU:', originalProductSku);
+
+      // Verificar si el producto ya existe por SKU original
       const { data: existingProduct } = await supabase
         .from('products')
         .select('id')
-        .eq('sku', uniqueProductSku)
+        .eq('sku', originalProductSku)
         .maybeSingle();
 
       if (existingProduct) {
         toast({
           title: "Producto ya existe",
-          description: `${product.title} ya está en tu catálogo.`,
+          description: `${product.title} ya está en tu catálogo con SKU ${originalProductSku}.`,
           variant: "destructive",
         });
         return;
       }
 
-      // Crear el producto principal
+      // Crear el producto principal con SKU original de Shopify
       const { data: createdProduct, error: productError } = await supabase
         .from('products')
         .insert([
           {
             name: product.title,
             description: product.description || '',
-            sku: uniqueProductSku,
+            sku: originalProductSku, // SKU original de Shopify
             base_price: product.price,
             image_url: product.image_url,
             category: 'Shopify Import',
@@ -241,21 +225,27 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         throw productError;
       }
 
-      console.log('Created product:', createdProduct);
+      console.log('Created product with original SKU:', createdProduct);
 
-      // Crear las variantes del producto CON ORDEN CORRECTO
+      // Crear las variantes con SKUs originales de Shopify
       if (product.variants && product.variants.length > 0) {
-        // Las variantes ya vienen ordenadas desde fetchAllProducts
-        const variants = product.variants.map((variant, index) => ({
-          product_id: createdProduct.id,
-          size: variant.size || '',
-          color: variant.color || '',
-          sku_variant: generateUniqueVariantSku(uniqueProductSku, variant.size || variant.color || 'Default', index),
-          additional_price: Math.max(0, variant.price - product.price),
-          stock_quantity: variant.stock_quantity || 0
-        }));
+        const variants = product.variants.map((variant, index) => {
+          // CAMBIO CRÍTICO: Usar el SKU original de cada variante de Shopify
+          const originalVariantSku = variant.sku || `${originalProductSku}-V${index + 1}`;
+          
+          console.log(`Variant ${index + 1} original SKU:`, originalVariantSku);
+          
+          return {
+            product_id: createdProduct.id,
+            size: variant.size || '',
+            color: variant.color || '',
+            sku_variant: originalVariantSku, // SKU original de Shopify
+            additional_price: Math.max(0, variant.price - product.price),
+            stock_quantity: variant.stock_quantity || 0
+          };
+        });
 
-        console.log('Creating variants in correct order:', variants);
+        console.log('Creating variants with original Shopify SKUs:', variants);
 
         const { error: variantsError } = await supabase
           .from('product_variants')
@@ -265,16 +255,15 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           console.error('Error creating variants:', variantsError);
           console.warn('Continuing without variants due to error:', variantsError);
         } else {
-          console.log('Successfully created variants in correct order');
+          console.log('Successfully created variants with original Shopify SKUs');
         }
       }
 
       toast({
         title: "Producto importado exitosamente",
-        description: `${product.title} ha sido importado a tu catálogo.`,
+        description: `${product.title} ha sido importado con SKU original ${originalProductSku}.`,
       });
 
-      // Llamar al callback para seleccionar el producto
       onProductSelect(product);
 
     } catch (error: any) {
@@ -414,6 +403,12 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                       {product.variants.length} variantes
                     </Badge>
                   )}
+                  {/* Mostrar SKU principal para verificación */}
+                  {product.variants?.[0]?.sku && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      SKU: {product.variants[0].sku}
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -437,6 +432,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         <div className="text-center text-gray-500">
           <p className="text-sm">
             ✅ Conectado automáticamente a Shopify usando credenciales seguras
+          </p>
+          <p className="text-xs mt-1">
+            📋 Los productos se importan con sus SKUs originales de Shopify
           </p>
         </div>
       </Card>
