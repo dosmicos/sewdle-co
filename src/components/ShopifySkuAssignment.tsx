@@ -11,7 +11,7 @@ import {
   Clock, 
   Play, 
   Pause,
-  Activity,
+  LoaderCircle,
   TrendingUp,
   AlertCircle
 } from 'lucide-react';
@@ -28,11 +28,17 @@ const ShopifySkuAssignment = () => {
     cancelProcess 
   } = useSkuAssignmentProgress();
   const [result, setResult] = useState<any>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   const handleNewAssignment = async () => {
-    const assignmentResult = await startNewProcess(100);
-    if (assignmentResult) {
-      setResult(assignmentResult);
+    setIsStarting(true);
+    try {
+      const assignmentResult = await startNewProcess(100);
+      if (assignmentResult) {
+        setResult(assignmentResult);
+      }
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -56,12 +62,12 @@ const ShopifySkuAssignment = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'running': return <Clock className="w-4 h-4 text-blue-500 animate-spin" />;
+      case 'running': return <LoaderCircle className="w-4 h-4 text-blue-500 animate-spin" />;
       case 'paused': return <Pause className="w-4 h-4 text-yellow-500" />;
       case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'failed': return <XCircle className="w-4 h-4 text-red-500" />;
       case 'cancelled': return <XCircle className="w-4 h-4 text-gray-500" />;
-      default: return <Activity className="w-4 h-4 text-gray-400" />;
+      default: return <Clock className="w-4 h-4 text-gray-400" />;
     }
   };
 
@@ -75,6 +81,24 @@ const ShopifySkuAssignment = () => {
       default: return 'bg-gray-400';
     }
   };
+
+  // Determinar qué datos mostrar - proceso actual o último resultado
+  const showCurrentProcess = currentProcess && (currentProcess.status === 'running' || currentProcess.status === 'paused');
+  const currentStats = showCurrentProcess ? {
+    updated_variants: currentProcess.updated_variants || 0,
+    total_products: currentProcess.total_products || 0,
+    error_variants: currentProcess.error_variants || 0,
+    processed_variants: currentProcess.processed_variants || 0,
+    status: currentProcess.status,
+    timestamp: currentProcess.last_activity_at
+  } : (result?.summary ? {
+    updated_variants: result.summary.updatedVariants || 0,
+    total_products: result.summary.totalProducts || 0,
+    error_variants: result.summary.errorVariants || 0,
+    processed_variants: result.summary.processedVariants || 0,
+    status: result.status,
+    timestamp: new Date().toISOString()
+  } : null);
 
   return (
     <Card className="border-blue-200">
@@ -101,24 +125,32 @@ const ShopifySkuAssignment = () => {
             </div>
           </div>
 
-          {/* Estado del proceso actual */}
-          {currentProcess && (
+          {/* Estado del proceso actual o estadísticas principales */}
+          {(showCurrentProcess || currentStats) && (
             <div className="bg-white border rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
-                  {getStatusIcon(currentProcess.status)}
-                  <span className="font-medium">Proceso Actual</span>
-                  <Badge variant="outline" className={`text-white ${getStatusColor(currentProcess.status)}`}>
-                    {currentProcess.status}
-                  </Badge>
+                  {showCurrentProcess ? getStatusIcon(currentProcess.status) : <CheckCircle className="w-4 h-4 text-green-500" />}
+                  <span className="font-medium">
+                    {showCurrentProcess ? 'Proceso en Curso' : 'Último Proceso Completado'}
+                  </span>
+                  {showCurrentProcess && (
+                    <Badge variant="outline" className={`text-white ${getStatusColor(currentProcess.status)}`}>
+                      {currentProcess.status}
+                    </Badge>
+                  )}
                 </div>
                 <div className="text-sm text-gray-500">
-                  ID: {currentProcess.process_id.slice(0, 8)}...
+                  {showCurrentProcess ? (
+                    <>ID: {currentProcess.process_id.slice(0, 8)}...</>
+                  ) : (
+                    <>Completado: {new Date(currentStats?.timestamp || '').toLocaleString()}</>
+                  )}
                 </div>
               </div>
 
-              {/* Barra de progreso mejorada */}
-              {currentProcess.total_variants > 0 && (
+              {/* Barra de progreso solo para procesos activos */}
+              {showCurrentProcess && currentProcess.total_variants > 0 && (
                 <div className="mb-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-medium">Progreso de Variantes</span>
@@ -133,36 +165,40 @@ const ShopifySkuAssignment = () => {
                 </div>
               )}
 
-              {/* Estadísticas del proceso actual */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-green-600">
-                    {currentProcess.updated_variants || 0}
+              {/* Estadísticas unificadas */}
+              {currentStats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-600">
+                      {currentStats.updated_variants}
+                    </div>
+                    <div className="text-xs text-gray-600">SKUs Asignados</div>
                   </div>
-                  <div className="text-xs text-gray-600">SKUs Asignados</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-blue-600">
-                    {currentProcess.total_products || 0}
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-600">
+                      {showCurrentProcess ? (currentStats.total_products || 0) : 'N/A'}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {showCurrentProcess ? 'Productos Pendientes' : 'Productos Totales'}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-600">Productos Pendientes</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-red-600">
-                    {currentProcess.error_variants || 0}
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-red-600">
+                      {currentStats.error_variants}
+                    </div>
+                    <div className="text-xs text-gray-600">Errores</div>
                   </div>
-                  <div className="text-xs text-gray-600">Errores</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-purple-600">
-                    {currentProcess.shopify_api_calls || 0}
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-purple-600">
+                      {showCurrentProcess ? (currentProcess.shopify_api_calls || 0) : 'N/A'}
+                    </div>
+                    <div className="text-xs text-gray-600">API Calls</div>
                   </div>
-                  <div className="text-xs text-gray-600">API Calls</div>
                 </div>
-              </div>
+              )}
 
-              {/* Rate limiting info */}
-              {currentProcess.rate_limit_hits > 0 && (
+              {/* Rate limiting info - solo para procesos activos */}
+              {showCurrentProcess && currentProcess.rate_limit_hits > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
                   <div className="text-sm text-yellow-800 flex items-center">
                     <AlertCircle className="w-4 h-4 mr-2" />
@@ -171,20 +207,20 @@ const ShopifySkuAssignment = () => {
                 </div>
               )}
 
-              {/* Controles del proceso */}
-              <div className="flex space-x-2">
-                {currentProcess.status === 'paused' && (
-                  <Button 
-                    onClick={handleResumeProcess}
-                    disabled={loading}
-                    className="bg-green-500 hover:bg-green-600"
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Continuar Proceso
-                  </Button>
-                )}
-                
-                {(currentProcess.status === 'running' || currentProcess.status === 'paused') && (
+              {/* Controles del proceso - solo para procesos activos */}
+              {showCurrentProcess && (
+                <div className="flex space-x-2">
+                  {currentProcess.status === 'paused' && (
+                    <Button 
+                      onClick={handleResumeProcess}
+                      disabled={loading}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Continuar Proceso
+                    </Button>
+                  )}
+                  
                   <Button 
                     onClick={handleCancelProcess}
                     variant="outline"
@@ -193,25 +229,29 @@ const ShopifySkuAssignment = () => {
                     <XCircle className="w-4 h-4 mr-2" />
                     Cancelar
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
           
           {/* Botón para nuevo proceso */}
           <Button
             onClick={handleNewAssignment}
-            disabled={loading || (currentProcess && currentProcess.status === 'running')}
+            disabled={loading || isStarting || (currentProcess && currentProcess.status === 'running')}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white"
           >
-            <Settings className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            {currentProcess && currentProcess.status === 'running' 
-              ? 'Analizando y Procesando...' 
-              : 'Iniciar Asignación Inteligente'}
+            {(loading || isStarting) ? (
+              <LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Settings className="w-4 h-4 mr-2" />
+            )}
+            {(loading || isStarting) ? 'Iniciando Proceso...' : 
+             (currentProcess && currentProcess.status === 'running') ? 'Proceso en Ejecución...' : 
+             'Iniciar Asignación Inteligente'}
           </Button>
 
-          {/* Resultado del último proceso */}
-          {result && (
+          {/* Mensaje del último resultado - solo si no hay proceso activo */}
+          {!showCurrentProcess && result && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="font-semibold mb-3 flex items-center">
                 {result.status === 'completed' ? (
@@ -219,7 +259,7 @@ const ShopifySkuAssignment = () => {
                 ) : (
                   <Clock className="w-5 h-5 text-blue-500 mr-2" />
                 )}
-                Resultado del Proceso
+                Mensaje del Sistema
               </h4>
               
               <div className={`p-3 rounded border ${
@@ -230,21 +270,6 @@ const ShopifySkuAssignment = () => {
                 <p className="font-medium">
                   {result.status === 'completed' ? '✅' : '📊'} {result.message}
                 </p>
-                
-                {result.summary && (
-                  <div className="mt-2 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>SKUs asignados: <strong>{result.summary.updatedVariants || 0}</strong></div>
-                      <div>Errores: <strong>{result.summary.errorVariants || 0}</strong></div>
-                      {result.summary.productsScanned && (
-                        <>
-                          <div>Productos revisados: <strong>{result.summary.productsScanned}</strong></div>
-                          <div>Ya procesados: <strong>{result.summary.productsSkipped || 0}</strong></div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}
