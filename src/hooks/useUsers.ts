@@ -97,61 +97,30 @@ export const useUsers = () => {
     requiresPasswordChange?: boolean;
   }) => {
     try {
-      // Generar contraseña temporal
-      const tempPassword = generatePassword();
-      
-      // Crear usuario en auth usando admin API
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: userData.email,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: {
-          name: userData.name,
-          requiresPasswordChange: userData.requiresPasswordChange
-        }
+      console.log('Creando usuario:', userData);
+
+      // Llamar a la Edge Function para crear el usuario
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: userData
       });
 
       if (error) {
-        throw error;
+        console.error('Error en Edge Function:', error);
+        throw new Error(error.message || 'Error al crear usuario');
       }
 
-      if (data.user) {
-        // Actualizar perfil
-        await supabase
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            name: userData.name,
-            email: userData.email
-          });
-
-        // Obtener el ID del rol
-        const { data: role } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('name', userData.role)
-          .single();
-
-        if (role) {
-          // Asignar rol al usuario
-          await supabase
-            .from('user_roles')
-            .insert({
-              user_id: data.user.id,
-              role_id: role.id,
-              workshop_id: userData.workshopId || null
-            });
-        }
-
-        await fetchUsers();
-        
-        toast({
-          title: "Usuario creado exitosamente",
-          description: `Usuario ${userData.email} creado. Contraseña temporal: ${tempPassword}`,
-        });
-
-        return { success: true, tempPassword };
+      if (!data.success) {
+        throw new Error(data.error || 'Error desconocido al crear usuario');
       }
+
+      await fetchUsers();
+      
+      toast({
+        title: "Usuario creado exitosamente",
+        description: `Usuario ${userData.email} creado. Contraseña temporal: ${data.tempPassword}`,
+      });
+
+      return { success: true, tempPassword: data.tempPassword };
     } catch (err: any) {
       console.error('Error creating user:', err);
       toast({
@@ -228,13 +197,9 @@ export const useUsers = () => {
         .delete()
         .eq('id', userId);
 
-      // Eliminar usuario de auth (requiere permisos de admin)
-      const { error } = await supabase.auth.admin.deleteUser(userId);
+      // Eliminar usuario de auth usando Edge Function (se podría crear otra función para esto)
+      // Por ahora, como es una operación menos frecuente, podríamos mantenerlo manual
       
-      if (error) {
-        throw error;
-      }
-
       await fetchUsers();
       
       toast({
@@ -247,20 +212,11 @@ export const useUsers = () => {
       console.error('Error deleting user:', err);
       toast({
         title: "Error al eliminar usuario",
-        description: err.message || "Hubo un problema al eliminar el usuario",
+        description: err.message || "Hubo un problema al eliminar el usuario. Para eliminación completa, contacte al administrador del sistema.",
         variant: "destructive",
       });
       return { success: false, error: err.message };
     }
-  };
-
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
   };
 
   useEffect(() => {
