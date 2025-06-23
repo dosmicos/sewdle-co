@@ -346,26 +346,13 @@ const DeliveryTable = ({
     }
   };
 
-  // Calculate quantities from delivery_items
-  const calculateQuantities = (delivery: any) => {
-    if (!delivery.delivery_items || delivery.delivery_items.length === 0) {
-      return {
-        total: delivery.total_quantity || 0,
-        approved: 0,
-        defective: 0
-      };
-    }
-
-    const total = delivery.delivery_items.reduce((sum: number, item: any) => 
-      sum + (item.quantity_delivered || 0), 0);
-    
-    const approved = delivery.delivery_items.reduce((sum: number, item: any) => 
-      sum + (item.quantity_approved || 0), 0);
-    
-    const defective = delivery.delivery_items.reduce((sum: number, item: any) => 
-      sum + (item.quantity_defective || 0), 0);
-
-    return { total, approved, defective };
+  // Use pre-calculated quantities from database function
+  const getQuantities = (delivery: any) => {
+    return {
+      total: delivery.total_quantity || 0,
+      approved: delivery.total_approved || 0,
+      defective: delivery.total_defective || 0
+    };
   };
 
   if (deliveries.length === 0) {
@@ -401,7 +388,7 @@ const DeliveryTable = ({
           </TableHeader>
           <TableBody>
             {deliveries.map((delivery) => {
-              const quantities = calculateQuantities(delivery);
+              const quantities = getQuantities(delivery);
               return (
                 <TableRow key={delivery.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
