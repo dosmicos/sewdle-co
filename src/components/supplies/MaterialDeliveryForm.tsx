@@ -92,13 +92,13 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
 
     try {
       const deliveryData = {
-        workshopId: selectedWorkshop,
-        items: validItems.map(item => ({
+        materials: validItems.map(item => ({
           materialId: item.materialId,
           quantity: Number(item.quantity),
           unit: item.unit,
           notes: item.notes || undefined
         })),
+        deliveredBy: selectedWorkshop, // Using workshop as deliveredBy for now
         notes: deliveryNotes.trim() || undefined
       };
 
