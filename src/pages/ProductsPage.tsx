@@ -1,8 +1,13 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, RefreshCw } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, RefreshCw, Package, Settings } from 'lucide-react';
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
+import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
+import SkuCorrectionTool from '@/components/SkuCorrectionTool';
+import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
 import { useProducts } from '@/hooks/useProducts';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +16,7 @@ const ProductsPage = () => {
   const [showProductForm, setShowProductForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingStock, setUpdatingStock] = useState(false);
+  const [activeTab, setActiveTab] = useState('catalog');
   const { products, loading, error, refetch } = useProducts();
   const { toast } = useToast();
 
@@ -123,7 +129,7 @@ const ProductsPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-black">Productos</h1>
-            <p className="text-gray-600">Catálogo de productos y plantillas</p>
+            <p className="text-gray-600">Gestión de catálogo y sincronización con Shopify</p>
           </div>
           <div className="flex gap-3">
             <Button 
@@ -145,27 +151,68 @@ const ProductsPage = () => {
           </div>
         </div>
 
-        {/* Barra de búsqueda */}
-        <div className="flex items-center space-x-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Buscar productos..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 bg-white border border-gray-300 rounded-xl px-4 py-3 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
-            />
-          </div>
-        </div>
+        {/* Sistema de pestañas */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="catalog" className="flex items-center space-x-2">
+              <Package className="w-4 h-4" />
+              <span>Catálogo</span>
+            </TabsTrigger>
+            <TabsTrigger value="shopify-sync" className="flex items-center space-x-2">
+              <Settings className="w-4 h-4" />
+              <span>Shopify Sync</span>
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Lista de productos */}
-        <ProductsList 
-          products={filteredProducts} 
-          loading={loading} 
-          error={error}
-          onProductUpdate={handleProductUpdate}
-        />
+          <TabsContent value="catalog" className="space-y-6 mt-6">
+            {/* Barra de búsqueda para catálogo */}
+            <div className="flex items-center space-x-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Buscar productos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 bg-white border border-gray-300 rounded-xl px-4 py-3 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Lista de productos simplificada */}
+            <ProductsList 
+              products={filteredProducts} 
+              loading={loading} 
+              error={error}
+              onProductUpdate={handleProductUpdate}
+              showDiagnosticTools={false}
+            />
+          </TabsContent>
+
+          <TabsContent value="shopify-sync" className="space-y-6 mt-6">
+            <div className="space-y-6">
+              {/* Descripción de la sección */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-semibold text-blue-900 mb-2">Herramientas de Sincronización con Shopify</h3>
+                <p className="text-sm text-blue-800">
+                  Conjunto de herramientas para gestionar la sincronización y corrección de productos entre tu sistema local y Shopify.
+                </p>
+              </div>
+
+              {/* Herramientas organizadas */}
+              <div className="grid gap-6">
+                {/* Asignación Inteligente de SKUs */}
+                <ShopifySkuAssignment />
+                
+                {/* Corrección Inteligente de SKUs */}
+                <SkuCorrectionTool />
+                
+                {/* Diagnóstico de Shopify */}
+                <ShopifyDiagnosticTool />
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {showProductForm && (

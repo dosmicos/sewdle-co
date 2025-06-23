@@ -1,14 +1,12 @@
+
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Package, AlertCircle } from 'lucide-react';
+import { Edit, Trash2, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ProductEditModal from '@/components/ProductEditModal';
-import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
-import SkuCorrectionTool from '@/components/SkuCorrectionTool';
-import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,14 +35,20 @@ interface ProductsListProps {
   loading: boolean;
   error: string | null;
   onProductUpdate?: () => void;
+  showDiagnosticTools?: boolean;
 }
 
-const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsListProps) => {
+const ProductsList = ({ 
+  products, 
+  loading, 
+  error, 
+  onProductUpdate,
+  showDiagnosticTools = true 
+}: ProductsListProps) => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
@@ -144,32 +148,6 @@ const ProductsList = ({ products, loading, error, onProductUpdate }: ProductsLis
 
   return (
     <>
-      {/* Herramientas de diagnóstico y corrección */}
-      <div className="mb-6 space-y-4">
-        {/* Nueva herramienta de asignación de SKUs */}
-        <ShopifySkuAssignment />
-        
-        {/* Herramienta de corrección de SKUs */}
-        <SkuCorrectionTool />
-        
-        {/* Herramienta de diagnóstico */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="w-5 h-5 text-blue-500" />
-            <h3 className="text-lg font-semibold mb-2 text-black">Diagnóstico de Shopify</h3>
-          </div>
-          <Button
-            onClick={() => setShowDiagnostic(!showDiagnostic)}
-            variant="outline"
-            className="border-blue-500 text-blue-600 hover:bg-blue-50"
-          >
-            {showDiagnostic ? 'Ocultar' : 'Mostrar'} Diagnóstico
-          </Button>
-        </div>
-        
-        {showDiagnostic && <ShopifyDiagnosticTool />}
-      </div>
-
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
         {products.length === 0 ? (
           <div className="text-center py-12">
