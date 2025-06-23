@@ -16,10 +16,9 @@ interface InventorySyncManagerProps {
 const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<any[]>([]);
-  const [selectedDelivery, setSelectedDelivery] = useState<string>('');
 
   const { syncApprovedItemsToShopify, fetchSyncLogs, loading: syncLoading } = useInventorySync();
-  const { fetchDeliveries, loading: deliveriesLoading } = useDeliveries();
+  const { fetchDeliveries, fetchDeliveryById, loading: deliveriesLoading } = useDeliveries();
 
   useEffect(() => {
     loadData();
@@ -44,7 +43,6 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
   const handleManualSync = async (delivery: any) => {
     try {
       // Obtener detalles completos de la entrega
-      const { fetchDeliveryById } = useDeliveries();
       const fullDelivery = await fetchDeliveryById(delivery.id);
       
       if (!fullDelivery || !fullDelivery.delivery_items) {

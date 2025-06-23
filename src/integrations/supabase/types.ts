@@ -126,6 +126,36 @@ export type Database = {
           },
         ]
       }
+      inventory_sync_logs: {
+        Row: {
+          created_at: string
+          delivery_id: string
+          error_count: number
+          id: string
+          success_count: number
+          sync_results: Json
+          synced_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_id: string
+          error_count?: number
+          id?: string
+          success_count?: number
+          sync_results: Json
+          synced_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_id?: string
+          error_count?: number
+          id?: string
+          success_count?: number
+          sync_results?: Json
+          synced_at?: string
+        }
+        Relationships: []
+      }
       material_deliveries: {
         Row: {
           created_at: string
