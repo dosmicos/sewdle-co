@@ -7,15 +7,13 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Settings, 
   CheckCircle, 
-  AlertTriangle, 
   XCircle, 
   Clock, 
-  Info, 
   Play, 
-  Pause, 
-  RefreshCw,
+  Pause,
   Activity,
-  TrendingUp
+  TrendingUp,
+  AlertCircle
 } from 'lucide-react';
 import { useShopifySkuAssignment } from '@/hooks/useShopifySkuAssignment';
 import { useSkuAssignmentProgress } from '@/hooks/useSkuAssignmentProgress';
@@ -23,7 +21,6 @@ import { useSkuAssignmentProgress } from '@/hooks/useSkuAssignmentProgress';
 const ShopifySkuAssignment = () => {
   const { assignShopifySkus, resumeProcess, loading } = useShopifySkuAssignment();
   const { 
-    logs, 
     currentProcess, 
     getProgressPercentage, 
     startNewProcess, 
@@ -84,7 +81,7 @@ const ShopifySkuAssignment = () => {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2 text-blue-700">
           <Settings className="w-5 h-5" />
-          <span>Asignación Avanzada de SKUs en Shopify</span>
+          <span>Asignación Inteligente de SKUs en Shopify</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -93,14 +90,14 @@ const ShopifySkuAssignment = () => {
           <div className="bg-blue-50 p-4 rounded-lg">
             <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
               <TrendingUp className="w-4 h-4 mr-2" />
-              Sistema mejorado con persistencia
+              Sistema optimizado con detección inteligente
             </h4>
             <div className="text-sm text-blue-700 space-y-2">
-              <p>• <strong>Persistencia de progreso:</strong> El proceso se guarda automáticamente</p>
-              <p>• <strong>Recuperación automática:</strong> Continúa desde donde se quedó</p>
-              <p>• <strong>Rate limiting inteligente:</strong> Manejo avanzado de límites de Shopify</p>
-              <p>• <strong>Monitoreo en tiempo real:</strong> Progreso y estadísticas actualizadas</p>
-              <p>• <strong>Procesamiento por lotes:</strong> 100 variantes por lote para mejor control</p>
+              <p>• <strong>Detección inteligente:</strong> Solo procesa productos que realmente necesitan SKUs</p>
+              <p>• <strong>Evita repeticiones:</strong> Salta automáticamente productos ya procesados</p>
+              <p>• <strong>Análisis previo:</strong> Cuenta productos pendientes antes de comenzar</p>
+              <p>• <strong>Progreso real:</strong> Muestra avance basado en trabajo realizado</p>
+              <p>• <strong>Procesamiento eficiente:</strong> 100 variantes por lote para mejor control</p>
             </div>
           </div>
 
@@ -120,19 +117,21 @@ const ShopifySkuAssignment = () => {
                 </div>
               </div>
 
-              {/* Barra de progreso */}
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">Progreso</span>
-                  <span className="text-sm text-gray-600">
-                    {getProgressPercentage(currentProcess)}%
-                  </span>
+              {/* Barra de progreso mejorada */}
+              {currentProcess.total_variants > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium">Progreso de Variantes</span>
+                    <span className="text-sm text-gray-600">
+                      {getProgressPercentage(currentProcess)}%
+                    </span>
+                  </div>
+                  <Progress value={getProgressPercentage(currentProcess)} className="h-2" />
+                  <div className="text-xs text-gray-500 mt-1">
+                    {currentProcess.processed_variants || 0} de {currentProcess.total_variants || 0} variantes procesadas
+                  </div>
                 </div>
-                <Progress value={getProgressPercentage(currentProcess)} className="h-2" />
-                <div className="text-xs text-gray-500 mt-1">
-                  {currentProcess.processed_variants || 0} de {currentProcess.total_variants || 0} variantes procesadas
-                </div>
-              </div>
+              )}
 
               {/* Estadísticas del proceso actual */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -143,10 +142,10 @@ const ShopifySkuAssignment = () => {
                   <div className="text-xs text-gray-600">SKUs Asignados</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-600">
-                    {currentProcess.skipped_variants || 0}
+                  <div className="text-lg font-bold text-blue-600">
+                    {currentProcess.total_products || 0}
                   </div>
-                  <div className="text-xs text-gray-600">Ya tenían SKU</div>
+                  <div className="text-xs text-gray-600">Productos Pendientes</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold text-red-600">
@@ -155,7 +154,7 @@ const ShopifySkuAssignment = () => {
                   <div className="text-xs text-gray-600">Errores</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-blue-600">
+                  <div className="text-lg font-bold text-purple-600">
                     {currentProcess.shopify_api_calls || 0}
                   </div>
                   <div className="text-xs text-gray-600">API Calls</div>
@@ -165,8 +164,9 @@ const ShopifySkuAssignment = () => {
               {/* Rate limiting info */}
               {currentProcess.rate_limit_hits > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
-                  <div className="text-sm text-yellow-800">
-                    ⚠️ Rate limits detectados: {currentProcess.rate_limit_hits} veces
+                  <div className="text-sm text-yellow-800 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    Rate limits detectados: {currentProcess.rate_limit_hits} veces (manejados automáticamente)
                   </div>
                 </div>
               )}
@@ -206,41 +206,11 @@ const ShopifySkuAssignment = () => {
           >
             <Settings className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             {currentProcess && currentProcess.status === 'running' 
-              ? 'Proceso en Ejecución...' 
-              : 'Iniciar Nueva Asignación'}
+              ? 'Analizando y Procesando...' 
+              : 'Iniciar Asignación Inteligente'}
           </Button>
 
-          {/* Historial de procesos */}
-          {logs.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h4 className="font-medium mb-3 flex items-center">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Historial de Procesos
-              </h4>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {logs.slice(0, 5).map((log) => (
-                  <div key={log.id} className="flex items-center justify-between p-2 bg-white rounded border text-sm">
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(log.status)}
-                      <span className="font-medium">
-                        {new Date(log.started_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-green-600 font-medium">
-                        {log.updated_variants || 0} SKUs asignados
-                      </div>
-                      <div className="text-gray-500 text-xs">
-                        {getProgressPercentage(log)}% completado
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Resultado del último lote */}
+          {/* Resultado del último proceso */}
           {result && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="font-semibold mb-3 flex items-center">
@@ -249,7 +219,7 @@ const ShopifySkuAssignment = () => {
                 ) : (
                   <Clock className="w-5 h-5 text-blue-500 mr-2" />
                 )}
-                Resultado del Último Lote
+                Resultado del Proceso
               </h4>
               
               <div className={`p-3 rounded border ${
@@ -260,6 +230,21 @@ const ShopifySkuAssignment = () => {
                 <p className="font-medium">
                   {result.status === 'completed' ? '✅' : '📊'} {result.message}
                 </p>
+                
+                {result.summary && (
+                  <div className="mt-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>SKUs asignados: <strong>{result.summary.updatedVariants || 0}</strong></div>
+                      <div>Errores: <strong>{result.summary.errorVariants || 0}</strong></div>
+                      {result.summary.productsScanned && (
+                        <>
+                          <div>Productos revisados: <strong>{result.summary.productsScanned}</strong></div>
+                          <div>Ya procesados: <strong>{result.summary.productsSkipped || 0}</strong></div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

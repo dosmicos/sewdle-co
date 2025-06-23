@@ -33,7 +33,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const { resumeFromCursor, maxVariants = 100, processId }: ProcessParams = body
 
-    console.log('Iniciando asignación de SKUs con persistencia', { resumeFromCursor, maxVariants, processId })
+    console.log('Iniciando proceso optimizado de asignación de SKUs', { resumeFromCursor, maxVariants, processId })
 
     // Buscar proceso existente o crear uno nuevo
     let currentLog
@@ -79,13 +79,11 @@ serve(async (req) => {
     // Función con backoff exponencial para rate limiting
     const makeShopifyRequest = async (url: string, options: any, retries = 3): Promise<Response> => {
       for (let attempt = 1; attempt <= retries; attempt++) {
-        // Log de la consulta para debugging
         console.log(`Shopify API call: ${url}`)
         
         const response = await fetch(url, options)
         
         if (response.status === 429) {
-          // Rate limit hit
           await updateProgress({ 
             rate_limit_hits: (currentLog.rate_limit_hits || 0) + 1,
             shopify_api_calls: (currentLog.shopify_api_calls || 0) + 1
@@ -111,25 +109,29 @@ serve(async (req) => {
           throw new Error(`Shopify API error: ${response.status} - ${errorText}`)
         }
         
-        // Pausa antes del siguiente intento
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
       }
       
       throw new Error('Max retries reached')
     }
 
-    // Función mejorada para contar productos totales (solo primera vez)
-    const countTotalProducts = async () => {
-      console.log('Contando productos totales...')
-      let totalProducts = 0
-      let totalVariants = 0
+    // NUEVA FUNCIÓN: Verificar si un producto necesita procesamiento
+    const productNeedsProcessing = (product: any) => {
+      return product.variants.some((variant: any) => !variant.sku || variant.sku.trim() === '')
+    }
+
+    // NUEVA FUNCIÓN: Contar productos que realmente necesitan procesamiento
+    const countProductsNeedingProcessing = async () => {
+      console.log('Contando productos que necesitan procesamiento...')
+      let productsNeedingProcessing = 0
+      let variantsNeedingProcessing = 0
       let hasNextPage = true
       let tempCursor = null
+      let totalProductsChecked = 0
 
       while (hasNextPage) {
         const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
         url.searchParams.set('limit', '50')
-        // IMPORTANTE: Solo filtrar por status cuando NO hay cursor
         if (!tempCursor) {
           url.searchParams.set('status', 'active,draft')
         }
@@ -146,13 +148,18 @@ serve(async (req) => {
 
         const data = await response.json()
         
-        // Filtrar por estado después de recibir los datos si estamos paginando
         const filteredProducts = tempCursor 
           ? data.products.filter((p: any) => p.status === 'active' || p.status === 'draft')
           : data.products
         
-        totalProducts += filteredProducts.length
-        totalVariants += filteredProducts.reduce((sum: number, p: any) => sum + p.variants.length, 0)
+        totalProductsChecked += filteredProducts.length
+
+        for (const product of filteredProducts) {
+          if (productNeedsProcessing(product)) {
+            productsNeedingProcessing++
+            variantsNeedingProcessing += product.variants.filter((v: any) => !v.sku || v.sku.trim() === '').length
+          }
+        }
 
         const linkHeader = response.headers.get('Link')
         if (linkHeader && linkHeader.includes('rel="next"')) {
@@ -165,21 +172,22 @@ serve(async (req) => {
         await new Promise(resolve => setTimeout(resolve, 500))
       }
 
-      console.log(`Total encontrado: ${totalProducts} productos, ${totalVariants} variantes`)
-      return { totalProducts, totalVariants }
+      console.log(`Productos revisados: ${totalProductsChecked}, necesitan procesamiento: ${productsNeedingProcessing}, variantes sin SKU: ${variantsNeedingProcessing}`)
+      return { productsNeedingProcessing, variantsNeedingProcessing, totalProductsChecked }
     }
 
-    // Función para cargar productos con cursor (para procesamiento)
-    const loadProductsFromCursor = async (cursor: string | null, maxProducts = 25) => {
-      console.log(`Cargando productos desde cursor: ${cursor || 'inicio'}`)
-      const allProducts = []
+    // FUNCIÓN MEJORADA: Cargar productos que necesitan procesamiento
+    const loadProductsNeedingProcessing = async (cursor: string | null, maxProducts = 25) => {
+      console.log(`Buscando productos que necesiten procesamiento desde cursor: ${cursor || 'inicio'}`)
+      const productsNeedingWork = []
       let hasNextPage = true
       let tempCursor = cursor
+      let productsScanned = 0
+      let productsSkipped = 0
 
-      while (hasNextPage && allProducts.length < maxProducts) {
+      while (hasNextPage && productsNeedingWork.length < maxProducts) {
         const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
         url.searchParams.set('limit', '25')
-        // CRÍTICO: NO incluir status cuando hay page_info
         if (!tempCursor) {
           url.searchParams.set('status', 'active,draft')
         }
@@ -198,12 +206,22 @@ serve(async (req) => {
 
         const data = await response.json()
         
-        // Filtrar productos por estado después de recibirlos si estamos paginando
         const filteredProducts = tempCursor 
           ? data.products.filter((p: any) => p.status === 'active' || p.status === 'draft')
           : data.products
         
-        allProducts.push(...filteredProducts)
+        productsScanned += filteredProducts.length
+
+        // FILTRAR: Solo agregar productos que realmente necesiten procesamiento
+        for (const product of filteredProducts) {
+          if (productNeedsProcessing(product)) {
+            productsNeedingWork.push(product)
+            console.log(`✓ Producto necesita procesamiento: ${product.title} (${product.variants.filter((v: any) => !v.sku || v.sku.trim() === '').length} variantes sin SKU)`)
+          } else {
+            productsSkipped++
+            console.log(`○ Producto ya procesado: ${product.title} (todas las variantes tienen SKU)`)
+          }
+        }
 
         const linkHeader = response.headers.get('Link')
         if (linkHeader && linkHeader.includes('rel="next"')) {
@@ -216,7 +234,8 @@ serve(async (req) => {
         await new Promise(resolve => setTimeout(resolve, 500))
       }
 
-      return { products: allProducts, nextCursor: tempCursor }
+      console.log(`Escaneo completado: ${productsScanned} productos revisados, ${productsSkipped} ya procesados, ${productsNeedingWork.length} necesitan trabajo`)
+      return { products: productsNeedingWork, nextCursor: tempCursor, productsScanned, productsSkipped }
     }
 
     // Procesar productos en chunks
@@ -227,22 +246,73 @@ serve(async (req) => {
         let updatedCount = currentLog.updated_variants || 0
         let skippedCount = currentLog.skipped_variants || 0
         let errorCount = currentLog.error_variants || 0
-        let totalProducts = currentLog.total_products || 0
-        let totalVariants = currentLog.total_variants || 0
 
-        // Si es la primera vez, contar productos totales
-        if (!cursor && totalProducts === 0) {
-          const { totalProducts: tp, totalVariants: tv } = await countTotalProducts()
-          totalProducts = tp
-          totalVariants = tv
-          await updateProgress({ total_products: totalProducts, total_variants: totalVariants })
+        // PASO 1: Si es un proceso nuevo, contar productos que realmente necesitan procesamiento
+        if (!cursor) {
+          console.log('=== INICIANDO ANÁLISIS PREVIO ===')
+          const analysis = await countProductsNeedingProcessing()
+          
+          if (analysis.variantsNeedingProcessing === 0) {
+            await updateProgress({ 
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+              total_products: analysis.totalProductsChecked,
+              total_variants: analysis.variantsNeedingProcessing
+            })
+
+            return {
+              success: true,
+              status: 'completed',
+              processId: currentProcessId,
+              summary: {
+                totalProducts: analysis.totalProductsChecked,
+                totalVariants: analysis.variantsNeedingProcessing,
+                processedVariants: 0,
+                updatedVariants: 0,
+                skippedVariants: 0,
+                errorVariants: 0
+              },
+              message: `✅ Análisis completado: No hay variantes sin SKU. Todos los ${analysis.totalProductsChecked} productos ya están procesados.`
+            }
+          }
+
+          await updateProgress({ 
+            total_products: analysis.productsNeedingProcessing,
+            total_variants: analysis.variantsNeedingProcessing
+          })
+
+          console.log(`=== PRODUCTOS PENDIENTES: ${analysis.productsNeedingProcessing} productos, ${analysis.variantsNeedingProcessing} variantes ===`)
         }
 
-        // Cargar productos para procesar
-        const { products, nextCursor } = await loadProductsFromCursor(cursor, Math.ceil(maxVariants / 10))
-        cursor = nextCursor
+        // PASO 2: Cargar productos que necesitan trabajo
+        console.log('=== CARGANDO PRODUCTOS PARA PROCESAR ===')
+        const { products, nextCursor, productsScanned, productsSkipped } = await loadProductsNeedingProcessing(cursor, Math.ceil(maxVariants / 10))
+        
+        if (products.length === 0) {
+          console.log('✅ No se encontraron más productos que necesiten procesamiento')
+          await updateProgress({
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
 
-        console.log(`Procesando ${products.length} productos`)
+          return {
+            success: true,
+            status: 'completed',
+            processId: currentProcessId,
+            summary: {
+              totalProducts: currentLog.total_products || 0,
+              totalVariants: currentLog.total_variants || 0,
+              processedVariants: processedCount,
+              updatedVariants: updatedCount,
+              skippedVariants: skippedCount,
+              errorVariants: errorCount
+            },
+            message: `✅ Proceso completado: No quedan productos por procesar. Se revisaron ${productsScanned} productos adicionales.`
+          }
+        }
+
+        cursor = nextCursor
+        console.log(`=== PROCESANDO ${products.length} PRODUCTOS (${productsSkipped} ya procesados fueron saltados) ===`)
 
         let variantsProcessedInBatch = 0
         const updateResults = []
@@ -253,14 +323,18 @@ serve(async (req) => {
             break
           }
 
-          console.log(`Procesando producto: ${product.title} (ID: ${product.id}, Estado: ${product.status})`)
+          console.log(`🔄 Procesando producto: ${product.title} (ID: ${product.id})`)
           
           await updateProgress({ 
             current_cursor: cursor,
             last_processed_product_id: product.id.toString()
           })
 
-          for (const variant of product.variants) {
+          // Solo procesar variantes que realmente necesiten SKU
+          const variantsNeedingSku = product.variants.filter((v: any) => !v.sku || v.sku.trim() === '')
+          console.log(`  → ${variantsNeedingSku.length} variantes necesitan SKU de ${product.variants.length} totales`)
+
+          for (const variant of variantsNeedingSku) {
             if (variantsProcessedInBatch >= maxVariants) break
 
             processedCount++
@@ -271,16 +345,9 @@ serve(async (req) => {
               last_processed_variant_id: variant.id.toString()
             })
 
-            if (variant.sku && variant.sku.trim() !== '') {
-              console.log(`Variante ${variant.id} ya tiene SKU: ${variant.sku}`)
-              skippedCount++
-              await updateProgress({ skipped_variants: skippedCount })
-              continue
-            }
-
             try {
               const newSku = variant.id.toString()
-              console.log(`Asignando SKU ${newSku} a variante ${variant.id}`)
+              console.log(`  → Asignando SKU ${newSku} a variante ${variant.id}`)
 
               const updateUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${variant.id}.json`
               const updateResponse = await makeShopifyRequest(updateUrl, {
@@ -299,7 +366,7 @@ serve(async (req) => {
 
               if (!updateResponse.ok) {
                 const errorText = await updateResponse.text()
-                console.error(`Error actualizando variante ${variant.id}:`, errorText)
+                console.error(`❌ Error actualizando variante ${variant.id}:`, errorText)
                 errorCount++
                 updateResults.push({
                   productId: product.id,
@@ -310,7 +377,7 @@ serve(async (req) => {
                 })
               } else {
                 updatedCount++
-                console.log(`✅ SKU asignado: ${newSku}`)
+                console.log(`  ✅ SKU asignado exitosamente: ${newSku}`)
                 updateResults.push({
                   productId: product.id,
                   productTitle: product.title,
@@ -325,11 +392,10 @@ serve(async (req) => {
                 error_variants: errorCount
               })
 
-              // Pausa adaptativa basada en el rendimiento
               await new Promise(resolve => setTimeout(resolve, 800))
 
             } catch (error) {
-              console.error(`Error procesando variante ${variant.id}:`, error.message)
+              console.error(`❌ Error procesando variante ${variant.id}:`, error.message)
               errorCount++
               updateResults.push({
                 productId: product.id,
@@ -342,12 +408,11 @@ serve(async (req) => {
             }
           }
 
-          // Pausa entre productos
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
 
         // Determinar si el proceso está completo
-        const isComplete = variantsProcessedInBatch < maxVariants || products.length < 25
+        const isComplete = products.length < Math.ceil(maxVariants / 10) || variantsProcessedInBatch < maxVariants
         const finalStatus = isComplete ? 'completed' : 'paused'
 
         const finalResult = {
@@ -355,32 +420,33 @@ serve(async (req) => {
           status: finalStatus,
           processId: currentProcessId,
           summary: {
-            totalProducts,
-            totalVariants,
+            totalProducts: currentLog.total_products || products.length,
+            totalVariants: currentLog.total_variants || variantsProcessedInBatch,
             processedVariants: processedCount,
             updatedVariants: updatedCount,
             skippedVariants: skippedCount,
-            errorVariants: errorCount
+            errorVariants: errorCount,
+            productsScanned,
+            productsSkipped
           },
-          details: updateResults.slice(-20),
+          details: updateResults.slice(-10),
           nextCursor: isComplete ? null : cursor,
           message: isComplete 
-            ? `Proceso completado: ${updatedCount} SKUs asignados, ${skippedCount} ya tenían SKU, ${errorCount} errores`
-            : `Lote procesado: ${updatedCount} SKUs asignados. Continuar desde cursor para procesar más.`
+            ? `✅ Proceso completado: ${updatedCount} SKUs asignados, ${errorCount} errores. Se revisaron ${productsScanned} productos.`
+            : `📊 Lote procesado: ${updatedCount} SKUs asignados en este lote. Continuar para procesar más productos.`
         }
 
-        // Actualizar estado final
         await updateProgress({
           status: finalStatus,
           detailed_results: updateResults,
           completed_at: isComplete ? new Date().toISOString() : null
         })
 
-        console.log('Proceso finalizado:', finalResult.summary)
+        console.log('=== PROCESO FINALIZADO ===', finalResult.summary)
         return finalResult
 
       } catch (error) {
-        console.error('Error en procesamiento:', error)
+        console.error('❌ Error en procesamiento:', error)
         await updateProgress({
           status: 'failed',
           error_message: error.message,
@@ -398,7 +464,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error en asignación de SKUs:', error)
+    console.error('❌ Error en asignación de SKUs:', error)
     
     return new Response(
       JSON.stringify({
