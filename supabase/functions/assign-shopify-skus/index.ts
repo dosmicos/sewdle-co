@@ -79,13 +79,16 @@ serve(async (req) => {
     // Función con backoff exponencial para rate limiting
     const makeShopifyRequest = async (url: string, options: any, retries = 3): Promise<Response> => {
       for (let attempt = 1; attempt <= retries; attempt++) {
+        // Log de la consulta para debugging
+        console.log(`Shopify API call: ${url}`)
+        
         const response = await fetch(url, options)
         
         if (response.status === 429) {
           // Rate limit hit
           await updateProgress({ 
-            rate_limit_hits: currentLog.rate_limit_hits + 1,
-            shopify_api_calls: currentLog.shopify_api_calls + 1
+            rate_limit_hits: (currentLog.rate_limit_hits || 0) + 1,
+            shopify_api_calls: (currentLog.shopify_api_calls || 0) + 1
           })
           
           const retryAfter = response.headers.get('Retry-After')
@@ -97,13 +100,15 @@ serve(async (req) => {
         }
 
         await updateProgress({ 
-          shopify_api_calls: currentLog.shopify_api_calls + 1
+          shopify_api_calls: (currentLog.shopify_api_calls || 0) + 1
         })
 
         if (response.ok) {
           return response
         } else if (attempt === retries) {
-          throw new Error(`Shopify API error: ${response.status} - ${await response.text()}`)
+          const errorText = await response.text()
+          console.error(`Shopify API error después de ${retries} intentos:`, response.status, errorText)
+          throw new Error(`Shopify API error: ${response.status} - ${errorText}`)
         }
         
         // Pausa antes del siguiente intento
@@ -111,6 +116,107 @@ serve(async (req) => {
       }
       
       throw new Error('Max retries reached')
+    }
+
+    // Función mejorada para contar productos totales (solo primera vez)
+    const countTotalProducts = async () => {
+      console.log('Contando productos totales...')
+      let totalProducts = 0
+      let totalVariants = 0
+      let hasNextPage = true
+      let tempCursor = null
+
+      while (hasNextPage) {
+        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
+        url.searchParams.set('limit', '50')
+        // IMPORTANTE: Solo filtrar por status cuando NO hay cursor
+        if (!tempCursor) {
+          url.searchParams.set('status', 'active,draft')
+        }
+        if (tempCursor) {
+          url.searchParams.set('page_info', tempCursor)
+        }
+
+        const response = await makeShopifyRequest(url.toString(), {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          }
+        })
+
+        const data = await response.json()
+        
+        // Filtrar por estado después de recibir los datos si estamos paginando
+        const filteredProducts = tempCursor 
+          ? data.products.filter((p: any) => p.status === 'active' || p.status === 'draft')
+          : data.products
+        
+        totalProducts += filteredProducts.length
+        totalVariants += filteredProducts.reduce((sum: number, p: any) => sum + p.variants.length, 0)
+
+        const linkHeader = response.headers.get('Link')
+        if (linkHeader && linkHeader.includes('rel="next"')) {
+          const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
+          tempCursor = match ? match[1] : null
+        } else {
+          hasNextPage = false
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      console.log(`Total encontrado: ${totalProducts} productos, ${totalVariants} variantes`)
+      return { totalProducts, totalVariants }
+    }
+
+    // Función para cargar productos con cursor (para procesamiento)
+    const loadProductsFromCursor = async (cursor: string | null, maxProducts = 25) => {
+      console.log(`Cargando productos desde cursor: ${cursor || 'inicio'}`)
+      const allProducts = []
+      let hasNextPage = true
+      let tempCursor = cursor
+
+      while (hasNextPage && allProducts.length < maxProducts) {
+        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
+        url.searchParams.set('limit', '25')
+        // CRÍTICO: NO incluir status cuando hay page_info
+        if (!tempCursor) {
+          url.searchParams.set('status', 'active,draft')
+        }
+        if (tempCursor) {
+          url.searchParams.set('page_info', tempCursor)
+        }
+
+        console.log(`Consultando: ${url.toString()}`)
+
+        const response = await makeShopifyRequest(url.toString(), {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          }
+        })
+
+        const data = await response.json()
+        
+        // Filtrar productos por estado después de recibirlos si estamos paginando
+        const filteredProducts = tempCursor 
+          ? data.products.filter((p: any) => p.status === 'active' || p.status === 'draft')
+          : data.products
+        
+        allProducts.push(...filteredProducts)
+
+        const linkHeader = response.headers.get('Link')
+        if (linkHeader && linkHeader.includes('rel="next"')) {
+          const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
+          tempCursor = match ? match[1] : null
+        } else {
+          hasNextPage = false
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
+      return { products: allProducts, nextCursor: tempCursor }
     }
 
     // Procesar productos en chunks
@@ -123,95 +229,25 @@ serve(async (req) => {
         let errorCount = currentLog.error_variants || 0
         let totalProducts = currentLog.total_products || 0
         let totalVariants = currentLog.total_variants || 0
-        let allProducts = []
 
         // Si es la primera vez, contar productos totales
         if (!cursor && totalProducts === 0) {
-          console.log('Primera ejecución: contando productos...')
-          let hasNextPage = true
-          let tempCursor = null
-
-          while (hasNextPage) {
-            const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
-            url.searchParams.set('limit', '50')
-            url.searchParams.set('status', 'active,draft')
-            if (tempCursor) url.searchParams.set('page_info', tempCursor)
-
-            const response = await makeShopifyRequest(url.toString(), {
-              headers: {
-                'X-Shopify-Access-Token': shopifyToken,
-                'Content-Type': 'application/json',
-              }
-            })
-
-            const data = await response.json()
-            const filteredProducts = data.products.filter((p: any) => 
-              p.status === 'active' || p.status === 'draft'
-            )
-            
-            allProducts.push(...filteredProducts)
-            totalProducts += filteredProducts.length
-            totalVariants += filteredProducts.reduce((sum: number, p: any) => sum + p.variants.length, 0)
-
-            const linkHeader = response.headers.get('Link')
-            if (linkHeader && linkHeader.includes('rel="next"')) {
-              const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
-              tempCursor = match ? match[1] : null
-            } else {
-              hasNextPage = false
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 500))
-          }
-
+          const { totalProducts: tp, totalVariants: tv } = await countTotalProducts()
+          totalProducts = tp
+          totalVariants = tv
           await updateProgress({ total_products: totalProducts, total_variants: totalVariants })
-          console.log(`Total encontrado: ${totalProducts} productos, ${totalVariants} variantes`)
         }
 
-        // Si no tenemos productos cargados, cargarlos desde el cursor
-        if (allProducts.length === 0) {
-          let hasNextPage = true
-          let tempCursor = cursor
+        // Cargar productos para procesar
+        const { products, nextCursor } = await loadProductsFromCursor(cursor, Math.ceil(maxVariants / 10))
+        cursor = nextCursor
 
-          while (hasNextPage && allProducts.length < maxVariants) {
-            const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
-            url.searchParams.set('limit', '25')
-            url.searchParams.set('status', 'active,draft')
-            if (tempCursor) url.searchParams.set('page_info', tempCursor)
-
-            const response = await makeShopifyRequest(url.toString(), {
-              headers: {
-                'X-Shopify-Access-Token': shopifyToken,
-                'Content-Type': 'application/json',
-              }
-            })
-
-            const data = await response.json()
-            const filteredProducts = data.products.filter((p: any) => 
-              p.status === 'active' || p.status === 'draft'
-            )
-            
-            allProducts.push(...filteredProducts)
-
-            const linkHeader = response.headers.get('Link')
-            if (linkHeader && linkHeader.includes('rel="next"')) {
-              const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
-              tempCursor = match ? match[1] : null
-              cursor = tempCursor
-            } else {
-              hasNextPage = false
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 500))
-          }
-        }
-
-        console.log(`Procesando ${allProducts.length} productos desde cursor`)
+        console.log(`Procesando ${products.length} productos`)
 
         let variantsProcessedInBatch = 0
         const updateResults = []
 
-        for (const product of allProducts) {
+        for (const product of products) {
           if (variantsProcessedInBatch >= maxVariants) {
             console.log(`Límite de ${maxVariants} variantes alcanzado en este lote`)
             break
@@ -311,7 +347,7 @@ serve(async (req) => {
         }
 
         // Determinar si el proceso está completo
-        const isComplete = variantsProcessedInBatch < maxVariants || allProducts.length < 25
+        const isComplete = variantsProcessedInBatch < maxVariants || products.length < 25
         const finalStatus = isComplete ? 'completed' : 'paused'
 
         const finalResult = {
