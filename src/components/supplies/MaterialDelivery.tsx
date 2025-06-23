@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Search, Package, Calendar, User } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Search, Package, Calendar, Palette } from 'lucide-react';
 import MaterialDeliveryForm from './MaterialDeliveryForm';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 
@@ -37,12 +38,13 @@ const MaterialDelivery = () => {
 
   // Filter deliveries
   const filteredDeliveries = deliveries.filter(delivery => {
-    // Search filter
+    // Search filter - now includes color
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = 
         delivery.materials?.name?.toLowerCase().includes(searchLower) ||
         delivery.materials?.sku?.toLowerCase().includes(searchLower) ||
+        delivery.materials?.color?.toLowerCase().includes(searchLower) ||
         delivery.workshops?.name?.toLowerCase().includes(searchLower) ||
         delivery.orders?.order_number?.toLowerCase().includes(searchLower);
       
@@ -54,7 +56,7 @@ const MaterialDelivery = () => {
       return false;
     }
 
-    // Period filter (could be expanded)
+    // Period filter
     if (filterPeriod !== 'all') {
       const deliveryDate = new Date(delivery.delivery_date);
       const now = new Date();
@@ -101,7 +103,7 @@ const MaterialDelivery = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
             <Input
               type="text"
-              placeholder="Buscar por material, taller u orden..."
+              placeholder="Buscar por material, color, taller u orden..."
               className="w-80 pl-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -150,7 +152,7 @@ const MaterialDelivery = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Material</TableHead>
+                  <TableHead>Material y Color</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Taller Destino</TableHead>
                   <TableHead>Orden</TableHead>
@@ -165,13 +167,31 @@ const MaterialDelivery = () => {
                 {filteredDeliveries.map((delivery) => (
                   <TableRow key={delivery.id}>
                     <TableCell>
-                      <div>
+                      <div className="space-y-2">
                         <div className="font-medium text-black">
                           {delivery.materials?.name || 'N/A'}
                         </div>
-                        <div className="text-sm text-gray-600">
-                          {delivery.materials?.category || ''}
+                        <div className="flex items-center space-x-2">
+                          {delivery.materials?.color && (
+                            <Badge 
+                              variant="outline" 
+                              className="flex items-center space-x-1 bg-blue-50 text-blue-700 border-blue-200"
+                            >
+                              <Palette className="w-3 h-3" />
+                              <span>{delivery.materials.color}</span>
+                            </Badge>
+                          )}
+                          {delivery.materials?.category && (
+                            <span className="text-sm text-gray-600">
+                              {delivery.materials.category}
+                            </span>
+                          )}
                         </div>
+                        {!delivery.materials?.color && (
+                          <span className="text-xs text-gray-500 italic">
+                            Sin color especificado
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-sm">
