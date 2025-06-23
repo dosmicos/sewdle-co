@@ -25,7 +25,9 @@ const MaterialDelivery = () => {
 
   const loadDeliveries = async () => {
     const data = await fetchMaterialDeliveries();
-    setDeliveries(data);
+    // CORRECCIÓN: Filtrar solo entregas reales (no consumos)
+    const actualDeliveries = data.filter(delivery => delivery.quantity_delivered > 0);
+    setDeliveries(actualDeliveries);
   };
 
   const handleDeliveryCreated = () => {
