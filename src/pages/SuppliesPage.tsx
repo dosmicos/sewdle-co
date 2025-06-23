@@ -3,10 +3,11 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Package, TruckIcon, BarChart3 } from 'lucide-react';
+import { Plus, Package, TruckIcon, BarChart3, Activity } from 'lucide-react';
 import MaterialsCatalog from '@/components/supplies/MaterialsCatalog';
 import MaterialDelivery from '@/components/supplies/MaterialDelivery';
 import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
+import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
 import MaterialForm from '@/components/supplies/MaterialForm';
 
 const SuppliesPage = () => {
@@ -37,7 +38,7 @@ const SuppliesPage = () => {
               <span>Entregas</span>
             </TabsTrigger>
             <TabsTrigger value="consumption" className="flex items-center space-x-2">
-              <Package className="w-4 h-4" />
+              <Activity className="w-4 h-4" />
               <span>Consumo</span>
             </TabsTrigger>
           </TabsList>
@@ -70,10 +71,10 @@ const SuppliesPage = () => {
           </TabsContent>
 
           <TabsContent value="consumption">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4 text-black">Registro de Consumo</h3>
-              <p className="text-gray-600">El registro de consumo se realiza desde las órdenes de producción específicas.</p>
-            </Card>
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-black">Gestión de Consumos</h2>
+              <MaterialConsumptionManager />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

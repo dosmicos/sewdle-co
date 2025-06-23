@@ -14,6 +14,7 @@ import MaterialDeliveryForm from '@/components/supplies/MaterialDeliveryForm';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useOrders } from '@/hooks/useOrders';
 import { useOrderMaterialValidation } from '@/hooks/useOrderMaterialValidation';
+import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 
 interface OrderFormProps {
   onClose: () => void;
@@ -39,6 +40,7 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
   const { workshops, loading: workshopsLoading } = useWorkshops();
   const { createOrder, loading: creatingOrder } = useOrders();
   const { validateMaterialsForWorkshop, loading: validatingMaterials } = useOrderMaterialValidation();
+  const { consumeOrderMaterials } = useMaterialConsumption();
 
   // Validar materiales cuando cambien los insumos o el taller
   useEffect(() => {
@@ -170,12 +172,34 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
         })),
         notes: notes.trim() || undefined,
         cuttingOrderFile: cuttingOrderFile || undefined,
-        // Información sobre la validación de materiales
         materialValidation: materialValidation
       };
 
       console.log('Final order data to send:', orderData);
-      await createOrder(orderData);
+      const createdOrder = await createOrder(orderData);
+      
+      // Si hay validación de materiales y materiales suficientes, consumir automáticamente
+      if (materialValidation && 
+          materialValidation.sufficientMaterials && 
+          materialValidation.sufficientMaterials.length > 0 &&
+          createdOrder) {
+        
+        console.log('Auto-consuming materials for order:', createdOrder.id);
+        
+        try {
+          const consumptionData = materialValidation.sufficientMaterials.map(material => ({
+            material_id: material.materialId,
+            quantity: material.quantity
+          }));
+          
+          await consumeOrderMaterials(createdOrder.id, consumptionData);
+          console.log('Materials consumed automatically');
+        } catch (consumptionError) {
+          console.error('Error consuming materials automatically:', consumptionError);
+          // No bloquear la creación de la orden si falla el consumo
+        }
+      }
+      
       handleOrderFormClose();
     } catch (error) {
       console.error('Error creating order:', error);
