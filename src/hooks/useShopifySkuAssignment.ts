@@ -7,15 +7,18 @@ interface SkuAssignmentResult {
   success: boolean;
   message: string;
   status?: string;
+  processId?: string;
   note?: string;
   summary?: {
     totalProducts: number;
     totalVariants: number;
+    processedVariants: number;
     updatedVariants: number;
     errorVariants: number;
     skippedVariants: number;
   };
   details?: any[];
+  nextCursor?: string;
 }
 
 export const useShopifySkuAssignment = () => {
@@ -23,12 +26,18 @@ export const useShopifySkuAssignment = () => {
   const [processing, setProcessing] = useState(false);
   const { toast } = useToast();
 
-  const assignShopifySkus = async (): Promise<SkuAssignmentResult | null> => {
+  const assignShopifySkus = async (options?: {
+    processId?: string;
+    resumeFromCursor?: string;
+    maxVariants?: number;
+  }): Promise<SkuAssignmentResult | null> => {
     setLoading(true);
     try {
-      console.log('Iniciando asignación de SKUs en Shopify...');
+      console.log('Iniciando asignación de SKUs con opciones:', options);
 
-      const { data, error } = await supabase.functions.invoke('assign-shopify-skus');
+      const { data, error } = await supabase.functions.invoke('assign-shopify-skus', {
+        body: options || { maxVariants: 100 }
+      });
 
       if (error) {
         throw error;
@@ -38,31 +47,24 @@ export const useShopifySkuAssignment = () => {
         throw new Error(data.error || 'Error en la asignación de SKUs');
       }
 
-      // Si el proceso está en background
-      if (data.status === 'processing') {
+      // Mostrar mensaje según el estado
+      if (data.status === 'completed') {
+        toast({
+          title: "🎉 Proceso completado",
+          description: data.message,
+        });
+      } else if (data.status === 'paused') {
         setProcessing(true);
         toast({
-          title: "Procesamiento iniciado",
-          description: "La asignación de SKUs está ejecutándose en segundo plano. Solo se procesarán productos activos/borrador.",
+          title: "📊 Lote procesado",
+          description: `${data.message} Haz clic en "Continuar" para procesar más.`,
         });
-
-        // Simular progreso y ocultar el estado de procesamiento después de un tiempo
-        setTimeout(() => {
-          setProcessing(false);
-          toast({
-            title: "Proceso en marcha",
-            description: "El proceso continúa ejecutándose. Puedes revisar tu tienda Shopify para ver el progreso.",
-          });
-        }, 10000);
-
-        return data as SkuAssignmentResult;
+      } else {
+        toast({
+          title: "⚡ Procesando",
+          description: data.message,
+        });
       }
-
-      // Si hay resultados inmediatos (caso poco probable con la nueva implementación)
-      toast({
-        title: "SKUs asignados en Shopify",
-        description: data.message || "Proceso completado exitosamente",
-      });
 
       return data as SkuAssignmentResult;
 
@@ -79,9 +81,19 @@ export const useShopifySkuAssignment = () => {
     }
   };
 
+  const resumeProcess = async (processId: string, cursor?: string) => {
+    return await assignShopifySkus({
+      processId,
+      resumeFromCursor: cursor,
+      maxVariants: 100
+    });
+  };
+
   return {
     assignShopifySkus,
+    resumeProcess,
     loading,
-    processing
+    processing,
+    setProcessing
   };
 };

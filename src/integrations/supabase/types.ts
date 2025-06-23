@@ -560,6 +560,78 @@ export type Database = {
         }
         Relationships: []
       }
+      sku_assignment_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_cursor: string | null
+          detailed_results: Json | null
+          error_message: string | null
+          error_variants: number | null
+          id: string
+          last_activity_at: string
+          last_processed_product_id: string | null
+          last_processed_variant_id: string | null
+          process_id: string
+          processed_variants: number | null
+          rate_limit_hits: number | null
+          shopify_api_calls: number | null
+          skipped_variants: number | null
+          started_at: string
+          status: string
+          total_products: number | null
+          total_variants: number | null
+          updated_at: string
+          updated_variants: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_cursor?: string | null
+          detailed_results?: Json | null
+          error_message?: string | null
+          error_variants?: number | null
+          id?: string
+          last_activity_at?: string
+          last_processed_product_id?: string | null
+          last_processed_variant_id?: string | null
+          process_id?: string
+          processed_variants?: number | null
+          rate_limit_hits?: number | null
+          shopify_api_calls?: number | null
+          skipped_variants?: number | null
+          started_at?: string
+          status?: string
+          total_products?: number | null
+          total_variants?: number | null
+          updated_at?: string
+          updated_variants?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_cursor?: string | null
+          detailed_results?: Json | null
+          error_message?: string | null
+          error_variants?: number | null
+          id?: string
+          last_activity_at?: string
+          last_processed_product_id?: string | null
+          last_processed_variant_id?: string | null
+          process_id?: string
+          processed_variants?: number | null
+          rate_limit_hits?: number | null
+          shopify_api_calls?: number | null
+          skipped_variants?: number | null
+          started_at?: string
+          status?: string
+          total_products?: number | null
+          total_variants?: number | null
+          updated_at?: string
+          updated_variants?: number | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -714,6 +786,10 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_old_sku_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       consume_order_materials: {
         Args: { order_id_param: string; consumption_data: Json }
         Returns: undefined
