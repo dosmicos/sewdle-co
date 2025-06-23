@@ -29,6 +29,14 @@ interface DiagnosisResult {
   };
 }
 
+interface SyncLogDetails {
+  delivery_id: string;
+  sync_results: any[];
+  success_count: number;
+  error_count: number;
+  synced_at: string;
+}
+
 export const useShopifyDiagnosis = () => {
   const [loading, setLoading] = useState(false);
   const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
@@ -71,8 +79,70 @@ export const useShopifyDiagnosis = () => {
     }
   };
 
+  const getSyncLogDetails = async (deliveryId: string): Promise<SyncLogDetails[]> => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('inventory_sync_logs')
+        .select('*')
+        .eq('delivery_id', deliveryId)
+        .order('synced_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error obteniendo logs de sincronización:', error);
+      toast({
+        title: "Error obteniendo logs",
+        description: error instanceof Error ? error.message : "No se pudieron obtener los logs",
+        variant: "destructive",
+      });
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testShopifyConnection = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
+        body: {
+          deliveryId: 'test',
+          approvedItems: []
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Test de conexión",
+        description: "Conexión con Shopify verificada",
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error en test de conexión:', error);
+      toast({
+        title: "Error de conexión",
+        description: error instanceof Error ? error.message : "No se pudo conectar con Shopify",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     runDiagnosis,
+    getSyncLogDetails,
+    testShopifyConnection,
     diagnosisResult,
     loading
   };

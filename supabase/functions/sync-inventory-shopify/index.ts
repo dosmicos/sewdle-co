@@ -26,14 +26,20 @@ serve(async (req) => {
       throw new Error('Credenciales de Shopify no configuradas')
     }
 
+    console.log('=== SHOPIFY SYNC INICIADO ===')
+    console.log('Domain:', shopifyDomain)
+    console.log('Token presente:', shopifyToken ? 'Sí' : 'No')
+
     const { deliveryId, approvedItems } = await req.json()
 
     if (!deliveryId || !approvedItems || !Array.isArray(approvedItems)) {
       throw new Error('Datos de sincronización inválidos')
     }
 
-    console.log('Starting Shopify sync for delivery:', deliveryId)
-    console.log('Items to sync:', approvedItems.length)
+    console.log('=== DATOS DE ENTRADA ===')
+    console.log('Delivery ID:', deliveryId)
+    console.log('Items a sincronizar:', approvedItems.length)
+    console.log('Items:', JSON.stringify(approvedItems, null, 2))
 
     // Verificar si ya está sincronizada
     const { data: delivery, error: deliveryError } = await supabase
@@ -66,10 +72,29 @@ serve(async (req) => {
       })
       .eq('id', deliveryId)
 
-    console.log('Delivery sync attempts:', (delivery.sync_attempts || 0) + 1)
+    console.log('=== PASO 1: VERIFICACIÓN DE AUTENTICACIÓN ===')
+    
+    // Verificar permisos del token con una llamada de prueba
+    const testUrl = `https://${shopifyDomain}/admin/api/2023-10/shop.json`
+    const testResponse = await fetch(testUrl, {
+      headers: {
+        'X-Shopify-Access-Token': shopifyToken,
+        'Content-Type': 'application/json',
+      },
+    })
 
-    // PRIMERA VALIDACIÓN: Verificar que todos los SKUs existen en Shopify antes de proceder
-    console.log('=== PRE-VALIDATION: Verificando existencia de SKUs ===')
+    console.log('Test de autenticación status:', testResponse.status)
+    console.log('Test headers:', Object.fromEntries(testResponse.headers.entries()))
+
+    if (!testResponse.ok) {
+      const errorText = await testResponse.text()
+      throw new Error(`Fallo autenticación Shopify: ${testResponse.status} - ${errorText}`)
+    }
+
+    const shopData = await testResponse.json()
+    console.log('✅ Autenticación exitosa - Shop:', shopData.shop?.name || 'N/A')
+
+    console.log('=== PASO 2: VALIDACIÓN DE SKUS ===')
     const skusToValidate = approvedItems.map(item => item.skuVariant)
     const validationResults = []
 
@@ -82,6 +107,8 @@ serve(async (req) => {
       const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
       url.searchParams.set('limit', '250')
       if (pageInfo) url.searchParams.set('page_info', pageInfo)
+
+      console.log('Consultando productos:', url.toString())
 
       const response = await fetch(url.toString(), {
         headers: {
@@ -120,7 +147,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Total variantes cargadas de Shopify: ${allShopifyVariants.size}`)
+    console.log(`Total variantes en Shopify: ${allShopifyVariants.size}`)
 
     // Validar cada SKU
     for (const sku of skusToValidate) {
@@ -145,30 +172,21 @@ serve(async (req) => {
     const missingSkus = validationResults.filter(result => !result.found)
     
     if (missingSkus.length > 0) {
-      console.log('=== SKUS FALTANTES DETECTADOS ===')
-      missingSkus.forEach(missing => {
-        console.log(`Faltante: ${missing.sku}`)
-      })
-
-      // Registrar error específico
+      console.log('=== SKUS FALTANTES ===')
       const errorMessage = `SKUs no encontrados en Shopify: ${missingSkus.map(m => m.sku).join(', ')}`
       
       await supabase
         .from('deliveries')
-        .update({ 
-          sync_error_message: errorMessage
-        })
+        .update({ sync_error_message: errorMessage })
         .eq('id', deliveryId)
 
-      // Generar respuesta de error con detalles
       const syncResults = missingSkus.map(missing => ({
         sku: missing.sku,
         status: 'error',
-        error: `SKU '${missing.sku}' no existe en Shopify. Verifica que el producto fue creado correctamente en Shopify con este SKU exacto.`,
+        error: `SKU '${missing.sku}' no existe en Shopify`,
         quantityAttempted: approvedItems.find(item => item.skuVariant === missing.sku)?.quantityApproved || 0
       }))
 
-      // Log para diagnóstico
       const logData = {
         delivery_id: deliveryId,
         sync_results: syncResults,
@@ -176,92 +194,138 @@ serve(async (req) => {
         error_count: missingSkus.length
       }
 
-      await supabase
-        .from('inventory_sync_logs')
-        .insert([logData])
+      await supabase.from('inventory_sync_logs').insert([logData])
 
       return new Response(
         JSON.stringify({
           success: false,
-          summary: {
-            successful: 0,
-            failed: missingSkus.length,
-            total: approvedItems.length
-          },
+          summary: { successful: 0, failed: missingSkus.length, total: approvedItems.length },
           details: syncResults,
-          error: `${missingSkus.length} SKUs no encontrados en Shopify`,
-          validation: {
-            total_skus_checked: skusToValidate.length,
-            missing_skus: missingSkus.length,
-            missing_sku_list: missingSkus.map(m => m.sku)
-          }
+          error: `${missingSkus.length} SKUs no encontrados en Shopify`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('✅ Todos los SKUs fueron encontrados en Shopify. Procediendo con la sincronización...')
-
-    // SINCRONIZACIÓN: Actualizar inventarios
+    console.log('=== PASO 3: SINCRONIZACIÓN CON VERIFICACIÓN POST-ACTUALIZACIÓN ===')
     const syncResults = []
     let successCount = 0
     let errorCount = 0
 
     for (const item of approvedItems) {
       try {
-        console.log(`=== Sincronizando item ===`)
-        console.log(`SKU: ${item.skuVariant}`)
-        console.log(`Cantidad a agregar: ${item.quantityApproved}`)
+        console.log(`\n=== PROCESANDO ITEM: ${item.skuVariant} ===`)
         
-        // Obtener datos de la variante (ya validada)
         const validatedVariant = validationResults.find(v => v.sku === item.skuVariant && v.found)
-        
         if (!validatedVariant) {
-          throw new Error(`Error interno: variante ${item.skuVariant} no encontrada en validación`)
+          throw new Error(`Error interno: variante ${item.skuVariant} no encontrada`)
         }
 
         const targetVariant = validatedVariant.variant
-        const currentInventory = targetVariant.inventory_quantity || 0
-        const newInventoryQuantity = currentInventory + item.quantityApproved
-        
-        console.log(`Actualizando inventario:`)
-        console.log(`- SKU: ${item.skuVariant}`)
-        console.log(`- Inventario actual: ${currentInventory}`)
-        console.log(`- Cantidad a agregar: ${item.quantityApproved}`)
-        console.log(`- Nuevo inventario: ${newInventoryQuantity}`)
+        console.log('Variant ID:', targetVariant.id)
+        console.log('Inventario actual reportado:', targetVariant.inventory_quantity)
+        console.log('Cantidad a agregar:', item.quantityApproved)
 
-        // Actualizar inventario en Shopify
+        // PASO 3A: Consultar inventario actual DIRECTAMENTE desde Shopify
+        const currentInventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${targetVariant.id}.json`
+        const currentInventoryResponse = await fetch(currentInventoryUrl, {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!currentInventoryResponse.ok) {
+          throw new Error(`Error consultando inventario actual: ${currentInventoryResponse.status}`)
+        }
+
+        const currentInventoryData = await currentInventoryResponse.json()
+        const realCurrentInventory = currentInventoryData.variant.inventory_quantity || 0
+        const newInventoryQuantity = realCurrentInventory + item.quantityApproved
+
+        console.log('=== INVENTARIO REAL CONSULTADO ===')
+        console.log('Inventario real actual:', realCurrentInventory)
+        console.log('Nuevo inventario calculado:', newInventoryQuantity)
+
+        // PASO 3B: Actualizar inventario
         const updateUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${targetVariant.id}.json`
+        const updatePayload = {
+          variant: {
+            id: targetVariant.id,
+            inventory_quantity: newInventoryQuantity
+          }
+        }
+
+        console.log('=== REQUEST A SHOPIFY ===')
+        console.log('URL:', updateUrl)
+        console.log('Payload:', JSON.stringify(updatePayload, null, 2))
+
         const updateResponse = await fetch(updateUrl, {
           method: 'PUT',
           headers: {
             'X-Shopify-Access-Token': shopifyToken,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            variant: {
-              id: targetVariant.id,
-              inventory_quantity: newInventoryQuantity
-            }
-          })
+          body: JSON.stringify(updatePayload)
         })
+
+        console.log('=== RESPONSE DE SHOPIFY ===')
+        console.log('Status:', updateResponse.status)
+        console.log('Headers:', Object.fromEntries(updateResponse.headers.entries()))
 
         if (!updateResponse.ok) {
           const errorText = await updateResponse.text()
-          console.error(`Error actualizando variante ${targetVariant.id}:`, errorText)
+          console.error('Error response body:', errorText)
           throw new Error(`Error actualizando inventario: ${updateResponse.status} - ${errorText}`)
         }
 
         const updateData = await updateResponse.json()
-        console.log(`✅ Éxito: Inventario actualizado para ${item.skuVariant}:`)
-        console.log(`   ${currentInventory} → ${updateData.variant.inventory_quantity}`)
+        console.log('Update response data:', JSON.stringify(updateData, null, 2))
+
+        // PASO 3C: VERIFICACIÓN POST-ACTUALIZACIÓN - Consultar nuevamente para confirmar
+        console.log('=== VERIFICACIÓN POST-ACTUALIZACIÓN ===')
+        
+        const verificationResponse = await fetch(currentInventoryUrl, {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!verificationResponse.ok) {
+          console.error('Error en verificación post-actualización')
+          throw new Error(`Error verificando actualización: ${verificationResponse.status}`)
+        }
+
+        const verificationData = await verificationResponse.json()
+        const finalInventory = verificationData.variant.inventory_quantity || 0
+
+        console.log('=== RESULTADO DE VERIFICACIÓN ===')
+        console.log('Inventario antes:', realCurrentInventory)
+        console.log('Inventario esperado:', newInventoryQuantity)
+        console.log('Inventario real final:', finalInventory)
+
+        // Verificar si la actualización realmente se aplicó
+        if (finalInventory !== newInventoryQuantity) {
+          console.error('❌ SINCRONIZACIÓN FALLIDA - Inventario no cambió')
+          console.error(`Esperado: ${newInventoryQuantity}, Real: ${finalInventory}`)
+          
+          throw new Error(
+            `Shopify no aplicó la actualización correctamente. ` +
+            `Esperado: ${newInventoryQuantity}, Real: ${finalInventory}. ` +
+            `Posible problema de permisos o rate limiting.`
+          )
+        }
+
+        console.log('✅ SINCRONIZACIÓN EXITOSA VERIFICADA')
 
         syncResults.push({
           sku: item.skuVariant,
           status: 'success',
-          previousQuantity: currentInventory,
+          previousQuantity: realCurrentInventory,
           addedQuantity: item.quantityApproved,
-          newQuantity: updateData.variant.inventory_quantity,
+          newQuantity: finalInventory,
+          verifiedQuantity: finalInventory,
           variantId: targetVariant.id,
           productTitle: targetVariant.product_title
         })
@@ -298,7 +362,7 @@ serve(async (req) => {
       console.error('Error guardando log:', logError)
     }
 
-    // Marcar entrega como sincronizada si fue exitosa
+    // Marcar entrega como sincronizada solo si TODO fue exitoso Y verificado
     if (successCount > 0 && errorCount === 0) {
       await supabase
         .from('deliveries')
@@ -310,7 +374,7 @@ serve(async (req) => {
       
       console.log(`✅ Entrega ${deliveryId} marcada como sincronizada`)
     } else if (errorCount > 0) {
-      // Registrar mensaje de error si hubo fallos
+      // Registrar mensaje de error detallado
       const errorMessage = syncResults
         .filter(r => r.status === 'error')
         .map(r => `${r.sku}: ${r.error}`)
@@ -331,25 +395,24 @@ serve(async (req) => {
       },
       details: syncResults,
       error: errorCount > 0 ? `${errorCount} items fallaron en la sincronización` : null,
-      validation: {
+      diagnostics: {
+        authentication_verified: true,
         total_variants_in_shopify: allShopifyVariants.size,
-        all_skus_found: true
+        all_skus_found: true,
+        post_update_verification: 'enabled'
       }
     }
 
-    console.log('=== Sync completed ===')
+    console.log('=== SYNC COMPLETADO ===')
     console.log('Summary:', response.summary)
-    if (errorCount > 0) {
-      console.log('Errors:', syncResults.filter(r => r.status === 'error').map(r => `${r.sku}: ${r.error}`))
-    }
-
+    
     return new Response(
       JSON.stringify(response),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
-    console.error('❌ Error en sincronización:', error)
+    console.error('❌ Error general en sincronización:', error)
     
     return new Response(
       JSON.stringify({

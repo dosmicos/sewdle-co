@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,12 +6,57 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertTriangle, CheckCircle, Search, FileText, Package } from 'lucide-react';
 import { useShopifyDiagnosis } from '@/hooks/useShopifyDiagnosis';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toast';
+import { XCircle } from 'lucide-react';
 
 const ShopifyDiagnosticTool = () => {
-  const { runDiagnosis, diagnosisResult, loading } = useShopifyDiagnosis();
+  const { 
+    runDiagnosis, 
+    getSyncLogDetails, 
+    testShopifyConnection,
+    diagnosisResult, 
+    loading 
+  } = useShopifyDiagnosis();
+
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState('');
 
   const handleRunDiagnosis = async () => {
     await runDiagnosis();
+  };
+
+  const handleViewSyncLogs = async (deliveryId: string) => {
+    if (!deliveryId.trim()) {
+      toast({
+        title: "ID requerido",
+        description: "Por favor ingresa un ID de entrega válido",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const logs = await getSyncLogDetails(deliveryId);
+      setSyncLogs(logs);
+      
+      if (logs.length === 0) {
+        toast({
+          title: "Sin logs",
+          description: "No se encontraron logs de sincronización para esta entrega",
+        });
+      }
+    } catch (error) {
+      console.error('Error viewing sync logs:', error);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    try {
+      await testShopifyConnection();
+    } catch (error) {
+      console.error('Error testing connection:', error);
+    }
   };
 
   const renderMatchStatus = (matched: boolean) => {
@@ -31,6 +75,137 @@ const ShopifyDiagnosticTool = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Herramienta de Diagnóstico Shopify</h2>
+        <div className="flex gap-2">
+          <Button onClick={handleTestConnection} disabled={loading} variant="outline">
+            <Package className="w-4 h-4 mr-2" />
+            Test Conexión
+          </Button>
+          <Button onClick={runDiagnosis} disabled={loading}>
+            <Search className="w-4 h-4 mr-2" />
+            {loading ? 'Ejecutando...' : 'Ejecutar Diagnóstico'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Sync Logs Viewer */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4">Ver Logs de Sincronización</h3>
+        <div className="flex gap-2 mb-4">
+          <Input
+            placeholder="ID de entrega (ej: 1b7ceadf-4cd4-4d54-a4a4-ea5b8ac26eb5)"
+            value={selectedDeliveryId}
+            onChange={(e) => setSelectedDeliveryId(e.target.value)}
+            className="flex-1"
+          />
+          <Button 
+            onClick={() => handleViewSyncLogs(selectedDeliveryId)}
+            disabled={loading}
+          >
+            <Search className="w-4 h-4 mr-2" />
+            Ver Logs
+          </Button>
+        </div>
+
+        {syncLogs.length > 0 && (
+          <div className="space-y-4">
+            <h4 className="font-medium">Logs de Sincronización</h4>
+            {syncLogs.map((log, index) => (
+              <Card key={index} className="p-4 bg-gray-50">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm font-medium">Fecha</p>
+                    <p className="text-sm text-gray-600">
+                      {new Date(log.synced_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Resultado</p>
+                    <p className="text-sm">
+                      <span className="text-green-600">{log.success_count} exitosos</span>
+                      {log.error_count > 0 && (
+                        <span className="text-red-600 ml-2">{log.error_count} errores</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {log.sync_results && log.sync_results.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Detalles por SKU:</p>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead>Cantidad Anterior</TableHead>
+                            <TableHead>Cantidad Agregada</TableHead>
+                            <TableHead>Cantidad Final</TableHead>
+                            <TableHead>Verificado</TableHead>
+                            <TableHead>Error</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {log.sync_results.map((result: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-mono text-xs">
+                                {result.sku}
+                              </TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  result.status === 'success' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {result.status === 'success' ? (
+                                    <>
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Éxito
+                                    </>
+                                  ) : (
+                                    <>
+                                      <XCircle className="w-3 h-3 mr-1" />
+                                      Error
+                                    </>
+                                  )}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {result.previousQuantity !== undefined ? result.previousQuantity : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {result.addedQuantity !== undefined ? result.addedQuantity : result.quantityAttempted || '-'}
+                              </TableCell>
+                              <TableCell>
+                                {result.newQuantity !== undefined ? result.newQuantity : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {result.verifiedQuantity !== undefined ? (
+                                  result.verifiedQuantity === result.newQuantity ? (
+                                    <span className="text-green-600 text-xs">✓ Verificado</span>
+                                  ) : (
+                                    <span className="text-red-600 text-xs">✗ No coincide</span>
+                                  )
+                                ) : '-'}
+                              </TableCell>
+                              <TableCell className="text-xs text-red-600">
+                                {result.error || '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
