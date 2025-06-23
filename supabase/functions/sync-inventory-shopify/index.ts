@@ -33,6 +33,7 @@ serve(async (req) => {
     }
 
     console.log('Starting Shopify sync for delivery:', deliveryId)
+    console.log('Items to sync:', approvedItems.length)
 
     // Verificar si ya está sincronizada
     const { data: delivery, error: deliveryError } = await supabase
@@ -65,82 +66,192 @@ serve(async (req) => {
       })
       .eq('id', deliveryId)
 
+    console.log('Delivery sync attempts:', (delivery.sync_attempts || 0) + 1)
+
     const syncResults = []
     let successCount = 0
     let errorCount = 0
 
-    // Función mejorada para buscar productos en Shopify con paginación
-    async function searchProductsBySku(sku: string) {
-      console.log(`Buscando producto con SKU: ${sku}`)
+    // Función mejorada para buscar variantes por SKU usando GraphQL
+    async function findVariantBySku(sku: string) {
+      console.log(`Buscando variante con SKU: ${sku}`)
       
-      // Primero buscar por SKU en todas las variantes
-      let pageInfo = null
-      let allProducts = []
-      
-      do {
-        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
-        url.searchParams.set('fields', 'id,variants,handle,title')
-        url.searchParams.set('limit', '250')
-        
-        if (pageInfo) {
-          url.searchParams.set('page_info', pageInfo)
-        }
+      try {
+        // Usar GraphQL para buscar por SKU más eficientemente
+        const query = `
+          query getProductVariants($query: String!) {
+            productVariants(first: 10, query: $query) {
+              edges {
+                node {
+                  id
+                  sku
+                  inventoryQuantity
+                  product {
+                    id
+                    title
+                  }
+                }
+              }
+            }
+          }
+        `
 
-        const response = await fetch(url.toString(), {
+        const graphqlUrl = `https://${shopifyDomain}/admin/api/2023-10/graphql.json`
+        const response = await fetch(graphqlUrl, {
+          method: 'POST',
           headers: {
             'X-Shopify-Access-Token': shopifyToken,
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            query,
+            variables: {
+              query: `sku:${sku}`
+            }
+          })
         })
 
         if (!response.ok) {
-          throw new Error(`Error buscando productos: ${response.status} ${response.statusText}`)
+          console.error(`GraphQL request failed: ${response.status} ${response.statusText}`)
+          // Fallback a REST API
+          return await findVariantBySkuRest(sku)
         }
 
         const data = await response.json()
-        allProducts.push(...(data.products || []))
+        console.log('GraphQL response:', JSON.stringify(data, null, 2))
+
+        if (data.errors) {
+          console.error('GraphQL errors:', data.errors)
+          // Fallback a REST API
+          return await findVariantBySkuRest(sku)
+        }
+
+        const variants = data.data?.productVariants?.edges || []
+        const variant = variants.find(edge => edge.node.sku === sku)
         
-        // Buscar la variante específica en estos productos
-        for (const product of data.products || []) {
-          for (const variant of product.variants || []) {
-            if (variant.sku === sku) {
-              console.log(`Variante encontrada: ID ${variant.id}, SKU ${variant.sku}, Inventario: ${variant.inventory_quantity}`)
-              return variant
-            }
+        if (variant) {
+          // Convertir ID de GraphQL a REST API format
+          const gid = variant.node.id
+          const restId = gid.split('/').pop()
+          
+          console.log(`Variante encontrada: ID ${restId}, SKU ${variant.node.sku}, Inventario: ${variant.node.inventoryQuantity}`)
+          
+          return {
+            id: restId,
+            sku: variant.node.sku,
+            inventory_quantity: variant.node.inventoryQuantity,
+            product_title: variant.node.product.title
           }
         }
 
-        // Obtener página siguiente si existe
-        const linkHeader = response.headers.get('Link')
-        if (linkHeader && linkHeader.includes('rel="next"')) {
-          const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
-          pageInfo = match ? match[1] : null
-        } else {
-          pageInfo = null
-        }
-      } while (pageInfo)
+        console.log(`No se encontró variante con SKU: ${sku} usando GraphQL`)
+        return null
 
-      console.log(`Total productos revisados: ${allProducts.length}`)
-      return null
+      } catch (error) {
+        console.error(`Error en búsqueda GraphQL para SKU ${sku}:`, error)
+        // Fallback a REST API
+        return await findVariantBySkuRest(sku)
+      }
+    }
+
+    // Función fallback usando REST API
+    async function findVariantBySkuRest(sku: string) {
+      console.log(`Fallback: Buscando con REST API - SKU: ${sku}`)
+      
+      try {
+        // Buscar usando el endpoint de inventory_items
+        const inventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_items.json?limit=250`
+        let pageInfo = null
+        
+        // Primero obtener todos los inventory items
+        do {
+          const url = new URL(inventoryUrl)
+          if (pageInfo) {
+            url.searchParams.set('page_info', pageInfo)
+          }
+
+          const response = await fetch(url.toString(), {
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`Error buscando inventory items: ${response.status} ${response.statusText}`)
+          }
+
+          const data = await response.json()
+          const inventoryItems = data.inventory_items || []
+          
+          // Buscar el item con el SKU correcto
+          const item = inventoryItems.find(item => item.sku === sku)
+          if (item) {
+            // Ahora buscar la variante que usa este inventory item
+            const variantResponse = await fetch(
+              `https://${shopifyDomain}/admin/api/2023-10/variants.json?limit=250&inventory_item_id=${item.id}`,
+              {
+                headers: {
+                  'X-Shopify-Access-Token': shopifyToken,
+                  'Content-Type': 'application/json',
+                },
+              }
+            )
+
+            if (variantResponse.ok) {
+              const variantData = await variantResponse.json()
+              const variant = variantData.variants?.[0]
+              
+              if (variant) {
+                console.log(`Variante encontrada via REST: ID ${variant.id}, SKU ${variant.sku}, Inventario: ${variant.inventory_quantity}`)
+                return variant
+              }
+            }
+          }
+
+          // Obtener página siguiente si existe
+          const linkHeader = response.headers.get('Link')
+          if (linkHeader && linkHeader.includes('rel="next"')) {
+            const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
+            pageInfo = match ? match[1] : null
+          } else {
+            pageInfo = null
+          }
+        } while (pageInfo)
+
+        console.log(`No se encontró variante con SKU: ${sku} usando REST API`)
+        return null
+
+      } catch (error) {
+        console.error(`Error en búsqueda REST para SKU ${sku}:`, error)
+        return null
+      }
     }
 
     // Procesar cada item aprobado
     for (const item of approvedItems) {
       try {
-        console.log(`Sincronizando item: ${item.skuVariant}, cantidad: ${item.quantityApproved}`)
+        console.log(`=== Sincronizando item ===`)
+        console.log(`SKU: ${item.skuVariant}`)
+        console.log(`Cantidad a agregar: ${item.quantityApproved}`)
         
         // Buscar la variante específica por SKU
-        const targetVariant = await searchProductsBySku(item.skuVariant)
+        const targetVariant = await findVariantBySku(item.skuVariant)
 
         if (!targetVariant) {
           throw new Error(`Variante con SKU ${item.skuVariant} no encontrada en Shopify. Verifica que el producto existe y el SKU es correcto.`)
         }
 
-        console.log(`Actualizando inventario: SKU ${item.skuVariant}, inventario actual: ${targetVariant.inventory_quantity}, agregando: ${item.quantityApproved}`)
+        const currentInventory = targetVariant.inventory_quantity || 0
+        const newInventoryQuantity = currentInventory + item.quantityApproved
+        
+        console.log(`Actualizando inventario:`)
+        console.log(`- SKU: ${item.skuVariant}`)
+        console.log(`- Inventario actual: ${currentInventory}`)
+        console.log(`- Cantidad a agregar: ${item.quantityApproved}`)
+        console.log(`- Nuevo inventario: ${newInventoryQuantity}`)
 
         // Actualizar inventario en Shopify
-        const newInventoryQuantity = (targetVariant.inventory_quantity || 0) + item.quantityApproved
-        
         const updateUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${targetVariant.id}.json`
         const updateResponse = await fetch(updateUrl, {
           method: 'PUT',
@@ -159,25 +270,27 @@ serve(async (req) => {
         if (!updateResponse.ok) {
           const errorText = await updateResponse.text()
           console.error(`Error actualizando variante ${targetVariant.id}:`, errorText)
-          throw new Error(`Error actualizando inventario: ${updateResponse.status} ${errorText}`)
+          throw new Error(`Error actualizando inventario: ${updateResponse.status} - ${errorText}`)
         }
 
         const updateData = await updateResponse.json()
-        console.log(`Éxito: Inventario actualizado para ${item.skuVariant}: ${targetVariant.inventory_quantity} -> ${updateData.variant.inventory_quantity}`)
+        console.log(`✅ Éxito: Inventario actualizado para ${item.skuVariant}:`)
+        console.log(`   ${currentInventory} → ${updateData.variant.inventory_quantity}`)
 
         syncResults.push({
           sku: item.skuVariant,
           status: 'success',
-          previousQuantity: targetVariant.inventory_quantity,
+          previousQuantity: currentInventory,
           addedQuantity: item.quantityApproved,
           newQuantity: updateData.variant.inventory_quantity,
-          variantId: targetVariant.id
+          variantId: targetVariant.id,
+          productTitle: targetVariant.product_title || 'Unknown'
         })
 
         successCount++
 
       } catch (error) {
-        console.error(`Error sincronizando ${item.skuVariant}:`, error.message)
+        console.error(`❌ Error sincronizando ${item.skuVariant}:`, error.message)
         
         syncResults.push({
           sku: item.skuVariant,
@@ -216,7 +329,7 @@ serve(async (req) => {
         })
         .eq('id', deliveryId)
       
-      console.log(`Entrega ${deliveryId} marcada como sincronizada`)
+      console.log(`✅ Entrega ${deliveryId} marcada como sincronizada`)
     } else if (errorCount > 0) {
       // Registrar mensaje de error si hubo fallos
       const errorMessage = syncResults
@@ -241,7 +354,11 @@ serve(async (req) => {
       error: errorCount > 0 ? `${errorCount} items fallaron en la sincronización` : null
     }
 
-    console.log('Sync completed:', response.summary)
+    console.log('=== Sync completed ===')
+    console.log('Summary:', response.summary)
+    if (errorCount > 0) {
+      console.log('Errors:', syncResults.filter(r => r.status === 'error').map(r => `${r.sku}: ${r.error}`))
+    }
 
     return new Response(
       JSON.stringify(response),
@@ -249,7 +366,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error en sincronización:', error)
+    console.error('❌ Error en sincronización:', error)
     
     return new Response(
       JSON.stringify({
