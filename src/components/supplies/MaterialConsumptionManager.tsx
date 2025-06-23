@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Package, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useOrders } from '@/hooks/useOrders';
@@ -52,25 +50,32 @@ const MaterialConsumptionManager = () => {
   const loadConsumptionHistory = async () => {
     try {
       const deliveries = await fetchMaterialDeliveries();
+      console.log('Deliveries data received:', deliveries);
       
-      // Agrupar consumos por orden y mostrar historial
+      // Procesar consumos con la nueva estructura de datos optimizada
       const consumptions = deliveries
         .filter(delivery => delivery.quantity_consumed > 0)
-        .map(delivery => ({
-          id: delivery.id,
-          orderId: delivery.order_id,
-          materialId: delivery.material_id,
-          materialName: delivery.materials?.name || 'Material desconocido',
-          workshopId: delivery.workshop_id,
-          workshopName: delivery.workshops?.name || 'Taller desconocido',
-          quantityConsumed: delivery.quantity_consumed,
-          consumedDate: delivery.updated_at,
-          orderNumber: delivery.orders?.order_number || 'Sin orden'
-        }));
+        .map(delivery => {
+          console.log('Processing delivery:', delivery);
+          
+          return {
+            id: delivery.id,
+            orderId: delivery.order_id,
+            materialId: delivery.material_id,
+            materialName: delivery.materials?.name || 'Material desconocido',
+            workshopId: delivery.workshop_id,
+            workshopName: delivery.workshops?.name || 'Taller desconocido',
+            quantityConsumed: delivery.quantity_consumed,
+            consumedDate: delivery.updated_at,
+            orderNumber: delivery.orders?.order_number || 'Sin orden asignada'
+          };
+        });
 
+      console.log('Processed consumptions:', consumptions);
       setConsumptionHistory(consumptions);
     } catch (error) {
       console.error('Error loading consumption history:', error);
+      setConsumptionHistory([]);
     }
   };
 
