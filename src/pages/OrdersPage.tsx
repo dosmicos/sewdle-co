@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useFilteredOrders } from '@/hooks/useFilteredOrders';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -41,8 +40,8 @@ const OrdersPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedWorkshop, setSelectedWorkshop] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedWorkshop, setSelectedWorkshop] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -108,20 +107,21 @@ const OrdersPage = () => {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setSelectedWorkshop('');
-    setSelectedStatus('');
+    setSelectedWorkshop('all');
+    setSelectedStatus('all');
   };
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || '';
     
-    const matchesWorkshop = !selectedWorkshop || 
+    const matchesWorkshop = selectedWorkshop === 'all' || 
+                           (selectedWorkshop === 'unassigned' && !order.workshop_assignments?.length) ||
                            order.workshop_assignments?.some((assignment: any) => 
                              assignment.workshop_id === selectedWorkshop
                            );
     
-    const matchesStatus = !selectedStatus || order.status === selectedStatus;
+    const matchesStatus = selectedStatus === 'all' || order.status === selectedStatus;
     
     return matchesSearch && matchesWorkshop && matchesStatus;
   });
@@ -180,7 +180,7 @@ const OrdersPage = () => {
                   <SelectValue placeholder="Todos los talleres" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos los talleres</SelectItem>
+                  <SelectItem value="all">Todos los talleres</SelectItem>
                   {workshops.map((workshop) => (
                     <SelectItem key={workshop.id} value={workshop.id}>
                       {workshop.name}
@@ -196,7 +196,7 @@ const OrdersPage = () => {
                   <SelectValue placeholder="Todos los estados" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos los estados</SelectItem>
+                  <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="pending">Pendiente</SelectItem>
                   <SelectItem value="assigned">Asignada</SelectItem>
                   <SelectItem value="in_progress">En Progreso</SelectItem>
@@ -253,13 +253,13 @@ const OrdersPage = () => {
                 <Package className="w-8 h-8 text-gray-400" />
               </div>
               <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                {searchTerm || selectedWorkshop || selectedStatus 
+                {searchTerm || selectedWorkshop !== 'all' || selectedStatus !== 'all'
                   ? 'No se encontraron órdenes' 
                   : (isAdmin ? 'No hay órdenes' : 'No tienes órdenes asignadas')
                 }
               </h3>
               <p className="text-gray-500">
-                {searchTerm || selectedWorkshop || selectedStatus
+                {searchTerm || selectedWorkshop !== 'all' || selectedStatus !== 'all'
                   ? 'Intenta ajustar los filtros de búsqueda'
                   : (isAdmin 
                     ? 'Cuando se creen órdenes, aparecerán aquí.'
