@@ -39,9 +39,16 @@ const DeliveriesPage = () => {
     }
   };
 
-  const handleFormSuccess = () => {
+  const handleFormClose = () => {
     setShowCreateForm(false);
     refetch();
+  };
+
+  const handleDeliveryDetailsBack = (shouldRefresh?: boolean) => {
+    setSelectedDelivery(null);
+    if (shouldRefresh) {
+      refetch();
+    }
   };
 
   if (loading) {
@@ -51,6 +58,16 @@ const DeliveriesPage = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       </div>
+    );
+  }
+
+  // Show delivery details if a delivery is selected
+  if (selectedDelivery) {
+    return (
+      <DeliveryDetails
+        delivery={selectedDelivery}
+        onBack={handleDeliveryDetailsBack}
+      />
     );
   }
 
@@ -74,15 +91,10 @@ const DeliveriesPage = () => {
       </div>
 
       {showCreateForm && isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Crear Nueva Entrega</CardTitle>
-            <CardDescription>Registra una nueva entrega</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DeliveryForm onFormSubmit={handleFormSuccess} />
-          </CardContent>
-        </Card>
+        <DeliveryForm
+          onClose={handleFormClose}
+          onDeliveryCreated={handleFormClose}
+        />
       )}
 
       <div className="grid gap-4">
@@ -143,14 +155,6 @@ const DeliveriesPage = () => {
           ))
         )}
       </div>
-
-      {selectedDelivery && (
-        <DeliveryDetails
-          delivery={selectedDelivery}
-          open={!!selectedDelivery}
-          onClose={() => setSelectedDelivery(null)}
-        />
-      )}
     </div>
   );
 };

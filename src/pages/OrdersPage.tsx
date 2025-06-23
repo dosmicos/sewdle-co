@@ -5,6 +5,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import OrderForm from '@/components/OrderForm';
 import OrderEditModal from '@/components/OrderEditModal';
 import OrderDetailsModal from '@/components/OrderDetailsModal';
+import { useOrderActions } from '@/hooks/useOrderActions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import { useState } from 'react';
 const OrdersPage = () => {
   const { orders, loading, refetch } = useFilteredOrders();
   const { isAdmin } = useUserContext();
+  const { deleteOrder } = useOrderActions();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -53,9 +55,24 @@ const OrdersPage = () => {
     setShowDetailsModal(true);
   };
 
-  const handleFormSuccess = () => {
+  const handleFormClose = () => {
     setShowCreateForm(false);
     refetch();
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    setSelectedOrder(null);
+    refetch();
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    const success = await deleteOrder(orderId);
+    if (success) {
+      setShowDetailsModal(false);
+      setSelectedOrder(null);
+      refetch();
+    }
   };
 
   if (loading) {
@@ -88,15 +105,7 @@ const OrdersPage = () => {
       </div>
 
       {showCreateForm && isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Crear Nueva Orden</CardTitle>
-            <CardDescription>Completa los detalles para crear una nueva orden</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <OrderForm onFormSubmit={handleFormSuccess} />
-          </CardContent>
-        </Card>
+        <OrderForm onClose={handleFormClose} />
       )}
 
       <div className="grid gap-4">
@@ -175,6 +184,7 @@ const OrdersPage = () => {
             setShowEditModal(false);
             setSelectedOrder(null);
           }}
+          onSuccess={handleEditSuccess}
         />
       )}
 
@@ -186,6 +196,8 @@ const OrdersPage = () => {
             setShowDetailsModal(false);
             setSelectedOrder(null);
           }}
+          onEdit={handleEditOrder}
+          onDelete={handleDeleteOrder}
         />
       )}
     </div>
