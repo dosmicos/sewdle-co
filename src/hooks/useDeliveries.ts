@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -112,22 +111,125 @@ export const useDeliveries = () => {
   const createDelivery = async (deliveryData: any) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      console.log('Creating delivery with data:', deliveryData);
+
+      // Paso 1: Validar que orderId existe
+      const { data: orderExists, error: orderError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('id', deliveryData.orderId)
+        .single();
+
+      if (orderError || !orderExists) {
+        throw new Error(`Orden no encontrada: ${deliveryData.orderId}`);
+      }
+
+      // Paso 2: Validar workshopId si se proporciona
+      if (deliveryData.workshopId) {
+        const { data: workshopExists, error: workshopError } = await supabase
+          .from('workshops')
+          .select('id')
+          .eq('id', deliveryData.workshopId)
+          .single();
+
+        if (workshopError || !workshopExists) {
+          console.warn(`Workshop no encontrado: ${deliveryData.workshopId}, continuando sin workshop`);
+        }
+      }
+
+      // Paso 3: Validar que todos los orderItemIds existen
+      if (deliveryData.items && deliveryData.items.length > 0) {
+        const orderItemIds = deliveryData.items.map((item: any) => item.orderItemId);
+        const { data: orderItemsExist, error: orderItemsError } = await supabase
+          .from('order_items')
+          .select('id')
+          .in('id', orderItemIds);
+
+        if (orderItemsError) {
+          throw new Error(`Error validando items de orden: ${orderItemsError.message}`);
+        }
+
+        if (!orderItemsExist || orderItemsExist.length !== orderItemIds.length) {
+          const foundIds = orderItemsExist?.map(item => item.id) || [];
+          const missingIds = orderItemIds.filter((id: string) => !foundIds.includes(id));
+          throw new Error(`Items de orden no encontrados: ${missingIds.join(', ')}`);
+        }
+      }
+
+      // Paso 4: Generar tracking number
+      const { data: trackingNumber, error: trackingError } = await supabase
+        .rpc('generate_delivery_number');
+
+      if (trackingError || !trackingNumber) {
+        throw new Error(`Error generando número de seguimiento: ${trackingError?.message || 'Unknown error'}`);
+      }
+
+      // Paso 5: Crear la entrega con datos corregidos
+      const deliveryRecord = {
+        tracking_number: trackingNumber,
+        order_id: deliveryData.orderId,
+        workshop_id: deliveryData.workshopId || null,
+        delivery_date: new Date().toISOString().split('T')[0], // Fecha actual en formato YYYY-MM-DD
+        status: 'pending',
+        notes: deliveryData.notes || null,
+        delivered_by: null, // Se puede asignar después
+        recipient_name: null,
+        recipient_phone: null,
+        recipient_address: null
+      };
+
+      console.log('Creating delivery record:', deliveryRecord);
+
+      const { data: createdDelivery, error: deliveryError } = await supabase
         .from('deliveries')
-        .insert([deliveryData])
+        .insert([deliveryRecord])
         .select()
         .single();
 
-      if (error) {
-        throw error;
+      if (deliveryError) {
+        console.error('Error creating delivery:', deliveryError);
+        throw new Error(`Error creando entrega: ${deliveryError.message}`);
+      }
+
+      console.log('Delivery created successfully:', createdDelivery);
+
+      // Paso 6: Crear los delivery_items si hay items
+      if (deliveryData.items && deliveryData.items.length > 0) {
+        const deliveryItems = deliveryData.items.map((item: any) => ({
+          delivery_id: createdDelivery.id,
+          order_item_id: item.orderItemId,
+          quantity_delivered: item.quantityDelivered,
+          quantity_approved: 0,
+          quantity_defective: 0,
+          quality_status: 'pending',
+          notes: null,
+          quality_notes: null
+        }));
+
+        console.log('Creating delivery items:', deliveryItems);
+
+        const { data: createdItems, error: itemsError } = await supabase
+          .from('delivery_items')
+          .insert(deliveryItems)
+          .select();
+
+        if (itemsError) {
+          console.error('Error creating delivery items:', itemsError);
+          // Rollback: eliminar la entrega creada
+          await supabase.from('deliveries').delete().eq('id', createdDelivery.id);
+          throw new Error(`Error creando items de entrega: ${itemsError.message}`);
+        }
+
+        console.log('Delivery items created successfully:', createdItems);
       }
 
       toast({
         title: "Entrega creada",
-        description: "La entrega ha sido registrada exitosamente",
+        description: `Entrega ${trackingNumber} registrada exitosamente`,
       });
 
-      return data;
+      return createdDelivery;
+
     } catch (error) {
       console.error('Error creating delivery:', error);
       toast({

@@ -120,6 +120,14 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
   const handleSubmit = async () => {
     try {
+      console.log('Form data before processing:', formData);
+
+      // Validar datos básicos
+      if (!formData.orderId) {
+        alert('Debe seleccionar una orden');
+        return;
+      }
+
       const deliveryItems = Object.entries(formData.products)
         .filter(([_, quantity]) => quantity > 0)
         .map(([orderItemId, quantity]) => ({
@@ -132,12 +140,15 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         return;
       }
 
+      // Crear la estructura de datos correcta para createDelivery
       const deliveryData = {
         orderId: formData.orderId,
         workshopId: formData.workshopId || null,
-        notes: formData.general.observations,
+        notes: formData.general.observations.trim() || null,
         items: deliveryItems
       };
+
+      console.log('Sending delivery data:', deliveryData);
 
       await createDelivery(deliveryData);
       
@@ -148,6 +159,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
       onClose();
     } catch (error) {
       console.error('Error creating delivery:', error);
+      // El error ya se muestra en el toast desde useDeliveries
     }
   };
 
