@@ -35,27 +35,88 @@ export const useDeliveries = () => {
   const fetchDeliveryById = async (deliveryId: string) => {
     setLoading(true);
     try {
+      console.log('Fetching delivery by ID:', deliveryId);
+      
       const { data, error } = await supabase
         .from('deliveries')
         .select(`
           *,
+          orders (
+            id,
+            order_number
+          ),
+          workshops (
+            id,
+            name
+          ),
           delivery_items (
-            *,
+            id,
+            delivery_id,
+            order_item_id,
+            quantity_delivered,
+            quantity_approved,
+            quantity_defective,
+            quality_status,
+            quality_notes,
+            notes,
+            created_at,
             order_items (
+              id,
+              order_id,
               product_variant_id,
+              quantity,
+              unit_price,
+              total_price,
               product_variants (
-                sku_variant
+                id,
+                sku_variant,
+                size,
+                color,
+                stock_quantity,
+                additional_price,
+                products (
+                  id,
+                  name,
+                  sku,
+                  description,
+                  category,
+                  base_price,
+                  image_url
+                )
               )
             )
           )
         `)
         .eq('id', deliveryId)
         .single();
-  
+
       if (error) {
+        console.error('SQL Error fetching delivery:', error);
         throw error;
       }
-  
+
+      console.log('Raw delivery data from database:', JSON.stringify(data, null, 2));
+      
+      // Verificar la estructura de los datos
+      if (data?.delivery_items) {
+        console.log('Delivery items structure check:');
+        data.delivery_items.forEach((item: any, index: number) => {
+          console.log(`Item ${index}:`, {
+            id: item.id,
+            order_item_id: item.order_item_id,
+            order_items_exists: !!item.order_items,
+            product_variants_exists: !!item.order_items?.product_variants,
+            products_exists: !!item.order_items?.product_variants?.products,
+            product_name: item.order_items?.product_variants?.products?.name,
+            variant_info: {
+              size: item.order_items?.product_variants?.size,
+              color: item.order_items?.product_variants?.color,
+              sku: item.order_items?.product_variants?.sku_variant
+            }
+          });
+        });
+      }
+
       return data;
     } catch (error) {
       console.error('Error fetching delivery by ID:', error);

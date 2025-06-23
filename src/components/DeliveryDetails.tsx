@@ -41,6 +41,39 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     setDeliveryData(details);
   };
 
+  // Helper function to get product info with fallbacks
+  const getProductInfo = (item: any) => {
+    console.log('Getting product info for item:', item);
+    
+    const product = item?.order_items?.product_variants?.products;
+    const variant = item?.order_items?.product_variants;
+    const orderItem = item?.order_items;
+    
+    // Datos del producto con fallbacks
+    const productName = product?.name || 'Producto sin nombre';
+    const variantSize = variant?.size || 'N/A';
+    const variantColor = variant?.color || 'N/A';
+    const skuVariant = variant?.sku_variant || `SKU-${item?.id || 'unknown'}`;
+    
+    console.log('Product info extracted:', {
+      productName,
+      variantSize,
+      variantColor,
+      skuVariant,
+      hasProduct: !!product,
+      hasVariant: !!variant,
+      hasOrderItem: !!orderItem
+    });
+    
+    return {
+      productName,
+      variantSize,
+      variantColor,
+      skuVariant,
+      isDataComplete: !!(product && variant && orderItem)
+    };
+  };
+
   const renderStatusBadge = (status) => {
     switch (status) {
       case 'pending':
@@ -232,9 +265,10 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         const delivered = item.quantity_delivered;
         
         if (reviewed > 0 && reviewed !== delivered) {
+          const productInfo = getProductInfo(item);
           mismatches.push({
             index,
-            productName: `${item.order_items?.product_variants?.products?.name} (${item.order_items?.product_variants?.size} - ${item.order_items?.product_variants?.color})`,
+            productName: `${productInfo.productName} (${productInfo.variantSize} - ${productInfo.variantColor})`,
             reviewed,
             delivered,
             difference: delivered - reviewed
@@ -439,32 +473,41 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deliveryData.delivery_items.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="py-2">
-                          <div>
-                            <p className="font-medium text-xs text-black">
-                              {item.order_items?.product_variants?.products?.name || 'Producto'}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {item.order_items?.product_variants?.sku_variant}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center py-2">
-                          <div className="text-xs">
-                            <span className="font-medium text-blue-600">{item.quantity_delivered}</span>
-                            <span className="text-gray-500">/{item.order_items?.quantity}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2">
-                          {renderItemStatusBadge(item.quality_status, item.notes)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {deliveryData.delivery_items.map((item, index) => {
+                      const productInfo = getProductInfo(item);
+                      
+                      return (
+                        <TableRow key={index}>
+                          <TableCell className="py-2">
+                            <div>
+                              <p className="font-medium text-xs text-black">
+                                {productInfo.productName}
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                {productInfo.variantSize} - {productInfo.variantColor}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {productInfo.skuVariant}
+                              </p>
+                              {!productInfo.isDataComplete && (
+                                <p className="text-xs text-amber-600 font-medium">
+                                  ⚠️ Datos incompletos
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center py-2">
+                            <div className="text-xs">
+                              <span className="font-medium text-blue-600">{item.quantity_delivered}</span>
+                              <span className="text-gray-500">/{item.order_items?.quantity || '?'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2">
+                            {renderItemStatusBadge(item.quality_status, item.notes)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -508,6 +551,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                       </TableHeader>
                       <TableBody>
                         {deliveryData.delivery_items?.map((item, index) => {
+                          const productInfo = getProductInfo(item);
                           const variantData = qualityData.variants[`item-${index}`];
                           const approved = variantData?.approved || 0;
                           const defective = variantData?.defective || 0;
@@ -518,10 +562,18 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                             <TableRow key={index}>
                               <TableCell>
                                 <div>
-                                  <p className="font-medium">{item.order_items?.product_variants?.products?.name}</p>
+                                  <p className="font-medium">{productInfo.productName}</p>
                                   <p className="text-sm text-gray-600">
-                                    {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                                    {productInfo.variantSize} - {productInfo.variantColor}
                                   </p>
+                                  <p className="text-xs text-gray-500">
+                                    {productInfo.skuVariant}
+                                  </p>
+                                  {!productInfo.isDataComplete && (
+                                    <p className="text-xs text-amber-600 font-medium">
+                                      ⚠️ Verificar datos
+                                    </p>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell className="text-center">
