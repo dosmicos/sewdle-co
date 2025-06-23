@@ -211,7 +211,7 @@ const OrdersPage = () => {
                 onClick={clearFilters}
                 className="h-12 px-4 border-gray-200 hover:bg-gray-50 rounded-xl"
               >
-                <Filter className="w-4 h-4 mr-2" />
+                <Filter className="w-4 h-4" />
                 Limpiar
               </Button>
             </div>
@@ -328,7 +328,7 @@ const OrderCard = ({
   getWorkshopColor, 
   isAdmin 
 }: any) => {
-  const { stats, loading: statsLoading } = useOrderStats(order.id);
+  const { stats, loading: statsLoading, error: statsError } = useOrderStats(order.id);
   
   return (
     <Card className="bg-white border-0 shadow-sm rounded-2xl hover:shadow-md transition-all duration-200">
@@ -370,42 +370,73 @@ const OrderCard = ({
 
         {/* Estadísticas de progreso */}
         <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
-                {statsLoading ? '...' : stats.totalOrdered}
+          {statsError ? (
+            <div className="text-center py-4">
+              <div className="text-sm text-red-600 mb-2">
+                Error al cargar estadísticas
               </div>
-              <div className="text-sm text-gray-500">Ordenado</div>
-            </div>
-            <div className="text-center border-l border-r border-gray-200">
-              <div className="text-2xl font-bold text-green-600">
-                {statsLoading ? '...' : stats.totalApproved}
+              <div className="text-xs text-gray-500">
+                Los datos se mostrarán cuando estén disponibles
               </div>
-              <div className="text-sm text-gray-500">Aprobado</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">
-                {statsLoading ? '...' : stats.totalPending}
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {statsLoading ? (
+                      <div className="w-8 h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                    ) : (
+                      stats.totalOrdered
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-500">Ordenado</div>
+                </div>
+                <div className="text-center border-l border-r border-gray-200">
+                  <div className="text-2xl font-bold text-green-600">
+                    {statsLoading ? (
+                      <div className="w-8 h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                    ) : (
+                      stats.totalApproved
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-500">Aprobado</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {statsLoading ? (
+                      <div className="w-8 h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                    ) : (
+                      stats.totalPending
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-500">Pendiente</div>
+                </div>
               </div>
-              <div className="text-sm text-gray-500">Pendiente</div>
-            </div>
-          </div>
-          
-          {/* Barra de progreso */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Progreso de producción</span>
-              <span className="font-medium text-gray-900">
-                {statsLoading ? '...' : `${stats.completionPercentage}%`}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${statsLoading ? 0 : stats.completionPercentage}%` }}
-              ></div>
-            </div>
-          </div>
+              
+              {/* Barra de progreso */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Progreso de producción</span>
+                  <span className="font-medium text-gray-900">
+                    {statsLoading ? (
+                      <div className="w-12 h-4 bg-gray-200 rounded animate-pulse"></div>
+                    ) : (
+                      `${stats.completionPercentage}%`
+                    )}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      statsLoading ? 'bg-gray-300 animate-pulse' : 'bg-blue-500'
+                    }`}
+                    style={{ width: `${statsLoading ? 30 : stats.completionPercentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Action Buttons */}
