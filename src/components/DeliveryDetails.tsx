@@ -157,6 +157,8 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     }
 
     console.log('Validation passed, processing quality review...');
+    
+    // Pasar el objeto qualityData directamente en lugar de convertirlo a array
     const success = await processQualityReview(delivery.id, qualityData);
     
     if (success) {
@@ -479,12 +481,15 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             
             {isQCLeader && !isDeliveryProcessed ? (
               <div className="space-y-4">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    <strong>Instrucciones:</strong> Especifica las cantidades aprobadas y defectuosas para cada variante. 
-                    Las cantidades aprobadas se procesarán automáticamente y las defectuosas se devolverán al taller con el motivo especificado.
-                  </p>
-                </div>
+                {/* Mostrar advertencia si ya está sincronizada */}
+                {deliveryData.synced_to_shopify && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800">
+                      <strong>⚠️ Nota:</strong> Esta entrega ya fue sincronizada con Shopify. 
+                      Los cambios de calidad no afectarán el inventario de Shopify.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <h4 className="font-medium">Resultado por Item</h4>
@@ -650,6 +655,11 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                     'devuelta'
                   }
                 </p>
+                {deliveryData.synced_to_shopify && (
+                  <p className="text-sm text-green-600 mt-2">
+                    ✅ Sincronizada con Shopify
+                  </p>
+                )}
                 {deliveryData.notes && (
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg text-left">
                     <p className="text-sm text-gray-600 font-medium mb-1">Resumen:</p>

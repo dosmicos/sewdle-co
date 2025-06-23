@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RefreshCw, CheckCircle, AlertTriangle, Clock, Zap } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertTriangle, Clock, Zap, Shield, X } from 'lucide-react';
 import { useInventorySync } from '@/hooks/useInventorySync';
 import { useDeliveries } from '@/hooks/useDeliveries';
 
@@ -32,9 +32,11 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
 
     setSyncLogs(logs);
     
-    // Filtrar entregas aprobadas que podrían necesitar sincronización
+    // Filtrar entregas aprobadas que NO han sido sincronizadas
     const approvedDeliveries = deliveries.filter(d => 
-      ['approved', 'partial_approved'].includes(d.status) && d.total_approved > 0
+      ['approved', 'partial_approved'].includes(d.status) && 
+      d.total_approved > 0 && 
+      !d.synced_to_shopify
     );
     
     setPendingDeliveries(approvedDeliveries);
@@ -42,6 +44,16 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
 
   const handleManualSync = async (delivery: any) => {
     try {
+      // Verificar que no esté ya sincronizada
+      if (delivery.synced_to_shopify) {
+        toast({
+          title: "Ya sincronizada",
+          description: "Esta entrega ya fue sincronizada con Shopify",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Obtener detalles completos de la entrega
       const fullDelivery = await fetchDeliveryById(delivery.id);
       
@@ -84,7 +96,17 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     } else if (successRate > 0) {
       return <Badge className="bg-yellow-100 text-yellow-700"><AlertTriangle className="w-3 h-3 mr-1" />Parcial</Badge>;
     } else {
-      return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="w-3 h-3 mr-1" />Fallido</Badge>;
+      return <Badge className="bg-red-100 text-red-700"><X className="w-3 h-3 mr-1" />Fallido</Badge>;
+    }
+  };
+
+  const renderDeliveryStatus = (delivery: any) => {
+    if (delivery.synced_to_shopify) {
+      return <Badge className="bg-green-100 text-green-700"><Shield className="w-3 h-3 mr-1" />Sincronizado</Badge>;
+    } else if (delivery.sync_attempts > 0) {
+      return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="w-3 h-3 mr-1" />Error ({delivery.sync_attempts} intentos)</Badge>;
+    } else {
+      return <Badge className="bg-yellow-100 text-yellow-700"><Clock className="w-3 h-3 mr-1" />Pendiente</Badge>;
     }
   };
 
@@ -119,15 +141,15 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
 
             <TabsContent value="pending" className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Entregas Aprobadas</h3>
+                <h3 className="text-lg font-semibold">Entregas Aprobadas Pendientes</h3>
                 <Badge variant="outline">{pendingDeliveries.length} entregas</Badge>
               </div>
               
               {pendingDeliveries.length === 0 ? (
                 <div className="text-center py-8">
-                  <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay entregas pendientes</h3>
-                  <p className="text-gray-600">Las entregas aprobadas aparecerán aquí para sincronización</p>
+                  <Shield className="w-12 h-12 text-green-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Todas las entregas están sincronizadas</h3>
+                  <p className="text-gray-600">No hay entregas pendientes de sincronización con Shopify</p>
                 </div>
               ) : (
                 <Table>
@@ -138,6 +160,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
                       <TableHead>Items Aprobados</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Fecha</TableHead>
+                      <TableHead>Estado Sync</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -159,15 +182,16 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
                           )}
                         </TableCell>
                         <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{renderDeliveryStatus(delivery)}</TableCell>
                         <TableCell>
                           <Button
                             onClick={() => handleManualSync(delivery)}
                             size="sm"
                             className="bg-blue-500 hover:bg-blue-600 text-white"
-                            disabled={loading}
+                            disabled={loading || delivery.synced_to_shopify}
                           >
                             <Zap className="w-4 h-4 mr-1" />
-                            Sincronizar
+                            {delivery.synced_to_shopify ? 'Sincronizado' : 'Sincronizar'}
                           </Button>
                         </TableCell>
                       </TableRow>

@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -12,9 +13,7 @@ export const useDeliveries = () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('deliveries')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .rpc('get_deliveries_with_sync_status');
 
       if (error) {
         throw error;
@@ -110,11 +109,57 @@ export const useDeliveries = () => {
     }
   };
 
-  const processQualityReview = async (deliveryId: string, itemsReview: any[]) => {
+  const createDelivery = async (deliveryData: any) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('deliveries')
+        .insert([deliveryData])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Entrega creada",
+        description: "La entrega ha sido registrada exitosamente",
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Error creating delivery:', error);
+      toast({
+        title: "Error al crear entrega",
+        description: error instanceof Error ? error.message : "No se pudo crear la entrega",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processQualityReview = async (deliveryId: string, qualityData: any) => {
     setLoading(true);
     try {
       console.log('Processing quality review for delivery:', deliveryId);
       
+      // Convertir datos de calidad al formato esperado
+      const itemsReview = Object.entries(qualityData.variants).map(([key, data]: [string, any]) => {
+        const itemIndex = parseInt(key.replace('item-', ''));
+        return {
+          id: itemIndex,
+          quantityApproved: data.approved || 0,
+          quantityDefective: data.defective || 0,
+          status: data.approved > 0 && data.defective === 0 ? 'approved' : 
+                 data.defective > 0 && data.approved === 0 ? 'rejected' : 
+                 'partial_approved',
+          notes: data.reason || qualityData.generalNotes || ''
+        };
+      });
+
       // Actualizar items con resultados de calidad
       for (const item of itemsReview) {
         const { error } = await supabase
@@ -155,40 +200,48 @@ export const useDeliveries = () => {
         throw deliveryError;
       }
 
-      // Preparar datos para sincronización con Shopify
-      const approvedItems = deliveryData.delivery_items
-        ?.filter((item: any) => item.quantity_approved > 0)
-        .map((item: any) => ({
-          variantId: item.order_items?.product_variant_id || '',
-          skuVariant: item.order_items?.product_variants?.sku_variant || '',
-          quantityApproved: item.quantity_approved
-        }))
-        .filter((item: any) => item.skuVariant) || [];
+      // Solo sincronizar si no se ha sincronizado antes
+      if (!deliveryData.synced_to_shopify) {
+        // Preparar datos para sincronización con Shopify
+        const approvedItems = deliveryData.delivery_items
+          ?.filter((item: any) => item.quantity_approved > 0)
+          .map((item: any) => ({
+            variantId: item.order_items?.product_variant_id || '',
+            skuVariant: item.order_items?.product_variants?.sku_variant || '',
+            quantityApproved: item.quantity_approved
+          }))
+          .filter((item: any) => item.skuVariant) || [];
 
-      // Intentar sincronización automática con Shopify si hay items aprobados
-      if (approvedItems.length > 0) {
-        try {
-          await syncApprovedItemsToShopify({
-            deliveryId,
-            approvedItems
-          });
-          
+        // Intentar sincronización automática con Shopify si hay items aprobados
+        if (approvedItems.length > 0) {
+          try {
+            await syncApprovedItemsToShopify({
+              deliveryId,
+              approvedItems
+            });
+            
+            toast({
+              title: "Revisión completada",
+              description: `Calidad procesada y inventario sincronizado con Shopify para ${approvedItems.length} items`,
+            });
+          } catch (syncError) {
+            console.error('Error in Shopify sync:', syncError);
+            toast({
+              title: "Revisión completada",
+              description: "Calidad procesada correctamente. Error en sincronización con Shopify, se puede reintentar manualmente.",
+              variant: "destructive",
+            });
+          }
+        } else {
           toast({
             title: "Revisión completada",
-            description: `Calidad procesada y inventario sincronizado con Shopify para ${approvedItems.length} items`,
-          });
-        } catch (syncError) {
-          console.error('Error in Shopify sync:', syncError);
-          toast({
-            title: "Revisión completada",
-            description: "Calidad procesada correctamente. Error en sincronización con Shopify, se puede reintentar manualmente.",
-            variant: "destructive",
+            description: "Los resultados de calidad han sido guardados",
           });
         }
       } else {
         toast({
           title: "Revisión completada",
-          description: "Los resultados de calidad han sido guardados",
+          description: "Los resultados de calidad han sido guardados. Esta entrega ya fue sincronizada con Shopify.",
         });
       }
 
@@ -242,6 +295,7 @@ export const useDeliveries = () => {
     fetchDeliveries,
     fetchDeliveryById,
     getDeliveryStats,
+    createDelivery,
     processQualityReview,
     deleteDelivery,
     loading

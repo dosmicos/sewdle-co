@@ -1,187 +1,235 @@
 
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface SyncInventoryRequest {
-  deliveryId: string;
-  approvedItems: {
-    variantId: string;
-    skuVariant: string;
-    quantityApproved: number;
-  }[];
 }
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-
-const handler = async (req: Request): Promise<Response> => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { deliveryId, approvedItems }: SyncInventoryRequest = await req.json();
-    
-    const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-    const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
-    
+    // Inicializar cliente Supabase
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Obtener credenciales de Shopify
+    const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+
     if (!shopifyDomain || !shopifyToken) {
-      throw new Error('Shopify credentials not configured');
+      throw new Error('Credenciales de Shopify no configuradas')
     }
 
-    console.log(`Starting inventory sync for delivery ${deliveryId} with ${approvedItems.length} items`);
+    const { deliveryId, approvedItems } = await req.json()
 
-    const syncResults = [];
-    
+    if (!deliveryId || !approvedItems || !Array.isArray(approvedItems)) {
+      throw new Error('Datos de sincronización inválidos')
+    }
+
+    console.log('Starting Shopify sync for delivery:', deliveryId)
+
+    // Verificar si ya está sincronizada
+    const { data: delivery, error: deliveryError } = await supabase
+      .from('deliveries')
+      .select('synced_to_shopify, sync_attempts')
+      .eq('id', deliveryId)
+      .single()
+
+    if (deliveryError) {
+      throw new Error(`Error verificando entrega: ${deliveryError.message}`)
+    }
+
+    if (delivery.synced_to_shopify) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Esta entrega ya fue sincronizada con Shopify',
+          summary: { successful: 0, failed: 0 }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Incrementar contador de intentos
+    await supabase
+      .from('deliveries')
+      .update({ 
+        sync_attempts: (delivery.sync_attempts || 0) + 1,
+        last_sync_attempt: new Date().toISOString()
+      })
+      .eq('id', deliveryId)
+
+    const syncResults = []
+    let successCount = 0
+    let errorCount = 0
+
+    // Procesar cada item aprobado
     for (const item of approvedItems) {
       try {
-        // First, find the Shopify variant by SKU
-        const searchResponse = await fetch(
-          `https://${shopifyDomain}/admin/api/2023-10/variants.json?sku=${item.skuVariant}`,
-          {
-            headers: {
-              'X-Shopify-Access-Token': shopifyToken,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        console.log(`Sincronizando item: ${item.skuVariant}, cantidad: ${item.quantityApproved}`)
+        
+        // Buscar el producto por SKU en Shopify
+        const searchUrl = `https://${shopifyDomain}/admin/api/2023-10/products.json?fields=id,variants&limit=250`
+        const searchResponse = await fetch(searchUrl, {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
+        })
 
         if (!searchResponse.ok) {
-          throw new Error(`Failed to search variant: ${searchResponse.statusText}`);
+          throw new Error(`Error buscando productos: ${searchResponse.status} ${searchResponse.statusText}`)
         }
 
-        const searchData = await searchResponse.json();
-        
-        if (!searchData.variants || searchData.variants.length === 0) {
-          console.warn(`No Shopify variant found for SKU: ${item.skuVariant}`);
-          syncResults.push({
-            skuVariant: item.skuVariant,
-            success: false,
-            error: 'Variant not found in Shopify'
-          });
-          continue;
-        }
+        const searchData = await searchResponse.json()
+        console.log(`Encontrados ${searchData.products?.length || 0} productos en Shopify`)
 
-        const shopifyVariant = searchData.variants[0];
-        
-        // Get current inventory level
-        const inventoryResponse = await fetch(
-          `https://${shopifyDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${shopifyVariant.inventory_item_id}`,
-          {
-            headers: {
-              'X-Shopify-Access-Token': shopifyToken,
-              'Content-Type': 'application/json',
-            },
+        // Buscar la variante específica
+        let targetVariant = null
+        for (const product of searchData.products || []) {
+          for (const variant of product.variants || []) {
+            if (variant.sku === item.skuVariant) {
+              targetVariant = variant
+              break
+            }
           }
-        );
-
-        if (!inventoryResponse.ok) {
-          throw new Error(`Failed to get inventory: ${inventoryResponse.statusText}`);
+          if (targetVariant) break
         }
 
-        const inventoryData = await inventoryResponse.json();
+        if (!targetVariant) {
+          throw new Error(`Variante con SKU ${item.skuVariant} no encontrada en Shopify`)
+        }
+
+        console.log(`Variante encontrada: ID ${targetVariant.id}, inventario actual: ${targetVariant.inventory_quantity}`)
+
+        // Actualizar inventario en Shopify
+        const newInventoryQuantity = (targetVariant.inventory_quantity || 0) + item.quantityApproved
         
-        if (!inventoryData.inventory_levels || inventoryData.inventory_levels.length === 0) {
-          console.warn(`No inventory locations found for variant: ${item.skuVariant}`);
-          syncResults.push({
-            skuVariant: item.skuVariant,
-            success: false,
-            error: 'No inventory locations found'
-          });
-          continue;
-        }
-
-        // Update inventory for the first location (primary location)
-        const inventoryLevel = inventoryData.inventory_levels[0];
-        const newQuantity = (inventoryLevel.available || 0) + item.quantityApproved;
-
-        const updateResponse = await fetch(
-          `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/set.json`,
-          {
-            method: 'POST',
-            headers: {
-              'X-Shopify-Access-Token': shopifyToken,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              location_id: inventoryLevel.location_id,
-              inventory_item_id: shopifyVariant.inventory_item_id,
-              available: newQuantity
-            }),
-          }
-        );
+        const updateUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${targetVariant.id}.json`
+        const updateResponse = await fetch(updateUrl, {
+          method: 'PUT',
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            variant: {
+              id: targetVariant.id,
+              inventory_quantity: newInventoryQuantity
+            }
+          })
+        })
 
         if (!updateResponse.ok) {
-          const errorData = await updateResponse.json();
-          throw new Error(`Failed to update inventory: ${JSON.stringify(errorData)}`);
+          const errorText = await updateResponse.text()
+          throw new Error(`Error actualizando inventario: ${updateResponse.status} ${errorText}`)
         }
 
-        console.log(`Successfully updated inventory for ${item.skuVariant}: +${item.quantityApproved} (new total: ${newQuantity})`);
+        const updateData = await updateResponse.json()
+        console.log(`Inventario actualizado para ${item.skuVariant}: ${targetVariant.inventory_quantity} -> ${updateData.variant.inventory_quantity}`)
+
+        syncResults.push({
+          sku: item.skuVariant,
+          status: 'success',
+          previousQuantity: targetVariant.inventory_quantity,
+          addedQuantity: item.quantityApproved,
+          newQuantity: updateData.variant.inventory_quantity,
+          variantId: targetVariant.id
+        })
+
+        successCount++
+
+      } catch (error) {
+        console.error(`Error sincronizando ${item.skuVariant}:`, error.message)
         
         syncResults.push({
-          skuVariant: item.skuVariant,
-          success: true,
-          previousQuantity: inventoryLevel.available || 0,
-          addedQuantity: item.quantityApproved,
-          newQuantity: newQuantity
-        });
+          sku: item.skuVariant,
+          status: 'error',
+          error: error.message,
+          quantityAttempted: item.quantityApproved
+        })
 
-      } catch (itemError) {
-        console.error(`Error syncing item ${item.skuVariant}:`, itemError);
-        syncResults.push({
-          skuVariant: item.skuVariant,
-          success: false,
-          error: itemError.message
-        });
+        errorCount++
       }
     }
 
-    // Log sync result to database
+    // Registrar resultado en la base de datos
+    const logData = {
+      delivery_id: deliveryId,
+      sync_results: syncResults,
+      success_count: successCount,
+      error_count: errorCount
+    }
+
     const { error: logError } = await supabase
       .from('inventory_sync_logs')
-      .insert({
-        delivery_id: deliveryId,
-        sync_results: syncResults,
-        synced_at: new Date().toISOString(),
-        success_count: syncResults.filter(r => r.success).length,
-        error_count: syncResults.filter(r => !r.success).length
-      });
+      .insert([logData])
 
     if (logError) {
-      console.error('Failed to log sync result:', logError);
+      console.error('Error guardando log:', logError)
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      deliveryId,
-      results: syncResults,
+    // Marcar entrega como sincronizada si fue exitosa
+    if (successCount > 0 && errorCount === 0) {
+      await supabase
+        .from('deliveries')
+        .update({ 
+          synced_to_shopify: true,
+          sync_error_message: null
+        })
+        .eq('id', deliveryId)
+      
+      console.log(`Entrega ${deliveryId} marcada como sincronizada`)
+    } else if (errorCount > 0) {
+      // Registrar mensaje de error si hubo fallos
+      const errorMessage = syncResults
+        .filter(r => r.status === 'error')
+        .map(r => `${r.sku}: ${r.error}`)
+        .join('; ')
+      
+      await supabase
+        .from('deliveries')
+        .update({ sync_error_message: errorMessage })
+        .eq('id', deliveryId)
+    }
+
+    const response = {
+      success: successCount > 0,
       summary: {
-        total: syncResults.length,
-        successful: syncResults.filter(r => r.success).length,
-        failed: syncResults.filter(r => !r.success).length
-      }
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+        successful: successCount,
+        failed: errorCount,
+        total: approvedItems.length
+      },
+      details: syncResults,
+      error: errorCount > 0 ? `${errorCount} items fallaron en la sincronización` : null
+    }
+
+    console.log('Sync completed:', response.summary)
+
+    return new Response(
+      JSON.stringify(response),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
 
   } catch (error) {
-    console.error('Error in sync-inventory-shopify:', error);
+    console.error('Error en sincronización:', error)
     
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+        summary: { successful: 0, failed: 0 }
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
   }
-};
-
-serve(handler);
+})

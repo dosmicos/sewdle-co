@@ -15,12 +15,16 @@ export type Database = {
           delivered_by: string | null
           delivery_date: string | null
           id: string
+          last_sync_attempt: string | null
           notes: string | null
           order_id: string
           recipient_address: string | null
           recipient_name: string | null
           recipient_phone: string | null
           status: string | null
+          sync_attempts: number
+          sync_error_message: string | null
+          synced_to_shopify: boolean
           tracking_number: string | null
           updated_at: string
           workshop_id: string
@@ -30,12 +34,16 @@ export type Database = {
           delivered_by?: string | null
           delivery_date?: string | null
           id?: string
+          last_sync_attempt?: string | null
           notes?: string | null
           order_id: string
           recipient_address?: string | null
           recipient_name?: string | null
           recipient_phone?: string | null
           status?: string | null
+          sync_attempts?: number
+          sync_error_message?: string | null
+          synced_to_shopify?: boolean
           tracking_number?: string | null
           updated_at?: string
           workshop_id: string
@@ -45,12 +53,16 @@ export type Database = {
           delivered_by?: string | null
           delivery_date?: string | null
           id?: string
+          last_sync_attempt?: string | null
           notes?: string | null
           order_id?: string
           recipient_address?: string | null
           recipient_name?: string | null
           recipient_phone?: string | null
           status?: string | null
+          sync_attempts?: number
+          sync_error_message?: string | null
+          synced_to_shopify?: boolean
           tracking_number?: string | null
           updated_at?: string
           workshop_id?: string
@@ -690,7 +702,16 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      deliveries_stats: {
+        Row: {
+          approved_deliveries: number | null
+          in_quality_deliveries: number | null
+          pending_deliveries: number | null
+          rejected_deliveries: number | null
+          total_deliveries: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       consume_order_materials: {
@@ -773,6 +794,34 @@ export type Database = {
           total_quantity: number
           total_approved: number
           total_defective: number
+        }[]
+      }
+      get_deliveries_with_sync_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          tracking_number: string
+          order_id: string
+          order_number: string
+          workshop_id: string
+          workshop_name: string
+          delivery_date: string
+          status: string
+          delivered_by: string
+          delivered_by_name: string
+          recipient_name: string
+          recipient_phone: string
+          recipient_address: string
+          notes: string
+          created_at: string
+          items_count: number
+          total_quantity: number
+          total_approved: number
+          total_defective: number
+          synced_to_shopify: boolean
+          sync_attempts: number
+          last_sync_attempt: string
+          sync_error_message: string
         }[]
       }
       get_delivery_stats: {
