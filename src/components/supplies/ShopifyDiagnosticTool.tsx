@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertTriangle, CheckCircle, Search, FileText, Package } from 'lucide-react';
 import { useShopifyDiagnosis } from '@/hooks/useShopifyDiagnosis';
 import { Input } from '@/components/ui/input';
-import { toast } from '@/components/ui/toast';
+import { useToast } from '@/hooks/use-toast';
 import { XCircle } from 'lucide-react';
 
 const ShopifyDiagnosticTool = () => {
@@ -18,6 +18,8 @@ const ShopifyDiagnosticTool = () => {
     diagnosisResult, 
     loading 
   } = useShopifyDiagnosis();
+  
+  const { toast } = useToast();
 
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState('');

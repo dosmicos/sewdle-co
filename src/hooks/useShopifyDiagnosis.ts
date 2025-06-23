@@ -92,7 +92,17 @@ export const useShopifyDiagnosis = () => {
         throw error;
       }
 
-      return data || [];
+      // Type conversion to handle Supabase Json type
+      const typedData = (data || []).map(item => ({
+        ...item,
+        sync_results: Array.isArray(item.sync_results) 
+          ? item.sync_results 
+          : typeof item.sync_results === 'string' 
+            ? JSON.parse(item.sync_results)
+            : []
+      })) as SyncLogDetails[];
+
+      return typedData;
     } catch (error) {
       console.error('Error obteniendo logs de sincronización:', error);
       toast({
