@@ -308,12 +308,26 @@ export const useDeliveries = () => {
     setLoading(true);
     try {
       console.log('Processing quality review for delivery:', deliveryId);
+      console.log('Quality data received:', qualityData);
       
-      // Convertir datos de calidad al formato esperado
-      const itemsReview = Object.entries(qualityData.variants).map(([key, data]: [string, any]) => {
-        const itemIndex = parseInt(key.replace('item-', ''));
+      // Validar que qualityData.variants existe y tiene datos
+      if (!qualityData.variants || Object.keys(qualityData.variants).length === 0) {
+        throw new Error('No se encontraron datos de variantes para procesar');
+      }
+
+      // Convertir datos de calidad al formato esperado usando los IDs reales
+      const itemsReview = Object.entries(qualityData.variants).map(([deliveryItemId, data]: [string, any]) => {
+        console.log('Processing item:', deliveryItemId, 'with data:', data);
+        
+        // Validar que el ID es un UUID válido
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(deliveryItemId)) {
+          console.error('Invalid UUID format for delivery_item_id:', deliveryItemId);
+          throw new Error(`ID de delivery_item inválido: ${deliveryItemId}`);
+        }
+
         return {
-          id: itemIndex,
+          id: deliveryItemId, // Usar el UUID real del delivery_item
           quantityApproved: data.approved || 0,
           quantityDefective: data.defective || 0,
           status: data.approved > 0 && data.defective === 0 ? 'approved' : 
@@ -323,8 +337,16 @@ export const useDeliveries = () => {
         };
       });
 
+      console.log('Items to review after processing:', itemsReview);
+
       // Actualizar items con resultados de calidad
       for (const item of itemsReview) {
+        console.log('Updating delivery_item:', item.id, 'with quantities:', {
+          approved: item.quantityApproved,
+          defective: item.quantityDefective,
+          status: item.status
+        });
+
         const { error } = await supabase
           .from('delivery_items')
           .update({
@@ -333,11 +355,14 @@ export const useDeliveries = () => {
             quality_status: item.status,
             quality_notes: item.notes
           })
-          .eq('id', item.id.toString());
+          .eq('id', item.id); // Usar el UUID real
 
         if (error) {
+          console.error('Error updating delivery_item:', item.id, error);
           throw error;
         }
+
+        console.log('Successfully updated delivery_item:', item.id);
       }
 
       // Obtener detalles completos de la entrega para sincronización

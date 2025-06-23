@@ -177,9 +177,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
   };
 
   const handleQualityReview = async () => {
-    console.log('Processing quality review:', delivery.id, qualityData);
+    console.log('Processing quality review with quality data:', qualityData);
     
-    // Validate that quantities are entered
+    // Validar que hay datos de calidad
     const hasValidData = Object.values(qualityData.variants).some(variant => 
       variant.approved > 0 || variant.defective > 0
     );
@@ -191,7 +191,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
     console.log('Validation passed, processing quality review...');
     
-    // Pasar el objeto qualityData directamente en lugar de convertirlo a array
     const success = await processQualityReview(delivery.id, qualityData);
     
     if (success) {
@@ -215,13 +214,15 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     }
   };
 
-  const handleVariantQuality = (variant: string, field: string, value: string | number) => {
+  const handleVariantQuality = (deliveryItemId: string, field: string, value: string | number) => {
+    console.log('Updating variant quality for delivery_item_id:', deliveryItemId, field, value);
+    
     setQualityData(prev => ({
       ...prev,
       variants: {
         ...prev.variants,
-        [variant]: {
-          ...prev.variants[variant],
+        [deliveryItemId]: {
+          ...prev.variants[deliveryItemId],
           [field]: value
         }
       }
@@ -250,14 +251,16 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     }, 0);
   };
 
-  // Get quantity mismatches for validation
+  // Get quantity mismatches for validation - actualizado para usar IDs reales
   const getQuantityMismatches = () => {
     const mismatches = [];
     
     if (!deliveryData?.delivery_items) return mismatches;
     
-    deliveryData.delivery_items.forEach((item, index) => {
-      const variantData = qualityData.variants[`item-${index}`];
+    deliveryData.delivery_items.forEach((item) => {
+      const deliveryItemId = item.id; // Usar el ID real del delivery_item
+      const variantData = qualityData.variants[deliveryItemId];
+      
       if (variantData) {
         const approved = variantData.approved || 0;
         const defective = variantData.defective || 0;
@@ -267,7 +270,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         if (reviewed > 0 && reviewed !== delivered) {
           const productInfo = getProductInfo(item);
           mismatches.push({
-            index,
+            id: deliveryItemId,
             productName: `${productInfo.productName} (${productInfo.variantSize} - ${productInfo.variantColor})`,
             reviewed,
             delivered,
@@ -550,16 +553,25 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {deliveryData.delivery_items?.map((item, index) => {
+                        {deliveryData.delivery_items?.map((item) => {
                           const productInfo = getProductInfo(item);
-                          const variantData = qualityData.variants[`item-${index}`];
+                          const deliveryItemId = item.id; // Usar el ID real del delivery_item
+                          const variantData = qualityData.variants[deliveryItemId];
                           const approved = variantData?.approved || 0;
                           const defective = variantData?.defective || 0;
                           const reviewed = approved + defective;
                           const delivered = item.quantity_delivered;
                           
+                          console.log('Rendering quality row for delivery_item:', deliveryItemId, {
+                            productInfo,
+                            variantData,
+                            approved,
+                            defective,
+                            delivered
+                          });
+                          
                           return (
-                            <TableRow key={index}>
+                            <TableRow key={deliveryItemId}>
                               <TableCell>
                                 <div>
                                   <p className="font-medium">{productInfo.productName}</p>
@@ -568,6 +580,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                   </p>
                                   <p className="text-xs text-gray-500">
                                     {productInfo.skuVariant}
+                                  </p>
+                                  <p className="text-xs text-blue-500">
+                                    ID: {deliveryItemId}
                                   </p>
                                   {!productInfo.isDataComplete && (
                                     <p className="text-xs text-amber-600 font-medium">
@@ -585,7 +600,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                   min="0"
                                   max={delivered}
                                   value={approved || ''}
-                                  onChange={(e) => handleVariantQuality(`item-${index}`, 'approved', parseInt(e.target.value) || 0)}
+                                  onChange={(e) => handleVariantQuality(deliveryItemId, 'approved', parseInt(e.target.value) || 0)}
                                   className="w-20 text-center"
                                 />
                               </TableCell>
@@ -595,7 +610,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                   min="0"
                                   max={delivered}
                                   value={defective || ''}
-                                  onChange={(e) => handleVariantQuality(`item-${index}`, 'defective', parseInt(e.target.value) || 0)}
+                                  onChange={(e) => handleVariantQuality(deliveryItemId, 'defective', parseInt(e.target.value) || 0)}
                                   className="w-20 text-center"
                                 />
                               </TableCell>
@@ -603,7 +618,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                                 <Input
                                   placeholder="Describir defectos..."
                                   value={variantData?.reason || ''}
-                                  onChange={(e) => handleVariantQuality(`item-${index}`, 'reason', e.target.value)}
+                                  onChange={(e) => handleVariantQuality(deliveryItemId, 'reason', e.target.value)}
                                   className="min-w-[200px]"
                                 />
                                 {reviewed > 0 && reviewed !== delivered && (
