@@ -2,54 +2,19 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building2, MapPin, Phone, Mail, User, Star, Calendar, Package, Clock } from 'lucide-react';
+import { ArrowLeft, Building2, MapPin, Phone, Mail, Star, Calendar, Package, Clock, User } from 'lucide-react';
+import { useWorkshopStats } from '@/hooks/useWorkshopStats';
+import { useWorkshopOrders } from '@/hooks/useWorkshopOrders';
+import type { Workshop } from '@/hooks/useWorkshops';
 
 interface WorkshopDetailsProps {
-  workshop: {
-    id: number;
-    name: string;
-    address: string;
-    phone: string;
-    email: string;
-    activeOrders: number;
-    completionRate: number;
-    qualityScore: number;
-    onTimeDelivery: number;
-  };
+  workshop: Workshop;
   onBack: () => void;
 }
 
 const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
-  // Mock data para órdenes de producción asignadas al taller
-  const mockOrders = [
-    {
-      id: 'ORD-001',
-      productName: 'Vestido Casual Verde',
-      quantity: 50,
-      dueDate: '2024-06-20',
-      status: 'En Progreso',
-      priority: 'Alta',
-      progress: 75
-    },
-    {
-      id: 'ORD-002',
-      productName: 'Camisa Formal Azul',
-      quantity: 100,
-      dueDate: '2024-06-25',
-      status: 'Pendiente',
-      priority: 'Media',
-      progress: 0
-    },
-    {
-      id: 'ORD-003',
-      productName: 'Pantalón Jeans',
-      quantity: 75,
-      dueDate: '2024-06-18',
-      status: 'Completado',
-      priority: 'Baja',
-      progress: 100
-    }
-  ];
+  const { stats, loading: statsLoading } = useWorkshopStats(workshop.id);
+  const { orders, loading: ordersLoading } = useWorkshopOrders(workshop.id);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -77,6 +42,19 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
     }
   };
 
+  if (statsLoading || ordersLoading) {
+    return (
+      <div className="p-6 space-y-6 animate-fade-in">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando datos del taller...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center space-x-4">
@@ -99,7 +77,7 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-black">{workshop.name}</h2>
-              <p className="text-gray-600">{workshop.email}</p>
+              <p className="text-gray-600">{workshop.email || 'Sin email'}</p>
             </div>
           </CardTitle>
         </CardHeader>
@@ -107,27 +85,39 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <div className="flex items-center space-x-3">
-                <MapPin className="w-5 h-5 text-gray-500" />
-                <span className="text-gray-700">{workshop.address}</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Phone className="w-5 h-5 text-gray-500" />
-                <span className="text-gray-700">{workshop.phone}</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Mail className="w-5 h-5 text-gray-500" />
-                <span className="text-gray-700">{workshop.email}</span>
-              </div>
+              {workshop.address && (
+                <div className="flex items-center space-x-3">
+                  <MapPin className="w-5 h-5 text-gray-500" />
+                  <span className="text-gray-700">{workshop.address}</span>
+                </div>
+              )}
+              {workshop.phone && (
+                <div className="flex items-center space-x-3">
+                  <Phone className="w-5 h-5 text-gray-500" />
+                  <span className="text-gray-700">{workshop.phone}</span>
+                </div>
+              )}
+              {workshop.email && (
+                <div className="flex items-center space-x-3">
+                  <Mail className="w-5 h-5 text-gray-500" />
+                  <span className="text-gray-700">{workshop.email}</span>
+                </div>
+              )}
+              {workshop.contactPerson && (
+                <div className="flex items-center space-x-3">
+                  <User className="w-5 h-5 text-gray-500" />
+                  <span className="text-gray-700">{workshop.contactPerson}</span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-xl">
-                <p className="text-2xl font-bold text-blue-600">{workshop.activeOrders}</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.activeOrders}</p>
                 <p className="text-sm text-gray-600">Órdenes Activas</p>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-xl">
-                <p className="text-2xl font-bold text-green-600">{workshop.completionRate}%</p>
+                <p className="text-2xl font-bold text-green-600">{stats.completionRate}%</p>
                 <p className="text-sm text-gray-600">Finalización</p>
               </div>
             </div>
@@ -139,16 +129,66 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
                 <Star className="w-5 h-5 text-yellow-500" />
                 <span className="text-gray-700">Calidad</span>
               </div>
-              <span className="font-bold text-black">{workshop.qualityScore}/5</span>
+              <span className="font-bold text-black">{stats.qualityScore}/5</span>
             </div>
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div className="flex items-center space-x-2">
                 <Calendar className="w-5 h-5 text-green-500" />
                 <span className="text-gray-700">Puntualidad</span>
               </div>
-              <span className="font-bold text-black">{workshop.onTimeDelivery}%</span>
+              <span className="font-bold text-black">{stats.onTimeDelivery}%</span>
             </div>
           </div>
+
+          {/* Especialidades */}
+          {workshop.specialties && workshop.specialties.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-black">Especialidades</h3>
+              <div className="flex flex-wrap gap-2">
+                {workshop.specialties.map((specialty, index) => (
+                  <span key={index} className="bg-blue-100 text-blue-700 text-sm px-3 py-1 rounded-full">
+                    {specialty}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Información adicional */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {workshop.city && (
+              <div className="text-center p-3 bg-gray-50 rounded-xl">
+                <p className="text-sm text-gray-600">Ciudad</p>
+                <p className="font-semibold text-black">{workshop.city}</p>
+              </div>
+            )}
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <p className="text-sm text-gray-600">Capacidad</p>
+              <p className="font-semibold text-black">{workshop.capacity}</p>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <p className="text-sm text-gray-600">Estado</p>
+              <p className="font-semibold text-black">{workshop.status === 'active' ? 'Activo' : 'Inactivo'}</p>
+            </div>
+          </div>
+
+          {/* Horarios de trabajo */}
+          {(workshop.workingHoursStart || workshop.workingHoursEnd) && (
+            <div className="p-4 bg-blue-50 rounded-xl">
+              <h4 className="font-semibold text-black mb-2">Horarios de Trabajo</h4>
+              <p className="text-gray-600">
+                {workshop.workingHoursStart || '--'} - {workshop.workingHoursEnd || '--'}
+              </p>
+            </div>
+          )}
+
+          {/* Notas */}
+          {workshop.notes && (
+            <div className="p-4 bg-yellow-50 rounded-xl">
+              <h4 className="font-semibold text-black mb-2">Notas</h4>
+              <p className="text-gray-600">{workshop.notes}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -163,7 +203,7 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
         
         <CardContent>
           <div className="space-y-4">
-            {mockOrders.map((order) => (
+            {orders.map((order) => (
               <div key={order.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -176,14 +216,16 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
                         {order.priority}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600">ID: {order.id}</p>
+                    <p className="text-sm text-gray-600">ID: {order.orderNumber}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-600">Cantidad: {order.quantity}</p>
-                    <div className="flex items-center space-x-1 text-sm text-gray-600">
-                      <Clock className="w-4 h-4" />
-                      <span>{order.dueDate}</span>
-                    </div>
+                    {order.dueDate && (
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <Clock className="w-4 h-4" />
+                        <span>{new Date(order.dueDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -204,7 +246,7 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
             ))}
           </div>
 
-          {mockOrders.length === 0 && (
+          {orders.length === 0 && (
             <div className="text-center py-8">
               <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
               <p className="text-gray-600">No hay órdenes asignadas a este taller</p>
