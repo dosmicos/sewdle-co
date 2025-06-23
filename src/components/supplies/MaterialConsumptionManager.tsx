@@ -20,16 +20,34 @@ const MaterialConsumptionManager = () => {
   });
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showConsumptionForm, setShowConsumptionForm] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
   const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
 
-  const { orders, loading: ordersLoading } = useOrders();
+  const { fetchOrders, loading: ordersLoading } = useOrders();
   const { workshops, loading: workshopsLoading } = useWorkshops();
   const { fetchMaterialDeliveries } = useMaterialDeliveries();
   const { loading: consumptionLoading } = useMaterialConsumption();
 
   useEffect(() => {
-    loadConsumptionHistory();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    await Promise.all([
+      loadOrders(),
+      loadConsumptionHistory()
+    ]);
+  };
+
+  const loadOrders = async () => {
+    try {
+      const ordersData = await fetchOrders();
+      setOrders(ordersData || []);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      setOrders([]);
+    }
+  };
 
   const loadConsumptionHistory = async () => {
     try {
@@ -87,10 +105,10 @@ const MaterialConsumptionManager = () => {
     setShowConsumptionForm(true);
   };
 
-  const handleConsumptionCreated = () => {
+  const handleConsumptionCompleted = () => {
     setShowConsumptionForm(false);
     setSelectedOrder(null);
-    loadConsumptionHistory();
+    loadData();
   };
 
   const loading = ordersLoading || workshopsLoading || consumptionLoading;
@@ -260,7 +278,7 @@ const MaterialConsumptionManager = () => {
             setShowConsumptionForm(false);
             setSelectedOrder(null);
           }}
-          onConsumptionCreated={handleConsumptionCreated}
+          onConsumptionCompleted={handleConsumptionCompleted}
         />
       )}
     </>
