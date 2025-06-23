@@ -41,24 +41,6 @@ export const useMaterialDeliveries = () => {
 
       console.log('User authenticated:', session.user.id);
 
-      // Verify user role before proceeding using the new role structure
-      const { data: userRoleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select(`
-          role_id,
-          roles!inner (
-            name
-          )
-        `)
-        .eq('user_id', session.user.id)
-        .single();
-
-      if (roleError && roleError.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking user role:', roleError);
-      }
-
-      console.log('User role:', userRoleData?.roles?.name || 'no role assigned');
-
       // Create material deliveries for each material
       const deliveryPromises = deliveryData.materials.map(async (material, index) => {
         const deliveryRecord = {
@@ -110,7 +92,6 @@ export const useMaterialDeliveries = () => {
       
       let errorMessage = "No se pudo registrar la entrega de materiales";
       
-      // Enhanced error handling with more specific messages
       if (error.message?.includes('Usuario no autenticado')) {
         errorMessage = "Debes iniciar sesión para registrar entregas.";
       } else if (error.message?.includes('Error de autenticación')) {
@@ -145,6 +126,7 @@ export const useMaterialDeliveries = () => {
     try {
       console.log('Fetching material deliveries...');
       
+      // Updated query without the problematic role reference
       const { data, error } = await supabase
         .from('material_deliveries')
         .select(`
@@ -168,7 +150,6 @@ export const useMaterialDeliveries = () => {
       if (error) {
         console.error('Error fetching material deliveries:', error);
         
-        // Enhanced error handling for fetch operations
         let errorMessage = "No se pudieron cargar las entregas de materiales.";
         
         if (error.code === 'PGRST301' || error.message?.includes('policy')) {
