@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -118,8 +117,13 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
     }
   };
 
-  const handleCreateDeliveryForMissing = () => {
+  const handleCreateDeliveryForMissing = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log('SuppliesManager: handleCreateDeliveryForMissing clicked');
+    
     if (onCreateDelivery && missingMaterials.length > 0) {
+      console.log('SuppliesManager: Calling onCreateDelivery with materials:', missingMaterials);
       onCreateDelivery(missingMaterials);
     }
   };
@@ -161,6 +165,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                 </ul>
               </div>
               <Button
+                type="button"
                 onClick={handleCreateDeliveryForMissing}
                 size="sm"
                 className="bg-yellow-600 hover:bg-yellow-700 text-white"

@@ -39,6 +39,28 @@ const OrderMaterialAlert = ({
     return material?.unit || 'unidad';
   };
 
+  const handleCreateDelivery = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log('OrderMaterialAlert: handleCreateDelivery clicked');
+    
+    if (onCreateDelivery) {
+      console.log('OrderMaterialAlert: Calling onCreateDelivery');
+      onCreateDelivery();
+    }
+  };
+
+  const handleProceedAnyway = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log('OrderMaterialAlert: handleProceedAnyway clicked');
+    
+    if (onProceedAnyway) {
+      console.log('OrderMaterialAlert: Calling onProceedAnyway');
+      onProceedAnyway();
+    }
+  };
+
   if (insufficientMaterials.length === 0) {
     return (
       <Alert className="border-green-200 bg-green-50">
@@ -75,7 +97,8 @@ const OrderMaterialAlert = ({
               <div className="flex space-x-2">
                 {onCreateDelivery && (
                   <Button
-                    onClick={onCreateDelivery}
+                    type="button"
+                    onClick={handleCreateDelivery}
                     size="sm"
                     className="bg-yellow-600 hover:bg-yellow-700 text-white"
                   >
@@ -85,7 +108,8 @@ const OrderMaterialAlert = ({
                 )}
                 {onProceedAnyway && (
                   <Button
-                    onClick={onProceedAnyway}
+                    type="button"
+                    onClick={handleProceedAnyway}
                     size="sm"
                     variant="outline"
                     className="border-yellow-600 text-yellow-700 hover:bg-yellow-50"
