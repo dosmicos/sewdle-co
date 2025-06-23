@@ -446,15 +446,3 @@ input:focus, textarea:focus, select:focus {
   border-color: #3b82f6 !important;
 }
 
-/* Fix específico para inputs de búsqueda - SOLO afecta contenedores con clase search-input */
-.search-input input[class*="pl-10"] {
-  padding-left: 2.5rem !important;
-}
-
-.search-input {
-  position: absolute !important;
-  left: 0.75rem !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  pointer-events: none !important;
-}
