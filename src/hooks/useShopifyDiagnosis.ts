@@ -131,8 +131,8 @@ export const useShopifyDiagnosis = () => {
       }
 
       toast({
-        title: "Test de conexión",
-        description: "Conexión con Shopify verificada",
+        title: "Test de conexión exitoso",
+        description: `Conectado a ${data.diagnostics?.location_name || 'Shopify'}. API: ${data.diagnostics?.api_method || 'inventory_levels_api'}`,
       });
 
       return data;
@@ -149,10 +149,48 @@ export const useShopifyDiagnosis = () => {
     }
   };
 
+  const runInventoryDiagnosis = async () => {
+    setLoading(true);
+    try {
+      console.log('Ejecutando diagnóstico de inventario...');
+
+      // Hacer una llamada de prueba para obtener información de configuración
+      const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
+        body: {
+          deliveryId: 'diagnosis-test',
+          approvedItems: []
+        }
+      });
+
+      if (error && !error.message.includes('Datos de sincronización inválidos')) {
+        throw error;
+      }
+
+      toast({
+        title: "Diagnóstico de inventario completado",
+        description: "Revisa los logs para ver la configuración de Shopify",
+      });
+
+      return data;
+
+    } catch (error) {
+      console.error('Error en diagnóstico de inventario:', error);
+      toast({
+        title: "Error en diagnóstico de inventario",
+        description: error instanceof Error ? error.message : "No se pudo ejecutar el diagnóstico de inventario",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     runDiagnosis,
     getSyncLogDetails,
     testShopifyConnection,
+    runInventoryDiagnosis,
     diagnosisResult,
     loading
   };

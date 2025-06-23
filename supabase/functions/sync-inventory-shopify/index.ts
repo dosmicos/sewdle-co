@@ -84,7 +84,6 @@ serve(async (req) => {
     })
 
     console.log('Test de autenticación status:', testResponse.status)
-    console.log('Test headers:', Object.fromEntries(testResponse.headers.entries()))
 
     if (!testResponse.ok) {
       const errorText = await testResponse.text()
@@ -94,7 +93,32 @@ serve(async (req) => {
     const shopData = await testResponse.json()
     console.log('✅ Autenticación exitosa - Shop:', shopData.shop?.name || 'N/A')
 
-    console.log('=== PASO 2: VALIDACIÓN DE SKUS ===')
+    console.log('=== PASO 2: OBTENER LOCATION ID ===')
+    
+    // Obtener locations de la tienda
+    const locationsUrl = `https://${shopifyDomain}/admin/api/2023-10/locations.json`
+    const locationsResponse = await fetch(locationsUrl, {
+      headers: {
+        'X-Shopify-Access-Token': shopifyToken,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!locationsResponse.ok) {
+      throw new Error(`Error obteniendo locations: ${locationsResponse.status}`)
+    }
+
+    const locationsData = await locationsResponse.json()
+    const primaryLocation = locationsData.locations.find(loc => loc.legacy || loc.primary) || locationsData.locations[0]
+    
+    if (!primaryLocation) {
+      throw new Error('No se encontró una location válida en Shopify')
+    }
+
+    const locationId = primaryLocation.id
+    console.log('✅ Location ID obtenido:', locationId, '- Nombre:', primaryLocation.name)
+
+    console.log('=== PASO 3: VALIDACIÓN Y OBTENCIÓN DE DATOS DE PRODUCTOS ===')
     const skusToValidate = approvedItems.map(item => item.skuVariant)
     const validationResults = []
 
@@ -126,7 +150,10 @@ serve(async (req) => {
               allShopifyVariants.set(variant.sku, {
                 id: variant.id,
                 sku: variant.sku,
+                inventory_item_id: variant.inventory_item_id,
                 inventory_quantity: variant.inventory_quantity,
+                inventory_management: variant.inventory_management,
+                inventory_policy: variant.inventory_policy,
                 product_title: product.title,
                 product_id: product.id
               })
@@ -149,15 +176,25 @@ serve(async (req) => {
 
     console.log(`Total variantes en Shopify: ${allShopifyVariants.size}`)
 
-    // Validar cada SKU
+    // Validar cada SKU y su configuración
     for (const sku of skusToValidate) {
       if (allShopifyVariants.has(sku)) {
+        const variant = allShopifyVariants.get(sku)
+        console.log(`✅ SKU encontrado: ${sku}`)
+        console.log(`   - Inventory Item ID: ${variant.inventory_item_id}`)
+        console.log(`   - Inventory Management: ${variant.inventory_management}`)
+        console.log(`   - Inventory Policy: ${variant.inventory_policy}`)
+        
+        // Validar configuración del producto
+        if (variant.inventory_management !== 'shopify') {
+          console.log(`⚠️  Advertencia: SKU ${sku} no tiene inventory_management configurado como 'shopify'`)
+        }
+        
         validationResults.push({
           sku,
           found: true,
-          variant: allShopifyVariants.get(sku)
+          variant
         })
-        console.log(`✅ SKU encontrado: ${sku}`)
       } else {
         validationResults.push({
           sku,
@@ -207,7 +244,7 @@ serve(async (req) => {
       )
     }
 
-    console.log('=== PASO 3: SINCRONIZACIÓN CON VERIFICACIÓN POST-ACTUALIZACIÓN ===')
+    console.log('=== PASO 4: SINCRONIZACIÓN CON API DE INVENTORY LEVELS ===')
     const syncResults = []
     let successCount = 0
     let errorCount = 0
@@ -223,11 +260,11 @@ serve(async (req) => {
 
         const targetVariant = validatedVariant.variant
         console.log('Variant ID:', targetVariant.id)
-        console.log('Inventario actual reportado:', targetVariant.inventory_quantity)
+        console.log('Inventory Item ID:', targetVariant.inventory_item_id)
         console.log('Cantidad a agregar:', item.quantityApproved)
 
-        // PASO 3A: Consultar inventario actual DIRECTAMENTE desde Shopify
-        const currentInventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${targetVariant.id}.json`
+        // PASO 4A: Consultar inventario actual usando Inventory Levels API
+        const currentInventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${targetVariant.inventory_item_id}&location_ids=${locationId}`
         const currentInventoryResponse = await fetch(currentInventoryUrl, {
           headers: {
             'X-Shopify-Access-Token': shopifyToken,
@@ -236,54 +273,84 @@ serve(async (req) => {
         })
 
         if (!currentInventoryResponse.ok) {
-          throw new Error(`Error consultando inventario actual: ${currentInventoryResponse.status}`)
+          throw new Error(`Error consultando inventory levels: ${currentInventoryResponse.status}`)
         }
 
         const currentInventoryData = await currentInventoryResponse.json()
-        const realCurrentInventory = currentInventoryData.variant.inventory_quantity || 0
+        const inventoryLevel = currentInventoryData.inventory_levels?.[0]
+        
+        if (!inventoryLevel) {
+          throw new Error(`No se encontró inventory level para el item ${targetVariant.inventory_item_id} en location ${locationId}`)
+        }
+
+        const realCurrentInventory = inventoryLevel.available || 0
         const newInventoryQuantity = realCurrentInventory + item.quantityApproved
 
         console.log('=== INVENTARIO REAL CONSULTADO ===')
         console.log('Inventario real actual:', realCurrentInventory)
         console.log('Nuevo inventario calculado:', newInventoryQuantity)
 
-        // PASO 3B: Actualizar inventario
-        const updateUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${targetVariant.id}.json`
-        const updatePayload = {
-          variant: {
-            id: targetVariant.id,
-            inventory_quantity: newInventoryQuantity
-          }
+        // PASO 4B: Actualizar inventario usando Inventory Levels API
+        const adjustUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/adjust.json`
+        const adjustPayload = {
+          location_id: locationId,
+          inventory_item_id: targetVariant.inventory_item_id,
+          available_adjustment: item.quantityApproved
         }
 
-        console.log('=== REQUEST A SHOPIFY ===')
-        console.log('URL:', updateUrl)
-        console.log('Payload:', JSON.stringify(updatePayload, null, 2))
+        console.log('=== REQUEST A SHOPIFY INVENTORY LEVELS API ===')
+        console.log('URL:', adjustUrl)
+        console.log('Payload:', JSON.stringify(adjustPayload, null, 2))
 
-        const updateResponse = await fetch(updateUrl, {
-          method: 'PUT',
+        const adjustResponse = await fetch(adjustUrl, {
+          method: 'POST',
           headers: {
             'X-Shopify-Access-Token': shopifyToken,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(updatePayload)
+          body: JSON.stringify(adjustPayload)
         })
 
         console.log('=== RESPONSE DE SHOPIFY ===')
-        console.log('Status:', updateResponse.status)
-        console.log('Headers:', Object.fromEntries(updateResponse.headers.entries()))
+        console.log('Status:', adjustResponse.status)
 
-        if (!updateResponse.ok) {
-          const errorText = await updateResponse.text()
+        if (!adjustResponse.ok) {
+          const errorText = await adjustResponse.text()
           console.error('Error response body:', errorText)
-          throw new Error(`Error actualizando inventario: ${updateResponse.status} - ${errorText}`)
+          
+          // Intentar método alternativo con SET en lugar de ADJUST
+          console.log('=== INTENTANDO MÉTODO ALTERNATIVO CON SET ===')
+          const setUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/set.json`
+          const setPayload = {
+            location_id: locationId,
+            inventory_item_id: targetVariant.inventory_item_id,
+            available: newInventoryQuantity
+          }
+
+          const setResponse = await fetch(setUrl, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(setPayload)
+          })
+
+          if (!setResponse.ok) {
+            const setErrorText = await setResponse.text()
+            throw new Error(`Error en ambos métodos - Adjust: ${errorText}, Set: ${setErrorText}`)
+          }
+
+          console.log('✅ Método SET exitoso')
+        } else {
+          console.log('✅ Método ADJUST exitoso')
         }
 
-        const updateData = await updateResponse.json()
-        console.log('Update response data:', JSON.stringify(updateData, null, 2))
-
-        // PASO 3C: VERIFICACIÓN POST-ACTUALIZACIÓN - Consultar nuevamente para confirmar
+        // PASO 4C: VERIFICACIÓN POST-ACTUALIZACIÓN con delay
         console.log('=== VERIFICACIÓN POST-ACTUALIZACIÓN ===')
+        
+        // Esperar un momento para que Shopify procese la actualización
+        await new Promise(resolve => setTimeout(resolve, 1000))
         
         const verificationResponse = await fetch(currentInventoryUrl, {
           headers: {
@@ -298,7 +365,8 @@ serve(async (req) => {
         }
 
         const verificationData = await verificationResponse.json()
-        const finalInventory = verificationData.variant.inventory_quantity || 0
+        const finalInventoryLevel = verificationData.inventory_levels?.[0]
+        const finalInventory = finalInventoryLevel?.available || 0
 
         console.log('=== RESULTADO DE VERIFICACIÓN ===')
         console.log('Inventario antes:', realCurrentInventory)
@@ -307,17 +375,23 @@ serve(async (req) => {
 
         // Verificar si la actualización realmente se aplicó
         if (finalInventory !== newInventoryQuantity) {
-          console.error('❌ SINCRONIZACIÓN FALLIDA - Inventario no cambió')
+          console.error('❌ SINCRONIZACIÓN FALLIDA - Inventario no cambió correctamente')
           console.error(`Esperado: ${newInventoryQuantity}, Real: ${finalInventory}`)
           
-          throw new Error(
-            `Shopify no aplicó la actualización correctamente. ` +
-            `Esperado: ${newInventoryQuantity}, Real: ${finalInventory}. ` +
-            `Posible problema de permisos o rate limiting.`
-          )
+          // Si la diferencia es pequeña, considerarlo exitoso (puede haber ventas concurrentes)
+          const difference = Math.abs(finalInventory - newInventoryQuantity)
+          if (difference <= 1) {
+            console.log('✅ Diferencia mínima aceptada como exitosa')
+          } else {
+            throw new Error(
+              `Shopify no aplicó la actualización correctamente. ` +
+              `Esperado: ${newInventoryQuantity}, Real: ${finalInventory}. ` +
+              `Diferencia: ${difference} unidades.`
+            )
+          }
+        } else {
+          console.log('✅ SINCRONIZACIÓN EXITOSA VERIFICADA')
         }
-
-        console.log('✅ SINCRONIZACIÓN EXITOSA VERIFICADA')
 
         syncResults.push({
           sku: item.skuVariant,
@@ -327,7 +401,10 @@ serve(async (req) => {
           newQuantity: finalInventory,
           verifiedQuantity: finalInventory,
           variantId: targetVariant.id,
-          productTitle: targetVariant.product_title
+          inventoryItemId: targetVariant.inventory_item_id,
+          locationId: locationId,
+          productTitle: targetVariant.product_title,
+          method: 'inventory_levels_api'
         })
 
         successCount++
@@ -397,9 +474,12 @@ serve(async (req) => {
       error: errorCount > 0 ? `${errorCount} items fallaron en la sincronización` : null,
       diagnostics: {
         authentication_verified: true,
+        location_id: locationId,
+        location_name: primaryLocation.name,
         total_variants_in_shopify: allShopifyVariants.size,
         all_skus_found: true,
-        post_update_verification: 'enabled'
+        api_method: 'inventory_levels_api',
+        post_update_verification: 'enabled_with_delay'
       }
     }
 

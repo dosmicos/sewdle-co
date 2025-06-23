@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, CheckCircle, Search, FileText, Package } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Search, FileText, Package, Settings } from 'lucide-react';
 import { useShopifyDiagnosis } from '@/hooks/useShopifyDiagnosis';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +15,7 @@ const ShopifyDiagnosticTool = () => {
     runDiagnosis, 
     getSyncLogDetails, 
     testShopifyConnection,
+    runInventoryDiagnosis,
     diagnosisResult, 
     loading 
   } = useShopifyDiagnosis();
@@ -61,6 +62,14 @@ const ShopifyDiagnosticTool = () => {
     }
   };
 
+  const handleInventoryDiagnosis = async () => {
+    try {
+      await runInventoryDiagnosis();
+    } catch (error) {
+      console.error('Error running inventory diagnosis:', error);
+    }
+  };
+
   const renderMatchStatus = (matched: boolean) => {
     return matched ? (
       <Badge className="bg-green-100 text-green-700">
@@ -80,6 +89,10 @@ const ShopifyDiagnosticTool = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Herramienta de Diagnóstico Shopify</h2>
         <div className="flex gap-2">
+          <Button onClick={handleInventoryDiagnosis} disabled={loading} variant="outline">
+            <Settings className="w-4 h-4 mr-2" />
+            Test Inventario
+          </Button>
           <Button onClick={handleTestConnection} disabled={loading} variant="outline">
             <Package className="w-4 h-4 mr-2" />
             Test Conexión
@@ -90,6 +103,25 @@ const ShopifyDiagnosticTool = () => {
           </Button>
         </div>
       </div>
+
+      {/* Información importante sobre las mejoras */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="p-4">
+          <div className="flex items-start space-x-3">
+            <Settings className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-blue-900 mb-2">Mejoras Implementadas</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Ahora usando la API correcta de Inventory Levels de Shopify</li>
+                <li>• Detección automática de Location ID principal</li>
+                <li>• Validación de configuración de inventory_management</li>
+                <li>• Verificación post-actualización con delay</li>
+                <li>• Método de respaldo (SET) si falla ADJUST</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Sync Logs Viewer */}
       <Card className="p-6">
@@ -142,6 +174,7 @@ const ShopifyDiagnosticTool = () => {
                           <TableRow>
                             <TableHead>SKU</TableHead>
                             <TableHead>Estado</TableHead>
+                            <TableHead>Método</TableHead>
                             <TableHead>Cantidad Anterior</TableHead>
                             <TableHead>Cantidad Agregada</TableHead>
                             <TableHead>Cantidad Final</TableHead>
@@ -173,6 +206,11 @@ const ShopifyDiagnosticTool = () => {
                                     </>
                                   )}
                                 </span>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {result.method || 'variants_api'}
+                                </Badge>
                               </TableCell>
                               <TableCell>
                                 {result.previousQuantity !== undefined ? result.previousQuantity : '-'}
