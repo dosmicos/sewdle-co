@@ -448,7 +448,7 @@ input:focus, textarea:focus, select:focus {
 
 /* Fix para inputs de búsqueda - no aplicar padding por defecto */
 input[class*="pl-"],
-input[placeholder*="Buscar"],
-input[placeholder*="buscar"] {
+input[placeholder*="Buscar productos..."],
+input[placeholder*="buscar productos..."] {
   padding: revert !important;
 }
