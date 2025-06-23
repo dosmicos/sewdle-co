@@ -450,5 +450,5 @@ input:focus, textarea:focus, select:focus {
 input[class*="pl-"],
 input[placeholder*="Buscar productos..."],
 input[placeholder*="buscar productos..."] {
-  padding: 2.5rem 0.75rem !important;
+  padding: 0.7rem 2.5rem !important;
 }
