@@ -41,15 +41,30 @@ export const useWorkshopOrders = (workshopId: string) => {
                 products(name)
               )
             )
-          ),
-          deliveries:orders(
-            delivery_items(quantity_approved, quantity_delivered)
           )
         `)
         .eq('workshop_id', workshopId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Obtener entregas por separado para calcular progreso
+      const orderIds = assignments?.map(a => a.orders.id) || [];
+      let deliveries = [];
+      
+      if (orderIds.length > 0) {
+        const { data: deliveriesData, error: deliveriesError } = await supabase
+          .from('deliveries')
+          .select(`
+            order_id,
+            delivery_items(quantity_approved)
+          `)
+          .in('order_id', orderIds)
+          .eq('workshop_id', workshopId);
+
+        if (deliveriesError) throw deliveriesError;
+        deliveries = deliveriesData || [];
+      }
 
       const formattedOrders: WorkshopOrder[] = assignments?.map(assignment => {
         const order = assignment.orders;
@@ -63,7 +78,8 @@ export const useWorkshopOrders = (workshopId: string) => {
 
         // Calcular progreso basado en entregas aprobadas
         let totalApproved = 0;
-        assignment.deliveries?.forEach((delivery: any) => {
+        const orderDeliveries = deliveries.filter((d: any) => d.order_id === order.id);
+        orderDeliveries.forEach((delivery: any) => {
           delivery.delivery_items?.forEach((item: any) => {
             totalApproved += item.quantity_approved || 0;
           });
