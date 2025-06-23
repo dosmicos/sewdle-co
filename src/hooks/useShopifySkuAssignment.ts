@@ -5,19 +5,22 @@ import { useToast } from '@/hooks/use-toast';
 
 interface SkuAssignmentResult {
   success: boolean;
-  summary: {
+  message: string;
+  status?: string;
+  note?: string;
+  summary?: {
     totalProducts: number;
     totalVariants: number;
     updatedVariants: number;
     errorVariants: number;
     skippedVariants: number;
   };
-  details: any[];
-  message: string;
+  details?: any[];
 }
 
 export const useShopifySkuAssignment = () => {
   const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const { toast } = useToast();
 
   const assignShopifySkus = async (): Promise<SkuAssignmentResult | null> => {
@@ -35,9 +38,30 @@ export const useShopifySkuAssignment = () => {
         throw new Error(data.error || 'Error en la asignación de SKUs');
       }
 
+      // Si el proceso está en background
+      if (data.status === 'processing') {
+        setProcessing(true);
+        toast({
+          title: "Procesamiento iniciado",
+          description: "La asignación de SKUs está ejecutándose en segundo plano. Solo se procesarán productos activos/borrador.",
+        });
+
+        // Simular progreso y ocultar el estado de procesamiento después de un tiempo
+        setTimeout(() => {
+          setProcessing(false);
+          toast({
+            title: "Proceso en marcha",
+            description: "El proceso continúa ejecutándose. Puedes revisar tu tienda Shopify para ver el progreso.",
+          });
+        }, 10000);
+
+        return data as SkuAssignmentResult;
+      }
+
+      // Si hay resultados inmediatos (caso poco probable con la nueva implementación)
       toast({
         title: "SKUs asignados en Shopify",
-        description: `${data.summary.updatedVariants} variantes actualizadas con nuevos SKUs`,
+        description: data.message || "Proceso completado exitosamente",
       });
 
       return data as SkuAssignmentResult;
@@ -57,6 +81,7 @@ export const useShopifySkuAssignment = () => {
 
   return {
     assignShopifySkus,
-    loading
+    loading,
+    processing
   };
 };
