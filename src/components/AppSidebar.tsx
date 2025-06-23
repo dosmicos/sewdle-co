@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const AppSidebar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -27,7 +28,8 @@ const AppSidebar = () => {
     { title: 'Entregas', url: '/my-deliveries', icon: Truck }
   ];
   
-  const menuItems = user?.role === 'admin' ? adminMenuItems : workshopMenuItems;
+  // Use isAdmin() function instead of direct role comparison
+  const menuItems = isAdmin() ? adminMenuItems : workshopMenuItems;
   
   const handleNavigation = (url: string) => {
     navigate(url);
@@ -48,7 +50,7 @@ const AppSidebar = () => {
           <div>
             <h2 className="font-semibold text-lg">TextilFlow</h2>
             <p className="text-xs text-muted-foreground">
-              {user?.role === 'admin' ? 'Administrador' : 'Taller'}
+              {isAdmin() ? 'Administrador' : 'Taller'}
             </p>
           </div>
         </div>
