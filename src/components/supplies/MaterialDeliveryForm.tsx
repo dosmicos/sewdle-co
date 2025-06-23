@@ -92,6 +92,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
 
     try {
       const deliveryData = {
+        workshopId: selectedWorkshop,
         materials: validItems.map(item => ({
           materialId: item.materialId,
           quantity: Number(item.quantity),
