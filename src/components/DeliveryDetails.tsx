@@ -283,7 +283,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     return mismatches;
   };
 
-  // Calculate summary statistics
+  // Calculate summary statistics using real data from delivery_items
   const calculateSummaryStats = () => {
     if (!deliveryData?.delivery_items) return { totalDelivered: 0, totalApproved: 0, totalDefective: 0 };
     
@@ -292,15 +292,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     let totalDefective = 0;
     
     deliveryData.delivery_items.forEach(item => {
-      totalDelivered += item.quantity_delivered;
-      
-      if (item.notes) {
-        const approvedMatch = item.notes.match(/Aprobadas: (\d+)/);
-        const defectiveMatch = item.notes.match(/Defectuosas: (\d+)/);
-        
-        if (approvedMatch) totalApproved += parseInt(approvedMatch[1]);
-        if (defectiveMatch) totalDefective += parseInt(defectiveMatch[1]);
-      }
+      totalDelivered += item.quantity_delivered || 0;
+      totalApproved += item.quantity_approved || 0;
+      totalDefective += item.quantity_defective || 0;
     });
     
     return { totalDelivered, totalApproved, totalDefective };
@@ -471,8 +465,9 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs">Producto</TableHead>
-                      <TableHead className="text-xs text-center">Cant.</TableHead>
-                      <TableHead className="text-xs text-center">Estado</TableHead>
+                      <TableHead className="text-xs text-center">Cantidad Total</TableHead>
+                      <TableHead className="text-xs text-center">Aprobadas</TableHead>
+                      <TableHead className="text-xs text-center">Defectuosas</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -500,13 +495,13 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                             </div>
                           </TableCell>
                           <TableCell className="text-center py-2">
-                            <div className="text-xs">
-                              <span className="font-medium text-blue-600">{item.quantity_delivered}</span>
-                              <span className="text-gray-500">/{item.order_items?.quantity || '?'}</span>
-                            </div>
+                            <span className="font-medium text-blue-600">{item.quantity_delivered || 0}</span>
                           </TableCell>
-                          <TableCell className="py-2">
-                            {renderItemStatusBadge(item.quality_status, item.notes)}
+                          <TableCell className="text-center py-2">
+                            <span className="font-medium text-green-600">{item.quantity_approved || 0}</span>
+                          </TableCell>
+                          <TableCell className="text-center py-2">
+                            <span className="font-medium text-red-600">{item.quantity_defective || 0}</span>
                           </TableCell>
                         </TableRow>
                       );
