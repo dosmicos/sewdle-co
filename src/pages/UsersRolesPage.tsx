@@ -7,106 +7,41 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Shield, Users, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2 } from 'lucide-react';
 import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
-import { User, Role } from '@/types/users';
+import { useUsers } from '@/hooks/useUsers';
+import { useRoles } from '@/hooks/useRoles';
 
 const UsersRolesPage = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedRole, setSelectedRole] = useState(null);
   const [userFilter, setUserFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Mock data
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      name: 'Juan Pérez',
-      email: 'admin@textilflow.com',
-      role: 'Administrador',
-      status: 'active',
-      requiresPasswordChange: false,
-      createdAt: '2024-01-15',
-      lastLogin: '2024-06-12',
-      createdBy: 'system'
-    },
-    {
-      id: '2',
-      name: 'María García',
-      email: 'maria@ejemplo.com',
-      role: 'Diseñador',
-      status: 'active',
-      requiresPasswordChange: false,
-      createdAt: '2024-02-20',
-      lastLogin: '2024-06-11',
-      createdBy: 'admin@textilflow.com'
-    },
-    {
-      id: '3',
-      name: 'Carlos López',
-      email: 'taller1@ejemplo.com',
-      role: 'Taller',
-      workshopId: '1',
-      workshopName: 'Taller Principal',
-      status: 'active',
-      requiresPasswordChange: true,
-      createdAt: '2024-03-10',
-      createdBy: 'admin@textilflow.com'
-    }
-  ];
+  const { 
+    users, 
+    loading: usersLoading, 
+    createUser, 
+    updateUser, 
+    deleteUser 
+  } = useUsers();
 
-  const mockRoles: Role[] = [
-    {
-      id: '1',
-      name: 'Administrador',
-      description: 'Control total de la plataforma',
-      isSystem: true,
-      usersCount: 1,
-      permissions: [
-        { module: 'Dashboard', actions: { view: true, create: true, edit: true, delete: true } },
-        { module: 'Órdenes', actions: { view: true, create: true, edit: true, delete: true } },
-        { module: 'Talleres', actions: { view: true, create: true, edit: true, delete: true } },
-        { module: 'Productos', actions: { view: true, create: true, edit: true, delete: true } },
-        { module: 'Entregas', actions: { view: true, create: true, edit: true, delete: true } },
-        { module: 'Usuarios', actions: { view: true, create: true, edit: true, delete: true } }
-      ]
-    },
-    {
-      id: '2',
-      name: 'Diseñador',
-      description: 'Gestión de órdenes y reportes',
-      isSystem: true,
-      usersCount: 1,
-      permissions: [
-        { module: 'Dashboard', actions: { view: true, create: false, edit: false, delete: false } },
-        { module: 'Órdenes', actions: { view: true, create: true, edit: true, delete: false } },
-        { module: 'Talleres', actions: { view: true, create: false, edit: false, delete: false } },
-        { module: 'Productos', actions: { view: true, create: true, edit: true, delete: false } },
-        { module: 'Entregas', actions: { view: true, create: false, edit: false, delete: false } }
-      ]
-    },
-    {
-      id: '3',
-      name: 'Taller',
-      description: 'Acceso a órdenes asignadas y entregas',
-      isSystem: true,
-      usersCount: 1,
-      permissions: [
-        { module: 'Dashboard', actions: { view: true, create: false, edit: false, delete: false } },
-        { module: 'Órdenes', actions: { view: true, create: false, edit: true, delete: false } },
-        { module: 'Entregas', actions: { view: true, create: true, edit: true, delete: false } }
-      ]
-    }
-  ];
+  const { 
+    roles, 
+    loading: rolesLoading, 
+    createRole, 
+    updateRole, 
+    deleteRole 
+  } = useRoles();
 
-  const activeUsers = mockUsers.filter(user => user.status === 'active').length;
-  const inactiveUsers = mockUsers.filter(user => user.status === 'inactive').length;
+  const activeUsers = users.filter(user => user.status === 'active').length;
+  const inactiveUsers = users.filter(user => user.status === 'inactive').length;
 
-  const filteredUsers = mockUsers.filter(user => {
+  const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(userFilter.toLowerCase()) ||
                          user.email.toLowerCase().includes(userFilter.toLowerCase());
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
@@ -115,12 +50,12 @@ const UsersRolesPage = () => {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const handleEditUser = (user: User) => {
+  const handleEditUser = (user: any) => {
     setSelectedUser(user);
     setShowUserModal(true);
   };
 
-  const handleEditRole = (role: Role) => {
+  const handleEditRole = (role: any) => {
     setSelectedRole(role);
     setShowRoleModal(true);
   };
@@ -134,6 +69,39 @@ const UsersRolesPage = () => {
     setSelectedRole(null);
     setShowRoleModal(true);
   };
+
+  const handleUserSave = async (userData: any) => {
+    if (selectedUser) {
+      await updateUser(selectedUser.id, userData);
+    } else {
+      await createUser(userData);
+    }
+    setShowUserModal(false);
+    setSelectedUser(null);
+  };
+
+  const handleRoleSave = async (roleData: any) => {
+    if (selectedRole) {
+      await updateRole(selectedRole.id, roleData);
+    } else {
+      await createRole(roleData);
+    }
+    setShowRoleModal(false);
+    setSelectedRole(null);
+  };
+
+  if (usersLoading || rolesLoading) {
+    return (
+      <div className="p-6 space-y-8 animate-fade-in">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+            <p className="text-gray-600">Cargando usuarios y roles...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-8 animate-fade-in">
@@ -165,7 +133,7 @@ const UsersRolesPage = () => {
                 <Users className="h-4 w-4 text-gray-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{mockUsers.length}</div>
+                <div className="text-2xl font-bold">{users.length}</div>
               </CardContent>
             </Card>
             <Card>
@@ -188,7 +156,7 @@ const UsersRolesPage = () => {
             </Card>
           </div>
 
-          {/* Filtros y botón nuevo usuario */}
+          {/* Lista de usuarios */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -216,9 +184,11 @@ const UsersRolesPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos los roles</SelectItem>
-                    <SelectItem value="Administrador">Administrador</SelectItem>
-                    <SelectItem value="Diseñador">Diseñador</SelectItem>
-                    <SelectItem value="Taller">Taller</SelectItem>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.name}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -310,7 +280,7 @@ const UsersRolesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockRoles.map((role) => (
+                  {roles.map((role) => (
                     <TableRow key={role.id}>
                       <TableCell className="font-medium">{role.name}</TableCell>
                       <TableCell>{role.description}</TableCell>
@@ -341,22 +311,22 @@ const UsersRolesPage = () => {
       {showUserModal && (
         <UserModal
           user={selectedUser}
-          onClose={() => setShowUserModal(false)}
-          onSave={() => {
+          onClose={() => {
             setShowUserModal(false);
-            // Aquí iría la lógica para guardar el usuario
+            setSelectedUser(null);
           }}
+          onSave={handleUserSave}
         />
       )}
 
       {showRoleModal && (
         <RoleModal
           role={selectedRole}
-          onClose={() => setShowRoleModal(false)}
-          onSave={() => {
+          onClose={() => {
             setShowRoleModal(false);
-            // Aquí iría la lógica para guardar el rol
+            setSelectedRole(null);
           }}
+          onSave={handleRoleSave}
         />
       )}
     </div>

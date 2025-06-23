@@ -7,9 +7,10 @@ import { useToast } from '@/hooks/use-toast';
 export interface UserProfile {
   id: string;
   email: string;
-  role: 'admin' | 'workshop';
+  role: string;
   name?: string;
   workshopId?: string;
+  permissions?: Record<string, Record<string, boolean>>;
 }
 
 interface AuthContextType {
@@ -18,6 +19,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
+  hasPermission: (module: string, action: string) => boolean;
+  isAdmin: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,42 +69,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Verificar si el usuario ya tiene rol
-      const { data: userRole, error: roleError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', session.user.id)
-        .single();
+      // Obtener información del rol usando la nueva función
+      const { data: roleInfo, error: roleError } = await supabase
+        .rpc('get_user_role_info', { user_uuid: session.user.id });
 
-      if (roleError && roleError.code !== 'PGRST116') {
+      if (roleError) {
         console.error('Error fetching user role:', roleError);
       }
 
-      let role = userRole?.role || 'admin';
+      let role = 'Administrador';
+      let permissions = {};
+      let workshopId = undefined;
 
-      // Si no tiene rol, asignar admin por defecto
-      if (!userRole) {
+      if (roleInfo && roleInfo.length > 0) {
+        role = roleInfo[0].role_name;
+        permissions = roleInfo[0].permissions || {};
+        workshopId = roleInfo[0].workshop_id;
+      } else {
+        // Si no tiene rol, asignar admin por defecto
         console.log('Assigning admin role to user:', session.user.id);
-        const { error: roleInsertError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: session.user.id,
-            role: 'admin'
-          });
+        const { data: adminRole } = await supabase
+          .from('roles')
+          .select('id, permissions')
+          .eq('name', 'Administrador')
+          .single();
 
-        if (roleInsertError) {
-          console.error('Error assigning role:', roleInsertError);
-          role = 'admin'; // Fallback
-        } else {
-          role = 'admin';
+        if (adminRole) {
+          const { error: roleInsertError } = await supabase
+            .from('user_roles')
+            .insert({
+              user_id: session.user.id,
+              role_id: adminRole.id
+            });
+
+          if (!roleInsertError) {
+            role = 'Administrador';
+            permissions = adminRole.permissions || {};
+          }
         }
       }
 
       return {
         id: session.user.id,
         email: session.user.email || '',
-        role: role as 'admin' | 'workshop',
+        role,
         name: profile?.name || session.user.user_metadata?.name || session.user.email,
+        workshopId,
+        permissions
       };
     } catch (error) {
       console.error('Error in createUserProfile:', error);
@@ -109,11 +123,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         id: session.user.id,
         email: session.user.email || '',
-        role: 'admin',
+        role: 'Administrador',
         name: session.user.user_metadata?.name || session.user.email,
+        permissions: {}
       };
     }
   }, []);
+
+  const hasPermission = useCallback((module: string, action: string): boolean => {
+    if (!user || !user.permissions) return false;
+    
+    const modulePerms = user.permissions[module.toLowerCase()];
+    if (!modulePerms) return false;
+    
+    return modulePerms[action] === true;
+  }, [user]);
+
+  const isAdmin = useCallback((): boolean => {
+    return user?.role === 'Administrador';
+  }, [user]);
 
   const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
     console.log('Auth state changed:', event, session?.user?.id);
@@ -129,8 +157,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: session.user.id,
           email: session.user.email || '',
-          role: 'admin',
+          role: 'Administrador',
           name: session.user.email,
+          permissions: {}
         });
       }
     } else {
@@ -221,7 +250,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [toast]);
 
   return (
-    <AuthContext.Provider value={{ user, session, login, logout, loading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      login, 
+      logout, 
+      loading, 
+      hasPermission, 
+      isAdmin 
+    }}>
       {children}
     </AuthContext.Provider>
   );

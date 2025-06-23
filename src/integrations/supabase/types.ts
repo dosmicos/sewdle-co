@@ -560,6 +560,36 @@ export type Database = {
         }
         Relationships: []
       }
+      roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system: boolean | null
+          name: string
+          permissions: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean | null
+          name: string
+          permissions?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean | null
+          name?: string
+          permissions?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sku_assignment_logs: {
         Row: {
           completed_at: string | null
@@ -636,7 +666,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          role: string
+          role_id: string | null
           updated_at: string | null
           user_id: string
           workshop_id: string | null
@@ -644,7 +674,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
-          role: string
+          role_id?: string | null
           updated_at?: string | null
           user_id: string
           workshop_id?: string | null
@@ -652,12 +682,19 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          role?: string
+          role_id?: string | null
           updated_at?: string | null
           user_id?: string
           workshop_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "user_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_roles_user_id_fkey"
             columns: ["user_id"]
@@ -982,6 +1019,14 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: string
       }
+      get_user_role_info: {
+        Args: { user_uuid: string }
+        Returns: {
+          role_name: string
+          permissions: Json
+          workshop_id: string
+        }[]
+      }
       get_workshop_capacity_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -992,6 +1037,14 @@ export type Database = {
           available_capacity: number
           completion_rate: number
         }[]
+      }
+      has_permission: {
+        Args: { user_uuid: string; module_name: string; action_name: string }
+        Returns: boolean
+      }
+      is_admin: {
+        Args: { user_uuid: string }
+        Returns: boolean
       }
       make_user_admin: {
         Args: { user_email: string }

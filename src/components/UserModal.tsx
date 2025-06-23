@@ -7,18 +7,29 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
-import { User, UserFormData } from '@/types/users';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useRoles } from '@/hooks/useRoles';
+import { useWorkshops } from '@/hooks/useWorkshops';
+
+interface UserFormData {
+  name: string;
+  email: string;
+  role: string;
+  workshopId?: string;
+  requiresPasswordChange: boolean;
+}
 
 interface UserModalProps {
-  user: User | null;
+  user: any | null;
   onClose: () => void;
   onSave: (userData: UserFormData) => void;
 }
 
 const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
   const { toast } = useToast();
+  const { roles, loading: rolesLoading } = useRoles();
+  const { workshops, loading: workshopsLoading } = useWorkshops();
+  
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
@@ -28,14 +39,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
   });
   const [emailError, setEmailError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const mockWorkshops = [
-    { id: '1', name: 'Taller Principal' },
-    { id: '2', name: 'Taller Norte' },
-    { id: '3', name: 'Taller Sur' }
-  ];
-
-  const roles = ['Administrador', 'Diseñador', 'Taller', 'Líder QC'];
 
   useEffect(() => {
     if (user) {
@@ -68,15 +71,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
     }
   };
 
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -105,57 +99,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
     setIsLoading(true);
 
     try {
-      if (!user) {
-        // Create new user
-        const tempPassword = generatePassword();
-        console.log('Creating user with:', { email: formData.email, password: tempPassword });
-        
-        const { data, error } = await supabase.auth.admin.createUser({
-          email: formData.email,
-          password: tempPassword,
-          email_confirm: true,
-          user_metadata: {
-            name: formData.name,
-            role: formData.role,
-            workshopId: formData.workshopId,
-            requiresPasswordChange: formData.requiresPasswordChange
-          }
-        });
-
-        if (error) {
-          console.error('Error creating user:', error);
-          throw error;
-        }
-
-        if (data.user) {
-          // Update the profile with additional data
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: data.user.id,
-              name: formData.name,
-              email: formData.email
-            });
-
-          if (profileError) {
-            console.error('Error updating profile:', profileError);
-          }
-
-          toast({
-            title: "Usuario creado exitosamente",
-            description: `Se ha creado el usuario para ${formData.email}. Contraseña temporal: ${tempPassword}`,
-          });
-        }
-      } else {
-        // Update existing user - for now just call the onSave callback
-        onSave(formData);
-        toast({
-          title: "Usuario actualizado",
-          description: "Los cambios han sido guardados correctamente",
-        });
-      }
-
-      onClose();
+      await onSave(formData);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       toast({
@@ -167,6 +111,19 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
       setIsLoading(false);
     }
   };
+
+  if (rolesLoading || workshopsLoading) {
+    return (
+      <Dialog open onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[500px]">
+          <div className="flex items-center justify-center p-6">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+            <span>Cargando...</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -210,7 +167,11 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
             <Label htmlFor="role">Rol *</Label>
             <Select 
               value={formData.role} 
-              onValueChange={(value) => setFormData({ ...formData, role: value, workshopId: value !== 'Taller' ? '' : formData.workshopId })}
+              onValueChange={(value) => setFormData({ 
+                ...formData, 
+                role: value, 
+                workshopId: value !== 'Taller' ? '' : formData.workshopId 
+              })}
               disabled={isLoading}
             >
               <SelectTrigger>
@@ -218,8 +179,8 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               </SelectTrigger>
               <SelectContent>
                 {roles.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {role}
+                  <SelectItem key={role.id} value={role.name}>
+                    {role.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -238,7 +199,9 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
                   <SelectValue placeholder="Selecciona un taller" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockWorkshops.map((workshop) => (
+                  {workshops
+                    .filter(workshop => workshop.status === 'active')
+                    .map((workshop) => (
                     <SelectItem key={workshop.id} value={workshop.id}>
                       {workshop.name}
                     </SelectItem>

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -47,9 +46,52 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Componente para rutas que requieren rol de administrador
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   
-  if (user?.role !== 'admin') {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  if (user?.role !== 'Administrador') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Componente para rutas según permisos específicos
+const PermissionRoute = ({ 
+  children, 
+  module, 
+  action 
+}: { 
+  children: React.ReactNode;
+  module: string;
+  action: string;
+}) => {
+  const { user, loading, hasPermission } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  if (!hasPermission(module, action)) {
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -79,15 +121,41 @@ const AppContent = () => {
         </ProtectedRoute>
       }>
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="orders" element={<OrdersPage />} />
-        <Route path="supplies" element={<SuppliesPage />} />
-        <Route path="workshops" element={<WorkshopsPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="deliveries" element={<DeliveriesPage />} />
-        <Route path="users-roles" element={
+        
+        <Route path="orders" element={
+          <PermissionRoute module="orders" action="view">
+            <OrdersPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="supplies" element={
           <AdminRoute>
-            <UsersRolesPage />
+            <SuppliesPage />
           </AdminRoute>
+        } />
+        
+        <Route path="workshops" element={
+          <PermissionRoute module="workshops" action="view">
+            <WorkshopsPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="products" element={
+          <PermissionRoute module="products" action="view">
+            <ProductsPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="deliveries" element={
+          <PermissionRoute module="deliveries" action="view">
+            <DeliveriesPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="users-roles" element={
+          <PermissionRoute module="users" action="view">
+            <UsersRolesPage />
+          </PermissionRoute>
         } />
       </Route>
       
