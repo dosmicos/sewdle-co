@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
+import InventorySyncManager from '@/components/supplies/InventorySyncManager';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useDeliveries } from '@/hooks/useDeliveries';
 
@@ -215,148 +216,161 @@ const DeliveriesPage = () => {
         </Card>
       </div>
 
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-4 mb-6">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-            <input 
-              type="text" 
-              placeholder="Buscar por orden o taller..." 
-              className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          
-          <div className="w-full lg:w-auto">
-            <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
-              <SelectTrigger className="w-full lg:w-48">
-                <SelectValue placeholder="Filtrar por taller" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los talleres</SelectItem>
-                {workshopOptions.map((workshop) => (
-                  <SelectItem key={workshop} value={workshop}>
-                    {workshop}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="w-full lg:w-auto">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
-              <TabsList className="grid grid-cols-4 w-full lg:w-auto">
-                <TabsTrigger value="all">Todos</TabsTrigger>
-                <TabsTrigger value="en-calidad">En Calidad</TabsTrigger>
-                <TabsTrigger value="devuelto">Devueltos</TabsTrigger>
-                <TabsTrigger value="aprobado">Aprobados</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        </div>
+      <Tabs defaultValue="deliveries" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="deliveries">Gestión de Entregas</TabsTrigger>
+          <TabsTrigger value="sync">Sincronización Shopify</TabsTrigger>
+        </TabsList>
 
-        {filteredDeliveries.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Número de Seguimiento</TableHead>
-                  <TableHead>Orden</TableHead>
-                  <TableHead>Taller</TableHead>
-                  <TableHead>Cantidad Total</TableHead>
-                  <TableHead>Aprobadas</TableHead>
-                  <TableHead>Defectuosas</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDeliveries.map((delivery) => {
-                  return (
-                    <TableRow key={delivery.id}>
-                      <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
-                      <TableCell>{delivery.order_number}</TableCell>
-                      <TableCell>{delivery.workshop_name}</TableCell>
-                      <TableCell>
-                        <span className="text-sm font-medium">{delivery.total_quantity} unidades</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm font-medium text-green-600">
-                          {delivery.total_approved > 0 ? delivery.total_approved : '-'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm font-medium text-red-600">
-                          {delivery.total_defective > 0 ? delivery.total_defective : '-'}
-                        </span>
-                      </TableCell>
-                      <TableCell>{renderStatusBadge(delivery.status)}</TableCell>
-                      <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button 
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewDeliveryDetails(delivery)}
-                          >
-                            Detalles
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
+        <TabsContent value="deliveries">
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-4 mb-6">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar por orden o taller..." 
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              
+              <div className="w-full lg:w-auto">
+                <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+                  <SelectTrigger className="w-full lg:w-48">
+                    <SelectValue placeholder="Filtrar por taller" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los talleres</SelectItem>
+                    {workshopOptions.map((workshop) => (
+                      <SelectItem key={workshop} value={workshop}>
+                        {workshop}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="w-full lg:w-auto">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
+                  <TabsList className="grid grid-cols-4 w-full lg:w-auto">
+                    <TabsTrigger value="all">Todos</TabsTrigger>
+                    <TabsTrigger value="en-calidad">En Calidad</TabsTrigger>
+                    <TabsTrigger value="devuelto">Devueltos</TabsTrigger>
+                    <TabsTrigger value="aprobado">Aprobados</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
+
+            {filteredDeliveries.length > 0 ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Número de Seguimiento</TableHead>
+                      <TableHead>Orden</TableHead>
+                      <TableHead>Taller</TableHead>
+                      <TableHead>Cantidad Total</TableHead>
+                      <TableHead>Aprobadas</TableHead>
+                      <TableHead>Defectuosas</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDeliveries.map((delivery) => {
+                      return (
+                        <TableRow key={delivery.id}>
+                          <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
+                          <TableCell>{delivery.order_number}</TableCell>
+                          <TableCell>{delivery.workshop_name}</TableCell>
+                          <TableCell>
+                            <span className="text-sm font-medium">{delivery.total_quantity} unidades</span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm font-medium text-green-600">
+                              {delivery.total_approved > 0 ? delivery.total_approved : '-'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm font-medium text-red-600">
+                              {delivery.total_defective > 0 ? delivery.total_defective : '-'}
+                            </span>
+                          </TableCell>
+                          <TableCell>{renderStatusBadge(delivery.status)}</TableCell>
+                          <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
                               <Button 
                                 variant="outline"
                                 size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleViewDeliveryDetails(delivery)}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                Detalles
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>¿Eliminar entrega?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Esta acción no se puede deshacer. Se eliminará permanentemente la entrega 
-                                  <strong> {delivery.tracking_number}</strong> y todos sus datos relacionados.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction 
-                                  onClick={() => handleDeleteDelivery(delivery.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Eliminar
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-gray-600" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2 text-black">No hay entregas que coincidan</h3>
-            <p className="text-gray-600 mb-4">Intenta ajustando los filtros o registra una nueva entrega</p>
-            <Button 
-              onClick={() => setShowDeliveryForm(true)}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Registrar Entrega
-            </Button>
-          </div>
-        )}
-      </Card>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Eliminar entrega?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción no se puede deshacer. Se eliminará permanentemente la entrega 
+                                      <strong> {delivery.tracking_number}</strong> y todos sus datos relacionados.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => handleDeleteDelivery(delivery.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-gray-600" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2 text-black">No hay entregas que coincidan</h3>
+                <p className="text-gray-600 mb-4">Intenta ajustando los filtros o registra una nueva entrega</p>
+                <Button 
+                  onClick={() => setShowDeliveryForm(true)}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Registrar Entrega
+                </Button>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sync">
+          <InventorySyncManager />
+        </TabsContent>
+      </Tabs>
 
       {showDeliveryForm && (
         <DeliveryForm 

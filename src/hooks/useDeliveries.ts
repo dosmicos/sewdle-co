@@ -1,7 +1,7 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useInventorySync } from '@/hooks/useInventorySync';
 
 export interface DeliveryItem {
   orderItemId: string;
@@ -50,6 +50,7 @@ interface DeliveryStats {
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { syncApprovedItemsToShopify } = useInventorySync();
 
   const createDelivery = async (deliveryData: CreateDeliveryData) => {
     setLoading(true);
@@ -432,11 +433,50 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery item:', update.id);
       }
 
-      // The delivery status will be automatically updated by the database trigger
+      // NUEVA FUNCIONALIDAD: Sincronizar inventario aprobado con Shopify
+      if (totalApproved > 0) {
+        try {
+          console.log('Starting Shopify inventory sync for approved items...');
+          
+          // Preparar datos para sincronización
+          const approvedItems = itemUpdates
+            .filter(item => item.quantity_approved > 0)
+            .map(item => {
+              const deliveryItem = delivery.delivery_items.find((di: any) => di.id === item.id);
+              return {
+                variantId: item.product_variant_id || '',
+                skuVariant: deliveryItem?.order_items?.product_variants?.sku_variant || '',
+                quantityApproved: item.quantity_approved
+              };
+            })
+            .filter(item => item.skuVariant); // Solo incluir items con SKU válido
+
+          if (approvedItems.length > 0) {
+            // Sincronizar en segundo plano (no bloquear la respuesta del usuario)
+            syncApprovedItemsToShopify({
+              deliveryId,
+              approvedItems
+            }).catch(syncError => {
+              console.error('Background sync to Shopify failed:', syncError);
+              // Mostrar notificación de fallo pero no interrumpir el flujo principal
+              toast({
+                title: "Advertencia de sincronización",
+                description: "La revisión se completó pero la sincronización con Shopify falló. Puedes intentar sincronizar manualmente.",
+                variant: "destructive",
+              });
+            });
+
+            console.log(`Initiated Shopify sync for ${approvedItems.length} approved items`);
+          }
+        } catch (syncError) {
+          // Log error but don't fail the quality review process
+          console.error('Error initiating Shopify sync:', syncError);
+        }
+      }
 
       toast({
         title: "Revisión de calidad procesada",
-        description: `${totalApproved} productos aprobados, ${totalDefective} devueltos.`,
+        description: `${totalApproved} productos aprobados, ${totalDefective} devueltos.${totalApproved > 0 ? ' Sincronizando inventario con Shopify...' : ''}`,
       });
 
       return true;
