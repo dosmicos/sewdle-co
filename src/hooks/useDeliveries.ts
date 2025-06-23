@@ -170,7 +170,7 @@ export const useDeliveries = () => {
             quality_status: item.status,
             quality_notes: item.notes
           })
-          .eq('id', item.id);
+          .eq('id', item.id.toString());
 
         if (error) {
           throw error;

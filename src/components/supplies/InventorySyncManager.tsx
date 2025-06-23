@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RefreshCw, CheckCircle, AlertTriangle, Clock, Zap, Shield, X } from 'lucide-react';
 import { useInventorySync } from '@/hooks/useInventorySync';
 import { useDeliveries } from '@/hooks/useDeliveries';
+import { useToast } from '@/hooks/use-toast';
 
 interface InventorySyncManagerProps {
   deliveryId?: string;
@@ -19,6 +19,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
 
   const { syncApprovedItemsToShopify, fetchSyncLogs, loading: syncLoading } = useInventorySync();
   const { fetchDeliveries, fetchDeliveryById, loading: deliveriesLoading } = useDeliveries();
+  const { toast } = useToast();
 
   useEffect(() => {
     loadData();

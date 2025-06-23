@@ -69,44 +69,74 @@ serve(async (req) => {
     let successCount = 0
     let errorCount = 0
 
-    // Procesar cada item aprobado
-    for (const item of approvedItems) {
-      try {
-        console.log(`Sincronizando item: ${item.skuVariant}, cantidad: ${item.quantityApproved}`)
+    // Función mejorada para buscar productos en Shopify con paginación
+    async function searchProductsBySku(sku: string) {
+      console.log(`Buscando producto con SKU: ${sku}`)
+      
+      // Primero buscar por SKU en todas las variantes
+      let pageInfo = null
+      let allProducts = []
+      
+      do {
+        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
+        url.searchParams.set('fields', 'id,variants,handle,title')
+        url.searchParams.set('limit', '250')
         
-        // Buscar el producto por SKU en Shopify
-        const searchUrl = `https://${shopifyDomain}/admin/api/2023-10/products.json?fields=id,variants&limit=250`
-        const searchResponse = await fetch(searchUrl, {
+        if (pageInfo) {
+          url.searchParams.set('page_info', pageInfo)
+        }
+
+        const response = await fetch(url.toString(), {
           headers: {
             'X-Shopify-Access-Token': shopifyToken,
             'Content-Type': 'application/json',
           },
         })
 
-        if (!searchResponse.ok) {
-          throw new Error(`Error buscando productos: ${searchResponse.status} ${searchResponse.statusText}`)
+        if (!response.ok) {
+          throw new Error(`Error buscando productos: ${response.status} ${response.statusText}`)
         }
 
-        const searchData = await searchResponse.json()
-        console.log(`Encontrados ${searchData.products?.length || 0} productos en Shopify`)
-
-        // Buscar la variante específica
-        let targetVariant = null
-        for (const product of searchData.products || []) {
+        const data = await response.json()
+        allProducts.push(...(data.products || []))
+        
+        // Buscar la variante específica en estos productos
+        for (const product of data.products || []) {
           for (const variant of product.variants || []) {
-            if (variant.sku === item.skuVariant) {
-              targetVariant = variant
-              break
+            if (variant.sku === sku) {
+              console.log(`Variante encontrada: ID ${variant.id}, SKU ${variant.sku}, Inventario: ${variant.inventory_quantity}`)
+              return variant
             }
           }
-          if (targetVariant) break
         }
+
+        // Obtener página siguiente si existe
+        const linkHeader = response.headers.get('Link')
+        if (linkHeader && linkHeader.includes('rel="next"')) {
+          const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
+          pageInfo = match ? match[1] : null
+        } else {
+          pageInfo = null
+        }
+      } while (pageInfo)
+
+      console.log(`Total productos revisados: ${allProducts.length}`)
+      return null
+    }
+
+    // Procesar cada item aprobado
+    for (const item of approvedItems) {
+      try {
+        console.log(`Sincronizando item: ${item.skuVariant}, cantidad: ${item.quantityApproved}`)
+        
+        // Buscar la variante específica por SKU
+        const targetVariant = await searchProductsBySku(item.skuVariant)
 
         if (!targetVariant) {
-          throw new Error(`Variante con SKU ${item.skuVariant} no encontrada en Shopify`)
+          throw new Error(`Variante con SKU ${item.skuVariant} no encontrada en Shopify. Verifica que el producto existe y el SKU es correcto.`)
         }
 
-        console.log(`Variante encontrada: ID ${targetVariant.id}, inventario actual: ${targetVariant.inventory_quantity}`)
+        console.log(`Actualizando inventario: SKU ${item.skuVariant}, inventario actual: ${targetVariant.inventory_quantity}, agregando: ${item.quantityApproved}`)
 
         // Actualizar inventario en Shopify
         const newInventoryQuantity = (targetVariant.inventory_quantity || 0) + item.quantityApproved
@@ -128,11 +158,12 @@ serve(async (req) => {
 
         if (!updateResponse.ok) {
           const errorText = await updateResponse.text()
+          console.error(`Error actualizando variante ${targetVariant.id}:`, errorText)
           throw new Error(`Error actualizando inventario: ${updateResponse.status} ${errorText}`)
         }
 
         const updateData = await updateResponse.json()
-        console.log(`Inventario actualizado para ${item.skuVariant}: ${targetVariant.inventory_quantity} -> ${updateData.variant.inventory_quantity}`)
+        console.log(`Éxito: Inventario actualizado para ${item.skuVariant}: ${targetVariant.inventory_quantity} -> ${updateData.variant.inventory_quantity}`)
 
         syncResults.push({
           sku: item.skuVariant,
