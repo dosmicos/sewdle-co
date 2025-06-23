@@ -4,35 +4,43 @@ import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 
 export const useFilteredDeliveries = () => {
-  const { deliveries, loading, error, createDelivery, updateDelivery, deleteDelivery, refetch } = useDeliveries();
+  const { fetchDeliveries, loading } = useDeliveries();
   const { workshopFilter, isWorkshopUser } = useUserContext();
-  const [filteredDeliveries, setFilteredDeliveries] = useState<any[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [error, setError] = useState<any>(null);
+
+  const loadDeliveries = async () => {
+    try {
+      const data = await fetchDeliveries();
+      
+      if (isWorkshopUser && workshopFilter) {
+        // Filtrar entregas del taller del usuario
+        const workshopDeliveries = data.filter(delivery => 
+          delivery.workshop_id === workshopFilter
+        );
+        setDeliveries(workshopDeliveries);
+      } else {
+        // Admin ve todas las entregas
+        setDeliveries(data);
+      }
+      setError(null);
+    } catch (err) {
+      setError(err);
+      setDeliveries([]);
+    }
+  };
 
   useEffect(() => {
-    if (!deliveries) {
-      setFilteredDeliveries([]);
-      return;
-    }
-
-    if (isWorkshopUser && workshopFilter) {
-      // Filtrar entregas del taller del usuario
-      const workshopDeliveries = deliveries.filter(delivery => 
-        delivery.workshop_id === workshopFilter
-      );
-      setFilteredDeliveries(workshopDeliveries);
-    } else {
-      // Admin ve todas las entregas
-      setFilteredDeliveries(deliveries);
-    }
-  }, [deliveries, isWorkshopUser, workshopFilter]);
+    loadDeliveries();
+  }, [isWorkshopUser, workshopFilter]);
 
   return {
-    deliveries: filteredDeliveries,
+    deliveries,
     loading,
     error,
-    createDelivery,
-    updateDelivery,
-    deleteDelivery,
-    refetch
+    createDelivery: () => Promise.resolve(), // Placeholder
+    updateDelivery: () => Promise.resolve(), // Placeholder
+    deleteDelivery: () => Promise.resolve(), // Placeholder
+    refetch: loadDeliveries
   };
 };

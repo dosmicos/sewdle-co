@@ -14,7 +14,7 @@ import { es } from 'date-fns/locale';
 import { useState } from 'react';
 
 const OrdersPage = () => {
-  const { orders, loading } = useFilteredOrders();
+  const { orders, loading, refetch } = useFilteredOrders();
   const { isAdmin } = useUserContext();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -53,6 +53,11 @@ const OrdersPage = () => {
     setShowDetailsModal(true);
   };
 
+  const handleFormSuccess = () => {
+    setShowCreateForm(false);
+    refetch();
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -89,7 +94,7 @@ const OrdersPage = () => {
             <CardDescription>Completa los detalles para crear una nueva orden</CardDescription>
           </CardHeader>
           <CardContent>
-            <OrderForm onSuccess={() => setShowCreateForm(false)} />
+            <OrderForm onFormSubmit={handleFormSuccess} />
           </CardContent>
         </Card>
       )}
@@ -165,7 +170,7 @@ const OrdersPage = () => {
       {selectedOrder && showEditModal && (
         <OrderEditModal
           order={selectedOrder}
-          isOpen={showEditModal}
+          open={showEditModal}
           onClose={() => {
             setShowEditModal(false);
             setSelectedOrder(null);
@@ -176,7 +181,7 @@ const OrdersPage = () => {
       {selectedOrder && showDetailsModal && (
         <OrderDetailsModal
           order={selectedOrder}
-          isOpen={showDetailsModal}
+          open={showDetailsModal}
           onClose={() => {
             setShowDetailsModal(false);
             setSelectedOrder(null);

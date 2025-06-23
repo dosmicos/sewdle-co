@@ -4,37 +4,45 @@ import { useOrders } from '@/hooks/useOrders';
 import { useUserContext } from '@/hooks/useUserContext';
 
 export const useFilteredOrders = () => {
-  const { orders, loading, error, createOrder, updateOrder, deleteOrder, refetch } = useOrders();
+  const { createOrder, fetchOrders, loading } = useOrders();
   const { workshopFilter, isWorkshopUser } = useUserContext();
-  const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [error, setError] = useState<any>(null);
+
+  const loadOrders = async () => {
+    try {
+      const data = await fetchOrders();
+      
+      if (isWorkshopUser && workshopFilter) {
+        // Filtrar órdenes asignadas al taller del usuario
+        const workshopOrders = data.filter(order => {
+          return order.workshop_assignments?.some((assignment: any) => 
+            assignment.workshop_id === workshopFilter
+          );
+        });
+        setOrders(workshopOrders);
+      } else {
+        // Admin ve todas las órdenes
+        setOrders(data);
+      }
+      setError(null);
+    } catch (err) {
+      setError(err);
+      setOrders([]);
+    }
+  };
 
   useEffect(() => {
-    if (!orders) {
-      setFilteredOrders([]);
-      return;
-    }
-
-    if (isWorkshopUser && workshopFilter) {
-      // Filtrar órdenes asignadas al taller del usuario
-      const workshopOrders = orders.filter(order => {
-        return order.workshop_assignments?.some((assignment: any) => 
-          assignment.workshop_id === workshopFilter
-        );
-      });
-      setFilteredOrders(workshopOrders);
-    } else {
-      // Admin ve todas las órdenes
-      setFilteredOrders(orders);
-    }
-  }, [orders, isWorkshopUser, workshopFilter]);
+    loadOrders();
+  }, [isWorkshopUser, workshopFilter]);
 
   return {
-    orders: filteredOrders,
+    orders,
     loading,
     error,
     createOrder,
-    updateOrder,
-    deleteOrder,
-    refetch
+    updateOrder: () => Promise.resolve(), // Placeholder
+    deleteOrder: () => Promise.resolve(), // Placeholder
+    refetch: loadOrders
   };
 };

@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const DeliveriesPage = () => {
-  const { deliveries, loading } = useFilteredDeliveries();
+  const { deliveries, loading, refetch } = useFilteredDeliveries();
   const { isAdmin } = useUserContext();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
@@ -37,6 +37,11 @@ const DeliveriesPage = () => {
       case 'rejected': return 'Rechazada';
       default: return status;
     }
+  };
+
+  const handleFormSuccess = () => {
+    setShowCreateForm(false);
+    refetch();
   };
 
   if (loading) {
@@ -75,7 +80,7 @@ const DeliveriesPage = () => {
             <CardDescription>Registra una nueva entrega</CardDescription>
           </CardHeader>
           <CardContent>
-            <DeliveryForm onSuccess={() => setShowCreateForm(false)} />
+            <DeliveryForm onFormSubmit={handleFormSuccess} />
           </CardContent>
         </Card>
       )}
@@ -142,7 +147,7 @@ const DeliveriesPage = () => {
       {selectedDelivery && (
         <DeliveryDetails
           delivery={selectedDelivery}
-          isOpen={!!selectedDelivery}
+          open={!!selectedDelivery}
           onClose={() => setSelectedDelivery(null)}
         />
       )}
