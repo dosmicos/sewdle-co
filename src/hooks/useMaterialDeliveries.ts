@@ -41,10 +41,15 @@ export const useMaterialDeliveries = () => {
 
       console.log('User authenticated:', session.user.id);
 
-      // Verify user role before proceeding
-      const { data: userRole, error: roleError } = await supabase
+      // Verify user role before proceeding using the new role structure
+      const { data: userRoleData, error: roleError } = await supabase
         .from('user_roles')
-        .select('role')
+        .select(`
+          role_id,
+          roles!inner (
+            name
+          )
+        `)
         .eq('user_id', session.user.id)
         .single();
 
@@ -52,7 +57,7 @@ export const useMaterialDeliveries = () => {
         console.error('Error checking user role:', roleError);
       }
 
-      console.log('User role:', userRole?.role || 'no role assigned');
+      console.log('User role:', userRoleData?.roles?.name || 'no role assigned');
 
       // Create material deliveries for each material
       const deliveryPromises = deliveryData.materials.map(async (material, index) => {
