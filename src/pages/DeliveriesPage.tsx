@@ -1,7 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
+import { useDeliveries } from '@/hooks/useDeliveries';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
@@ -11,13 +11,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap } from 'lucide-react';
+import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
 
 const DeliveriesPage = () => {
   const { deliveries, loading, refetch } = useFilteredDeliveries();
+  const { deleteDelivery } = useDeliveries();
   const { isAdmin } = useUserContext();
+  const { toast } = useToast();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,6 +113,15 @@ const DeliveriesPage = () => {
     setSelectedDelivery(null);
     if (shouldRefresh) {
       refetch();
+    }
+  };
+
+  const handleDeleteDelivery = async (deliveryId: string, trackingNumber: string) => {
+    if (window.confirm(`¿Estás seguro de que quieres eliminar la entrega ${trackingNumber}?`)) {
+      const success = await deleteDelivery(deliveryId);
+      if (success) {
+        refetch();
+      }
     }
   };
 
@@ -255,19 +267,39 @@ const DeliveriesPage = () => {
         </TabsList>
 
         <TabsContent value="all" className="space-y-4">
-          <DeliveryTable deliveries={filteredDeliveries} onViewDetails={setSelectedDelivery} />
+          <DeliveryTable 
+            deliveries={filteredDeliveries} 
+            onViewDetails={setSelectedDelivery}
+            onDeleteDelivery={handleDeleteDelivery}
+            isAdmin={isAdmin}
+          />
         </TabsContent>
 
         <TabsContent value="in_quality" className="space-y-4">
-          <DeliveryTable deliveries={filteredDeliveries} onViewDetails={setSelectedDelivery} />
+          <DeliveryTable 
+            deliveries={filteredDeliveries} 
+            onViewDetails={setSelectedDelivery}
+            onDeleteDelivery={handleDeleteDelivery}
+            isAdmin={isAdmin}
+          />
         </TabsContent>
 
         <TabsContent value="approved" className="space-y-4">
-          <DeliveryTable deliveries={filteredDeliveries} onViewDetails={setSelectedDelivery} />
+          <DeliveryTable 
+            deliveries={filteredDeliveries} 
+            onViewDetails={setSelectedDelivery}
+            onDeleteDelivery={handleDeleteDelivery}
+            isAdmin={isAdmin}
+          />
         </TabsContent>
 
         <TabsContent value="rejected" className="space-y-4">
-          <DeliveryTable deliveries={filteredDeliveries} onViewDetails={setSelectedDelivery} />
+          <DeliveryTable 
+            deliveries={filteredDeliveries} 
+            onViewDetails={setSelectedDelivery}
+            onDeleteDelivery={handleDeleteDelivery}
+            isAdmin={isAdmin}
+          />
         </TabsContent>
 
         {isAdmin && (
@@ -281,7 +313,17 @@ const DeliveriesPage = () => {
 };
 
 // Separate component for the delivery table
-const DeliveryTable = ({ deliveries, onViewDetails }: { deliveries: any[], onViewDetails: (delivery: any) => void }) => {
+const DeliveryTable = ({ 
+  deliveries, 
+  onViewDetails, 
+  onDeleteDelivery, 
+  isAdmin 
+}: { 
+  deliveries: any[], 
+  onViewDetails: (delivery: any) => void,
+  onDeleteDelivery: (deliveryId: string, trackingNumber: string) => void,
+  isAdmin: boolean
+}) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -302,6 +344,28 @@ const DeliveryTable = ({ deliveries, onViewDetails }: { deliveries: any[], onVie
       case 'rejected': return 'Rechazada';
       default: return status;
     }
+  };
+
+  // Calculate quantities from delivery_items
+  const calculateQuantities = (delivery: any) => {
+    if (!delivery.delivery_items || delivery.delivery_items.length === 0) {
+      return {
+        total: delivery.total_quantity || 0,
+        approved: 0,
+        defective: 0
+      };
+    }
+
+    const total = delivery.delivery_items.reduce((sum: number, item: any) => 
+      sum + (item.quantity_delivered || 0), 0);
+    
+    const approved = delivery.delivery_items.reduce((sum: number, item: any) => 
+      sum + (item.quantity_approved || 0), 0);
+    
+    const defective = delivery.delivery_items.reduce((sum: number, item: any) => 
+      sum + (item.quantity_defective || 0), 0);
+
+    return { total, approved, defective };
   };
 
   if (deliveries.length === 0) {
@@ -327,37 +391,54 @@ const DeliveryTable = ({ deliveries, onViewDetails }: { deliveries: any[], onVie
               <TableHead>Seguimiento</TableHead>
               <TableHead>Orden</TableHead>
               <TableHead>Taller</TableHead>
-              <TableHead>Fecha Entrega</TableHead>
+              <TableHead>Cantidad Total</TableHead>
+              <TableHead>Aprobadas</TableHead>
+              <TableHead>Defectuosas</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>Items</TableHead>
-              <TableHead>Cantidad</TableHead>
+              <TableHead>Fecha</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {deliveries.map((delivery) => (
-              <TableRow key={delivery.id} className="hover:bg-muted/50">
-                <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
-                <TableCell>{delivery.order_number}</TableCell>
-                <TableCell>{delivery.workshop_name || 'Sin asignar'}</TableCell>
-                <TableCell>
-                  {delivery.delivery_date ? format(new Date(delivery.delivery_date), 'dd/MM/yyyy', { locale: es }) : 'Sin fecha'}
-                </TableCell>
-                <TableCell>
-                  <Badge className={getStatusColor(delivery.status)}>
-                    {getStatusText(delivery.status)}
-                  </Badge>
-                </TableCell>
-                <TableCell>{delivery.items_count || 0}</TableCell>
-                <TableCell>{delivery.total_quantity || 0}</TableCell>
-                <TableCell>
-                  <Button variant="outline" size="sm" onClick={() => onViewDetails(delivery)}>
-                    <Eye className="w-4 h-4 mr-2" />
-                    Ver
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {deliveries.map((delivery) => {
+              const quantities = calculateQuantities(delivery);
+              return (
+                <TableRow key={delivery.id} className="hover:bg-muted/50">
+                  <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
+                  <TableCell>{delivery.order_number}</TableCell>
+                  <TableCell>{delivery.workshop_name || 'Sin asignar'}</TableCell>
+                  <TableCell>{quantities.total}</TableCell>
+                  <TableCell>{quantities.approved}</TableCell>
+                  <TableCell>{quantities.defective}</TableCell>
+                  <TableCell>
+                    <Badge className={getStatusColor(delivery.status)}>
+                      {getStatusText(delivery.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {delivery.delivery_date ? format(new Date(delivery.delivery_date), 'dd/MM/yyyy', { locale: es }) : 'Sin fecha'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => onViewDetails(delivery)}>
+                        <Eye className="w-4 h-4 mr-2" />
+                        Ver
+                      </Button>
+                      {isAdmin && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => onDeleteDelivery(delivery.id, delivery.tracking_number)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>
