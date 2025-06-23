@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
@@ -22,10 +21,10 @@ const AppSidebar = () => {
   ];
   
   const workshopMenuItems = [
-    { title: 'Mi Dashboard', url: '/workshop-dashboard', icon: LayoutDashboard },
-    { title: 'Mis Órdenes', url: '/my-orders', icon: FileText },
-    { title: 'Mis Insumos', url: '/my-supplies', icon: Package2 },
-    { title: 'Entregas', url: '/my-deliveries', icon: Truck }
+    { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
+    { title: 'Mis Órdenes', url: '/orders', icon: FileText },
+    { title: 'Mis Insumos', url: '/supplies', icon: Package2 },
+    { title: 'Mis Entregas', url: '/deliveries', icon: Truck }
   ];
   
   // Use isAdmin() function instead of direct role comparison
