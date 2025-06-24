@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Loader2, User, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
 
@@ -85,6 +87,18 @@ const LoginPage = () => {
               />
             </div>
 
+            {/* Password recovery link */}
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={() => setShowPasswordRecovery(true)}
+                className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                disabled={isLoading}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+
             <Button
               type="submit"
               className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-all duration-200 active:scale-[0.98]"
@@ -142,6 +156,12 @@ const LoginPage = () => {
           <p className="text-xs text-gray-500">© 2024 TextilFlow. Todos los derechos reservados.</p>
         </div>
       </div>
+
+      {/* Password Recovery Modal */}
+      <PasswordRecoveryModal
+        isOpen={showPasswordRecovery}
+        onClose={() => setShowPasswordRecovery(false)}
+      />
     </div>
   );
 };
