@@ -1,25 +1,15 @@
 
 import React from 'react';
-import Dashboard from '@/components/Dashboard';
-import { useUserContext } from '@/hooks/useUserContext';
+import AdminDashboard from '@/components/AdminDashboard';
+import WorkshopDashboard from '@/components/WorkshopDashboard';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DashboardPage = () => {
-  const { isAdmin } = useUserContext();
+  const { isAdmin } = useAuth();
   
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">
-          {isAdmin ? 'Dashboard General' : 'Mi Dashboard'}
-        </h1>
-        <p className="text-muted-foreground">
-          {isAdmin 
-            ? 'Vista general del sistema TextilFlow'
-            : 'Vista general de mi taller'
-          }
-        </p>
-      </div>
-      <Dashboard />
+      {isAdmin() ? <AdminDashboard /> : <WorkshopDashboard />}
     </div>
   );
 };
