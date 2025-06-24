@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useDeliveries } from '@/hooks/useDeliveries';
+import { useAuth } from '@/contexts/AuthContext';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
@@ -20,11 +21,17 @@ const DeliveriesPage = () => {
   const { deliveries, loading, refetch } = useFilteredDeliveries();
   const { deleteDelivery } = useDeliveries();
   const { isAdmin } = useUserContext();
+  const { hasPermission } = useAuth();
   const { toast } = useToast();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+
+  // Permission checks
+  const canCreateDeliveries = hasPermission('entregas', 'create');
+  const canEditDeliveries = hasPermission('entregas', 'edit');
+  const canDeleteDeliveries = hasPermission('entregas', 'delete');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -156,7 +163,7 @@ const DeliveriesPage = () => {
             {isAdmin ? 'Administra todas las entregas del sistema' : 'Entregas de tu taller'}
           </p>
         </div>
-        {isAdmin && (
+        {canCreateDeliveries && (
           <Button onClick={() => setShowCreateForm(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nueva Entrega
@@ -164,7 +171,7 @@ const DeliveriesPage = () => {
         )}
       </div>
 
-      {showCreateForm && isAdmin && (
+      {showCreateForm && canCreateDeliveries && (
         <DeliveryForm
           onClose={handleFormClose}
           onDeliveryCreated={handleFormClose}
@@ -271,7 +278,7 @@ const DeliveriesPage = () => {
             deliveries={filteredDeliveries} 
             onViewDetails={setSelectedDelivery}
             onDeleteDelivery={handleDeleteDelivery}
-            isAdmin={isAdmin}
+            canDeleteDeliveries={canDeleteDeliveries}
           />
         </TabsContent>
 
@@ -280,7 +287,7 @@ const DeliveriesPage = () => {
             deliveries={filteredDeliveries} 
             onViewDetails={setSelectedDelivery}
             onDeleteDelivery={handleDeleteDelivery}
-            isAdmin={isAdmin}
+            canDeleteDeliveries={canDeleteDeliveries}
           />
         </TabsContent>
 
@@ -289,7 +296,7 @@ const DeliveriesPage = () => {
             deliveries={filteredDeliveries} 
             onViewDetails={setSelectedDelivery}
             onDeleteDelivery={handleDeleteDelivery}
-            isAdmin={isAdmin}
+            canDeleteDeliveries={canDeleteDeliveries}
           />
         </TabsContent>
 
@@ -298,7 +305,7 @@ const DeliveriesPage = () => {
             deliveries={filteredDeliveries} 
             onViewDetails={setSelectedDelivery}
             onDeleteDelivery={handleDeleteDelivery}
-            isAdmin={isAdmin}
+            canDeleteDeliveries={canDeleteDeliveries}
           />
         </TabsContent>
 
@@ -317,12 +324,12 @@ const DeliveryTable = ({
   deliveries, 
   onViewDetails, 
   onDeleteDelivery, 
-  isAdmin 
+  canDeleteDeliveries 
 }: { 
   deliveries: any[], 
   onViewDetails: (delivery: any) => void,
   onDeleteDelivery: (deliveryId: string, trackingNumber: string) => void,
-  isAdmin: boolean
+  canDeleteDeliveries: boolean
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -411,7 +418,7 @@ const DeliveryTable = ({
                         <Eye className="w-4 h-4 mr-2" />
                         Ver
                       </Button>
-                      {isAdmin && (
+                      {canDeleteDeliveries && (
                         <Button 
                           variant="outline" 
                           size="sm" 
