@@ -32,7 +32,11 @@ interface MaterialDeliveryWithBalance {
   order_number?: string;
 }
 
-const MaterialDelivery = () => {
+interface MaterialDeliveryProps {
+  canCreateDeliveries?: boolean;
+}
+
+const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps) => {
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveries, setDeliveries] = useState<MaterialDeliveryWithBalance[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,9 +62,7 @@ const MaterialDelivery = () => {
   // Extract unique workshops for filter
   const workshopOptions = [...new Set(deliveries.map(d => d.workshop_name).filter(Boolean))];
 
-  // Filter deliveries
   const filteredDeliveries = deliveries.filter(delivery => {
-    // Search filter - includes color, material name, SKU, workshop
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = 
@@ -73,12 +75,10 @@ const MaterialDelivery = () => {
       if (!matchesSearch) return false;
     }
 
-    // Workshop filter
     if (filterWorkshop !== 'all' && delivery.workshop_name !== filterWorkshop) {
       return false;
     }
 
-    // Period filter
     if (filterPeriod !== 'all') {
       const deliveryDate = new Date(delivery.delivery_date);
       const now = new Date();
@@ -181,13 +181,15 @@ const MaterialDelivery = () => {
           </Select>
         </div>
 
-        <Button 
-          onClick={() => setShowDeliveryForm(true)}
-          className="bg-blue-500 hover:bg-blue-600 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nueva Entrega
-        </Button>
+        {canCreateDeliveries && (
+          <Button 
+            onClick={() => setShowDeliveryForm(true)}
+            className="bg-blue-500 hover:bg-blue-600 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nueva Entrega
+          </Button>
+        )}
       </div>
 
       <Card className="p-6">
@@ -299,22 +301,24 @@ const MaterialDelivery = () => {
             </h3>
             <p className="text-gray-600 mb-4">
               {deliveries.length === 0 
-                ? 'Comienza registrando la primera entrega de materiales'
+                ? 'Las entregas de materiales aparecerán aquí cuando se registren'
                 : 'Intenta ajustando los filtros de búsqueda'
               }
             </p>
-            <Button 
-              onClick={() => setShowDeliveryForm(true)}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              {deliveries.length === 0 ? 'Registrar Primera Entrega' : 'Nueva Entrega'}
-            </Button>
+            {canCreateDeliveries && deliveries.length === 0 && (
+              <Button 
+                onClick={() => setShowDeliveryForm(true)}
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Registrar Primera Entrega
+              </Button>
+            )}
           </div>
         )}
       </Card>
 
-      {showDeliveryForm && (
+      {showDeliveryForm && canCreateDeliveries && (
         <MaterialDeliveryForm 
           onClose={() => setShowDeliveryForm(false)}
           onDeliveryCreated={handleDeliveryCreated}

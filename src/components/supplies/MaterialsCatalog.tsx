@@ -35,6 +35,7 @@ import {
 import { useMaterials } from '@/hooks/useMaterials';
 import MaterialForm from './MaterialForm';
 import { Material } from '@/types/materials';
+import { useAuth } from '@/contexts/AuthContext';
 
 const MaterialsCatalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,6 +46,10 @@ const MaterialsCatalog = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const { materials, loading, fetchMaterials, deleteMaterial } = useMaterials();
+  const { hasPermission } = useAuth();
+
+  const canEditMaterials = hasPermission('insumos', 'edit');
+  const canDeleteMaterials = hasPermission('insumos', 'delete');
 
   // Obtener categorías únicas para el filtro
   const categories = React.useMemo(() => {
@@ -104,12 +109,16 @@ const MaterialsCatalog = () => {
   };
 
   const handleEditMaterial = (material: Material) => {
-    setEditingMaterial(material);
+    if (canEditMaterials) {
+      setEditingMaterial(material);
+    }
   };
 
   const handleDeleteClick = (material: Material) => {
-    setDeletingMaterial(material);
-    setShowDeleteDialog(true);
+    if (canDeleteMaterials) {
+      setDeletingMaterial(material);
+      setShowDeleteDialog(true);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -217,7 +226,9 @@ const MaterialsCatalog = () => {
                   <TableHead>Estado</TableHead>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Costo Unitario</TableHead>
-                  <TableHead>Acciones</TableHead>
+                  {(canEditMaterials || canDeleteMaterials) && (
+                    <TableHead>Acciones</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -266,46 +277,52 @@ const MaterialsCatalog = () => {
                           : 'No definido'
                         }
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleEditMaterial(material)}
-                                  disabled={loading}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Editar material</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                      {(canEditMaterials || canDeleteMaterials) && (
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            {canEditMaterials && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => handleEditMaterial(material)}
+                                      disabled={loading}
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Editar material</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
 
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="text-red-500 hover:text-red-700"
-                                  onClick={() => handleDeleteClick(material)}
-                                  disabled={loading}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Eliminar material</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      </TableCell>
+                            {canDeleteMaterials && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="text-red-500 hover:text-red-700"
+                                      onClick={() => handleDeleteClick(material)}
+                                      disabled={loading}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Eliminar material</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -346,7 +363,7 @@ const MaterialsCatalog = () => {
       </Card>
 
       {/* Modal de Edición */}
-      {editingMaterial && (
+      {editingMaterial && canEditMaterials && (
         <MaterialForm 
           material={editingMaterial} 
           onClose={handleCloseEditModal} 
