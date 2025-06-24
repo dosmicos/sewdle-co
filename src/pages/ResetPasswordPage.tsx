@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Loader2, Building2, Eye, EyeOff, CheckCircle } from 'lucide-react';
-import { useToast } = from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 const ResetPasswordPage = () => {
   const [password, setPassword] = useState('');
