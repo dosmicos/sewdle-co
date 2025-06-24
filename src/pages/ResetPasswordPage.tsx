@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Loader2, Building2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Loader2, Building2, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const ResetPasswordPage = () => {
@@ -15,23 +15,65 @@ const ResetPasswordPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [hasValidToken, setHasValidToken] = useState(false);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Verificar si hay un token de reset en la URL
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    
-    if (accessToken && refreshToken) {
-      // Establecer la sesión con los tokens de la URL
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-    }
-  }, [searchParams]);
+    const checkAndSetSession = async () => {
+      console.log('Checking URL parameters...');
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
+      const type = searchParams.get('type');
+      
+      console.log('URL params:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
+
+      if (accessToken && refreshToken && type === 'recovery') {
+        try {
+          console.log('Setting session with tokens...');
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            console.error('Error setting session:', error);
+            toast({
+              title: "Error",
+              description: "El enlace de recuperación es inválido o ha expirado",
+              variant: "destructive",
+            });
+            setHasValidToken(false);
+          } else {
+            console.log('Session set successfully:', data);
+            setHasValidToken(true);
+          }
+        } catch (error) {
+          console.error('Exception setting session:', error);
+          toast({
+            title: "Error",
+            description: "Error al procesar el enlace de recuperación",
+            variant: "destructive",
+          });
+          setHasValidToken(false);
+        }
+      } else {
+        console.log('Missing required parameters');
+        toast({
+          title: "Error",
+          description: "Enlace de recuperación inválido. Por favor solicita un nuevo enlace.",
+          variant: "destructive",
+        });
+        setHasValidToken(false);
+      }
+      
+      setIsCheckingToken(false);
+    };
+
+    checkAndSetSession();
+  }, [searchParams, toast]);
 
   const validatePassword = (password: string) => {
     if (password.length < 6) {
@@ -64,12 +106,17 @@ const ResetPasswordPage = () => {
 
     setIsLoading(true);
     try {
+      console.log('Updating password...');
       const { error } = await supabase.auth.updateUser({
         password: password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating password:', error);
+        throw error;
+      }
 
+      console.log('Password updated successfully');
       setIsSuccess(true);
       toast({
         title: "Contraseña actualizada",
@@ -92,6 +139,55 @@ const ResetPasswordPage = () => {
     }
   };
 
+  // Mostrar spinner mientras verifica el token
+  if (isCheckingToken) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-white animate-spin" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Verificando enlace...</h1>
+              <p className="text-sm text-gray-600">
+                Por favor espera mientras verificamos tu enlace de recuperación
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar error si el token no es válido
+  if (!hasValidToken) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-red-500 rounded-2xl flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-white" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Enlace inválido</h1>
+              <p className="text-sm text-gray-600">
+                El enlace de recuperación es inválido o ha expirado. Por favor solicita un nuevo enlace.
+              </p>
+            </div>
+            <Button 
+              onClick={() => navigate('/auth')} 
+              className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-all duration-200"
+            >
+              Volver al inicio
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar pantalla de éxito
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -112,6 +208,7 @@ const ResetPasswordPage = () => {
     );
   }
 
+  // Mostrar formulario de cambio de contraseña
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-sm space-y-6">

@@ -32,14 +32,22 @@ const PasswordRecoveryModal = ({ isOpen, onClose }: PasswordRecoveryModalProps) 
 
     setIsLoading(true);
     try {
+      // Use the current origin to build the redirect URL
       const redirectUrl = `${window.location.origin}/reset-password`;
+      
+      console.log('Sending password reset email to:', email);
+      console.log('Redirect URL:', redirectUrl);
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error sending reset email:', error);
+        throw error;
+      }
 
+      console.log('Password reset email sent successfully');
       setEmailSent(true);
       toast({
         title: "Email enviado",
