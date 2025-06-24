@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
 import { useUsers } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
+import { useUserTracking } from '@/hooks/useUserTracking';
 
 const UsersRolesPage = () => {
   const [showUserModal, setShowUserModal] = useState(false);
@@ -20,6 +21,7 @@ const UsersRolesPage = () => {
   const [userFilter, setUserFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [lastAccessData, setLastAccessData] = useState<Record<string, string>>({});
 
   const { 
     users, 
@@ -36,6 +38,30 @@ const UsersRolesPage = () => {
     updateRole, 
     deleteRole 
   } = useRoles();
+
+  const { getLastAccess } = useUserTracking();
+
+  // Cargar información de último acceso para todos los usuarios
+  useEffect(() => {
+    const loadLastAccessData = async () => {
+      if (users.length > 0) {
+        const accessPromises = users.map(async (user) => {
+          const lastAccess = await getLastAccess(user.id);
+          return { userId: user.id, lastAccess };
+        });
+        
+        const accessResults = await Promise.all(accessPromises);
+        const accessMap = accessResults.reduce((acc, { userId, lastAccess }) => {
+          acc[userId] = lastAccess;
+          return acc;
+        }, {} as Record<string, string>);
+        
+        setLastAccessData(accessMap);
+      }
+    };
+
+    loadLastAccessData();
+  }, [users, getLastAccess]);
 
   const activeUsers = users.filter(user => user.status === 'active').length;
   const inactiveUsers = users.filter(user => user.status === 'inactive').length;
@@ -228,20 +254,21 @@ const UsersRolesPage = () => {
                 <TableBody>
                   {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell className="font-medium">{user.name || 'Sin nombre'}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Badge 
                           variant={user.role === 'Sin Rol' ? 'destructive' : 'outline'}
+                          className={user.role === 'Sin Rol' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : ''}
                         >
-                          {user.role}
+                          {user.role || 'Sin Rol'}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {user.workshopName ? (
                           <Badge variant="secondary">{user.workshopName}</Badge>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-400">Sin taller</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -250,9 +277,9 @@ const UsersRolesPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.lastLogin ? user.lastLogin : (
-                          <span className="text-yellow-600">Nunca</span>
-                        )}
+                        <span className={lastAccessData[user.id] === 'Nunca' ? 'text-yellow-600' : 'text-gray-600'}>
+                          {lastAccessData[user.id] || 'Cargando...'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Button
@@ -265,6 +292,13 @@ const UsersRolesPage = () => {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {filteredUsers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                        No se encontraron usuarios que coincidan con los filtros aplicados
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

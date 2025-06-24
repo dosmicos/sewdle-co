@@ -27,7 +27,7 @@ export const useUsers = () => {
       setLoading(true);
       setError(null);
 
-      // Obtener usuarios de auth junto con sus perfiles y roles (LEFT JOIN para incluir usuarios sin roles)
+      // Obtener todos los perfiles con sus roles y talleres usando JOINs explícitos
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -35,34 +35,39 @@ export const useUsers = () => {
           name,
           email,
           created_at,
-          user_roles (
+          user_roles!left (
             workshop_id,
-            roles (
+            roles!inner (
               name
             )
+          ),
+          workshops!user_roles_workshop_id_fkey (
+            id,
+            name
           )
         `);
 
       if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
         throw profilesError;
       }
 
-      // Obtener talleres para mapear nombres
-      const { data: workshops } = await supabase
-        .from('workshops')
-        .select('id, name');
-
-      const workshopMap = workshops?.reduce((acc, workshop) => {
-        acc[workshop.id] = workshop.name;
-        return acc;
-      }, {} as Record<string, string>) || {};
+      console.log('Profiles data received:', profiles);
 
       // Transformar datos al formato esperado
       const formattedUsers: User[] = profiles?.map((profile: any) => {
-        // Manejar usuarios sin roles asignados
+        console.log('Processing profile:', profile);
+        
+        // Obtener rol del usuario
         const userRole = profile.user_roles?.[0];
         const roleName = userRole?.roles?.name || 'Sin Rol';
+        
+        // Obtener información del taller
+        const workshop = profile.workshops?.[0];
         const workshopId = userRole?.workshop_id;
+        const workshopName = workshop?.name;
+        
+        console.log('User role info:', { userRole, roleName, workshop, workshopId, workshopName });
         
         return {
           id: profile.id,
@@ -70,8 +75,8 @@ export const useUsers = () => {
           email: profile.email,
           role: roleName,
           workshopId: workshopId,
-          workshopName: workshopId ? workshopMap[workshopId] : undefined,
-          status: 'active' as const,
+          workshopName: workshopName,
+          status: 'active' as const, // Por defecto activo
           requiresPasswordChange: false, // TODO: Implementar lógica real
           createdAt: profile.created_at,
           lastLogin: undefined, // TODO: Implementar seguimiento de último login
@@ -79,6 +84,7 @@ export const useUsers = () => {
         };
       }) || [];
 
+      console.log('Formatted users:', formattedUsers);
       setUsers(formattedUsers);
     } catch (err: any) {
       console.error('Error fetching users:', err);
