@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -155,7 +154,7 @@ const SuppliesDashboard = () => {
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2 text-black">Cargando dashboard...</h3>
             <p className="text-gray-600">
-              {isAdmin ? 'Obteniendo estadísticas generales de insumos' : `Obteniendo estadísticas de ${currentUser?.workshopName || 'tu taller'}`}
+              {isAdmin ? 'Obteniendo estadísticas generales de insumos' : 'Obteniendo estadísticas de tu taller'}
             </p>
           </div>
         </div>
@@ -188,7 +187,7 @@ const SuppliesDashboard = () => {
       {!isAdmin && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-blue-900 mb-1">
-            Dashboard de Insumos - {currentUser?.workshopName || 'Tu Taller'}
+            Dashboard de Insumos - Tu Taller
           </h2>
           <p className="text-sm text-blue-700">
             Vista de los materiales y entregas específicos de tu taller
@@ -197,7 +196,7 @@ const SuppliesDashboard = () => {
       )}
 
       {/* Estadísticas Generales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${currentUser?.role !== 'Taller' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6`}>
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">
@@ -239,20 +238,23 @@ const SuppliesDashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-800">
-              {isAdmin ? 'Valor del Stock' : 'Valor Estimado'}
-            </CardTitle>
-            <BarChart3 className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-900">
-              ${materialStats.totalStockValue.toLocaleString()}
-            </div>
-            <p className="text-xs text-purple-700">Valor total del inventario</p>
-          </CardContent>
-        </Card>
+        {/* Ocultar esta tarjeta para usuarios con rol "Taller" */}
+        {currentUser?.role !== 'Taller' && (
+          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-800">
+                {isAdmin ? 'Valor del Stock' : 'Valor Estimado'}
+              </CardTitle>
+              <BarChart3 className="h-4 w-4 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-900">
+                ${materialStats.totalStockValue.toLocaleString()}
+              </div>
+              <p className="text-xs text-purple-700">Valor total del inventario</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Estadísticas de Consumo */}
@@ -325,7 +327,7 @@ const SuppliesDashboard = () => {
           <div className="text-center">
             <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2 text-black">
-              {isAdmin ? '¡Bienvenido al módulo de Insumos!' : `¡Bienvenido a tus insumos!`}
+              {isAdmin ? '¡Bienvenido al módulo de Insumos!' : '¡Bienvenido a tus insumos!'}
             </h3>
             <p className="text-gray-600 mb-4">
               {isAdmin 
