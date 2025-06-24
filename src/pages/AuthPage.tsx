@@ -78,18 +78,6 @@ const AuthPage = () => {
     }
   }, [email, password, name, isSignUp, login, toast]);
 
-  const fillAdminCredentials = useCallback(() => {
-    setEmail('admin@textilflow.com');
-    setPassword('admin123456');
-    setIsSignUp(false);
-  }, []);
-
-  const fillWorkshopCredentials = useCallback(() => {
-    setEmail('taller1@ejemplo.com');
-    setPassword('password123');
-    setIsSignUp(false);
-  }, []);
-
   const toggleMode = useCallback(() => {
     setIsSignUp(!isSignUp);
     setName('');
@@ -194,41 +182,6 @@ const AuthPage = () => {
               }
             </button>
           </div>
-
-          {/* Test users - only show in login mode */}
-          {!isSignUp && (
-            <div className="space-y-4">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-gray-200" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-3 text-gray-500">Usuarios de prueba</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={fillAdminCredentials}
-                  className="h-10 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 rounded-xl transition-all duration-200"
-                  disabled={isLoading}
-                >
-                  Admin
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={fillWorkshopCredentials}
-                  className="h-10 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 rounded-xl transition-all duration-200"
-                  disabled={isLoading}
-                >
-                  Taller
-                </Button>
-              </div>
-            </div>
-          )}
         </Card>
 
         {/* Footer */}

@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Loader2, User, Building2 } from 'lucide-react';
+import { Loader2, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
 
@@ -40,16 +40,6 @@ const LoginPage = () => {
       setIsLoading(false);
     }
   }, [email, password, login, toast]);
-
-  const fillAdminCredentials = useCallback(() => {
-    setEmail('admin@textilflow.com');
-    setPassword('admin123456');
-  }, []);
-
-  const fillWorkshopCredentials = useCallback(() => {
-    setEmail('taller1@ejemplo.com');
-    setPassword('password123');
-  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -114,41 +104,6 @@ const LoginPage = () => {
               )}
             </Button>
           </form>
-
-          {/* Test users */}
-          <div className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-3 text-gray-500">Usuarios de prueba</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={fillAdminCredentials}
-                className="h-10 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 rounded-xl transition-all duration-200"
-                disabled={isLoading}
-              >
-                <User className="w-4 h-4 mr-2" />
-                Admin
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={fillWorkshopCredentials}
-                className="h-10 border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 rounded-xl transition-all duration-200"
-                disabled={isLoading}
-              >
-                <Building2 className="w-4 h-4 mr-2" />
-                Taller
-              </Button>
-            </div>
-          </div>
         </Card>
 
         {/* Footer */}
