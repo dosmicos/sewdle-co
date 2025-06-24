@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +11,34 @@ export const useOrderActions = () => {
     try {
       console.log('Deleting order:', orderId);
 
-      // Eliminar archivos de la orden
+      // CORRECCIÓN: Eliminar en el orden correcto para evitar errores de FK
+      
+      // 1. Primero eliminar delivery_items (depende de deliveries)
+      const { error: deliveryItemsError } = await supabase
+        .from('delivery_items')
+        .delete()
+        .in('delivery_id', 
+          supabase
+            .from('deliveries')
+            .select('id')
+            .eq('order_id', orderId)
+        );
+
+      if (deliveryItemsError) {
+        console.error('Error deleting delivery items:', deliveryItemsError);
+      }
+
+      // 2. Eliminar deliveries (depende de orders)
+      const { error: deliveriesError } = await supabase
+        .from('deliveries')
+        .delete()
+        .eq('order_id', orderId);
+
+      if (deliveriesError) {
+        console.error('Error deleting deliveries:', deliveriesError);
+      }
+
+      // 3. Eliminar archivos de la orden
       const { error: filesError } = await supabase
         .from('order_files')
         .delete()
@@ -22,7 +48,7 @@ export const useOrderActions = () => {
         console.error('Error deleting order files:', filesError);
       }
 
-      // Eliminar insumos de la orden
+      // 4. Eliminar insumos de la orden
       const { error: suppliesError } = await supabase
         .from('order_supplies')
         .delete()
@@ -32,7 +58,7 @@ export const useOrderActions = () => {
         console.error('Error deleting order supplies:', suppliesError);
       }
 
-      // Eliminar items de la orden
+      // 5. Eliminar items de la orden
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
@@ -42,7 +68,7 @@ export const useOrderActions = () => {
         console.error('Error deleting order items:', itemsError);
       }
 
-      // Eliminar asignaciones de taller
+      // 6. Eliminar asignaciones de taller
       const { error: assignmentsError } = await supabase
         .from('workshop_assignments')
         .delete()
@@ -52,7 +78,7 @@ export const useOrderActions = () => {
         console.error('Error deleting workshop assignments:', assignmentsError);
       }
 
-      // Finalmente eliminar la orden
+      // 7. Finalmente eliminar la orden
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
@@ -73,7 +99,7 @@ export const useOrderActions = () => {
       console.error('Error deleting order:', error);
       toast({
         title: "Error al eliminar la orden",
-        description: "Hubo un problema al eliminar la orden de producción.",
+        description: "Hubo un problema al eliminar la orden de producción. Verifique que no tenga entregas asociadas.",
         variant: "destructive",
       });
       return false;

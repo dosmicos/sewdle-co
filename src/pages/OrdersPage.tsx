@@ -13,6 +13,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { 
   Plus, 
   Package, 
   Calendar, 
@@ -44,6 +54,8 @@ const OrdersPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWorkshop, setSelectedWorkshop] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
 
   // Verificar si el usuario puede crear órdenes
   const canCreateOrders = hasPermission('orders', 'create');
@@ -105,12 +117,19 @@ const OrdersPage = () => {
     refetch();
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar esta orden? Esta acción no se puede deshacer.')) {
-      const success = await deleteOrder(orderId);
+  const handleDeleteOrder = (order: any) => {
+    setOrderToDelete(order);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (orderToDelete) {
+      const success = await deleteOrder(orderToDelete.id);
       if (success) {
         refetch();
       }
+      setShowDeleteDialog(false);
+      setOrderToDelete(null);
     }
   };
 
@@ -322,6 +341,28 @@ const OrdersPage = () => {
           onDelete={handleDeleteOrder}
         />
       )}
+
+      {/* AlertDialog para confirmación de eliminación */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar la orden "{orderToDelete?.order_number}"? 
+              Esta acción no se puede deshacer y eliminará todos los datos asociados incluyendo entregas, items y asignaciones.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteOrder}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -476,7 +517,7 @@ const OrderCard = ({
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => onDelete(order.id)}
+              onClick={() => onDelete(order)}
               className="flex items-center gap-2 px-4 py-2 border-red-200 text-red-600 hover:bg-red-50 rounded-xl"
             >
               <Trash2 className="w-4 h-4" />
