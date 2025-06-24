@@ -17,6 +17,28 @@ interface MaterialDeliveryData {
   supportDocument?: File;
 }
 
+interface MaterialDeliveryWithBalance {
+  id: string;
+  material_id: string;
+  workshop_id: string;
+  order_id?: string;
+  delivery_date: string;
+  delivered_by?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  total_delivered: number;
+  total_consumed: number;
+  real_balance: number;
+  material_name: string;
+  material_sku: string;
+  material_unit: string;
+  material_color?: string;
+  material_category: string;
+  workshop_name: string;
+  order_number?: string;
+}
+
 export const useMaterialDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -121,41 +143,22 @@ export const useMaterialDeliveries = () => {
     }
   };
 
-  const fetchMaterialDeliveries = async () => {
+  const fetchMaterialDeliveries = async (): Promise<MaterialDeliveryWithBalance[]> => {
     setLoading(true);
     try {
-      console.log('Fetching material deliveries with optimized single query...');
+      console.log('Fetching material deliveries with corrected balance calculation...');
       
-      // Single optimized query using Supabase's foreign key relationships
+      // Usar la nueva función que calcula correctamente el balance por taller
       const { data: deliveries, error } = await supabase
-        .from('material_deliveries')
-        .select(`
-          *,
-          materials:material_id (
-            id,
-            name,
-            sku,
-            unit,
-            category,
-            color
-          ),
-          workshops:workshop_id (
-            id,
-            name
-          ),
-          orders:order_id (
-            id,
-            order_number
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .rpc('get_material_deliveries_with_real_balance')
+        .order('delivery_date', { ascending: false });
 
       if (error) {
         console.error('Error fetching material deliveries:', error);
         throw error;
       }
 
-      console.log('Material deliveries fetched successfully:', deliveries?.length || 0);
+      console.log('Material deliveries with real balance fetched:', deliveries?.length || 0);
       return deliveries || [];
 
     } catch (error: any) {

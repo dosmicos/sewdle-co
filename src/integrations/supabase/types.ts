@@ -947,6 +947,30 @@ export type Database = {
           rejected_deliveries: number
         }[]
       }
+      get_material_deliveries_with_real_balance: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          material_id: string
+          workshop_id: string
+          order_id: string
+          delivery_date: string
+          delivered_by: string
+          notes: string
+          created_at: string
+          updated_at: string
+          total_delivered: number
+          total_consumed: number
+          real_balance: number
+          material_name: string
+          material_sku: string
+          material_unit: string
+          material_color: string
+          material_category: string
+          workshop_name: string
+          order_number: string
+        }[]
+      }
       get_materials_with_stock_status: {
         Args: Record<PropertyKey, never>
         Returns: {
