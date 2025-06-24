@@ -8,16 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText, AlertCircle } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DeliveryDetailsProps {
   delivery: any;
   onBack: (shouldRefresh?: boolean) => void;
 }
-
-// Mock user data for role checking
-const currentUser = {
-  role: 'qc_leader' // This would come from your auth context
-};
 
 const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) => {
   const [deliveryData, setDeliveryData] = useState(null);
@@ -27,6 +23,10 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     generalNotes: ''
   });
   const { fetchDeliveryById, processQualityReview, loading } = useDeliveries();
+  const { hasPermission } = useAuth();
+
+  // Check if user has quality control permissions
+  const canDoQualityControl = hasPermission('deliveries', 'quality_control');
 
   useEffect(() => {
     if (delivery?.id) {
@@ -316,7 +316,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     );
   }
 
-  const isQCLeader = currentUser.role === 'qc_leader';
   const summaryStats = calculateSummaryStats();
   const qualityTotals = calculateQualityTotals();
   const quantityMismatches = getQuantityMismatches();
@@ -520,7 +519,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Control de Calidad</h3>
             
-            {isQCLeader && !isDeliveryProcessed ? (
+            {canDoQualityControl && !isDeliveryProcessed ? (
               <div className="space-y-4">
                 {/* Mostrar advertencia si ya está sincronizada */}
                 {deliveryData.synced_to_shopify && (
@@ -550,20 +549,12 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                       <TableBody>
                         {deliveryData.delivery_items?.map((item) => {
                           const productInfo = getProductInfo(item);
-                          const deliveryItemId = item.id; // Usar el ID real del delivery_item
+                          const deliveryItemId = item.id;
                           const variantData = qualityData.variants[deliveryItemId];
                           const approved = variantData?.approved || 0;
                           const defective = variantData?.defective || 0;
                           const reviewed = approved + defective;
                           const delivered = item.quantity_delivered;
-                          
-                          console.log('Rendering quality row for delivery_item:', deliveryItemId, {
-                            productInfo,
-                            variantData,
-                            approved,
-                            defective,
-                            delivered
-                          });
                           
                           return (
                             <TableRow key={deliveryItemId}>
@@ -732,7 +723,8 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             ) : (
               <div className="text-center py-8 text-gray-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
-                <p>Solo el Líder de Calidad puede realizar inspecciones</p>
+                <p>No tienes permisos para realizar control de calidad</p>
+                <p className="text-sm mt-2">Solo usuarios con rol de Control de Calidad o Administrador pueden realizar inspecciones</p>
               </div>
             )}
           </Card>
