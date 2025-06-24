@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -13,9 +14,11 @@ import {
 } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import { useUserContext } from '@/hooks/useUserContext';
 import WorkshopInventoryTable from './WorkshopInventoryTable';
 
 const SuppliesDashboard = () => {
+  const { isAdmin, currentUser } = useUserContext();
   const [deliveryStats, setDeliveryStats] = useState({
     totalDeliveries: 0,
     recentDeliveries: 0,
@@ -55,7 +58,7 @@ const SuppliesDashboard = () => {
       setLoading(true);
       setError(null);
 
-      // Cargar entregas de materiales
+      // Cargar entregas de materiales (ya filtradas por el hook)
       const deliveries = await fetchMaterialDeliveries();
       
       if (deliveries && Array.isArray(deliveries)) {
@@ -112,7 +115,7 @@ const SuppliesDashboard = () => {
     }
   };
 
-  // Calcular estadísticas de materiales
+  // Calcular estadísticas de materiales (solo mostrar materiales relevantes para talleres)
   const materialStats = React.useMemo(() => {
     if (!materials || materials.length === 0) {
       return {
@@ -123,6 +126,8 @@ const SuppliesDashboard = () => {
       };
     }
 
+    // Para talleres, mostrar solo estadísticas globales simplificadas
+    // (los materiales no están filtrados por taller en la tabla materials)
     const totalMaterials = materials.length;
     const lowStockMaterials = materials.filter(m => 
       m.current_stock <= m.min_stock_alert && m.current_stock > 0
@@ -149,7 +154,9 @@ const SuppliesDashboard = () => {
           <div className="text-center">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2 text-black">Cargando dashboard...</h3>
-            <p className="text-gray-600">Obteniendo estadísticas de insumos</p>
+            <p className="text-gray-600">
+              {isAdmin ? 'Obteniendo estadísticas generales de insumos' : `Obteniendo estadísticas de ${currentUser?.workshopName || 'tu taller'}`}
+            </p>
           </div>
         </div>
       </div>
@@ -177,22 +184,38 @@ const SuppliesDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header contextual */}
+      {!isAdmin && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h2 className="text-lg font-semibold text-blue-900 mb-1">
+            Dashboard de Insumos - {currentUser?.workshopName || 'Tu Taller'}
+          </h2>
+          <p className="text-sm text-blue-700">
+            Vista de los materiales y entregas específicos de tu taller
+          </p>
+        </div>
+      )}
+
       {/* Estadísticas Generales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-800">Total Materiales</CardTitle>
+            <CardTitle className="text-sm font-medium text-blue-800">
+              {isAdmin ? 'Total Materiales' : 'Materiales en Catálogo'}
+            </CardTitle>
             <Package className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-900">{materialStats.totalMaterials}</div>
-            <p className="text-xs text-blue-700">Materiales en catálogo</p>
+            <p className="text-xs text-blue-700">Materiales disponibles</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-800">Entregas Totales</CardTitle>
+            <CardTitle className="text-sm font-medium text-green-800">
+              {isAdmin ? 'Entregas Totales' : 'Mis Entregas'}
+            </CardTitle>
             <TruckIcon className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -218,7 +241,9 @@ const SuppliesDashboard = () => {
 
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-800">Valor del Stock</CardTitle>
+            <CardTitle className="text-sm font-medium text-purple-800">
+              {isAdmin ? 'Valor del Stock' : 'Valor Estimado'}
+            </CardTitle>
             <BarChart3 className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
@@ -234,7 +259,9 @@ const SuppliesDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-black">Total Consumido</CardTitle>
+            <CardTitle className="text-sm font-medium text-black">
+              {isAdmin ? 'Total Consumido' : 'Mi Consumo'}
+            </CardTitle>
             <CheckCircle className="h-4 w-4 text-gray-600" />
           </CardHeader>
           <CardContent>
@@ -245,7 +272,9 @@ const SuppliesDashboard = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-black">Stock Restante</CardTitle>
+            <CardTitle className="text-sm font-medium text-black">
+              {isAdmin ? 'Stock Restante' : 'Mi Stock Disponible'}
+            </CardTitle>
             <Clock className="h-4 w-4 text-gray-600" />
           </CardHeader>
           <CardContent>
@@ -266,11 +295,11 @@ const SuppliesDashboard = () => {
         </Card>
       </div>
 
-      {/* NUEVA SECCIÓN: Inventario por Taller */}
+      {/* Inventario por Taller (filtrado) */}
       <WorkshopInventoryTable deliveries={deliveriesData} />
 
-      {/* Alertas de Stock */}
-      {materialStats.outOfStockMaterials > 0 && (
+      {/* Alertas de Stock (solo para admin) */}
+      {isAdmin && materialStats.outOfStockMaterials > 0 && (
         <Alert className="border-red-200 bg-red-50">
           <AlertTriangle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
@@ -280,7 +309,7 @@ const SuppliesDashboard = () => {
         </Alert>
       )}
 
-      {materialStats.lowStockMaterials > 0 && (
+      {isAdmin && materialStats.lowStockMaterials > 0 && (
         <Alert className="border-yellow-200 bg-yellow-50">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
@@ -291,13 +320,18 @@ const SuppliesDashboard = () => {
       )}
 
       {/* Mensaje informativo si no hay datos */}
-      {materialStats.totalMaterials === 0 && deliveryStats.totalDeliveries === 0 && (
+      {deliveryStats.totalDeliveries === 0 && (
         <Card className="p-8">
           <div className="text-center">
             <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2 text-black">¡Bienvenido al módulo de Insumos!</h3>
+            <h3 className="text-lg font-semibold mb-2 text-black">
+              {isAdmin ? '¡Bienvenido al módulo de Insumos!' : `¡Bienvenido a tus insumos!`}
+            </h3>
             <p className="text-gray-600 mb-4">
-              Aún no tienes materiales o entregas registradas. Comienza agregando materiales al catálogo.
+              {isAdmin 
+                ? 'Aún no tienes materiales o entregas registradas. Comienza agregando materiales al catálogo.'
+                : 'Aún no tienes entregas de materiales registradas para tu taller.'
+              }
             </p>
           </div>
         </Card>

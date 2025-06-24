@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useUserContext } from '@/hooks/useUserContext';
 
 interface MaterialDeliveryData {
   workshopId: string;
@@ -42,6 +43,7 @@ interface MaterialDeliveryWithBalance {
 export const useMaterialDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { workshopFilter, isAdmin } = useUserContext();
 
   const createMaterialDelivery = async (deliveryData: MaterialDeliveryData) => {
     setLoading(true);
@@ -146,20 +148,40 @@ export const useMaterialDeliveries = () => {
   const fetchMaterialDeliveries = async (): Promise<MaterialDeliveryWithBalance[]> => {
     setLoading(true);
     try {
-      console.log('Fetching material deliveries with corrected balance calculation...');
+      console.log('Fetching material deliveries with workshop filter:', { workshopFilter, isAdmin });
       
-      // Usar la nueva función que calcula correctamente el balance por taller
-      const { data: deliveries, error } = await supabase
-        .rpc('get_material_deliveries_with_real_balance')
-        .order('delivery_date', { ascending: false });
+      // Construir la consulta base
+      let query = supabase.rpc('get_material_deliveries_with_real_balance');
+      
+      // Si no es admin y tiene workshopFilter, filtrar por taller
+      if (!isAdmin && workshopFilter) {
+        // Filtrar los resultados por workshop_id después de obtenerlos
+        const { data: allDeliveries, error } = await query.order('delivery_date', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching material deliveries:', error);
-        throw error;
+        if (error) {
+          console.error('Error fetching material deliveries:', error);
+          throw error;
+        }
+
+        // Filtrar manualmente por workshop_id
+        const filteredDeliveries = allDeliveries?.filter(delivery => 
+          delivery.workshop_id === workshopFilter
+        ) || [];
+
+        console.log('Material deliveries filtered by workshop:', filteredDeliveries.length, 'of', allDeliveries?.length || 0);
+        return filteredDeliveries;
+      } else {
+        // Si es admin, mostrar todos
+        const { data: deliveries, error } = await query.order('delivery_date', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching material deliveries:', error);
+          throw error;
+        }
+
+        console.log('Material deliveries (admin view):', deliveries?.length || 0);
+        return deliveries || [];
       }
-
-      console.log('Material deliveries with real balance fetched:', deliveries?.length || 0);
-      return deliveries || [];
 
     } catch (error: any) {
       console.error('Error in fetchMaterialDeliveries:', error);
