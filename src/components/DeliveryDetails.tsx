@@ -362,7 +362,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                 <TableHead className="text-xs text-center">Cantidad Total</TableHead>
                 <TableHead className="text-xs text-center">Aprobadas</TableHead>
                 <TableHead className="text-xs text-center">Defectuosas</TableHead>
-                {isDeliveryProcessed && <TableHead className="text-xs">Estado</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -398,11 +397,6 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                     <TableCell className="text-center py-2">
                       <span className="font-medium text-red-600">{item.quantity_defective || 0}</span>
                     </TableCell>
-                    {isDeliveryProcessed && (
-                      <TableCell className="py-2">
-                        {renderItemStatusBadge(item.quality_status, item.quality_notes)}
-                      </TableCell>
-                    )}
                   </TableRow>
                 );
               })}
