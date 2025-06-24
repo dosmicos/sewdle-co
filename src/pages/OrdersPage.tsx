@@ -7,6 +7,7 @@ import OrderForm from '@/components/OrderForm';
 import OrderEditModal from '@/components/OrderEditModal';
 import OrderDetailsModal from '@/components/OrderDetailsModal';
 import { useOrderActions } from '@/hooks/useOrderActions';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +34,7 @@ import { useState } from 'react';
 const OrdersPage = () => {
   const { orders, loading, refetch } = useFilteredOrders();
   const { isAdmin } = useUserContext();
+  const { hasPermission } = useAuth();
   const { workshops } = useWorkshops();
   const { deleteOrder } = useOrderActions();
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -42,6 +44,13 @@ const OrdersPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWorkshop, setSelectedWorkshop] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+  // Verificar si el usuario puede crear órdenes
+  const canCreateOrders = hasPermission('orders', 'create');
+  // Verificar si el usuario puede editar órdenes
+  const canEditOrders = hasPermission('orders', 'edit');
+  // Verificar si el usuario puede eliminar órdenes
+  const canDeleteOrders = hasPermission('orders', 'delete');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -226,7 +235,7 @@ const OrdersPage = () => {
                 Actualizar
               </Button>
               
-              {isAdmin && (
+              {canCreateOrders && (
                 <Button 
                   onClick={() => setShowCreateForm(true)}
                   className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg"
@@ -240,7 +249,7 @@ const OrdersPage = () => {
         </CardContent>
       </Card>
 
-      {showCreateForm && isAdmin && (
+      {showCreateForm && canCreateOrders && (
         <OrderForm onClose={handleFormClose} />
       )}
 
@@ -281,7 +290,8 @@ const OrdersPage = () => {
               getStatusText={getStatusText}
               getWorkshopName={getWorkshopName}
               getWorkshopColor={getWorkshopColor}
-              isAdmin={isAdmin}
+              canEdit={canEditOrders}
+              canDelete={canDeleteOrders}
             />
           ))
         )}
@@ -326,7 +336,8 @@ const OrderCard = ({
   getStatusText, 
   getWorkshopName, 
   getWorkshopColor, 
-  isAdmin 
+  canEdit,
+  canDelete 
 }: any) => {
   const { stats, loading: statsLoading, error: statsError } = useOrderStats(order.id);
   
@@ -450,27 +461,27 @@ const OrderCard = ({
             <Eye className="w-4 h-4" />
             Ver
           </Button>
-          {isAdmin && (
-            <>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => onEdit(order)}
-                className="flex items-center gap-2 px-4 py-2 border-green-200 text-green-600 hover:bg-green-50 rounded-xl"
-              >
-                <Edit className="w-4 h-4" />
-                Editar
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => onDelete(order.id)}
-                className="flex items-center gap-2 px-4 py-2 border-red-200 text-red-600 hover:bg-red-50 rounded-xl"
-              >
-                <Trash2 className="w-4 h-4" />
-                Eliminar
-              </Button>
-            </>
+          {canEdit && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => onEdit(order)}
+              className="flex items-center gap-2 px-4 py-2 border-green-200 text-green-600 hover:bg-green-50 rounded-xl"
+            >
+              <Edit className="w-4 h-4" />
+              Editar
+            </Button>
+          )}
+          {canDelete && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onDelete(order.id)}
+              className="flex items-center gap-2 px-4 py-2 border-red-200 text-red-600 hover:bg-red-50 rounded-xl"
+            >
+              <Trash2 className="w-4 h-4" />
+              Eliminar
+            </Button>
           )}
         </div>
       </CardContent>
