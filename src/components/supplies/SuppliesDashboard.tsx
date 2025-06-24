@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import WorkshopInventoryTable from './WorkshopInventoryTable';
 
 const SuppliesDashboard = () => {
   const [deliveryStats, setDeliveryStats] = useState({
@@ -32,7 +32,21 @@ const SuppliesDashboard = () => {
   const { materials, loading: materialsLoading } = useMaterials();
   const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
 
+  // Estado para las entregas (necesario para WorkshopInventoryTable)
+  const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
+
   useEffect(() => {
+    const loadDeliveries = async () => {
+      try {
+        const deliveries = await fetchMaterialDeliveries();
+        setDeliveriesData(deliveries || []);
+      } catch (error) {
+        console.error('Error loading deliveries for inventory:', error);
+        setDeliveriesData([]);
+      }
+    };
+
+    loadDeliveries();
     loadDashboardData();
   }, []);
 
@@ -251,6 +265,9 @@ const SuppliesDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* NUEVA SECCIÓN: Inventario por Taller */}
+      <WorkshopInventoryTable deliveries={deliveriesData} />
 
       {/* Alertas de Stock */}
       {materialStats.outOfStockMaterials > 0 && (
