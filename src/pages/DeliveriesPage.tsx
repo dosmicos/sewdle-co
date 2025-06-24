@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -13,6 +12,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -28,6 +37,8 @@ const DeliveriesPage = () => {
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deliveryToDelete, setDeliveryToDelete] = useState<any>(null);
 
   // Permission checks - using correct English module names
   const canCreateDeliveries = hasPermission('deliveries', 'create');
@@ -124,12 +135,19 @@ const DeliveriesPage = () => {
     }
   };
 
-  const handleDeleteDelivery = async (deliveryId: string, trackingNumber: string) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar la entrega ${trackingNumber}?`)) {
-      const success = await deleteDelivery(deliveryId);
+  const handleDeleteDelivery = (delivery: any) => {
+    setDeliveryToDelete(delivery);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteDelivery = async () => {
+    if (deliveryToDelete) {
+      const success = await deleteDelivery(deliveryToDelete.id);
       if (success) {
         refetch();
       }
+      setShowDeleteDialog(false);
+      setDeliveryToDelete(null);
     }
   };
 
@@ -316,6 +334,28 @@ const DeliveriesPage = () => {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* AlertDialog for delivery deletion confirmation */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar la entrega "{deliveryToDelete?.tracking_number}"? 
+              Esta acción no se puede deshacer y eliminará todos los datos asociados incluyendo los items de entrega.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteDelivery}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -329,7 +369,7 @@ const DeliveryTable = ({
 }: { 
   deliveries: any[], 
   onViewDetails: (delivery: any) => void,
-  onDeleteDelivery: (deliveryId: string, trackingNumber: string) => void,
+  onDeleteDelivery: (delivery: any) => void,
   canDeleteDeliveries: boolean
 }) => {
   const getStatusColor = (status: string) => {
@@ -429,7 +469,7 @@ const DeliveryTable = ({
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          onClick={() => onDeleteDelivery(delivery.id, delivery.tracking_number)}
+                          onClick={() => onDeleteDelivery(delivery)}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="w-4 h-4" />
