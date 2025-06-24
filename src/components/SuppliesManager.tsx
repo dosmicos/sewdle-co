@@ -48,12 +48,12 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
       const deliveries = await fetchMaterialDeliveries();
       const stock: Record<string, number> = {};
       
-      // Calcular stock disponible por material en el taller seleccionado
+      // Calcular stock disponible por material en el taller seleccionado usando el nuevo campo real_balance
       deliveries
         .filter(delivery => delivery.workshop_id === selectedWorkshop)
         .forEach(delivery => {
           const materialId = delivery.material_id;
-          const available = delivery.quantity_remaining || 0;
+          const available = delivery.real_balance || 0;
           stock[materialId] = (stock[materialId] || 0) + available;
         });
       

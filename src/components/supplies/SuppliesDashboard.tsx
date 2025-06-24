@@ -55,7 +55,7 @@ const SuppliesDashboard = () => {
         ).length;
 
         const totalMaterialsDelivered = deliveries.reduce((sum, delivery) => 
-          sum + (delivery.quantity_delivered || 0), 0
+          sum + (delivery.total_delivered || 0), 0
         );
 
         setDeliveryStats({
@@ -64,13 +64,13 @@ const SuppliesDashboard = () => {
           totalMaterialsDelivered
         });
 
-        // Calcular estadísticas de consumo
+        // Calcular estadísticas de consumo usando los nuevos campos
         const totalConsumed = deliveries.reduce((sum, delivery) => 
-          sum + (delivery.quantity_consumed || 0), 0
+          sum + (delivery.total_consumed || 0), 0
         );
 
         const remainingStock = deliveries.reduce((sum, delivery) => 
-          sum + (delivery.quantity_remaining || 0), 0
+          sum + (delivery.real_balance || 0), 0
         );
 
         const utilizationRate = totalMaterialsDelivered > 0 

@@ -27,7 +27,7 @@ export const useOrderMaterialValidation = () => {
     try {
       console.log('Validating materials for workshop:', workshopId, materials);
 
-      // Obtener stock disponible en el taller
+      // Obtener stock disponible en el taller usando el nuevo campo real_balance
       const deliveries = await fetchMaterialDeliveries();
       const workshopStock: Record<string, number> = {};
       
@@ -35,7 +35,7 @@ export const useOrderMaterialValidation = () => {
         .filter(delivery => delivery.workshop_id === workshopId)
         .forEach(delivery => {
           const materialId = delivery.material_id;
-          const available = delivery.quantity_remaining || 0;
+          const available = delivery.real_balance || 0;
           workshopStock[materialId] = (workshopStock[materialId] || 0) + available;
         });
 

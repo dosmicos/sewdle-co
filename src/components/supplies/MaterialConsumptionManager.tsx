@@ -26,9 +26,9 @@ const MaterialConsumptionManager = () => {
       const deliveries = await fetchMaterialDeliveries();
       console.log('Deliveries data received:', deliveries);
       
-      // CORRECCIÓN: Procesar solo registros de consumo (quantity_consumed > 0 y quantity_delivered = 0)
+      // CORRECCIÓN: Procesar solo registros que tienen consumo registrado (total_consumed > 0)
       const consumptions = deliveries
-        .filter(delivery => delivery.quantity_consumed > 0 && delivery.quantity_delivered === 0)
+        .filter(delivery => delivery.total_consumed > 0)
         .map(delivery => {
           console.log('Processing consumption:', delivery);
           
@@ -36,12 +36,12 @@ const MaterialConsumptionManager = () => {
             id: delivery.id,
             orderId: delivery.order_id,
             materialId: delivery.material_id,
-            materialName: delivery.materials?.name || 'Material desconocido',
+            materialName: delivery.material_name || 'Material desconocido',
             workshopId: delivery.workshop_id,
-            workshopName: delivery.workshops?.name || 'Taller desconocido',
-            quantityConsumed: delivery.quantity_consumed,
+            workshopName: delivery.workshop_name || 'Taller desconocido',
+            quantityConsumed: delivery.total_consumed,
             consumedDate: delivery.updated_at,
-            orderNumber: delivery.orders?.order_number || 'Sin orden asignada'
+            orderNumber: delivery.order_number || 'Sin orden asignada'
           };
         });
 
