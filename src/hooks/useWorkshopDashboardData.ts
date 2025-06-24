@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -58,24 +57,46 @@ export const useWorkshopDashboardData = () => {
     if (!workshopId) return;
 
     try {
-      // Fetch workshop assignments
+      console.log('Fetching stats for workshop:', workshopId);
+
+      // Fetch workshop assignments with order data (JOIN to get real order status)
       const { data: assignments, error: assignmentsError } = await supabase
         .from('workshop_assignments')
-        .select('*')
+        .select(`
+          *,
+          orders!inner(
+            id,
+            order_number,
+            status,
+            due_date,
+            created_at
+          )
+        `)
         .eq('workshop_id', workshopId);
 
       if (assignmentsError) throw assignmentsError;
 
-      const assignedOrders = assignments?.length || 0;
-      const completedOrders = assignments?.filter(a => a.status === 'completed').length || 0;
-      const activeOrders = assignments?.filter(a => a.status === 'in_progress').length || 0;
+      console.log('Raw assignments data:', assignments);
 
-      // Fetch pending deliveries for this workshop
+      // Calculate metrics based on REAL order status, not assignment status
+      const assignedOrders = assignments?.length || 0;
+      const completedOrders = assignments?.filter(a => a.orders?.status === 'completed').length || 0;
+      const activeOrders = assignments?.filter(a => 
+        a.orders?.status === 'assigned' || a.orders?.status === 'in_progress'
+      ).length || 0;
+
+      console.log('Calculated metrics:', {
+        assignedOrders,
+        completedOrders, 
+        activeOrders
+      });
+
+      // Fetch pending deliveries for this workshop (include in_quality as pending)
       const { count: pendingDeliveriesCount, error: deliveriesError } = await supabase
         .from('deliveries')
         .select('*', { count: 'exact', head: true })
         .eq('workshop_id', workshopId)
-        .eq('status', 'pending');
+        .in('status', ['pending', 'in_quality']);
 
       if (deliveriesError) throw deliveriesError;
 
@@ -106,7 +127,7 @@ export const useWorkshopDashboardData = () => {
 
         onTimeDeliveryRate = Math.round((onTimeDeliveries / deliveries.length) * 100);
 
-        // Calculate quality score
+        // Calculate quality score using new delivery_items structure
         let totalDelivered = 0;
         let totalApproved = 0;
         
@@ -122,7 +143,7 @@ export const useWorkshopDashboardData = () => {
         }
       }
 
-      setStats({
+      const finalStats = {
         assignedOrders,
         completedOrders,
         activeOrders,
@@ -130,7 +151,10 @@ export const useWorkshopDashboardData = () => {
         completionRate,
         onTimeDeliveryRate,
         qualityScore
-      });
+      };
+
+      console.log('Final stats:', finalStats);
+      setStats(finalStats);
 
     } catch (error) {
       console.error('Error fetching workshop stats:', error);
@@ -146,9 +170,16 @@ export const useWorkshopDashboardData = () => {
     if (!workshopId) return;
 
     try {
+      // Get assignments with real order data for accurate monthly progress
       const { data: assignments, error } = await supabase
         .from('workshop_assignments')
-        .select('created_at, status')
+        .select(`
+          created_at,
+          orders!inner(
+            status,
+            created_at
+          )
+        `)
         .eq('workshop_id', workshopId)
         .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString())
         .order('created_at', { ascending: true });
@@ -167,7 +198,7 @@ export const useWorkshopDashboardData = () => {
         const monthName = months[date.getMonth()];
         if (monthName) {
           monthlyStats[monthName].assigned++;
-          if (assignment.status === 'completed') {
+          if (assignment.orders?.status === 'completed') {
             monthlyStats[monthName].completed++;
           }
         }
@@ -190,9 +221,12 @@ export const useWorkshopDashboardData = () => {
     if (!workshopId) return;
 
     try {
+      // Use real order status instead of assignment status
       const { data: assignments, error } = await supabase
         .from('workshop_assignments')
-        .select('status')
+        .select(`
+          orders!inner(status)
+        `)
         .eq('workshop_id', workshopId);
 
       if (error) throw error;
@@ -204,11 +238,12 @@ export const useWorkshopDashboardData = () => {
       };
 
       assignments?.forEach(assignment => {
-        if (assignment.status === 'assigned') {
+        const orderStatus = assignment.orders?.status;
+        if (orderStatus === 'assigned') {
           statusCounts.assigned++;
-        } else if (assignment.status === 'in_progress') {
+        } else if (orderStatus === 'in_progress') {
           statusCounts.in_progress++;
-        } else if (assignment.status === 'completed') {
+        } else if (orderStatus === 'completed') {
           statusCounts.completed++;
         }
       });
