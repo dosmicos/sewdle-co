@@ -22,24 +22,26 @@ const ResetPasswordPage = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkAndSetSession = async () => {
-      console.log('Checking URL parameters...');
+    const checkRecoveryToken = async () => {
+      console.log('Checking URL parameters for recovery...');
       const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
       const type = searchParams.get('type');
       
-      console.log('URL params:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
+      console.log('URL params:', { accessToken: !!accessToken, type });
 
-      if (accessToken && refreshToken && type === 'recovery') {
+      // Para recuperación de contraseña, solo necesitamos access_token y type=recovery
+      if (accessToken && type === 'recovery') {
         try {
-          console.log('Setting session with tokens...');
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
+          console.log('Processing password recovery token...');
+          
+          // Verificar el token de recuperación usando verifyOtp
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: accessToken,
+            type: 'recovery'
           });
 
           if (error) {
-            console.error('Error setting session:', error);
+            console.error('Error verifying recovery token:', error);
             toast({
               title: "Error",
               description: "El enlace de recuperación es inválido o ha expirado",
@@ -47,11 +49,15 @@ const ResetPasswordPage = () => {
             });
             setHasValidToken(false);
           } else {
-            console.log('Session set successfully:', data);
+            console.log('Recovery token verified successfully:', data);
             setHasValidToken(true);
+            toast({
+              title: "Enlace válido",
+              description: "Ahora puedes establecer tu nueva contraseña",
+            });
           }
         } catch (error) {
-          console.error('Exception setting session:', error);
+          console.error('Exception verifying recovery token:', error);
           toast({
             title: "Error",
             description: "Error al procesar el enlace de recuperación",
@@ -60,7 +66,7 @@ const ResetPasswordPage = () => {
           setHasValidToken(false);
         }
       } else {
-        console.log('Missing required parameters');
+        console.log('Missing required parameters for recovery');
         toast({
           title: "Error",
           description: "Enlace de recuperación inválido. Por favor solicita un nuevo enlace.",
@@ -72,7 +78,7 @@ const ResetPasswordPage = () => {
       setIsCheckingToken(false);
     };
 
-    checkAndSetSession();
+    checkRecoveryToken();
   }, [searchParams, toast]);
 
   const validatePassword = (password: string) => {
@@ -223,68 +229,114 @@ const ResetPasswordPage = () => {
           </div>
         </div>
 
-        {/* Reset password form */}
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 space-y-6">
-          <form onSubmit={handlePasswordReset} className="space-y-4">
-            <div className="space-y-3">
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Nueva contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 bg-white border border-gray-300 rounded-xl px-4 py-3 pr-12 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              
-              <div className="relative">
-                <Input
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Confirmar contraseña"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-12 bg-white border border-gray-300 rounded-xl px-4 py-3 pr-12 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
+        {isCheckingToken ? (
+          <div className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-white animate-spin" />
             </div>
-
-            <Button
-              type="submit"
-              className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-all duration-200 active:scale-[0.98]"
-              disabled={isLoading}
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Verificando enlace...</h1>
+              <p className="text-sm text-gray-600">
+                Por favor espera mientras verificamos tu enlace de recuperación
+              </p>
+            </div>
+          </div>
+        ) : !hasValidToken ? (
+          <div className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-red-500 rounded-2xl flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-white" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Enlace inválido</h1>
+              <p className="text-sm text-gray-600">
+                El enlace de recuperación es inválido o ha expirado. Por favor solicita un nuevo enlace.
+              </p>
+            </div>
+            <Button 
+              onClick={() => navigate('/auth')} 
+              className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-all duration-200"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Actualizando contraseña...
-                </>
-              ) : (
-                'Actualizar contraseña'
-              )}
+              Volver al inicio
             </Button>
-          </form>
-        </Card>
+          </div>
+        ) : isSuccess ? (
+          <div className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-white" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">¡Contraseña actualizada!</h1>
+              <p className="text-sm text-gray-600">
+                Tu contraseña ha sido cambiada exitosamente. Serás redirigido al dashboard en unos segundos.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Reset password form */}
+            <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 space-y-6">
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Nueva contraseña"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-12 bg-white border border-gray-300 rounded-xl px-4 py-3 pr-12 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Confirmar contraseña"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="h-12 bg-white border border-gray-300 rounded-xl px-4 py-3 pr-12 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
 
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-xs text-gray-500">© 2024 TextilFlow. Todos los derechos reservados.</p>
-        </div>
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl transition-all duration-200 active:scale-[0.98]"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Actualizando contraseña...
+                    </>
+                  ) : (
+                    'Actualizar contraseña'
+                  )}
+                </Button>
+              </form>
+            </Card>
+
+            {/* Footer */}
+            <div className="text-center">
+              <p className="text-xs text-gray-500">© 2024 TextilFlow. Todos los derechos reservados.</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
