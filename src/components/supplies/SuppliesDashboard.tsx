@@ -38,33 +38,62 @@ const SuppliesDashboard = () => {
   // Estado para las entregas (necesario para WorkshopInventoryTable)
   const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
 
-  useEffect(() => {
-    const loadDeliveries = async () => {
-      try {
-        console.log('SuppliesDashboard - Loading deliveries...');
-        const deliveries = await fetchMaterialDeliveries();
-        console.log('SuppliesDashboard - Deliveries loaded:', deliveries?.length || 0);
-        setDeliveriesData(deliveries || []);
-      } catch (error) {
-        console.error('Error loading deliveries for inventory:', error);
-        setDeliveriesData([]);
-      }
-    };
+  // Verificar si el contexto está listo
+  const isContextReady = currentUser !== null && (isAdmin !== undefined && isDesigner !== undefined);
 
-    loadDeliveries();
-    loadDashboardData();
-  }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
+  useEffect(() => {
+    console.log('SuppliesDashboard - Context status:', {
+      isContextReady,
+      currentUser: currentUser?.id,
+      role: currentUser?.role,
+      isAdmin,
+      isDesigner
+    });
+
+    // Solo cargar datos cuando el contexto esté completamente listo
+    if (isContextReady) {
+      console.log('SuppliesDashboard - Context ready, loading data...');
+      loadDeliveries();
+      loadDashboardData();
+    }
+  }, [isContextReady, isAdmin, isDesigner]);
+
+  const loadDeliveries = async () => {
+    if (!isContextReady) {
+      console.log('SuppliesDashboard - Context not ready, skipping loadDeliveries');
+      return;
+    }
+
+    try {
+      console.log('SuppliesDashboard - Loading deliveries...');
+      const deliveries = await fetchMaterialDeliveries();
+      console.log('SuppliesDashboard - Deliveries loaded:', deliveries?.length || 0);
+      setDeliveriesData(deliveries || []);
+    } catch (error) {
+      console.error('Error loading deliveries for inventory:', error);
+      setDeliveriesData([]);
+    }
+  };
 
   const loadDashboardData = async () => {
+    if (!isContextReady) {
+      console.log('SuppliesDashboard - Context not ready, skipping loadDashboardData');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      console.log('SuppliesDashboard - Loading dashboard data with context:', { isAdmin, isDesigner });
+      console.log('SuppliesDashboard - Loading dashboard data with context:', { 
+        isAdmin, 
+        isDesigner, 
+        userRole: currentUser?.role 
+      });
 
       // Cargar entregas de materiales (ya filtradas por el hook)
       const deliveries = await fetchMaterialDeliveries();
-      console.log('SuppliesDashboard - Dashboard deliveries:', deliveries?.length || 0);
+      console.log('SuppliesDashboard - Dashboard deliveries loaded:', deliveries?.length || 0);
       
       if (deliveries && Array.isArray(deliveries)) {
         // Calcular estadísticas de entregas
@@ -164,16 +193,23 @@ const SuppliesDashboard = () => {
     };
   }, [materials]);
 
-  // Show loading while user context is not ready or data is loading
-  if (loading || materialsLoading || deliveriesLoading || currentUser === null) {
+  // Show loading while context is not ready or data is loading
+  if (!isContextReady || loading || materialsLoading || deliveriesLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2 text-black">Cargando dashboard...</h3>
+            <h3 className="text-lg font-semibold mb-2 text-black">
+              {!isContextReady ? 'Verificando permisos...' : 'Cargando dashboard...'}
+            </h3>
             <p className="text-gray-600">
-              {isAdmin || isDesigner ? 'Obteniendo estadísticas generales de insumos' : 'Obteniendo estadísticas de tu taller'}
+              {!isContextReady 
+                ? 'Obteniendo información de usuario'
+                : isAdmin || isDesigner 
+                  ? 'Obteniendo estadísticas generales de insumos' 
+                  : 'Obteniendo estadísticas de tu taller'
+              }
             </p>
           </div>
         </div>

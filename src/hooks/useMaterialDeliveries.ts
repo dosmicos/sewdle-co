@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -43,7 +42,7 @@ interface MaterialDeliveryWithBalance {
 export const useMaterialDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { workshopFilter, isAdmin, isDesigner } = useUserContext();
+  const { workshopFilter, isAdmin, isDesigner, currentUser } = useUserContext();
 
   const createMaterialDelivery = async (deliveryData: MaterialDeliveryData) => {
     setLoading(true);
@@ -149,9 +148,11 @@ export const useMaterialDeliveries = () => {
     setLoading(true);
     try {
       console.log('useMaterialDeliveries - fetchMaterialDeliveries starting with context:', { 
-        workshopFilter, 
         isAdmin, 
-        isDesigner 
+        isDesigner,
+        workshopFilter,
+        currentUserRole: currentUser?.role,
+        currentUserId: currentUser?.id
       });
       
       // Llamar directamente a la función RPC
@@ -166,18 +167,28 @@ export const useMaterialDeliveries = () => {
 
       console.log('useMaterialDeliveries - Raw deliveries from RPC:', deliveries?.length || 0);
 
-      // Aplicar filtrado según el rol del usuario
+      // Aplicar filtrado según el rol del usuario - CORREGIDO
       let filteredDeliveries = deliveries || [];
 
-      // Si no es admin NI diseñador y tiene workshopFilter, filtrar por taller
-      if (!isAdmin && !isDesigner && workshopFilter) {
+      // Solo filtrar por taller si NO es admin NI diseñador Y tiene workshopFilter
+      const shouldFilterByWorkshop = !isAdmin && !isDesigner && workshopFilter;
+      
+      console.log('useMaterialDeliveries - Filtering logic:', {
+        shouldFilterByWorkshop,
+        isAdmin,
+        isDesigner,
+        workshopFilter,
+        userRole: currentUser?.role
+      });
+
+      if (shouldFilterByWorkshop) {
         console.log('useMaterialDeliveries - Filtering by workshop for workshop user:', workshopFilter);
         filteredDeliveries = deliveries?.filter(delivery => 
           delivery.workshop_id === workshopFilter
         ) || [];
         console.log('useMaterialDeliveries - Filtered deliveries for workshop:', filteredDeliveries.length);
       } else {
-        console.log('useMaterialDeliveries - No filtering needed (admin or designer), showing all deliveries');
+        console.log('useMaterialDeliveries - No filtering needed, showing all deliveries for admin/designer');
       }
 
       console.log('useMaterialDeliveries - Final deliveries returned:', filteredDeliveries.length);
