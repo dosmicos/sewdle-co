@@ -20,7 +20,11 @@ const MaterialConsumptionManager = () => {
   const { isAdmin, isDesigner, currentUser } = useUserContext();
 
   useEffect(() => {
-    console.log('MaterialConsumptionManager - Component mounted with context:', { isAdmin, isDesigner, currentUser?.role });
+    console.log('MaterialConsumptionManager - Component mounted with context:', { 
+      isAdmin, 
+      isDesigner, 
+      currentUserRole: currentUser?.role 
+    });
     loadConsumptionHistory();
   }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
 

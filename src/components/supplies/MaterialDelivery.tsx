@@ -48,7 +48,11 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const { isAdmin, isDesigner, currentUser } = useUserContext();
 
   useEffect(() => {
-    console.log('MaterialDelivery - Component mounted with context:', { isAdmin, isDesigner, currentUser?.role });
+    console.log('MaterialDelivery - Component mounted with context:', { 
+      isAdmin, 
+      isDesigner, 
+      currentUserRole: currentUser?.role 
+    });
     loadDeliveries();
   }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
 
