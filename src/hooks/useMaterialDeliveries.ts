@@ -148,40 +148,40 @@ export const useMaterialDeliveries = () => {
   const fetchMaterialDeliveries = async (): Promise<MaterialDeliveryWithBalance[]> => {
     setLoading(true);
     try {
-      console.log('Fetching material deliveries with user context:', { workshopFilter, isAdmin, isDesigner });
+      console.log('useMaterialDeliveries - fetchMaterialDeliveries starting with context:', { 
+        workshopFilter, 
+        isAdmin, 
+        isDesigner 
+      });
       
-      // Construir la consulta base
-      let query = supabase.rpc('get_material_deliveries_with_real_balance');
-      
+      // Llamar directamente a la función RPC
+      const { data: deliveries, error } = await supabase
+        .rpc('get_material_deliveries_with_real_balance')
+        .order('delivery_date', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching material deliveries:', error);
+        throw error;
+      }
+
+      console.log('useMaterialDeliveries - Raw deliveries from RPC:', deliveries?.length || 0);
+
+      // Aplicar filtrado según el rol del usuario
+      let filteredDeliveries = deliveries || [];
+
       // Si no es admin NI diseñador y tiene workshopFilter, filtrar por taller
       if (!isAdmin && !isDesigner && workshopFilter) {
-        // Filtrar los resultados por workshop_id después de obtenerlos
-        const { data: allDeliveries, error } = await query.order('delivery_date', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching material deliveries:', error);
-          throw error;
-        }
-
-        // Filtrar manualmente por workshop_id
-        const filteredDeliveries = allDeliveries?.filter(delivery => 
+        console.log('useMaterialDeliveries - Filtering by workshop for workshop user:', workshopFilter);
+        filteredDeliveries = deliveries?.filter(delivery => 
           delivery.workshop_id === workshopFilter
         ) || [];
-
-        console.log('Material deliveries filtered by workshop:', filteredDeliveries.length, 'of', allDeliveries?.length || 0);
-        return filteredDeliveries;
+        console.log('useMaterialDeliveries - Filtered deliveries for workshop:', filteredDeliveries.length);
       } else {
-        // Si es admin o diseñador, mostrar todos
-        const { data: deliveries, error } = await query.order('delivery_date', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching material deliveries:', error);
-          throw error;
-        }
-
-        console.log('Material deliveries (admin/designer view):', deliveries?.length || 0);
-        return deliveries || [];
+        console.log('useMaterialDeliveries - No filtering needed (admin or designer), showing all deliveries');
       }
+
+      console.log('useMaterialDeliveries - Final deliveries returned:', filteredDeliveries.length);
+      return filteredDeliveries;
 
     } catch (error: any) {
       console.error('Error in fetchMaterialDeliveries:', error);

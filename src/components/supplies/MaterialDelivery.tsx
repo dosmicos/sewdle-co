@@ -45,13 +45,15 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const [filterPeriod, setFilterPeriod] = useState('all');
 
   const { fetchMaterialDeliveries, loading } = useMaterialDeliveries();
-  const { isAdmin, isDesigner } = useUserContext();
+  const { isAdmin, isDesigner, currentUser } = useUserContext();
 
   useEffect(() => {
+    console.log('MaterialDelivery - Component mounted with context:', { isAdmin, isDesigner, currentUser?.role });
     loadDeliveries();
-  }, []);
+  }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
 
   const loadDeliveries = async () => {
+    console.log('MaterialDelivery - Loading deliveries...');
     const data = await fetchMaterialDeliveries();
     console.log('MaterialDelivery - Loaded deliveries:', data?.length || 0);
     setDeliveries(data);
@@ -126,7 +128,8 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
     }
   };
 
-  if (loading && deliveries.length === 0) {
+  // Show loading while user context is not ready or data is loading
+  if ((loading && deliveries.length === 0) || currentUser === null) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-center py-12">

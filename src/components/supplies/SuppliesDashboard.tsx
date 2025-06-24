@@ -41,7 +41,9 @@ const SuppliesDashboard = () => {
   useEffect(() => {
     const loadDeliveries = async () => {
       try {
+        console.log('SuppliesDashboard - Loading deliveries...');
         const deliveries = await fetchMaterialDeliveries();
+        console.log('SuppliesDashboard - Deliveries loaded:', deliveries?.length || 0);
         setDeliveriesData(deliveries || []);
       } catch (error) {
         console.error('Error loading deliveries for inventory:', error);
@@ -51,15 +53,18 @@ const SuppliesDashboard = () => {
 
     loadDeliveries();
     loadDashboardData();
-  }, []);
+  }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      console.log('SuppliesDashboard - Loading dashboard data with context:', { isAdmin, isDesigner });
+
       // Cargar entregas de materiales (ya filtradas por el hook)
       const deliveries = await fetchMaterialDeliveries();
+      console.log('SuppliesDashboard - Dashboard deliveries:', deliveries?.length || 0);
       
       if (deliveries && Array.isArray(deliveries)) {
         // Calcular estadísticas de entregas
@@ -74,6 +79,12 @@ const SuppliesDashboard = () => {
         const totalMaterialsDelivered = deliveries.reduce((sum, delivery) => 
           sum + (delivery.total_delivered || 0), 0
         );
+
+        console.log('SuppliesDashboard - Calculated delivery stats:', {
+          totalDeliveries,
+          recentDeliveries,
+          totalMaterialsDelivered
+        });
 
         setDeliveryStats({
           totalDeliveries,
@@ -94,13 +105,19 @@ const SuppliesDashboard = () => {
           ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
           : 0;
 
+        console.log('SuppliesDashboard - Calculated consumption stats:', {
+          totalConsumed,
+          remainingStock,
+          utilizationRate
+        });
+
         setConsumptionStats({
           totalConsumed,
           remainingStock,
           utilizationRate
         });
       } else {
-        // Si no hay datos, establecer valores por defecto
+        console.log('SuppliesDashboard - No deliveries data, setting default values');
         setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
         setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
       }
@@ -147,7 +164,8 @@ const SuppliesDashboard = () => {
     };
   }, [materials]);
 
-  if (loading || materialsLoading || deliveriesLoading) {
+  // Show loading while user context is not ready or data is loading
+  if (loading || materialsLoading || deliveriesLoading || currentUser === null) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-center py-12">
