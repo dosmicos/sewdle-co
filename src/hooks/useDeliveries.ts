@@ -448,6 +448,69 @@ export const useDeliveries = () => {
     }
   };
 
+  const updateDeliveryQuantities = async (deliveryId: string, quantityUpdates: Array<{id: string, quantity: number}>) => {
+    setLoading(true);
+    try {
+      console.log('Updating delivery quantities for delivery:', deliveryId, quantityUpdates);
+      
+      // Verificar que la entrega existe y está en estado editable
+      const { data: deliveryCheck, error: deliveryError } = await supabase
+        .from('deliveries')
+        .select('id, status, synced_to_shopify')
+        .eq('id', deliveryId)
+        .single();
+
+      if (deliveryError) {
+        throw new Error('Entrega no encontrada');
+      }
+
+      // Verificar que la entrega puede ser editada
+      const editableStatuses = ['pending', 'in_quality'];
+      if (!editableStatuses.includes(deliveryCheck.status)) {
+        throw new Error('Esta entrega ya no puede ser editada porque ha pasado por control de calidad');
+      }
+
+      if (deliveryCheck.synced_to_shopify) {
+        throw new Error('Esta entrega ya fue sincronizada con Shopify y no puede ser editada');
+      }
+
+      // Actualizar las cantidades de cada delivery_item
+      for (const update of quantityUpdates) {
+        console.log('Updating delivery_item:', update.id, 'to quantity:', update.quantity);
+        
+        const { error: updateError } = await supabase
+          .from('delivery_items')
+          .update({
+            quantity_delivered: update.quantity
+          })
+          .eq('id', update.id);
+
+        if (updateError) {
+          console.error('Error updating delivery_item:', update.id, updateError);
+          throw new Error(`Error actualizando item: ${updateError.message}`);
+        }
+      }
+
+      toast({
+        title: "Cantidades actualizadas",
+        description: "Las cantidades de entrega han sido actualizadas exitosamente",
+      });
+
+      return true;
+
+    } catch (error) {
+      console.error('Error updating delivery quantities:', error);
+      toast({
+        title: "Error al actualizar cantidades",
+        description: error instanceof Error ? error.message : "No se pudieron actualizar las cantidades",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteDelivery = async (deliveryId: string) => {
     setLoading(true);
     try {
@@ -485,6 +548,7 @@ export const useDeliveries = () => {
     getDeliveryStats,
     createDelivery,
     processQualityReview,
+    updateDeliveryQuantities,
     deleteDelivery,
     loading
   };

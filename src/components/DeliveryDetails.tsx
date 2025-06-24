@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Package, CheckCircle, XCircle, AlertTriangle, Camera, FileText, AlertCircle, Edit } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useAuth } from '@/contexts/AuthContext';
+import DeliveryQuantityEditor from './DeliveryQuantityEditor';
 
 interface DeliveryDetailsProps {
   delivery: any;
@@ -17,16 +18,20 @@ interface DeliveryDetailsProps {
 
 const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) => {
   const [deliveryData, setDeliveryData] = useState(null);
+  const [isEditingQuantities, setIsEditingQuantities] = useState(false);
   const [qualityData, setQualityData] = useState({
     variants: {} as Record<string, { approved: number; defective: number; reason: string }>,
     evidenceFiles: null as FileList | null,
     generalNotes: ''
   });
-  const { fetchDeliveryById, processQualityReview, loading } = useDeliveries();
+  const { fetchDeliveryById, processQualityReview, updateDeliveryQuantities, loading } = useDeliveries();
   const { hasPermission } = useAuth();
 
   // Check if user has quality control permissions
   const canDoQualityControl = hasPermission('deliveries', 'quality_control');
+  
+  // Check if user can edit quantities (Taller role)
+  const canEditQuantities = hasPermission('deliveries', 'edit') || hasPermission('deliveries', 'manage');
 
   useEffect(() => {
     if (delivery?.id) {
@@ -300,6 +305,22 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     return { totalDelivered, totalApproved, totalDefective };
   };
 
+  const handleSaveQuantities = async (quantityUpdates: Array<{id: string, quantity: number}>) => {
+    const success = await updateDeliveryQuantities(delivery.id, quantityUpdates);
+    if (success) {
+      await loadDeliveryDetails(); // Recargar datos
+      return true;
+    }
+    return false;
+  };
+
+  // Check if delivery can be edited (pending or in_quality and not synced)
+  const canEditDelivery = () => {
+    if (!deliveryData) return false;
+    const editableStatuses = ['pending', 'in_quality'];
+    return editableStatuses.includes(deliveryData.status) && !deliveryData.synced_to_shopify;
+  };
+
   if (loading || !deliveryData) {
     return (
       <div className="p-6 space-y-6 animate-fade-in">
@@ -343,8 +364,31 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
             <p className="text-sm text-blue-600 font-medium">Total Entregado: {totalDelivered} unidades</p>
           </div>
         </div>
-        {renderStatusBadge(deliveryData.status)}
+        <div className="flex items-center space-x-3">
+          {/* Botón para editar cantidades */}
+          {canEditQuantities && canEditDelivery() && !isEditingQuantities && (
+            <Button
+              onClick={() => setIsEditingQuantities(true)}
+              variant="outline"
+              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Editar Cantidades
+            </Button>
+          )}
+          {renderStatusBadge(deliveryData.status)}
+        </div>
       </div>
+
+      {/* Editor de cantidades */}
+      {isEditingQuantities && (
+        <DeliveryQuantityEditor
+          deliveryData={deliveryData}
+          onSave={handleSaveQuantities}
+          onCancel={() => setIsEditingQuantities(false)}
+          loading={loading}
+        />
+      )}
 
       {/* Summary Stats */}
       {isDeliveryProcessed && (
