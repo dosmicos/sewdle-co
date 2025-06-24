@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -401,9 +402,15 @@ const DeliveryTable = ({
                   <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
                   <TableCell>{delivery.order_number}</TableCell>
                   <TableCell>{delivery.workshop_name || 'Sin asignar'}</TableCell>
-                  <TableCell>{quantities.total}</TableCell>
-                  <TableCell>{quantities.approved}</TableCell>
-                  <TableCell>{quantities.defective}</TableCell>
+                  <TableCell>
+                    <span className="font-medium text-blue-600">{quantities.total}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium text-green-600">{quantities.approved}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium text-red-600">{quantities.defective}</span>
+                  </TableCell>
                   <TableCell>
                     <Badge className={getStatusColor(delivery.status)}>
                       {getStatusText(delivery.status)}
