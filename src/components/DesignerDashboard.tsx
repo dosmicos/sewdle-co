@@ -264,8 +264,8 @@ const DesignerDashboard = () => {
               </div>
             )}
           </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
     </div>
   );
 };
