@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { 
   Search, 
   Package, 
@@ -18,13 +33,34 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
+import MaterialForm from './MaterialForm';
+
+interface Material {
+  id: string;
+  sku: string;
+  name: string;
+  description?: string;
+  unit: string;
+  color?: string;
+  category: string;
+  min_stock_alert: number;
+  current_stock: number;
+  supplier?: string;
+  unit_cost?: number;
+  image_url?: string;
+  stock_status?: string;
+  created_at: string;
+}
 
 const MaterialsCatalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+  const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const { materials, loading, fetchMaterials } = useMaterials();
+  const { materials, loading, fetchMaterials, deleteMaterial } = useMaterials();
 
   // Obtener categorías únicas para el filtro
   const categories = React.useMemo(() => {
@@ -81,6 +117,36 @@ const MaterialsCatalog = () => {
 
   const handleRefresh = () => {
     fetchMaterials();
+  };
+
+  const handleEditMaterial = (material: Material) => {
+    setEditingMaterial(material);
+  };
+
+  const handleDeleteClick = (material: Material) => {
+    setDeletingMaterial(material);
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingMaterial) return;
+
+    try {
+      await deleteMaterial(deletingMaterial.id);
+      setShowDeleteDialog(false);
+      setDeletingMaterial(null);
+    } catch (error) {
+      console.error('Error deleting material:', error);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteDialog(false);
+    setDeletingMaterial(null);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingMaterial(null);
   };
 
   if (loading && (!materials || materials.length === 0)) {
@@ -218,12 +284,42 @@ const MaterialsCatalog = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleEditMaterial(material)}
+                                  disabled={loading}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Editar material</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-red-500 hover:text-red-700"
+                                  onClick={() => handleDeleteClick(material)}
+                                  disabled={loading}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Eliminar material</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -264,6 +360,51 @@ const MaterialsCatalog = () => {
           </div>
         )}
       </Card>
+
+      {/* Modal de Edición */}
+      {editingMaterial && (
+        <MaterialForm 
+          material={editingMaterial} 
+          onClose={handleCloseEditModal} 
+        />
+      )}
+
+      {/* Modal de Confirmación de Eliminación */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar Material?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que quieres eliminar el material{' '}
+              <span className="font-semibold text-black">
+                "{deletingMaterial?.name}"
+              </span>
+              {deletingMaterial?.sku && (
+                <span> ({deletingMaterial.sku})</span>
+              )}
+              ? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDelete}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                'Eliminar'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
