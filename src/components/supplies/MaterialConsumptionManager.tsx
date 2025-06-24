@@ -4,10 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Package, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Package, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
-import { useUserContext } from '@/hooks/useUserContext';
 
 const MaterialConsumptionManager = () => {
   const [filters, setFilters] = useState({
@@ -17,22 +16,15 @@ const MaterialConsumptionManager = () => {
 
   const { workshops, loading: workshopsLoading } = useWorkshops();
   const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
-  const { isAdmin, isDesigner, currentUser } = useUserContext();
 
   useEffect(() => {
-    console.log('MaterialConsumptionManager - Component mounted with context:', { 
-      isAdmin, 
-      isDesigner, 
-      currentUserRole: currentUser?.role 
-    });
     loadConsumptionHistory();
-  }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
+  }, []);
 
   const loadConsumptionHistory = async () => {
     try {
-      console.log('MaterialConsumptionManager - Loading consumption history...');
       const deliveries = await fetchMaterialDeliveries();
-      console.log('MaterialConsumptionManager - Deliveries data received:', deliveries?.length || 0);
+      console.log('Deliveries data received:', deliveries);
       
       // CORRECCIÓN: Procesar solo registros que tienen consumo registrado (total_consumed > 0)
       const consumptions = deliveries
@@ -53,7 +45,7 @@ const MaterialConsumptionManager = () => {
           };
         });
 
-      console.log('MaterialConsumptionManager - Processed consumptions:', consumptions.length);
+      console.log('Processed consumptions:', consumptions);
       setConsumptionHistory(consumptions);
     } catch (error) {
       console.error('Error loading consumption history:', error);
@@ -68,12 +60,11 @@ const MaterialConsumptionManager = () => {
 
   const loading = workshopsLoading || deliveriesLoading;
 
-  // Show loading while user context is not ready or data is loading
-  if (loading || currentUser === null) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <Loader2 className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-spin" />
+          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-pulse" />
           <h3 className="text-lg font-semibold mb-2 text-black">Cargando datos de consumo...</h3>
           <p className="text-gray-600">Obteniendo información de consumos de materiales</p>
         </div>
@@ -126,12 +117,7 @@ const MaterialConsumptionManager = () => {
             <div className="text-center py-8">
               <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay consumos registrados</h3>
-              <p className="text-gray-600">
-                {isAdmin || isDesigner 
-                  ? 'Los consumos de materiales aparecerán aquí cuando se registren'
-                  : 'Tus consumos de materiales aparecerán aquí cuando se registren'
-                }
-              </p>
+              <p className="text-gray-600">Los consumos de materiales aparecerán aquí cuando se registren</p>
             </div>
           ) : (
             <Table>

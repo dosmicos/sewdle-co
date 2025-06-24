@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
@@ -30,7 +31,6 @@ const AppSidebar = () => {
   const designerMenuItems = [
     { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
     { title: 'Órdenes', url: '/orders', icon: FileText },
-    { title: 'Insumos', url: '/supplies', icon: Package2 },
     { title: 'Productos', url: '/products', icon: Package },
     { title: 'Talleres', url: '/workshops', icon: Building2 },
     { title: 'Entregas', url: '/deliveries', icon: Truck }
@@ -49,8 +49,6 @@ const AppSidebar = () => {
       switch (item.url) {
         case '/orders':
           return hasPermission('orders', 'view');
-        case '/supplies':
-          return hasPermission('insumos', 'view');
         case '/products':
           return hasPermission('products', 'view');
         case '/workshops':

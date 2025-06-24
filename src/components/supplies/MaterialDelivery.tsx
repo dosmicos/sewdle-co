@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Package, Calendar, Palette, AlertTriangle, CheckCircle } from 'lucide-react';
 import MaterialDeliveryForm from './MaterialDeliveryForm';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
-import { useUserContext } from '@/hooks/useUserContext';
 
 interface MaterialDeliveryWithBalance {
   id: string;
@@ -45,21 +44,13 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const [filterPeriod, setFilterPeriod] = useState('all');
 
   const { fetchMaterialDeliveries, loading } = useMaterialDeliveries();
-  const { isAdmin, isDesigner, currentUser } = useUserContext();
 
   useEffect(() => {
-    console.log('MaterialDelivery - Component mounted with context:', { 
-      isAdmin, 
-      isDesigner, 
-      currentUserRole: currentUser?.role 
-    });
     loadDeliveries();
-  }, [isAdmin, isDesigner]); // Re-run when admin/designer status changes
+  }, []);
 
   const loadDeliveries = async () => {
-    console.log('MaterialDelivery - Loading deliveries...');
     const data = await fetchMaterialDeliveries();
-    console.log('MaterialDelivery - Loaded deliveries:', data?.length || 0);
     setDeliveries(data);
   };
 
@@ -132,8 +123,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
     }
   };
 
-  // Show loading while user context is not ready or data is loading
-  if ((loading && deliveries.length === 0) || currentUser === null) {
+  if (loading && deliveries.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-center py-12">

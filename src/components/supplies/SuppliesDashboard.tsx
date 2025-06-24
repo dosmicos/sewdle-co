@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -18,7 +17,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import WorkshopInventoryTable from './WorkshopInventoryTable';
 
 const SuppliesDashboard = () => {
-  const { isAdmin, isDesigner, currentUser } = useUserContext();
+  const { isAdmin, currentUser } = useUserContext();
   const [deliveryStats, setDeliveryStats] = useState({
     totalDeliveries: 0,
     recentDeliveries: 0,
@@ -38,62 +37,28 @@ const SuppliesDashboard = () => {
   // Estado para las entregas (necesario para WorkshopInventoryTable)
   const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
 
-  // Verificar si el contexto está listo
-  const isContextReady = currentUser !== null && (isAdmin !== undefined && isDesigner !== undefined);
-
   useEffect(() => {
-    console.log('SuppliesDashboard - Context status:', {
-      isContextReady,
-      currentUser: currentUser?.id,
-      role: currentUser?.role,
-      isAdmin,
-      isDesigner
-    });
+    const loadDeliveries = async () => {
+      try {
+        const deliveries = await fetchMaterialDeliveries();
+        setDeliveriesData(deliveries || []);
+      } catch (error) {
+        console.error('Error loading deliveries for inventory:', error);
+        setDeliveriesData([]);
+      }
+    };
 
-    // Solo cargar datos cuando el contexto esté completamente listo
-    if (isContextReady) {
-      console.log('SuppliesDashboard - Context ready, loading data...');
-      loadDeliveries();
-      loadDashboardData();
-    }
-  }, [isContextReady, isAdmin, isDesigner]);
-
-  const loadDeliveries = async () => {
-    if (!isContextReady) {
-      console.log('SuppliesDashboard - Context not ready, skipping loadDeliveries');
-      return;
-    }
-
-    try {
-      console.log('SuppliesDashboard - Loading deliveries...');
-      const deliveries = await fetchMaterialDeliveries();
-      console.log('SuppliesDashboard - Deliveries loaded:', deliveries?.length || 0);
-      setDeliveriesData(deliveries || []);
-    } catch (error) {
-      console.error('Error loading deliveries for inventory:', error);
-      setDeliveriesData([]);
-    }
-  };
+    loadDeliveries();
+    loadDashboardData();
+  }, []);
 
   const loadDashboardData = async () => {
-    if (!isContextReady) {
-      console.log('SuppliesDashboard - Context not ready, skipping loadDashboardData');
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
 
-      console.log('SuppliesDashboard - Loading dashboard data with context:', { 
-        isAdmin, 
-        isDesigner, 
-        userRole: currentUser?.role 
-      });
-
       // Cargar entregas de materiales (ya filtradas por el hook)
       const deliveries = await fetchMaterialDeliveries();
-      console.log('SuppliesDashboard - Dashboard deliveries loaded:', deliveries?.length || 0);
       
       if (deliveries && Array.isArray(deliveries)) {
         // Calcular estadísticas de entregas
@@ -108,12 +73,6 @@ const SuppliesDashboard = () => {
         const totalMaterialsDelivered = deliveries.reduce((sum, delivery) => 
           sum + (delivery.total_delivered || 0), 0
         );
-
-        console.log('SuppliesDashboard - Calculated delivery stats:', {
-          totalDeliveries,
-          recentDeliveries,
-          totalMaterialsDelivered
-        });
 
         setDeliveryStats({
           totalDeliveries,
@@ -134,19 +93,13 @@ const SuppliesDashboard = () => {
           ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
           : 0;
 
-        console.log('SuppliesDashboard - Calculated consumption stats:', {
-          totalConsumed,
-          remainingStock,
-          utilizationRate
-        });
-
         setConsumptionStats({
           totalConsumed,
           remainingStock,
           utilizationRate
         });
       } else {
-        console.log('SuppliesDashboard - No deliveries data, setting default values');
+        // Si no hay datos, establecer valores por defecto
         setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
         setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
       }
@@ -193,23 +146,15 @@ const SuppliesDashboard = () => {
     };
   }, [materials]);
 
-  // Show loading while context is not ready or data is loading
-  if (!isContextReady || loading || materialsLoading || deliveriesLoading) {
+  if (loading || materialsLoading || deliveriesLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2 text-black">
-              {!isContextReady ? 'Verificando permisos...' : 'Cargando dashboard...'}
-            </h3>
+            <h3 className="text-lg font-semibold mb-2 text-black">Cargando dashboard...</h3>
             <p className="text-gray-600">
-              {!isContextReady 
-                ? 'Obteniendo información de usuario'
-                : isAdmin || isDesigner 
-                  ? 'Obteniendo estadísticas generales de insumos' 
-                  : 'Obteniendo estadísticas de tu taller'
-              }
+              {isAdmin ? 'Obteniendo estadísticas generales de insumos' : 'Obteniendo estadísticas de tu taller'}
             </p>
           </div>
         </div>
@@ -239,7 +184,7 @@ const SuppliesDashboard = () => {
   return (
     <div className="space-y-6">
       {/* Header contextual */}
-      {!isAdmin && !isDesigner && (
+      {!isAdmin && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-blue-900 mb-1">
             Dashboard de Insumos - Tu Taller
@@ -255,7 +200,7 @@ const SuppliesDashboard = () => {
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">
-              {isAdmin || isDesigner ? 'Total Materiales' : 'Materiales en Catálogo'}
+              {isAdmin ? 'Total Materiales' : 'Materiales en Catálogo'}
             </CardTitle>
             <Package className="h-4 w-4 text-blue-600" />
           </CardHeader>
@@ -268,7 +213,7 @@ const SuppliesDashboard = () => {
         <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">
-              {isAdmin || isDesigner ? 'Entregas Totales' : 'Mis Entregas'}
+              {isAdmin ? 'Entregas Totales' : 'Mis Entregas'}
             </CardTitle>
             <TruckIcon className="h-4 w-4 text-green-600" />
           </CardHeader>
@@ -298,7 +243,7 @@ const SuppliesDashboard = () => {
           <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-purple-800">
-                {isAdmin || isDesigner ? 'Valor del Stock' : 'Valor Estimado'}
+                {isAdmin ? 'Valor del Stock' : 'Valor Estimado'}
               </CardTitle>
               <BarChart3 className="h-4 w-4 text-purple-600" />
             </CardHeader>
@@ -317,7 +262,7 @@ const SuppliesDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-black">
-              {isAdmin || isDesigner ? 'Total Consumido' : 'Mi Consumo'}
+              {isAdmin ? 'Total Consumido' : 'Mi Consumo'}
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-gray-600" />
           </CardHeader>
@@ -330,7 +275,7 @@ const SuppliesDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-black">
-              {isAdmin || isDesigner ? 'Stock Restante' : 'Mi Stock Disponible'}
+              {isAdmin ? 'Stock Restante' : 'Mi Stock Disponible'}
             </CardTitle>
             <Clock className="h-4 w-4 text-gray-600" />
           </CardHeader>
@@ -355,8 +300,8 @@ const SuppliesDashboard = () => {
       {/* Inventario por Taller (filtrado) */}
       <WorkshopInventoryTable deliveries={deliveriesData} />
 
-      {/* Alertas de Stock (solo para admin y diseñador) */}
-      {(isAdmin || isDesigner) && materialStats.outOfStockMaterials > 0 && (
+      {/* Alertas de Stock (solo para admin) */}
+      {isAdmin && materialStats.outOfStockMaterials > 0 && (
         <Alert className="border-red-200 bg-red-50">
           <AlertTriangle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
@@ -366,7 +311,7 @@ const SuppliesDashboard = () => {
         </Alert>
       )}
 
-      {(isAdmin || isDesigner) && materialStats.lowStockMaterials > 0 && (
+      {isAdmin && materialStats.lowStockMaterials > 0 && (
         <Alert className="border-yellow-200 bg-yellow-50">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
@@ -382,10 +327,10 @@ const SuppliesDashboard = () => {
           <div className="text-center">
             <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2 text-black">
-              {isAdmin || isDesigner ? '¡Bienvenido al módulo de Insumos!' : '¡Bienvenido a tus insumos!'}
+              {isAdmin ? '¡Bienvenido al módulo de Insumos!' : '¡Bienvenido a tus insumos!'}
             </h3>
             <p className="text-gray-600 mb-4">
-              {isAdmin || isDesigner
+              {isAdmin 
                 ? 'Aún no tienes materiales o entregas registradas. Comienza agregando materiales al catálogo.'
                 : 'Aún no tienes entregas de materiales registradas para tu taller.'
               }
