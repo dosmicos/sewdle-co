@@ -22,6 +22,25 @@ export interface Role {
   usersCount: number;
 }
 
+// Diccionario bidireccional para mapeo de módulos
+const MODULE_MAPPING = {
+  // Base de datos → Interfaz
+  'dashboard': 'Dashboard',
+  'orders': 'Órdenes',
+  'workshops': 'Talleres', 
+  'products': 'Productos',
+  'insumos': 'Insumos',
+  'deliveries': 'Entregas',
+  'users': 'Usuarios',
+  'reports': 'Reportes',
+  'qc': 'QC (Control de Calidad)'
+};
+
+// Mapeo inverso: Interfaz → Base de datos
+const REVERSE_MODULE_MAPPING = Object.fromEntries(
+  Object.entries(MODULE_MAPPING).map(([key, value]) => [value, key])
+);
+
 export const useRoles = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,10 +73,14 @@ export const useRoles = () => {
         const permissions: Permission[] = [];
         
         if (role.permissions && typeof role.permissions === 'object') {
-          Object.keys(role.permissions).forEach(module => {
-            const modulePerms = role.permissions[module];
+          Object.keys(role.permissions).forEach(dbModule => {
+            const modulePerms = role.permissions[dbModule];
+            // Usar el mapeo para convertir nombre del módulo de BD a UI
+            const displayModule = MODULE_MAPPING[dbModule as keyof typeof MODULE_MAPPING] || 
+                                  dbModule.charAt(0).toUpperCase() + dbModule.slice(1);
+            
             permissions.push({
-              module: module.charAt(0).toUpperCase() + module.slice(1),
+              module: displayModule,
               actions: {
                 view: modulePerms.view || false,
                 create: modulePerms.create || false,
@@ -98,10 +121,13 @@ export const useRoles = () => {
     permissions: Permission[];
   }) => {
     try {
-      // Transformar permisos al formato JSONB
+      // Transformar permisos al formato JSONB usando mapeo inverso
       const permissionsJson: Record<string, any> = {};
       roleData.permissions.forEach(permission => {
-        permissionsJson[permission.module.toLowerCase()] = permission.actions;
+        // Convertir nombre del módulo de UI a BD
+        const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
+                        permission.module.toLowerCase();
+        permissionsJson[dbModule] = permission.actions;
       });
 
       const { error } = await supabase
@@ -148,9 +174,13 @@ export const useRoles = () => {
       if (updates.description) updateData.description = updates.description;
       
       if (updates.permissions) {
+        // Transformar permisos al formato JSONB usando mapeo inverso
         const permissionsJson: Record<string, any> = {};
         updates.permissions.forEach(permission => {
-          permissionsJson[permission.module.toLowerCase()] = permission.actions;
+          // Convertir nombre del módulo de UI a BD
+          const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
+                          permission.module.toLowerCase();
+          permissionsJson[dbModule] = permission.actions;
         });
         updateData.permissions = permissionsJson;
       }
