@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -27,25 +28,10 @@ export const useUsers = () => {
       setLoading(true);
       setError(null);
 
-      // Obtener todos los perfiles con sus roles y talleres usando JOINs explícitos
+      // Paso 1: Obtener todos los perfiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          name,
-          email,
-          created_at,
-          user_roles!left (
-            workshop_id,
-            roles!inner (
-              name
-            )
-          ),
-          workshops!user_roles_workshop_id_fkey (
-            id,
-            name
-          )
-        `);
+        .select('*');
 
       if (profilesError) {
         console.error('Error fetching profiles:', profilesError);
@@ -54,17 +40,57 @@ export const useUsers = () => {
 
       console.log('Profiles data received:', profiles);
 
-      // Transformar datos al formato esperado
+      // Paso 2: Obtener roles de usuarios
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select(`
+          user_id,
+          workshop_id,
+          roles!inner (
+            name
+          )
+        `);
+
+      if (rolesError) {
+        console.error('Error fetching user roles:', rolesError);
+        throw rolesError;
+      }
+
+      console.log('User roles data received:', userRoles);
+
+      // Paso 3: Obtener información de talleres si hay IDs de talleres
+      const workshopIds = userRoles
+        ?.filter(ur => ur.workshop_id)
+        .map(ur => ur.workshop_id) || [];
+
+      let workshops: any[] = [];
+      if (workshopIds.length > 0) {
+        const { data: workshopsData, error: workshopsError } = await supabase
+          .from('workshops')
+          .select('id, name')
+          .in('id', workshopIds);
+
+        if (workshopsError) {
+          console.error('Error fetching workshops:', workshopsError);
+          // No lanzar error aquí, solo log
+        } else {
+          workshops = workshopsData || [];
+        }
+      }
+
+      console.log('Workshops data received:', workshops);
+
+      // Paso 4: Combinar los datos
       const formattedUsers: User[] = profiles?.map((profile: any) => {
         console.log('Processing profile:', profile);
         
-        // Obtener rol del usuario
-        const userRole = profile.user_roles?.[0];
+        // Buscar rol del usuario
+        const userRole = userRoles?.find(ur => ur.user_id === profile.id);
         const roleName = userRole?.roles?.name || 'Sin Rol';
         
-        // Obtener información del taller
-        const workshop = profile.workshops?.[0];
+        // Buscar información del taller
         const workshopId = userRole?.workshop_id;
+        const workshop = workshops.find(w => w.id === workshopId);
         const workshopName = workshop?.name;
         
         console.log('User role info:', { userRole, roleName, workshop, workshopId, workshopName });
