@@ -25,10 +25,10 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
     generalNotes: ''
   });
   const { fetchDeliveryById, processQualityReview, updateDeliveryQuantities, loading } = useDeliveries();
-  const { hasPermission } = useAuth();
+  const { hasPermission, isAdmin } = useAuth();
 
-  // Check if user has quality control permissions
-  const canDoQualityControl = hasPermission('deliveries', 'quality_control');
+  // Check if user has quality control permissions - Admins can always do quality control
+  const canDoQualityControl = isAdmin() || hasPermission('deliveries', 'edit');
   
   // Check if user can edit quantities (Taller role)
   const canEditQuantities = hasPermission('deliveries', 'edit') || hasPermission('deliveries', 'manage');
@@ -768,7 +768,7 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
               <div className="text-center py-8 text-gray-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
                 <p>No tienes permisos para realizar control de calidad</p>
-                <p className="text-sm mt-2">Solo usuarios con rol de Control de Calidad o Administrador pueden realizar inspecciones</p>
+                <p className="text-sm mt-2">Solo usuarios con rol de Control de Calidad, Administrador o permisos de edición pueden realizar inspecciones</p>
               </div>
             )}
           </Card>
