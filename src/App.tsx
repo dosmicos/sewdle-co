@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -131,9 +132,9 @@ const AppContent = () => {
         } />
         
         <Route path="supplies" element={
-          <AdminRoute>
+          <PermissionRoute module="insumos" action="view">
             <SuppliesPage />
-          </AdminRoute>
+          </PermissionRoute>
         } />
         
         <Route path="workshops" element={
