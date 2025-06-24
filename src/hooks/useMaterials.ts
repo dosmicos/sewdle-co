@@ -1,35 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
-interface Material {
-  id: string;
-  sku: string;
-  name: string;
-  description?: string;
-  unit: string;
-  color?: string;
-  category: string;
-  min_stock_alert: number;
-  current_stock: number;
-  supplier?: string;
-  unit_cost?: number;
-  image_url?: string;
-  stock_status?: string;
-  created_at: string;
-}
-
-interface CreateMaterialData {
-  name: string;
-  description?: string;
-  category: string;
-  unit: string;
-  color?: string;
-  min_stock_alert: number;
-  supplier?: string;
-  unit_cost?: number;
-}
+import { Material, CreateMaterialData } from '@/types/materials';
 
 export const useMaterials = () => {
   const [materials, setMaterials] = useState<Material[]>([]);

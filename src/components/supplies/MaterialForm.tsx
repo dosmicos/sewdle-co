@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,21 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Upload, X } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
-
-interface Material {
-  id: string;
-  sku: string;
-  name: string;
-  description: string;
-  unit: string;
-  color: string;
-  category: string;
-  min_stock_alert: number;
-  current_stock: number;
-  supplier?: string;
-  unit_cost?: number;
-  image_url?: string;
-}
+import { Material } from '@/types/materials';
 
 interface MaterialFormProps {
   material?: Material;

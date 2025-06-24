@@ -34,23 +34,7 @@ import {
 } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 import MaterialForm from './MaterialForm';
-
-interface Material {
-  id: string;
-  sku: string;
-  name: string;
-  description?: string;
-  unit: string;
-  color?: string;
-  category: string;
-  min_stock_alert: number;
-  current_stock: number;
-  supplier?: string;
-  unit_cost?: number;
-  image_url?: string;
-  stock_status?: string;
-  created_at: string;
-}
+import { Material } from '@/types/materials';
 
 const MaterialsCatalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
