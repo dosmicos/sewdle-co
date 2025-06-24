@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Package, Calendar, Palette, AlertTriangle, CheckCircle } from 'lucide-react';
 import MaterialDeliveryForm from './MaterialDeliveryForm';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import { useUserContext } from '@/hooks/useUserContext';
 
 interface MaterialDeliveryWithBalance {
   id: string;
@@ -44,6 +45,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const [filterPeriod, setFilterPeriod] = useState('all');
 
   const { fetchMaterialDeliveries, loading } = useMaterialDeliveries();
+  const { isAdmin, isDesigner } = useUserContext();
 
   useEffect(() => {
     loadDeliveries();
@@ -51,6 +53,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
 
   const loadDeliveries = async () => {
     const data = await fetchMaterialDeliveries();
+    console.log('MaterialDelivery - Loaded deliveries:', data?.length || 0);
     setDeliveries(data);
   };
 
