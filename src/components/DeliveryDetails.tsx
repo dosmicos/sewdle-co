@@ -349,6 +349,72 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
 
   console.log('Delivery status:', deliveryData.status, 'Is processed:', isDeliveryProcessed);
 
+  // Component para el resumen de items
+  const DeliverySummaryTable = () => (
+    <Card className="p-6">
+      <h3 className="text-lg font-semibold mb-4">Resumen de la Entrega</h3>
+      {deliveryData.delivery_items && deliveryData.delivery_items.length > 0 ? (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">Producto</TableHead>
+                <TableHead className="text-xs text-center">Cantidad Total</TableHead>
+                <TableHead className="text-xs text-center">Aprobadas</TableHead>
+                <TableHead className="text-xs text-center">Defectuosas</TableHead>
+                {isDeliveryProcessed && <TableHead className="text-xs">Estado</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deliveryData.delivery_items.map((item, index) => {
+                const productInfo = getProductInfo(item);
+                
+                return (
+                  <TableRow key={index}>
+                    <TableCell className="py-2">
+                      <div>
+                        <p className="font-medium text-xs text-black">
+                          {productInfo.productName}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {productInfo.variantSize} - {productInfo.variantColor}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {productInfo.skuVariant}
+                        </p>
+                        {!productInfo.isDataComplete && (
+                          <p className="text-xs text-amber-600 font-medium">
+                            ⚠️ Datos incompletos
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-2">
+                      <span className="font-medium text-blue-600">{item.quantity_delivered || 0}</span>
+                    </TableCell>
+                    <TableCell className="text-center py-2">
+                      <span className="font-medium text-green-600">{item.quantity_approved || 0}</span>
+                    </TableCell>
+                    <TableCell className="text-center py-2">
+                      <span className="font-medium text-red-600">{item.quantity_defective || 0}</span>
+                    </TableCell>
+                    {isDeliveryProcessed && (
+                      <TableCell className="py-2">
+                        {renderItemStatusBadge(item.quality_status, item.quality_notes)}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <p className="text-gray-500 text-sm">No hay items registrados para esta entrega</p>
+      )}
+    </Card>
+  );
+
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       {/* Header */}
@@ -449,300 +515,94 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Delivery Information */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Información de Entrega</h3>
-            <div className="space-y-3">
-              <div className="flex items-center text-sm">
-                <Package className="w-4 h-4 mr-2 text-gray-500" />
-                <span className="font-medium">Orden:</span>
-                <span className="ml-2">{deliveryData.orders?.order_number}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <User className="w-4 h-4 mr-2 text-gray-500" />
-                <span className="font-medium">Taller:</span>
-                <span className="ml-2">{deliveryData.workshops?.name}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-                <span className="font-medium">Fecha:</span>
-                <span className="ml-2">{new Date(deliveryData.delivery_date).toLocaleDateString()}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <span className="font-medium">Entrega #:</span>
-                <span className="ml-2">{deliveryData.tracking_number}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <span className="font-medium">Total Entregado:</span>
-                <span className="ml-2 font-bold text-blue-600">{totalDelivered} unidades</span>
-              </div>
-              {deliveryData.recipient_name && (
+      {/* Layout condicional basado en el estado de procesamiento */}
+      {isDeliveryProcessed ? (
+        // Layout para entregas procesadas: Información izquierda, Resumen derecha
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Delivery Information */}
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Información de Entrega</h3>
+              <div className="space-y-3">
                 <div className="flex items-center text-sm">
-                  <span className="font-medium">Receptor:</span>
-                  <span className="ml-2">{deliveryData.recipient_name}</span>
+                  <Package className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="font-medium">Orden:</span>
+                  <span className="ml-2">{deliveryData.orders?.order_number}</span>
                 </div>
-              )}
-              {deliveryData.recipient_phone && (
                 <div className="flex items-center text-sm">
-                  <span className="font-medium">Teléfono:</span>
-                  <span className="ml-2">{deliveryData.recipient_phone}</span>
+                  <User className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="font-medium">Taller:</span>
+                  <span className="ml-2">{deliveryData.workshops?.name}</span>
                 </div>
-              )}
-              {deliveryData.notes && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600 font-medium mb-1">Notas:</p>
-                  <p className="text-sm text-gray-700">{deliveryData.notes}</p>
+                <div className="flex items-center text-sm">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="font-medium">Fecha:</span>
+                  <span className="ml-2">{new Date(deliveryData.delivery_date).toLocaleDateString()}</span>
                 </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Items Table */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Items de la Entrega</h3>
-            {deliveryData.delivery_items && deliveryData.delivery_items.length > 0 ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Producto</TableHead>
-                      <TableHead className="text-xs text-center">Cantidad Total</TableHead>
-                      <TableHead className="text-xs text-center">Aprobadas</TableHead>
-                      <TableHead className="text-xs text-center">Defectuosas</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {deliveryData.delivery_items.map((item, index) => {
-                      const productInfo = getProductInfo(item);
-                      
-                      return (
-                        <TableRow key={index}>
-                          <TableCell className="py-2">
-                            <div>
-                              <p className="font-medium text-xs text-black">
-                                {productInfo.productName}
-                              </p>
-                              <p className="text-xs text-gray-600">
-                                {productInfo.variantSize} - {productInfo.variantColor}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {productInfo.skuVariant}
-                              </p>
-                              {!productInfo.isDataComplete && (
-                                <p className="text-xs text-amber-600 font-medium">
-                                  ⚠️ Datos incompletos
-                                </p>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center py-2">
-                            <span className="font-medium text-blue-600">{item.quantity_delivered || 0}</span>
-                          </TableCell>
-                          <TableCell className="text-center py-2">
-                            <span className="font-medium text-green-600">{item.quantity_approved || 0}</span>
-                          </TableCell>
-                          <TableCell className="text-center py-2">
-                            <span className="font-medium text-red-600">{item.quantity_defective || 0}</span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="flex items-center text-sm">
+                  <span className="font-medium">Entrega #:</span>
+                  <span className="ml-2">{deliveryData.tracking_number}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <span className="font-medium">Total Entregado:</span>
+                  <span className="ml-2 font-bold text-blue-600">{totalDelivered} unidades</span>
+                </div>
+                {deliveryData.recipient_name && (
+                  <div className="flex items-center text-sm">
+                    <span className="font-medium">Receptor:</span>
+                    <span className="ml-2">{deliveryData.recipient_name}</span>
+                  </div>
+                )}
+                {deliveryData.recipient_phone && (
+                  <div className="flex items-center text-sm">
+                    <span className="font-medium">Teléfono:</span>
+                    <span className="ml-2">{deliveryData.recipient_phone}</span>
+                  </div>
+                )}
+                {deliveryData.notes && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600 font-medium mb-1">Notas:</p>
+                    <p className="text-sm text-gray-700">{deliveryData.notes}</p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <p className="text-gray-500 text-sm">No hay items registrados para esta entrega</p>
-            )}
-          </Card>
-        </div>
+            </Card>
 
-        {/* Right Column - Quality Control (Expanded width) */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Control de Calidad</h3>
+            {/* History */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Historial de la Entrega</h3>
+              <div className="space-y-3">
+                <div className="p-3 border-l-4 border-blue-500 bg-blue-50">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Entrega Creada</span>
+                    <span className="text-sm text-gray-600">{new Date(deliveryData.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1">Entrega registrada en el sistema</p>
+                </div>
+                
+                <div className="p-3 border-l-4 border-green-500 bg-green-50">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Estado Actual</span>
+                    <span className="text-sm text-gray-600">{new Date().toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1">
+                    {deliveryData.status === 'approved' ? 'Entrega aprobada completamente' :
+                     deliveryData.status === 'rejected' ? 'Entrega rechazada' :
+                     deliveryData.status === 'partial_approved' ? 'Entrega parcialmente aprobada' :
+                     'Estado actualizado'}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Right Column - Delivery Summary (Expanded width) */}
+          <div className="lg:col-span-2 space-y-6">
+            <DeliverySummaryTable />
             
-            {canDoQualityControl && !isDeliveryProcessed ? (
-              <div className="space-y-4">
-                {/* Mostrar advertencia si ya está sincronizada */}
-                {deliveryData.synced_to_shopify && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-sm text-green-800">
-                      <strong>⚠️ Nota:</strong> Esta entrega ya fue sincronizada con Shopify. 
-                      Los cambios de calidad no afectarán el inventario de Shopify.
-                    </p>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <h4 className="font-medium">Resultado por Item</h4>
-                  
-                  {/* Quality Review Table */}
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Variante</TableHead>
-                          <TableHead className="text-center">Entregadas</TableHead>
-                          <TableHead className="text-center">Aprobadas</TableHead>
-                          <TableHead className="text-center">Defectuosas</TableHead>
-                          <TableHead>Motivo (si hay defectos)</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {deliveryData.delivery_items?.map((item) => {
-                          const productInfo = getProductInfo(item);
-                          const deliveryItemId = item.id;
-                          const variantData = qualityData.variants[deliveryItemId];
-                          const approved = variantData?.approved || 0;
-                          const defective = variantData?.defective || 0;
-                          const reviewed = approved + defective;
-                          const delivered = item.quantity_delivered;
-                          
-                          return (
-                            <TableRow key={deliveryItemId}>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium">{productInfo.productName}</p>
-                                  <p className="text-sm text-gray-600">
-                                    {productInfo.variantSize} - {productInfo.variantColor}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {productInfo.skuVariant}
-                                  </p>
-                                  <p className="text-xs text-blue-500">
-                                    ID: {deliveryItemId}
-                                  </p>
-                                  {!productInfo.isDataComplete && (
-                                    <p className="text-xs text-amber-600 font-medium">
-                                      ⚠️ Verificar datos
-                                    </p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <span className="font-medium text-blue-600">{delivered}</span>
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max={delivered}
-                                  value={approved || ''}
-                                  onChange={(e) => handleVariantQuality(deliveryItemId, 'approved', parseInt(e.target.value) || 0)}
-                                  className="w-20 text-center"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max={delivered}
-                                  value={defective || ''}
-                                  onChange={(e) => handleVariantQuality(deliveryItemId, 'defective', parseInt(e.target.value) || 0)}
-                                  className="w-20 text-center"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  placeholder="Describir defectos..."
-                                  value={variantData?.reason || ''}
-                                  onChange={(e) => handleVariantQuality(deliveryItemId, 'reason', e.target.value)}
-                                  className="min-w-[200px]"
-                                />
-                                {reviewed > 0 && reviewed !== delivered && (
-                                  <p className="text-xs text-amber-600 mt-1">
-                                    Total revisadas: {reviewed} (entregadas: {delivered})
-                                  </p>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-
-                {/* Quality Review Summary */}
-                <Card className="p-4 bg-gray-50 border border-gray-200">
-                  <h4 className="font-medium text-gray-900 mb-3">Resumen de Revisión</h4>
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div>
-                      <p className="text-xl font-bold text-green-600">{qualityTotals.totalApproved}</p>
-                      <p className="text-sm text-green-700">Total Aprobadas</p>
-                    </div>
-                    <div>
-                      <p className="text-xl font-bold text-red-600">{qualityTotals.totalDefective}</p>
-                      <p className="text-sm text-red-700">Total Defectuosas</p>
-                    </div>
-                  </div>
-                  {(qualityTotals.totalApproved + qualityTotals.totalDefective) > 0 && (
-                    <div className="mt-3 text-center">
-                      <p className="text-sm text-gray-600">
-                        Total Revisadas: {qualityTotals.totalApproved + qualityTotals.totalDefective}
-                      </p>
-                    </div>
-                  )}
-                </Card>
-
-                <div className="space-y-3">
-                  <Label htmlFor="evidence">Fotos de Evidencia</Label>
-                  <input
-                    type="file"
-                    id="evidence"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => setQualityData(prev => ({ ...prev, evidenceFiles: e.target.files }))}
-                    className="w-full p-2 border rounded-lg"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <Label htmlFor="notes">Notas Generales</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Observaciones generales sobre la calidad..."
-                    value={qualityData.generalNotes}
-                    onChange={(e) => setQualityData(prev => ({ ...prev, generalNotes: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
-
-                {/* Quantity Mismatch Warning Alert */}
-                {quantityMismatches.length > 0 && (
-                  <Alert className="border-amber-200 bg-amber-50">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-800">
-                      <strong>Discrepancia detectada:</strong> Las cantidades reportadas no coinciden con las entregadas:
-                      <ul className="mt-2 ml-4 list-disc">
-                        {quantityMismatches.map((item, index) => (
-                          <li key={index} className="text-sm">
-                            <strong>{item.productName}:</strong> {item.reviewed} revisadas de {item.delivered} entregadas 
-                            ({item.difference > 0 ? `faltan ${item.difference}` : `sobran ${Math.abs(item.difference)}`})
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-sm mt-2">
-                        Esta discrepancia será registrada en el sistema para seguimiento.
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="pt-4">
-                  <Button
-                    onClick={handleQualityReview}
-                    disabled={loading}
-                    className="w-full bg-blue-500 hover:bg-blue-600"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    {loading ? 'Procesando...' : 'Procesar Revisión de Calidad'}
-                  </Button>
-                </div>
-              </div>
-            ) : isDeliveryProcessed ? (
+            {/* Quality Review Results */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Resultado de Control de Calidad</h3>
               <div className="text-center py-8">
                 <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
                 <p className="text-gray-600">
@@ -764,45 +624,259 @@ const DeliveryDetails: React.FC<DeliveryDetailsProps> = ({ delivery, onBack }) =
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
-                <p>No tienes permisos para realizar control de calidad</p>
-                <p className="text-sm mt-2">Solo usuarios con rol de Control de Calidad, Administrador o permisos de edición pueden realizar inspecciones</p>
-              </div>
-            )}
-          </Card>
-
-          {/* History */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Historial de la Entrega</h3>
-            <div className="space-y-3">
-              <div className="p-3 border-l-4 border-blue-500 bg-blue-50">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Entrega Creada</span>
-                  <span className="text-sm text-gray-600">{new Date(deliveryData.created_at).toLocaleDateString()}</span>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        // Layout original para entregas no procesadas: Información izquierda, Control de calidad derecha
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Delivery Information */}
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Información de Entrega</h3>
+              <div className="space-y-3">
+                <div className="flex items-center text-sm">
+                  <Package className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="font-medium">Orden:</span>
+                  <span className="ml-2">{deliveryData.orders?.order_number}</span>
                 </div>
-                <p className="text-sm text-gray-700 mt-1">Entrega registrada en el sistema</p>
-              </div>
-              
-              {isDeliveryProcessed && (
-                <div className="p-3 border-l-4 border-green-500 bg-green-50">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Estado Actual</span>
-                    <span className="text-sm text-gray-600">{new Date().toLocaleDateString()}</span>
+                <div className="flex items-center text-sm">
+                  <User className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="font-medium">Taller:</span>
+                  <span className="ml-2">{deliveryData.workshops?.name}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  <span className="font-medium">Fecha:</span>
+                  <span className="ml-2">{new Date(deliveryData.delivery_date).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <span className="font-medium">Entrega #:</span>
+                  <span className="ml-2">{deliveryData.tracking_number}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <span className="font-medium">Total Entregado:</span>
+                  <span className="ml-2 font-bold text-blue-600">{totalDelivered} unidades</span>
+                </div>
+                {deliveryData.recipient_name && (
+                  <div className="flex items-center text-sm">
+                    <span className="font-medium">Receptor:</span>
+                    <span className="ml-2">{deliveryData.recipient_name}</span>
                   </div>
-                  <p className="text-sm text-gray-700 mt-1">
-                    {deliveryData.status === 'approved' ? 'Entrega aprobada completamente' :
-                     deliveryData.status === 'rejected' ? 'Entrega rechazada' :
-                     deliveryData.status === 'partial_approved' ? 'Entrega parcialmente aprobada' :
-                     'Estado actualizado'}
-                  </p>
+                )}
+                {deliveryData.recipient_phone && (
+                  <div className="flex items-center text-sm">
+                    <span className="font-medium">Teléfono:</span>
+                    <span className="ml-2">{deliveryData.recipient_phone}</span>
+                  </div>
+                )}
+                {deliveryData.notes && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600 font-medium mb-1">Notas:</p>
+                    <p className="text-sm text-gray-700">{deliveryData.notes}</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            <DeliverySummaryTable />
+          </div>
+
+          {/* Right Column - Quality Control (Expanded width) */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Control de Calidad</h3>
+              
+              {canDoQualityControl ? (
+                <div className="space-y-4">
+                  {/* Mostrar advertencia si ya está sincronizada */}
+                  {deliveryData.synced_to_shopify && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-800">
+                        <strong>⚠️ Nota:</strong> Esta entrega ya fue sincronizada con Shopify. 
+                        Los cambios de calidad no afectarán el inventario de Shopify.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <h4 className="font-medium">Resultado por Item</h4>
+                    
+                    {/* Quality Review Table */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Variante</TableHead>
+                            <TableHead className="text-center">Entregadas</TableHead>
+                            <TableHead className="text-center">Aprobadas</TableHead>
+                            <TableHead className="text-center">Defectuosas</TableHead>
+                            <TableHead>Motivo (si hay defectos)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {deliveryData.delivery_items?.map((item) => {
+                            const productInfo = getProductInfo(item);
+                            const deliveryItemId = item.id;
+                            const variantData = qualityData.variants[deliveryItemId];
+                            const approved = variantData?.approved || 0;
+                            const defective = variantData?.defective || 0;
+                            const reviewed = approved + defective;
+                            const delivered = item.quantity_delivered;
+                            
+                            return (
+                              <TableRow key={deliveryItemId}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium">{productInfo.productName}</p>
+                                    <p className="text-sm text-gray-600">
+                                      {productInfo.variantSize} - {productInfo.variantColor}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      {productInfo.skuVariant}
+                                    </p>
+                                    <p className="text-xs text-blue-500">
+                                      ID: {deliveryItemId}
+                                    </p>
+                                    {!productInfo.isDataComplete && (
+                                      <p className="text-xs text-amber-600 font-medium">
+                                        ⚠️ Verificar datos
+                                      </p>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="font-medium text-blue-600">{delivered}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max={delivered}
+                                    value={approved || ''}
+                                    onChange={(e) => handleVariantQuality(deliveryItemId, 'approved', parseInt(e.target.value) || 0)}
+                                    className="w-20 text-center"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max={delivered}
+                                    value={defective || ''}
+                                    onChange={(e) => handleVariantQuality(deliveryItemId, 'defective', parseInt(e.target.value) || 0)}
+                                    className="w-20 text-center"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    placeholder="Describir defectos..."
+                                    value={variantData?.reason || ''}
+                                    onChange={(e) => handleVariantQuality(deliveryItemId, 'reason', e.target.value)}
+                                    className="min-w-[200px]"
+                                  />
+                                  {reviewed > 0 && reviewed !== delivered && (
+                                    <p className="text-xs text-amber-600 mt-1">
+                                      Total revisadas: {reviewed} (entregadas: {delivered})
+                                    </p>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  {/* Quality Review Summary */}
+                  <Card className="p-4 bg-gray-50 border border-gray-200">
+                    <h4 className="font-medium text-gray-900 mb-3">Resumen de Revisión</h4>
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div>
+                        <p className="text-xl font-bold text-green-600">{qualityTotals.totalApproved}</p>
+                        <p className="text-sm text-green-700">Total Aprobadas</p>
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold text-red-600">{qualityTotals.totalDefective}</p>
+                        <p className="text-sm text-red-700">Total Defectuosas</p>
+                      </div>
+                    </div>
+                    {(qualityTotals.totalApproved + qualityTotals.totalDefective) > 0 && (
+                      <div className="mt-3 text-center">
+                        <p className="text-sm text-gray-600">
+                          Total Revisadas: {qualityTotals.totalApproved + qualityTotals.totalDefective}
+                        </p>
+                      </div>
+                    )}
+                  </Card>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="evidence">Fotos de Evidencia</Label>
+                    <input
+                      type="file"
+                      id="evidence"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => setQualityData(prev => ({ ...prev, evidenceFiles: e.target.files }))}
+                      className="w-full p-2 border rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="notes">Notas Generales</Label>
+                    <Textarea
+                      id="notes"
+                      placeholder="Observaciones generales sobre la calidad..."
+                      value={qualityData.generalNotes}
+                      onChange={(e) => setQualityData(prev => ({ ...prev, generalNotes: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Quantity Mismatch Warning Alert */}
+                  {quantityMismatches.length > 0 && (
+                    <Alert className="border-amber-200 bg-amber-50">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-800">
+                        <strong>Discrepancia detectada:</strong> Las cantidades reportadas no coinciden con las entregadas:
+                        <ul className="mt-2 ml-4 list-disc">
+                          {quantityMismatches.map((item, index) => (
+                            <li key={index} className="text-sm">
+                              <strong>{item.productName}:</strong> {item.reviewed} revisadas de {item.delivered} entregadas 
+                              ({item.difference > 0 ? `faltan ${item.difference}` : `sobran ${Math.abs(item.difference)}`})
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-sm mt-2">
+                          Esta discrepancia será registrada en el sistema para seguimiento.
+                        </p>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="pt-4">
+                    <Button
+                      onClick={handleQualityReview}
+                      disabled={loading}
+                      className="w-full bg-blue-500 hover:bg-blue-600"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      {loading ? 'Procesando...' : 'Procesar Revisión de Calidad'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <AlertTriangle className="w-12 h-12 mx-auto mb-2" />
+                  <p>No tienes permisos para realizar control de calidad</p>
+                  <p className="text-sm mt-2">Solo usuarios con rol de Control de Calidad, Administrador o permisos de edición pueden realizar inspecciones</p>
                 </div>
               )}
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
