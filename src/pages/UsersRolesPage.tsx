@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTriangle } from 'lucide-react';
 import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
 import { useUsers } from '@/hooks/useUsers';
@@ -40,6 +39,7 @@ const UsersRolesPage = () => {
 
   const activeUsers = users.filter(user => user.status === 'active').length;
   const inactiveUsers = users.filter(user => user.status === 'inactive').length;
+  const usersWithoutRoles = users.filter(user => user.role === 'Sin Rol').length;
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(userFilter.toLowerCase()) ||
@@ -125,8 +125,8 @@ const UsersRolesPage = () => {
         </TabsList>
 
         <TabsContent value="users" className="space-y-6">
-          {/* KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* KPIs actualizados */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
@@ -152,6 +152,15 @@ const UsersRolesPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">{inactiveUsers}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sin Rol Asignado</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{usersWithoutRoles}</div>
               </CardContent>
             </Card>
           </div>
@@ -184,6 +193,7 @@ const UsersRolesPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos los roles</SelectItem>
+                    <SelectItem value="Sin Rol">Sin Rol</SelectItem>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.name}>
                         {role.name}
@@ -221,7 +231,11 @@ const UsersRolesPage = () => {
                       <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.role}</Badge>
+                        <Badge 
+                          variant={user.role === 'Sin Rol' ? 'destructive' : 'outline'}
+                        >
+                          {user.role}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {user.workshopName ? (

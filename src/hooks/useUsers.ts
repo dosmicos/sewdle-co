@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -28,7 +27,7 @@ export const useUsers = () => {
       setLoading(true);
       setError(null);
 
-      // Obtener usuarios de auth junto con sus perfiles y roles
+      // Obtener usuarios de auth junto con sus perfiles y roles (LEFT JOIN para incluir usuarios sin roles)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -36,9 +35,9 @@ export const useUsers = () => {
           name,
           email,
           created_at,
-          user_roles!inner (
+          user_roles (
             workshop_id,
-            roles!inner (
+            roles (
               name
             )
           )
@@ -59,21 +58,26 @@ export const useUsers = () => {
       }, {} as Record<string, string>) || {};
 
       // Transformar datos al formato esperado
-      const formattedUsers: User[] = profiles?.map((profile: any) => ({
-        id: profile.id,
-        name: profile.name || profile.email,
-        email: profile.email,
-        role: profile.user_roles[0]?.roles?.name || 'Sin Rol',
-        workshopId: profile.user_roles[0]?.workshop_id,
-        workshopName: profile.user_roles[0]?.workshop_id 
-          ? workshopMap[profile.user_roles[0].workshop_id] 
-          : undefined,
-        status: 'active' as const,
-        requiresPasswordChange: false, // TODO: Implementar lógica real
-        createdAt: profile.created_at,
-        lastLogin: undefined, // TODO: Implementar seguimiento de último login
-        createdBy: 'system' // TODO: Implementar tracking de quién creó el usuario
-      })) || [];
+      const formattedUsers: User[] = profiles?.map((profile: any) => {
+        // Manejar usuarios sin roles asignados
+        const userRole = profile.user_roles?.[0];
+        const roleName = userRole?.roles?.name || 'Sin Rol';
+        const workshopId = userRole?.workshop_id;
+        
+        return {
+          id: profile.id,
+          name: profile.name || profile.email,
+          email: profile.email,
+          role: roleName,
+          workshopId: workshopId,
+          workshopName: workshopId ? workshopMap[workshopId] : undefined,
+          status: 'active' as const,
+          requiresPasswordChange: false, // TODO: Implementar lógica real
+          createdAt: profile.created_at,
+          lastLogin: undefined, // TODO: Implementar seguimiento de último login
+          createdBy: 'system' // TODO: Implementar tracking de quién creó el usuario
+        };
+      }) || [];
 
       setUsers(formattedUsers);
     } catch (err: any) {
@@ -146,7 +150,7 @@ export const useUsers = () => {
       }
 
       // Actualizar rol si es necesario
-      if (updates.role) {
+      if (updates.role && updates.role !== 'Sin Rol') {
         const { data: role } = await supabase
           .from('roles')
           .select('id')
@@ -154,13 +158,32 @@ export const useUsers = () => {
           .single();
 
         if (role) {
-          await supabase
+          // Verificar si ya existe un rol para este usuario
+          const { data: existingRole } = await supabase
             .from('user_roles')
-            .update({
-              role_id: role.id,
-              workshop_id: updates.workshopId || null
-            })
-            .eq('user_id', userId);
+            .select('id')
+            .eq('user_id', userId)
+            .single();
+
+          if (existingRole) {
+            // Actualizar rol existente
+            await supabase
+              .from('user_roles')
+              .update({
+                role_id: role.id,
+                workshop_id: updates.workshopId || null
+              })
+              .eq('user_id', userId);
+          } else {
+            // Crear nuevo rol para el usuario
+            await supabase
+              .from('user_roles')
+              .insert({
+                user_id: userId,
+                role_id: role.id,
+                workshop_id: updates.workshopId || null
+              });
+          }
         }
       }
 
