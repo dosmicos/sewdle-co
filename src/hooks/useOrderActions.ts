@@ -1,4 +1,5 @@
 
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -48,7 +49,17 @@ export const useOrderActions = () => {
         console.error('Error deleting deliveries:', deliveriesError);
       }
 
-      // 4. Eliminar archivos de la orden
+      // 4. Eliminar entregas de materiales (depende de orders)
+      const { error: materialDeliveriesError } = await supabase
+        .from('material_deliveries')
+        .delete()
+        .eq('order_id', orderId);
+
+      if (materialDeliveriesError) {
+        console.error('Error deleting material deliveries:', materialDeliveriesError);
+      }
+
+      // 5. Eliminar archivos de la orden
       const { error: filesError } = await supabase
         .from('order_files')
         .delete()
@@ -58,7 +69,7 @@ export const useOrderActions = () => {
         console.error('Error deleting order files:', filesError);
       }
 
-      // 5. Eliminar insumos de la orden
+      // 6. Eliminar insumos de la orden
       const { error: suppliesError } = await supabase
         .from('order_supplies')
         .delete()
@@ -68,7 +79,7 @@ export const useOrderActions = () => {
         console.error('Error deleting order supplies:', suppliesError);
       }
 
-      // 6. Eliminar items de la orden
+      // 7. Eliminar items de la orden
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
@@ -78,7 +89,7 @@ export const useOrderActions = () => {
         console.error('Error deleting order items:', itemsError);
       }
 
-      // 7. Eliminar asignaciones de taller
+      // 8. Eliminar asignaciones de taller
       const { error: assignmentsError } = await supabase
         .from('workshop_assignments')
         .delete()
@@ -88,7 +99,7 @@ export const useOrderActions = () => {
         console.error('Error deleting workshop assignments:', assignmentsError);
       }
 
-      // 8. Finalmente eliminar la orden
+      // 9. Finalmente eliminar la orden
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
@@ -218,3 +229,4 @@ export const useOrderActions = () => {
     loading
   };
 };
+
