@@ -28,10 +28,10 @@ const DeliveriesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
 
-  // Permission checks
-  const canCreateDeliveries = hasPermission('entregas', 'create');
-  const canEditDeliveries = hasPermission('entregas', 'edit');
-  const canDeleteDeliveries = hasPermission('entregas', 'delete');
+  // Permission checks - using correct English module names
+  const canCreateDeliveries = hasPermission('deliveries', 'create');
+  const canEditDeliveries = hasPermission('deliveries', 'edit');
+  const canDeleteDeliveries = hasPermission('deliveries', 'delete');
 
   const getStatusColor = (status: string) => {
     switch (status) {

@@ -15,6 +15,7 @@ const SuppliesPage = () => {
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const { hasPermission } = useAuth();
 
+  // Using correct English module names
   const canCreateMaterials = hasPermission('insumos', 'create');
   const canCreateDeliveries = hasPermission('insumos', 'create');
   const canManageConsumption = hasPermission('insumos', 'edit');
