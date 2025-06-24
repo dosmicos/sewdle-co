@@ -1,17 +1,17 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useUserContext } from '@/hooks/useUserContext';
 
 export const useDeliveryOrders = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { isAdmin, currentUser } = useUserContext();
 
   const fetchAvailableOrders = async () => {
     setLoading(true);
     try {
-      // Obtener órdenes que estén asignadas o en progreso y tengan items
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -32,14 +32,33 @@ export const useDeliveryOrders = () => {
         .in('status', ['assigned', 'in_progress'])
         .order('due_date', { ascending: true, nullsFirst: false });
 
+      // Si el usuario es taller (no admin), filtrar solo órdenes de su taller
+      if (!isAdmin && currentUser?.workshopId) {
+        query = query.eq('workshop_assignments.workshop_id', currentUser.workshopId);
+      }
+
+      const { data, error } = await query;
+
       if (error) {
         throw error;
       }
 
-      // Filtrar solo órdenes que tengan items
+      // Filtrar solo órdenes que tengan items y estén asignadas a talleres
       const ordersWithItems = data?.filter(order => 
-        order.order_items && order.order_items.length > 0
+        order.order_items && 
+        order.order_items.length > 0 &&
+        order.workshop_assignments &&
+        order.workshop_assignments.length > 0
       ) || [];
+
+      // Si el usuario no es admin, aplicar filtro adicional por si el filtro en la consulta no funcionó
+      if (!isAdmin && currentUser?.workshopId) {
+        return ordersWithItems.filter(order => 
+          order.workshop_assignments.some(assignment => 
+            assignment.workshop_id === currentUser.workshopId
+          )
+        );
+      }
 
       return ordersWithItems;
     } catch (error) {
