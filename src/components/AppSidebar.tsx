@@ -30,7 +30,7 @@ const AppSidebar = () => {
 
   const designerMenuItems = [
     { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'Mis Órdenes', url: '/orders', icon: FileText },
+    { title: 'Órdenes', url: '/orders', icon: FileText },
     { title: 'Productos', url: '/products', icon: Package },
     { title: 'Talleres', url: '/workshops', icon: Building2 },
     { title: 'Entregas', url: '/deliveries', icon: Truck }
