@@ -119,9 +119,66 @@ export const useOrderActions = () => {
     }
   };
 
+  const updateOrderItemQuantities = async (orderId: string, updatedItems: { id: string; quantity: number; total_price: number }[]) => {
+    setLoading(true);
+    try {
+      console.log('Updating order item quantities:', orderId, updatedItems);
+
+      // Actualizar cada item individualmente
+      for (const item of updatedItems) {
+        const { error: itemError } = await supabase
+          .from('order_items')
+          .update({
+            quantity: item.quantity,
+            total_price: item.total_price,
+          })
+          .eq('id', item.id);
+
+        if (itemError) {
+          console.error('Error updating order item:', itemError);
+          throw itemError;
+        }
+      }
+
+      // Calcular y actualizar el total de la orden
+      const newTotalAmount = updatedItems.reduce((total, item) => total + item.total_price, 0);
+      
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({
+          total_amount: newTotalAmount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (orderError) {
+        console.error('Error updating order total:', orderError);
+        throw orderError;
+      }
+
+      toast({
+        title: "Cantidades actualizadas",
+        description: "Las cantidades de producción han sido actualizadas exitosamente.",
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error updating order item quantities:', error);
+      toast({
+        title: "Error al actualizar cantidades",
+        description: "Hubo un problema al actualizar las cantidades de producción.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     deleteOrder,
     updateOrder,
+    updateOrderItemQuantities,
     loading
   };
 };
