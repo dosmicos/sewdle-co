@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -183,12 +182,10 @@ export const useMaterialDeliveries = () => {
 
       console.log('Authenticated user for deliveries fetch:', session.user.id);
       
-      // Construir la consulta base
-      let query = supabase.rpc('get_material_deliveries_with_real_balance');
+      // CORRECCIÓN: Remover el .order() que interfiere con el ORDER BY interno de la RPC
+      console.log('Executing RPC call: get_material_deliveries_with_real_balance (without additional ordering)');
       
-      console.log('Executing RPC call: get_material_deliveries_with_real_balance');
-      
-      const { data: allDeliveries, error } = await query.order('delivery_date', { ascending: false });
+      const { data: allDeliveries, error } = await supabase.rpc('get_material_deliveries_with_real_balance');
 
       if (error) {
         console.error('Error fetching material deliveries:', error);
@@ -201,7 +198,8 @@ export const useMaterialDeliveries = () => {
         throw error;
       }
 
-      console.log('Raw deliveries from RPC:', allDeliveries?.length || 0, 'items');
+      console.log('Raw deliveries from RPC (SUCCESS):', allDeliveries?.length || 0, 'items');
+      console.log('First delivery sample:', allDeliveries?.[0]);
 
       if (!allDeliveries || !Array.isArray(allDeliveries)) {
         console.warn('Invalid deliveries data structure:', allDeliveries);
@@ -221,7 +219,9 @@ export const useMaterialDeliveries = () => {
         console.log('No workshop filter applied - showing all deliveries for admin/designer');
       }
 
-      console.log('Final filtered deliveries:', filteredDeliveries.length);
+      console.log('Final filtered deliveries (SUCCESS):', filteredDeliveries.length);
+      console.log('Sample filtered delivery:', filteredDeliveries?.[0]);
+      
       return filteredDeliveries;
 
     } catch (error: any) {

@@ -55,6 +55,7 @@ const SuppliesDashboard = () => {
       try {
         if (!isMountedRef.current) return;
         
+        console.log('=== DASHBOARD DATA LOADING START ===');
         console.log('Loading dashboard data for user role:', { isAdmin, isDesigner, isWorkshopUser });
         setLoading(true);
         setError(null);
@@ -66,16 +67,25 @@ const SuppliesDashboard = () => {
 
         const deliveriesPromise = fetchMaterialDeliveries();
         
+        console.log('Fetching deliveries with timeout protection...');
         const deliveries = await Promise.race([deliveriesPromise, timeoutPromise]) as any[];
         
         if (!isMountedRef.current || controller.signal.aborted) return;
 
-        console.log('Loaded deliveries:', deliveries?.length || 0, 'items');
+        console.log('=== DELIVERIES FETCH RESULT ===');
+        console.log('Loaded deliveries count:', deliveries?.length || 0);
+        console.log('Deliveries data structure check:', {
+          isArray: Array.isArray(deliveries),
+          firstItem: deliveries?.[0],
+          hasRealBalance: deliveries?.[0]?.real_balance !== undefined
+        });
         
         // Actualizar estado de deliveries para WorkshopInventoryTable
         setDeliveriesData(deliveries || []);
         
         if (deliveries && Array.isArray(deliveries) && deliveries.length > 0) {
+          console.log('=== CALCULATING STATISTICS ===');
+          
           // Calcular estadísticas de entregas
           const totalDeliveries = deliveries.length;
           const thirtyDaysAgo = new Date();
@@ -94,6 +104,12 @@ const SuppliesDashboard = () => {
             const delivered = Number(delivery.total_delivered) || 0;
             return sum + delivered;
           }, 0);
+
+          console.log('Delivery stats calculated:', {
+            totalDeliveries,
+            recentDeliveries,
+            totalMaterialsDelivered
+          });
 
           if (isMountedRef.current) {
             setDeliveryStats({
@@ -118,6 +134,12 @@ const SuppliesDashboard = () => {
             ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
             : 0;
 
+          console.log('Consumption stats calculated:', {
+            totalConsumed,
+            remainingStock,
+            utilizationRate
+          });
+
           if (isMountedRef.current) {
             setConsumptionStats({
               totalConsumed,
@@ -126,14 +148,18 @@ const SuppliesDashboard = () => {
             });
           }
         } else {
-          console.log('No deliveries data found or empty array');
+          console.log('=== NO DELIVERIES DATA ===');
+          console.log('No deliveries data found or empty array. Setting default values.');
           // Establecer valores por defecto
           if (isMountedRef.current) {
             setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
             setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
           }
         }
+        
+        console.log('=== DASHBOARD DATA LOADING SUCCESS ===');
       } catch (err: any) {
+        console.error('=== DASHBOARD DATA LOADING ERROR ===');
         console.error('Error loading dashboard data:', err);
         if (isMountedRef.current && !controller.signal.aborted) {
           setError(`Error al cargar los datos del dashboard: ${err.message || 'Error desconocido'}`);
@@ -144,6 +170,7 @@ const SuppliesDashboard = () => {
       } finally {
         if (isMountedRef.current && !controller.signal.aborted) {
           setLoading(false);
+          console.log('=== DASHBOARD DATA LOADING COMPLETE ===');
         }
       }
     };
