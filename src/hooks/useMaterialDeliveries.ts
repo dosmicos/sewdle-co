@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -165,30 +166,38 @@ export const useMaterialDeliveries = () => {
   const fetchMaterialDeliveries = useCallback(async (): Promise<MaterialDeliveryWithBalance[]> => {
     safeSetLoading(true);
     try {
-      console.log('Fetching material deliveries with filters:', { workshopFilter, isAdmin, isDesigner });
+      console.log('=== FETCH MATERIAL DELIVERIES START ===');
+      console.log('User context:', { workshopFilter, isAdmin, isDesigner });
       
-      // Verificar autenticación antes de hacer la consulta
+      // Verificar autenticación DETALLADAMENTE
+      console.log('Checking authentication...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
-        console.error('Session error in fetchMaterialDeliveries:', sessionError);
+        console.error('❌ Session error in fetchMaterialDeliveries:', sessionError);
         throw new Error('Error de autenticación');
       }
       
       if (!session?.user) {
-        console.error('No authenticated user in fetchMaterialDeliveries');
+        console.error('❌ No authenticated user in fetchMaterialDeliveries');
         throw new Error('Usuario no autenticado');
       }
 
-      console.log('Authenticated user for deliveries fetch:', session.user.id);
+      console.log('✅ Authenticated user:', {
+        id: session.user.id,
+        email: session.user.email,
+        role: session.user.role
+      });
       
-      // CORRECCIÓN: Remover el .order() que interfiere con el ORDER BY interno de la RPC
-      console.log('Executing RPC call: get_material_deliveries_with_real_balance (without additional ordering)');
+      // Llamada RPC sin filtros adicionales (CORRECCIÓN CLAVE)
+      console.log('🔄 Executing RPC: get_material_deliveries_with_real_balance');
+      console.log('⚠️  REMOVED .order() to prevent conflict with internal RPC ordering');
       
-      const { data: allDeliveries, error } = await supabase.rpc('get_material_deliveries_with_real_balance');
+      const { data: allDeliveries, error } = await supabase
+        .rpc('get_material_deliveries_with_real_balance');
 
       if (error) {
-        console.error('Error fetching material deliveries:', error);
+        console.error('❌ RPC Error:', error);
         console.error('Full error details:', {
           code: error.code,
           message: error.message,
@@ -198,34 +207,81 @@ export const useMaterialDeliveries = () => {
         throw error;
       }
 
-      console.log('Raw deliveries from RPC (SUCCESS):', allDeliveries?.length || 0, 'items');
-      console.log('First delivery sample:', allDeliveries?.[0]);
+      console.log('✅ RPC Success - Raw data received:', {
+        count: allDeliveries?.length || 0,
+        isArray: Array.isArray(allDeliveries),
+        firstItem: allDeliveries?.[0]
+      });
 
       if (!allDeliveries || !Array.isArray(allDeliveries)) {
-        console.warn('Invalid deliveries data structure:', allDeliveries);
+        console.warn('⚠️  Invalid deliveries data structure:', allDeliveries);
         return [];
       }
 
-      // Filtrar por taller si es necesario (solo para usuarios de taller)
+      console.log('📊 Deliveries sample data:');
+      allDeliveries.slice(0, 2).forEach((delivery, index) => {
+        console.log(`  Item ${index + 1}:`, {
+          id: delivery.id,
+          material_name: delivery.material_name,
+          workshop_name: delivery.workshop_name,
+          total_delivered: delivery.total_delivered,
+          total_consumed: delivery.total_consumed,
+          real_balance: delivery.real_balance
+        });
+      });
+
+      // Aplicar filtros SOLO si es necesario
       let filteredDeliveries = allDeliveries;
       
+      console.log('🔍 Applying filters...');
+      console.log('Filter conditions:', {
+        isAdmin,
+        isDesigner,
+        hasWorkshopFilter: !!workshopFilter,
+        workshopFilter
+      });
+
       if (!isAdmin && !isDesigner && workshopFilter) {
-        console.log('Applying workshop filter:', workshopFilter);
-        filteredDeliveries = allDeliveries.filter(delivery => 
-          delivery.workshop_id === workshopFilter
-        );
-        console.log('Deliveries after workshop filter:', filteredDeliveries.length, 'of', allDeliveries.length);
+        console.log('🏭 Applying workshop filter for regular user:', workshopFilter);
+        const beforeFilter = filteredDeliveries.length;
+        filteredDeliveries = allDeliveries.filter(delivery => {
+          const matches = delivery.workshop_id === workshopFilter;
+          if (!matches) {
+            console.log(`  Filtered out delivery for workshop: ${delivery.workshop_name} (${delivery.workshop_id})`);
+          }
+          return matches;
+        });
+        console.log(`🔽 Workshop filter: ${beforeFilter} → ${filteredDeliveries.length} deliveries`);
       } else {
-        console.log('No workshop filter applied - showing all deliveries for admin/designer');
+        console.log('👑 Admin/Designer - showing all deliveries without workshop filter');
       }
 
-      console.log('Final filtered deliveries (SUCCESS):', filteredDeliveries.length);
-      console.log('Sample filtered delivery:', filteredDeliveries?.[0]);
+      console.log('✅ Final filtered deliveries:', {
+        count: filteredDeliveries.length,
+        workshops: [...new Set(filteredDeliveries.map(d => d.workshop_name))],
+        materials: [...new Set(filteredDeliveries.map(d => d.material_name))]
+      });
+
+      // Log estadísticas calculadas localmente para comparar
+      if (filteredDeliveries.length > 0) {
+        const totalDelivered = filteredDeliveries.reduce((sum, d) => sum + (Number(d.total_delivered) || 0), 0);
+        const totalConsumed = filteredDeliveries.reduce((sum, d) => sum + (Number(d.total_consumed) || 0), 0);
+        const totalBalance = filteredDeliveries.reduce((sum, d) => sum + (Number(d.real_balance) || 0), 0);
+        
+        console.log('📈 Calculated statistics:', {
+          totalDelivered,
+          totalConsumed,
+          totalBalance,
+          deliveriesCount: filteredDeliveries.length
+        });
+      }
       
+      console.log('=== FETCH MATERIAL DELIVERIES SUCCESS ===');
       return filteredDeliveries;
 
     } catch (error: any) {
-      console.error('Error in fetchMaterialDeliveries:', error);
+      console.error('=== FETCH MATERIAL DELIVERIES ERROR ===');
+      console.error('Error details:', error);
       
       let errorMessage = "No se pudieron cargar las entregas de materiales.";
       
@@ -247,10 +303,11 @@ export const useMaterialDeliveries = () => {
         });
       }
       
-      // Return empty array instead of throwing to prevent UI crashes
+      console.log('🔄 Returning empty array to prevent UI crashes');
       return [];
     } finally {
       safeSetLoading(false);
+      console.log('=== FETCH MATERIAL DELIVERIES COMPLETE ===');
     }
   }, [workshopFilter, isAdmin, isDesigner, toast, safeSetLoading]);
 

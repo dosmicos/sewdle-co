@@ -56,29 +56,51 @@ const SuppliesDashboard = () => {
         if (!isMountedRef.current) return;
         
         console.log('=== DASHBOARD DATA LOADING START ===');
-        console.log('Loading dashboard data for user role:', { isAdmin, isDesigner, isWorkshopUser });
+        console.log('User context:', { 
+          isAdmin, 
+          isDesigner, 
+          isWorkshopUser,
+          currentUser: currentUser?.id
+        });
+        
         setLoading(true);
         setError(null);
 
-        // Cargar entregas de materiales con timeout
+        // Timeout para evitar carga infinita
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Timeout loading deliveries')), 30000);
         });
 
         const deliveriesPromise = fetchMaterialDeliveries();
         
-        console.log('Fetching deliveries with timeout protection...');
+        console.log('🔄 Fetching deliveries with timeout protection...');
         const deliveries = await Promise.race([deliveriesPromise, timeoutPromise]) as any[];
         
-        if (!isMountedRef.current || controller.signal.aborted) return;
+        if (!isMountedRef.current || controller.signal.aborted) {
+          console.log('⚠️  Component unmounted or aborted, stopping...');
+          return;
+        }
 
-        console.log('=== DELIVERIES FETCH RESULT ===');
-        console.log('Loaded deliveries count:', deliveries?.length || 0);
-        console.log('Deliveries data structure check:', {
+        console.log('=== DELIVERIES RECEIVED IN DASHBOARD ===');
+        console.log('Received deliveries:', {
+          count: deliveries?.length || 0,
           isArray: Array.isArray(deliveries),
-          firstItem: deliveries?.[0],
-          hasRealBalance: deliveries?.[0]?.real_balance !== undefined
+          isEmpty: !deliveries || deliveries.length === 0
         });
+
+        if (deliveries && Array.isArray(deliveries)) {
+          console.log('📋 First 2 deliveries sample:');
+          deliveries.slice(0, 2).forEach((delivery, index) => {
+            console.log(`  Delivery ${index + 1}:`, {
+              id: delivery.id,
+              material_name: delivery.material_name,
+              workshop_name: delivery.workshop_name,
+              total_delivered: delivery.total_delivered,
+              total_consumed: delivery.total_consumed,
+              real_balance: delivery.real_balance
+            });
+          });
+        }
         
         // Actualizar estado de deliveries para WorkshopInventoryTable
         setDeliveriesData(deliveries || []);
@@ -105,7 +127,7 @@ const SuppliesDashboard = () => {
             return sum + delivered;
           }, 0);
 
-          console.log('Delivery stats calculated:', {
+          console.log('📊 Delivery stats calculated:', {
             totalDeliveries,
             recentDeliveries,
             totalMaterialsDelivered
@@ -134,7 +156,7 @@ const SuppliesDashboard = () => {
             ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
             : 0;
 
-          console.log('Consumption stats calculated:', {
+          console.log('📈 Consumption stats calculated:', {
             totalConsumed,
             remainingStock,
             utilizationRate
@@ -147,10 +169,12 @@ const SuppliesDashboard = () => {
               utilizationRate
             });
           }
+
+          console.log('✅ All statistics updated successfully');
         } else {
-          console.log('=== NO DELIVERIES DATA ===');
-          console.log('No deliveries data found or empty array. Setting default values.');
-          // Establecer valores por defecto
+          console.log('=== NO DELIVERIES DATA - SETTING DEFAULTS ===');
+          console.log('Deliveries data:', deliveries);
+          
           if (isMountedRef.current) {
             setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
             setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
@@ -160,9 +184,13 @@ const SuppliesDashboard = () => {
         console.log('=== DASHBOARD DATA LOADING SUCCESS ===');
       } catch (err: any) {
         console.error('=== DASHBOARD DATA LOADING ERROR ===');
-        console.error('Error loading dashboard data:', err);
+        console.error('Error details:', err);
+        
         if (isMountedRef.current && !controller.signal.aborted) {
-          setError(`Error al cargar los datos del dashboard: ${err.message || 'Error desconocido'}`);
+          const errorMessage = `Error al cargar los datos del dashboard: ${err.message || 'Error desconocido'}`;
+          console.error('Setting error state:', errorMessage);
+          
+          setError(errorMessage);
           // Establecer valores por defecto en caso de error
           setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
           setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
