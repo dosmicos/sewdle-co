@@ -21,6 +21,7 @@ interface AuthContextType {
   hasPermission: (module: string, action: string) => boolean;
   isAdmin: () => boolean;
   isDesigner: () => boolean;
+  isQCLeader: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -147,6 +148,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user?.role === 'Diseñador';
   }, [user]);
 
+  const isQCLeader = useCallback((): boolean => {
+    return user?.role === 'Líder QC';
+  }, [user]);
+
   const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
     console.log('Auth state changed:', event, session?.user?.id);
     setSession(session);
@@ -262,7 +267,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading, 
       hasPermission, 
       isAdmin,
-      isDesigner 
+      isDesigner,
+      isQCLeader 
     }}>
       {children}
     </AuthContext.Provider>
