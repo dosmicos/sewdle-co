@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -253,9 +254,9 @@ const DeliveriesPage = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+    <div className="p-3 md:p-6 space-y-3 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col space-y-4 md:flex-row md:justify-between md:items-center md:space-y-0">
+      <div className="flex flex-col space-y-3 md:flex-row md:justify-between md:items-center md:space-y-0">
         <div>
           <h1 className="text-xl md:text-2xl font-bold">
             {isAdmin ? 'Gestión de Entregas' : 'Mis Entregas'}
@@ -282,68 +283,141 @@ const DeliveriesPage = () => {
         />
       )}
 
-      {/* Statistics Cards - Responsive Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center space-x-2">
-              <Package className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
-              <div>
-                <p className="text-xs md:text-sm font-medium">Total</p>
-                <p className="text-lg md:text-2xl font-bold">{stats.total}</p>
-              </div>
+      {/* Statistics Cards - Mobile First Design */}
+      <div className={`${isMobile ? 'space-y-2' : 'grid grid-cols-5 gap-4'}`}>
+        {isMobile ? (
+          <>
+            {/* Primera fila: Total */}
+            <Card>
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Package className="w-5 h-5 text-blue-500" />
+                    <div>
+                      <p className="text-sm font-medium">Total</p>
+                      <p className="text-2xl font-bold">{stats.total}</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Segunda fila: Pendientes y En Calidad */}
+            <div className="grid grid-cols-2 gap-2">
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-yellow-500" />
+                    <div>
+                      <p className="text-xs font-medium">Pendientes</p>
+                      <p className="text-xl font-bold">{stats.pending}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-blue-500" />
+                    <div>
+                      <p className="text-xs font-medium">En Calidad</p>
+                      <p className="text-xl font-bold">{stats.in_quality}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 md:w-5 md:h-5 text-yellow-500" />
-              <div>
-                <p className="text-xs md:text-sm font-medium">Pendientes</p>
-                <p className="text-lg md:text-2xl font-bold">{stats.pending}</p>
-              </div>
+            
+            {/* Tercera fila: Aprobadas y Rechazadas */}
+            <div className="grid grid-cols-2 gap-2">
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <div>
+                      <p className="text-xs font-medium">Aprobadas</p>
+                      <p className="text-xl font-bold">{stats.approved}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center space-x-2">
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    <div>
+                      <p className="text-xs font-medium">Rechazadas</p>
+                      <p className="text-xl font-bold">{stats.rejected}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
-              <div>
-                <p className="text-xs md:text-sm font-medium">En Calidad</p>
-                <p className="text-lg md:text-2xl font-bold">{stats.in_quality}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-500" />
-              <div>
-                <p className="text-xs md:text-sm font-medium">Aprobadas</p>
-                <p className="text-lg md:text-2xl font-bold">{stats.approved}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="col-span-2 md:col-span-1">
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center space-x-2">
-              <XCircle className="w-4 h-4 md:w-5 md:h-5 text-red-500" />
-              <div>
-                <p className="text-xs md:text-sm font-medium">Rechazadas</p>
-                <p className="text-lg md:text-2xl font-bold">{stats.rejected}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <Package className="w-5 h-5 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium">Total</p>
+                    <p className="text-2xl font-bold">{stats.total}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-5 h-5 text-yellow-500" />
+                  <div>
+                    <p className="text-sm font-medium">Pendientes</p>
+                    <p className="text-2xl font-bold">{stats.pending}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="w-5 h-5 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium">En Calidad</p>
+                    <p className="text-2xl font-bold">{stats.in_quality}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <div>
+                    <p className="text-sm font-medium">Aprobadas</p>
+                    <p className="text-2xl font-bold">{stats.approved}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <XCircle className="w-5 h-5 text-red-500" />
+                  <div>
+                    <p className="text-sm font-medium">Rechazadas</p>
+                    <p className="text-2xl font-bold">{stats.rejected}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Search and Filters */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-3 md:p-4">
           <div className="flex items-center space-x-2 md:space-x-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -357,11 +431,11 @@ const DeliveriesPage = () => {
             {isMobile ? (
               <Sheet open={showFiltersSheet} onOpenChange={setShowFiltersSheet}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="sm" className="relative">
-                    <Filter className="w-4 h-4 mr-2" />
+                  <Button variant="outline" size="sm" className="relative shrink-0">
+                    <Filter className="w-4 h-4 mr-1" />
                     Filtros
                     {activeFiltersCount > 0 && (
-                      <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-blue-500 text-white text-xs">
+                      <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
                         {activeFiltersCount}
                       </Badge>
                     )}
@@ -416,30 +490,30 @@ const DeliveriesPage = () => {
         </CardContent>
       </Card>
 
-      {/* Tabs - Horizontal scroll on mobile */}
+      {/* Tabs - Optimized for mobile */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto">
-          <TabsList className={`grid ${isMobile ? 'grid-cols-5 w-max min-w-full' : 'w-full grid-cols-6'}`}>
-            <TabsTrigger value="all" className="whitespace-nowrap">
+        <div className="overflow-x-auto pb-2">
+          <TabsList className={`${isMobile ? 'grid grid-cols-5 w-max min-w-full' : 'grid grid-cols-6 w-full'} gap-1`}>
+            <TabsTrigger value="all" className="whitespace-nowrap text-xs px-2">
               {isMobile ? `Todas (${stats.total})` : `Todas (${stats.total})`}
             </TabsTrigger>
-            <TabsTrigger value="in_quality" className="whitespace-nowrap">
+            <TabsTrigger value="in_quality" className="whitespace-nowrap text-xs px-2">
               {isMobile ? `Calidad (${stats.in_quality})` : `En Calidad (${stats.in_quality})`}
             </TabsTrigger>
-            <TabsTrigger value="approved" className="whitespace-nowrap">
-              {isMobile ? `Aprobadas (${stats.approved})` : `Aprobadas (${stats.approved})`}
+            <TabsTrigger value="approved" className="whitespace-nowrap text-xs px-2">
+              {isMobile ? `Aprob. (${stats.approved})` : `Aprobadas (${stats.approved})`}
             </TabsTrigger>
-            <TabsTrigger value="rejected" className="whitespace-nowrap">
-              {isMobile ? `Rechazadas (${stats.rejected})` : `Rechazadas (${stats.rejected})`}
+            <TabsTrigger value="rejected" className="whitespace-nowrap text-xs px-2">
+              {isMobile ? `Rech. (${stats.rejected})` : `Rechazadas (${stats.rejected})`}
             </TabsTrigger>
             {isAdmin && (
-              <TabsTrigger value="sync" className="whitespace-nowrap">
+              <TabsTrigger value="sync" className="whitespace-nowrap text-xs px-2">
                 {isMobile ? (
                   <Zap className="w-4 h-4" />
                 ) : (
                   <>
                     <Zap className="w-4 h-4 mr-2" />
-                    Sincronización Shopify
+                    Sync Shopify
                   </>
                 )}
               </TabsTrigger>
@@ -447,7 +521,7 @@ const DeliveriesPage = () => {
           </TabsList>
         </div>
 
-        <TabsContent value="all" className="space-y-4">
+        <TabsContent value="all" className="space-y-4 mt-3">
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
@@ -465,7 +539,7 @@ const DeliveriesPage = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="in_quality" className="space-y-4">
+        <TabsContent value="in_quality" className="space-y-4 mt-3">
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
@@ -483,7 +557,7 @@ const DeliveriesPage = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="approved" className="space-y-4">
+        <TabsContent value="approved" className="space-y-4 mt-3">
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
@@ -501,7 +575,7 @@ const DeliveriesPage = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="rejected" className="space-y-4">
+        <TabsContent value="rejected" className="space-y-4 mt-3">
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
@@ -520,7 +594,7 @@ const DeliveriesPage = () => {
         </TabsContent>
 
         {isAdmin && (
-          <TabsContent value="sync" className="space-y-4">
+          <TabsContent value="sync" className="space-y-4 mt-3">
             <InventorySyncManager />
           </TabsContent>
         )}
