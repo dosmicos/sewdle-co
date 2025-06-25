@@ -169,69 +169,48 @@ export const useMaterialDeliveries = () => {
       console.log('=== FETCH MATERIAL DELIVERIES START ===');
       console.log('User context:', { workshopFilter, isAdmin, isDesigner });
       
-      // Verificar autenticación DETALLADAMENTE
+      // Verificar autenticación
       console.log('Checking authentication...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
-        console.error('❌ Session error in fetchMaterialDeliveries:', sessionError);
+        console.error('❌ Session error:', sessionError);
         throw new Error('Error de autenticación');
       }
       
       if (!session?.user) {
-        console.error('❌ No authenticated user in fetchMaterialDeliveries');
+        console.error('❌ No authenticated user');
         throw new Error('Usuario no autenticado');
       }
 
       console.log('✅ Authenticated user:', {
         id: session.user.id,
-        email: session.user.email,
-        role: session.user.role
+        email: session.user.email
       });
       
-      // Llamada RPC sin filtros adicionales (CORRECCIÓN CLAVE)
+      // LLAMADA RPC DIRECTA SIN FILTROS ADICIONALES
       console.log('🔄 Executing RPC: get_material_deliveries_with_real_balance');
-      console.log('⚠️  REMOVED .order() to prevent conflict with internal RPC ordering');
       
-      const { data: allDeliveries, error } = await supabase
+      const { data: rawData, error } = await supabase
         .rpc('get_material_deliveries_with_real_balance');
 
       if (error) {
         console.error('❌ RPC Error:', error);
-        console.error('Full error details:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
         throw error;
       }
 
       console.log('✅ RPC Success - Raw data received:', {
-        count: allDeliveries?.length || 0,
-        isArray: Array.isArray(allDeliveries),
-        firstItem: allDeliveries?.[0]
+        count: rawData?.length || 0,
+        data: rawData
       });
 
-      if (!allDeliveries || !Array.isArray(allDeliveries)) {
-        console.warn('⚠️  Invalid deliveries data structure:', allDeliveries);
+      if (!rawData || !Array.isArray(rawData)) {
+        console.warn('⚠️  Invalid data structure, returning empty array');
         return [];
       }
 
-      console.log('📊 Deliveries sample data:');
-      allDeliveries.slice(0, 2).forEach((delivery, index) => {
-        console.log(`  Item ${index + 1}:`, {
-          id: delivery.id,
-          material_name: delivery.material_name,
-          workshop_name: delivery.workshop_name,
-          total_delivered: delivery.total_delivered,
-          total_consumed: delivery.total_consumed,
-          real_balance: delivery.real_balance
-        });
-      });
-
-      // Aplicar filtros SOLO si es necesario
-      let filteredDeliveries = allDeliveries;
+      // APLICAR FILTROS SOLO SI ES NECESARIO (SIN MODIFICAR LOS DATOS ORIGINALES)
+      let filteredData = rawData;
       
       console.log('🔍 Applying filters...');
       console.log('Filter conditions:', {
@@ -241,43 +220,23 @@ export const useMaterialDeliveries = () => {
         workshopFilter
       });
 
+      // Solo filtrar por taller si no es admin/diseñador Y tiene filtro específico
       if (!isAdmin && !isDesigner && workshopFilter) {
         console.log('🏭 Applying workshop filter for regular user:', workshopFilter);
-        const beforeFilter = filteredDeliveries.length;
-        filteredDeliveries = allDeliveries.filter(delivery => {
-          const matches = delivery.workshop_id === workshopFilter;
-          if (!matches) {
-            console.log(`  Filtered out delivery for workshop: ${delivery.workshop_name} (${delivery.workshop_id})`);
-          }
-          return matches;
-        });
-        console.log(`🔽 Workshop filter: ${beforeFilter} → ${filteredDeliveries.length} deliveries`);
+        const beforeFilter = filteredData.length;
+        filteredData = rawData.filter(delivery => delivery.workshop_id === workshopFilter);
+        console.log(`🔽 Workshop filter: ${beforeFilter} → ${filteredData.length} deliveries`);
       } else {
-        console.log('👑 Admin/Designer - showing all deliveries without workshop filter');
+        console.log('👑 Admin/Designer - showing all deliveries');
       }
 
       console.log('✅ Final filtered deliveries:', {
-        count: filteredDeliveries.length,
-        workshops: [...new Set(filteredDeliveries.map(d => d.workshop_name))],
-        materials: [...new Set(filteredDeliveries.map(d => d.material_name))]
+        count: filteredData.length,
+        sampleData: filteredData.slice(0, 2)
       });
 
-      // Log estadísticas calculadas localmente para comparar
-      if (filteredDeliveries.length > 0) {
-        const totalDelivered = filteredDeliveries.reduce((sum, d) => sum + (Number(d.total_delivered) || 0), 0);
-        const totalConsumed = filteredDeliveries.reduce((sum, d) => sum + (Number(d.total_consumed) || 0), 0);
-        const totalBalance = filteredDeliveries.reduce((sum, d) => sum + (Number(d.real_balance) || 0), 0);
-        
-        console.log('📈 Calculated statistics:', {
-          totalDelivered,
-          totalConsumed,
-          totalBalance,
-          deliveriesCount: filteredDeliveries.length
-        });
-      }
-      
       console.log('=== FETCH MATERIAL DELIVERIES SUCCESS ===');
-      return filteredDeliveries;
+      return filteredData;
 
     } catch (error: any) {
       console.error('=== FETCH MATERIAL DELIVERIES ERROR ===');

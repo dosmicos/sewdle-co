@@ -4,52 +4,87 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Package, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+
+interface ConsumptionRecord {
+  id: string;
+  orderId?: string;
+  materialId: string;
+  materialName: string;
+  workshopId: string;
+  workshopName: string;
+  quantityConsumed: number;
+  materialUnit: string;
+  consumedDate: string;
+  orderNumber: string;
+}
 
 const MaterialConsumptionManager = () => {
   const [filters, setFilters] = useState({
     workshop: 'all'
   });
-  const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
+  const [consumptionHistory, setConsumptionHistory] = useState<ConsumptionRecord[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   const { workshops, loading: workshopsLoading } = useWorkshops();
   const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
 
   useEffect(() => {
     loadConsumptionHistory();
-  }, []);
+  }, [fetchMaterialDeliveries]);
 
   const loadConsumptionHistory = async () => {
     try {
-      const deliveries = await fetchMaterialDeliveries();
-      console.log('Deliveries data received:', deliveries);
+      setDataLoading(true);
+      console.log('=== LOADING CONSUMPTION HISTORY ===');
       
-      // CORRECCIÓN: Procesar solo registros que tienen consumo registrado (total_consumed > 0)
-      const consumptions = deliveries
-        .filter(delivery => delivery.total_consumed > 0)
-        .map(delivery => {
-          console.log('Processing consumption:', delivery);
+      const deliveries = await fetchMaterialDeliveries();
+      console.log('Deliveries data received for consumption:', deliveries?.length || 0);
+      
+      if (!deliveries || !Array.isArray(deliveries)) {
+        console.log('No deliveries data available');
+        setConsumptionHistory([]);
+        return;
+      }
+
+      // PROCESAMIENTO CORRECTO: Generar registros de consumo únicos por taller + material
+      const consumptions: ConsumptionRecord[] = [];
+      
+      deliveries.forEach(delivery => {
+        const totalConsumed = Number(delivery.total_consumed) || 0;
+        
+        // Solo incluir si hay consumo registrado
+        if (totalConsumed > 0) {
+          console.log('Processing consumption:', {
+            material: delivery.material_name,
+            workshop: delivery.workshop_name,
+            consumed: totalConsumed
+          });
           
-          return {
+          consumptions.push({
             id: delivery.id,
             orderId: delivery.order_id,
             materialId: delivery.material_id,
             materialName: delivery.material_name || 'Material desconocido',
             workshopId: delivery.workshop_id,
             workshopName: delivery.workshop_name || 'Taller desconocido',
-            quantityConsumed: delivery.total_consumed,
+            quantityConsumed: totalConsumed,
+            materialUnit: delivery.material_unit || 'unidad',
             consumedDate: delivery.updated_at,
             orderNumber: delivery.order_number || 'Sin orden asignada'
-          };
-        });
+          });
+        }
+      });
 
-      console.log('Processed consumptions:', consumptions);
+      console.log('Processed consumptions:', consumptions.length, consumptions);
       setConsumptionHistory(consumptions);
     } catch (error) {
       console.error('Error loading consumption history:', error);
       setConsumptionHistory([]);
+    } finally {
+      setDataLoading(false);
     }
   };
 
@@ -58,13 +93,13 @@ const MaterialConsumptionManager = () => {
     return true;
   });
 
-  const loading = workshopsLoading || deliveriesLoading;
+  const loading = workshopsLoading || deliveriesLoading || dataLoading;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
-          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-pulse" />
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2 text-black">Cargando datos de consumo...</h3>
           <p className="text-gray-600">Obteniendo información de consumos de materiales</p>
         </div>
@@ -104,6 +139,38 @@ const MaterialConsumptionManager = () => {
         </CardContent>
       </Card>
 
+      {/* Estadísticas de Consumo */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <CheckCircle className="w-5 h-5" />
+            <span>Resumen de Consumos</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">
+                {filteredConsumptions.length}
+              </div>
+              <div className="text-sm text-blue-600">Registros de Consumo</div>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <div className="text-2xl font-bold text-red-600">
+                {filteredConsumptions.reduce((sum, c) => sum + c.quantityConsumed, 0)}
+              </div>
+              <div className="text-sm text-red-600">Total Consumido</div>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">
+                {[...new Set(filteredConsumptions.map(c => c.workshopId))].length}
+              </div>
+              <div className="text-sm text-green-600">Talleres Activos</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Historial de Consumos */}
       <Card>
         <CardHeader>
@@ -117,7 +184,12 @@ const MaterialConsumptionManager = () => {
             <div className="text-center py-8">
               <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay consumos registrados</h3>
-              <p className="text-gray-600">Los consumos de materiales aparecerán aquí cuando se registren</p>
+              <p className="text-gray-600">
+                {consumptionHistory.length === 0 
+                  ? 'Los consumos de materiales aparecerán aquí cuando se registren'
+                  : 'No hay consumos que coincidan con los filtros seleccionados'
+                }
+              </p>
             </div>
           ) : (
             <Table>
@@ -126,19 +198,19 @@ const MaterialConsumptionManager = () => {
                   <TableHead>Orden</TableHead>
                   <TableHead>Material</TableHead>
                   <TableHead>Taller</TableHead>
-                  <TableHead>Cantidad</TableHead>
+                  <TableHead>Cantidad Consumida</TableHead>
                   <TableHead>Fecha</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredConsumptions.map((consumption) => (
-                  <TableRow key={consumption.id}>
+                  <TableRow key={`${consumption.materialId}-${consumption.workshopId}`}>
                     <TableCell className="font-medium">{consumption.orderNumber}</TableCell>
                     <TableCell>{consumption.materialName}</TableCell>
                     <TableCell>{consumption.workshopName}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="border-red-500 text-red-700">
-                        -{consumption.quantityConsumed}
+                        -{consumption.quantityConsumed} {consumption.materialUnit}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
