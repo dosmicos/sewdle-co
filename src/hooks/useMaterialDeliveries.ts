@@ -43,7 +43,7 @@ interface MaterialDeliveryWithBalance {
 export const useMaterialDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { workshopFilter, isAdmin } = useUserContext();
+  const { workshopFilter, isAdmin, isDesigner } = useUserContext();
 
   const createMaterialDelivery = async (deliveryData: MaterialDeliveryData) => {
     setLoading(true);
@@ -148,13 +148,13 @@ export const useMaterialDeliveries = () => {
   const fetchMaterialDeliveries = async (): Promise<MaterialDeliveryWithBalance[]> => {
     setLoading(true);
     try {
-      console.log('Fetching material deliveries with workshop filter:', { workshopFilter, isAdmin });
+      console.log('Fetching material deliveries with filters:', { workshopFilter, isAdmin, isDesigner });
       
       // Construir la consulta base
       let query = supabase.rpc('get_material_deliveries_with_real_balance');
       
-      // Si no es admin y tiene workshopFilter, filtrar por taller
-      if (!isAdmin && workshopFilter) {
+      // Solo filtrar por taller si no es admin ni diseñador y tiene workshopFilter
+      if (!isAdmin && !isDesigner && workshopFilter) {
         // Filtrar los resultados por workshop_id después de obtenerlos
         const { data: allDeliveries, error } = await query.order('delivery_date', { ascending: false });
 
@@ -171,7 +171,7 @@ export const useMaterialDeliveries = () => {
         console.log('Material deliveries filtered by workshop:', filteredDeliveries.length, 'of', allDeliveries?.length || 0);
         return filteredDeliveries;
       } else {
-        // Si es admin, mostrar todos
+        // Si es admin o diseñador, mostrar todos
         const { data: deliveries, error } = await query.order('delivery_date', { ascending: false });
 
         if (error) {
@@ -179,7 +179,7 @@ export const useMaterialDeliveries = () => {
           throw error;
         }
 
-        console.log('Material deliveries (admin view):', deliveries?.length || 0);
+        console.log('Material deliveries (admin/designer view):', deliveries?.length || 0);
         return deliveries || [];
       }
 

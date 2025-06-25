@@ -5,17 +5,19 @@ export const useUserContext = () => {
   const { user, isAdmin, isDesigner, hasPermission } = useAuth();
   
   const getWorkshopFilter = () => {
+    // Solo los usuarios con rol "Taller" (no admin ni diseñador) tienen filtro
     if (isAdmin() || isDesigner()) {
       return null; // Admins y diseñadores ven todos los datos
     }
-    return user?.workshopId; // Talleres solo ven sus datos
+    return user?.workshopId; // Solo talleres ven sus datos filtrados
   };
   
   const getUserFilter = () => {
+    // Solo los usuarios con rol "Taller" (no admin ni diseñador) tienen filtro
     if (isAdmin() || isDesigner()) {
       return null; // Admins y diseñadores ven todos los datos
     }
-    return user?.id; // Talleres solo ven sus datos
+    return user?.id; // Solo talleres ven sus datos filtrados
   };
   
   const isWorkshopUser = () => !isAdmin() && !isDesigner();

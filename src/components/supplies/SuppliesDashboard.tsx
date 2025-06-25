@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -17,7 +18,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import WorkshopInventoryTable from './WorkshopInventoryTable';
 
 const SuppliesDashboard = () => {
-  const { isAdmin, currentUser } = useUserContext();
+  const { isAdmin, isDesigner, currentUser } = useUserContext();
   const [deliveryStats, setDeliveryStats] = useState({
     totalDeliveries: 0,
     recentDeliveries: 0,
@@ -125,8 +126,6 @@ const SuppliesDashboard = () => {
       };
     }
 
-    // Para talleres, mostrar solo estadísticas globales simplificadas
-    // (los materiales no están filtrados por taller en la tabla materials)
     const totalMaterials = materials.length;
     const lowStockMaterials = materials.filter(m => 
       m.current_stock <= m.min_stock_alert && m.current_stock > 0
@@ -146,6 +145,9 @@ const SuppliesDashboard = () => {
     };
   }, [materials]);
 
+  // Determinar si es usuario de taller (ni admin ni diseñador)
+  const isWorkshopUser = !isAdmin && !isDesigner;
+
   if (loading || materialsLoading || deliveriesLoading) {
     return (
       <div className="space-y-6">
@@ -154,7 +156,7 @@ const SuppliesDashboard = () => {
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2 text-black">Cargando dashboard...</h3>
             <p className="text-gray-600">
-              {isAdmin ? 'Obteniendo estadísticas generales de insumos' : 'Obteniendo estadísticas de tu taller'}
+              {isWorkshopUser ? 'Obteniendo estadísticas de tu taller' : 'Obteniendo estadísticas generales de insumos'}
             </p>
           </div>
         </div>
@@ -183,8 +185,8 @@ const SuppliesDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header contextual */}
-      {!isAdmin && (
+      {/* Header contextual - solo para usuarios de taller */}
+      {isWorkshopUser && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-blue-900 mb-1">
             Dashboard de Insumos - Tu Taller
@@ -196,11 +198,11 @@ const SuppliesDashboard = () => {
       )}
 
       {/* Estadísticas Generales */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${currentUser?.role !== 'Taller' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6`}>
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isWorkshopUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6`}>
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">
-              {isAdmin ? 'Total Materiales' : 'Materiales en Catálogo'}
+              {isWorkshopUser ? 'Materiales en Catálogo' : 'Total Materiales'}
             </CardTitle>
             <Package className="h-4 w-4 text-blue-600" />
           </CardHeader>
@@ -213,7 +215,7 @@ const SuppliesDashboard = () => {
         <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">
-              {isAdmin ? 'Entregas Totales' : 'Mis Entregas'}
+              {isWorkshopUser ? 'Mis Entregas' : 'Total Entregas'}
             </CardTitle>
             <TruckIcon className="h-4 w-4 text-green-600" />
           </CardHeader>
@@ -238,13 +240,11 @@ const SuppliesDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Ocultar esta tarjeta para usuarios con rol "Taller" */}
-        {currentUser?.role !== 'Taller' && (
+        {/* Mostrar valor del stock para admins y diseñadores */}
+        {!isWorkshopUser && (
           <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-purple-800">
-                {isAdmin ? 'Valor del Stock' : 'Valor Estimado'}
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-purple-800">Valor del Stock</CardTitle>
               <BarChart3 className="h-4 w-4 text-purple-600" />
             </CardHeader>
             <CardContent>
@@ -262,7 +262,7 @@ const SuppliesDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-black">
-              {isAdmin ? 'Total Consumido' : 'Mi Consumo'}
+              {isWorkshopUser ? 'Mi Consumo' : 'Total Consumido'}
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-gray-600" />
           </CardHeader>
@@ -275,7 +275,7 @@ const SuppliesDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-black">
-              {isAdmin ? 'Stock Restante' : 'Mi Stock Disponible'}
+              {isWorkshopUser ? 'Mi Stock Disponible' : 'Stock Restante'}
             </CardTitle>
             <Clock className="h-4 w-4 text-gray-600" />
           </CardHeader>
@@ -300,8 +300,8 @@ const SuppliesDashboard = () => {
       {/* Inventario por Taller (filtrado) */}
       <WorkshopInventoryTable deliveries={deliveriesData} />
 
-      {/* Alertas de Stock (solo para admin) */}
-      {isAdmin && materialStats.outOfStockMaterials > 0 && (
+      {/* Alertas de Stock (solo para admin y diseñadores) */}
+      {!isWorkshopUser && materialStats.outOfStockMaterials > 0 && (
         <Alert className="border-red-200 bg-red-50">
           <AlertTriangle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
@@ -311,7 +311,7 @@ const SuppliesDashboard = () => {
         </Alert>
       )}
 
-      {isAdmin && materialStats.lowStockMaterials > 0 && (
+      {!isWorkshopUser && materialStats.lowStockMaterials > 0 && (
         <Alert className="border-yellow-200 bg-yellow-50">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
@@ -327,12 +327,12 @@ const SuppliesDashboard = () => {
           <div className="text-center">
             <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2 text-black">
-              {isAdmin ? '¡Bienvenido al módulo de Insumos!' : '¡Bienvenido a tus insumos!'}
+              {isWorkshopUser ? '¡Bienvenido a tus insumos!' : '¡Bienvenido al módulo de Insumos!'}
             </h3>
             <p className="text-gray-600 mb-4">
-              {isAdmin 
-                ? 'Aún no tienes materiales o entregas registradas. Comienza agregando materiales al catálogo.'
-                : 'Aún no tienes entregas de materiales registradas para tu taller.'
+              {isWorkshopUser 
+                ? 'Aún no tienes entregas de materiales registradas para tu taller.'
+                : 'Aún no tienes materiales o entregas registradas. Comienza agregando materiales al catálogo.'
               }
             </p>
           </div>
