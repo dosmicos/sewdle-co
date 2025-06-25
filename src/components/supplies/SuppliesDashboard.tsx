@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,8 @@ import WorkshopInventoryTable from './WorkshopInventoryTable';
 
 const SuppliesDashboard = () => {
   const { isAdmin, isDesigner, currentUser } = useUserContext();
+  const isMountedRef = useRef(true);
+  
   const [deliveryStats, setDeliveryStats] = useState({
     totalDeliveries: 0,
     recentDeliveries: 0,
@@ -31,93 +33,166 @@ const SuppliesDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
 
   const { materials, loading: materialsLoading } = useMaterials();
   const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
 
-  // Estado para las entregas (necesario para WorkshopInventoryTable)
-  const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
+  // Determinar si es usuario de taller
+  const isWorkshopUser = !isAdmin && !isDesigner;
 
   useEffect(() => {
-    const loadDeliveries = async () => {
+    // Cleanup function para marcar el componente como desmontado
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    const loadDashboardData = async () => {
       try {
-        const deliveries = await fetchMaterialDeliveries();
+        if (!isMountedRef.current) return;
+        
+        console.log('Loading dashboard data for user role:', { isAdmin, isDesigner, isWorkshopUser });
+        setLoading(true);
+        setError(null);
+
+        // Cargar entregas de materiales con timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Timeout loading deliveries')), 30000);
+        });
+
+        const deliveriesPromise = fetchMaterialDeliveries();
+        
+        const deliveries = await Promise.race([deliveriesPromise, timeoutPromise]) as any[];
+        
+        if (!isMountedRef.current || controller.signal.aborted) return;
+
+        console.log('Loaded deliveries:', deliveries?.length || 0, 'items');
+        
+        // Actualizar estado de deliveries para WorkshopInventoryTable
         setDeliveriesData(deliveries || []);
-      } catch (error) {
-        console.error('Error loading deliveries for inventory:', error);
-        setDeliveriesData([]);
+        
+        if (deliveries && Array.isArray(deliveries) && deliveries.length > 0) {
+          // Calcular estadísticas de entregas
+          const totalDeliveries = deliveries.length;
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          
+          const recentDeliveries = deliveries.filter(delivery => {
+            try {
+              return new Date(delivery.created_at) >= thirtyDaysAgo;
+            } catch (e) {
+              console.warn('Invalid date in delivery:', delivery.created_at);
+              return false;
+            }
+          }).length;
+
+          const totalMaterialsDelivered = deliveries.reduce((sum, delivery) => {
+            const delivered = Number(delivery.total_delivered) || 0;
+            return sum + delivered;
+          }, 0);
+
+          if (isMountedRef.current) {
+            setDeliveryStats({
+              totalDeliveries,
+              recentDeliveries,
+              totalMaterialsDelivered
+            });
+          }
+
+          // Calcular estadísticas de consumo
+          const totalConsumed = deliveries.reduce((sum, delivery) => {
+            const consumed = Number(delivery.total_consumed) || 0;
+            return sum + consumed;
+          }, 0);
+
+          const remainingStock = deliveries.reduce((sum, delivery) => {
+            const balance = Number(delivery.real_balance) || 0;
+            return sum + balance;
+          }, 0);
+
+          const utilizationRate = totalMaterialsDelivered > 0 
+            ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
+            : 0;
+
+          if (isMountedRef.current) {
+            setConsumptionStats({
+              totalConsumed,
+              remainingStock,
+              utilizationRate
+            });
+          }
+        } else {
+          console.log('No deliveries data found or empty array');
+          // Establecer valores por defecto
+          if (isMountedRef.current) {
+            setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
+            setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
+          }
+        }
+      } catch (err: any) {
+        console.error('Error loading dashboard data:', err);
+        if (isMountedRef.current && !controller.signal.aborted) {
+          setError(`Error al cargar los datos del dashboard: ${err.message || 'Error desconocido'}`);
+          // Establecer valores por defecto en caso de error
+          setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
+          setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
+        }
+      } finally {
+        if (isMountedRef.current && !controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
-    loadDeliveries();
     loadDashboardData();
-  }, []);
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    return () => {
+      controller.abort();
+    };
+  }, [fetchMaterialDeliveries, isAdmin, isDesigner, isWorkshopUser]);
 
-      // Cargar entregas de materiales (ya filtradas por el hook)
-      const deliveries = await fetchMaterialDeliveries();
-      
-      if (deliveries && Array.isArray(deliveries)) {
-        // Calcular estadísticas de entregas
-        const totalDeliveries = deliveries.length;
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        
-        const recentDeliveries = deliveries.filter(delivery => 
-          new Date(delivery.created_at) >= thirtyDaysAgo
-        ).length;
-
-        const totalMaterialsDelivered = deliveries.reduce((sum, delivery) => 
-          sum + (delivery.total_delivered || 0), 0
-        );
-
-        setDeliveryStats({
-          totalDeliveries,
-          recentDeliveries,
-          totalMaterialsDelivered
-        });
-
-        // Calcular estadísticas de consumo usando los nuevos campos
-        const totalConsumed = deliveries.reduce((sum, delivery) => 
-          sum + (delivery.total_consumed || 0), 0
-        );
-
-        const remainingStock = deliveries.reduce((sum, delivery) => 
-          sum + (delivery.real_balance || 0), 0
-        );
-
-        const utilizationRate = totalMaterialsDelivered > 0 
-          ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
-          : 0;
-
-        setConsumptionStats({
-          totalConsumed,
-          remainingStock,
-          utilizationRate
-        });
-      } else {
-        // Si no hay datos, establecer valores por defecto
-        setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
-        setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
-      }
-    } catch (err) {
-      console.error('Error loading dashboard data:', err);
-      setError('Error al cargar los datos del dashboard');
-      // Establecer valores por defecto en caso de error
-      setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
-      setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Calcular estadísticas de materiales (solo mostrar materiales relevantes para talleres)
+  // Calcular estadísticas de materiales de forma segura
   const materialStats = React.useMemo(() => {
-    if (!materials || materials.length === 0) {
+    try {
+      if (!materials || !Array.isArray(materials) || materials.length === 0) {
+        return {
+          totalMaterials: 0,
+          lowStockMaterials: 0,
+          outOfStockMaterials: 0,
+          totalStockValue: 0
+        };
+      }
+
+      const totalMaterials = materials.length;
+      const lowStockMaterials = materials.filter(m => {
+        const currentStock = Number(m.current_stock) || 0;
+        const minStock = Number(m.min_stock_alert) || 0;
+        return currentStock <= minStock && currentStock > 0;
+      }).length;
+      
+      const outOfStockMaterials = materials.filter(m => {
+        const currentStock = Number(m.current_stock) || 0;
+        return currentStock === 0;
+      }).length;
+      
+      const totalStockValue = materials.reduce((sum, m) => {
+        const stock = Number(m.current_stock) || 0;
+        const cost = Number(m.unit_cost) || 0;
+        return sum + (stock * cost);
+      }, 0);
+
+      return {
+        totalMaterials,
+        lowStockMaterials,
+        outOfStockMaterials,
+        totalStockValue
+      };
+    } catch (error) {
+      console.error('Error calculating material stats:', error);
       return {
         totalMaterials: 0,
         lowStockMaterials: 0,
@@ -125,29 +200,9 @@ const SuppliesDashboard = () => {
         totalStockValue: 0
       };
     }
-
-    const totalMaterials = materials.length;
-    const lowStockMaterials = materials.filter(m => 
-      m.current_stock <= m.min_stock_alert && m.current_stock > 0
-    ).length;
-    const outOfStockMaterials = materials.filter(m => 
-      m.current_stock === 0
-    ).length;
-    const totalStockValue = materials.reduce((sum, m) => 
-      sum + ((m.current_stock || 0) * (m.unit_cost || 0)), 0
-    );
-
-    return {
-      totalMaterials,
-      lowStockMaterials,
-      outOfStockMaterials,
-      totalStockValue
-    };
   }, [materials]);
 
-  // Determinar si es usuario de taller (ni admin ni diseñador)
-  const isWorkshopUser = !isAdmin && !isDesigner;
-
+  // Mostrar loading state
   if (loading || materialsLoading || deliveriesLoading) {
     return (
       <div className="space-y-6">
@@ -164,6 +219,7 @@ const SuppliesDashboard = () => {
     );
   }
 
+  // Mostrar error state
   if (error) {
     return (
       <div className="space-y-6">
@@ -172,10 +228,10 @@ const SuppliesDashboard = () => {
           <AlertDescription className="text-red-800">
             {error}
             <button 
-              onClick={loadDashboardData} 
+              onClick={() => window.location.reload()} 
               className="ml-2 underline font-medium hover:no-underline"
             >
-              Reintentar
+              Recargar página
             </button>
           </AlertDescription>
         </Alert>
@@ -185,7 +241,7 @@ const SuppliesDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header contextual - solo para usuarios de taller */}
+      {/* Header contextual */}
       {isWorkshopUser && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-blue-900 mb-1">
@@ -297,7 +353,7 @@ const SuppliesDashboard = () => {
         </Card>
       </div>
 
-      {/* Inventario por Taller (filtrado) */}
+      {/* Inventario por Taller (con datos filtrados) */}
       <WorkshopInventoryTable deliveries={deliveriesData} />
 
       {/* Alertas de Stock (solo para admin y diseñadores) */}

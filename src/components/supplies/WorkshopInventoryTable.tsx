@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Package, Warehouse } from 'lucide-react';
+import { Package, Warehouse, Loader2 } from 'lucide-react';
 
 interface MaterialDeliveryWithBalance {
   id: string;
@@ -33,62 +33,97 @@ interface WorkshopInventoryTableProps {
 
 const WorkshopInventoryTable: React.FC<WorkshopInventoryTableProps> = ({ deliveries }) => {
   const workshopInventory = useMemo(() => {
-    const inventory: Record<string, {
-      workshopName: string;
-      materials: Array<{
-        materialId: string;
-        materialName: string;
-        sku: string;
-        color?: string;
-        category: string;
-        unit: string;
-        totalDelivered: number;
-        totalConsumed: number;
-        remaining: number;
-      }>;
-    }> = {};
-
-    // Agrupar por taller y material
-    deliveries.forEach(delivery => {
-      const workshopId = delivery.workshop_id;
-      const materialId = delivery.material_id;
-
-      if (!inventory[workshopId]) {
-        inventory[workshopId] = {
-          workshopName: delivery.workshop_name,
-          materials: []
-        };
+    try {
+      console.log('Processing deliveries for inventory table:', deliveries?.length || 0);
+      
+      if (!deliveries || !Array.isArray(deliveries) || deliveries.length === 0) {
+        console.log('No deliveries data provided to WorkshopInventoryTable');
+        return {};
       }
 
-      // Buscar si ya existe este material para este taller
-      const existingMaterial = inventory[workshopId].materials.find(
-        m => m.materialId === materialId
-      );
+      const inventory: Record<string, {
+        workshopName: string;
+        materials: Array<{
+          materialId: string;
+          materialName: string;
+          sku: string;
+          color?: string;
+          category: string;
+          unit: string;
+          totalDelivered: number;
+          totalConsumed: number;
+          remaining: number;
+        }>;
+      }> = {};
 
-      if (!existingMaterial) {
-        inventory[workshopId].materials.push({
-          materialId,
-          materialName: delivery.material_name,
-          sku: delivery.material_sku,
-          color: delivery.material_color,
-          category: delivery.material_category,
-          unit: delivery.material_unit,
-          totalDelivered: delivery.total_delivered,
-          totalConsumed: delivery.total_consumed,
-          remaining: delivery.real_balance
-        });
-      }
-    });
+      // Agrupar por taller y material
+      deliveries.forEach(delivery => {
+        try {
+          const workshopId = delivery.workshop_id;
+          const materialId = delivery.material_id;
 
-    // Ordenar materiales por nombre dentro de cada taller
-    Object.values(inventory).forEach(workshop => {
-      workshop.materials.sort((a, b) => a.materialName.localeCompare(b.materialName));
-    });
+          if (!workshopId || !materialId) {
+            console.warn('Invalid delivery data - missing workshop_id or material_id:', delivery);
+            return;
+          }
 
-    return inventory;
+          if (!inventory[workshopId]) {
+            inventory[workshopId] = {
+              workshopName: delivery.workshop_name || 'Taller sin nombre',
+              materials: []
+            };
+          }
+
+          // Buscar si ya existe este material para este taller
+          const existingMaterial = inventory[workshopId].materials.find(
+            m => m.materialId === materialId
+          );
+
+          const totalDelivered = Number(delivery.total_delivered) || 0;
+          const totalConsumed = Number(delivery.total_consumed) || 0;
+          const remaining = Number(delivery.real_balance) || 0;
+
+          if (!existingMaterial) {
+            inventory[workshopId].materials.push({
+              materialId,
+              materialName: delivery.material_name || 'Material sin nombre',
+              sku: delivery.material_sku || 'N/A',
+              color: delivery.material_color,
+              category: delivery.material_category || 'Sin categoría',
+              unit: delivery.material_unit || 'unidad',
+              totalDelivered,
+              totalConsumed,
+              remaining
+            });
+          } else {
+            // Si ya existe, actualizar cantidades (en caso de múltiples entregas)
+            existingMaterial.totalDelivered += totalDelivered;
+            existingMaterial.totalConsumed += totalConsumed;
+            existingMaterial.remaining += remaining;
+          }
+        } catch (error) {
+          console.error('Error processing delivery item:', delivery, error);
+        }
+      });
+
+      // Ordenar materiales por nombre dentro de cada taller
+      Object.values(inventory).forEach(workshop => {
+        if (workshop.materials && Array.isArray(workshop.materials)) {
+          workshop.materials.sort((a, b) => 
+            (a.materialName || '').localeCompare(b.materialName || '')
+          );
+        }
+      });
+
+      console.log('Processed inventory for', Object.keys(inventory).length, 'workshops');
+      return inventory;
+    } catch (error) {
+      console.error('Error processing workshop inventory:', error);
+      return {};
+    }
   }, [deliveries]);
 
-  const getStockBadgeVariant = (remaining: number) => {
+  const getStockBadgeVariant = (remaining: number): "default" | "destructive" | "outline" | "secondary" => {
     if (remaining <= 0) return 'destructive';
     if (remaining <= 10) return 'outline';
     return 'default';
@@ -100,6 +135,27 @@ const WorkshopInventoryTable: React.FC<WorkshopInventoryTableProps> = ({ deliver
     return 'Disponible';
   };
 
+  // Loading state
+  if (!deliveries) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Warehouse className="w-5 h-5" />
+            <span>Inventario por Taller</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Cargando inventario...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Empty state
   if (Object.keys(workshopInventory).length === 0) {
     return (
       <Card>
@@ -134,7 +190,7 @@ const WorkshopInventoryTable: React.FC<WorkshopInventoryTableProps> = ({ deliver
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {workshop.materials.length === 0 ? (
+            {!workshop.materials || workshop.materials.length === 0 ? (
               <div className="text-center py-4">
                 <p className="text-gray-600">No hay materiales disponibles en este taller</p>
               </div>

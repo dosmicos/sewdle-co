@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -44,9 +44,23 @@ export const useMaterialDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { workshopFilter, isAdmin, isDesigner } = useUserContext();
+  const isMountedRef = useRef(true);
+
+  // Cleanup ref cuando el componente se desmonte
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const safeSetLoading = useCallback((value: boolean) => {
+    if (isMountedRef.current) {
+      setLoading(value);
+    }
+  }, []);
 
   const createMaterialDelivery = async (deliveryData: MaterialDeliveryData) => {
-    setLoading(true);
+    safeSetLoading(true);
     try {
       console.log('Creating material delivery with data:', deliveryData);
 
@@ -105,10 +119,12 @@ export const useMaterialDeliveries = () => {
 
       console.log('All material deliveries created successfully:', results);
 
-      toast({
-        title: "¡Entrega registrada exitosamente!",
-        description: `Se registraron ${deliveryData.materials.length} materiales entregados.`,
-      });
+      if (isMountedRef.current) {
+        toast({
+          title: "¡Entrega registrada exitosamente!",
+          description: `Se registraron ${deliveryData.materials.length} materiales entregados.`,
+        });
+      }
 
       return results;
     } catch (error: any) {
@@ -134,78 +150,109 @@ export const useMaterialDeliveries = () => {
         errorMessage = `Error: ${error.message}`;
       }
       
-      toast({
-        title: "Error al registrar entrega",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      if (isMountedRef.current) {
+        toast({
+          title: "Error al registrar entrega",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
       throw error;
     } finally {
-      setLoading(false);
+      safeSetLoading(false);
     }
   };
 
-  const fetchMaterialDeliveries = async (): Promise<MaterialDeliveryWithBalance[]> => {
-    setLoading(true);
+  const fetchMaterialDeliveries = useCallback(async (): Promise<MaterialDeliveryWithBalance[]> => {
+    safeSetLoading(true);
     try {
       console.log('Fetching material deliveries with filters:', { workshopFilter, isAdmin, isDesigner });
+      
+      // Verificar autenticación antes de hacer la consulta
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error in fetchMaterialDeliveries:', sessionError);
+        throw new Error('Error de autenticación');
+      }
+      
+      if (!session?.user) {
+        console.error('No authenticated user in fetchMaterialDeliveries');
+        throw new Error('Usuario no autenticado');
+      }
+
+      console.log('Authenticated user for deliveries fetch:', session.user.id);
       
       // Construir la consulta base
       let query = supabase.rpc('get_material_deliveries_with_real_balance');
       
-      // Solo filtrar por taller si no es admin ni diseñador y tiene workshopFilter
-      if (!isAdmin && !isDesigner && workshopFilter) {
-        // Filtrar los resultados por workshop_id después de obtenerlos
-        const { data: allDeliveries, error } = await query.order('delivery_date', { ascending: false });
+      console.log('Executing RPC call: get_material_deliveries_with_real_balance');
+      
+      const { data: allDeliveries, error } = await query.order('delivery_date', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching material deliveries:', error);
-          throw error;
-        }
-
-        // Filtrar manualmente por workshop_id
-        const filteredDeliveries = allDeliveries?.filter(delivery => 
-          delivery.workshop_id === workshopFilter
-        ) || [];
-
-        console.log('Material deliveries filtered by workshop:', filteredDeliveries.length, 'of', allDeliveries?.length || 0);
-        return filteredDeliveries;
-      } else {
-        // Si es admin o diseñador, mostrar todos
-        const { data: deliveries, error } = await query.order('delivery_date', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching material deliveries:', error);
-          throw error;
-        }
-
-        console.log('Material deliveries (admin/designer view):', deliveries?.length || 0);
-        return deliveries || [];
+      if (error) {
+        console.error('Error fetching material deliveries:', error);
+        console.error('Full error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        throw error;
       }
+
+      console.log('Raw deliveries from RPC:', allDeliveries?.length || 0, 'items');
+
+      if (!allDeliveries || !Array.isArray(allDeliveries)) {
+        console.warn('Invalid deliveries data structure:', allDeliveries);
+        return [];
+      }
+
+      // Filtrar por taller si es necesario (solo para usuarios de taller)
+      let filteredDeliveries = allDeliveries;
+      
+      if (!isAdmin && !isDesigner && workshopFilter) {
+        console.log('Applying workshop filter:', workshopFilter);
+        filteredDeliveries = allDeliveries.filter(delivery => 
+          delivery.workshop_id === workshopFilter
+        );
+        console.log('Deliveries after workshop filter:', filteredDeliveries.length, 'of', allDeliveries.length);
+      } else {
+        console.log('No workshop filter applied - showing all deliveries for admin/designer');
+      }
+
+      console.log('Final filtered deliveries:', filteredDeliveries.length);
+      return filteredDeliveries;
 
     } catch (error: any) {
       console.error('Error in fetchMaterialDeliveries:', error);
       
       let errorMessage = "No se pudieron cargar las entregas de materiales.";
       
-      if (error.code === 'PGRST301' || error.message?.includes('policy')) {
+      if (error.message?.includes('Usuario no autenticado')) {
+        errorMessage = "Debes iniciar sesión para ver las entregas.";
+      } else if (error.message?.includes('Error de autenticación')) {
+        errorMessage = "Error de autenticación. Por favor vuelve a iniciar sesión.";
+      } else if (error.code === 'PGRST301' || error.message?.includes('policy')) {
         errorMessage = "Sin permisos para ver las entregas. Contacta al administrador.";
       } else if (error.message) {
         errorMessage = `Error al cargar datos: ${error.message}`;
       }
       
-      toast({
-        title: "Error al cargar entregas",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      if (isMountedRef.current) {
+        toast({
+          title: "Error al cargar entregas",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
       
       // Return empty array instead of throwing to prevent UI crashes
       return [];
     } finally {
-      setLoading(false);
+      safeSetLoading(false);
     }
-  };
+  }, [workshopFilter, isAdmin, isDesigner, toast, safeSetLoading]);
 
   return {
     loading,
