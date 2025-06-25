@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -103,7 +102,7 @@ export const useUsers = () => {
           workshopId: workshopId,
           workshopName: workshopName,
           status: 'active' as const, // Por defecto activo
-          requiresPasswordChange: false, // TODO: Implementar lógica real
+          requiresPasswordChange: profile.requires_password_change || false,
           createdAt: profile.created_at,
           lastLogin: undefined, // TODO: Implementar seguimiento de último login
           createdBy: 'system' // TODO: Implementar tracking de quién creó el usuario
@@ -171,12 +170,13 @@ export const useUsers = () => {
   const updateUser = async (userId: string, updates: Partial<User>) => {
     try {
       // Actualizar perfil
-      if (updates.name || updates.email) {
+      if (updates.name || updates.email || updates.requiresPasswordChange !== undefined) {
         await supabase
           .from('profiles')
           .update({
             name: updates.name,
-            email: updates.email
+            email: updates.email,
+            requires_password_change: updates.requiresPasswordChange
           })
           .eq('id', userId);
       }

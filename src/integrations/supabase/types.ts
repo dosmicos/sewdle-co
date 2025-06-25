@@ -540,6 +540,7 @@ export type Database = {
           email: string | null
           id: string
           name: string | null
+          requires_password_change: boolean | null
           updated_at: string | null
         }
         Insert: {
@@ -548,6 +549,7 @@ export type Database = {
           email?: string | null
           id: string
           name?: string | null
+          requires_password_change?: boolean | null
           updated_at?: string | null
         }
         Update: {
@@ -556,6 +558,7 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          requires_password_change?: boolean | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1078,8 +1081,16 @@ export type Database = {
         Args: { user_email: string }
         Returns: undefined
       }
+      mark_password_changed: {
+        Args: { user_uuid: string }
+        Returns: undefined
+      }
       recalculate_material_stock: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      require_password_change: {
+        Args: { user_uuid: string }
         Returns: undefined
       }
       user_has_workshop_permissions: {

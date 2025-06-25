@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,14 +7,23 @@ import { Card } from '@/components/ui/card';
 import { Loader2, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
+import PasswordChangeModal from '@/components/PasswordChangeModal';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
-  const { login } = useAuth();
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const { login, user } = useAuth();
   const { toast } = useToast();
+
+  // Verificar si el usuario requiere cambio de contraseña después del login
+  useEffect(() => {
+    if (user && user.requiresPasswordChange) {
+      setShowPasswordChange(true);
+    }
+  }, [user]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +39,7 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       await login(email, password);
+      // No redirigir aquí, el useEffect se encargará de mostrar el modal si es necesario
     } catch (error) {
       toast({
         title: "Error de autenticación",
@@ -40,6 +50,11 @@ const LoginPage = () => {
       setIsLoading(false);
     }
   }, [email, password, login, toast]);
+
+  const handlePasswordChangeComplete = () => {
+    setShowPasswordChange(false);
+    // El usuario será redirigido automáticamente al dashboard por el AuthContext
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -116,6 +131,12 @@ const LoginPage = () => {
       <PasswordRecoveryModal
         isOpen={showPasswordRecovery}
         onClose={() => setShowPasswordRecovery(false)}
+      />
+
+      {/* Password Change Modal */}
+      <PasswordChangeModal
+        isOpen={showPasswordChange}
+        onClose={handlePasswordChangeComplete}
       />
     </div>
   );

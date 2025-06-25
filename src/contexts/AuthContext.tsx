@@ -10,6 +10,7 @@ export interface UserProfile {
   name?: string;
   workshopId?: string;
   permissions?: Record<string, Record<string, boolean>>;
+  requiresPasswordChange?: boolean;
 }
 
 interface AuthContextType {
@@ -22,6 +23,8 @@ interface AuthContextType {
   isAdmin: () => boolean;
   isDesigner: () => boolean;
   isQCLeader: () => boolean;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  markPasswordChanged: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -116,7 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role,
         name: profile?.name || session.user.user_metadata?.name || session.user.email,
         workshopId,
-        permissions
+        permissions,
+        requiresPasswordChange: profile?.requires_password_change || false
       };
     } catch (error) {
       console.error('Error in createUserProfile:', error);
@@ -126,10 +130,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: session.user.email || '',
         role: 'Administrador',
         name: session.user.user_metadata?.name || session.user.email,
-        permissions: {}
+        permissions: {},
+        requiresPasswordChange: false
       };
     }
   }, []);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<void> => {
+    if (!user) {
+      throw new Error('No user authenticated');
+    }
+
+    try {
+      // Verificar contraseña actual
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        throw new Error('Contraseña actual incorrecta');
+      }
+
+      // Cambiar contraseña
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      toast({
+        title: "Contraseña actualizada",
+        description: "Tu contraseña ha sido cambiada exitosamente",
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      throw error;
+    }
+  }, [user, toast]);
+
+  const markPasswordChanged = useCallback(async (): Promise<void> => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.rpc('mark_password_changed', {
+        user_uuid: user.id
+      });
+
+      if (error) {
+        console.error('Error marking password as changed:', error);
+        throw error;
+      }
+
+      // Actualizar el estado local
+      setUser(prev => prev ? { ...prev, requiresPasswordChange: false } : null);
+    } catch (error) {
+      console.error('Error in markPasswordChanged:', error);
+      throw error;
+    }
+  }, [user]);
 
   const hasPermission = useCallback((module: string, action: string): boolean => {
     if (!user || !user.permissions) return false;
@@ -168,7 +229,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: session.user.email || '',
           role: 'Administrador',
           name: session.user.email,
-          permissions: {}
+          permissions: {},
+          requiresPasswordChange: false
         });
       }
     } else {
@@ -268,7 +330,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hasPermission, 
       isAdmin,
       isDesigner,
-      isQCLeader 
+      isQCLeader,
+      changePassword,
+      markPasswordChanged
     }}>
       {children}
     </AuthContext.Provider>
