@@ -8,10 +8,19 @@ import OrderEditModal from '@/components/OrderEditModal';
 import OrderDetailsModal from '@/components/OrderDetailsModal';
 import { useOrderActions } from '@/hooks/useOrderActions';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +44,8 @@ import {
   Building, 
   Trash2,
   Filter,
-  TrendingUp
+  TrendingUp,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -47,6 +57,7 @@ const OrdersPage = () => {
   const { hasPermission } = useAuth();
   const { workshops } = useWorkshops();
   const { deleteOrder } = useOrderActions();
+  const isMobile = useIsMobile();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -56,6 +67,7 @@ const OrdersPage = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
 
   // Verificar si el usuario puede crear órdenes
   const canCreateOrders = hasPermission('orders', 'create');
@@ -139,6 +151,13 @@ const OrdersPage = () => {
     setSelectedStatus('all');
   };
 
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (selectedWorkshop !== 'all') count++;
+    if (selectedStatus !== 'all') count++;
+    return count;
+  };
+
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || '';
@@ -165,7 +184,7 @@ const OrdersPage = () => {
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+    <div className="p-4 md:p-6 space-y-6 bg-gray-50 min-h-screen">
       {/* Header con título y breadcrumbs */}
       <div className="space-y-2">
         <div className="flex items-center text-sm text-gray-500">
@@ -175,8 +194,8 @@ const OrdersPage = () => {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Gestión de Órdenes de Producción</h1>
-            <p className="text-gray-600">Administra y monitorea todas las órdenes de producción</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Gestión de Órdenes de Producción</h1>
+            <p className="text-gray-600 text-sm md:text-base">Administra y monitorea todas las órdenes de producción</p>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <TrendingUp className="w-4 h-4" />
@@ -185,12 +204,13 @@ const OrdersPage = () => {
         </div>
       </div>
 
-      {/* Filtros mejorados */}
+      {/* Filtros mejorados - Responsive */}
       <Card className="bg-white border-0 shadow-sm rounded-2xl">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Búsqueda */}
+        <CardContent className="p-4 md:p-6">
+          {isMobile ? (
+            // Vista móvil con drawer
+            <div className="space-y-4">
+              {/* Búsqueda principal siempre visible */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <input
@@ -202,69 +222,136 @@ const OrdersPage = () => {
                 />
               </div>
 
-              {/* Filtro por taller */}
-              <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
-                <SelectTrigger className="h-12 rounded-xl border-gray-200">
-                  <SelectValue placeholder="Todos los talleres" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los talleres</SelectItem>
-                  {workshops.map((workshop) => (
-                    <SelectItem key={workshop.id} value={workshop.id}>
-                      {workshop.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="unassigned">Sin asignar</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Botones de acción móvil */}
+              <div className="flex gap-3 justify-between">
+                <div className="flex gap-2">
+                  {/* Botón de filtros con Sheet */}
+                  <Sheet open={showFiltersSheet} onOpenChange={setShowFiltersSheet}>
+                    <SheetTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="flex items-center gap-2 px-4 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl relative"
+                      >
+                        <Filter className="w-4 h-4" />
+                        Filtros
+                        {getActiveFiltersCount() > 0 && (
+                          <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-blue-600 text-white text-xs p-0 flex items-center justify-center">
+                            {getActiveFiltersCount()}
+                          </Badge>
+                        )}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="h-auto max-h-[80vh]">
+                      <SheetHeader className="text-left pb-6">
+                        <SheetTitle>Filtros de búsqueda</SheetTitle>
+                        <SheetDescription>
+                          Ajusta los filtros para encontrar las órdenes que necesitas
+                        </SheetDescription>
+                      </SheetHeader>
+                      <FiltersContent />
+                    </SheetContent>
+                  </Sheet>
 
-              {/* Filtro por estado */}
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="h-12 rounded-xl border-gray-200">
-                  <SelectValue placeholder="Todos los estados" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="assigned">Asignada</SelectItem>
-                  <SelectItem value="in_progress">En Progreso</SelectItem>
-                  <SelectItem value="completed">Completada</SelectItem>
-                  <SelectItem value="cancelled">Cancelada</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Limpiar filtros */}
-              <Button 
-                variant="outline" 
-                onClick={clearFilters}
-                className="h-12 px-4 border-gray-200 hover:bg-gray-50 rounded-xl"
-              >
-                <Filter className="w-4 h-4" />
-                Limpiar
-              </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => refetch()}
+                    className="flex items-center gap-2 px-4 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                {canCreateOrders && (
+                  <Button 
+                    onClick={() => setShowCreateForm(true)}
+                    className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nueva
+                  </Button>
+                )}
+              </div>
             </div>
-            
-            <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => refetch()}
-                className="flex items-center gap-2 px-6 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Actualizar
-              </Button>
-              
-              {canCreateOrders && (
+          ) : (
+            // Vista desktop original
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Búsqueda */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <input
+                    type="text"
+                    placeholder="Buscar órdenes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Filtro por taller */}
+                <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+                  <SelectTrigger className="h-12 rounded-xl border-gray-200">
+                    <SelectValue placeholder="Todos los talleres" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los talleres</SelectItem>
+                    {workshops.map((workshop) => (
+                      <SelectItem key={workshop.id} value={workshop.id}>
+                        {workshop.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="unassigned">Sin asignar</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro por estado */}
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger className="h-12 rounded-xl border-gray-200">
+                    <SelectValue placeholder="Todos los estados" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="assigned">Asignada</SelectItem>
+                    <SelectItem value="in_progress">En Progreso</SelectItem>
+                    <SelectItem value="completed">Completada</SelectItem>
+                    <SelectItem value="cancelled">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Limpiar filtros */}
                 <Button 
-                  onClick={() => setShowCreateForm(true)}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg"
+                  variant="outline" 
+                  onClick={clearFilters}
+                  className="h-12 px-4 border-gray-200 hover:bg-gray-50 rounded-xl"
                 >
-                  <Plus className="w-4 h-4" />
-                  Nueva Orden
+                  <Filter className="w-4 h-4" />
+                  Limpiar
                 </Button>
-              )}
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => refetch()}
+                  className="flex items-center gap-2 px-6 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Actualizar
+                </Button>
+                
+                {canCreateOrders && (
+                  <Button 
+                    onClick={() => setShowCreateForm(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nueva Orden
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -381,21 +468,22 @@ const OrderCard = ({
   canDelete 
 }: any) => {
   const { stats, loading: statsLoading, error: statsError } = useOrderStats(order.id);
+  const isMobile = useIsMobile();
   
   return (
     <Card className="bg-white border-0 shadow-sm rounded-2xl hover:shadow-md transition-all duration-200">
-      <CardContent className="p-6">
+      <CardContent className="p-4 md:p-6">
         {/* Header Section */}
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+              <FileText className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">{order.order_number}</h3>
-              <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+              <h3 className="text-lg md:text-xl font-semibold text-gray-900">{order.order_number}</h3>
+              <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-xs md:text-sm text-gray-500 mt-1">
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-3 h-3 md:w-4 md:h-4" />
                   {format(new Date(order.created_at), 'dd MMM yyyy', { locale: es })}
                 </span>
                 <span>
@@ -406,7 +494,7 @@ const OrderCard = ({
           </div>
           
           <div className="flex items-center gap-3">
-            <Badge className={`${getStatusColor(order.status)} border rounded-full px-3 py-1`}>
+            <Badge className={`${getStatusColor(order.status)} border rounded-full px-2 md:px-3 py-1 text-xs`}>
               {getStatusText(order.status)}
             </Badge>
           </div>
@@ -414,14 +502,14 @@ const OrderCard = ({
 
         {/* Información del taller - Más prominente */}
         <div className="mb-4">
-          <Badge className={`${getWorkshopColor(order)} border rounded-full px-3 py-1 text-sm`}>
-            <Building className="w-4 h-4 mr-1" />
+          <Badge className={`${getWorkshopColor(order)} border rounded-full px-2 md:px-3 py-1 text-xs md:text-sm`}>
+            <Building className="w-3 h-3 md:w-4 md:h-4 mr-1" />
             {getWorkshopName(order)}
           </Badge>
         </div>
 
         {/* Estadísticas de progreso */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
+        <div className="mb-6 p-3 md:p-4 bg-gray-50 rounded-2xl">
           {statsError ? (
             <div className="text-center py-4">
               <div className="text-sm text-red-600 mb-2">
@@ -433,46 +521,46 @@ const OrderCard = ({
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-lg md:text-2xl font-bold text-blue-600">
                     {statsLoading ? (
-                      <div className="w-8 h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                      <div className="w-6 md:w-8 h-4 md:h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
                     ) : (
                       stats.totalOrdered
                     )}
                   </div>
-                  <div className="text-sm text-gray-500">Ordenado</div>
+                  <div className="text-xs md:text-sm text-gray-500">Ordenado</div>
                 </div>
                 <div className="text-center border-l border-r border-gray-200">
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-lg md:text-2xl font-bold text-green-600">
                     {statsLoading ? (
-                      <div className="w-8 h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                      <div className="w-6 md:w-8 h-4 md:h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
                     ) : (
                       stats.totalApproved
                     )}
                   </div>
-                  <div className="text-sm text-gray-500">Aprobado</div>
+                  <div className="text-xs md:text-sm text-gray-500">Aprobado</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">
+                  <div className="text-lg md:text-2xl font-bold text-orange-600">
                     {statsLoading ? (
-                      <div className="w-8 h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
+                      <div className="w-6 md:w-8 h-4 md:h-6 bg-gray-200 rounded animate-pulse mx-auto"></div>
                     ) : (
                       stats.totalPending
                     )}
                   </div>
-                  <div className="text-sm text-gray-500">Pendiente</div>
+                  <div className="text-xs md:text-sm text-gray-500">Pendiente</div>
                 </div>
               </div>
               
               {/* Barra de progreso */}
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs md:text-sm">
                   <span className="text-gray-600">Progreso de producción</span>
                   <span className="font-medium text-gray-900">
                     {statsLoading ? (
-                      <div className="w-12 h-4 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="w-8 md:w-12 h-3 md:h-4 bg-gray-200 rounded animate-pulse"></div>
                     ) : (
                       `${stats.completionPercentage}%`
                     )}
@@ -492,25 +580,25 @@ const OrderCard = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 justify-end">
+        <div className={`flex gap-2 md:gap-3 ${isMobile ? 'justify-center' : 'justify-end'}`}>
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => onView(order)}
-            className="flex items-center gap-2 px-4 py-2 border-blue-200 text-blue-600 hover:bg-blue-50 rounded-xl"
+            className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 border-blue-200 text-blue-600 hover:bg-blue-50 rounded-xl text-xs md:text-sm"
           >
-            <Eye className="w-4 h-4" />
-            Ver
+            <Eye className="w-3 h-3 md:w-4 md:h-4" />
+            {isMobile ? '' : 'Ver'}
           </Button>
           {canEdit && (
             <Button 
               variant="outline" 
               size="sm" 
               onClick={() => onEdit(order)}
-              className="flex items-center gap-2 px-4 py-2 border-green-200 text-green-600 hover:bg-green-50 rounded-xl"
+              className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 border-green-200 text-green-600 hover:bg-green-50 rounded-xl text-xs md:text-sm"
             >
-              <Edit className="w-4 h-4" />
-              Editar
+              <Edit className="w-3 h-3 md:w-4 md:h-4" />
+              {isMobile ? '' : 'Editar'}
             </Button>
           )}
           {canDelete && (
@@ -518,10 +606,10 @@ const OrderCard = ({
               variant="outline" 
               size="sm"
               onClick={() => onDelete(order)}
-              className="flex items-center gap-2 px-4 py-2 border-red-200 text-red-600 hover:bg-red-50 rounded-xl"
+              className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs md:text-sm"
             >
-              <Trash2 className="w-4 h-4" />
-              Eliminar
+              <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+              {isMobile ? '' : 'Eliminar'}
             </Button>
           )}
         </div>
