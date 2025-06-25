@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useFilteredOrders } from '@/hooks/useFilteredOrders';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -172,6 +173,63 @@ const OrdersPage = () => {
     
     return matchesSearch && matchesWorkshop && matchesStatus;
   });
+
+  // Componente para el contenido de filtros
+  const FiltersContent = () => (
+    <div className="space-y-4">
+      {/* Filtro por taller */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Taller</label>
+        <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Todos los talleres" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los talleres</SelectItem>
+            {workshops.map((workshop) => (
+              <SelectItem key={workshop.id} value={workshop.id}>
+                {workshop.name}
+              </SelectItem>
+            ))}
+            <SelectItem value="unassigned">Sin asignar</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Filtro por estado */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Estado</label>
+        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Todos los estados" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="pending">Pendiente</SelectItem>
+            <SelectItem value="assigned">Asignada</SelectItem>
+            <SelectItem value="in_progress">En Progreso</SelectItem>
+            <SelectItem value="completed">Completada</SelectItem>
+            <SelectItem value="cancelled">Cancelada</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Botón limpiar filtros */}
+      <div className="pt-4 border-t">
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            clearFilters();
+            setShowFiltersSheet(false);
+          }}
+          className="w-full flex items-center gap-2"
+        >
+          <X className="w-4 h-4" />
+          Limpiar filtros
+        </Button>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
