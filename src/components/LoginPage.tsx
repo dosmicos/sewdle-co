@@ -8,6 +8,7 @@ import { Loader2, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
 import PasswordChangeModal from '@/components/PasswordChangeModal';
+import { logger } from '@/lib/logger';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -39,8 +40,10 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       await login(email, password);
+      logger.info('User logged in successfully');
       // No redirigir aquí, el useEffect se encargará de mostrar el modal si es necesario
     } catch (error) {
+      logger.error('Login error', error);
       toast({
         title: "Error de autenticación",
         description: error instanceof Error ? error.message : "Error desconocido",

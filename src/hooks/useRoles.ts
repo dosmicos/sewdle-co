@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 export interface Permission {
   module: string;
@@ -103,7 +104,7 @@ export const useRoles = () => {
 
       setRoles(formattedRoles);
     } catch (err: any) {
-      console.error('Error fetching roles:', err);
+      logger.error('Error fetching roles', err);
       setError(err.message || 'Error al cargar roles');
       toast({
         title: "Error",
@@ -152,7 +153,7 @@ export const useRoles = () => {
 
       return { success: true };
     } catch (err: any) {
-      console.error('Error creating role:', err);
+      logger.error('Error creating role', err);
       toast({
         title: "Error al crear rol",
         description: err.message || "Hubo un problema al crear el rol",
@@ -203,7 +204,7 @@ export const useRoles = () => {
 
       return { success: true };
     } catch (err: any) {
-      console.error('Error updating role:', err);
+      logger.error('Error updating role', err);
       toast({
         title: "Error al actualizar rol",
         description: err.message || "Hubo un problema al actualizar el rol",
@@ -233,7 +234,7 @@ export const useRoles = () => {
 
       return { success: true };
     } catch (err: any) {
-      console.error('Error deleting role:', err);
+      logger.error('Error deleting role', err);
       toast({
         title: "Error al eliminar rol",
         description: err.message || "Hubo un problema al eliminar el rol",

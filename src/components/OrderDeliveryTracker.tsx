@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Truck, Package, CheckCircle, XCircle, AlertTriangle, Calendar, Factory, ShirtIcon, RefreshCw } from 'lucide-react';
 import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
+import { logger } from '@/lib/logger';
 
 interface OrderDeliveryTrackerProps {
   orderId: string;
@@ -30,7 +31,7 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
     }
     
     try {
-      console.log('Loading order delivery data for order:', orderId, 'Force refresh:', forceRefresh);
+      logger.debug('Loading order delivery data', { orderId, forceRefresh });
       
       const [orderStats, deliveriesData, variantsData] = await Promise.all([
         getOrderStats(orderId),
@@ -38,15 +39,11 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
         getOrderVariantsBreakdown(orderId)
       ]);
       
-      console.log('Loaded order stats:', orderStats);
-      console.log('Loaded deliveries data:', deliveriesData);
-      console.log('Loaded variants data:', variantsData);
-      
       setStats(orderStats);
       setDeliveries(deliveriesData);
       setVariants(variantsData);
     } catch (error) {
-      console.error('Error loading order delivery data:', error);
+      logger.error('Error loading order delivery data', error);
     } finally {
       if (forceRefresh) {
         setRefreshing(false);
@@ -55,7 +52,7 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
   };
 
   const handleRefresh = () => {
-    console.log('Manual refresh triggered');
+    logger.debug('Manual refresh triggered');
     loadData(true);
   };
 

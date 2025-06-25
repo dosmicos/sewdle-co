@@ -1,4 +1,5 @@
 
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
@@ -16,8 +17,6 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
     const { name, email, role, workshopId, requiresPasswordChange = true } = await req.json()
-    
-    console.log('Creating user with data:', { name, email, role, workshopId, requiresPasswordChange })
 
     // Generate a temporary password
     const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase()
@@ -38,8 +37,6 @@ serve(async (req) => {
       throw authError
     }
 
-    console.log('User created in auth:', authData.user?.id)
-
     // Create or update profile
     const { error: profileError } = await supabase
       .from('profiles')
@@ -54,8 +51,6 @@ serve(async (req) => {
       console.error('Profile error:', profileError)
       throw profileError
     }
-
-    console.log('Profile created/updated')
 
     // Assign role if provided
     if (role && role !== 'Sin Rol') {
@@ -84,8 +79,6 @@ serve(async (req) => {
         console.error('User role error:', userRoleError)
         throw userRoleError
       }
-
-      console.log('Role assigned to user')
     }
 
     return new Response(
@@ -119,3 +112,4 @@ serve(async (req) => {
     )
   }
 })
+
