@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,12 +5,18 @@ import { Plus, Building2, Star, Calendar, ArrowLeft, Trash2, Edit } from 'lucide
 import WorkshopForm from '@/components/WorkshopForm';
 import WorkshopDetails from '@/components/WorkshopDetails';
 import { useWorkshops } from '@/hooks/useWorkshops';
+import { useAuth } from '@/contexts/AuthContext';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 const WorkshopsPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedWorkshop, setSelectedWorkshop] = useState<any>(null);
   const { workshops, loading, deleteWorkshop } = useWorkshops();
+  const { hasPermission } = useAuth();
+
+  // Verificar permisos
+  const canCreateWorkshops = hasPermission('workshops', 'create');
+  const canDeleteWorkshops = hasPermission('workshops', 'delete');
 
   const handleWorkshopClick = (workshop: any) => {
     setSelectedWorkshop(workshop);
@@ -77,27 +82,36 @@ const WorkshopsPage = () => {
           <h1 className="text-3xl font-bold tracking-tight text-black">Talleres</h1>
           <p className="text-gray-600">Gestiona y supervisa todos los talleres</p>
         </div>
-        <Button 
-          onClick={() => setShowForm(true)}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Taller
-        </Button>
+        {canCreateWorkshops && (
+          <Button 
+            onClick={() => setShowForm(true)}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Taller
+          </Button>
+        )}
       </div>
 
       {workshops.length === 0 ? (
         <div className="text-center py-12">
           <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay talleres registrados</h3>
-          <p className="text-gray-600 mb-4">Comienza agregando tu primer taller de confección</p>
-          <Button 
-            onClick={() => setShowForm(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Crear Primer Taller
-          </Button>
+          <p className="text-gray-600 mb-4">
+            {canCreateWorkshops 
+              ? "Comienza agregando tu primer taller de confección"
+              : "No tienes permisos para crear talleres"
+            }
+          </p>
+          {canCreateWorkshops && (
+            <Button 
+              onClick={() => setShowForm(true)}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl px-6 py-3"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Crear Primer Taller
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -118,37 +132,39 @@ const WorkshopsPage = () => {
                       <p className="text-sm text-gray-600">{workshop.email}</p>
                     </div>
                   </div>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Eliminar taller?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Se eliminará permanentemente el taller "{workshop.name}".
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={(e) => handleDeleteWorkshop(workshop.id, e)}
-                            className="bg-red-500 hover:bg-red-600"
+                  {canDeleteWorkshops && (
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            Eliminar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar taller?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta acción no se puede deshacer. Se eliminará permanentemente el taller "{workshop.name}".
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={(e) => handleDeleteWorkshop(workshop.id, e)}
+                              className="bg-red-500 hover:bg-red-600"
+                            >
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
