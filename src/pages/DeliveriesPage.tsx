@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -22,10 +24,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2 } from 'lucide-react';
+import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const DeliveriesPage = () => {
   const { deliveries, loading, refetch } = useFilteredDeliveries();
@@ -33,17 +36,34 @@ const DeliveriesPage = () => {
   const { isAdmin } = useUserContext();
   const { hasPermission } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deliveryToDelete, setDeliveryToDelete] = useState<any>(null);
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [workshopFilter, setWorkshopFilter] = useState('all');
 
   // Permission checks - using correct English module names
   const canCreateDeliveries = hasPermission('deliveries', 'create');
   const canEditDeliveries = hasPermission('deliveries', 'edit');
   const canDeleteDeliveries = hasPermission('deliveries', 'delete');
+
+  // Get unique workshops for filter
+  const workshopOptions = [...new Set(deliveries.map(d => d.workshop_name).filter(Boolean))];
+
+  // Count active filters
+  const activeFiltersCount = [statusFilter, workshopFilter].filter(f => f !== 'all').length;
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setWorkshopFilter('all');
+    setSearchTerm('');
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -78,7 +98,7 @@ const DeliveriesPage = () => {
     }
   };
 
-  // Filter deliveries based on search term and active tab
+  // Filter deliveries based on search term and active filters
   const filteredDeliveries = useMemo(() => {
     let filtered = deliveries;
 
@@ -91,8 +111,18 @@ const DeliveriesPage = () => {
       );
     }
 
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(delivery => delivery.status === statusFilter);
+    }
+
+    // Apply workshop filter
+    if (workshopFilter !== 'all') {
+      filtered = filtered.filter(delivery => delivery.workshop_name === workshopFilter);
+    }
+
     // Apply tab filter
-    if (activeTab !== 'all') {
+    if (activeTab !== 'all' && activeTab !== 'sync') {
       filtered = filtered.filter(delivery => {
         switch (activeTab) {
           case 'in_quality':
@@ -101,8 +131,6 @@ const DeliveriesPage = () => {
             return delivery.status === 'approved' || delivery.status === 'partial_approved';
           case 'rejected':
             return delivery.status === 'rejected';
-          case 'sync':
-            return true; // Sync tab shows all deliveries for sync management
           default:
             return true;
         }
@@ -110,7 +138,7 @@ const DeliveriesPage = () => {
     }
 
     return filtered;
-  }, [deliveries, searchTerm, activeTab]);
+  }, [deliveries, searchTerm, statusFilter, workshopFilter, activeTab]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -151,6 +179,59 @@ const DeliveriesPage = () => {
     }
   };
 
+  // Componente para el contenido de filtros
+  const FiltersContent = () => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Estado</label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Todos los estados" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="pending">Pendiente</SelectItem>
+            <SelectItem value="in_quality">En Revisión</SelectItem>
+            <SelectItem value="approved">Aprobada</SelectItem>
+            <SelectItem value="partial_approved">Parcial</SelectItem>
+            <SelectItem value="rejected">Rechazada</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Taller</label>
+        <Select value={workshopFilter} onValueChange={setWorkshopFilter}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Todos los talleres" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los talleres</SelectItem>
+            {workshopOptions.map((workshop) => (
+              <SelectItem key={workshop} value={workshop}>
+                {workshop}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="pt-4 border-t">
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            clearFilters();
+            setShowFiltersSheet(false);
+          }}
+          className="w-full flex items-center gap-2"
+        >
+          <X className="w-4 h-4" />
+          Limpiar filtros
+        </Button>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="p-6">
@@ -172,18 +253,22 @@ const DeliveriesPage = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col space-y-4 md:flex-row md:justify-between md:items-center md:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-xl md:text-2xl font-bold">
             {isAdmin ? 'Gestión de Entregas' : 'Mis Entregas'}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             {isAdmin ? 'Administra todas las entregas del sistema' : 'Entregas de tu taller'}
           </p>
         </div>
         {canCreateDeliveries && (
-          <Button onClick={() => setShowCreateForm(true)}>
+          <Button 
+            onClick={() => setShowCreateForm(true)}
+            className="w-full md:w-auto"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Nueva Entrega
           </Button>
@@ -197,59 +282,59 @@ const DeliveriesPage = () => {
         />
       )}
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Statistics Cards - Responsive Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 md:p-4">
             <div className="flex items-center space-x-2">
-              <Package className="w-5 h-5 text-blue-500" />
+              <Package className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
               <div>
-                <p className="text-sm font-medium">Total</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-xs md:text-sm font-medium">Total</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.total}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 md:p-4">
             <div className="flex items-center space-x-2">
-              <Clock className="w-5 h-5 text-yellow-500" />
+              <Clock className="w-4 h-4 md:w-5 md:h-5 text-yellow-500" />
               <div>
-                <p className="text-sm font-medium">Pendientes</p>
-                <p className="text-2xl font-bold">{stats.pending}</p>
+                <p className="text-xs md:text-sm font-medium">Pendientes</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.pending}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 md:p-4">
             <div className="flex items-center space-x-2">
-              <AlertTriangle className="w-5 h-5 text-blue-500" />
+              <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
               <div>
-                <p className="text-sm font-medium">En Calidad</p>
-                <p className="text-2xl font-bold">{stats.in_quality}</p>
+                <p className="text-xs md:text-sm font-medium">En Calidad</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.in_quality}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 md:p-4">
             <div className="flex items-center space-x-2">
-              <CheckCircle className="w-5 h-5 text-green-500" />
+              <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-500" />
               <div>
-                <p className="text-sm font-medium">Aprobadas</p>
-                <p className="text-2xl font-bold">{stats.approved}</p>
+                <p className="text-xs md:text-sm font-medium">Aprobadas</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.approved}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
+        <Card className="col-span-2 md:col-span-1">
+          <CardContent className="p-3 md:p-4">
             <div className="flex items-center space-x-2">
-              <XCircle className="w-5 h-5 text-red-500" />
+              <XCircle className="w-4 h-4 md:w-5 md:h-5 text-red-500" />
               <div>
-                <p className="text-sm font-medium">Rechazadas</p>
-                <p className="text-2xl font-bold">{stats.rejected}</p>
+                <p className="text-xs md:text-sm font-medium">Rechazadas</p>
+                <p className="text-lg md:text-2xl font-bold">{stats.rejected}</p>
               </div>
             </div>
           </CardContent>
@@ -259,7 +344,7 @@ const DeliveriesPage = () => {
       {/* Search and Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 md:space-x-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
@@ -269,63 +354,169 @@ const DeliveriesPage = () => {
                 className="pl-10"
               />
             </div>
-            <Button variant="outline" size="sm">
-              <Filter className="w-4 h-4 mr-2" />
-              Filtros
-            </Button>
+            {isMobile ? (
+              <Sheet open={showFiltersSheet} onOpenChange={setShowFiltersSheet}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="relative">
+                    <Filter className="w-4 h-4 mr-2" />
+                    Filtros
+                    {activeFiltersCount > 0 && (
+                      <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-blue-500 text-white text-xs">
+                        {activeFiltersCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80">
+                  <SheetHeader>
+                    <SheetTitle>Filtros</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6">
+                    <FiltersContent />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="in_quality">En Revisión</SelectItem>
+                    <SelectItem value="approved">Aprobada</SelectItem>
+                    <SelectItem value="partial_approved">Parcial</SelectItem>
+                    <SelectItem value="rejected">Rechazada</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={workshopFilter} onValueChange={setWorkshopFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Taller" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los talleres</SelectItem>
+                    {workshopOptions.map((workshop) => (
+                      <SelectItem key={workshop} value={workshop}>
+                        {workshop}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {activeFiltersCount > 0 && (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    <X className="w-4 h-4 mr-2" />
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabs */}
+      {/* Tabs - Horizontal scroll on mobile */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="all">Todas ({stats.total})</TabsTrigger>
-          <TabsTrigger value="in_quality">En Calidad ({stats.in_quality})</TabsTrigger>
-          <TabsTrigger value="approved">Aprobadas ({stats.approved})</TabsTrigger>
-          <TabsTrigger value="rejected">Rechazadas ({stats.rejected})</TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="sync">
-              <Zap className="w-4 h-4 mr-2" />
-              Sincronización Shopify
+        <div className="overflow-x-auto">
+          <TabsList className={`grid ${isMobile ? 'grid-cols-5 w-max min-w-full' : 'w-full grid-cols-6'}`}>
+            <TabsTrigger value="all" className="whitespace-nowrap">
+              {isMobile ? `Todas (${stats.total})` : `Todas (${stats.total})`}
             </TabsTrigger>
-          )}
-        </TabsList>
+            <TabsTrigger value="in_quality" className="whitespace-nowrap">
+              {isMobile ? `Calidad (${stats.in_quality})` : `En Calidad (${stats.in_quality})`}
+            </TabsTrigger>
+            <TabsTrigger value="approved" className="whitespace-nowrap">
+              {isMobile ? `Aprobadas (${stats.approved})` : `Aprobadas (${stats.approved})`}
+            </TabsTrigger>
+            <TabsTrigger value="rejected" className="whitespace-nowrap">
+              {isMobile ? `Rechazadas (${stats.rejected})` : `Rechazadas (${stats.rejected})`}
+            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="sync" className="whitespace-nowrap">
+                {isMobile ? (
+                  <Zap className="w-4 h-4" />
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 mr-2" />
+                    Sincronización Shopify
+                  </>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
         <TabsContent value="all" className="space-y-4">
-          <DeliveryTable 
-            deliveries={filteredDeliveries} 
-            onViewDetails={setSelectedDelivery}
-            onDeleteDelivery={handleDeleteDelivery}
-            canDeleteDeliveries={canDeleteDeliveries}
-          />
+          {isMobile ? (
+            <DeliveryCards 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          ) : (
+            <DeliveryTable 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="in_quality" className="space-y-4">
-          <DeliveryTable 
-            deliveries={filteredDeliveries} 
-            onViewDetails={setSelectedDelivery}
-            onDeleteDelivery={handleDeleteDelivery}
-            canDeleteDeliveries={canDeleteDeliveries}
-          />
+          {isMobile ? (
+            <DeliveryCards 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          ) : (
+            <DeliveryTable 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="approved" className="space-y-4">
-          <DeliveryTable 
-            deliveries={filteredDeliveries} 
-            onViewDetails={setSelectedDelivery}
-            onDeleteDelivery={handleDeleteDelivery}
-            canDeleteDeliveries={canDeleteDeliveries}
-          />
+          {isMobile ? (
+            <DeliveryCards 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          ) : (
+            <DeliveryTable 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="rejected" className="space-y-4">
-          <DeliveryTable 
-            deliveries={filteredDeliveries} 
-            onViewDetails={setSelectedDelivery}
-            onDeleteDelivery={handleDeleteDelivery}
-            canDeleteDeliveries={canDeleteDeliveries}
-          />
+          {isMobile ? (
+            <DeliveryCards 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          ) : (
+            <DeliveryTable 
+              deliveries={filteredDeliveries} 
+              onViewDetails={setSelectedDelivery}
+              onDeleteDelivery={handleDeleteDelivery}
+              canDeleteDeliveries={canDeleteDeliveries}
+            />
+          )}
         </TabsContent>
 
         {isAdmin && (
@@ -360,7 +551,137 @@ const DeliveriesPage = () => {
   );
 };
 
-// Separate component for the delivery table
+// Componente para las tarjetas de entregas (vista móvil)
+const DeliveryCards = ({ 
+  deliveries, 
+  onViewDetails, 
+  onDeleteDelivery, 
+  canDeleteDeliveries 
+}: { 
+  deliveries: any[], 
+  onViewDetails: (delivery: any) => void,
+  onDeleteDelivery: (delivery: any) => void,
+  canDeleteDeliveries: boolean
+}) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'in_quality': return 'bg-blue-100 text-blue-800';
+      case 'approved': return 'bg-green-100 text-green-800';
+      case 'partial_approved': return 'bg-orange-100 text-orange-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pendiente';
+      case 'in_quality': return 'En Revisión';
+      case 'approved': return 'Aprobada';
+      case 'partial_approved': return 'Parcial';
+      case 'rejected': return 'Rechazada';
+      default: return status;
+    }
+  };
+
+  const getQuantities = (delivery: any) => {
+    return {
+      total: delivery.total_quantity || 0,
+      approved: delivery.total_approved || 0,
+      defective: delivery.total_defective || 0
+    };
+  };
+
+  if (deliveries.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No hay entregas</h3>
+          <p className="text-muted-foreground">
+            No se encontraron entregas que coincidan con los filtros seleccionados.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {deliveries.map((delivery) => {
+        const quantities = getQuantities(delivery);
+        return (
+          <Card key={delivery.id} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="font-semibold text-sm">{delivery.tracking_number}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Orden: {delivery.order_number}
+                  </div>
+                </div>
+                <Badge className={`text-xs ${getStatusColor(delivery.status)}`}>
+                  {getStatusText(delivery.status)}
+                </Badge>
+              </div>
+
+              <div className="space-y-2 mb-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Taller:</span>
+                  <span className="font-medium">{delivery.workshop_name || 'Sin asignar'}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Fecha:</span>
+                  <span>{delivery.delivery_date ? format(new Date(delivery.delivery_date), 'dd/MM/yyyy', { locale: es }) : 'Sin fecha'}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                <div className="bg-blue-50 p-2 rounded">
+                  <div className="text-xs text-muted-foreground">Total</div>
+                  <div className="font-semibold text-blue-600">{quantities.total}</div>
+                </div>
+                <div className="bg-green-50 p-2 rounded">
+                  <div className="text-xs text-muted-foreground">Aprobadas</div>
+                  <div className="font-semibold text-green-600">{quantities.approved}</div>
+                </div>
+                <div className="bg-red-50 p-2 rounded">
+                  <div className="text-xs text-muted-foreground">Defectuosas</div>
+                  <div className="font-semibold text-red-600">{quantities.defective}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => onViewDetails(delivery)}
+                  className="flex-1"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Ver Detalles
+                </Button>
+                {canDeleteDeliveries && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => onDeleteDelivery(delivery)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+};
+
+// Componente para la tabla de entregas (vista desktop)
 const DeliveryTable = ({ 
   deliveries, 
   onViewDetails, 
@@ -394,7 +715,6 @@ const DeliveryTable = ({
     }
   };
 
-  // Use pre-calculated quantities from database function
   const getQuantities = (delivery: any) => {
     return {
       total: delivery.total_quantity || 0,
