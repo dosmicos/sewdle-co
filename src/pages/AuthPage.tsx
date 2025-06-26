@@ -89,7 +89,7 @@ const AuthPage = () => {
       <div className="w-full max-w-sm space-y-6">
         {/* Logo and title */}
         <div className="text-center space-y-4">
-          <div className="mx-auto w-24 h-auto flex items-center justify-center">
+          <div className="mx-auto w-28 h-auto flex items-center justify-center">
             <img 
               src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
               alt="Sewdle Logo" 
