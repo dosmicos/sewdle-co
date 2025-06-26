@@ -93,7 +93,7 @@ const AuthPage = () => {
             <img 
               src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
               alt="Sewdle Logo" 
-              className="w-24 h-24 object-contain"
+              className="w-24 h-auto object-contain"
               onError={(e) => {
                 // Fallback to Building2 icon if logo fails to load
                 e.currentTarget.style.display = 'none';
