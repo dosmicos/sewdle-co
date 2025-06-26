@@ -208,7 +208,7 @@ const LandingPage = () => {
       <section id="integraciones" className="py-20 bg-gray-900">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl lg:text-5xl font-bold text-white mb-4">
+            <h2 className="text-4xl text-white mb-4 lg:text-3xl font-semibold">
               ¿Por qué elegir Sewdle?
             </h2>
           </div>
