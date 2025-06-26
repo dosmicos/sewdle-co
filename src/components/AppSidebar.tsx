@@ -107,24 +107,24 @@ const AppSidebar = () => {
   return (
     <Sidebar className="border-r border-border">
       <SidebarHeader className="p-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-16 h-16 flex items-center justify-center">
             <img 
               src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
               alt="Sewdle Logo" 
-              className="w-8 h-8 object-contain"
+              className="w-14 h-14 object-contain"
               onError={(e) => {
-                // Fallback to Building2 icon if logo fails to load
+                // Fallback to user icon if logo fails to load
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
               }}
             />
-            <div className="w-8 h-8 bg-primary rounded-lg hidden items-center justify-center">
-              {React.createElement(userIcon, { className: "w-5 h-5 text-primary-foreground" })}
+            <div className="w-14 h-14 bg-primary rounded-lg hidden items-center justify-center">
+              {React.createElement(userIcon, { className: "w-8 h-8 text-primary-foreground" })}
             </div>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">
+          <div className="text-center">
+            <p className="text-sm font-medium text-muted-foreground">
               {userTypeLabel}
             </p>
           </div>
