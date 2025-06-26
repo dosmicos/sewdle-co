@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -268,7 +267,7 @@ const DeliveriesPage = () => {
         {canCreateDeliveries && (
           <Button 
             onClick={() => setShowCreateForm(true)}
-            className="w-full md:w-auto"
+            className="w-full md:w-auto bg-[#FF6B35] hover:bg-[#E5562B] text-white border-none"
           >
             <Plus className="w-4 h-4 mr-2" />
             Nueva Entrega
