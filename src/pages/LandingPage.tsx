@@ -34,7 +34,7 @@ const LandingPage = () => {
                 <img 
                   src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
                   alt="Sewdle Logo" 
-                  className="h-5 w-auto"
+                  className="h-6 w-auto"
                 />
               </div>
 
