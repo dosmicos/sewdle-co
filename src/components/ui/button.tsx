@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -13,7 +14,7 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "border hover:bg-accent hover:text-accent-foreground",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
@@ -40,11 +41,21 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, style, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    
+    // Explicit styles for outline variant to prevent yellow appearance
+    const explicitStyle = variant === "outline" ? {
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e7eb',
+      color: '#374151',
+      ...style
+    } : style;
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
+        style={explicitStyle}
         ref={ref}
         {...props}
       />

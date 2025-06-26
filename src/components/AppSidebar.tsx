@@ -105,7 +105,14 @@ const AppSidebar = () => {
   };
 
   return (
-    <Sidebar className="border-r" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
+    <Sidebar 
+      className="border-r" 
+      style={{ 
+        backgroundColor: '#ffffff', 
+        borderColor: '#e5e7eb',
+        color: '#374151'
+      }}
+    >
       <SidebarHeader className="p-4" style={{ backgroundColor: '#ffffff' }}>
         <div className="flex flex-col items-start space-y-1">
           <div className="w-26 h-auto flex items-center justify-center">
@@ -143,8 +150,9 @@ const AppSidebar = () => {
                     isActive={location.pathname === item.url}
                     className="w-full justify-start"
                     style={{ 
-                      backgroundColor: location.pathname === item.url ? '#f3f4f6' : 'transparent',
-                      color: '#374151'
+                      backgroundColor: location.pathname === item.url ? '#f3f4f6' : '#ffffff',
+                      color: '#374151',
+                      borderColor: 'transparent'
                     }}
                   >
                     <item.icon className="w-4 h-4" />
@@ -170,7 +178,11 @@ const AppSidebar = () => {
             variant="outline" 
             onClick={handleLogout} 
             className="w-full justify-start"
-            style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}
+            style={{ 
+              backgroundColor: '#ffffff', 
+              borderColor: '#e5e7eb', 
+              color: '#374151' 
+            }}
           >
             <LogOut className="w-4 h-4 mr-2" />
             Cerrar sesión

@@ -6,85 +6,86 @@
 /* Sistema de colores limpio y consistente */
 @layer base {
   :root {
-    /* Colores principales - Apple inspired */
-    --background: 255 255 255;
-    --foreground: 0 0 0;
-    --card: 255 255 255;
-    --card-foreground: 0 0 0;
-    --popover: 255 255 255;
-    --popover-foreground: 0 0 0;
+    /* Colores principales - usando valores hexadecimales directos */
+    --background: #ffffff;
+    --foreground: #000000;
+    --card: #ffffff;
+    --card-foreground: #000000;
+    --popover: #ffffff;
+    --popover-foreground: #000000;
     
     /* Colores de acción */
-    --primary: 59 130 246;
-    --primary-foreground: 255 255 255;
-    --secondary: 243 244 246;
-    --secondary-foreground: 0 0 0;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --secondary: #f3f4f6;
+    --secondary-foreground: #000000;
     
     /* Colores de estado */
-    --muted: 249 250 251;
-    --muted-foreground: 75 85 99;
-    --accent: 229 231 235;
-    --accent-foreground: 0 0 0;
-    --destructive: 239 68 68;
-    --destructive-foreground: 255 255 255;
+    --muted: #f9fafb;
+    --muted-foreground: #4b5563;
+    --accent: #e5e7eb;
+    --accent-foreground: #000000;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
     
-    /* Bordes e inputs - CORREGIDO */
-    --border: 209 213 219;
-    --input: 229 231 235;
-    --ring: 209 213 219;
+    /* Bordes e inputs - usando hexadecimales */
+    --border: #d1d5db;
+    --input: #e5e7eb;
+    --ring: #d1d5db;
     --radius: 0.5rem;
     
     /* Sidebar */
-    --sidebar-background: 255 255 255;
-    --sidebar-foreground: 0 0 0;
-    --sidebar-primary: 59 130 246;
-    --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 229 231 235;
-    --sidebar-accent-foreground: 0 0 0;
-    --sidebar-border: 209 213 219;
-    --sidebar-ring: 209 213 219;
+    --sidebar-background: #ffffff;
+    --sidebar-foreground: #000000;
+    --sidebar-primary: #3b82f6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e5e7eb;
+    --sidebar-accent-foreground: #000000;
+    --sidebar-border: #d1d5db;
+    --sidebar-ring: #d1d5db;
   }
 
   .dark {
-    --background: 3 7 18;
-    --foreground: 248 250 252;
-    --card: 15 23 42;
-    --card-foreground: 248 250 252;
-    --popover: 15 23 42;
-    --popover-foreground: 248 250 252;
+    --background: #030712;
+    --foreground: #f8fafc;
+    --card: #0f172a;
+    --card-foreground: #f8fafc;
+    --popover: #0f172a;
+    --popover-foreground: #f8fafc;
     
-    --primary: 99 102 241;
-    --primary-foreground: 248 250 252;
-    --secondary: 30 41 59;
-    --secondary-foreground: 248 250 252;
+    --primary: #6366f1;
+    --primary-foreground: #f8fafc;
+    --secondary: #1e293b;
+    --secondary-foreground: #f8fafc;
     
-    --muted: 30 41 59;
-    --muted-foreground: 148 163 184;
-    --accent: 30 41 59;
-    --accent-foreground: 248 250 252;
-    --destructive: 220 38 38;
-    --destructive-foreground: 248 250 252;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #1e293b;
+    --accent-foreground: #f8fafc;
+    --destructive: #dc2626;
+    --destructive-foreground: #f8fafc;
     
-    --border: 51 65 85;
-    --input: 30 41 59;
-    --ring: 99 102 241;
+    --border: #334155;
+    --input: #1e293b;
+    --ring: #6366f1;
     
-    --sidebar-background: 15 23 42;
-    --sidebar-foreground: 248 250 252;
-    --sidebar-primary: 99 102 241;
-    --sidebar-primary-foreground: 248 250 252;
-    --sidebar-accent: 30 41 59;
-    --sidebar-accent-foreground: 248 250 252;
-    --sidebar-border: 51 65 85;
-    --sidebar-ring: 99 102 241;
+    --sidebar-background: #0f172a;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-primary: #6366f1;
+    --sidebar-primary-foreground: #f8fafc;
+    --sidebar-accent: #1e293b;
+    --sidebar-accent-foreground: #f8fafc;
+    --sidebar-border: #334155;
+    --sidebar-ring: #6366f1;
   }
 
   * {
-    @apply border-border;
+    border-color: #d1d5db;
   }
   
   body {
-    @apply bg-background text-foreground;
+    background-color: #ffffff;
+    color: #000000;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -92,175 +93,295 @@
 
   /* Prevenir fondos amarillos automáticos */
   html, body, #root {
-    background-color: rgb(var(--background));
+    background-color: #ffffff !important;
   }
 }
 
 @layer components {
   /* Componentes de formulario con colores explícitos */
   .form-input {
-    @apply w-full px-3 py-2 text-sm bg-background rounded-md;
-    @apply placeholder:text-muted-foreground;
-    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    background-color: #ffffff;
+    border-radius: 0.375rem;
+    color: #000000;
+    border: 1px solid #d1d5db;
+  }
+  
+  .form-input::placeholder {
+    color: #6b7280;
+  }
+  
+  .form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
   .form-textarea {
-    @apply w-full px-3 py-2 text-sm bg-background rounded-md;
-    @apply placeholder:text-muted-foreground;
-    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-    @apply resize-none transition-colors;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    background-color: #ffffff;
+    border-radius: 0.375rem;
     min-height: 80px;
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    resize: none;
+    transition: all 0.2s;
+    color: #000000;
+    border: 1px solid #d1d5db;
+  }
+  
+  .form-textarea::placeholder {
+    color: #6b7280;
+  }
+  
+  .form-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
   .form-select {
-    @apply w-full px-3 py-2 text-sm bg-background rounded-md;
-    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    background-color: #ffffff;
+    border-radius: 0.375rem;
+    color: #000000;
+    border: 1px solid #d1d5db;
+  }
+  
+  .form-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
-  /* Botones */
+  /* Botones con colores explícitos */
   .btn {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-medium;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-    @apply transition-colors;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  
+  .btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #3b82f6;
+  }
+  
+  .btn:disabled {
+    pointer-events: none;
+    opacity: 0.5;
   }
   
   .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-    @apply h-10 px-4 py-2;
+    background-color: #3b82f6;
+    color: #ffffff;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .btn-primary:hover {
+    background-color: #2563eb;
   }
   
   .btn-secondary {
-    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
-    @apply h-10 px-4 py-2;
+    background-color: #f3f4f6;
+    color: #000000;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #e5e7eb;
   }
   
   .btn-outline {
-    @apply hover:bg-accent hover:text-accent-foreground;
-    @apply h-10 px-4 py-2;
-    border: 1px solid rgb(var(--border));
-    background-color: rgb(var(--background));
+    background-color: #ffffff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .btn-outline:hover {
+    background-color: #f9fafb;
+    color: #000000;
   }
   
   .btn-ghost {
-    @apply hover:bg-accent hover:text-accent-foreground;
-    @apply h-10 px-4 py-2;
+    background-color: transparent;
+    color: #374151;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .btn-ghost:hover {
+    background-color: #f9fafb;
+    color: #000000;
   }
   
   .btn-destructive {
-    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
-    @apply h-10 px-4 py-2;
+    background-color: #ef4444;
+    color: #ffffff;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+  
+  .btn-destructive:hover {
+    background-color: #dc2626;
   }
 
-  /* Cards */
+  /* Cards con colores explícitos */
   .card {
-    @apply rounded-lg shadow-sm;
-    background-color: rgb(var(--card));
-    color: rgb(var(--card-foreground));
-    border: 1px solid rgb(var(--border));
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    background-color: #ffffff;
+    color: #000000;
+    border: 1px solid #d1d5db;
   }
   
   .card-header {
-    @apply flex flex-col space-y-1.5 p-6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 1.5rem;
   }
   
   .card-title {
-    @apply text-2xl font-semibold leading-none tracking-tight;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.025em;
   }
   
   .card-description {
-    @apply text-sm text-muted-foreground;
+    font-size: 0.875rem;
+    color: #6b7280;
   }
   
   .card-content {
-    @apply p-6 pt-0;
+    padding: 1.5rem;
+    padding-top: 0;
   }
   
   .card-footer {
-    @apply flex items-center p-6 pt-0;
+    display: flex;
+    align-items: center;
+    padding: 1.5rem;
+    padding-top: 0;
   }
 
   /* Labels */
   .label {
-    @apply text-sm font-medium leading-none;
-    @apply peer-disabled:cursor-not-allowed peer-disabled:opacity-70;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
   }
 
   /* Input con icono */
   .input-with-icon {
-    @apply relative flex items-center;
+    position: relative;
+    display: flex;
+    align-items: center;
   }
 
   .input-with-icon input {
-    @apply w-full pl-10 pr-3 py-2.5 text-sm rounded-xl;
-    @apply placeholder:text-muted-foreground;
-    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-    @apply transition-all duration-200;
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    width: 100%;
+    padding-left: 2.5rem;
+    padding-right: 0.75rem;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+    font-size: 0.875rem;
+    border-radius: 0.75rem;
+    color: #000000;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    transition: all 0.2s;
+  }
+
+  .input-with-icon input::placeholder {
+    color: #6b7280;
   }
 
   .input-with-icon input:focus {
-    border-color: rgb(var(--primary));
+    outline: none;
+    border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .input-with-icon .icon {
-    @apply absolute left-3 top-1/2 transform -translate-y-1/2;
-    @apply w-4 h-4 text-muted-foreground;
-    @apply transition-colors duration-200;
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1rem;
+    height: 1rem;
+    color: #6b7280;
+    transition: all 0.2s;
     pointer-events: none;
   }
 
   /* Búsqueda específica */
   .search-input {
-    @apply relative flex items-center max-w-md;
+    position: relative;
+    display: flex;
+    align-items: center;
+    max-width: 28rem;
   }
 
   .search-input input {
-    @apply w-full pl-10 pr-4 py-2.5 text-sm rounded-xl;
-    @apply placeholder:text-muted-foreground;
-    @apply focus:outline-none;
-    @apply transition-all duration-200 ease-in-out;
+    width: 100%;
+    padding-left: 2.5rem;
+    padding-right: 1rem;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+    font-size: 0.875rem;
+    border-radius: 0.75rem;
     font-weight: 400;
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    color: #000000;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .search-input input::placeholder {
+    color: #6b7280;
   }
 
   .search-input input:focus {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
-    border-color: rgb(var(--primary));
+    border-color: #3b82f6;
+    outline: none;
   }
 
   .search-input .search-icon {
-    @apply absolute left-3 top-1/2 transform -translate-y-1/2;
-    @apply w-4 h-4 text-gray-400;
-    @apply transition-colors duration-200;
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1rem;
+    height: 1rem;
+    color: #9ca3af;
+    transition: all 0.2s;
     pointer-events: none;
   }
 
   .search-input input:focus ~ .search-icon {
-    color: rgb(var(--primary));
+    color: #3b82f6;
   }
 
   /* Utilidades */
   .text-gradient {
-    @apply bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
+    background: linear-gradient(to right, #2563eb, #9333ea);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   
   .shadow-soft {
@@ -305,9 +426,9 @@
   input[type="number"],
   textarea,
   select {
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    color: #000000;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
   }
   
   input[type="text"]:focus,
@@ -317,57 +438,62 @@
   textarea:focus,
   select:focus {
     outline: none;
-    border-color: rgb(var(--primary));
+    border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
   ::placeholder {
-    color: rgb(107 114 128);
+    color: #6b7280;
     opacity: 1;
   }
 
   /* Select dropdowns */
   [data-radix-select-content] {
-    background-color: rgb(var(--background));
-    border: 1px solid rgb(var(--border));
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
     border-radius: 0.75rem;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 
   [data-radix-select-item] {
-    background-color: rgb(var(--background));
-    color: rgb(var(--foreground));
+    background-color: #ffffff;
+    color: #000000;
   }
 
   [data-radix-select-item]:hover {
-    background-color: rgb(var(--accent));
+    background-color: #f9fafb;
   }
 
   [data-radix-select-item][data-highlighted] {
-    background-color: rgb(var(--primary));
-    color: rgb(var(--primary-foreground));
+    background-color: #3b82f6;
+    color: #ffffff;
   }
 
   /* Tables */
   table th,
   table td {
-    color: rgb(var(--foreground));
+    color: #000000;
   }
 
   table tr:hover {
-    background-color: rgb(var(--muted));
+    background-color: #f9fafb;
   }
 
   /* Texto */
   .text-muted-foreground {
-    color: rgb(var(--muted-foreground));
+    color: #6b7280;
   }
 
   /* Prevenir amarillo específico */
   .no-yellow {
-    background-color: rgb(var(--background));
+    background-color: #ffffff;
   }
 
+  /* Override para botones específicos */
+  button[style*="borderColor"] {
+    border-color: #e5e7eb !important;
+  }
+  
   /* Fix para inputs de búsqueda - padding específico */
   input[class*="pl-"],
   input[placeholder*="Buscar productos..."],
@@ -378,8 +504,8 @@
 
 /* Clase wrapper para aplicar en el componente principal */
 .clean-layout {
-  background-color: rgb(var(--background));
-  color: rgb(var(--foreground));
+  background-color: #ffffff;
+  color: #000000;
 }
 
 .clean-layout * {
@@ -389,13 +515,13 @@
 .clean-layout input,
 .clean-layout textarea,
 .clean-layout select {
-  background-color: rgb(var(--background));
-  border: 1px solid rgb(var(--border));
-  color: rgb(var(--foreground));
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #000000;
 }
 
 .clean-layout .card {
-  background-color: rgb(var(--card));
+  background-color: #ffffff;
 }
 
 .clean-layout button.bg-blue-500 {
@@ -404,4 +530,16 @@
 
 .clean-layout button.bg-blue-500:hover {
   background-color: #2563eb;
+}
+
+/* Forzar colores correctos en elementos problemáticos */
+.sidebar-fix {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+.button-fix {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #374151 !important;
 }
