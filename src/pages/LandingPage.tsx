@@ -67,7 +67,7 @@ const LandingPage = () => {
                   {" "}producción textil
                 </span>
               </h1>
-              <p className="text-lg lg:text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
+              <p className="text-lg text-gray-600 leading-relaxed max-w-3xl mx-auto lg:text-lg">
                 La plataforma que conecta tu marca de moda con todos tus talleres y fabricantes, 
                 para una gestión sin límites ni sobresaltos.
               </p>
