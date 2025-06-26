@@ -274,7 +274,7 @@ const UsersRolesPage = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Gestión de Roles</CardTitle>
-                <Button onClick={handleNewRole} className="bg-blue-500 hover:bg-blue-600">
+                <Button onClick={handleNewRole} className="bg-[#ff5c02]">
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo Rol
                 </Button>
