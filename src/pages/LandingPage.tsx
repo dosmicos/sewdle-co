@@ -34,7 +34,7 @@ const LandingPage = () => {
                 <img 
                   src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
                   alt="Sewdle Logo" 
-                  className="h-6 w-auto"
+                  className="h-5 w-auto"
                 />
               </div>
 
@@ -81,33 +81,24 @@ const LandingPage = () => {
         </header>
 
         {/* Hero Content */}
-        <div className="relative max-w-7xl mx-auto px-6 py-20 lg:py-32">
-          <div className="text-center space-y-8">
-            {/* Logo */}
-            <div className="flex justify-center mb-8">
-              <img 
-                src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
-                alt="Sewdle Logo" 
-                className="h-16 w-auto"
-              />
-            </div>
-            
+        <div className="relative max-w-7xl mx-auto px-6 py-16 lg:py-24">
+          <div className="text-center space-y-6">
             {/* Headline */}
             <div className="space-y-4 max-w-4xl mx-auto">
-              <h1 className="text-5xl lg:text-7xl font-bold text-gray-900 leading-tight">
+              <h1 className="text-4xl lg:text-6xl font-bold text-gray-900 leading-tight">
                 Toma el control total de tu
                 <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
                   {" "}producción textil
                 </span>
               </h1>
-              <p className="text-xl lg:text-2xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
+              <p className="text-lg lg:text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
                 La plataforma que conecta tu marca de moda con todos tus talleres y fabricantes, 
                 para una gestión sin límites ni sobresaltos.
               </p>
             </div>
 
             {/* CTA */}
-            <div className="pt-8">
+            <div className="pt-6">
               <Button 
                 onClick={handleCTAClick}
                 className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-8 py-4 text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105"
