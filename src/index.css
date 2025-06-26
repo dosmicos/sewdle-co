@@ -28,9 +28,9 @@
     --destructive: 239 68 68;
     --destructive-foreground: 255 255 255;
     
-    /* Bordes e inputs */
+    /* Bordes e inputs - CORREGIDO */
     --border: 209 213 219;
-    --input: 216 12 84;
+    --input: 229 231 235;
     --ring: 209 213 219;
     --radius: 0.5rem;
     
@@ -97,33 +97,36 @@
 }
 
 @layer components {
-  /* Componentes de formulario */
+  /* Componentes de formulario con colores explícitos */
   .form-input {
-    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
+    @apply w-full px-3 py-2 text-sm bg-background rounded-md;
     @apply placeholder:text-muted-foreground;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     color: rgb(var(--foreground));
-    border-color: rgb(var(--border));
+    background-color: rgb(var(--background));
+    border: 1px solid rgb(var(--border));
   }
   
   .form-textarea {
-    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
+    @apply w-full px-3 py-2 text-sm bg-background rounded-md;
     @apply placeholder:text-muted-foreground;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply resize-none transition-colors;
     min-height: 80px;
     color: rgb(var(--foreground));
-    border-color: rgb(var(--border));
+    background-color: rgb(var(--background));
+    border: 1px solid rgb(var(--border));
   }
   
   .form-select {
-    @apply w-full px-3 py-2 text-sm bg-background border border-input rounded-md;
+    @apply w-full px-3 py-2 text-sm bg-background rounded-md;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     color: rgb(var(--foreground));
-    border-color: rgb(var(--border));
+    background-color: rgb(var(--background));
+    border: 1px solid rgb(var(--border));
   }
 
   /* Botones */
@@ -145,8 +148,10 @@
   }
   
   .btn-outline {
-    @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+    @apply hover:bg-accent hover:text-accent-foreground;
     @apply h-10 px-4 py-2;
+    border: 1px solid rgb(var(--border));
+    background-color: rgb(var(--background));
   }
   
   .btn-ghost {
@@ -161,7 +166,10 @@
 
   /* Cards */
   .card {
-    @apply rounded-lg border bg-card text-card-foreground shadow-sm;
+    @apply rounded-lg shadow-sm;
+    background-color: rgb(var(--card));
+    color: rgb(var(--card-foreground));
+    border: 1px solid rgb(var(--border));
   }
   
   .card-header {
@@ -190,63 +198,24 @@
     @apply peer-disabled:cursor-not-allowed peer-disabled:opacity-70;
   }
 
-  /* Dialog/Modal */
-  .dialog-content {
-    @apply fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%];
-    @apply gap-4 border bg-background p-6 shadow-lg duration-200;
-    @apply sm:rounded-lg;
-  }
-  
-  .dialog-header {
-    @apply flex flex-col space-y-1.5 text-center sm:text-left;
-  }
-  
-  .dialog-title {
-    @apply text-lg font-semibold leading-none tracking-tight;
-  }
-  
-  .dialog-description {
-    @apply text-sm text-muted-foreground;
-  }
-  
-  .dialog-footer {
-    @apply flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2;
-  }
-
-  /* Tabs */
-  .tabs-list {
-    @apply inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground;
-  }
-  
-  .tabs-trigger {
-    @apply inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5;
-    @apply text-sm font-medium ring-offset-background transition-all;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-    @apply data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm;
-  }
-  
-  .tabs-content {
-    @apply mt-2 ring-offset-background;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-  }
-
   /* Input con icono */
   .input-with-icon {
     @apply relative flex items-center;
   }
 
   .input-with-icon input {
-    @apply w-full pl-10 pr-3 py-2.5 text-sm bg-background rounded-xl;
+    @apply w-full pl-10 pr-3 py-2.5 text-sm rounded-xl;
     @apply placeholder:text-muted-foreground;
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     @apply transition-all duration-200;
+    color: rgb(var(--foreground));
+    background-color: rgb(var(--background));
     border: 1px solid rgb(var(--border));
   }
 
   .input-with-icon input:focus {
-    @apply border-primary;
+    border-color: rgb(var(--primary));
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
@@ -263,12 +232,14 @@
   }
 
   .search-input input {
-    @apply w-full pl-10 pr-4 py-2.5 text-sm;
-    @apply bg-background border border-border rounded-xl;
+    @apply w-full pl-10 pr-4 py-2.5 text-sm rounded-xl;
     @apply placeholder:text-muted-foreground;
-    @apply focus:outline-none focus:border-primary;
+    @apply focus:outline-none;
     @apply transition-all duration-200 ease-in-out;
     font-weight: 400;
+    color: rgb(var(--foreground));
+    background-color: rgb(var(--background));
+    border: 1px solid rgb(var(--border));
   }
 
   .search-input input:focus {
@@ -284,7 +255,7 @@
   }
 
   .search-input input:focus ~ .search-icon {
-    @apply text-primary;
+    color: rgb(var(--primary));
   }
 
   /* Utilidades */
@@ -327,37 +298,32 @@
 }
 
 @layer utilities {
-  /* Fixes específicos sin !important */
+  /* Elementos de formulario con colores explícitos */
   input[type="text"],
   input[type="email"],
   input[type="password"],
   input[type="number"],
   textarea,
   select {
-    @apply form-input;
+    color: rgb(var(--foreground));
+    background-color: rgb(var(--background));
+    border: 1px solid rgb(var(--border));
+  }
+  
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  input[type="number"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: rgb(var(--primary));
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
   ::placeholder {
     color: rgb(107 114 128);
     opacity: 1;
-  }
-
-  /* Elementos de formulario con estilos específicos */
-  .lovable-override input,
-  .lovable-override textarea,
-  .lovable-override select {
-    color: rgb(var(--foreground));
-    background-color: rgb(var(--background));
-    border-color: rgb(var(--border));
-  }
-
-  /* Botones con estados */
-  .lovable-override button:not(.bg-blue-500):not(.bg-blue-600) {
-    background-color: transparent;
-  }
-
-  .lovable-override button:not(.bg-blue-500):not(.bg-blue-600):hover {
-    background-color: rgba(243, 244, 246, 0.5);
   }
 
   /* Select dropdowns */
@@ -397,9 +363,16 @@
     color: rgb(var(--muted-foreground));
   }
 
-  /* Prevenir amarillo específico de Lovable */
+  /* Prevenir amarillo específico */
   .no-yellow {
     background-color: rgb(var(--background));
+  }
+
+  /* Fix para inputs de búsqueda - padding específico */
+  input[class*="pl-"],
+  input[placeholder*="Buscar productos..."],
+  input[placeholder*="buscar productos..."] {
+    padding: 0.7rem 2.5rem;
   }
 }
 
@@ -416,8 +389,8 @@
 .clean-layout input,
 .clean-layout textarea,
 .clean-layout select {
-  background-color: rgb(var(--input));
-  border-color: rgb(var(--border));
+  background-color: rgb(var(--background));
+  border: 1px solid rgb(var(--border));
   color: rgb(var(--foreground));
 }
 
@@ -431,24 +404,4 @@
 
 .clean-layout button.bg-blue-500:hover {
   background-color: #2563eb;
-}
-
-/* Fix para hover molesto de tablas */
-table tr:hover,
-tbody tr:hover {
-  background-color: transparent !important;
-}
-
-/* Eliminar borde amarillo molesto en focus */
-input:focus, textarea:focus, select:focus {
-  outline: none !important;
-  box-shadow: none !important;
-  border-color: #3b82f6 !important;
-}
-
-/* Fix para inputs de búsqueda - no aplicar padding por defecto */
-input[class*="pl-"],
-input[placeholder*="Buscar productos..."],
-input[placeholder*="buscar productos..."] {
-  padding: 0.7rem 2.5rem !important;
 }
