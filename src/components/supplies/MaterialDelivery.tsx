@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Package, Calendar, Palette, AlertTriangle, CheckCircle } from 'lucide-react';
 import MaterialDeliveryForm from './MaterialDeliveryForm';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
-
 interface MaterialDeliveryWithBalance {
   id: string;
   material_id: string;
@@ -31,29 +29,28 @@ interface MaterialDeliveryWithBalance {
   workshop_name: string;
   order_number?: string;
 }
-
 interface MaterialDeliveryProps {
   canCreateDeliveries?: boolean;
 }
-
-const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps) => {
+const MaterialDelivery = ({
+  canCreateDeliveries = false
+}: MaterialDeliveryProps) => {
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveries, setDeliveries] = useState<MaterialDeliveryWithBalance[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterWorkshop, setFilterWorkshop] = useState('all');
   const [filterPeriod, setFilterPeriod] = useState('all');
-
-  const { fetchMaterialDeliveries, loading } = useMaterialDeliveries();
-
+  const {
+    fetchMaterialDeliveries,
+    loading
+  } = useMaterialDeliveries();
   useEffect(() => {
     loadDeliveries();
   }, []);
-
   const loadDeliveries = async () => {
     const data = await fetchMaterialDeliveries();
     setDeliveries(data);
   };
-
   const handleDeliveryCreated = () => {
     setShowDeliveryForm(false);
     loadDeliveries();
@@ -61,28 +58,18 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
 
   // Extract unique workshops for filter
   const workshopOptions = [...new Set(deliveries.map(d => d.workshop_name).filter(Boolean))];
-
   const filteredDeliveries = deliveries.filter(delivery => {
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
-      const matchesSearch = 
-        delivery.material_name?.toLowerCase().includes(searchLower) ||
-        delivery.material_sku?.toLowerCase().includes(searchLower) ||
-        delivery.material_color?.toLowerCase().includes(searchLower) ||
-        delivery.workshop_name?.toLowerCase().includes(searchLower) ||
-        delivery.order_number?.toLowerCase().includes(searchLower);
-      
+      const matchesSearch = delivery.material_name?.toLowerCase().includes(searchLower) || delivery.material_sku?.toLowerCase().includes(searchLower) || delivery.material_color?.toLowerCase().includes(searchLower) || delivery.workshop_name?.toLowerCase().includes(searchLower) || delivery.order_number?.toLowerCase().includes(searchLower);
       if (!matchesSearch) return false;
     }
-
     if (filterWorkshop !== 'all' && delivery.workshop_name !== filterWorkshop) {
       return false;
     }
-
     if (filterPeriod !== 'all') {
       const deliveryDate = new Date(delivery.delivery_date);
       const now = new Date();
-      
       switch (filterPeriod) {
         case 'today':
           if (deliveryDate.toDateString() !== now.toDateString()) return false;
@@ -97,10 +84,8 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
           break;
       }
     }
-
     return true;
   });
-
   const getBalanceStatus = (balance: number) => {
     if (balance > 0) {
       return {
@@ -122,10 +107,8 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
       };
     }
   };
-
   if (loading && deliveries.length === 0) {
-    return (
-      <div className="space-y-6">
+    return <div className="space-y-6">
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
@@ -135,23 +118,14 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
             <p className="text-gray-600">Por favor espera mientras cargamos los datos</p>
           </div>
         </div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="space-y-6">
+  return <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-            <Input
-              type="text"
-              placeholder="Buscar por material, color, taller u orden..."
-              className="w-80 pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <Input type="text" placeholder="Buscar por material, color, taller u orden..." className="w-80 pl-10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
           
           <Select value={filterWorkshop} onValueChange={setFilterWorkshop}>
@@ -160,11 +134,9 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los talleres</SelectItem>
-              {workshopOptions.map((workshop) => (
-                <SelectItem key={workshop} value={workshop}>
+              {workshopOptions.map(workshop => <SelectItem key={workshop} value={workshop}>
                   {workshop}
-                </SelectItem>
-              ))}
+                </SelectItem>)}
             </SelectContent>
           </Select>
 
@@ -181,20 +153,14 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
           </Select>
         </div>
 
-        {canCreateDeliveries && (
-          <Button 
-            onClick={() => setShowDeliveryForm(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
-          >
+        {canCreateDeliveries && <Button onClick={() => setShowDeliveryForm(true)} className="text-white bg-[#ff5c02]">
             <Plus className="w-4 h-4 mr-2" />
             Nueva Entrega
-          </Button>
-        )}
+          </Button>}
       </div>
 
       <Card className="p-6">
-        {filteredDeliveries.length > 0 ? (
-          <div className="overflow-x-auto">
+        {filteredDeliveries.length > 0 ? <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -210,36 +176,26 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDeliveries.map((delivery) => {
-                  const balanceStatus = getBalanceStatus(delivery.real_balance);
-                  return (
-                    <TableRow key={`${delivery.material_id}-${delivery.workshop_id}`}>
+                {filteredDeliveries.map(delivery => {
+              const balanceStatus = getBalanceStatus(delivery.real_balance);
+              return <TableRow key={`${delivery.material_id}-${delivery.workshop_id}`}>
                       <TableCell>
                         <div className="space-y-2">
                           <div className="font-medium text-black">
                             {delivery.material_name || 'N/A'}
                           </div>
                           <div className="flex items-center space-x-2">
-                            {delivery.material_color && (
-                              <Badge 
-                                variant="outline" 
-                                className="flex items-center space-x-1 bg-blue-50 text-blue-700 border-blue-200"
-                              >
+                            {delivery.material_color && <Badge variant="outline" className="flex items-center space-x-1 bg-blue-50 text-blue-700 border-blue-200">
                                 <Palette className="w-3 h-3" />
                                 <span>{delivery.material_color}</span>
-                              </Badge>
-                            )}
-                            {delivery.material_category && (
-                              <span className="text-sm text-gray-600">
+                              </Badge>}
+                            {delivery.material_category && <span className="text-sm text-gray-600">
                                 {delivery.material_category}
-                              </span>
-                            )}
+                              </span>}
                           </div>
-                          {!delivery.material_color && (
-                            <span className="text-xs text-gray-500 italic">
+                          {!delivery.material_color && <span className="text-xs text-gray-500 italic">
                               Sin color especificado
-                            </span>
-                          )}
+                            </span>}
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-sm">
@@ -249,11 +205,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
                         <span className="font-medium">{delivery.workshop_name || 'N/A'}</span>
                       </TableCell>
                       <TableCell>
-                        {delivery.order_number ? (
-                          <span className="font-medium">{delivery.order_number}</span>
-                        ) : (
-                          <span className="text-gray-500 italic">Sin orden asignada</span>
-                        )}
+                        {delivery.order_number ? <span className="font-medium">{delivery.order_number}</span> : <span className="text-gray-500 italic">Sin orden asignada</span>}
                       </TableCell>
                       <TableCell>
                         <span className="font-medium text-blue-600">
@@ -266,10 +218,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className={`font-bold ${
-                          delivery.real_balance > 0 ? 'text-green-600' : 
-                          delivery.real_balance === 0 ? 'text-gray-600' : 'text-red-600'
-                        }`}>
+                        <span className={`font-bold ${delivery.real_balance > 0 ? 'text-green-600' : delivery.real_balance === 0 ? 'text-gray-600' : 'text-red-600'}`}>
                           {delivery.real_balance} {delivery.material_unit || ''}
                         </span>
                       </TableCell>
@@ -285,14 +234,11 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
                           <span>{new Date(delivery.delivery_date).toLocaleDateString()}</span>
                         </div>
                       </TableCell>
-                    </TableRow>
-                  );
-                })}
+                    </TableRow>;
+            })}
               </TableBody>
             </Table>
-          </div>
-        ) : (
-          <div className="text-center py-12">
+          </div> : <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Package className="w-8 h-8 text-gray-600" />
             </div>
@@ -300,32 +246,16 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
               {deliveries.length === 0 ? 'No hay entregas registradas' : 'No hay entregas que coincidan'}
             </h3>
             <p className="text-gray-600 mb-4">
-              {deliveries.length === 0 
-                ? 'Las entregas de materiales aparecerán aquí cuando se registren'
-                : 'Intenta ajustando los filtros de búsqueda'
-              }
+              {deliveries.length === 0 ? 'Las entregas de materiales aparecerán aquí cuando se registren' : 'Intenta ajustando los filtros de búsqueda'}
             </p>
-            {canCreateDeliveries && deliveries.length === 0 && (
-              <Button 
-                onClick={() => setShowDeliveryForm(true)}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-              >
+            {canCreateDeliveries && deliveries.length === 0 && <Button onClick={() => setShowDeliveryForm(true)} className="bg-blue-500 hover:bg-blue-600 text-white">
                 <Plus className="w-4 h-4 mr-2" />
                 Registrar Primera Entrega
-              </Button>
-            )}
-          </div>
-        )}
+              </Button>}
+          </div>}
       </Card>
 
-      {showDeliveryForm && canCreateDeliveries && (
-        <MaterialDeliveryForm 
-          onClose={() => setShowDeliveryForm(false)}
-          onDeliveryCreated={handleDeliveryCreated}
-        />
-      )}
-    </div>
-  );
+      {showDeliveryForm && canCreateDeliveries && <MaterialDeliveryForm onClose={() => setShowDeliveryForm(false)} onDeliveryCreated={handleDeliveryCreated} />}
+    </div>;
 };
-
 export default MaterialDelivery;
