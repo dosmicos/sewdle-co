@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AuthPage from "@/pages/AuthPage";
+import LandingPage from "@/pages/LandingPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import MainLayout from "@/components/MainLayout";
 import DashboardPage from "@/pages/DashboardPage";
@@ -115,7 +116,7 @@ const AppContent = () => {
       <Route path="/auth" element={!user ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={<Navigate to="/auth" replace />} />
-      <Route path="/" element={!user ? <Navigate to="/auth" replace /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
       
       <Route path="/" element={
         <ProtectedRoute>
