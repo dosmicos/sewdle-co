@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -416,6 +415,51 @@
       transform: translateY(0);
     }
   }
+
+  /* Modal overrides for mobile */
+  @media (max-width: 768px) {
+    [data-radix-dialog-content],
+    [data-radix-alert-dialog-content],
+    [data-radix-sheet-content] {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      border-color: #e5e7eb !important;
+    }
+    
+    [data-radix-dialog-title],
+    [data-radix-alert-dialog-title],
+    [data-radix-sheet-title] {
+      color: #000000 !important;
+    }
+    
+    [data-radix-dialog-description],
+    [data-radix-alert-dialog-description],
+    [data-radix-sheet-description] {
+      color: #6b7280 !important;
+    }
+  }
+
+  /* Force white backgrounds on all modal elements */
+  .modal-white-override {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  .modal-white-override * {
+    color: inherit !important;
+  }
+  
+  .modal-white-override input,
+  .modal-white-override textarea,
+  .modal-white-override select {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border-color: #e5e7eb !important;
+  }
+  
+  .modal-white-override label {
+    color: #000000 !important;
+  }
 }
 
 @layer utilities {
@@ -499,6 +543,43 @@
   input[placeholder*="Buscar productos..."],
   input[placeholder*="buscar productos..."] {
     padding: 0.7rem 2.5rem;
+  }
+
+  /* Mobile modal fixes */
+  @media screen and (max-width: 768px) {
+    .fixed.z-50[role="dialog"] {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+    }
+    
+    .fixed.z-50[role="dialog"] * {
+      background-color: inherit;
+      color: inherit;
+    }
+    
+    .fixed.z-50[role="dialog"] input,
+    .fixed.z-50[role="dialog"] textarea,
+    .fixed.z-50[role="dialog"] select {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      border: 1px solid #e5e7eb !important;
+    }
+  }
+  
+  /* Explicit modal colors for all screen sizes */
+  [data-state="open"][role="dialog"] {
+    background-color: #ffffff;
+    color: #000000;
+  }
+  
+  [data-state="open"][role="dialog"] h2,
+  [data-state="open"][role="dialog"] h3,
+  [data-state="open"][role="dialog"] label {
+    color: #000000;
+  }
+  
+  [data-state="open"][role="dialog"] p {
+    color: #6b7280;
   }
 }
 

@@ -78,20 +78,27 @@ const WorkshopAssignmentForm: React.FC<WorkshopAssignmentFormProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent 
+        className="max-w-md"
+        style={{ 
+          backgroundColor: '#ffffff', 
+          color: '#000000',
+          borderColor: '#e5e7eb'
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Asignar Orden a Taller</DialogTitle>
+          <DialogTitle style={{ color: '#000000' }}>Asignar Orden a Taller</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="order">Orden de Producción</Label>
+            <Label htmlFor="order" style={{ color: '#000000' }}>Orden de Producción</Label>
             <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
-              <SelectTrigger>
+              <SelectTrigger style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#000000' }}>
                 <SelectValue placeholder="Seleccionar orden..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
                 {availableOrders.map((order) => (
-                  <SelectItem key={order.id} value={order.id}>
+                  <SelectItem key={order.id} value={order.id} style={{ color: '#000000' }}>
                     {order.order_number} - {order.client_name}
                   </SelectItem>
                 ))}
@@ -100,14 +107,14 @@ const WorkshopAssignmentForm: React.FC<WorkshopAssignmentFormProps> = ({
           </div>
 
           <div>
-            <Label htmlFor="workshop">Taller</Label>
+            <Label htmlFor="workshop" style={{ color: '#000000' }}>Taller</Label>
             <Select value={selectedWorkshopId} onValueChange={setSelectedWorkshopId}>
-              <SelectTrigger>
+              <SelectTrigger style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#000000' }}>
                 <SelectValue placeholder="Seleccionar taller..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
                 {workshops.map((workshop) => (
-                  <SelectItem key={workshop.id} value={workshop.id}>
+                  <SelectItem key={workshop.id} value={workshop.id} style={{ color: '#000000' }}>
                     {workshop.name}
                   </SelectItem>
                 ))}
@@ -116,32 +123,41 @@ const WorkshopAssignmentForm: React.FC<WorkshopAssignmentFormProps> = ({
           </div>
 
           <div>
-            <Label htmlFor="expectedDate">Fecha Esperada de Entrega</Label>
+            <Label htmlFor="expectedDate" style={{ color: '#000000' }}>Fecha Esperada de Entrega</Label>
             <Input
               type="date"
               value={expectedDate}
               onChange={(e) => setExpectedDate(e.target.value)}
+              style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#000000' }}
             />
           </div>
 
           <div>
-            <Label htmlFor="notes">Notas</Label>
+            <Label htmlFor="notes" style={{ color: '#000000' }}>Notas</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notas adicionales..."
               rows={3}
+              style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#000000' }}
             />
           </div>
 
           <div className="flex space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onClose} 
+              className="flex-1"
+              style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}
+            >
               Cancelar
             </Button>
             <Button 
               type="submit" 
               disabled={loading || !selectedOrderId || !selectedWorkshopId}
               className="flex-1"
+              style={{ backgroundColor: '#3b82f6', color: '#ffffff' }}
             >
               {loading ? 'Asignando...' : 'Asignar'}
             </Button>
