@@ -107,7 +107,7 @@ const AppSidebar = () => {
   return (
     <Sidebar className="border-r border-border">
       <SidebarHeader className="p-4">
-        <div className="flex flex-col items-center space-y-3">
+        <div className="flex flex-col items-start space-y-3">
           <div className="w-26 h-auto flex items-center justify-center">
             <img 
               src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
