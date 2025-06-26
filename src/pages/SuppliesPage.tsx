@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,18 +9,17 @@ import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
 import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
 import MaterialForm from '@/components/supplies/MaterialForm';
 import { useAuth } from '@/contexts/AuthContext';
-
 const SuppliesPage = () => {
   const [showMaterialForm, setShowMaterialForm] = useState(false);
-  const { hasPermission } = useAuth();
+  const {
+    hasPermission
+  } = useAuth();
 
   // Using correct English module names
   const canCreateMaterials = hasPermission('insumos', 'create');
   const canCreateDeliveries = hasPermission('insumos', 'create');
   const canManageConsumption = hasPermission('insumos', 'edit');
-
-  return (
-    <>
+  return <>
       <div className="p-6 space-y-8 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
@@ -58,15 +56,10 @@ const SuppliesPage = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold text-black">Catálogo de Materiales</h2>
-                {canCreateMaterials && (
-                  <Button 
-                    onClick={() => setShowMaterialForm(true)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white"
-                  >
+                {canCreateMaterials && <Button onClick={() => setShowMaterialForm(true)} className="text-white bg-[#ff5c02]">
                     <Plus className="w-4 h-4 mr-2" />
                     Nuevo Material
-                  </Button>
-                )}
+                  </Button>}
               </div>
               <MaterialsCatalog />
             </div>
@@ -82,10 +75,7 @@ const SuppliesPage = () => {
           <TabsContent value="consumption">
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-black">Gestión de Consumos</h2>
-              {canManageConsumption ? (
-                <MaterialConsumptionManager />
-              ) : (
-                <div className="text-center py-12">
+              {canManageConsumption ? <MaterialConsumptionManager /> : <div className="text-center py-12">
                   <Activity className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <Activity className="w-8 h-8 text-gray-600" />
                   </Activity>
@@ -93,18 +83,13 @@ const SuppliesPage = () => {
                   <p className="text-gray-600">
                     No tienes permisos para gestionar el consumo de materiales. Contacta al administrador.
                   </p>
-                </div>
-              )}
+                </div>}
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      {showMaterialForm && canCreateMaterials && (
-        <MaterialForm onClose={() => setShowMaterialForm(false)} />
-      )}
-    </>
-  );
+      {showMaterialForm && canCreateMaterials && <MaterialForm onClose={() => setShowMaterialForm(false)} />}
+    </>;
 };
-
 export default SuppliesPage;
