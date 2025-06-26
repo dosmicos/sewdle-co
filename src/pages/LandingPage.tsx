@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowRight, CheckCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, Package, Users, Truck, BarChart3, ArrowDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
@@ -29,15 +29,6 @@ const LandingPage = () => {
         <header className="relative z-50 w-full">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
-              {/* Logo */}
-              <div className="flex items-center">
-                <img 
-                  src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
-                  alt="Sewdle Logo" 
-                  className="h-6 w-auto"
-                />
-              </div>
-
               {/* Navigation Links */}
               <nav className="hidden md:flex items-center space-x-6">
                 <button
@@ -85,13 +76,13 @@ const LandingPage = () => {
           <div className="text-center space-y-6">
             {/* Headline */}
             <div className="space-y-4 max-w-4xl mx-auto">
-              <h1 className="text-4xl lg:text-6xl font-bold text-gray-900 leading-tight">
+              <h1 className="text-3xl lg:text-5xl font-bold text-gray-900 leading-tight">
                 Toma el control total de tu
                 <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
                   {" "}producción textil
                 </span>
               </h1>
-              <p className="text-lg lg:text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto">
+              <p className="text-base lg:text-lg text-gray-600 leading-relaxed max-w-3xl mx-auto">
                 La plataforma que conecta tu marca de moda con todos tus talleres y fabricantes, 
                 para una gestión sin límites ni sobresaltos.
               </p>
@@ -133,44 +124,110 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Features Section - Sewdle en 30s */}
-      <section id="como-funciona" className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
+      {/* Features Section - Redesigned with animated flow */}
+      <section id="como-funciona" className="py-20 bg-white relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
               Sewdle en 30 segundos
             </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Un flujo de trabajo optimizado que transforma tu producción textil
+            </p>
           </div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              {
-                icon: '🧵',
-                title: 'Órdenes centralizadas',
-                description: 'Crea, asigna y sigue cada orden desde un único panel.'
-              },
-              {
-                icon: '🔗',
-                title: 'Talleres conectados',
-                description: 'Chat y timeline compartido; capacidad de cada taller visible al instante.'
-              },
-              {
-                icon: '📦',
-                title: 'Trazabilidad total',
-                description: 'Diseño → insumos → producción → entrega, todo registrado.'
-              },
-              {
-                icon: '📊',
-                title: 'Dashboard ejecutivo',
-                description: 'KPIs de avance, cumplimiento y capacidad en tiempo real.'
-              }
-            ].map((feature, index) => (
-              <Card key={index} className="p-6 text-center hover:shadow-lg transition-shadow duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
-                <div className="text-4xl mb-4">{feature.icon}</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">{feature.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
-              </Card>
-            ))}
+          {/* Animated Flow Container */}
+          <div className="relative">
+            {/* Flow Steps */}
+            <div className="grid lg:grid-cols-4 gap-8 lg:gap-12 relative">
+              {[
+                {
+                  icon: Package,
+                  title: 'Órdenes centralizadas',
+                  description: 'Crea, asigna y sigue cada orden desde un único panel de control intuitivo.',
+                  color: 'from-orange-500 to-red-500',
+                  delay: '0s'
+                },
+                {
+                  icon: Users,
+                  title: 'Talleres conectados',
+                  description: 'Chat en tiempo real y capacidad de cada taller visible al instante.',
+                  color: 'from-blue-500 to-indigo-500',
+                  delay: '0.2s'
+                },
+                {
+                  icon: Truck,
+                  title: 'Trazabilidad total',
+                  description: 'Diseño → insumos → producción → entrega, todo registrado y monitoreado.',
+                  color: 'from-green-500 to-emerald-500',
+                  delay: '0.4s'
+                },
+                {
+                  icon: BarChart3,
+                  title: 'Dashboard ejecutivo',
+                  description: 'KPIs de avance, cumplimiento y capacidad en tiempo real.',
+                  color: 'from-purple-500 to-pink-500',
+                  delay: '0.6s'
+                }
+              ].map((feature, index) => (
+                <div key={index} className="relative group">
+                  {/* Animated Card */}
+                  <div 
+                    className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 border border-gray-100 animate-fade-in"
+                    style={{ animationDelay: feature.delay }}
+                  >
+                    {/* Icon Container with Gradient */}
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-r ${feature.color} flex items-center justify-center mb-6 mx-auto transform transition-transform duration-300 group-hover:rotate-12`}>
+                      <feature.icon className="h-8 w-8 text-white" />
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-gray-900 mb-4">{feature.title}</h3>
+                      <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+                    </div>
+                    
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-red-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  </div>
+                  
+                  {/* Animated Connector - Only show between cards, not after the last one */}
+                  {index < 3 && (
+                    <div className="hidden lg:block absolute top-1/2 -right-6 transform -translate-y-1/2 z-10">
+                      <div className="flex items-center">
+                        <div className="w-12 h-0.5 bg-gradient-to-r from-orange-400 to-red-400 animate-pulse"></div>
+                        <ArrowRight className="h-4 w-4 text-orange-500 ml-1 animate-bounce" style={{ animationDelay: `${0.8 + index * 0.2}s` }} />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Mobile Connector */}
+                  {index < 3 && (
+                    <div className="lg:hidden flex justify-center mt-6 mb-2">
+                      <ArrowDown className="h-6 w-6 text-orange-500 animate-bounce" style={{ animationDelay: `${0.8 + index * 0.2}s` }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Background Decoration */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-orange-100 rounded-full opacity-20 animate-pulse"></div>
+              <div className="absolute bottom-1/4 right-1/4 w-24 h-24 bg-blue-100 rounded-full opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
+            </div>
+          </div>
+          
+          {/* Call to Action */}
+          <div className="text-center mt-16">
+            <Button 
+              onClick={handleCTAClick}
+              variant="outline"
+              className="px-8 py-3 text-lg font-semibold border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-all duration-300 rounded-full"
+            >
+              Ver demo interactiva
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
           </div>
         </div>
       </section>
