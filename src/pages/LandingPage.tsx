@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -22,7 +21,7 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-br from-orange-50/95 via-white/95 to-blue-50/95 backdrop-blur-sm border-b border-orange-100/50">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-br from-orange-50/90 via-white/90 to-blue-50/90 backdrop-blur-md border-b-0">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
@@ -30,7 +29,7 @@ const LandingPage = () => {
               <img 
                 src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
                 alt="Sewdle Logo" 
-                className="h-8 w-auto"
+                className="h-6 w-auto"
               />
             </div>
 
