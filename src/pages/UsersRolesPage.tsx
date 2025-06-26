@@ -12,7 +12,6 @@ import RoleModal from '@/components/RoleModal';
 import { useUsers } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useUserTracking } from '@/hooks/useUserTracking';
-
 const UsersRolesPage = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -22,80 +21,73 @@ const UsersRolesPage = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [lastAccessData, setLastAccessData] = useState<Record<string, string>>({});
-
-  const { 
-    users, 
-    loading: usersLoading, 
-    createUser, 
-    updateUser, 
-    deleteUser 
+  const {
+    users,
+    loading: usersLoading,
+    createUser,
+    updateUser,
+    deleteUser
   } = useUsers();
-
-  const { 
-    roles, 
-    loading: rolesLoading, 
-    createRole, 
-    updateRole, 
-    deleteRole 
+  const {
+    roles,
+    loading: rolesLoading,
+    createRole,
+    updateRole,
+    deleteRole
   } = useRoles();
-
-  const { getLastAccess } = useUserTracking();
+  const {
+    getLastAccess
+  } = useUserTracking();
 
   // Cargar información de último acceso para todos los usuarios
   useEffect(() => {
     const loadLastAccessData = async () => {
       if (users.length > 0) {
-        const accessPromises = users.map(async (user) => {
+        const accessPromises = users.map(async user => {
           const lastAccess = await getLastAccess(user.id);
-          return { userId: user.id, lastAccess };
+          return {
+            userId: user.id,
+            lastAccess
+          };
         });
-        
         const accessResults = await Promise.all(accessPromises);
-        const accessMap = accessResults.reduce((acc, { userId, lastAccess }) => {
+        const accessMap = accessResults.reduce((acc, {
+          userId,
+          lastAccess
+        }) => {
           acc[userId] = lastAccess;
           return acc;
         }, {} as Record<string, string>);
-        
         setLastAccessData(accessMap);
       }
     };
-
     loadLastAccessData();
   }, [users, getLastAccess]);
-
   const activeUsers = users.filter(user => user.status === 'active').length;
   const inactiveUsers = users.filter(user => user.status === 'inactive').length;
   const usersWithoutRoles = users.filter(user => user.role === 'Sin Rol').length;
-
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(userFilter.toLowerCase()) ||
-                         user.email.toLowerCase().includes(userFilter.toLowerCase());
+    const matchesSearch = user.name.toLowerCase().includes(userFilter.toLowerCase()) || user.email.toLowerCase().includes(userFilter.toLowerCase());
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-    
     return matchesSearch && matchesRole && matchesStatus;
   });
-
   const handleEditUser = (user: any) => {
     setSelectedUser(user);
     setShowUserModal(true);
   };
-
   const handleEditRole = (role: any) => {
     setSelectedRole(role);
     setShowRoleModal(true);
   };
-
   const handleNewUser = () => {
     setSelectedUser(null);
     setShowUserModal(true);
   };
-
   const handleNewRole = () => {
     setSelectedRole(null);
     setShowRoleModal(true);
   };
-
   const handleUserSave = async (userData: any) => {
     if (selectedUser) {
       await updateUser(selectedUser.id, userData);
@@ -105,7 +97,6 @@ const UsersRolesPage = () => {
     setShowUserModal(false);
     setSelectedUser(null);
   };
-
   const handleRoleSave = async (roleData: any) => {
     if (selectedRole) {
       await updateRole(selectedRole.id, roleData);
@@ -115,22 +106,17 @@ const UsersRolesPage = () => {
     setShowRoleModal(false);
     setSelectedRole(null);
   };
-
   if (usersLoading || rolesLoading) {
-    return (
-      <div className="p-6 space-y-8 animate-fade-in">
+    return <div className="p-6 space-y-8 animate-fade-in">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
             <p className="text-gray-600">Cargando usuarios y roles...</p>
           </div>
         </div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="p-6 space-y-8 animate-fade-in">
+  return <div className="p-6 space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-black">Usuarios & Roles</h1>
@@ -196,7 +182,7 @@ const UsersRolesPage = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Lista de Usuarios</CardTitle>
-                <Button onClick={handleNewUser} className="bg-blue-500 hover:bg-blue-600">
+                <Button onClick={handleNewUser} className="bg-[#ff5c02]">
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo Usuario
                 </Button>
@@ -206,12 +192,7 @@ const UsersRolesPage = () => {
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Buscar por nombre o correo..."
-                    value={userFilter}
-                    onChange={(e) => setUserFilter(e.target.value)}
-                    className="pl-10"
-                  />
+                  <Input placeholder="Buscar por nombre o correo..." value={userFilter} onChange={e => setUserFilter(e.target.value)} className="pl-10" />
                 </div>
                 <Select value={roleFilter} onValueChange={setRoleFilter}>
                   <SelectTrigger className="w-full md:w-48">
@@ -220,11 +201,9 @@ const UsersRolesPage = () => {
                   <SelectContent>
                     <SelectItem value="all">Todos los roles</SelectItem>
                     <SelectItem value="Sin Rol">Sin Rol</SelectItem>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.name}>
+                    {roles.map(role => <SelectItem key={role.id} value={role.name}>
                         {role.name}
-                      </SelectItem>
-                    ))}
+                      </SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -252,24 +231,16 @@ const UsersRolesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
+                  {filteredUsers.map(user => <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.name || 'Sin nombre'}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Badge 
-                          variant={user.role === 'Sin Rol' ? 'destructive' : 'outline'}
-                          className={user.role === 'Sin Rol' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : ''}
-                        >
+                        <Badge variant={user.role === 'Sin Rol' ? 'destructive' : 'outline'} className={user.role === 'Sin Rol' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : ''}>
                           {user.role || 'Sin Rol'}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.workshopName ? (
-                          <Badge variant="secondary">{user.workshopName}</Badge>
-                        ) : (
-                          <span className="text-gray-400">Sin taller</span>
-                        )}
+                        {user.workshopName ? <Badge variant="secondary">{user.workshopName}</Badge> : <span className="text-gray-400">Sin taller</span>}
                       </TableCell>
                       <TableCell>
                         <Badge variant={user.status === 'active' ? 'default' : 'destructive'}>
@@ -282,23 +253,16 @@ const UsersRolesPage = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditUser(user)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => handleEditUser(user)}>
                           <Edit className="w-4 h-4" />
                         </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredUsers.length === 0 && (
-                    <TableRow>
+                    </TableRow>)}
+                  {filteredUsers.length === 0 && <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                         No se encontraron usuarios que coincidan con los filtros aplicados
                       </TableCell>
-                    </TableRow>
-                  )}
+                    </TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
@@ -328,8 +292,7 @@ const UsersRolesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {roles.map((role) => (
-                    <TableRow key={role.id}>
+                  {roles.map(role => <TableRow key={role.id}>
                       <TableCell className="font-medium">{role.name}</TableCell>
                       <TableCell>{role.description}</TableCell>
                       <TableCell>
@@ -339,16 +302,11 @@ const UsersRolesPage = () => {
                       </TableCell>
                       <TableCell>{role.usersCount}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditRole(role)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => handleEditRole(role)}>
                           <Edit className="w-4 h-4" />
                         </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
+                    </TableRow>)}
                 </TableBody>
               </Table>
             </CardContent>
@@ -356,29 +314,15 @@ const UsersRolesPage = () => {
         </TabsContent>
       </Tabs>
 
-      {showUserModal && (
-        <UserModal
-          user={selectedUser}
-          onClose={() => {
-            setShowUserModal(false);
-            setSelectedUser(null);
-          }}
-          onSave={handleUserSave}
-        />
-      )}
+      {showUserModal && <UserModal user={selectedUser} onClose={() => {
+      setShowUserModal(false);
+      setSelectedUser(null);
+    }} onSave={handleUserSave} />}
 
-      {showRoleModal && (
-        <RoleModal
-          role={selectedRole}
-          onClose={() => {
-            setShowRoleModal(false);
-            setSelectedRole(null);
-          }}
-          onSave={handleRoleSave}
-        />
-      )}
-    </div>
-  );
+      {showRoleModal && <RoleModal role={selectedRole} onClose={() => {
+      setShowRoleModal(false);
+      setSelectedRole(null);
+    }} onSave={handleRoleSave} />}
+    </div>;
 };
-
 export default UsersRolesPage;
