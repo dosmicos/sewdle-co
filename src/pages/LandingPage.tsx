@@ -22,7 +22,7 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-br from-orange-50/95 via-white/95 to-blue-50/95 backdrop-blur-sm border-b border-orange-100/50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
@@ -35,22 +35,22 @@ const LandingPage = () => {
             </div>
 
             {/* Navigation Links */}
-            <nav className="hidden md:flex items-center space-x-8">
+            <nav className="hidden md:flex items-center space-x-6">
               <button
                 onClick={() => scrollToSection('como-funciona')}
-                className="text-gray-700 hover:text-orange-600 transition-colors font-medium"
+                className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
               >
                 Cómo funciona
               </button>
               <button
                 onClick={() => scrollToSection('casos-de-uso')}
-                className="text-gray-700 hover:text-orange-600 transition-colors font-medium"
+                className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
               >
                 Casos de uso
               </button>
               <button
                 onClick={() => scrollToSection('integraciones')}
-                className="text-gray-700 hover:text-orange-600 transition-colors font-medium"
+                className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
               >
                 Integraciones
               </button>
@@ -61,13 +61,13 @@ const LandingPage = () => {
               <Button
                 onClick={handleCTAClick}
                 variant="ghost"
-                className="text-gray-700 hover:text-orange-600 font-medium"
+                className="text-sm text-gray-600 hover:text-orange-600 font-medium"
               >
                 Iniciar sesión
               </Button>
               <Button
                 onClick={handleCTAClick}
-                className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all duration-300"
+                className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-5 py-2 rounded-full hover:shadow-lg transition-all duration-300"
               >
                 Registrarse
               </Button>
