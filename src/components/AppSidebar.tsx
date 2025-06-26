@@ -124,8 +124,7 @@ const AppSidebar = () => {
             </div>
           </div>
           <div>
-            <h2 className="font-semibold text-lg">Sewdle</h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {userTypeLabel}
             </p>
           </div>
