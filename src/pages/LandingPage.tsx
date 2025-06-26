@@ -87,7 +87,7 @@ const LandingPage = () => {
       {/* Problem Section */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-12">
+          <h2 className="text-4xl text-gray-900 mb-12 font-semibold lg:text-3xl">
             ¿Tu marca crece, pero la producción se vuelve caótica?
           </h2>
           <div className="grid md:grid-cols-2 gap-6 text-left">
