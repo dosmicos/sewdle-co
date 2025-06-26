@@ -27,25 +27,25 @@ class Logger {
 
   error(message: string, data?: any): void {
     if (this.shouldLog('ERROR')) {
-      console.error(`[TextilFlow Error] ${message}`, data || '');
+      console.error(`[Sewdle Error] ${message}`, data || '');
     }
   }
 
   warn(message: string, data?: any): void {
     if (this.shouldLog('WARN')) {
-      console.warn(`[TextilFlow Warning] ${message}`, data || '');
+      console.warn(`[Sewdle Warning] ${message}`, data || '');
     }
   }
 
   info(message: string, data?: any): void {
     if (this.shouldLog('INFO')) {
-      console.info(`[TextilFlow Info] ${message}`, data || '');
+      console.info(`[Sewdle Info] ${message}`, data || '');
     }
   }
 
   debug(message: string, data?: any): void {
     if (this.shouldLog('DEBUG')) {
-      console.log(`[TextilFlow Debug] ${message}`, data || '');
+      console.log(`[Sewdle Debug] ${message}`, data || '');
     }
   }
 }

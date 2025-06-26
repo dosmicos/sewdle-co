@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
@@ -113,7 +112,7 @@ const AppSidebar = () => {
             {React.createElement(userIcon, { className: "w-5 h-5 text-primary-foreground" })}
           </div>
           <div>
-            <h2 className="font-semibold text-lg">TextilFlow</h2>
+            <h2 className="font-semibold text-lg">Sewdle</h2>
             <p className="text-xs text-muted-foreground">
               {userTypeLabel}
             </p>

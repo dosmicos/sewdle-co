@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -41,7 +40,6 @@ const LoginPage = () => {
     try {
       await login(email, password);
       logger.info('User logged in successfully');
-      // No redirigir aquí, el useEffect se encargará de mostrar el modal si es necesario
     } catch (error) {
       logger.error('Login error', error);
       toast({
@@ -56,7 +54,6 @@ const LoginPage = () => {
 
   const handlePasswordChangeComplete = () => {
     setShowPasswordChange(false);
-    // El usuario será redirigido automáticamente al dashboard por el AuthContext
   };
 
   return (
@@ -68,7 +65,7 @@ const LoginPage = () => {
             <Building2 className="w-8 h-8 text-white" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">TextilFlow</h1>
+            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Sewdle</h1>
             <p className="text-sm text-gray-600">Sistema de Gestión de Talleres Textiles</p>
           </div>
         </div>
@@ -126,7 +123,7 @@ const LoginPage = () => {
 
         {/* Footer */}
         <div className="text-center">
-          <p className="text-xs text-gray-500">© 2024 TextilFlow. Todos los derechos reservados.</p>
+          <p className="text-xs text-gray-500">© 2024 Sewdle. Todos los derechos reservados.</p>
         </div>
       </div>
 

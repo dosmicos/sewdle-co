@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -92,7 +91,7 @@ const AuthPage = () => {
             <Building2 className="w-8 h-8 text-white" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">TextilFlow</h1>
+            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Sewdle</h1>
             <p className="text-sm text-gray-600">Sistema de Gestión de Talleres Textiles</p>
           </div>
         </div>
@@ -186,7 +185,7 @@ const AuthPage = () => {
 
         {/* Footer */}
         <div className="text-center">
-          <p className="text-xs text-gray-500">© 2024 TextilFlow. Todos los derechos reservados.</p>
+          <p className="text-xs text-gray-500">© 2024 Sewdle. Todos los derechos reservados.</p>
         </div>
       </div>
 
