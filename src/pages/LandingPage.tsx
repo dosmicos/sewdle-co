@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,64 +21,66 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-br from-orange-50/90 via-white/90 to-blue-50/90 backdrop-blur-md border-b-0">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center">
-              <img 
-                src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
-                alt="Sewdle Logo" 
-                className="h-6 w-auto"
-              />
-            </div>
+      {/* Hero Section with Integrated Navigation */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50"></div>
+        
+        {/* Navigation Header - Now integrated within hero */}
+        <header className="relative z-50 w-full">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              {/* Logo */}
+              <div className="flex items-center">
+                <img 
+                  src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
+                  alt="Sewdle Logo" 
+                  className="h-6 w-auto"
+                />
+              </div>
 
-            {/* Navigation Links */}
-            <nav className="hidden md:flex items-center space-x-6">
-              <button
-                onClick={() => scrollToSection('como-funciona')}
-                className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
-              >
-                Cómo funciona
-              </button>
-              <button
-                onClick={() => scrollToSection('casos-de-uso')}
-                className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
-              >
-                Casos de uso
-              </button>
-              <button
-                onClick={() => scrollToSection('integraciones')}
-                className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
-              >
-                Integraciones
-              </button>
-            </nav>
+              {/* Navigation Links */}
+              <nav className="hidden md:flex items-center space-x-6">
+                <button
+                  onClick={() => scrollToSection('como-funciona')}
+                  className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
+                >
+                  Cómo funciona
+                </button>
+                <button
+                  onClick={() => scrollToSection('casos-de-uso')}
+                  className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
+                >
+                  Casos de uso
+                </button>
+                <button
+                  onClick={() => scrollToSection('integraciones')}
+                  className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium"
+                >
+                  Integraciones
+                </button>
+              </nav>
 
-            {/* Auth Buttons */}
-            <div className="flex items-center space-x-3">
-              <Button
-                onClick={handleCTAClick}
-                variant="ghost"
-                className="text-sm text-gray-600 hover:text-orange-600 font-medium"
-              >
-                Iniciar sesión
-              </Button>
-              <Button
-                onClick={handleCTAClick}
-                className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-5 py-2 rounded-full hover:shadow-lg transition-all duration-300"
-              >
-                Registrarse
-              </Button>
+              {/* Auth Buttons */}
+              <div className="flex items-center space-x-3">
+                <Button
+                  onClick={handleCTAClick}
+                  variant="ghost"
+                  className="text-sm text-gray-600 hover:text-orange-600 font-medium"
+                >
+                  Iniciar sesión
+                </Button>
+                <Button
+                  onClick={handleCTAClick}
+                  className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-5 py-2 rounded-full hover:shadow-lg transition-all duration-300"
+                >
+                  Registrarse
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden pt-20">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50"></div>
+        {/* Hero Content */}
         <div className="relative max-w-7xl mx-auto px-6 py-20 lg:py-32">
           <div className="text-center space-y-8">
             {/* Logo */}
