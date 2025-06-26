@@ -12,10 +12,72 @@ const LandingPage = () => {
     navigate('/auth');
   };
 
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
+      {/* Navigation Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <div className="flex items-center">
+              <img 
+                src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
+                alt="Sewdle Logo" 
+                className="h-8 w-auto"
+              />
+            </div>
+
+            {/* Navigation Links */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <button
+                onClick={() => scrollToSection('como-funciona')}
+                className="text-gray-700 hover:text-orange-600 transition-colors font-medium"
+              >
+                Cómo funciona
+              </button>
+              <button
+                onClick={() => scrollToSection('casos-de-uso')}
+                className="text-gray-700 hover:text-orange-600 transition-colors font-medium"
+              >
+                Casos de uso
+              </button>
+              <button
+                onClick={() => scrollToSection('integraciones')}
+                className="text-gray-700 hover:text-orange-600 transition-colors font-medium"
+              >
+                Integraciones
+              </button>
+            </nav>
+
+            {/* Auth Buttons */}
+            <div className="flex items-center space-x-3">
+              <Button
+                onClick={handleCTAClick}
+                variant="ghost"
+                className="text-gray-700 hover:text-orange-600 font-medium"
+              >
+                Iniciar sesión
+              </Button>
+              <Button
+                onClick={handleCTAClick}
+                className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all duration-300"
+              >
+                Registrarse
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
+      <section className="relative overflow-hidden pt-20">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50"></div>
         <div className="relative max-w-7xl mx-auto px-6 py-20 lg:py-32">
           <div className="text-center space-y-8">
@@ -79,7 +141,7 @@ const LandingPage = () => {
       </section>
 
       {/* Features Section - Sewdle en 30s */}
-      <section className="py-20">
+      <section id="como-funciona" className="py-20">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
@@ -164,7 +226,7 @@ const LandingPage = () => {
       </section>
 
       {/* Use Cases Section */}
-      <section className="py-20">
+      <section id="casos-de-uso" className="py-20">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
@@ -211,7 +273,7 @@ const LandingPage = () => {
       </section>
 
       {/* Differentials Section */}
-      <section className="py-20 bg-gray-900">
+      <section id="integraciones" className="py-20 bg-gray-900">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl lg:text-5xl font-bold text-white mb-4">
