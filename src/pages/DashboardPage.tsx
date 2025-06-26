@@ -9,7 +9,7 @@ const DashboardPage = () => {
   const { isAdmin, isDesigner } = useAuth();
   
   return (
-    <div className="p-6">
+    <div className="p-6" style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
       {isAdmin() ? (
         <AdminDashboard />
       ) : isDesigner() ? (

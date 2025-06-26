@@ -33,19 +33,19 @@ const DesignerDashboard = () => {
 
   if (loading) {
     return (
-      <div className="space-y-8 animate-fade-in">
+      <div className="space-y-8 animate-fade-in" style={{ backgroundColor: '#ffffff' }}>
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'rgb(29 29 31)' }}>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ color: '#1d1d1f' }}>
             Dashboard de Diseño
           </h1>
-          <p style={{ color: 'rgb(99 99 102)' }}>
+          <p style={{ color: '#636366' }}>
             Cargando datos de diseño...
           </p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 animate-pulse">
+            <Card key={i} className="p-6 animate-pulse">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
                 <div className="flex-1">
@@ -61,14 +61,14 @@ const DesignerDashboard = () => {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in" style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'rgb(29 29 31)' }}>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ color: '#1d1d1f' }}>
             Dashboard de Diseño
           </h1>
-          <p style={{ color: 'rgb(99 99 102)' }}>
+          <p style={{ color: '#636366' }}>
             Bienvenido {user?.name}, gestiona tus proyectos de diseño
           </p>
         </div>
@@ -78,11 +78,12 @@ const DesignerDashboard = () => {
             variant="outline"
             size="sm"
             className="flex items-center space-x-2"
+            style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}
           >
             <RefreshCw className="w-4 h-4" />
             <span>Actualizar</span>
           </Button>
-          <Button size="sm" className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700">
+          <Button size="sm" className="flex items-center space-x-2" style={{ backgroundColor: '#8B5CF6', color: '#ffffff' }}>
             <Plus className="w-4 h-4" />
             <span>Nueva Orden</span>
           </Button>
@@ -91,64 +92,64 @@ const DesignerDashboard = () => {
 
       {/* Stats Cards específicas para diseñador */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Card className="p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-purple-50 rounded-xl">
-              <FileText className="w-6 h-6 text-purple-600" />
+            <div className="p-3 rounded-xl" style={{ backgroundColor: '#faf5ff' }}>
+              <FileText className="w-6 h-6" style={{ color: '#8B5CF6' }} />
             </div>
             <div>
-              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+              <p className="text-sm font-medium" style={{ color: '#636366' }}>
                 Diseños Pendientes
               </p>
-              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+              <p className="text-2xl font-bold" style={{ color: '#1d1d1f' }}>
                 {designerStats.pendingDesigns}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Card className="p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-blue-50 rounded-xl">
-              <Package className="w-6 h-6 text-blue-600" />
+            <div className="p-3 rounded-xl" style={{ backgroundColor: '#eff6ff' }}>
+              <Package className="w-6 h-6" style={{ color: '#3B82F6' }} />
             </div>
             <div>
-              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+              <p className="text-sm font-medium" style={{ color: '#636366' }}>
                 Productos Diseñados
               </p>
-              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+              <p className="text-2xl font-bold" style={{ color: '#1d1d1f' }}>
                 {designerStats.productsDesigned}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Card className="p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-green-50 rounded-xl">
-              <Building2 className="w-6 h-6 text-green-600" />
+            <div className="p-3 rounded-xl" style={{ backgroundColor: '#f0fdf4' }}>
+              <Building2 className="w-6 h-6" style={{ color: '#10B981' }} />
             </div>
             <div>
-              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+              <p className="text-sm font-medium" style={{ color: '#636366' }}>
                 Talleres Activos
               </p>
-              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+              <p className="text-2xl font-bold" style={{ color: '#1d1d1f' }}>
                 {designerStats.activeWorkshops}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Card className="p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-orange-50 rounded-xl">
-              <CheckCircle className="w-6 h-6 text-orange-600" />
+            <div className="p-3 rounded-xl" style={{ backgroundColor: '#fff7ed' }}>
+              <CheckCircle className="w-6 h-6" style={{ color: '#F97316' }} />
             </div>
             <div>
-              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+              <p className="text-sm font-medium" style={{ color: '#636366' }}>
                 Completados Este Mes
               </p>
-              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+              <p className="text-2xl font-bold" style={{ color: '#1d1d1f' }}>
                 {designerStats.completedThisMonth}
               </p>
             </div>
@@ -158,9 +159,9 @@ const DesignerDashboard = () => {
 
       {/* Charts y contenido específico para diseñador */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Card className="p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+            <h3 className="text-lg font-semibold" style={{ color: '#1d1d1f' }}>
               Productividad de Diseño
             </h3>
             <div className="h-64">
@@ -193,27 +194,27 @@ const DesignerDashboard = () => {
           </div>
         </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Card className="p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+              <h3 className="text-lg font-semibold" style={{ color: '#1d1d1f' }}>
                 Accesos Rápidos
               </h3>
             </div>
             <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start" size="lg">
+              <Button variant="outline" className="w-full justify-start" size="lg" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}>
                 <FileText className="w-5 h-5 mr-3" />
                 Ver Mis Órdenes
               </Button>
-              <Button variant="outline" className="w-full justify-start" size="lg">
+              <Button variant="outline" className="w-full justify-start" size="lg" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}>
                 <Package className="w-5 h-5 mr-3" />
                 Gestionar Productos
               </Button>
-              <Button variant="outline" className="w-full justify-start" size="lg">
+              <Button variant="outline" className="w-full justify-start" size="lg" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}>
                 <Building2 className="w-5 h-5 mr-3" />
                 Coordinar con Talleres
               </Button>
-              <Button variant="outline" className="w-full justify-start" size="lg">
+              <Button variant="outline" className="w-full justify-start" size="lg" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}>
                 <Eye className="w-5 h-5 mr-3" />
                 Ver Entregas
               </Button>
@@ -223,9 +224,9 @@ const DesignerDashboard = () => {
       </div>
 
       {/* Actividad Reciente específica para diseñador */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+      <Card className="p-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+          <h3 className="text-lg font-semibold" style={{ color: '#1d1d1f' }}>
             Actividad Reciente de Diseño
           </h3>
           <div className="space-y-4">
@@ -242,17 +243,17 @@ const DesignerDashboard = () => {
               
               const IconComponent = getActivityIcon(activity.icon);
               return (
-                <div key={activity.id} className="flex items-start space-x-4 p-4 bg-purple-50 rounded-xl">
+                <div key={activity.id} className="flex items-start space-x-4 p-4 rounded-xl" style={{ backgroundColor: '#faf5ff' }}>
                   <IconComponent className={`w-5 h-5 mt-0.5 ${activity.color}`} />
                   <div className="flex-1 space-y-1">
-                    <p className="text-sm font-medium" style={{ color: 'rgb(29 29 31)' }}>
+                    <p className="text-sm font-medium" style={{ color: '#1d1d1f' }}>
                       {activity.title}
                     </p>
-                    <p className="text-xs" style={{ color: 'rgb(99 99 102)' }}>
+                    <p className="text-xs" style={{ color: '#636366' }}>
                       {activity.description}
                     </p>
                   </div>
-                  <p className="text-xs" style={{ color: 'rgb(142 142 147)' }}>
+                  <p className="text-xs" style={{ color: '#8e8e93' }}>
                     {activity.time}
                   </p>
                 </div>

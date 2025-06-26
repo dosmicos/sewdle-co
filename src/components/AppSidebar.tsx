@@ -105,8 +105,8 @@ const AppSidebar = () => {
   };
 
   return (
-    <Sidebar className="border-r border-border">
-      <SidebarHeader className="p-4">
+    <Sidebar className="border-r" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
+      <SidebarHeader className="p-4" style={{ backgroundColor: '#ffffff' }}>
         <div className="flex flex-col items-start space-y-1">
           <div className="w-26 h-auto flex items-center justify-center">
             <img 
@@ -119,21 +119,21 @@ const AppSidebar = () => {
                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
               }}
             />
-            <div className="w-14 h-14 bg-primary rounded-lg hidden items-center justify-center">
-              {React.createElement(userIcon, { className: "w-8 h-8 text-primary-foreground" })}
+            <div className="w-14 h-14 rounded-lg hidden items-center justify-center" style={{ backgroundColor: '#3B82F6' }}>
+              {React.createElement(userIcon, { className: "w-8 h-8", style: { color: '#ffffff' } })}
             </div>
           </div>
           <div className="text-center">
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-xs font-medium" style={{ color: '#6b7280' }}>
               {userTypeLabel}
             </p>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent style={{ backgroundColor: '#ffffff' }}>
         <SidebarGroup>
-          <SidebarGroupLabel>Navegación</SidebarGroupLabel>
+          <SidebarGroupLabel style={{ color: '#374151' }}>Navegación</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -142,6 +142,10 @@ const AppSidebar = () => {
                     onClick={() => handleNavigation(item.url)}
                     isActive={location.pathname === item.url}
                     className="w-full justify-start"
+                    style={{ 
+                      backgroundColor: location.pathname === item.url ? '#f3f4f6' : 'transparent',
+                      color: '#374151'
+                    }}
                   >
                     <item.icon className="w-4 h-4" />
                     <span>{item.title}</span>
@@ -153,16 +157,21 @@ const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4" style={{ backgroundColor: '#ffffff' }}>
         <div className="space-y-3">
-          <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-xl">
-            <User className="w-8 h-8 text-muted-foreground" />
+          <div className="flex items-center space-x-3 p-3 rounded-xl" style={{ backgroundColor: '#f9fafb' }}>
+            <User className="w-8 h-8" style={{ color: '#6b7280' }} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user?.name || user?.email}</p>
-              <p className="text-xs truncate text-gray-800">{user?.email}</p>
+              <p className="text-sm font-medium truncate" style={{ color: '#1f2937' }}>{user?.name || user?.email}</p>
+              <p className="text-xs truncate" style={{ color: '#1f2937' }}>{user?.email}</p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout} className="w-full justify-start">
+          <Button 
+            variant="outline" 
+            onClick={handleLogout} 
+            className="w-full justify-start"
+            style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', color: '#374151' }}
+          >
             <LogOut className="w-4 h-4 mr-2" />
             Cerrar sesión
           </Button>
