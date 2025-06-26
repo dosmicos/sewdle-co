@@ -167,7 +167,7 @@ const LandingPage = () => {
       <section id="casos-de-uso" className="py-20">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl text-gray-900 mb-4 lg:text-3xl font-semibold">
               Casos de uso
             </h2>
           </div>
