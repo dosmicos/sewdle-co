@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,8 +88,20 @@ const AuthPage = () => {
       <div className="w-full max-w-sm space-y-6">
         {/* Logo and title */}
         <div className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center">
-            <Building2 className="w-8 h-8 text-white" />
+          <div className="mx-auto w-16 h-16 flex items-center justify-center">
+            <img 
+              src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
+              alt="Sewdle Logo" 
+              className="w-16 h-16 object-contain"
+              onError={(e) => {
+                // Fallback to Building2 icon if logo fails to load
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="w-16 h-16 bg-gray-900 rounded-2xl hidden items-center justify-center">
+              <Building2 className="w-8 h-8 text-white" />
+            </div>
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Sewdle</h1>
