@@ -1,4 +1,5 @@
 
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -44,13 +45,23 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, style, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
     
-    // Explicit styles for outline variant to prevent yellow appearance
-    const explicitStyle = variant === "outline" ? {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e7eb',
-      color: '#374151',
-      ...style
-    } : style;
+    // Explicit styles for different variants
+    let explicitStyle = style;
+    
+    if (variant === "outline") {
+      explicitStyle = {
+        backgroundColor: '#ffffff',
+        borderColor: '#e5e7eb',
+        color: '#374151',
+        ...style
+      };
+    } else if (variant === "default" || variant === undefined) {
+      explicitStyle = {
+        backgroundColor: '#FF5C02',
+        color: '#ffffff',
+        ...style
+      };
+    }
 
     return (
       <Comp
@@ -65,3 +76,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
+

@@ -14,7 +14,7 @@
     --popover-foreground: #000000;
     
     /* Colores de acción */
-    --primary: #3b82f6;
+    --primary: #FF5C02;
     --primary-foreground: #ffffff;
     --secondary: #f3f4f6;
     --secondary-foreground: #000000;
@@ -36,7 +36,7 @@
     /* Sidebar */
     --sidebar-background: #ffffff;
     --sidebar-foreground: #000000;
-    --sidebar-primary: #3b82f6;
+    --sidebar-primary: #FF5C02;
     --sidebar-primary-foreground: #ffffff;
     --sidebar-accent: #e5e7eb;
     --sidebar-accent-foreground: #000000;
@@ -52,7 +52,7 @@
     --popover: #0f172a;
     --popover-foreground: #f8fafc;
     
-    --primary: #6366f1;
+    --primary: #FF5C02;
     --primary-foreground: #f8fafc;
     --secondary: #1e293b;
     --secondary-foreground: #f8fafc;
@@ -66,16 +66,16 @@
     
     --border: #334155;
     --input: #1e293b;
-    --ring: #6366f1;
+    --ring: #FF5C02;
     
     --sidebar-background: #0f172a;
     --sidebar-foreground: #f8fafc;
-    --sidebar-primary: #6366f1;
+    --sidebar-primary: #FF5C02;
     --sidebar-primary-foreground: #f8fafc;
     --sidebar-accent: #1e293b;
     --sidebar-accent-foreground: #f8fafc;
     --sidebar-border: #334155;
-    --sidebar-ring: #6366f1;
+    --sidebar-ring: #FF5C02;
   }
 
   * {
@@ -179,14 +179,14 @@
   }
   
   .btn-primary {
-    background-color: #3b82f6;
+    background-color: #FF5C02;
     color: #ffffff;
     height: 2.5rem;
     padding: 0.5rem 1rem;
   }
   
   .btn-primary:hover {
-    background-color: #2563eb;
+    background-color: #FF5C02;
   }
   
   .btn-secondary {
