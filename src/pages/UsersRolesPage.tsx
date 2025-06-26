@@ -32,13 +32,6 @@ const getRoleColor = (role: string) => {
   return 'bg-blue-100 text-blue-800 border-blue-300';
 };
 
-const getWorkshopColor = (hasWorkshop: boolean) => {
-  if (hasWorkshop) {
-    return 'bg-purple-100 text-purple-800 border-purple-300';
-  }
-  return 'bg-gray-100 text-gray-500 border-gray-300';
-};
-
 const UsersRolesPage = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -271,7 +264,11 @@ const UsersRolesPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.workshopName ? <Badge className={getWorkshopColor(true)}>{user.workshopName}</Badge> : <span className="text-gray-400">Sin taller</span>}
+                        {user.workshopName ? (
+                          <span className="text-gray-900">{user.workshopName}</span>
+                        ) : (
+                          <span className="text-gray-400">Sin taller</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge className={getUserStatusColor(user.status)}>
