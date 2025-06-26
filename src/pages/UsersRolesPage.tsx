@@ -12,6 +12,33 @@ import RoleModal from '@/components/RoleModal';
 import { useUsers } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useUserTracking } from '@/hooks/useUserTracking';
+
+// Helper functions for status colors
+const getUserStatusColor = (status: string) => {
+  switch (status) {
+    case 'active':
+      return 'bg-green-100 text-green-800 border-green-300';
+    case 'inactive':
+      return 'bg-red-100 text-red-800 border-red-300';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-300';
+  }
+};
+
+const getRoleColor = (role: string) => {
+  if (role === 'Sin Rol') {
+    return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+  }
+  return 'bg-blue-100 text-blue-800 border-blue-300';
+};
+
+const getWorkshopColor = (hasWorkshop: boolean) => {
+  if (hasWorkshop) {
+    return 'bg-purple-100 text-purple-800 border-purple-300';
+  }
+  return 'bg-gray-100 text-gray-500 border-gray-300';
+};
+
 const UsersRolesPage = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -21,6 +48,7 @@ const UsersRolesPage = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [lastAccessData, setLastAccessData] = useState<Record<string, string>>({});
+
   const {
     users,
     loading: usersLoading,
@@ -39,7 +67,6 @@ const UsersRolesPage = () => {
     getLastAccess
   } = useUserTracking();
 
-  // Cargar información de último acceso para todos los usuarios
   useEffect(() => {
     const loadLastAccessData = async () => {
       if (users.length > 0) {
@@ -63,6 +90,7 @@ const UsersRolesPage = () => {
     };
     loadLastAccessData();
   }, [users, getLastAccess]);
+
   const activeUsers = users.filter(user => user.status === 'active').length;
   const inactiveUsers = users.filter(user => user.status === 'inactive').length;
   const usersWithoutRoles = users.filter(user => user.role === 'Sin Rol').length;
@@ -72,6 +100,7 @@ const UsersRolesPage = () => {
     const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
     return matchesSearch && matchesRole && matchesStatus;
   });
+
   const handleEditUser = (user: any) => {
     setSelectedUser(user);
     setShowUserModal(true);
@@ -106,6 +135,7 @@ const UsersRolesPage = () => {
     setShowRoleModal(false);
     setSelectedRole(null);
   };
+
   if (usersLoading || rolesLoading) {
     return <div className="p-6 space-y-8 animate-fade-in">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -116,6 +146,7 @@ const UsersRolesPage = () => {
         </div>
       </div>;
   }
+
   return <div className="p-6 space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
@@ -235,15 +266,15 @@ const UsersRolesPage = () => {
                       <TableCell className="font-medium">{user.name || 'Sin nombre'}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Badge variant={user.role === 'Sin Rol' ? 'destructive' : 'outline'} className={user.role === 'Sin Rol' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : ''}>
+                        <Badge className={getRoleColor(user.role)}>
                           {user.role || 'Sin Rol'}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.workshopName ? <Badge variant="secondary">{user.workshopName}</Badge> : <span className="text-gray-400">Sin taller</span>}
+                        {user.workshopName ? <Badge className={getWorkshopColor(true)}>{user.workshopName}</Badge> : <span className="text-gray-400">Sin taller</span>}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.status === 'active' ? 'default' : 'destructive'}>
+                        <Badge className={getUserStatusColor(user.status)}>
                           {user.status === 'active' ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
@@ -325,4 +356,5 @@ const UsersRolesPage = () => {
     }} onSave={handleRoleSave} />}
     </div>;
 };
+
 export default UsersRolesPage;
