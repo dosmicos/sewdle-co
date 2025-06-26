@@ -124,7 +124,7 @@ const AppSidebar = () => {
             </div>
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-muted-foreground">
+            <p className="text-sm font-small text-muted-foreground">
               {userTypeLabel}
             </p>
           </div>
