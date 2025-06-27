@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2, Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { sortProductVariants } from '@/lib/variantSorting';
+import SearchableProductSelector from './SearchableProductSelector';
 
 interface ProductSelectorProps {
   selectedProducts: any[];
@@ -17,6 +17,7 @@ interface Product {
   name: string;
   description: string;
   base_price: number;
+  image_url?: string;
   variants: ProductVariant[];
 }
 
@@ -72,6 +73,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
           name,
           description,
           base_price,
+          image_url,
           product_variants (
             id,
             size,
@@ -97,6 +99,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
           name: product.name,
           description: product.description || '',
           base_price: product.base_price || 0,
+          image_url: product.image_url,
           variants: sortedVariants
         };
       }) || [];
@@ -262,21 +265,12 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
               <label className="block text-sm font-medium text-black mb-2">
                 Seleccionar Producto
               </label>
-              <Select
-                value={product.productId || ""}
-                onValueChange={(value) => updateProductSelection(index, value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar producto..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableProducts.map((prod) => (
-                    <SelectItem key={prod.id} value={prod.id}>
-                      {prod.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableProductSelector
+                products={availableProducts}
+                selectedProductId={product.productId}
+                onProductSelect={(productId) => updateProductSelection(index, productId)}
+                placeholder="Buscar producto..."
+              />
             </div>
 
             {selectedProductData && selectedProductData.variants.length > 0 && (
