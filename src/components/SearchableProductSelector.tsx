@@ -101,21 +101,22 @@ const SearchableProductSelector = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="p-0 z-[100] bg-white border shadow-lg" 
+        className="p-0 z-[100] bg-white border shadow-lg max-h-[400px] overflow-hidden" 
         align="start"
         style={{ width: 'var(--radix-popover-trigger-width)', minWidth: '300px' }}
       >
-        <Command shouldFilter={false}>
+        <Command className="flex flex-col h-full max-h-[400px]" shouldFilter={false}>
           <CommandInput 
             placeholder="Buscar producto..." 
             value={searchTerm}
             onValueChange={setSearchTerm}
+            className="border-b"
           />
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList className="flex-1 overflow-y-auto">
             {filteredProducts.length === 0 ? (
               <CommandEmpty>No se encontraron productos.</CommandEmpty>
             ) : (
-              <CommandGroup>
+              <CommandGroup className="p-0">
                 {filteredProducts.map((product) => (
                   <CommandItem
                     key={product.id}
@@ -125,7 +126,7 @@ const SearchableProductSelector = ({
                       setOpen(false);
                       setSearchTerm('');
                     }}
-                    className="flex items-center space-x-3 p-3 cursor-pointer"
+                    className="flex items-center space-x-3 p-3 cursor-pointer hover:bg-gray-50"
                   >
                     {/* Product Image */}
                     <div className="flex-shrink-0">
