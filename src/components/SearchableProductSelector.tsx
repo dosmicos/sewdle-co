@@ -29,14 +29,8 @@ const SearchableProductSelector = ({
   placeholder = "Buscar producto..."
 }: SearchableProductSelectorProps) => {
   const [open, setOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
   
   const selectedProduct = products.find(p => p.id === selectedProductId);
-
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-    (product.description && product.description.toLowerCase().includes(searchValue.toLowerCase()))
-  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -70,41 +64,36 @@ const SearchableProductSelector = ({
       </PopoverTrigger>
       <PopoverContent className="w-full p-0" align="start">
         <Command>
-          <CommandInput 
-            placeholder="Buscar producto..." 
-            value={searchValue}
-            onValueChange={setSearchValue}
-          />
+          <CommandInput placeholder="Buscar producto..." />
           <CommandList className="max-h-[300px]">
             <CommandEmpty>No se encontraron productos.</CommandEmpty>
             <CommandGroup>
-              {filteredProducts.map((product) => (
+              {products.map((product) => (
                 <CommandItem
                   key={product.id}
-                  value={product.id}
+                  value={`${product.name} ${product.description || ''}`}
                   onSelect={() => {
                     onProductSelect(product.id);
                     setOpen(false);
-                    setSearchValue("");
                   }}
                   className="flex items-center space-x-3 p-3 cursor-pointer"
                 >
-                  {/* Product Image */}
+                  {/* Product Image - smaller size */}
                   <div className="flex-shrink-0">
                     {product.image_url ? (
                       <img 
                         src={product.image_url} 
                         alt={product.name}
-                        className="w-12 h-12 rounded-lg object-cover border border-gray-200"
+                        className="w-10 h-10 rounded-lg object-cover border border-gray-200"
                       />
                     ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
-                        <Package className="w-6 h-6 text-gray-400" />
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200">
+                        <Package className="w-5 h-5 text-gray-400" />
                       </div>
                     )}
                   </div>
                   
-                  {/* Product Info */}
+                  {/* Product Info - simplified */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="font-medium text-gray-900 truncate">
@@ -116,21 +105,6 @@ const SearchableProductSelector = ({
                           selectedProductId === product.id ? "opacity-100" : "opacity-0"
                         )}
                       />
-                    </div>
-                    
-                    {product.description && (
-                      <p className="text-sm text-gray-500 truncate">
-                        {product.description}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-sm font-medium text-blue-600">
-                        ${product.base_price.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {product.variants.length} variantes
-                      </span>
                     </div>
                   </div>
                 </CommandItem>
