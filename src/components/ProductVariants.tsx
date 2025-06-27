@@ -1,18 +1,19 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Plus, GripVertical, MoreHorizontal, X } from 'lucide-react';
+import { Plus, GripVertical, MoreHorizontal, X, Edit2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface Variant {
   size: string;
   color: string;
-  price: string;
-  sku: string;
+  skuVariant: string;
+  additionalPrice: number;
+  stockQuantity: number;
 }
 
 interface VariantOption {
@@ -44,6 +45,7 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionValue, setNewOptionValue] = useState('');
   const [editingOption, setEditingOption] = useState<string | null>(null);
+  const [generatedVariants, setGeneratedVariants] = useState<Variant[]>([]);
 
   const availableColors = [
     { name: 'Blanco', colorClass: 'bg-white border border-gray-300' },
@@ -57,6 +59,51 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
     { name: 'Rosa', colorClass: 'bg-pink-500' },
     { name: 'Morado', colorClass: 'bg-purple-500' }
   ];
+
+  // Generar variantes automáticamente cuando cambien las opciones
+  useEffect(() => {
+    generateVariants();
+  }, [variantOptions]);
+
+  const generateVariants = () => {
+    const colorOption = variantOptions.find(opt => opt.id === 'color');
+    const sizeOption = variantOptions.find(opt => opt.id === 'size');
+    
+    if (!colorOption || !sizeOption || colorOption.values.length === 0 || sizeOption.values.length === 0) {
+      setGeneratedVariants([]);
+      onVariantsChange([]);
+      return;
+    }
+
+    const newVariants: Variant[] = [];
+    
+    // Generar todas las combinaciones posibles
+    colorOption.values.forEach(color => {
+      sizeOption.values.forEach(size => {
+        // Buscar si ya existe esta variante para mantener los datos del usuario
+        const existingVariant = generatedVariants.find(v => v.color === color && v.size === size) ||
+                               variants.find(v => v.color === color && v.size === size);
+        
+        newVariants.push({
+          size,
+          color,
+          skuVariant: existingVariant?.skuVariant || `${color.substring(0, 3).toUpperCase()}-${size.split(' ')[0]}`,
+          additionalPrice: existingVariant?.additionalPrice || 0,
+          stockQuantity: existingVariant?.stockQuantity || 0
+        });
+      });
+    });
+
+    setGeneratedVariants(newVariants);
+    onVariantsChange(newVariants);
+  };
+
+  const updateVariant = (index: number, field: keyof Variant, value: any) => {
+    const updatedVariants = [...generatedVariants];
+    updatedVariants[index] = { ...updatedVariants[index], [field]: value };
+    setGeneratedVariants(updatedVariants);
+    onVariantsChange(updatedVariants);
+  };
 
   const addNewVariantOption = () => {
     if (newOptionName.trim()) {
@@ -114,11 +161,13 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
           className="text-black border-gray-300"
         >
           <Plus className="w-4 h-4 mr-1" />
-          Agregar variante
+          Agregar opción
         </Button>
       </div>
 
-      <div className="space-y-6">
+      {/* Sección de Opciones */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-gray-900">Opciones de Variantes</h4>
         {variantOptions.map((option) => (
           <Card key={option.id} className="border border-gray-200">
             <CardContent className="p-4">
@@ -258,7 +307,6 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
                   Cancelar
                 </Button>
               </div>
-              <p className="text-sm text-red-600 mt-1">El nombre de la opción es obligatorio.</p>
             </CardContent>
           </Card>
         )}
@@ -277,6 +325,78 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
           </div>
         )}
       </div>
+
+      {/* Sección de Variantes Generadas */}
+      {generatedVariants.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-gray-900">Variantes Generadas</h4>
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              {generatedVariants.length} variante{generatedVariants.length !== 1 ? 's' : ''}
+            </Badge>
+          </div>
+
+          <div className="space-y-3">
+            {generatedVariants.map((variant, index) => (
+              <Card key={`${variant.color}-${variant.size}`} className="border border-gray-200">
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full ${getColorClass(variant.color)}`}></div>
+                      <div>
+                        <p className="font-medium text-sm">{variant.color}</p>
+                        <p className="text-xs text-gray-500">{variant.size}</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label className="text-xs text-gray-600">SKU Variante</Label>
+                      <Input
+                        value={variant.skuVariant}
+                        onChange={(e) => updateVariant(index, 'skuVariant', e.target.value)}
+                        className="h-8 text-sm"
+                        placeholder="SKU-VAR"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label className="text-xs text-gray-600">Precio Adicional</Label>
+                      <Input
+                        type="number"
+                        value={variant.additionalPrice}
+                        onChange={(e) => updateVariant(index, 'additionalPrice', Number(e.target.value))}
+                        className="h-8 text-sm"
+                        placeholder="0"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label className="text-xs text-gray-600">Stock</Label>
+                      <Input
+                        type="number"
+                        value={variant.stockQuantity}
+                        onChange={(e) => updateVariant(index, 'stockQuantity', Number(e.target.value))}
+                        className="h-8 text-sm"
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {generatedVariants.length === 0 && variantOptions.some(opt => opt.values.length > 0) && (
+        <div className="text-center py-8 text-gray-500">
+          <p>Configura al menos un valor en Color y Talla para generar variantes</p>
+        </div>
+      )}
     </div>
   );
 };

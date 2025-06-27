@@ -92,13 +92,19 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
     setLoading(true);
 
     try {
+      // Generar SKU automático si no se proporciona
+      let productSku = formData.sku.trim();
+      if (!productSku) {
+        productSku = `PROD-${Date.now()}`;
+      }
+
       // Subir primero el archivo técnico si existe
       let technicalFileUrl = null;
       if (technicalFiles.length > 0) {
         const technicalFile = technicalFiles[0];
         const { data, error } = await supabase.storage
           .from('product-files')
-          .upload(`${formData.sku}/${technicalFile.name}`, technicalFile, {
+          .upload(`${productSku}/${technicalFile.name}`, technicalFile, {
             cacheControl: '3600',
             upsert: false
           });
@@ -119,7 +125,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
           {
             name: formData.name,
             description: formData.description,
-            sku: formData.sku,
+            sku: productSku,
             category: formData.brand,
             base_price: formData.basePrice,
             image_url: formData.imageUrl,
@@ -244,15 +250,16 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="sku" className="text-black font-medium">SKU</Label>
+                    <Label htmlFor="sku" className="text-black font-medium">
+                      SKU <span className="text-sm text-gray-500">(opcional)</span>
+                    </Label>
                     <Input
                       type="text"
                       id="sku"
                       name="sku"
-                      placeholder="Ej: CAM-001"
+                      placeholder="Ej: CAM-001 (se generará automáticamente si se omite)"
                       value={formData.sku}
                       onChange={handleInputChange}
-                      required
                       className="mt-1"
                     />
                   </div>
