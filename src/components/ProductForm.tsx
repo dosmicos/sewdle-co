@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import ProductVariants from '@/components/ProductVariants';
 import TechnicalFileUpload from '@/components/TechnicalFileUpload';
 import ShopifyProductImport from '@/components/ShopifyProductImport';
+import ProductImageUpload from '@/components/ProductImageUpload';
 
 interface ProductFormProps {
   onSuccess: () => void;
@@ -76,6 +77,14 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
   const removeVariant = (index: number) => {
     const updatedVariants = variants.filter((_, i) => i !== index);
     setVariants(updatedVariants);
+  };
+
+  const handleImageUploaded = (url: string) => {
+    setFormData(prev => ({ ...prev, imageUrl: url }));
+  };
+
+  const handleImageRemoved = () => {
+    setFormData(prev => ({ ...prev, imageUrl: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -263,10 +272,14 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="basePrice" className="text-black font-medium">Marca</Label>
+                    <Label htmlFor="basePrice" className="text-black font-medium">Precio Base</Label>
                     <Input
-                      type="text"
-                      placeholder="Ej: Tu Marca"
+                      type="number"
+                      id="basePrice"
+                      name="basePrice"
+                      placeholder="0"
+                      value={formData.basePrice}
+                      onChange={handleInputChange}
                       className="mt-1"
                     />
                   </div>
@@ -283,6 +296,15 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
                     className="min-h-[100px] mt-1"
                   />
                 </div>
+              </div>
+
+              {/* Imagen del Producto */}
+              <div>
+                <ProductImageUpload 
+                  onImageUploaded={handleImageUploaded}
+                  currentImageUrl={formData.imageUrl}
+                  onImageRemoved={handleImageRemoved}
+                />
               </div>
 
               {/* Especificaciones Técnicas */}
