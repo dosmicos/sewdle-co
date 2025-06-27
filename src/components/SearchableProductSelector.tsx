@@ -22,6 +22,29 @@ interface SearchableProductSelectorProps {
   placeholder?: string;
 }
 
+// Helper function to normalize text for better search
+const normalizeText = (text: string) => {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^\w\s]/g, ' ') // Replace special characters with spaces
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim();
+};
+
+// Helper function to create search value with variations
+const createSearchValue = (product: Product) => {
+  const name = normalizeText(product.name);
+  const description = normalizeText(product.description || '');
+  
+  // Create word variations for better matching
+  const words = name.split(' ').concat(description.split(' '));
+  const uniqueWords = [...new Set(words)].filter(word => word.length > 0);
+  
+  return uniqueWords.join(' ');
+};
+
 const SearchableProductSelector = ({ 
   products, 
   selectedProductId, 
@@ -62,16 +85,20 @@ const SearchableProductSelector = ({
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent 
+        className="p-0 z-50" 
+        align="start"
+        style={{ width: 'var(--radix-popover-trigger-width)' }}
+      >
         <Command>
           <CommandInput placeholder="Buscar producto..." />
-          <CommandList className="max-h-[300px]">
+          <CommandList className="max-h-[300px] overflow-y-auto">
             <CommandEmpty>No se encontraron productos.</CommandEmpty>
             <CommandGroup>
               {products.map((product) => (
                 <CommandItem
                   key={product.id}
-                  value={`${product.name} ${product.description || ''}`}
+                  value={createSearchValue(product)}
                   onSelect={() => {
                     onProductSelect(product.id);
                     setOpen(false);
