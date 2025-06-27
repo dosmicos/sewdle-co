@@ -1,5 +1,3 @@
-
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -7,6 +5,82 @@ import { useToast } from '@/hooks/use-toast';
 export const useOrderActions = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  const addProductsToOrder = async (orderId: string, selectedProducts: any[]) => {
+    setLoading(true);
+    try {
+      console.log('Adding products to order:', orderId, selectedProducts);
+
+      // Prepare order items to insert
+      const orderItemsToInsert = selectedProducts.map(product => ({
+        order_id: orderId,
+        product_variant_id: product.variantId,
+        quantity: product.quantity,
+        unit_price: product.unitPrice,
+        total_price: product.quantity * product.unitPrice
+      }));
+
+      // Insert new order items
+      const { error: orderItemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsToInsert);
+
+      if (orderItemsError) {
+        console.error('Error adding order items:', orderItemsError);
+        throw orderItemsError;
+      }
+
+      // Calculate new total amount
+      const newTotalAmount = selectedProducts.reduce((total, product) => {
+        return total + (product.quantity * product.unitPrice);
+      }, 0);
+
+      // Get current order total
+      const { data: currentOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('total_amount')
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching current order:', fetchError);
+        throw fetchError;
+      }
+
+      // Update order total
+      const updatedTotal = (currentOrder.total_amount || 0) + newTotalAmount;
+      
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          total_amount: updatedTotal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (orderUpdateError) {
+        console.error('Error updating order total:', orderUpdateError);
+        throw orderUpdateError;
+      }
+
+      toast({
+        title: "Productos agregados",
+        description: `Se han agregado ${selectedProducts.length} productos a la orden exitosamente.`,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error adding products to order:', error);
+      toast({
+        title: "Error al agregar productos",
+        description: "Hubo un problema al agregar los productos a la orden.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const deleteOrder = async (orderId: string) => {
     setLoading(true);
@@ -226,7 +300,7 @@ export const useOrderActions = () => {
     deleteOrder,
     updateOrder,
     updateOrderItemQuantities,
+    addProductsToOrder,
     loading
   };
 };
-

@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrderActions } from '@/hooks/useOrderActions';
 import { useUserContext } from '@/hooks/useUserContext';
 import OrderQuantityEditor from './OrderQuantityEditor';
-import { Settings, Package, AlertTriangle } from 'lucide-react';
+import ProductSelector from './ProductSelector';
+import { Settings, Package, AlertTriangle, Plus } from 'lucide-react';
 
 interface OrderEditModalProps {
   order: any;
@@ -24,7 +25,8 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('');
   const [activeTab, setActiveTab] = useState('details');
-  const { updateOrder, updateOrderItemQuantities, loading } = useOrderActions();
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { isAdmin, isDesigner } = useUserContext();
 
   const canEditQuantities = isAdmin || isDesigner;
@@ -35,6 +37,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
       setNotes(order.notes || '');
       setStatus(order.status || 'pending');
       setActiveTab('details'); // Reset to details tab when order changes
+      setSelectedProducts([]); // Reset selected products
     }
   }, [order]);
 
@@ -63,6 +66,27 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     return false;
   };
 
+  const handleAddProducts = async () => {
+    if (selectedProducts.length === 0) {
+      return;
+    }
+
+    const success = await addProductsToOrder(order.id, selectedProducts);
+    if (success) {
+      setSelectedProducts([]);
+      onSuccess();
+      setActiveTab('details'); // Switch back to details tab
+    }
+  };
+
+  const handleProductsChange = (products: any[]) => {
+    setSelectedProducts(products);
+  };
+
+  const getTotalProductsToAdd = () => {
+    return selectedProducts.reduce((total, product) => total + product.quantity, 0);
+  };
+
   if (!order) return null;
 
   return (
@@ -75,7 +99,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="details" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
               <span>Información General</span>
@@ -83,6 +107,10 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
             <TabsTrigger value="quantities" className="flex items-center space-x-2">
               <Package className="w-4 h-4" />
               <span>Cantidades de Producción</span>
+            </TabsTrigger>
+            <TabsTrigger value="add-products" className="flex items-center space-x-2">
+              <Plus className="w-4 h-4" />
+              <span>Agregar Productos</span>
             </TabsTrigger>
           </TabsList>
 
@@ -172,6 +200,49 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                 <p className="text-sm mt-2">Solo los administradores y diseñadores pueden editar las cantidades de producción</p>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="add-products" className="space-y-6 mt-6">
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-900 mb-2">Agregar productos a la orden</h4>
+                <p className="text-sm text-blue-700">
+                  Selecciona los productos y cantidades que deseas agregar a esta orden de producción.
+                </p>
+              </div>
+
+              <ProductSelector
+                selectedProducts={selectedProducts}
+                onProductsChange={handleProductsChange}
+              />
+
+              {selectedProducts.length > 0 && (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <h4 className="font-medium text-green-900 mb-2">Resumen de productos a agregar</h4>
+                  <p className="text-sm text-green-700">
+                    Se agregarán {getTotalProductsToAdd()} unidades en total ({selectedProducts.length} productos diferentes)
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-4 pt-6 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveTab('details')}
+                  disabled={loading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleAddProducts}
+                  disabled={loading || selectedProducts.length === 0}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  {loading ? 'Agregando...' : `Agregar ${selectedProducts.length} Productos`}
+                </Button>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
