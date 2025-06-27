@@ -101,22 +101,22 @@ const SearchableProductSelector = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="p-0 z-[100] bg-white border shadow-lg max-h-[400px] overflow-hidden" 
+        className="p-0 z-[100] bg-white border shadow-lg h-[400px]" 
         align="start"
         style={{ width: 'var(--radix-popover-trigger-width)', minWidth: '300px' }}
       >
-        <Command className="flex flex-col h-full max-h-[400px]" shouldFilter={false}>
+        <Command className="flex flex-col h-full" shouldFilter={false}>
           <CommandInput 
             placeholder="Buscar producto..." 
             value={searchTerm}
             onValueChange={setSearchTerm}
             className="border-b"
           />
-          <CommandList className="flex-1 overflow-y-auto">
+          <CommandList>
             {filteredProducts.length === 0 ? (
               <CommandEmpty>No se encontraron productos.</CommandEmpty>
             ) : (
-              <CommandGroup className="p-0">
+              <CommandGroup>
                 {filteredProducts.map((product) => (
                   <CommandItem
                     key={product.id}
