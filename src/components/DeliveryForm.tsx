@@ -50,6 +50,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
   const loadAvailableOrders = async () => {
     const orders = await fetchAvailableOrders();
+    console.log('Available orders loaded:', orders); // Debug log
     setAvailableOrders(orders);
   };
 
@@ -202,6 +203,11 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
                   <SelectValue placeholder={ordersLoading ? "Cargando órdenes..." : "Seleccione una orden..."} />
                 </SelectTrigger>
                 <SelectContent>
+                  {availableOrders.length === 0 && !ordersLoading && (
+                    <SelectItem value="no-orders" disabled>
+                      No hay órdenes disponibles
+                    </SelectItem>
+                  )}
                   {availableOrders.map((order) => (
                     <SelectItem key={order.id} value={order.id}>
                       {order.order_number} - {order.workshop_assignments?.[0]?.workshops?.name || 'Sin taller'}
@@ -209,6 +215,10 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
                   ))}
                 </SelectContent>
               </Select>
+              {/* Debug info - remove after testing */}
+              <div className="text-xs text-gray-500 mt-1">
+                Debug: {availableOrders.length} órdenes disponibles
+              </div>
             </div>
             
             {selectedOrder && (
