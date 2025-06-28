@@ -400,16 +400,16 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto m-4">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold">Registrar Entrega</h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-2xl border-0">
+        <div className="flex items-center justify-between p-6 border-b bg-white">
+          <h2 className="text-xl font-semibold text-black">Registrar Entrega</h2>
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X className="w-4 h-4" />
           </Button>
         </div>
 
-        <div className="px-6 py-4 border-b">
+        <div className="px-6 py-4 border-b bg-white">
           <div className="flex items-center space-x-4">
             {[1, 2, 3].map((step) => (
               <div key={step} className="flex items-center">
@@ -433,15 +433,16 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 bg-white">
           {renderStepContent()}
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t">
+        <div className="flex items-center justify-between p-6 border-t bg-white">
           <Button
             variant="outline"
             onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
             disabled={currentStep === 1}
+            className="border-gray-300 text-gray-700 hover:bg-gray-50"
           >
             Anterior
           </Button>
