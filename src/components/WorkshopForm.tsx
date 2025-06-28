@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,7 +84,11 @@ const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
         notes: ''
       });
       setSelectedSpecialties([]);
-      onSuccess?.();
+      
+      // Pequeño delay para asegurar que la base de datos se haya actualizado completamente
+      setTimeout(() => {
+        onSuccess?.();
+      }, 100);
     }
 
     setLoading(false);
