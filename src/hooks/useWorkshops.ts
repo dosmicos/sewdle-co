@@ -115,7 +115,7 @@ export const useWorkshops = () => {
           phone: data.phone,
           email: data.email,
           contactPerson: data.contact_person,
-          status: data.status,
+          status: (data.status as 'active' | 'inactive') || 'active',
           capacity: data.capacity || 0,
           specialties: data.specialties || [],
           workingHoursStart: data.working_hours_start,
