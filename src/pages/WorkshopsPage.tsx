@@ -7,13 +7,15 @@ import WorkshopDetails from '@/components/WorkshopDetails';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+
 const WorkshopsPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedWorkshop, setSelectedWorkshop] = useState<any>(null);
   const {
     workshops,
     loading,
-    deleteWorkshop
+    deleteWorkshop,
+    refetch
   } = useWorkshops();
   const {
     hasPermission
@@ -22,19 +24,25 @@ const WorkshopsPage = () => {
   // Verificar permisos
   const canCreateWorkshops = hasPermission('workshops', 'create');
   const canDeleteWorkshops = hasPermission('workshops', 'delete');
+  
   const handleWorkshopClick = (workshop: any) => {
     setSelectedWorkshop(workshop);
   };
+  
   const handleBackToList = () => {
     setSelectedWorkshop(null);
   };
+  
   const handleDeleteWorkshop = async (workshopId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     await deleteWorkshop(workshopId);
   };
-  const handleFormSuccess = () => {
+  
+  const handleFormSuccess = async () => {
+    await refetch(); // Refetch the workshops list
     setShowForm(false);
   };
+
   if (showForm) {
     return <div className="animate-fade-in">
         <div className="px-6 pb-3 pt-6">
@@ -150,4 +158,5 @@ const WorkshopsPage = () => {
         </div>}
     </div>;
 };
+
 export default WorkshopsPage;

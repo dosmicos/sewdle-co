@@ -85,10 +85,7 @@ const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
       });
       setSelectedSpecialties([]);
       
-      // Pequeño delay para asegurar que la base de datos se haya actualizado completamente
-      setTimeout(() => {
-        onSuccess?.();
-      }, 100);
+      onSuccess?.();
     }
 
     setLoading(false);

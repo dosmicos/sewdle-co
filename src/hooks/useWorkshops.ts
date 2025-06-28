@@ -105,33 +105,6 @@ export const useWorkshops = () => {
         throw error;
       }
 
-      // Agregar el nuevo taller al estado local inmediatamente (actualización optimista)
-      if (data) {
-        const newWorkshop: Workshop = {
-          id: data.id,
-          name: data.name,
-          address: data.address,
-          city: data.city,
-          phone: data.phone,
-          email: data.email,
-          contactPerson: data.contact_person,
-          status: (data.status as 'active' | 'inactive') || 'active',
-          capacity: data.capacity || 0,
-          specialties: data.specialties || [],
-          workingHoursStart: data.working_hours_start,
-          workingHoursEnd: data.working_hours_end,
-          notes: data.notes,
-          createdAt: data.created_at,
-          updatedAt: data.updated_at
-        };
-
-        // Actualizar el estado local inmediatamente
-        setWorkshops(prev => [...prev, newWorkshop].sort((a, b) => a.name.localeCompare(b.name)));
-      }
-
-      // También refrescar desde la base de datos para asegurar consistencia
-      await fetchWorkshops();
-      
       toast({
         title: "Taller creado",
         description: `El taller "${workshopData.name}" ha sido creado exitosamente`,
