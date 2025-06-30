@@ -63,7 +63,7 @@ const LandingPage = () => {
             <div className="space-y-4 max-w-4xl mx-auto">
               <h1 className="text-gray-900 leading-tight lg:text-6xl text-4xl font-semibold">
                 Toma el control total de tu
-                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold text-4xl">
+                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold lg:text-6xl text-4xll">
                   {" "}producción textil
                 </span>
               </h1>
