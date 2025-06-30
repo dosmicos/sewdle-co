@@ -23,13 +23,29 @@ interface LanguageProviderProps {
   children: React.ReactNode;
 }
 
+// Function to detect browser language
+const detectBrowserLanguage = (): Language => {
+  const browserLang = navigator.language || navigator.languages?.[0];
+  const langCode = browserLang?.toLowerCase().split('-')[0];
+  
+  // Return Spanish if browser language is Spanish, otherwise default to English
+  return langCode === 'es' ? 'es' : 'en';
+};
+
 export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
 
   useEffect(() => {
+    // Check for saved language preference first
     const savedLanguage = localStorage.getItem('sewdle-language') as Language;
+    
     if (savedLanguage && ['en', 'es'].includes(savedLanguage)) {
       setLanguageState(savedLanguage);
+    } else {
+      // If no saved preference, detect browser language
+      const detectedLanguage = detectBrowserLanguage();
+      setLanguageState(detectedLanguage);
+      localStorage.setItem('sewdle-language', detectedLanguage);
     }
   }, []);
 

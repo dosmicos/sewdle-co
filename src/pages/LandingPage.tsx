@@ -5,11 +5,14 @@ import { Card } from '@/components/ui/card';
 import { ArrowRight, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import LanguageSelector from '@/components/LanguageSelector';
+import MobileNavigation from '@/components/MobileNavigation';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
 
   const handleCTAClick = () => {
     navigate('/auth');
@@ -30,16 +33,16 @@ const LandingPage = () => {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50"></div>
         
-        {/* Navigation Header - Now integrated within hero */}
+        {/* Navigation Header - Now responsive */}
         <header className="relative z-50 w-full">
-          <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between">
               {/* Logo */}
-              <div className="flex items-center">
+              <div className="flex items-center flex-shrink-0">
                 <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-6 w-auto" />
               </div>
 
-              {/* Navigation Links */}
+              {/* Desktop Navigation Links */}
               <nav className="hidden md:flex items-center space-x-6">
                 <button onClick={() => scrollToSection('como-funciona')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
                   {t('nav.howItWorks')}
@@ -52,41 +55,49 @@ const LandingPage = () => {
                 </button>
               </nav>
 
-              {/* Auth Buttons and Language Selector */}
-              <div className="flex items-center space-x-3">
+              {/* Right side items */}
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                {/* Language Selector - always visible */}
                 <LanguageSelector />
-                <Button onClick={handleCTAClick} variant="ghost" className="text-sm text-gray-600 hover:text-orange-600 font-medium">
-                  {t('nav.login')}
-                </Button>
-                <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-5 py-2 rounded-full hover:shadow-lg transition-all duration-300">
-                  {t('nav.signup')}
-                </Button>
+                
+                {/* Desktop Auth Buttons */}
+                <div className="hidden md:flex items-center space-x-3">
+                  <Button onClick={handleCTAClick} variant="ghost" className="text-sm text-gray-600 hover:text-orange-600 font-medium">
+                    {t('nav.login')}
+                  </Button>
+                  <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-4 py-2 rounded-full hover:shadow-lg transition-all duration-300">
+                    {t('nav.signup')}
+                  </Button>
+                </div>
+
+                {/* Mobile Navigation */}
+                <MobileNavigation onCTAClick={handleCTAClick} scrollToSection={scrollToSection} />
               </div>
             </div>
           </div>
         </header>
 
         {/* Hero Content */}
-        <div className="relative max-w-7xl mx-auto px-6 py-16 lg:py-24">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 lg:py-24">
           <div className="text-center space-y-6">
             {/* Headline */}
             <div className="space-y-4 max-w-4xl mx-auto">
-              <h1 className="text-gray-900 leading-tight lg:text-6xl text-4xl font-semibold">
+              <h1 className="text-gray-900 leading-tight text-3xl sm:text-4xl lg:text-6xl font-semibold">
                 {t('hero.title.1')}
-                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold lg:text-6xl text-4xl">
+                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold">
                   {" "}{t('hero.title.2')}
                 </span>
               </h1>
-              <p className="text-lg text-gray-600 leading-relaxed max-w-3xl mx-auto lg:text-lg">
+              <p className="text-base sm:text-lg text-gray-600 leading-relaxed max-w-3xl mx-auto">
                 {t('hero.subtitle')}
               </p>
             </div>
 
             {/* CTA */}
             <div className="pt-6">
-              <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-8 py-4 text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+              <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
                 {t('hero.cta')}
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </div>
           </div>
@@ -94,16 +105,16 @@ const LandingPage = () => {
       </section>
 
       {/* Problem Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl text-gray-900 mb-12 font-semibold lg:text-3xl">
+      <section className="py-16 sm:py-20 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-8 sm:mb-12 font-semibold">
             {t('problem.title')}
           </h2>
-          <div className="grid md:grid-cols-2 gap-6 text-left">
+          <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 text-left">
             {[t('problem.1'), t('problem.2'), t('problem.3'), t('problem.4')].map((problem, index) => (
               <div key={index} className="flex items-start space-x-3 p-4 bg-white rounded-xl shadow-sm">
                 <div className="w-2 h-2 bg-red-500 rounded-full mt-3 flex-shrink-0"></div>
-                <p className="text-lg text-gray-700">{problem}</p>
+                <p className="text-base sm:text-lg text-gray-700">{problem}</p>
               </div>
             ))}
           </div>
@@ -111,15 +122,15 @@ const LandingPage = () => {
       </section>
 
       {/* Features Section - Sewdle en 30s */}
-      <section id="como-funciona" className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl text-gray-900 mb-4 lg:text-3xl font-semibold">
+      <section id="como-funciona" className="py-16 sm:py-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-4 font-semibold">
               {t('features.title')}
             </h2>
           </div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {[
               {
                 icon: '🧵',
@@ -144,8 +155,8 @@ const LandingPage = () => {
             ].map((feature, index) => (
               <Card key={index} className="p-6 text-center hover:shadow-lg transition-shadow duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
                 <div className="text-4xl mb-4">{feature.icon}</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">{feature.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">{feature.title}</h3>
+                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{feature.description}</p>
               </Card>
             ))}
           </div>
@@ -153,30 +164,30 @@ const LandingPage = () => {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-20 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-12">
+      <section className="py-16 sm:py-20 bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12">
             {/* Para Marcas de Moda */}
-            <Card className="p-8 border-0 shadow-lg bg-white">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">{t('benefits.brands.title')}</h3>
+            <Card className="p-6 sm:p-8 border-0 shadow-lg bg-white">
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">{t('benefits.brands.title')}</h3>
               <div className="space-y-4">
                 {[t('benefits.brands.1'), t('benefits.brands.2'), t('benefits.brands.3'), t('benefits.brands.4')].map((benefit, index) => (
                   <div key={index} className="flex items-center space-x-3">
                     <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <span className="text-gray-700">{benefit}</span>
+                    <span className="text-sm sm:text-base text-gray-700">{benefit}</span>
                   </div>
                 ))}
               </div>
             </Card>
 
             {/* Para Talleres */}
-            <Card className="p-8 border-0 shadow-lg bg-white">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">{t('benefits.workshops.title')}</h3>
+            <Card className="p-6 sm:p-8 border-0 shadow-lg bg-white">
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">{t('benefits.workshops.title')}</h3>
               <div className="space-y-4">
                 {[t('benefits.workshops.1'), t('benefits.workshops.2'), t('benefits.workshops.3'), t('benefits.workshops.4')].map((benefit, index) => (
                   <div key={index} className="flex items-center space-x-3">
                     <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <span className="text-gray-700">{benefit}</span>
+                    <span className="text-sm sm:text-base text-gray-700">{benefit}</span>
                   </div>
                 ))}
               </div>
@@ -186,15 +197,15 @@ const LandingPage = () => {
       </section>
 
       {/* Use Cases Section */}
-      <section id="casos-de-uso" className="py-20">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl text-gray-900 mb-4 lg:text-3xl font-semibold">
+      <section id="casos-de-uso" className="py-16 sm:py-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-4 font-semibold">
               {t('useCases.title')}
             </h2>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {[
               {
                 title: t('useCases.emerging.title'),
@@ -213,9 +224,9 @@ const LandingPage = () => {
               }
             ].map((useCase, index) => (
               <Card key={index} className="p-6 text-center border-0 bg-gradient-to-br from-white to-orange-50 hover:shadow-lg transition-shadow duration-300">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{useCase.title}</h3>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">{useCase.title}</h3>
                 <p className="text-sm text-orange-600 font-medium mb-4">{useCase.subtitle}</p>
-                <p className="text-gray-600">{useCase.description}</p>
+                <p className="text-sm sm:text-base text-gray-600">{useCase.description}</p>
               </Card>
             ))}
           </div>
@@ -223,24 +234,24 @@ const LandingPage = () => {
       </section>
 
       {/* Testimonial Section */}
-      <section className="py-20 bg-gradient-to-r from-orange-500 to-red-500">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <blockquote className="text-2xl lg:text-3xl font-medium text-white leading-relaxed">
+      <section className="py-16 sm:py-20 bg-gradient-to-r from-orange-500 to-red-500">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <blockquote className="text-xl sm:text-2xl lg:text-3xl font-medium text-white leading-relaxed">
             {t('testimonial')}
           </blockquote>
         </div>
       </section>
 
       {/* Differentials Section */}
-      <section id="integraciones" className="py-20 bg-gray-900">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl text-white mb-4 lg:text-3xl font-semibold">
+      <section id="integraciones" className="py-16 sm:py-20 bg-gray-900">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-white mb-4 font-semibold">
               {t('differentials.title')}
             </h2>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
             {[
               {
                 title: t('differentials.designed.title'),
@@ -262,8 +273,8 @@ const LandingPage = () => {
               <div key={index} className="flex items-start space-x-4 p-6 bg-gray-800 rounded-xl">
                 <div className="w-3 h-3 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
                 <div>
-                  <h3 className="text-xl font-semibold text-white mb-2">{differential.title}</h3>
-                  <p className="text-gray-300">{differential.description}</p>
+                  <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">{differential.title}</h3>
+                  <p className="text-sm sm:text-base text-gray-300">{differential.description}</p>
                 </div>
               </div>
             ))}
@@ -272,22 +283,22 @@ const LandingPage = () => {
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-20 bg-gradient-to-br from-orange-50 via-white to-blue-50">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
+      <section className="py-16 sm:py-20 bg-gradient-to-br from-orange-50 via-white to-blue-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 mb-6">
             {t('finalCta.title')}
           </h2>
-          <p className="text-xl text-gray-600 mb-12 leading-relaxed">
+          <p className="text-lg sm:text-xl text-gray-600 mb-8 sm:mb-12 leading-relaxed">
             {t('finalCta.subtitle')}
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button onClick={handleCTAClick} variant="outline" className="px-8 py-4 text-lg font-semibold rounded-full border-2 border-gray-300 hover:border-orange-500 hover:text-orange-500 transition-all duration-300">
+            <Button onClick={handleCTAClick} variant="outline" className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full border-2 border-gray-300 hover:border-orange-500 hover:text-orange-500 transition-all duration-300">
               {t('finalCta.demo')}
             </Button>
-            <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-8 py-4 text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
               {t('finalCta.start')}
-              <ArrowRight className="ml-2 h-5 w-5" />
+              <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
         </div>
@@ -295,7 +306,7 @@ const LandingPage = () => {
 
       {/* Footer */}
       <footer className="py-12 bg-gray-900">
-        <div className="max-w-6xl mx-auto px-6 text-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <div className="flex justify-center mb-6">
             <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-12 w-auto opacity-80" />
           </div>
