@@ -3,14 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ArrowRight, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
 const LandingPage = () => {
   const navigate = useNavigate();
-  
   const handleCTAClick = () => {
     navigate('/auth');
   };
-  
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -19,9 +16,7 @@ const LandingPage = () => {
       });
     }
   };
-
-  return (
-    <div className="min-h-screen bg-white">
+  return <div className="min-h-screen bg-white">
       {/* Hero Section with Integrated Navigation */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50"></div>
@@ -66,9 +61,9 @@ const LandingPage = () => {
           <div className="text-center space-y-6">
             {/* Headline */}
             <div className="space-y-4 max-w-4xl mx-auto">
-              <h1 className="text-4xl text-gray-900 leading-tight font-semibold lg:text-6xl">
+              <h1 className="text-gray-900 leading-tight lg:text-6xl text-4xl font-semibold">
                 Toma el control total de tu
-                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold text-6xl">
+                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold text-4xl">
                   {" "}producción textil
                 </span>
               </h1>
@@ -147,12 +142,10 @@ const LandingPage = () => {
             <Card className="p-8 border-0 shadow-lg bg-white">
               <h3 className="text-2xl font-bold text-gray-900 mb-6">Para Marcas de Moda</h3>
               <div className="space-y-4">
-                {['Visibilidad 360° de la cadena', '30% menos tiempo en coordinación', 'Decisiones basadas en datos reales', 'Escala hasta 50+ talleres sin perder control'].map((benefit, index) => (
-                  <div key={index} className="flex items-center space-x-3">
+                {['Visibilidad 360° de la cadena', '30% menos tiempo en coordinación', 'Decisiones basadas en datos reales', 'Escala hasta 50+ talleres sin perder control'].map((benefit, index) => <div key={index} className="flex items-center space-x-3">
                     <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                     <span className="text-gray-700">{benefit}</span>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </Card>
 
@@ -160,12 +153,10 @@ const LandingPage = () => {
             <Card className="p-8 border-0 shadow-lg bg-white">
               <h3 className="text-2xl font-bold text-gray-900 mb-6">Para Talleres</h3>
               <div className="space-y-4">
-                {['Órdenes claras y sin ambigüedades', 'Mejor planificación de capacidad', 'Comunicación directa y rápida', 'Entregas puntuales, menos reprocesos'].map((benefit, index) => (
-                  <div key={index} className="flex items-center space-x-3">
+                {['Órdenes claras y sin ambigüedades', 'Mejor planificación de capacidad', 'Comunicación directa y rápida', 'Entregas puntuales, menos reprocesos'].map((benefit, index) => <div key={index} className="flex items-center space-x-3">
                     <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                     <span className="text-gray-700">{benefit}</span>
-                  </div>
-                ))}
+                  </div>)}
               </div>
             </Card>
           </div>
@@ -277,8 +268,6 @@ const LandingPage = () => {
           <p className="text-gray-400">© 2024 Sewdle. Todos los derechos reservados.</p>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default LandingPage;
