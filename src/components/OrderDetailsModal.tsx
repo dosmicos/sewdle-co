@@ -1,12 +1,12 @@
-
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory } from 'lucide-react';
+import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import OrderDeliveryTracker from './OrderDeliveryTracker';
 import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
@@ -69,6 +69,34 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
   const getTotalQuantity = () => {
     if (!order.order_items) return 0;
     return order.order_items.reduce((total: number, item: any) => total + item.quantity, 0);
+  };
+
+  const handleFileAction = (file: any, action: 'view' | 'download') => {
+    // Check if it's a legacy mock URL
+    if (file.file_url && file.file_url.includes('mock-url/')) {
+      console.warn('Legacy file URL detected:', file.file_url);
+      return;
+    }
+
+    try {
+      if (action === 'view') {
+        window.open(file.file_url, '_blank');
+      } else if (action === 'download') {
+        // Create a temporary link to trigger download
+        const link = document.createElement('a');
+        link.href = file.file_url;
+        link.download = file.file_name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Error handling file action:', error);
+    }
+  };
+
+  const isLegacyFile = (fileUrl: string) => {
+    return fileUrl && fileUrl.includes('mock-url/');
   };
 
   return (
@@ -291,16 +319,43 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                               <p className="text-sm text-gray-600">
                                 {file.file_type} • {Math.round(file.file_size / 1024)} KB
                               </p>
+                              {isLegacyFile(file.file_url) && (
+                                <div className="flex items-center space-x-1 mt-1">
+                                  <AlertTriangle className="w-3 h-3 text-amber-500" />
+                                  <span className="text-xs text-amber-600">Archivo legacy - No disponible</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(file.file_url, '_blank')}
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            Ver
-                          </Button>
+                          <div className="flex space-x-2">
+                            {!isLegacyFile(file.file_url) ? (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleFileAction(file, 'view')}
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Ver
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleFileAction(file, 'download')}
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  Descargar
+                                </Button>
+                              </>
+                            ) : (
+                              <Alert className="max-w-xs">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription className="text-xs">
+                                  Este archivo fue creado antes de la actualización del sistema y no está disponible.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

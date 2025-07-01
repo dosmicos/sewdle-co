@@ -33,6 +33,42 @@ export const useOrders = () => {
   const { toast } = useToast();
   const { consumeOrderMaterials } = useMaterialConsumption();
 
+  const uploadOrderFile = async (file: File, orderId: string): Promise<string> => {
+    try {
+      console.log('Uploading file to Supabase Storage:', file.name);
+      
+      // Generate unique filename to avoid conflicts
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${orderId}-${Date.now()}.${fileExt}`;
+      const filePath = `orders/${fileName}`;
+
+      // Upload file to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('order-files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading file:', uploadError);
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('order-files')
+        .getPublicUrl(filePath);
+
+      console.log('File uploaded successfully. Public URL:', urlData.publicUrl);
+      return urlData.publicUrl;
+
+    } catch (error) {
+      console.error('Error in uploadOrderFile:', error);
+      throw error;
+    }
+  };
+
   const createOrder = async (orderData: CreateOrderData) => {
     setLoading(true);
     try {
@@ -222,28 +258,40 @@ export const useOrders = () => {
         console.log('Successfully created workshop assignment');
       }
 
-      // Manejar archivo de orden de corte (simulado por ahora)
+      // Manejar archivo de orden de corte - IMPLEMENTACIÓN REAL
       if (orderData.cuttingOrderFile) {
         console.log('Processing cutting order file:', orderData.cuttingOrderFile.name);
         
-        const fileData = {
-          order_id: order.id,
-          file_name: orderData.cuttingOrderFile.name,
-          file_url: `mock-url/${orderData.cuttingOrderFile.name}`,
-          file_type: orderData.cuttingOrderFile.type,
-          file_size: orderData.cuttingOrderFile.size
-        };
+        try {
+          // Upload file to Supabase Storage
+          const fileUrl = await uploadOrderFile(orderData.cuttingOrderFile, order.id);
+          
+          const fileData = {
+            order_id: order.id,
+            file_name: orderData.cuttingOrderFile.name,
+            file_url: fileUrl,
+            file_type: orderData.cuttingOrderFile.type,
+            file_size: orderData.cuttingOrderFile.size
+          };
 
-        const { error: fileError } = await supabase
-          .from('order_files')
-          .insert([fileData]);
+          const { error: fileError } = await supabase
+            .from('order_files')
+            .insert([fileData]);
 
-        if (fileError) {
-          console.error('Error creating order file:', fileError);
-          throw fileError;
+          if (fileError) {
+            console.error('Error creating order file record:', fileError);
+            throw fileError;
+          }
+
+          console.log('Successfully uploaded and created order file reference');
+        } catch (fileUploadError) {
+          console.error('Error uploading cutting order file:', fileUploadError);
+          toast({
+            title: "Advertencia",
+            description: "La orden fue creada pero hubo un problema al subir el archivo adjunto. Puedes intentar subirlo después.",
+            variant: "default",
+          });
         }
-
-        console.log('Successfully created order file reference');
       }
 
       return order;
