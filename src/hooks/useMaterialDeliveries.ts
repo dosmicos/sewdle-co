@@ -40,6 +40,28 @@ interface MaterialDeliveryWithBalance {
   order_number?: string;
 }
 
+interface IndividualMaterialDelivery {
+  id: string;
+  material_id: string;
+  workshop_id: string;
+  order_id?: string;
+  delivery_date: string;
+  delivered_by?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  quantity_delivered: number;
+  quantity_consumed: number;
+  quantity_remaining: number;
+  material_name: string;
+  material_sku: string;
+  material_unit: string;
+  material_color?: string;
+  material_category: string;
+  workshop_name: string;
+  order_number?: string;
+}
+
 export const useMaterialDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -163,6 +185,231 @@ export const useMaterialDeliveries = () => {
     }
   };
 
+  const deleteMaterialDelivery = async (deliveryId: string) => {
+    safeSetLoading(true);
+    try {
+      console.log('Deleting material delivery:', deliveryId);
+
+      // Verificar autenticación
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Error de autenticación: ' + sessionError.message);
+      }
+      
+      if (!session?.user) {
+        console.error('No session found');
+        throw new Error('Usuario no autenticado. Por favor inicia sesión.');
+      }
+
+      console.log('User authenticated:', session.user.id);
+
+      // Eliminar la entrega
+      const { error } = await supabase
+        .from('material_deliveries')
+        .delete()
+        .eq('id', deliveryId);
+
+      if (error) {
+        console.error('Error deleting material delivery:', error);
+        console.error('Full error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          deliveryId
+        });
+        throw new Error(`Error al eliminar entrega: ${error.message}`);
+      }
+
+      console.log('Material delivery deleted successfully:', deliveryId);
+
+      if (isMountedRef.current) {
+        toast({
+          title: "¡Entrega eliminada exitosamente!",
+          description: "La entrega de material ha sido eliminada.",
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Error deleting material delivery:', error);
+      
+      let errorMessage = "No se pudo eliminar la entrega de material";
+      
+      if (error.message?.includes('Usuario no autenticado')) {
+        errorMessage = "Debes iniciar sesión para eliminar entregas.";
+      } else if (error.message?.includes('Error de autenticación')) {
+        errorMessage = "Error de autenticación. Por favor vuelve a iniciar sesión.";
+      } else if (error.code === 'PGRST301' || error.message?.includes('policy')) {
+        errorMessage = "Sin permisos: Tu usuario no tiene autorización para eliminar entregas de materiales. Contacta al administrador.";
+      } else if (error.code === '42501') {
+        errorMessage = "Permisos insuficientes: No tienes autorización para realizar esta acción.";
+      } else if (error.message?.includes('foreign key constraint')) {
+        errorMessage = "No se puede eliminar: Esta entrega está siendo referenciada por otros registros.";
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      if (isMountedRef.current) {
+        toast({
+          title: "Error al eliminar entrega",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+      throw error;
+    } finally {
+      safeSetLoading(false);
+    }
+  };
+
+  const fetchIndividualMaterialDeliveries = useCallback(async (): Promise<IndividualMaterialDelivery[]> => {
+    safeSetLoading(true);
+    try {
+      console.log('=== FETCH INDIVIDUAL MATERIAL DELIVERIES START ===');
+      console.log('User context:', { workshopFilter, isAdmin, isDesigner });
+      
+      // Verificar autenticación
+      console.log('Checking authentication...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('❌ Session error:', sessionError);
+        throw new Error('Error de autenticación');
+      }
+      
+      if (!session?.user) {
+        console.error('❌ No authenticated user');
+        throw new Error('Usuario no autenticado');
+      }
+
+      console.log('✅ Authenticated user:', {
+        id: session.user.id,
+        email: session.user.email
+      });
+      
+      // Consulta directa a material_deliveries con joins
+      console.log('🔄 Fetching individual material deliveries');
+      
+      let query = supabase
+        .from('material_deliveries')
+        .select(`
+          id,
+          material_id,
+          workshop_id,
+          order_id,
+          delivery_date,
+          delivered_by,
+          notes,
+          created_at,
+          updated_at,
+          quantity_delivered,
+          quantity_consumed,
+          quantity_remaining,
+          materials:material_id (
+            name,
+            sku,
+            unit,
+            color,
+            category
+          ),
+          workshops:workshop_id (
+            name
+          ),
+          orders:order_id (
+            order_number
+          )
+        `)
+        .order('delivery_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      // Aplicar filtros según rol y contexto
+      if (!isAdmin && !isDesigner && workshopFilter) {
+        console.log('🏭 Applying workshop filter for regular user:', workshopFilter);
+        query = query.eq('workshop_id', workshopFilter);
+      }
+
+      const { data: rawData, error } = await query;
+
+      if (error) {
+        console.error('❌ Query Error:', error);
+        throw error;
+      }
+
+      console.log('✅ Query Success - Raw data received:', {
+        count: rawData?.length || 0,
+        sampleData: rawData?.slice(0, 2)
+      });
+
+      if (!rawData || !Array.isArray(rawData)) {
+        console.warn('⚠️  Invalid data structure, returning empty array');
+        return [];
+      }
+
+      // Transformar los datos para el formato esperado
+      const transformedData: IndividualMaterialDelivery[] = rawData.map(delivery => ({
+        id: delivery.id,
+        material_id: delivery.material_id,
+        workshop_id: delivery.workshop_id,
+        order_id: delivery.order_id,
+        delivery_date: delivery.delivery_date,
+        delivered_by: delivery.delivered_by,
+        notes: delivery.notes,
+        created_at: delivery.created_at,
+        updated_at: delivery.updated_at,
+        quantity_delivered: delivery.quantity_delivered,
+        quantity_consumed: delivery.quantity_consumed || 0,
+        quantity_remaining: delivery.quantity_remaining,
+        material_name: delivery.materials?.name || 'N/A',
+        material_sku: delivery.materials?.sku || 'N/A',
+        material_unit: delivery.materials?.unit || '',
+        material_color: delivery.materials?.color,
+        material_category: delivery.materials?.category || 'N/A',
+        workshop_name: delivery.workshops?.name || 'N/A',
+        order_number: delivery.orders?.order_number
+      }));
+
+      console.log('✅ Final transformed deliveries:', {
+        count: transformedData.length,
+        sampleData: transformedData.slice(0, 2)
+      });
+
+      console.log('=== FETCH INDIVIDUAL MATERIAL DELIVERIES SUCCESS ===');
+      return transformedData;
+
+    } catch (error: any) {
+      console.error('=== FETCH INDIVIDUAL MATERIAL DELIVERIES ERROR ===');
+      console.error('Error details:', error);
+      
+      let errorMessage = "No se pudieron cargar las entregas de materiales.";
+      
+      if (error.message?.includes('Usuario no autenticado')) {
+        errorMessage = "Debes iniciar sesión para ver las entregas.";
+      } else if (error.message?.includes('Error de autenticación')) {
+        errorMessage = "Error de autenticación. Por favor vuelve a iniciar sesión.";
+      } else if (error.code === 'PGRST301' || error.message?.includes('policy')) {
+        errorMessage = "Sin permisos para ver las entregas. Contacta al administrador.";
+      } else if (error.message) {
+        errorMessage = `Error al cargar datos: ${error.message}`;
+      }
+      
+      if (isMountedRef.current) {
+        toast({
+          title: "Error al cargar entregas",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+      
+      console.log('🔄 Returning empty array to prevent UI crashes');
+      return [];
+    } finally {
+      safeSetLoading(false);
+      console.log('=== FETCH INDIVIDUAL MATERIAL DELIVERIES COMPLETE ===');
+    }
+  }, [workshopFilter, isAdmin, isDesigner, toast, safeSetLoading]);
+
   const fetchMaterialDeliveries = useCallback(async (): Promise<MaterialDeliveryWithBalance[]> => {
     safeSetLoading(true);
     try {
@@ -273,6 +520,8 @@ export const useMaterialDeliveries = () => {
   return {
     loading,
     createMaterialDelivery,
-    fetchMaterialDeliveries
+    deleteMaterialDelivery,
+    fetchMaterialDeliveries,
+    fetchIndividualMaterialDeliveries
   };
 };
