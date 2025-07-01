@@ -16,9 +16,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Plus, Package, Calendar, User, Eye, Edit, Search, RefreshCw, FileText, Building, Trash2, Filter, TrendingUp, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { formatDateSafe, parseDateSafe } from '@/lib/dateUtils';
 import { useState } from 'react';
+
+// Helper function to format dates for the orders list
+const formatDateForList = (dateString: string): string => {
+  if (!dateString) return 'Sin fecha';
+  
+  // Parse the date components manually to avoid timezone issues
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  
+  // Create date using local timezone (month is 0-indexed)
+  const date = new Date(year, month - 1, day);
+  
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
 const OrdersPage = () => {
   const {
     orders,
@@ -408,14 +425,10 @@ const OrderCard = ({
               <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-xs md:text-sm text-gray-500 mt-1">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3 h-3 md:w-4 md:h-4" />
-                  {format(new Date(order.created_at), 'dd MMM yyyy', {
-                  locale: es
-                })}
+                  {formatDateForList(order.created_at)}
                 </span>
                 <span>
-                  Entrega: {order.due_date ? format(new Date(order.due_date), 'dd MMM yyyy', {
-                  locale: es
-                }) : 'Sin fecha'}
+                  Entrega: {order.due_date ? formatDateForList(order.due_date) : 'Sin fecha'}
                 </span>
               </div>
             </div>
