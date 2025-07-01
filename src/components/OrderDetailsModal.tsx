@@ -9,6 +9,7 @@ import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import OrderDeliveryTracker from './OrderDeliveryTracker';
 import { useUserContext } from '@/hooks/useUserContext';
+import { formatDateSafe } from '@/lib/dateUtils';
 
 interface OrderDetailsModalProps {
   order: any;
@@ -157,7 +158,7 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                       <Calendar className="w-4 h-4 text-gray-500" />
                       <div>
                         <p className="text-sm text-gray-600">Fecha de Creación</p>
-                        <p className="font-medium">{formatDate(order.created_at)}</p>
+                        <p className="font-medium">{formatDateSafe(order.created_at?.split('T')[0])}</p>
                       </div>
                     </div>
                     {order.due_date && (
@@ -165,7 +166,7 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                         <Truck className="w-4 h-4 text-gray-500" />
                         <div>
                           <p className="text-sm text-gray-600">Fecha de Entrega</p>
-                          <p className="font-medium">{formatDate(order.due_date)}</p>
+                          <p className="font-medium">{formatDateSafe(order.due_date)}</p>
                         </div>
                       </div>
                     )}
