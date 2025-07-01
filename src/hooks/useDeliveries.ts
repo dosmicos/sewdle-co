@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useInventorySync } from './useInventorySync';
+import { useDeliveryEvidence } from './useDeliveryEvidence';
 
 export const useDeliveries = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { syncApprovedItemsToShopify } = useInventorySync();
+  const { uploadEvidenceFiles } = useDeliveryEvidence();
 
   const fetchDeliveries = async () => {
     setLoading(true);
@@ -363,6 +365,23 @@ export const useDeliveries = () => {
         }
 
         console.log('Successfully updated delivery_item:', item.id);
+      }
+
+      // NUEVA FUNCIONALIDAD: Subir archivos de evidencia si existen
+      if (qualityData.evidenceFiles && qualityData.evidenceFiles.length > 0) {
+        try {
+          console.log('Uploading evidence files:', qualityData.evidenceFiles.length);
+          await uploadEvidenceFiles(deliveryId, qualityData.evidenceFiles);
+          console.log('Evidence files uploaded successfully');
+        } catch (evidenceError) {
+          console.error('Error uploading evidence files:', evidenceError);
+          // No fallar el proceso de calidad por error de evidencia
+          toast({
+            title: "Advertencia",
+            description: "La revisión de calidad fue procesada pero hubo un problema al subir la evidencia fotográfica.",
+            variant: "default",
+          });
+        }
       }
 
       // Obtener detalles completos de la entrega para sincronización
