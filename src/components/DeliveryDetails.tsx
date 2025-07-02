@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -210,7 +209,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
       const defective = variantData.defective || 0;
       const reviewed = approved + defective;
       
-      if (delivered !== reviewed) {
+      // Only consider discrepancy if user has entered values (approved > 0 OR defective > 0)
+      if ((approved > 0 || defective > 0) && delivered !== reviewed) {
         discrepancies.push({
           item,
           delivered,
@@ -395,28 +395,6 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
               </div>
             </div>
 
-            {/* Discrepancy Alert */}
-            {hasDiscrepancies && (
-              <Alert className="border-orange-200 bg-orange-50">
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
-                  <strong>¡Atención!</strong> Hay discrepancias en las cantidades:
-                  <ul className="mt-2 space-y-1">
-                    {discrepancies.map((disc, index) => (
-                      <li key={index} className="text-sm">
-                        • <strong>{disc.item.order_items?.product_variants?.products?.name}</strong> 
-                        ({disc.item.order_items?.product_variants?.size} - {disc.item.order_items?.product_variants?.color}): 
-                        Entregadas {disc.delivered}, Revisadas {disc.reviewed} 
-                        <span className={disc.difference > 0 ? 'text-red-600' : 'text-green-600'}>
-                          ({disc.difference > 0 ? '+' : ''}{disc.difference})
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            )}
-
             {/* Quality Control Table */}
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-300">
@@ -427,7 +405,6 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                     <th className="border border-gray-300 p-3 text-center">Aprobadas</th>
                     <th className="border border-gray-300 p-3 text-center">Defectuosas</th>
                     <th className="border border-gray-300 p-3 text-left">Motivo/Observaciones</th>
-                    <th className="border border-gray-300 p-3 text-center">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -437,10 +414,11 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                     const approved = variantData.approved || 0;
                     const defective = variantData.defective || 0;
                     const reviewed = approved + defective;
-                    const hasDiscrepancy = delivered !== reviewed;
+                    const hasUserInput = approved > 0 || defective > 0;
+                    const hasDiscrepancy = hasUserInput && delivered !== reviewed;
                     
                     return (
-                      <tr key={item.id} className={hasDiscrepancy ? 'bg-orange-50' : ''}>
+                      <tr key={item.id}>
                         <td className="border border-gray-300 p-3">
                           <div>
                             <p className="font-medium">{item.order_items?.product_variants?.products?.name}</p>
@@ -483,22 +461,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                             rows={2}
                             className="text-sm"
                           />
-                        </td>
-                        <td className="border border-gray-300 p-3 text-center">
-                          {hasDiscrepancy ? (
-                            <Badge variant="destructive" className="text-xs">
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              Discrepancia
-                            </Badge>
-                          ) : reviewed === delivered && delivered > 0 ? (
-                            <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Completo
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">
-                              Pendiente
-                            </Badge>
+                          {hasDiscrepancy && (
+                            <p className="text-orange-600 text-sm mt-1">
+                              Total revisadas: {reviewed} (entregadas: {delivered})
+                            </p>
                           )}
                         </td>
                       </tr>
