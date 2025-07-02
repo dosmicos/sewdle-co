@@ -1,7 +1,6 @@
 
 import React from 'react';
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
+import { Sonner } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -175,8 +174,26 @@ const App = () => {
       <TooltipProvider>
         <LanguageProvider>
           <AuthProvider>
-            <Toaster />
-            <Sonner />
+            <Sonner 
+              position="top-right"
+              expand={true}
+              richColors={true}
+              closeButton={true}
+              toastOptions={{
+                style: {
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  padding: '16px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                  zIndex: 999999
+                },
+                className: 'toast-custom'
+              }}
+            />
             <BrowserRouter>
               <AppContent />
             </BrowserRouter>

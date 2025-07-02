@@ -98,6 +98,52 @@
 }
 
 @layer components {
+  /* Estilos específicos para toasts - asegurar opacidad completa */
+  .toast-custom,
+  [data-sonner-toast] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+    opacity: 1 !important;
+    backdrop-filter: none !important;
+    z-index: 999999 !important;
+  }
+
+  [data-sonner-toast] * {
+    color: inherit !important;
+  }
+
+  [data-sonner-toast][data-type="success"] {
+    background-color: #f0f9f0 !important;
+    border-color: #22c55e !important;
+    color: #166534 !important;
+  }
+
+  [data-sonner-toast][data-type="error"] {
+    background-color: #fef2f2 !important;
+    border-color: #ef4444 !important;
+    color: #dc2626 !important;
+  }
+
+  [data-sonner-toast][data-type="warning"] {
+    background-color: #fffbeb !important;
+    border-color: #f59e0b !important;
+    color: #d97706 !important;
+  }
+
+  [data-sonner-toast][data-type="info"] {
+    background-color: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1d4ed8 !important;
+  }
+
+  /* Asegurar que el contenedor de toasts esté bien posicionado */
+  [data-sonner-toaster] {
+    z-index: 999999 !important;
+  }
+
   /* Componentes de formulario con colores explícitos */
   .form-input {
     width: 100%;
