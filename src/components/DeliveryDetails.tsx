@@ -283,96 +283,71 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         </CardContent>
       </Card>
 
-      {/* Items Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      {/* Items Entregados - Only for users WITHOUT QC permissions */}
+      {!canProcessQuality && (
+        <Card>
+          <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Package className="w-5 h-5" />
-              <span>Items de la Entrega ({delivery.delivery_items?.length || 0})</span>
+              <span>Items Entregados ({delivery.delivery_items?.length || 0})</span>
             </CardTitle>
-            {canEdit && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditing(!isEditing)}
-              >
-                <Edit2 className="w-4 h-4 mr-2" />
-                {isEditing ? 'Cancelar' : 'Editar Cantidades'}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {delivery.delivery_items?.map((item: any) => (
-              <div key={item.id} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h4 className="font-medium">
-                      {item.order_items?.product_variants?.products?.name || 'Producto'}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      SKU: {item.order_items?.product_variants?.sku_variant}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    {isEditing ? (
-                      <div className="flex items-center space-x-2">
-                        <Label className="text-sm">Cantidad:</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={quantityData[item.id] || 0}
-                          onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
-                          className="w-20"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="font-medium text-lg">
-                          {item.quantity_delivered} entregadas
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {delivery.delivery_items?.map((item: any) => (
+                <div key={item.id} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-medium">
+                        {item.order_items?.product_variants?.products?.name || 'Producto'}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        {item.order_items?.product_variants?.size} - {item.order_items?.product_variants?.color}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        SKU: {item.order_items?.product_variants?.sku_variant}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-lg">
+                        {item.quantity_delivered} entregadas
+                      </p>
+                      {item.quantity_approved > 0 && (
+                        <p className="text-sm text-green-600">
+                          {item.quantity_approved} aprobadas
                         </p>
-                        {item.quantity_approved > 0 && (
-                          <p className="text-sm text-green-600">
-                            {item.quantity_approved} aprobadas
-                          </p>
-                        )}
-                        {item.quantity_defective > 0 && (
-                          <p className="text-sm text-red-600">
-                            {item.quantity_defective} defectuosas
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      )}
+                      {item.quantity_defective > 0 && (
+                        <p className="text-sm text-red-600">
+                          {item.quantity_defective} defectuosas
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            
-            {isEditing && (
-              <div className="flex justify-end space-x-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => setIsEditing(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleSaveQuantities} disabled={loading}>
-                  <Save className="w-4 h-4 mr-2" />
-                  Guardar Cambios
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Quality Control Section */}
+      {/* Quality Control Section - Only for users WITH QC permissions */}
       {canProcessQuality && (
         <Card>
           <CardHeader>
-            <CardTitle>Control de Calidad</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Control de Calidad</CardTitle>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(!isEditing)}
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  {isEditing ? 'Cancelar' : 'Editar Cantidades'}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Quality Summary */}
@@ -431,7 +406,17 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                           </div>
                         </td>
                         <td className="border border-gray-300 p-3 text-center">
-                          <span className="font-bold text-blue-600">{delivered}</span>
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              value={quantityData[item.id] || 0}
+                              onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
+                              className="w-20 mx-auto text-center"
+                            />
+                          ) : (
+                            <span className="font-bold text-blue-600">{delivered}</span>
+                          )}
                         </td>
                         <td className="border border-gray-300 p-3 text-center">
                           <Input
@@ -441,6 +426,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                             value={approved}
                             onChange={(e) => handleQualityChange(item.id, 'approved', parseInt(e.target.value) || 0)}
                             className="w-20 mx-auto text-center"
+                            disabled={isEditing}
                           />
                         </td>
                         <td className="border border-gray-300 p-3 text-center">
@@ -451,6 +437,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                             value={defective}
                             onChange={(e) => handleQualityChange(item.id, 'defective', parseInt(e.target.value) || 0)}
                             className="w-20 mx-auto text-center"
+                            disabled={isEditing}
                           />
                         </td>
                         <td className="border border-gray-300 p-3">
@@ -460,6 +447,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                             onChange={(e) => handleQualityChange(item.id, 'reason', e.target.value)}
                             rows={2}
                             className="text-sm"
+                            disabled={isEditing}
                           />
                           {hasDiscrepancy && (
                             <p className="text-orange-600 text-sm mt-1">
@@ -474,90 +462,109 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
               </table>
             </div>
 
+            {/* Save quantities button when editing */}
+            {isEditing && (
+              <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveQuantities} disabled={loading}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Guardar Cambios
+                </Button>
+              </div>
+            )}
+
             {/* General Notes */}
-            <div>
-              <Label className="text-sm font-medium">Notas Generales de Calidad</Label>
-              <Textarea
-                placeholder="Comentarios adicionales sobre la entrega..."
-                value={generalNotes}
-                onChange={(e) => setGeneralNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
+            {!isEditing && (
+              <div>
+                <Label className="text-sm font-medium">Notas Generales de Calidad</Label>
+                <Textarea
+                  placeholder="Comentarios adicionales sobre la entrega..."
+                  value={generalNotes}
+                  onChange={(e) => setGeneralNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            )}
 
             {/* Evidence Upload Section */}
-            <div className="space-y-4">
-              <Label className="text-sm font-medium">Evidencia Fotográfica (Opcional)</Label>
+            {!isEditing && (
               <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleEvidenceFilesSelect}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center space-x-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>Subir Fotos de Evidencia</span>
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    (Máximo 10 archivos, 5MB cada uno)
-                  </span>
-                </div>
-
-                {/* Preview Selected Files */}
-                {evidenceFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Archivos seleccionados:</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {evidenceFiles.map((file, index) => (
-                        <div key={index} className="relative group">
-                          <div className="aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300">
-                            <img
-                              src={evidencePreviews[index]}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div className="absolute top-1 right-1">
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleRemoveEvidenceFile(index)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                          <p className="text-xs text-center mt-1 truncate">{file.name}</p>
-                        </div>
-                      ))}
-                    </div>
+                <Label className="text-sm font-medium">Evidencia Fotográfica (Opcional)</Label>
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleEvidenceFilesSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center space-x-2"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Subir Fotos de Evidencia</span>
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      (Máximo 10 archivos, 5MB cada uno)
+                    </span>
                   </div>
-                )}
+
+                  {/* Preview Selected Files */}
+                  {evidenceFiles.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Archivos seleccionados:</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {evidenceFiles.map((file, index) => (
+                          <div key={index} className="relative group">
+                            <div className="aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300">
+                              <img
+                                src={evidencePreviews[index]}
+                                alt={file.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="absolute top-1 right-1">
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRemoveEvidenceFile(index)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <p className="text-xs text-center mt-1 truncate">{file.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="flex justify-end">
-              <Button 
-                onClick={handleQualitySubmit} 
-                disabled={loading || hasDiscrepancies}
-                className={hasDiscrepancies ? 'opacity-50 cursor-not-allowed' : ''}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Procesar Control de Calidad
-              </Button>
-            </div>
+            {!isEditing && (
+              <div className="flex justify-end">
+                <Button 
+                  onClick={handleQualitySubmit} 
+                  disabled={loading || hasDiscrepancies}
+                  className={hasDiscrepancies ? 'opacity-50 cursor-not-allowed' : ''}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Procesar Control de Calidad
+                </Button>
+              </div>
+            )}
 
-            {hasDiscrepancies && (
+            {hasDiscrepancies && !isEditing && (
               <p className="text-sm text-orange-600 text-center">
                 <AlertTriangle className="w-4 h-4 inline mr-1" />
                 Corrige las discrepancias antes de procesar el control de calidad
@@ -567,7 +574,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         </Card>
       )}
 
-      {/* Evidence Gallery */}
+      {/* Evidence Gallery - Only for users without QC permissions */}
       {!canProcessQuality && (
         <Card>
           <CardHeader>
