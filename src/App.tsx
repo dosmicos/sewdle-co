@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Sonner } from "sonner";
+import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -174,7 +173,7 @@ const App = () => {
       <TooltipProvider>
         <LanguageProvider>
           <AuthProvider>
-            <Sonner 
+            <Toaster 
               position="top-right"
               expand={true}
               richColors={true}
