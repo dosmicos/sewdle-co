@@ -12,6 +12,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import DeliveryEvidenceGallery from './DeliveryEvidenceGallery';
+import DeliveryReviewSummary from './DeliveryReviewSummary';
 
 interface DeliveryDetailsProps {
   delivery: any;
@@ -251,6 +252,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
           {getStatusText(delivery.status)}
         </Badge>
       </div>
+
+      {/* Resumen de Revisión - Solo mostrar si ha sido procesada */}
+      <DeliveryReviewSummary 
+        delivery={delivery}
+        totalDelivered={totals.delivered}
+        totalApproved={totals.approved}
+        totalDefective={totals.defective}
+      />
 
       {/* Delivery Information */}
       <Card>
@@ -576,14 +585,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
 
       {/* Evidence Gallery - Only for users without QC permissions */}
       {!canProcessQuality && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Evidencia Fotográfica</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DeliveryEvidenceGallery deliveryId={delivery.id} />
-          </CardContent>
-        </Card>
+        <DeliveryEvidenceGallery deliveryId={delivery.id} />
       )}
     </div>
   );
