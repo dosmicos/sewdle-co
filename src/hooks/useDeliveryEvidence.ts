@@ -8,54 +8,118 @@ export const useDeliveryEvidence = () => {
   const { toast } = useToast();
 
   const uploadEvidenceFiles = async (deliveryId: string, files: File[], description?: string) => {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      console.log('No files to upload');
+      return;
+    }
 
     setLoading(true);
+    console.log(`Starting upload of ${files.length} file(s) for delivery ${deliveryId}`);
+    
     try {
-      const uploadPromises = files.map(async (file) => {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${deliveryId}/${Date.now()}-${Math.random()}.${fileExt}`;
+      // Obtener el usuario una sola vez al inicio
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Error getting user:', userError);
+        throw new Error(`Error de autenticación: ${userError.message}`);
+      }
+
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      console.log('User authenticated:', user.id);
+
+      // Procesar archivos secuencialmente para evitar problemas de concurrencia
+      const uploadResults = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        console.log(`Processing file ${i + 1}/${files.length}: ${file.name} (${file.size} bytes)`);
         
-        // Upload file to storage
-        const { error: uploadError } = await supabase.storage
-          .from('delivery-evidence')
-          .upload(fileName, file);
+        try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${deliveryId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+          
+          console.log(`Uploading to storage: ${fileName}`);
+          
+          // Upload file to storage
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('delivery-evidence')
+            .upload(fileName, file);
 
-        if (uploadError) {
-          throw uploadError;
-        }
+          if (uploadError) {
+            console.error(`Storage upload error for file ${file.name}:`, uploadError);
+            throw new Error(`Error subiendo archivo ${file.name}: ${uploadError.message}`);
+          }
 
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('delivery-evidence')
-          .getPublicUrl(fileName);
+          console.log(`File uploaded successfully:`, uploadData);
 
-        // Save file record to database
-        const { error: dbError } = await supabase
-          .from('delivery_files')
-          .insert({
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('delivery-evidence')
+            .getPublicUrl(fileName);
+
+          console.log(`Public URL generated: ${publicUrl}`);
+
+          // Save file record to database
+          const fileRecord = {
             delivery_id: deliveryId,
             file_name: file.name,
             file_url: publicUrl,
             file_type: file.type,
             file_size: file.size,
-            uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+            uploaded_by: user.id,
             notes: description || null
+          };
+
+          console.log('Inserting file record to database:', fileRecord);
+
+          const { data: dbData, error: dbError } = await supabase
+            .from('delivery_files')
+            .insert([fileRecord])
+            .select();
+
+          if (dbError) {
+            console.error(`Database insert error for file ${file.name}:`, dbError);
+            throw new Error(`Error guardando registro de archivo ${file.name}: ${dbError.message}`);
+          }
+
+          console.log(`File record saved to database:`, dbData);
+          uploadResults.push({ file: file.name, url: publicUrl, success: true });
+
+        } catch (fileError) {
+          console.error(`Error processing file ${file.name}:`, fileError);
+          uploadResults.push({ 
+            file: file.name, 
+            success: false, 
+            error: fileError instanceof Error ? fileError.message : 'Error desconocido' 
           });
-
-        if (dbError) {
-          throw dbError;
         }
+      }
 
-        return publicUrl;
-      });
+      // Verificar resultados
+      const successCount = uploadResults.filter(r => r.success).length;
+      const failureCount = uploadResults.filter(r => !r.success).length;
 
-      await Promise.all(uploadPromises);
-      
-      toast({
-        title: "Archivos subidos",
-        description: `${files.length} archivo(s) de evidencia subidos exitosamente`,
-      });
+      console.log(`Upload summary: ${successCount} successful, ${failureCount} failed`);
+
+      if (successCount > 0) {
+        toast({
+          title: "Archivos subidos",
+          description: `${successCount} archivo(s) de evidencia subidos exitosamente${failureCount > 0 ? `. ${failureCount} archivo(s) fallaron.` : ''}`,
+        });
+      }
+
+      if (failureCount > 0) {
+        const failedFiles = uploadResults.filter(r => !r.success);
+        console.error('Failed files:', failedFiles);
+        
+        if (successCount === 0) {
+          throw new Error(`No se pudieron subir ninguno de los ${files.length} archivos`);
+        }
+      }
 
     } catch (error) {
       console.error('Error uploading evidence files:', error);
@@ -72,17 +136,26 @@ export const useDeliveryEvidence = () => {
 
   const fetchEvidenceFiles = async (deliveryId: string) => {
     setLoading(true);
+    console.log(`Fetching evidence files for delivery: ${deliveryId}`);
+    
     try {
       const { data, error } = await supabase
         .from('delivery_files')
-        .select('*')
+        .select(`
+          *,
+          profiles:uploaded_by (
+            name
+          )
+        `)
         .eq('delivery_id', deliveryId)
         .order('created_at', { ascending: false });
 
       if (error) {
+        console.error('Error fetching evidence files:', error);
         throw error;
       }
 
+      console.log(`Found ${data?.length || 0} evidence files`);
       return data || [];
     } catch (error) {
       console.error('Error fetching evidence files:', error);
@@ -97,13 +170,23 @@ export const useDeliveryEvidence = () => {
     }
   };
 
-  const deleteEvidenceFile = async (fileId: string, fileName: string) => {
+  const deleteEvidenceFile = async (fileId: string, fileUrl: string) => {
     setLoading(true);
+    console.log(`Deleting evidence file: ${fileId}`);
+    
     try {
+      // Extract file path from URL
+      const urlParts = fileUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      const deliveryFolder = urlParts[urlParts.length - 2];
+      const filePath = `${deliveryFolder}/${fileName}`;
+
+      console.log(`Deleting from storage: ${filePath}`);
+
       // Delete from storage
       const { error: storageError } = await supabase.storage
         .from('delivery-evidence')
-        .remove([fileName]);
+        .remove([filePath]);
 
       if (storageError) {
         console.error('Error deleting from storage:', storageError);
@@ -117,8 +200,11 @@ export const useDeliveryEvidence = () => {
         .eq('id', fileId);
 
       if (dbError) {
+        console.error('Error deleting from database:', dbError);
         throw dbError;
       }
+
+      console.log('File deleted successfully');
 
       toast({
         title: "Archivo eliminado",

@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -176,6 +177,14 @@ export const useDeliveries = () => {
     try {
       console.log('Creating delivery with data:', deliveryData);
 
+      // Validar archivos adjuntos al inicio
+      if (deliveryData.files && deliveryData.files.length > 0) {
+        console.log(`Files to attach: ${deliveryData.files.length}`);
+        deliveryData.files.forEach((file: File, index: number) => {
+          console.log(`File ${index + 1}: ${file.name} (${file.size} bytes, ${file.type})`);
+        });
+      }
+
       // Paso 1: Validar que orderId existe
       const { data: orderExists, error: orderError } = await supabase
         .from('orders')
@@ -286,26 +295,48 @@ export const useDeliveries = () => {
         console.log('Delivery items created successfully:', createdItems);
       }
 
-      // Paso 7: NUEVA FUNCIONALIDAD - Subir archivos adjuntos si existen
+      // Paso 7: FUNCIONALIDAD MEJORADA - Subir archivos adjuntos si existen
       if (deliveryData.files && deliveryData.files.length > 0) {
         try {
-          console.log('Uploading delivery files:', deliveryData.files.length);
-          await uploadEvidenceFiles(createdDelivery.id, deliveryData.files, 'Archivos de entrega inicial');
-          console.log('Delivery files uploaded successfully');
+          console.log(`Starting file upload process for ${deliveryData.files.length} files`);
+          
+          // Validar que todos los archivos son válidos antes de subirlos
+          const validFiles = Array.from(deliveryData.files).filter((file: File) => {
+            if (!file || file.size === 0) {
+              console.warn(`Skipping invalid file:`, file);
+              return false;
+            }
+            return true;
+          });
+
+          if (validFiles.length > 0) {
+            console.log(`Uploading ${validFiles.length} valid files...`);
+            await uploadEvidenceFiles(
+              createdDelivery.id, 
+              validFiles, 
+              deliveryData.notes ? `Archivos de entrega: ${deliveryData.notes}` : 'Archivos de entrega inicial'
+            );
+            console.log('All files uploaded successfully');
+          } else {
+            console.warn('No valid files to upload');
+          }
+          
         } catch (fileError) {
           console.error('Error uploading delivery files:', fileError);
-          // No fallar la creación de la entrega por error en archivos
+          // No fallar la creación de la entrega por error en archivos, pero mostrar advertencia
           toast({
             title: "Advertencia",
-            description: "La entrega fue creada exitosamente pero hubo un problema al subir los archivos adjuntos.",
+            description: "La entrega fue creada exitosamente pero hubo un problema al subir algunos archivos adjuntos. Puedes intentar subirlos nuevamente desde los detalles de la entrega.",
             variant: "default",
           });
         }
       }
 
+      // Mensaje de éxito
+      const filesCount = deliveryData.files ? deliveryData.files.length : 0;
       toast({
         title: "Entrega creada",
-        description: `Entrega ${trackingNumber} registrada exitosamente${deliveryData.files && deliveryData.files.length > 0 ? ` con ${deliveryData.files.length} archivo(s) adjunto(s)` : ''}`,
+        description: `Entrega ${trackingNumber} registrada exitosamente${filesCount > 0 ? ` con ${filesCount} archivo(s) adjunto(s)` : ''}`,
       });
 
       return createdDelivery;
