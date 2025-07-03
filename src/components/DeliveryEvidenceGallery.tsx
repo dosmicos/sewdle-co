@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +18,7 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
   const [evidenceFiles, setEvidenceFiles] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState<string>('');
-  const { fetchDeliveryEvidence, deleteEvidenceFile, loading } = useDeliveryEvidence();
+  const { fetchEvidenceFiles, deleteEvidenceFile, loading } = useDeliveryEvidence();
   const { isAdmin } = useUserContext();
 
   useEffect(() => {
@@ -27,7 +26,7 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
   }, [deliveryId]);
 
   const loadEvidence = async () => {
-    const evidence = await fetchDeliveryEvidence(deliveryId);
+    const evidence = await fetchEvidenceFiles(deliveryId);
     setEvidenceFiles(evidence);
   };
 
