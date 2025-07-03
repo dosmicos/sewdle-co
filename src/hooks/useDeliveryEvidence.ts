@@ -7,78 +7,75 @@ export const useDeliveryEvidence = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const uploadEvidenceFiles = async (deliveryId: string, files: File[]): Promise<string[]> => {
-    try {
-      console.log('Uploading evidence files for delivery:', deliveryId, files);
-      
-      const uploadPromises = files.map(async (file) => {
-        // Generate unique filename
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${deliveryId}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `evidence/${fileName}`;
+  const uploadEvidenceFiles = async (deliveryId: string, files: File[], description?: string) => {
+    if (!files || files.length === 0) return;
 
-        // Upload file to Supabase Storage
+    setLoading(true);
+    try {
+      const uploadPromises = files.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${deliveryId}/${Date.now()}-${Math.random()}.${fileExt}`;
+        
+        // Upload file to storage
         const { error: uploadError } = await supabase.storage
           .from('delivery-evidence')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
+          .upload(fileName, file);
 
         if (uploadError) {
-          console.error('Error uploading evidence file:', uploadError);
           throw uploadError;
         }
 
         // Get public URL
-        const { data: urlData } = supabase.storage
+        const { data: { publicUrl } } = supabase.storage
           .from('delivery-evidence')
-          .getPublicUrl(filePath);
+          .getPublicUrl(fileName);
 
-        // Create database record
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        // Save file record to database
         const { error: dbError } = await supabase
           .from('delivery_files')
           .insert({
             delivery_id: deliveryId,
             file_name: file.name,
-            file_url: urlData.publicUrl,
+            file_url: publicUrl,
             file_type: file.type,
             file_size: file.size,
-            uploaded_by: session?.user?.id || null,
-            notes: 'Evidencia de calidad'
+            uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+            notes: description || null
           });
 
         if (dbError) {
-          console.error('Error creating delivery file record:', dbError);
           throw dbError;
         }
 
-        console.log('Evidence file uploaded successfully:', fileName);
-        return urlData.publicUrl;
+        return publicUrl;
       });
 
-      const uploadedUrls = await Promise.all(uploadPromises);
-      return uploadedUrls;
+      await Promise.all(uploadPromises);
+      
+      toast({
+        title: "Archivos subidos",
+        description: `${files.length} archivo(s) de evidencia subidos exitosamente`,
+      });
 
     } catch (error) {
-      console.error('Error in uploadEvidenceFiles:', error);
+      console.error('Error uploading evidence files:', error);
+      toast({
+        title: "Error al subir archivos",
+        description: error instanceof Error ? error.message : "No se pudieron subir los archivos",
+        variant: "destructive",
+      });
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchDeliveryEvidence = async (deliveryId: string) => {
+  const fetchEvidenceFiles = async (deliveryId: string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('delivery_files')
-        .select(`
-          *,
-          profiles!delivery_files_uploaded_by_fkey (
-            name
-          )
-        `)
+        .select('*')
         .eq('delivery_id', deliveryId)
         .order('created_at', { ascending: false });
 
@@ -88,10 +85,10 @@ export const useDeliveryEvidence = () => {
 
       return data || [];
     } catch (error) {
-      console.error('Error fetching delivery evidence:', error);
+      console.error('Error fetching evidence files:', error);
       toast({
-        title: "Error al cargar evidencia",
-        description: "No se pudo cargar la evidencia de la entrega",
+        title: "Error al cargar archivos",
+        description: error instanceof Error ? error.message : "No se pudieron cargar los archivos de evidencia",
         variant: "destructive",
       });
       return [];
@@ -100,20 +97,17 @@ export const useDeliveryEvidence = () => {
     }
   };
 
-  const deleteEvidenceFile = async (fileId: string, fileUrl: string) => {
+  const deleteEvidenceFile = async (fileId: string, fileName: string) => {
     setLoading(true);
     try {
-      // Extract file path from URL
-      const urlParts = fileUrl.split('/');
-      const filePath = `evidence/${urlParts[urlParts.length - 1]}`;
-
       // Delete from storage
       const { error: storageError } = await supabase.storage
         .from('delivery-evidence')
-        .remove([filePath]);
+        .remove([fileName]);
 
       if (storageError) {
-        console.warn('Error deleting from storage:', storageError);
+        console.error('Error deleting from storage:', storageError);
+        // Continue with database deletion even if storage deletion fails
       }
 
       // Delete from database
@@ -127,16 +121,16 @@ export const useDeliveryEvidence = () => {
       }
 
       toast({
-        title: "Evidencia eliminada",
-        description: "El archivo de evidencia ha sido eliminado",
+        title: "Archivo eliminado",
+        description: "El archivo de evidencia ha sido eliminado exitosamente",
       });
 
       return true;
     } catch (error) {
       console.error('Error deleting evidence file:', error);
       toast({
-        title: "Error al eliminar",
-        description: "No se pudo eliminar el archivo de evidencia",
+        title: "Error al eliminar archivo",
+        description: error instanceof Error ? error.message : "No se pudo eliminar el archivo",
         variant: "destructive",
       });
       return false;
@@ -147,7 +141,7 @@ export const useDeliveryEvidence = () => {
 
   return {
     uploadEvidenceFiles,
-    fetchDeliveryEvidence,
+    fetchEvidenceFiles,
     deleteEvidenceFile,
     loading
   };

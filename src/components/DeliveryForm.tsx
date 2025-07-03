@@ -141,15 +141,16 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         return;
       }
 
-      // Crear la estructura de datos correcta para createDelivery
+      // Crear la estructura de datos correcta para createDelivery incluyendo archivos
       const deliveryData = {
         orderId: formData.orderId,
         workshopId: formData.workshopId || null,
         notes: formData.general.observations.trim() || null,
-        items: deliveryItems
+        items: deliveryItems,
+        files: formData.files ? Array.from(formData.files) : undefined // Incluir los archivos
       };
 
-      console.log('Sending delivery data:', deliveryData);
+      console.log('Sending delivery data with files:', deliveryData);
 
       await createDelivery(deliveryData);
       

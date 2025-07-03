@@ -286,9 +286,26 @@ export const useDeliveries = () => {
         console.log('Delivery items created successfully:', createdItems);
       }
 
+      // Paso 7: NUEVA FUNCIONALIDAD - Subir archivos adjuntos si existen
+      if (deliveryData.files && deliveryData.files.length > 0) {
+        try {
+          console.log('Uploading delivery files:', deliveryData.files.length);
+          await uploadEvidenceFiles(createdDelivery.id, deliveryData.files, 'Archivos de entrega inicial');
+          console.log('Delivery files uploaded successfully');
+        } catch (fileError) {
+          console.error('Error uploading delivery files:', fileError);
+          // No fallar la creación de la entrega por error en archivos
+          toast({
+            title: "Advertencia",
+            description: "La entrega fue creada exitosamente pero hubo un problema al subir los archivos adjuntos.",
+            variant: "default",
+          });
+        }
+      }
+
       toast({
         title: "Entrega creada",
-        description: `Entrega ${trackingNumber} registrada exitosamente`,
+        description: `Entrega ${trackingNumber} registrada exitosamente${deliveryData.files && deliveryData.files.length > 0 ? ` con ${deliveryData.files.length} archivo(s) adjunto(s)` : ''}`,
       });
 
       return createdDelivery;
