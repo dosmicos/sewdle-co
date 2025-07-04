@@ -63,17 +63,38 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
     }
   };
 
-  // Helper function to sort delivery items by variant size
+  // Helper function to sort delivery items by product first, then by variant size
   const getSortedDeliveryItems = (items: any[]) => {
     if (!items) return [];
     
-    const itemsWithSizeInfo = items.map(item => ({
-      ...item,
-      size: item.order_items?.product_variants?.size || '',
-      title: item.order_items?.product_variants?.size || ''
-    }));
+    // Group items by product name
+    const groupedByProduct = items.reduce((acc, item) => {
+      const productName = item.order_items?.product_variants?.products?.name || 'Sin nombre';
+      if (!acc[productName]) {
+        acc[productName] = [];
+      }
+      acc[productName].push({
+        ...item,
+        size: item.order_items?.product_variants?.size || '',
+        title: item.order_items?.product_variants?.size || ''
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
     
-    return sortVariants(itemsWithSizeInfo);
+    // Sort each product group by variants and then combine all
+    const sortedItems: any[] = [];
+    
+    // Sort product names alphabetically
+    const sortedProductNames = Object.keys(groupedByProduct).sort();
+    
+    // For each product, sort its variants and add to final array
+    sortedProductNames.forEach(productName => {
+      const productItems = groupedByProduct[productName];
+      const sortedProductItems = sortVariants(productItems);
+      sortedItems.push(...sortedProductItems);
+    });
+    
+    return sortedItems;
   };
 
   const handleQuantityChange = (itemId: string, value: number) => {
