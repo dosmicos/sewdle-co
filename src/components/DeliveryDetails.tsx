@@ -621,10 +621,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         </CardContent>
       </Card>
 
-      {/* Evidence Gallery - Only for users without QC permissions */}
-      {!canProcessQuality && (
-        <DeliveryEvidenceGallery deliveryId={delivery.id} />
-      )}
+      {/* Evidence Gallery - NOW SHOWN TO ALL USERS */}
+      <DeliveryEvidenceGallery deliveryId={delivery.id} />
     </div>
   );
 };
