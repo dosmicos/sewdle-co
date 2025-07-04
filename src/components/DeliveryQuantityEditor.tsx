@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Edit, Save, X, AlertTriangle } from 'lucide-react';
+import { sortVariants } from '@/lib/variantSorting';
 
 interface DeliveryQuantityEditorProps {
   deliveryData: any;
@@ -34,6 +35,19 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
       setQuantities(initialQuantities);
     }
   }, [deliveryData]);
+
+  // Helper function to sort delivery items by variant size
+  const getSortedDeliveryItems = (items: any[]) => {
+    if (!items) return [];
+    
+    const itemsWithSizeInfo = items.map(item => ({
+      ...item,
+      size: item.order_items?.product_variants?.size || '',
+      title: item.order_items?.product_variants?.size || ''
+    }));
+    
+    return sortVariants(itemsWithSizeInfo);
+  };
 
   // Helper function para obtener info del producto
   const getProductInfo = (item: any) => {
@@ -112,6 +126,9 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
 
   const hasErrors = Object.keys(errors).length > 0;
 
+  // Get sorted delivery items
+  const sortedDeliveryItems = getSortedDeliveryItems(deliveryData.delivery_items);
+
   return (
     <Card className="border-blue-200">
       <CardHeader>
@@ -141,7 +158,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deliveryData.delivery_items?.map((item: any) => {
+              {sortedDeliveryItems?.map((item: any) => {
                 const productInfo = getProductInfo(item);
                 const itemId = item.id;
                 const currentQuantity = item.quantity_delivered || 0;

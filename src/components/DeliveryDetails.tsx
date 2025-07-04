@@ -12,6 +12,7 @@ import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { sortVariants } from '@/lib/variantSorting';
 import DeliveryEvidenceGallery from './DeliveryEvidenceGallery';
 import DeliveryReviewSummary from './DeliveryReviewSummary';
 
@@ -60,6 +61,19 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
       });
       setQualityData(initialQualityData);
     }
+  };
+
+  // Helper function to sort delivery items by variant size
+  const getSortedDeliveryItems = (items: any[]) => {
+    if (!items) return [];
+    
+    const itemsWithSizeInfo = items.map(item => ({
+      ...item,
+      size: item.order_items?.product_variants?.size || '',
+      title: item.order_items?.product_variants?.size || ''
+    }));
+    
+    return sortVariants(itemsWithSizeInfo);
   };
 
   const handleQuantityChange = (itemId: string, value: number) => {
@@ -232,6 +246,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
   const canProcessQuality = canEditDeliveries && ['pending', 'in_quality'].includes(delivery.status);
   const hasDiscrepancies = discrepancies.length > 0;
 
+  // Get sorted delivery items
+  const sortedDeliveryItems = getSortedDeliveryItems(delivery.delivery_items);
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -332,7 +349,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {delivery.delivery_items?.map((item: any) => {
+                {sortedDeliveryItems?.map((item: any) => {
                   const delivered = item.quantity_delivered || 0;
                   const variantData = qualityData.variants[item.id] || {};
                   const approved = variantData.approved || 0;
