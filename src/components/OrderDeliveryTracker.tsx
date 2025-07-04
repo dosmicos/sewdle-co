@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Truck, Package, CheckCircle, XCircle, AlertTriangle, Calendar, Factory, ShirtIcon, RefreshCw } from 'lucide-react';
 import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
+import { sortVariants } from '@/lib/variantSorting';
 import { logger } from '@/lib/logger';
 
 interface OrderDeliveryTrackerProps {
@@ -25,6 +25,40 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
     loadData();
   }, [orderId]);
 
+  // Helper function to sort variants by product first, then by variant size
+  const getSortedVariants = (variants: any[]) => {
+    if (!variants) return [];
+    
+    // Group variants by product name
+    const groupedByProduct = variants.reduce((acc, variant) => {
+      const productName = variant.product_name || 'Sin nombre';
+      if (!acc[productName]) {
+        acc[productName] = [];
+      }
+      acc[productName].push({
+        ...variant,
+        size: variant.variant_size || '',
+        title: variant.variant_size || ''
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+    
+    // Sort each product group by variants and then combine all
+    const sortedVariants: any[] = [];
+    
+    // Sort product names alphabetically
+    const sortedProductNames = Object.keys(groupedByProduct).sort();
+    
+    // For each product, sort its variants and add to final array
+    sortedProductNames.forEach(productName => {
+      const productVariants = groupedByProduct[productName];
+      const sortedProductVariants = sortVariants(productVariants);
+      sortedVariants.push(...sortedProductVariants);
+    });
+    
+    return sortedVariants;
+  };
+
   const loadData = async (forceRefresh = false) => {
     if (forceRefresh) {
       setRefreshing(true);
@@ -41,7 +75,10 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
       
       setStats(orderStats);
       setDeliveries(deliveriesData);
-      setVariants(variantsData);
+      
+      // Apply sorting to variants before setting state
+      const sortedVariantsData = getSortedVariants(variantsData);
+      setVariants(sortedVariantsData);
     } catch (error) {
       logger.error('Error loading order delivery data', error);
     } finally {
