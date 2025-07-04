@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Image, Eye, Trash2, Download, Calendar, User } from 'lucide-react';
+import { Image, Eye, Trash2, Download, Calendar, User, Loader2 } from 'lucide-react';
 import { useDeliveryEvidence } from '@/hooks/useDeliveryEvidence';
 import { useUserContext } from '@/hooks/useUserContext';
 import { format } from 'date-fns';
@@ -18,6 +19,7 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
   const [evidenceFiles, setEvidenceFiles] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState<string>('');
+  const [initialLoading, setInitialLoading] = useState(true);
   const { fetchEvidenceFiles, deleteEvidenceFile, loading } = useDeliveryEvidence();
   const { isAdmin } = useUserContext();
 
@@ -26,8 +28,14 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
   }, [deliveryId]);
 
   const loadEvidence = async () => {
-    const evidence = await fetchEvidenceFiles(deliveryId);
-    setEvidenceFiles(evidence);
+    try {
+      const evidence = await fetchEvidenceFiles(deliveryId);
+      setEvidenceFiles(evidence);
+    } catch (error) {
+      console.error('Error loading evidence:', error);
+    } finally {
+      setInitialLoading(false);
+    }
   };
 
   const handleViewImage = (fileUrl: string, fileName: string) => {
@@ -55,6 +63,21 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
     return fileType.startsWith('image/');
   };
 
+  // Estado de carga inicial
+  if (initialLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <Loader2 className="w-8 h-8 mx-auto animate-spin text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Cargando evidencia...</h3>
+          <p className="text-muted-foreground">
+            Obteniendo archivos de evidencia fotográfica
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (evidenceFiles.length === 0) {
     return (
       <Card>
@@ -76,6 +99,7 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
           <CardTitle className="flex items-center space-x-2">
             <Image className="w-5 h-5" />
             <span>Evidencia Fotográfica ({evidenceFiles.length})</span>
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -139,8 +163,9 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
                             variant="outline"
                             size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={loading}
                           >
-                            <Trash2 className="w-3 h-3" />
+                            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>

@@ -139,11 +139,21 @@ export const useDeliveryEvidence = () => {
     console.log(`Fetching evidence files for delivery: ${deliveryId}`);
     
     try {
+      // Consulta optimizada con LEFT JOIN explícito y manejo de casos sin usuario
       const { data, error } = await supabase
         .from('delivery_files')
         .select(`
-          *,
+          id,
+          delivery_id,
+          file_name,
+          file_url,
+          file_type,
+          file_size,
+          created_at,
+          notes,
+          uploaded_by,
           profiles:uploaded_by (
+            id,
             name
           )
         `)
@@ -155,8 +165,18 @@ export const useDeliveryEvidence = () => {
         throw error;
       }
 
-      console.log(`Found ${data?.length || 0} evidence files`);
-      return data || [];
+      // Procesar los datos para manejar casos donde no hay perfil de usuario
+      const processedData = (data || []).map(file => ({
+        ...file,
+        profiles: file.profiles || { 
+          id: file.uploaded_by, 
+          name: 'Usuario eliminado' 
+        }
+      }));
+
+      console.log(`Found ${processedData.length} evidence files`);
+      return processedData;
+      
     } catch (error) {
       console.error('Error fetching evidence files:', error);
       toast({
