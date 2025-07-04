@@ -2,7 +2,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertTriangle, XCircle, Clock, Zap, RefreshCw } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { CheckCircle, AlertTriangle, XCircle, Clock, Zap, RefreshCw, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -80,8 +81,6 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
 
   const syncStatus = getSyncStatusInfo();
   const deliveryStatus = getDeliveryStatusInfo();
-  const SyncIcon = syncStatus.icon;
-  const StatusIcon = deliveryStatus.icon;
 
   // Solo mostrar el resumen si la entrega ha sido procesada
   if (delivery.status === 'pending') {
@@ -94,7 +93,7 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <StatusIcon className={`w-5 h-5 ${deliveryStatus.color}`} />
+            <deliveryStatus.icon className={`w-5 h-5 ${deliveryStatus.color}`} />
             <span>Resumen de Revisión de Calidad</span>
           </CardTitle>
         </CardHeader>
@@ -128,7 +127,7 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
         <CardContent className="p-6">
           <div className="flex items-start space-x-4">
             <div className="flex-shrink-0">
-              <SyncIcon className={`w-8 h-8 ${syncStatus.color}`} />
+              <syncStatus.icon className={`w-8 h-8 ${syncStatus.color}`} />
             </div>
             <div className="flex-1">
               <h3 className={`text-lg font-semibold ${syncStatus.color} mb-2`}>
@@ -152,63 +151,102 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
         </CardContent>
       </Card>
 
-      {/* Timeline del Proceso */}
+      {/* Timeline del Proceso - Horizontal Compacto */}
       <Card>
         <CardHeader>
           <CardTitle>Timeline del Proceso</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {/* Entrega Creada */}
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <div>
-                <p className="font-medium text-green-700">Entrega Creada</p>
-                <p className="text-sm text-gray-600">
-                  {format(new Date(delivery.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
-                </p>
-              </div>
-            </div>
+          <TooltipProvider>
+            <div className="flex flex-wrap items-center gap-2 p-4 bg-gray-50 rounded-lg">
+              
+              {/* Entrega Creada */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border shadow-sm">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Creada</span>
+                    <span className="text-xs text-gray-500">
+                      {format(new Date(delivery.created_at), 'dd/MM', { locale: es })}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Entrega creada el {format(new Date(delivery.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</p>
+                </TooltipContent>
+              </Tooltip>
 
-            {/* Revisión de Calidad */}
-            {(totalApproved > 0 || totalDefective > 0) && (
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <div>
-                  <p className="font-medium text-green-700">Revisión de Calidad Completada</p>
-                  <p className="text-sm text-gray-600">
-                    {totalApproved} aprobadas, {totalDefective} defectuosas
-                  </p>
-                </div>
-              </div>
-            )}
+              <ArrowRight className="w-4 h-4 text-gray-400" />
 
-            {/* Estado Final */}
-            <div className="flex items-center space-x-3">
-              <StatusIcon className={`w-5 h-5 ${deliveryStatus.color}`} />
-              <div>
-                <p className={`font-medium ${deliveryStatus.color.replace('text-', 'text-')}`}>
-                  {deliveryStatus.text}
-                </p>
-                <p className="text-sm text-gray-600">
-                  Tasa de aprobación: {approvalRate.toFixed(1)}%
-                </p>
-              </div>
-            </div>
+              {/* Revisión de Calidad */}
+              {(totalApproved > 0 || totalDefective > 0) && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border shadow-sm">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-sm font-medium text-green-700">Revisión QC</span>
+                        <span className="text-xs text-gray-500">
+                          {totalApproved}✓ {totalDefective}✗
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Revisión de Calidad Completada: {totalApproved} aprobadas, {totalDefective} defectuosas</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-            {/* Sincronización con Shopify */}
-            <div className="flex items-center space-x-3">
-              <SyncIcon className={`w-5 h-5 ${syncStatus.color}`} />
-              <div>
-                <p className={`font-medium ${syncStatus.color.replace('text-', 'text-')}`}>
-                  {syncStatus.text}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {totalApproved > 0 ? `${totalApproved} unidades para inventario` : 'Sin unidades para actualizar'}
-                </p>
-              </div>
+                  <ArrowRight className="w-4 h-4 text-gray-400" />
+                </>
+              )}
+
+              {/* Estado Final */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border shadow-sm">
+                    <deliveryStatus.icon className={`w-4 h-4 ${deliveryStatus.color}`} />
+                    <span className={`text-sm font-medium ${deliveryStatus.color.replace('text-', 'text-')}`}>
+                      {delivery.status === 'approved' ? 'Aprobada' : 
+                       delivery.status === 'partial_approved' ? 'Parcial' :
+                       delivery.status === 'rejected' ? 'Rechazada' : 'En Proceso'}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {approvalRate.toFixed(0)}%
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{deliveryStatus.text} - Tasa de aprobación: {approvalRate.toFixed(1)}%</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <ArrowRight className="w-4 h-4 text-gray-400" />
+
+              {/* Sincronización con Shopify */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border shadow-sm">
+                    <syncStatus.icon className={`w-4 h-4 ${syncStatus.color}`} />
+                    <span className={`text-sm font-medium ${syncStatus.color.replace('text-', 'text-')}`}>
+                      {delivery.synced_to_shopify ? 'Sincronizado' :
+                       delivery.sync_attempts > 0 ? 'Error Sync' : 
+                       totalApproved > 0 ? 'Pendiente' : 'Sin Sync'}
+                    </span>
+                    {totalApproved > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {totalApproved} unds
+                      </span>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{syncStatus.text}</p>
+                  <p className="text-xs">{syncStatus.description}</p>
+                </TooltipContent>
+              </Tooltip>
+
             </div>
-          </div>
+          </TooltipProvider>
         </CardContent>
       </Card>
     </div>
