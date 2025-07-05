@@ -173,53 +173,66 @@ export const useDeliveries = () => {
 
   const createDelivery = async (deliveryData: any) => {
     setLoading(true);
+    console.log('Starting delivery creation process with enhanced file handling...');
+    
     try {
       console.log('Creating delivery with data:', deliveryData);
 
-      // Validar archivos adjuntos al inicio con tipo correcto
+      // Enhanced file validation with specific logging for invoice/remission files
       let validFiles: File[] = [];
       if (deliveryData.files && deliveryData.files.length > 0) {
-        console.log(`Files to attach: ${deliveryData.files.length}`);
+        console.log(`📄 Processing ${deliveryData.files.length} invoice/remission file(s)...`);
         
-        // Convertir FileList a Array y validar que sean archivos
         validFiles = Array.from(deliveryData.files).filter((file): file is File => {
           if (file instanceof File) {
-            console.log(`Valid file: ${file.name} (${file.size} bytes, ${file.type})`);
+            console.log(`✅ Valid invoice/remission file: ${file.name} (${file.size} bytes, ${file.type})`);
             return true;
           } else {
-            console.warn('Invalid file object found:', file);
+            console.warn('❌ Invalid file object found:', file);
             return false;
           }
         });
         
-        console.log(`Valid files after filtering: ${validFiles.length}`);
+        console.log(`📊 Invoice/Remission files summary: ${validFiles.length}/${deliveryData.files.length} valid files`);
+        
+        // Additional validation for invoice/remission files
+        const supportedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+        const unsupportedFiles = validFiles.filter(file => !supportedTypes.includes(file.type));
+        
+        if (unsupportedFiles.length > 0) {
+          throw new Error(`Archivos no soportados para cuenta de cobro/remisión: ${unsupportedFiles.map(f => f.name).join(', ')}`);
+        }
       }
 
-      // Paso 1: Validar que orderId existe
+      // Step 1: Validate orderId exists
       const { data: orderExists, error: orderError } = await supabase
         .from('orders')
-        .select('id')
+        .select('id, order_number')
         .eq('id', deliveryData.orderId)
         .single();
 
       if (orderError || !orderExists) {
         throw new Error(`Orden no encontrada: ${deliveryData.orderId}`);
       }
+      
+      console.log(`📋 Order validated: ${orderExists.order_number}`);
 
-      // Paso 2: Validar workshopId si se proporciona
+      // Step 2: Validate workshopId if provided
       if (deliveryData.workshopId) {
         const { data: workshopExists, error: workshopError } = await supabase
           .from('workshops')
-          .select('id')
+          .select('id, name')
           .eq('id', deliveryData.workshopId)
           .single();
 
         if (workshopError || !workshopExists) {
           console.warn(`Workshop no encontrado: ${deliveryData.workshopId}, continuando sin workshop`);
+        } else {
+          console.log(`🏭 Workshop validated: ${workshopExists.name}`);
         }
       }
 
-      // Paso 3: Validar que todos los orderItemIds existen
+      // Step 3: Validate order items
       if (deliveryData.items && deliveryData.items.length > 0) {
         const orderItemIds = deliveryData.items.map((item: any) => item.orderItemId);
         const { data: orderItemsExist, error: orderItemsError } = await supabase
@@ -236,25 +249,29 @@ export const useDeliveries = () => {
           const missingIds = orderItemIds.filter((id: string) => !foundIds.includes(id));
           throw new Error(`Items de orden no encontrados: ${missingIds.join(', ')}`);
         }
+        
+        console.log(`📦 ${orderItemsExist.length} order items validated`);
       }
 
-      // Paso 4: Generar tracking number
+      // Step 4: Generate tracking number
       const { data: trackingNumber, error: trackingError } = await supabase
         .rpc('generate_delivery_number');
 
       if (trackingError || !trackingNumber) {
         throw new Error(`Error generando número de seguimiento: ${trackingError?.message || 'Unknown error'}`);
       }
+      
+      console.log(`🏷️ Generated tracking number: ${trackingNumber}`);
 
-      // Paso 5: Crear la entrega con datos corregidos
+      // Step 5: Create delivery record
       const deliveryRecord = {
         tracking_number: trackingNumber,
         order_id: deliveryData.orderId,
         workshop_id: deliveryData.workshopId || null,
-        delivery_date: new Date().toISOString().split('T')[0], // Fecha actual en formato YYYY-MM-DD
+        delivery_date: new Date().toISOString().split('T')[0],
         status: 'pending',
         notes: deliveryData.notes || null,
-        delivered_by: null, // Se puede asignar después
+        delivered_by: null,
         recipient_name: null,
         recipient_phone: null,
         recipient_address: null
@@ -269,13 +286,13 @@ export const useDeliveries = () => {
         .single();
 
       if (deliveryError) {
-        console.error('Error creating delivery:', deliveryError);
+        console.error('❌ Error creating delivery:', deliveryError);
         throw new Error(`Error creando entrega: ${deliveryError.message}`);
       }
 
-      console.log('Delivery created successfully:', createdDelivery);
+      console.log('✅ Delivery created successfully:', createdDelivery);
 
-      // Paso 6: Crear los delivery_items si hay items
+      // Step 6: Create delivery items
       if (deliveryData.items && deliveryData.items.length > 0) {
         const deliveryItems = deliveryData.items.map((item: any) => ({
           delivery_id: createdDelivery.id,
@@ -296,49 +313,152 @@ export const useDeliveries = () => {
           .select();
 
         if (itemsError) {
-          console.error('Error creating delivery items:', itemsError);
-          // Rollback: eliminar la entrega creada
+          console.error('❌ Error creating delivery items:', itemsError);
           await supabase.from('deliveries').delete().eq('id', createdDelivery.id);
           throw new Error(`Error creando items de entrega: ${itemsError.message}`);
         }
 
-        console.log('Delivery items created successfully:', createdItems);
+        console.log('✅ Delivery items created successfully:', createdItems);
       }
 
-      // Paso 7: FUNCIONALIDAD MEJORADA - Subir archivos adjuntos si existen
+      // Step 7: Enhanced file upload for invoice/remission documents
+      let uploadedFilesCount = 0;
+      let failedFilesCount = 0;
+      
       if (validFiles.length > 0) {
         try {
-          console.log(`Starting file upload process for ${validFiles.length} files`);
+          console.log(`📁 Starting upload of ${validFiles.length} invoice/remission file(s) to delivery-evidence bucket...`);
           
-          await uploadEvidenceFiles(
-            createdDelivery.id, 
-            validFiles, 
-            deliveryData.notes ? `Archivos de entrega: ${deliveryData.notes}` : 'Archivos de entrega inicial'
-          );
-          console.log('All files uploaded successfully');
+          const uploadResults = [];
+          
+          for (let i = 0; i < validFiles.length; i++) {
+            const file = validFiles[i];
+            console.log(`📤 Uploading file ${i + 1}/${validFiles.length}: ${file.name}`);
+            
+            try {
+              // Upload to delivery-evidence bucket with proper folder structure
+              const fileExt = file.name.split('.').pop();
+              const fileName = `${createdDelivery.id}/invoice-remission-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+              
+              console.log(`📂 Storage path: delivery-evidence/${fileName}`);
+              
+              const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('delivery-evidence')
+                .upload(fileName, file);
+
+              if (uploadError) {
+                console.error(`❌ Upload error for ${file.name}:`, uploadError);
+                failedFilesCount++;
+                uploadResults.push({ 
+                  file: file.name, 
+                  success: false, 
+                  error: uploadError.message 
+                });
+                continue;
+              }
+
+              console.log(`✅ File uploaded to storage:`, uploadData);
+
+              // Get public URL
+              const { data: { publicUrl } } = supabase.storage
+                .from('delivery-evidence')
+                .getPublicUrl(fileName);
+
+              console.log(`🔗 Public URL generated: ${publicUrl}`);
+
+              // Save file record to delivery_files table
+              const fileRecord = {
+                delivery_id: createdDelivery.id,
+                file_name: file.name,
+                file_url: publicUrl,
+                file_type: file.type,
+                file_size: file.size,
+                uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+                notes: 'Archivo de cuenta de cobro/remisión'
+              };
+
+              console.log('💾 Saving file record to database:', fileRecord);
+
+              const { data: dbData, error: dbError } = await supabase
+                .from('delivery_files')
+                .insert([fileRecord])
+                .select();
+
+              if (dbError) {
+                console.error(`❌ Database insert error for ${file.name}:`, dbError);
+                failedFilesCount++;
+                uploadResults.push({ 
+                  file: file.name, 
+                  success: false, 
+                  error: dbError.message 
+                });
+              } else {
+                console.log(`✅ File record saved to database:`, dbData);
+                uploadedFilesCount++;
+                uploadResults.push({ 
+                  file: file.name, 
+                  success: true, 
+                  url: publicUrl 
+                });
+              }
+
+            } catch (fileError) {
+              console.error(`❌ Error processing file ${file.name}:`, fileError);
+              failedFilesCount++;
+              uploadResults.push({ 
+                file: file.name, 
+                success: false, 
+                error: fileError instanceof Error ? fileError.message : 'Error desconocido' 
+              });
+            }
+          }
+
+          console.log(`📊 File upload summary: ${uploadedFilesCount} successful, ${failedFilesCount} failed`);
+          
+          if (uploadedFilesCount > 0) {
+            const successMessage = failedFilesCount > 0 
+              ? `Entrega ${trackingNumber} creada. ${uploadedFilesCount} archivo(s) de cuenta de cobro/remisión subidos. ${failedFilesCount} archivo(s) fallaron.`
+              : `Entrega ${trackingNumber} creada exitosamente con ${uploadedFilesCount} archivo(s) de cuenta de cobro/remisión`;
+              
+            toast({
+              title: "Entrega registrada",
+              description: successMessage,
+            });
+          }
+
+          if (failedFilesCount > 0 && uploadedFilesCount === 0) {
+            console.warn('⚠️ All files failed to upload');
+            toast({
+              title: "Advertencia",
+              description: `Entrega ${trackingNumber} creada pero no se pudieron subir los archivos de cuenta de cobro/remisión. Puedes subirlos después desde los detalles de la entrega.`,
+              variant: "default",
+            });
+          }
           
         } catch (fileError) {
-          console.error('Error uploading delivery files:', fileError);
-          // No fallar la creación de la entrega por error en archivos, pero mostrar advertencia
+          console.error('❌ Critical error in file upload process:', fileError);
           toast({
             title: "Advertencia",
-            description: "La entrega fue creada exitosamente pero hubo un problema al subir algunos archivos adjuntos. Puedes intentar subirlos nuevamente desde los detalles de la entrega.",
+            description: `Entrega ${trackingNumber} creada pero hubo problemas con los archivos de cuenta de cobro/remisión. Puedes subirlos después desde los detalles de la entrega.`,
             variant: "default",
           });
         }
+      } else {
+        // No files to upload
+        toast({
+          title: "Entrega registrada",
+          description: `Entrega ${trackingNumber} creada exitosamente`,
+        });
       }
 
-      // Mensaje de éxito
-      const filesCount = validFiles.length;
-      toast({
-        title: "Entrega creada",
-        description: `Entrega ${trackingNumber} registrada exitosamente${filesCount > 0 ? ` con ${filesCount} archivo(s) adjunto(s)` : ''}`,
-      });
-
+      console.log(`✅ Delivery creation process completed successfully for ${trackingNumber}`);
+      console.log(`📄 Files uploaded to delivery-evidence bucket under folder: ${createdDelivery.id}/`);
+      console.log(`💾 File records saved to delivery_files table with delivery_id: ${createdDelivery.id}`);
+      
       return createdDelivery;
 
     } catch (error) {
-      console.error('Error creating delivery:', error);
+      console.error('❌ Error creating delivery:', error);
       toast({
         title: "Error al crear entrega",
         description: error instanceof Error ? error.message : "No se pudo crear la entrega",
@@ -356,16 +476,13 @@ export const useDeliveries = () => {
       console.log('Processing quality review for delivery:', deliveryId);
       console.log('Quality data received:', qualityData);
       
-      // Validar que qualityData.variants existe y tiene datos
       if (!qualityData.variants || Object.keys(qualityData.variants).length === 0) {
         throw new Error('No se encontraron datos de variantes para procesar');
       }
 
-      // Convertir datos de calidad al formato esperado usando los IDs reales
       const itemsReview = Object.entries(qualityData.variants).map(([deliveryItemId, data]: [string, any]) => {
         console.log('Processing item:', deliveryItemId, 'with data:', data);
         
-        // Validar que el ID es un UUID válido
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(deliveryItemId)) {
           console.error('Invalid UUID format for delivery_item_id:', deliveryItemId);
@@ -373,7 +490,7 @@ export const useDeliveries = () => {
         }
 
         return {
-          id: deliveryItemId, // Usar el UUID real del delivery_item
+          id: deliveryItemId,
           quantityApproved: data.approved || 0,
           quantityDefective: data.defective || 0,
           status: data.approved > 0 && data.defective === 0 ? 'approved' : 
@@ -385,7 +502,6 @@ export const useDeliveries = () => {
 
       console.log('Items to review after processing:', itemsReview);
 
-      // Actualizar items con resultados de calidad
       for (const item of itemsReview) {
         console.log('Updating delivery_item:', item.id, 'with quantities:', {
           approved: item.quantityApproved,
@@ -401,7 +517,7 @@ export const useDeliveries = () => {
             quality_status: item.status,
             quality_notes: item.notes
           })
-          .eq('id', item.id); // Usar el UUID real
+          .eq('id', item.id);
 
         if (error) {
           console.error('Error updating delivery_item:', item.id, error);
@@ -411,15 +527,14 @@ export const useDeliveries = () => {
         console.log('Successfully updated delivery_item:', item.id);
       }
 
-      // NUEVA FUNCIONALIDAD: Subir archivos de evidencia si existen
+      // Upload quality evidence files (different from invoice/remission files)
       if (qualityData.evidenceFiles && qualityData.evidenceFiles.length > 0) {
         try {
-          console.log('Uploading evidence files:', qualityData.evidenceFiles.length);
+          console.log('Uploading quality control evidence files:', qualityData.evidenceFiles.length);
           await uploadEvidenceFiles(deliveryId, qualityData.evidenceFiles);
-          console.log('Evidence files uploaded successfully');
+          console.log('Quality evidence files uploaded successfully');
         } catch (evidenceError) {
-          console.error('Error uploading evidence files:', evidenceError);
-          // No fallar el proceso de calidad por error de evidencia
+          console.error('Error uploading quality evidence files:', evidenceError);
           toast({
             title: "Advertencia",
             description: "La revisión de calidad fue procesada pero hubo un problema al subir la evidencia fotográfica.",
@@ -428,7 +543,6 @@ export const useDeliveries = () => {
         }
       }
 
-      // Obtener detalles completos de la entrega para sincronización
       const { data: deliveryData, error: deliveryError } = await supabase
         .from('deliveries')
         .select(`
@@ -451,9 +565,7 @@ export const useDeliveries = () => {
         throw deliveryError;
       }
 
-      // Solo sincronizar si no se ha sincronizado antes
       if (!deliveryData.synced_to_shopify) {
-        // Preparar datos para sincronización con Shopify
         const approvedItems = deliveryData.delivery_items
           ?.filter((item: any) => item.quantity_approved > 0)
           .map((item: any) => ({
@@ -463,7 +575,6 @@ export const useDeliveries = () => {
           }))
           .filter((item: any) => item.skuVariant) || [];
 
-        // Intentar sincronización automática con Shopify si hay items aprobados
         if (approvedItems.length > 0) {
           try {
             await syncApprovedItemsToShopify({
@@ -516,7 +627,6 @@ export const useDeliveries = () => {
     try {
       console.log('Updating delivery quantities for delivery:', deliveryId, quantityUpdates);
       
-      // Verificar que la entrega existe y está en estado editable
       const { data: deliveryCheck, error: deliveryError } = await supabase
         .from('deliveries')
         .select('id, status, synced_to_shopify')
@@ -527,7 +637,6 @@ export const useDeliveries = () => {
         throw new Error('Entrega no encontrada');
       }
 
-      // Verificar que la entrega puede ser editada
       const editableStatuses = ['pending', 'in_quality'];
       if (!editableStatuses.includes(deliveryCheck.status)) {
         throw new Error('Esta entrega ya no puede ser editada porque ha pasado por control de calidad');
@@ -537,7 +646,6 @@ export const useDeliveries = () => {
         throw new Error('Esta entrega ya fue sincronizada con Shopify y no puede ser editada');
       }
 
-      // Actualizar las cantidades de cada delivery_item
       for (const update of quantityUpdates) {
         console.log('Updating delivery_item:', update.id, 'to quantity:', update.quantity);
         

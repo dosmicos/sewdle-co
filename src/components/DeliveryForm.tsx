@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -5,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Upload, FileText, Image, CheckCircle } from 'lucide-react';
+import { X, Upload, FileText, Image, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { useDeliveryOrders } from '@/hooks/useDeliveryOrders';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
+import { Badge } from '@/components/ui/badge';
 
 interface DeliveryFormProps {
   onClose: () => void;
@@ -25,6 +27,13 @@ interface FormData {
   files: FileList | null;
 }
 
+interface FileUploadStatus {
+  file: File;
+  status: 'pending' | 'uploading' | 'success' | 'error';
+  error?: string;
+  progress?: number;
+}
+
 const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
@@ -39,6 +48,8 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [availableOrders, setAvailableOrders] = useState<any[]>([]);
   const [variantsBreakdown, setVariantsBreakdown] = useState<any[]>([]);
+  const [fileUploadStatus, setFileUploadStatus] = useState<FileUploadStatus[]>([]);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   
   const { fetchAvailableOrders, loading: ordersLoading } = useDeliveryOrders();
   const { createDelivery, loading: deliveryLoading } = useDeliveries();
@@ -50,7 +61,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
 
   const loadAvailableOrders = async () => {
     const orders = await fetchAvailableOrders();
-    console.log('Available orders loaded:', orders); // Debug log
+    console.log('Available orders loaded:', orders);
     setAvailableOrders(orders);
   };
 
@@ -68,7 +79,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         products: {}
       }));
 
-      // Cargar el desglose por variantes para obtener los pendientes
       const variants = await getOrderVariantsBreakdown(orderId);
       setVariantsBreakdown(variants);
     }
@@ -92,7 +102,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
       const invalidFiles = Array.from(files).filter(file => !validTypes.includes(file.type));
       
       if (invalidFiles.length > 0) {
-        alert('Solo se permiten archivos JPG, PNG y PDF');
+        alert('Solo se permiten archivos JPG, PNG y PDF para la cuenta de cobro/remisión');
         return;
       }
 
@@ -106,6 +116,32 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         ...prev,
         files
       }));
+
+      // Initialize upload status for each file
+      const statusArray: FileUploadStatus[] = Array.from(files).map(file => ({
+        file,
+        status: 'pending'
+      }));
+      setFileUploadStatus(statusArray);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    if (formData.files) {
+      const dt = new DataTransfer();
+      const files = Array.from(formData.files);
+      files.splice(index, 1);
+      
+      files.forEach(file => dt.items.add(file));
+      
+      setFormData(prev => ({
+        ...prev,
+        files: dt.files
+      }));
+
+      const newStatus = [...fileUploadStatus];
+      newStatus.splice(index, 1);
+      setFileUploadStatus(newStatus);
     }
   };
 
@@ -123,7 +159,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
     try {
       console.log('Form data before processing:', formData);
 
-      // Validar datos básicos
       if (!formData.orderId) {
         alert('Debe seleccionar una orden');
         return;
@@ -141,19 +176,34 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
         return;
       }
 
-      // Crear la estructura de datos correcta para createDelivery incluyendo archivos
+      // Update file upload status to indicate start of upload
+      if (formData.files && formData.files.length > 0) {
+        setIsUploadingFiles(true);
+        setFileUploadStatus(prev => 
+          prev.map(status => ({ ...status, status: 'uploading' as const }))
+        );
+      }
+
       const deliveryData = {
         orderId: formData.orderId,
         workshopId: formData.workshopId || null,
         notes: formData.general.observations.trim() || null,
         items: deliveryItems,
-        files: formData.files ? Array.from(formData.files) : undefined // Incluir los archivos
+        files: formData.files ? Array.from(formData.files) : undefined
       };
 
-      console.log('Sending delivery data with files:', deliveryData);
+      console.log('Sending delivery data with invoice/remission files:', deliveryData);
 
-      await createDelivery(deliveryData);
+      const result = await createDelivery(deliveryData);
       
+      // Update file status based on result
+      if (formData.files && formData.files.length > 0) {
+        setFileUploadStatus(prev => 
+          prev.map(status => ({ ...status, status: 'success' as const }))
+        );
+        console.log(`Archivos de cuenta de cobro/remisión guardados exitosamente para entrega ${result.tracking_number}`);
+      }
+
       if (onDeliveryCreated) {
         onDeliveryCreated();
       }
@@ -161,7 +211,19 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
       onClose();
     } catch (error) {
       console.error('Error creating delivery:', error);
-      // El error ya se muestra en el toast desde useDeliveries
+      
+      // Update file status to show error
+      if (formData.files && formData.files.length > 0) {
+        setFileUploadStatus(prev => 
+          prev.map(status => ({ 
+            ...status, 
+            status: 'error' as const,
+            error: 'Error al subir archivo de cuenta de cobro/remisión'
+          }))
+        );
+      }
+    } finally {
+      setIsUploadingFiles(false);
     }
   };
 
@@ -182,7 +244,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
     }
   };
 
-  // Función para obtener las unidades pendientes por variante
   const getPendingQuantityForVariant = (orderItem: any) => {
     const variant = variantsBreakdown.find(v => 
       v.product_name === orderItem.product_variants?.products?.name &&
@@ -190,6 +251,36 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
       v.variant_color === orderItem.product_variants?.color
     );
     return variant ? variant.total_pending : orderItem.quantity;
+  };
+
+  const getFileIcon = (file: File) => {
+    return file.type.startsWith('image/') ? Image : FileText;
+  };
+
+  const getStatusIcon = (status: FileUploadStatus['status']) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case 'uploading':
+        return <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusBadge = (status: FileUploadStatus['status']) => {
+    switch (status) {
+      case 'success':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Subido</Badge>;
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>;
+      case 'uploading':
+        return <Badge variant="secondary">Subiendo...</Badge>;
+      default:
+        return <Badge variant="outline">Pendiente</Badge>;
+    }
   };
 
   const renderStepContent = () => {
@@ -216,7 +307,6 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
                   ))}
                 </SelectContent>
               </Select>
-              {/* Debug info - remove after testing */}
               <div className="text-xs text-gray-500 mt-1">
                 Debug: {availableOrders.length} órdenes disponibles
               </div>
@@ -300,12 +390,12 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="files">Adjuntar Archivos</Label>
+            <div className="space-y-4">
+              <Label htmlFor="files">Cuenta de Cobro/Remisión</Label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm text-gray-600 mb-2">
-                  Arrastra archivos aquí o haz clic para seleccionar
+                  Adjunta la cuenta de cobro o remisión de esta entrega
                 </p>
                 <p className="text-xs text-gray-500 mb-3">
                   JPG, PNG, PDF (máx. 5 archivos, 100MB total)
@@ -322,19 +412,54 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
                   type="button"
                   variant="outline"
                   onClick={() => document.getElementById('files')?.click()}
+                  disabled={isUploadingFiles}
                 >
-                  Seleccionar Archivos
+                  {isUploadingFiles ? 'Subiendo...' : 'Seleccionar Archivos'}
                 </Button>
               </div>
-              {formData.files && formData.files.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm font-medium mb-2">Archivos seleccionados:</p>
-                  {Array.from(formData.files).map((file, index) => (
-                    <div key={index} className="flex items-center text-sm text-gray-600">
-                      {file.type.startsWith('image/') ? <Image className="w-4 h-4 mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
-                      {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+
+              {fileUploadStatus.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm font-medium mb-2">Archivos de cuenta de cobro/remisión:</p>
+                  {fileUploadStatus.map((fileStatus, index) => {
+                    const FileIcon = getFileIcon(fileStatus.file);
+                    return (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <FileIcon className="w-5 h-5 text-gray-500" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{fileStatus.file.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {(fileStatus.file.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(fileStatus.status)}
+                          {getStatusBadge(fileStatus.status)}
+                          {fileStatus.status === 'pending' && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeFile(index)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {fileUploadStatus.some(f => f.status === 'error') && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-600 font-medium">
+                        Algunos archivos no se pudieron subir. Puedes intentar nuevamente o continuar sin ellos.
+                      </p>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -388,16 +513,22 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
                 </div>
               )}
 
-              {formData.files && formData.files.length > 0 && (
+              {fileUploadStatus.length > 0 && (
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium mb-2">Archivos adjuntos:</h4>
-                  <div className="space-y-1">
-                    {Array.from(formData.files).map((file, index) => (
-                      <div key={index} className="flex items-center text-sm text-gray-600">
-                        {file.type.startsWith('image/') ? <Image className="w-4 h-4 mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
-                        {file.name}
-                      </div>
-                    ))}
+                  <h4 className="font-medium mb-2">Cuenta de Cobro/Remisión:</h4>
+                  <div className="space-y-2">
+                    {fileUploadStatus.map((fileStatus, index) => {
+                      const FileIcon = getFileIcon(fileStatus.file);
+                      return (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileIcon className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600">{fileStatus.file.name}</span>
+                          </div>
+                          {getStatusBadge(fileStatus.status)}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -439,7 +570,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
           </div>
           <div className="flex justify-between mt-2 text-xs text-gray-600">
             <span>Seleccionar Orden</span>
-            <span>Cantidades</span>
+            <span>Cantidades y Documentos</span>
             <span>Confirmar</span>
           </div>
         </div>
@@ -469,10 +600,10 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!isStepValid(currentStep) || deliveryLoading}
+              disabled={!isStepValid(currentStep) || deliveryLoading || isUploadingFiles}
               className="bg-green-500 hover:bg-green-600 text-white"
             >
-              {deliveryLoading ? 'Registrando...' : 'Registrar Entrega'}
+              {deliveryLoading || isUploadingFiles ? 'Registrando...' : 'Registrar Entrega'}
             </Button>
           )}
         </div>
