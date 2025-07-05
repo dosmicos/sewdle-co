@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import { sortVariants } from '@/lib/variantSorting';
 import DeliveryEvidenceGallery from './DeliveryEvidenceGallery';
 import DeliveryReviewSummary from './DeliveryReviewSummary';
+import DeliveryInvoiceFiles from './DeliveryInvoiceFiles';
 
 interface DeliveryDetailsProps {
   delivery: any;
@@ -620,6 +621,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
           )}
         </CardContent>
       </Card>
+
+      {/* Archivos de Cuenta de Cobro/Remisión */}
+      <DeliveryInvoiceFiles deliveryId={delivery.id} />
 
       {/* Evidence Gallery - NOW SHOWN TO ALL USERS */}
       <DeliveryEvidenceGallery deliveryId={delivery.id} />
