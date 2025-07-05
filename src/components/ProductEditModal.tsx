@@ -50,6 +50,7 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
   });
 
   const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [originalVariants, setOriginalVariants] = useState<ProductVariant[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingVariants, setLoadingVariants] = useState(true);
   const { toast } = useToast();
@@ -73,7 +74,10 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         throw error;
       }
 
-      setVariants(data || []);
+      console.log('Fetched variants:', data);
+      const fetchedVariants = data || [];
+      setVariants(fetchedVariants);
+      setOriginalVariants(fetchedVariants);
     } catch (error: any) {
       console.error('Error loading variants:', error);
       toast({
@@ -123,7 +127,15 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
     setLoading(true);
 
     try {
-      // Update product
+      // Validar datos antes de enviar
+      const validVariants = variants.filter(variant => 
+        variant.sku_variant && variant.sku_variant.trim() !== ''
+      );
+
+      console.log('Original variants:', originalVariants);
+      console.log('Current variants:', validVariants);
+
+      // Actualizar información básica del producto
       const { error: productError } = await supabase
         .from('products')
         .update({
@@ -142,20 +154,39 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         throw new Error('Error al actualizar el producto');
       }
 
-      // Delete existing variants
-      const { error: deleteError } = await supabase
-        .from('product_variants')
-        .delete()
-        .eq('product_id', product.id);
+      console.log('Product updated successfully');
 
-      if (deleteError) {
-        console.error('Error deleting variants:', deleteError);
-        throw new Error('Error al actualizar las variantes');
+      // Lógica inteligente para variantes
+      const originalIds = new Set(originalVariants.map(v => v.id).filter(Boolean));
+      const currentIds = new Set(validVariants.map(v => v.id).filter(Boolean));
+
+      // 1. Actualizar variantes existentes
+      for (const variant of validVariants) {
+        if (variant.id && originalIds.has(variant.id)) {
+          console.log('Updating existing variant:', variant.id);
+          const { error: updateError } = await supabase
+            .from('product_variants')
+            .update({
+              size: variant.size,
+              color: variant.color,
+              sku_variant: variant.sku_variant,
+              additional_price: variant.additional_price,
+              stock_quantity: variant.stock_quantity
+            })
+            .eq('id', variant.id);
+
+          if (updateError) {
+            console.error('Error updating variant:', variant.id, updateError);
+            throw new Error(`Error al actualizar variante: ${updateError.message}`);
+          }
+        }
       }
 
-      // Insert updated variants
-      if (variants.length > 0) {
-        const variantsToInsert = variants.map(variant => ({
+      // 2. Insertar variantes nuevas
+      const newVariants = validVariants.filter(variant => !variant.id);
+      if (newVariants.length > 0) {
+        console.log('Inserting new variants:', newVariants);
+        const variantsToInsert = newVariants.map(variant => ({
           product_id: product.id,
           size: variant.size,
           color: variant.color,
@@ -164,13 +195,57 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
           stock_quantity: variant.stock_quantity
         }));
 
-        const { error: variantsError } = await supabase
+        const { error: insertError } = await supabase
           .from('product_variants')
           .insert(variantsToInsert);
 
-        if (variantsError) {
-          console.error('Error creating variants:', variantsError);
-          throw new Error('Error al crear las nuevas variantes');
+        if (insertError) {
+          console.error('Error inserting new variants:', insertError);
+          throw new Error(`Error al crear nuevas variantes: ${insertError.message}`);
+        }
+      }
+
+      // 3. Eliminar variantes que ya no están (solo si no están referenciadas)
+      const variantsToDelete = originalVariants.filter(
+        original => original.id && !currentIds.has(original.id)
+      );
+
+      for (const variantToDelete of variantsToDelete) {
+        console.log('Attempting to delete variant:', variantToDelete.id);
+        
+        // Verificar si la variante está siendo referenciada
+        const { data: orderItems, error: checkError } = await supabase
+          .from('order_items')
+          .select('id')
+          .eq('product_variant_id', variantToDelete.id)
+          .limit(1);
+
+        if (checkError) {
+          console.error('Error checking variant references:', checkError);
+          continue; // Continuar con la siguiente variante
+        }
+
+        if (orderItems && orderItems.length > 0) {
+          console.log('Variant is referenced in orders, skipping deletion:', variantToDelete.id);
+          toast({
+            title: "Advertencia",
+            description: `La variante "${variantToDelete.sku_variant}" no se puede eliminar porque está siendo utilizada en órdenes existentes.`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        // Si no está referenciada, proceder con la eliminación
+        const { error: deleteError } = await supabase
+          .from('product_variants')
+          .delete()
+          .eq('id', variantToDelete.id);
+
+        if (deleteError) {
+          console.error('Error deleting variant:', variantToDelete.id, deleteError);
+          // No lanzar error, solo registrar y continuar
+        } else {
+          console.log('Variant deleted successfully:', variantToDelete.id);
         }
       }
 
@@ -315,7 +390,9 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
                   <Card key={index} className="border border-gray-200">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-4">
-                        <Badge variant="outline">Variante {index + 1}</Badge>
+                        <Badge variant="outline">
+                          {variant.id ? `Variante ${index + 1} (ID: ${variant.id})` : `Nueva Variante ${index + 1}`}
+                        </Badge>
                         <Button
                           type="button"
                           onClick={() => removeVariant(index)}
@@ -347,12 +424,13 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
                           />
                         </div>
                         <div>
-                          <Label className="text-black font-medium">SKU Variante</Label>
+                          <Label className="text-black font-medium">SKU Variante <span className="text-red-500">*</span></Label>
                           <Input
                             value={variant.sku_variant}
                             onChange={(e) => updateVariant(index, 'sku_variant', e.target.value)}
                             placeholder="Ej: CAM-001-M-R"
                             className="mt-1"
+                            required
                           />
                         </div>
                       </div>
