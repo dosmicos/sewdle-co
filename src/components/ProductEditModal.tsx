@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,20 +121,130 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
     setVariants(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Nueva función para comparar variantes y detectar cambios reales
+  const compareVariants = (original: ProductVariant[], current: ProductVariant[]) => {
+    console.log('=== COMPARANDO VARIANTES ===');
+    console.log('Originales:', original);
+    console.log('Actuales:', current);
+
+    const operations = {
+      toUpdate: [] as ProductVariant[],
+      toInsert: [] as ProductVariant[],
+      toDelete: [] as ProductVariant[]
+    };
+
+    // Identificar variantes a actualizar
+    current.forEach(currentVariant => {
+      if (currentVariant.id) {
+        const originalVariant = original.find(orig => orig.id === currentVariant.id);
+        if (originalVariant) {
+          // Comparar campo por campo para detectar cambios reales
+          const hasChanges = 
+            originalVariant.size !== currentVariant.size ||
+            originalVariant.color !== currentVariant.color ||
+            originalVariant.sku_variant !== currentVariant.sku_variant ||
+            originalVariant.additional_price !== currentVariant.additional_price ||
+            originalVariant.stock_quantity !== currentVariant.stock_quantity;
+
+          if (hasChanges) {
+            console.log(`Cambios detectados en variante ${currentVariant.id}:`, {
+              original: originalVariant,
+              current: currentVariant
+            });
+            operations.toUpdate.push(currentVariant);
+          } else {
+            console.log(`Sin cambios en variante ${currentVariant.id}`);
+          }
+        }
+      } else {
+        // Nueva variante
+        if (currentVariant.sku_variant && currentVariant.sku_variant.trim() !== '') {
+          console.log('Nueva variante detectada:', currentVariant);
+          operations.toInsert.push(currentVariant);
+        }
+      }
+    });
+
+    // Identificar variantes a eliminar
+    original.forEach(originalVariant => {
+      if (originalVariant.id && !current.find(curr => curr.id === originalVariant.id)) {
+        console.log('Variante a eliminar:', originalVariant);
+        operations.toDelete.push(originalVariant);
+      }
+    });
+
+    console.log('Operaciones planeadas:', operations);
+    return operations;
+  };
+
+  // Función mejorada para validar variantes
+  const validateVariants = (variants: ProductVariant[]) => {
+    const errors: string[] = [];
+    const skus = new Set<string>();
+
+    variants.forEach((variant, index) => {
+      // Validar SKU requerido
+      if (!variant.sku_variant || variant.sku_variant.trim() === '') {
+        errors.push(`La variante ${index + 1} requiere un SKU`);
+      } else {
+        // Validar SKU único
+        if (skus.has(variant.sku_variant)) {
+          errors.push(`El SKU "${variant.sku_variant}" está duplicado`);
+        }
+        skus.add(variant.sku_variant);
+      }
+
+      // Validar valores numéricos
+      if (variant.additional_price < 0) {
+        errors.push(`El precio adicional de la variante ${index + 1} no puede ser negativo`);
+      }
+      if (variant.stock_quantity < 0) {
+        errors.push(`El stock de la variante ${index + 1} no puede ser negativo`);
+      }
+    });
+
+    return errors;
+  };
+
+  // Función mejorada para verificar referencias en orders
+  const checkVariantReferences = async (variantId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('product_variant_id', variantId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error verificando referencias:', error);
+        return false;
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error en checkVariantReferences:', error);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
+    console.log('=== INICIANDO GUARDADO DE PRODUCTO ===');
+    console.log('Producto ID:', product.id);
+
     try {
-      // Validar datos antes de enviar
-      const validVariants = variants.filter(variant => 
-        variant.sku_variant && variant.sku_variant.trim() !== ''
-      );
+      // 1. Validar variantes antes de proceder
+      const validationErrors = validateVariants(variants);
+      if (validationErrors.length > 0) {
+        throw new Error(`Errores de validación:\n${validationErrors.join('\n')}`);
+      }
 
-      console.log('Original variants:', originalVariants);
-      console.log('Current variants:', validVariants);
+      console.log('✓ Validación de variantes exitosa');
 
-      // Actualizar información básica del producto
+      // 2. Actualizar información básica del producto
+      console.log('Actualizando información básica del producto...');
       const { error: productError } = await supabase
         .from('products')
         .update({
@@ -150,43 +259,51 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         .eq('id', product.id);
 
       if (productError) {
-        console.error('Error updating product:', productError);
-        throw new Error('Error al actualizar el producto');
+        console.error('Error actualizando producto:', productError);
+        throw new Error(`Error al actualizar el producto: ${productError.message}`);
       }
 
-      console.log('Product updated successfully');
+      console.log('✓ Producto actualizado exitosamente');
 
-      // Lógica inteligente para variantes
-      const originalIds = new Set(originalVariants.map(v => v.id).filter(Boolean));
-      const currentIds = new Set(validVariants.map(v => v.id).filter(Boolean));
+      // 3. Procesar variantes con lógica inteligente
+      const operations = compareVariants(originalVariants, variants);
 
-      // 1. Actualizar variantes existentes
-      for (const variant of validVariants) {
-        if (variant.id && originalIds.has(variant.id)) {
-          console.log('Updating existing variant:', variant.id);
-          const { error: updateError } = await supabase
-            .from('product_variants')
-            .update({
-              size: variant.size,
-              color: variant.color,
-              sku_variant: variant.sku_variant,
-              additional_price: variant.additional_price,
-              stock_quantity: variant.stock_quantity
-            })
-            .eq('id', variant.id);
+      let operationsCount = 0;
+      let successCount = 0;
+      const operationResults: string[] = [];
 
-          if (updateError) {
-            console.error('Error updating variant:', variant.id, updateError);
-            throw new Error(`Error al actualizar variante: ${updateError.message}`);
-          }
+      // Procesar actualizaciones
+      for (const variant of operations.toUpdate) {
+        operationsCount++;
+        console.log(`Actualizando variante ${variant.id}...`);
+        
+        const { error } = await supabase
+          .from('product_variants')
+          .update({
+            size: variant.size,
+            color: variant.color,
+            sku_variant: variant.sku_variant,
+            additional_price: variant.additional_price,
+            stock_quantity: variant.stock_quantity
+          })
+          .eq('id', variant.id);
+
+        if (error) {
+          console.error(`Error actualizando variante ${variant.id}:`, error);
+          operationResults.push(`❌ Error actualizando "${variant.sku_variant}": ${error.message}`);
+        } else {
+          successCount++;
+          console.log(`✓ Variante ${variant.id} actualizada exitosamente`);
+          operationResults.push(`✓ Actualizada "${variant.sku_variant}"`);
         }
       }
 
-      // 2. Insertar variantes nuevas
-      const newVariants = validVariants.filter(variant => !variant.id);
-      if (newVariants.length > 0) {
-        console.log('Inserting new variants:', newVariants);
-        const variantsToInsert = newVariants.map(variant => ({
+      // Procesar inserciones
+      if (operations.toInsert.length > 0) {
+        operationsCount += operations.toInsert.length;
+        console.log(`Insertando ${operations.toInsert.length} nuevas variantes...`);
+
+        const variantsToInsert = operations.toInsert.map(variant => ({
           product_id: product.id,
           size: variant.size,
           color: variant.color,
@@ -195,73 +312,83 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
           stock_quantity: variant.stock_quantity
         }));
 
-        const { error: insertError } = await supabase
+        const { error } = await supabase
           .from('product_variants')
           .insert(variantsToInsert);
 
-        if (insertError) {
-          console.error('Error inserting new variants:', insertError);
-          throw new Error(`Error al crear nuevas variantes: ${insertError.message}`);
-        }
-      }
-
-      // 3. Eliminar variantes que ya no están (solo si no están referenciadas)
-      const variantsToDelete = originalVariants.filter(
-        original => original.id && !currentIds.has(original.id)
-      );
-
-      for (const variantToDelete of variantsToDelete) {
-        console.log('Attempting to delete variant:', variantToDelete.id);
-        
-        // Verificar si la variante está siendo referenciada
-        const { data: orderItems, error: checkError } = await supabase
-          .from('order_items')
-          .select('id')
-          .eq('product_variant_id', variantToDelete.id)
-          .limit(1);
-
-        if (checkError) {
-          console.error('Error checking variant references:', checkError);
-          continue; // Continuar con la siguiente variante
-        }
-
-        if (orderItems && orderItems.length > 0) {
-          console.log('Variant is referenced in orders, skipping deletion:', variantToDelete.id);
-          toast({
-            title: "Advertencia",
-            description: `La variante "${variantToDelete.sku_variant}" no se puede eliminar porque está siendo utilizada en órdenes existentes.`,
-            variant: "destructive",
-          });
-          continue;
-        }
-
-        // Si no está referenciada, proceder con la eliminación
-        const { error: deleteError } = await supabase
-          .from('product_variants')
-          .delete()
-          .eq('id', variantToDelete.id);
-
-        if (deleteError) {
-          console.error('Error deleting variant:', variantToDelete.id, deleteError);
-          // No lanzar error, solo registrar y continuar
+        if (error) {
+          console.error('Error insertando nuevas variantes:', error);
+          operationResults.push(`❌ Error creando variantes nuevas: ${error.message}`);
         } else {
-          console.log('Variant deleted successfully:', variantToDelete.id);
+          successCount += operations.toInsert.length;
+          console.log(`✓ ${operations.toInsert.length} variantes nuevas creadas exitosamente`);
+          operations.toInsert.forEach(variant => {
+            operationResults.push(`✓ Creada "${variant.sku_variant}"`);
+          });
         }
       }
 
-      toast({
-        title: "Producto actualizado",
-        description: `${formData.name} ha sido actualizado exitosamente.`,
-      });
+      // Procesar eliminaciones (con verificación de referencias)
+      for (const variant of operations.toDelete) {
+        operationsCount++;
+        console.log(`Verificando referencias para variante ${variant.id}...`);
+        
+        const hasReferences = await checkVariantReferences(variant.id!);
+        
+        if (hasReferences) {
+          console.log(`⚠️ Variante ${variant.id} tiene referencias, no se puede eliminar`);
+          operationResults.push(`⚠️ "${variant.sku_variant}" no se puede eliminar (en uso en órdenes)`);
+        } else {
+          console.log(`Eliminando variante ${variant.id}...`);
+          
+          const { error } = await supabase
+            .from('product_variants')
+            .delete()
+            .eq('id', variant.id);
 
-      onSuccess();
-      onClose();
+          if (error) {
+            console.error(`Error eliminando variante ${variant.id}:`, error);
+            operationResults.push(`❌ Error eliminando "${variant.sku_variant}": ${error.message}`);
+          } else {
+            successCount++;
+            console.log(`✓ Variante ${variant.id} eliminada exitosamente`);
+            operationResults.push(`✓ Eliminada "${variant.sku_variant}"`);
+          }
+        }
+      }
+
+      // 4. Mostrar resultados detallados
+      console.log('=== RESUMEN DE OPERACIONES ===');
+      console.log(`Total operaciones: ${operationsCount}`);
+      console.log(`Exitosas: ${successCount}`);
+      console.log(`Fallidas: ${operationsCount - successCount}`);
+      console.log('Detalles:', operationResults);
+
+      if (successCount === operationsCount) {
+        toast({
+          title: "✓ Producto actualizado completamente",
+          description: `${formData.name} y todas sus variantes han sido actualizadas exitosamente.`,
+        });
+        
+        onSuccess();
+        onClose();
+      } else if (successCount > 0) {
+        toast({
+          title: "⚠️ Producto actualizado parcialmente",
+          description: `Se completaron ${successCount} de ${operationsCount} operaciones. Revisa los detalles en la consola.`,
+          variant: "destructive",
+        });
+      } else {
+        throw new Error("No se pudieron completar las operaciones de variantes");
+      }
 
     } catch (error: any) {
-      console.error('Error updating product:', error);
+      console.error('=== ERROR EN GUARDADO ===');
+      console.error('Error completo:', error);
+      
       toast({
-        title: "Error al actualizar producto",
-        description: error.message || "Hubo un problema al actualizar el producto.",
+        title: "❌ Error al actualizar producto",
+        description: error.message || "Hubo un problema al actualizar el producto y sus variantes.",
         variant: "destructive",
       });
     } finally {
