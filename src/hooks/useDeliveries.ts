@@ -493,35 +493,17 @@ export const useDeliveries = () => {
           throw new Error(`ID de delivery_item inválido: ${deliveryItemId}`);
         }
 
-        // Manejar estados especiales
-        if (data.status === 'not_arrived') {
-          return {
-            id: deliveryItemId,
-            quantityApproved: 0,
-            quantityDefective: 0,
-            status: 'not_arrived',
-            notes: data.reason || 'Variante no recibida en esta entrega'
-          };
-        }
+        // Procesar todas las variantes normalmente
+        const approved = data.approved || 0;
+        const defective = data.defective || 0;
         
-        if (data.status === 'under_review') {
-          return {
-            id: deliveryItemId,
-            quantityApproved: 0,
-            quantityDefective: 0,
-            status: 'under_review',
-            notes: data.reason || 'Pendiente de revisión'
-          };
-        }
-
-        // Estado normal - determinar status basado en cantidades
         return {
           id: deliveryItemId,
-          quantityApproved: data.approved || 0,
-          quantityDefective: data.defective || 0,
-          status: data.approved > 0 && data.defective === 0 ? 'approved' : 
-                 data.defective > 0 && data.approved === 0 ? 'rejected' : 
-                 data.approved > 0 && data.defective > 0 ? 'partial_approved' :
+          quantityApproved: approved,
+          quantityDefective: defective,
+          status: approved > 0 && defective === 0 ? 'approved' : 
+                 defective > 0 && approved === 0 ? 'rejected' : 
+                 approved > 0 && defective > 0 ? 'partial_approved' :
                  'pending',
           notes: data.reason || qualityData.generalNotes || ''
         };
