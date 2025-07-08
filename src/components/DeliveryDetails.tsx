@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -137,7 +136,6 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
       }
     }));
   };
-
 
   const saveVariantQuality = async (itemId: string) => {
     const variantData = qualityData.variants[itemId];
@@ -588,10 +586,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                         )}
                       </TableCell>
 
-                       {(canProcessQuality || totals.approved > 0 || totals.defective > 0) && (
+                      {(canProcessQuality || totals.approved > 0 || totals.defective > 0) && (
                         <>
                           <TableCell className="text-center">
-                            {canProcessQuality ? (
+                            {canProcessQuality && !isEditing ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -601,12 +599,16 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                                 className="w-20 mx-auto text-center"
                               />
                             ) : (
-                              <span className="text-lg font-bold text-green-600">{item.quantity_approved}</span>
+                              <div className="flex flex-col items-center">
+                                {approved > 0 && (
+                                  <span className="text-lg font-bold text-green-600">{approved}</span>
+                                )}
+                              </div>
                             )}
                           </TableCell>
 
                           <TableCell className="text-center">
-                            {canProcessQuality ? (
+                            {canProcessQuality && !isEditing ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -616,7 +618,11 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                                 className="w-20 mx-auto text-center"
                               />
                             ) : (
-                              <span className="text-lg font-bold text-red-600">{item.quantity_defective}</span>
+                              <div className="flex flex-col items-center">
+                                {defective > 0 && (
+                                  <span className="text-lg font-bold text-red-600">{defective}</span>
+                                )}
+                              </div>
                             )}
                           </TableCell>
                         </>
@@ -624,19 +630,54 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
 
                       {canProcessQuality && !isEditing && (
                         <TableCell>
-                          <Textarea
-                            placeholder="Observaciones..."
-                            value={variantData.reason || ''}
-                            onChange={(e) => handleQualityChange(item.id, 'reason', e.target.value)}
-                            rows={2}
-                            className="text-sm resize-none"
-                          />
-                          
-                          {hasDiscrepancy && (
-                            <p className="text-orange-600 text-xs mt-1">
-                              ⚠️ Total revisadas: {reviewed} (entregadas: {delivered})
-                            </p>
-                          )}
+                          <div className="space-y-2">
+                            <Textarea
+                              placeholder="Observaciones..."
+                              value={variantData.reason || ''}
+                              onChange={(e) => handleQualityChange(item.id, 'reason', e.target.value)}
+                              rows={2}
+                              className="text-sm resize-none"
+                            />
+                            {hasDiscrepancy && (
+                              <p className="text-orange-600 text-xs">
+                                ⚠️ Total revisadas: {reviewed} (entregadas: {delivered})
+                              </p>
+                            )}
+                            
+                            {/* Botones de acciones por variante */}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {canSaveVariant && !item.synced_to_shopify && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => saveVariantQuality(item.id)}
+                                  className="text-xs"
+                                >
+                                  <Save className="w-3 h-3 mr-1" />
+                                  Guardar
+                                </Button>
+                              )}
+                              
+                              {canSyncVariant && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => syncVariantToShopify(item.id)}
+                                  disabled={syncingVariants.has(item.id)}
+                                  className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700"
+                                >
+                                  <RefreshCw className={`w-3 h-3 mr-1 ${syncingVariants.has(item.id) ? 'animate-spin' : ''}`} />
+                                  {syncingVariants.has(item.id) ? 'Sincronizando...' : 'Sincronizar'}
+                                </Button>
+                              )}
+                              
+                              {item.sync_attempt_count > 0 && !item.synced_to_shopify && (
+                                <div className="text-xs text-red-600">
+                                  {item.sync_attempt_count} intento(s) fallidos
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -761,26 +802,23 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
               )}
 
               {!isEditing && (
-                <div className="space-y-2">
-                  {hasDiscrepancies && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                      <p className="text-sm text-orange-800 text-center">
-                        <AlertTriangle className="w-4 h-4 inline mr-1" />
-                        Hay discrepancias en las cantidades. Las advertencias son informativas, puedes procesar el control de calidad.
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-end">
-                    <Button 
-                      onClick={handleQualitySubmit} 
-                      disabled={loading}
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Procesar Control de Calidad
-                    </Button>
-                  </div>
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={handleQualitySubmit} 
+                    disabled={loading || hasDiscrepancies}
+                    className={hasDiscrepancies ? 'opacity-50 cursor-not-allowed' : ''}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Procesar Control de Calidad
+                  </Button>
                 </div>
+              )}
+
+              {hasDiscrepancies && !isEditing && (
+                <p className="text-sm text-orange-600 text-center">
+                  <AlertTriangle className="w-4 h-4 inline mr-1" />
+                  Corrige las discrepancias antes de procesar el control de calidad
+                </p>
               )}
             </div>
           )}

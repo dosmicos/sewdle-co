@@ -493,18 +493,13 @@ export const useDeliveries = () => {
           throw new Error(`ID de delivery_item inválido: ${deliveryItemId}`);
         }
 
-        // Procesar todas las variantes normalmente
-        const approved = data.approved || 0;
-        const defective = data.defective || 0;
-        
         return {
           id: deliveryItemId,
-          quantityApproved: approved,
-          quantityDefective: defective,
-          status: approved > 0 && defective === 0 ? 'approved' : 
-                 defective > 0 && approved === 0 ? 'rejected' : 
-                 approved > 0 && defective > 0 ? 'partial_approved' :
-                 'pending',
+          quantityApproved: data.approved || 0,
+          quantityDefective: data.defective || 0,
+          status: data.approved > 0 && data.defective === 0 ? 'approved' : 
+                 data.defective > 0 && data.approved === 0 ? 'rejected' : 
+                 'partial_approved',
           notes: data.reason || qualityData.generalNotes || ''
         };
       });
