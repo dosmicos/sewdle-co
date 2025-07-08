@@ -33,6 +33,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
   const [generalNotes, setGeneralNotes] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
+  const [syncingVariants, setSyncingVariants] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { fetchDeliveryById, updateDeliveryQuantities, processQualityReview, loading } = useDeliveries();
@@ -224,6 +225,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
 
     if (!confirmSync) return;
 
+    // Agregar al set de variantes sincronizando
+    setSyncingVariants(prev => new Set(prev.add(itemId)));
+
     try {
       const syncData = {
         deliveryId: delivery.id,
@@ -270,6 +274,13 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         title: "Error de sincronización",
         description: "No se pudo sincronizar con Shopify",
         variant: "destructive",
+      });
+    } finally {
+      // Remover del set de variantes sincronizando
+      setSyncingVariants(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
       });
     }
   };
@@ -653,10 +664,11 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                                   size="sm"
                                   variant="outline"
                                   onClick={() => syncVariantToShopify(item.id)}
+                                  disabled={syncingVariants.has(item.id)}
                                   className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700"
                                 >
-                                  <RefreshCw className="w-3 h-3 mr-1" />
-                                  Sincronizar
+                                  <RefreshCw className={`w-3 h-3 mr-1 ${syncingVariants.has(item.id) ? 'animate-spin' : ''}`} />
+                                  {syncingVariants.has(item.id) ? 'Sincronizando...' : 'Sincronizar'}
                                 </Button>
                               )}
                               
