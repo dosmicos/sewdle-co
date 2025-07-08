@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -135,6 +136,42 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         }
       }
     }));
+  };
+
+  const handleVariantStatusChange = (itemId: string, status: 'delivered' | 'not_arrived' | 'under_review') => {
+    setQualityData(prev => {
+      const newVariants = { ...prev.variants };
+      
+      if (status === 'not_arrived') {
+        // Si no llegó, poner todo en 0 y marcar como tal
+        newVariants[itemId] = {
+          ...newVariants[itemId],
+          approved: 0,
+          defective: 0,
+          status: 'not_arrived',
+          reason: 'Variante no recibida en esta entrega'
+        };
+      } else if (status === 'under_review') {
+        // Si está en revisión, mantener valores actuales pero marcar como pendiente
+        newVariants[itemId] = {
+          ...newVariants[itemId],
+          status: 'under_review',
+          reason: newVariants[itemId]?.reason || 'Pendiente de revisión'
+        };
+      } else {
+        // Si fue entregada, permitir edición normal
+        newVariants[itemId] = {
+          ...newVariants[itemId],
+          status: 'delivered',
+          reason: newVariants[itemId]?.reason || ''
+        };
+      }
+      
+      return {
+        ...prev,
+        variants: newVariants
+      };
+    });
   };
 
   const saveVariantQuality = async (itemId: string) => {
@@ -397,18 +434,23 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
     delivery.delivery_items?.forEach((item: any) => {
       const delivered = item.quantity_delivered || 0;
       const variantData = qualityData.variants[item.id] || {};
-      const approved = variantData.approved || 0;
-      const defective = variantData.defective || 0;
-      const reviewed = approved + defective;
       
-      // Only consider discrepancy if user has entered values (approved > 0 OR defective > 0)
-      if ((approved > 0 || defective > 0) && delivered !== reviewed) {
-        discrepancies.push({
-          item,
-          delivered,
-          reviewed,
-          difference: delivered - reviewed
-        });
+      // Solo verificar discrepancias para variantes marcadas como "delivered" (estado normal)
+      // Las variantes "not_arrived" y "under_review" no deben generar discrepancias
+      if (variantData.status !== 'not_arrived' && variantData.status !== 'under_review') {
+        const approved = variantData.approved || 0;
+        const defective = variantData.defective || 0;
+        const reviewed = approved + defective;
+        
+        // Only consider discrepancy if user has entered values (approved > 0 OR defective > 0)
+        if ((approved > 0 || defective > 0) && delivered !== reviewed) {
+          discrepancies.push({
+            item,
+            delivered,
+            reviewed,
+            difference: delivered - reviewed
+          });
+        }
       }
     });
     
@@ -589,48 +631,84 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                       {(canProcessQuality || totals.approved > 0 || totals.defective > 0) && (
                         <>
                           <TableCell className="text-center">
-                            {canProcessQuality && !isEditing ? (
-                              <Input
-                                type="number"
-                                min="0"
-                                max={delivered}
-                                value={approved}
-                                onChange={(e) => handleQualityChange(item.id, 'approved', parseInt(e.target.value) || 0)}
-                                className="w-20 mx-auto text-center"
-                              />
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                {approved > 0 && (
-                                  <span className="text-lg font-bold text-green-600">{approved}</span>
-                                )}
-                              </div>
-                            )}
+                            <div className="flex flex-col items-center">
+                              {approved > 0 && (
+                                <span className="text-lg font-bold text-green-600">{approved}</span>
+                              )}
+                              {variantData.status === 'not_arrived' && (
+                                <span className="text-xs text-orange-600">No llegó</span>
+                              )}
+                              {variantData.status === 'under_review' && (
+                                <span className="text-xs text-blue-600">Pendiente</span>
+                              )}
+                            </div>
                           </TableCell>
 
                           <TableCell className="text-center">
-                            {canProcessQuality && !isEditing ? (
-                              <Input
-                                type="number"
-                                min="0"
-                                max={delivered}
-                                value={defective}
-                                onChange={(e) => handleQualityChange(item.id, 'defective', parseInt(e.target.value) || 0)}
-                                className="w-20 mx-auto text-center"
-                              />
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                {defective > 0 && (
-                                  <span className="text-lg font-bold text-red-600">{defective}</span>
-                                )}
-                              </div>
-                            )}
+                            <div className="flex flex-col items-center">
+                              {defective > 0 && (
+                                <span className="text-lg font-bold text-red-600">{defective}</span>
+                              )}
+                              {variantData.status === 'not_arrived' && (
+                                <span className="text-xs text-orange-600">-</span>
+                              )}
+                              {variantData.status === 'under_review' && (
+                                <span className="text-xs text-blue-600">-</span>
+                              )}
+                            </div>
                           </TableCell>
                         </>
                       )}
 
                       {canProcessQuality && !isEditing && (
                         <TableCell>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
+                            {/* Selector de estado de variante */}
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium text-muted-foreground">Estado de la variante</Label>
+                              <Select
+                                value={variantData.status || 'delivered'}
+                                onValueChange={(value) => handleVariantStatusChange(item.id, value as 'delivered' | 'not_arrived' | 'under_review')}
+                              >
+                                <SelectTrigger className="w-full h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="delivered">✅ Recibida y revisada</SelectItem>
+                                  <SelectItem value="not_arrived">❌ No llegó en esta entrega</SelectItem>
+                                  <SelectItem value="under_review">⏳ Pendiente de revisión</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Campos de cantidad - solo si el estado es "delivered" */}
+                            {variantData.status !== 'not_arrived' && variantData.status !== 'under_review' && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs font-medium text-muted-foreground">Aprobadas</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max={delivered}
+                                    value={approved}
+                                    onChange={(e) => handleQualityChange(item.id, 'approved', parseInt(e.target.value) || 0)}
+                                    className="h-8 text-center text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs font-medium text-muted-foreground">Defectuosas</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max={delivered}
+                                    value={defective}
+                                    onChange={(e) => handleQualityChange(item.id, 'defective', parseInt(e.target.value) || 0)}
+                                    className="h-8 text-center text-xs"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            
                             <Textarea
                               placeholder="Observaciones..."
                               value={variantData.reason || ''}
@@ -638,10 +716,24 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                               rows={2}
                               className="text-sm resize-none"
                             />
-                            {hasDiscrepancy && (
+                            
+                            {hasDiscrepancy && variantData.status !== 'not_arrived' && variantData.status !== 'under_review' && (
                               <p className="text-orange-600 text-xs">
                                 ⚠️ Total revisadas: {reviewed} (entregadas: {delivered})
                               </p>
+                            )}
+                            
+                            {/* Estado visual para variantes especiales */}
+                            {variantData.status === 'not_arrived' && (
+                              <div className="text-xs bg-orange-50 text-orange-700 p-2 rounded border">
+                                📦 Esta variante no fue recibida en esta entrega
+                              </div>
+                            )}
+                            
+                            {variantData.status === 'under_review' && (
+                              <div className="text-xs bg-blue-50 text-blue-700 p-2 rounded border">
+                                🔍 Esta variante está pendiente de revisión
+                              </div>
                             )}
                             
                             {/* Botones de acciones por variante */}
