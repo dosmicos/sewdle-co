@@ -7,9 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
+import { useInventorySync } from '@/hooks/useInventorySync';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { sortVariants } from '@/lib/variantSorting';
@@ -34,6 +37,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
   
   const { fetchDeliveryById, updateDeliveryQuantities, processQualityReview, loading } = useDeliveries();
   const { canEditDeliveries } = useUserContext();
+  const { syncApprovedItemsToShopify } = useInventorySync();
+  const { toast } = useToast();
 
   useEffect(() => {
     loadDelivery();
@@ -131,6 +136,144 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
     }));
   };
 
+  const saveVariantQuality = async (itemId: string) => {
+    const variantData = qualityData.variants[itemId];
+    if (!variantData || (variantData.approved === 0 && variantData.defective === 0)) {
+      toast({
+        title: "Error",
+        description: "Debe asignar al menos una unidad como aprobada o defectuosa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const deliveredItem = delivery.delivery_items?.find((item: any) => item.id === itemId);
+    if (!deliveredItem) return;
+
+    const totalReviewed = variantData.approved + variantData.defective;
+    if (totalReviewed !== deliveredItem.quantity_delivered) {
+      toast({
+        title: "Error", 
+        description: `Debe revisar todas las ${deliveredItem.quantity_delivered} unidades entregadas`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('delivery_items')
+        .update({
+          quantity_approved: variantData.approved,
+          quantity_defective: variantData.defective,
+          quality_notes: variantData.reason || null
+        })
+        .eq('id', itemId);
+
+      if (error) {
+        console.error('Error saving variant quality:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo guardar la revisión de calidad",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Guardado",
+        description: "Revisión de calidad guardada exitosamente",
+      });
+
+      // Recargar datos de la entrega
+      loadDelivery();
+    } catch (error) {
+      console.error('Error saving variant quality:', error);
+      toast({
+        title: "Error",
+        description: "Error al guardar la revisión de calidad",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const syncVariantToShopify = async (itemId: string) => {
+    const deliveredItem = delivery.delivery_items?.find((item: any) => item.id === itemId);
+    if (!deliveredItem || deliveredItem.quantity_approved === 0) {
+      toast({
+        title: "Error",
+        description: "No hay unidades aprobadas para sincronizar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (deliveredItem.synced_to_shopify) {
+      toast({
+        title: "Ya sincronizado",
+        description: "Esta variante ya ha sido sincronizada con Shopify",
+        variant: "default",
+      });
+      return;
+    }
+
+    // Confirmar sincronización
+    const confirmSync = window.confirm(
+      `¿Desea sincronizar ${deliveredItem.quantity_approved} unidades aprobadas de esta variante con Shopify?\n\nProducto: ${deliveredItem.order_items?.product_variants?.products?.name}\nVariante: ${deliveredItem.order_items?.product_variants?.size} - ${deliveredItem.order_items?.product_variants?.color}\nSKU: ${deliveredItem.order_items?.product_variants?.sku_variant}`
+    );
+
+    if (!confirmSync) return;
+
+    try {
+      const syncData = {
+        deliveryId: delivery.id,
+        approvedItems: [{
+          variantId: deliveredItem.order_items?.product_variants?.id,
+          skuVariant: deliveredItem.order_items?.product_variants?.sku_variant,
+          quantityApproved: deliveredItem.quantity_approved
+        }]
+      };
+
+      const result = await syncApprovedItemsToShopify(syncData);
+
+      if (result.success) {
+        // Marcar como sincronizado
+        await supabase
+          .from('delivery_items')
+          .update({
+            synced_to_shopify: true,
+            last_sync_attempt: new Date().toISOString()
+          })
+          .eq('id', itemId);
+
+        toast({
+          title: "Sincronizado",
+          description: "Variante sincronizada exitosamente con Shopify",
+        });
+
+        loadDelivery();
+      }
+    } catch (error) {
+      console.error('Error syncing variant:', error);
+      
+      // Actualizar contador de intentos fallidos
+      await supabase
+        .from('delivery_items')
+        .update({
+          sync_attempt_count: (deliveredItem.sync_attempt_count || 0) + 1,
+          last_sync_attempt: new Date().toISOString(),
+          sync_error_message: error instanceof Error ? error.message : 'Error desconocido'
+        })
+        .eq('id', itemId);
+
+      toast({
+        title: "Error de sincronización",
+        description: "No se pudo sincronizar con Shopify",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleEvidenceFilesSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     
@@ -175,7 +318,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
       const qualityDataWithEvidence = {
         ...qualityData,
         generalNotes,
-        evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined
+        evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined,
+        skipAlreadySynced: true // Nueva flag para evitar sincronizar items ya sincronizados
       };
 
       await processQualityReview(delivery.id, qualityDataWithEvidence);
@@ -379,14 +523,29 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                   const reviewed = approved + defective;
                   const hasUserInput = approved > 0 || defective > 0;
                   const hasDiscrepancy = hasUserInput && delivered !== reviewed;
+                  const isVariantReviewed = item.quantity_approved > 0 || item.quantity_defective > 0;
+                  const canSaveVariant = hasUserInput && !hasDiscrepancy;
+                  const canSyncVariant = item.quantity_approved > 0 && !item.synced_to_shopify;
                   
                   return (
                     <TableRow key={item.id} className="hover:bg-muted/25">
                       <TableCell>
                         <div className="space-y-1">
-                          <p className="font-medium text-sm">
-                            {item.order_items?.product_variants?.products?.name}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm">
+                              {item.order_items?.product_variants?.products?.name}
+                            </p>
+                            {item.synced_to_shopify && (
+                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                                ✓ Sincronizado
+                              </Badge>
+                            )}
+                            {isVariantReviewed && !item.synced_to_shopify && (
+                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                                Revisado
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                             <span className="bg-gray-100 px-2 py-1 rounded">
                               {item.order_items?.product_variants?.size}
@@ -474,6 +633,39 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                                 ⚠️ Total revisadas: {reviewed} (entregadas: {delivered})
                               </p>
                             )}
+                            
+                            {/* Botones de acciones por variante */}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {canSaveVariant && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => saveVariantQuality(item.id)}
+                                  className="text-xs"
+                                >
+                                  <Save className="w-3 h-3 mr-1" />
+                                  Guardar
+                                </Button>
+                              )}
+                              
+                              {canSyncVariant && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => syncVariantToShopify(item.id)}
+                                  className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700"
+                                >
+                                  <RefreshCw className="w-3 h-3 mr-1" />
+                                  Sincronizar
+                                </Button>
+                              )}
+                              
+                              {item.sync_attempt_count > 0 && !item.synced_to_shopify && (
+                                <div className="text-xs text-red-600">
+                                  {item.sync_attempt_count} intento(s) fallidos
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                       )}

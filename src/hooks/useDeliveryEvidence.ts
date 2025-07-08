@@ -151,14 +151,24 @@ export const useDeliveryEvidence = () => {
           file_size,
           created_at,
           notes,
-          uploaded_by,
-          profiles:uploaded_by (
-            id,
-            name
-          )
+          uploaded_by
         `)
         .eq('delivery_id', deliveryId)
         .order('created_at', { ascending: false });
+
+      // Obtener los perfiles por separado si hay archivos
+      let profilesData: any[] = [];
+      if (data && data.length > 0) {
+        const userIds = [...new Set(data.map(file => file.uploaded_by).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, name')
+            .in('id', userIds);
+          
+          profilesData = profiles || [];
+        }
+      }
 
       if (error) {
         console.error('Error fetching evidence files:', error);
@@ -166,13 +176,16 @@ export const useDeliveryEvidence = () => {
       }
 
       // Procesar los datos para manejar casos donde no hay perfil de usuario
-      const processedData = (data || []).map(file => ({
-        ...file,
-        profiles: file.profiles || { 
-          id: file.uploaded_by, 
-          name: 'Usuario eliminado' 
-        }
-      }));
+      const processedData = (data || []).map(file => {
+        const userProfile = profilesData.find(profile => profile.id === file.uploaded_by);
+        return {
+          ...file,
+          profiles: userProfile || { 
+            id: file.uploaded_by, 
+            name: 'Usuario eliminado' 
+          }
+        };
+      });
 
       console.log(`Found ${processedData.length} evidence files`);
       return processedData;

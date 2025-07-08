@@ -61,6 +61,10 @@ export const useDeliveries = () => {
             quality_status,
             quality_notes,
             notes,
+            synced_to_shopify,
+            sync_attempt_count,
+            last_sync_attempt,
+            sync_error_message,
             created_at,
             order_items (
               id,
@@ -565,9 +569,10 @@ export const useDeliveries = () => {
         throw deliveryError;
       }
 
-      if (!deliveryData.synced_to_shopify) {
+      // Solo sincronizar si no se especificó saltar ya sincronizados
+      if (!deliveryData.synced_to_shopify && !qualityData.skipAlreadySynced) {
         const approvedItems = deliveryData.delivery_items
-          ?.filter((item: any) => item.quantity_approved > 0)
+          ?.filter((item: any) => item.quantity_approved > 0 && !item.synced_to_shopify)
           .map((item: any) => ({
             variantId: item.order_items?.product_variant_id || '',
             skuVariant: item.order_items?.product_variants?.sku_variant || '',
@@ -581,6 +586,19 @@ export const useDeliveries = () => {
               deliveryId,
               approvedItems
             });
+            
+            // Marcar los items como sincronizados
+            for (const item of deliveryData.delivery_items) {
+              if (item.quantity_approved > 0 && !item.synced_to_shopify) {
+                await supabase
+                  .from('delivery_items')
+                  .update({
+                    synced_to_shopify: true,
+                    last_sync_attempt: new Date().toISOString()
+                  })
+                  .eq('id', item.id);
+              }
+            }
             
             toast({
               title: "Revisión completada",

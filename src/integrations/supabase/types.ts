@@ -138,6 +138,7 @@ export type Database = {
           created_at: string
           delivery_id: string
           id: string
+          last_sync_attempt: string | null
           notes: string | null
           order_item_id: string
           quality_notes: string | null
@@ -145,11 +146,15 @@ export type Database = {
           quantity_approved: number
           quantity_defective: number
           quantity_delivered: number
+          sync_attempt_count: number
+          sync_error_message: string | null
+          synced_to_shopify: boolean
         }
         Insert: {
           created_at?: string
           delivery_id: string
           id?: string
+          last_sync_attempt?: string | null
           notes?: string | null
           order_item_id: string
           quality_notes?: string | null
@@ -157,11 +162,15 @@ export type Database = {
           quantity_approved?: number
           quantity_defective?: number
           quantity_delivered: number
+          sync_attempt_count?: number
+          sync_error_message?: string | null
+          synced_to_shopify?: boolean
         }
         Update: {
           created_at?: string
           delivery_id?: string
           id?: string
+          last_sync_attempt?: string | null
           notes?: string | null
           order_item_id?: string
           quality_notes?: string | null
@@ -169,6 +178,9 @@ export type Database = {
           quantity_approved?: number
           quantity_defective?: number
           quantity_delivered?: number
+          sync_attempt_count?: number
+          sync_error_message?: string | null
+          synced_to_shopify?: boolean
         }
         Relationships: [
           {
