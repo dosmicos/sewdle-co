@@ -493,7 +493,28 @@ export const useDeliveries = () => {
           throw new Error(`ID de delivery_item inválido: ${deliveryItemId}`);
         }
 
-        // Simplificado - procesar todas las variantes sin estados especiales
+        // Manejar estados especiales
+        if (data.status === 'not_arrived') {
+          return {
+            id: deliveryItemId,
+            quantityApproved: 0,
+            quantityDefective: 0,
+            status: 'not_arrived',
+            notes: data.reason || 'Variante no recibida en esta entrega'
+          };
+        }
+        
+        if (data.status === 'under_review') {
+          return {
+            id: deliveryItemId,
+            quantityApproved: 0,
+            quantityDefective: 0,
+            status: 'under_review',
+            notes: data.reason || 'Pendiente de revisión'
+          };
+        }
+
+        // Estado normal - determinar status basado en cantidades
         return {
           id: deliveryItemId,
           quantityApproved: data.approved || 0,

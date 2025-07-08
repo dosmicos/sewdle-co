@@ -442,8 +442,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         const defective = variantData.defective || 0;
         const reviewed = approved + defective;
         
-        // Only consider discrepancy if user has entered values AND the sum exceeds delivered quantity
-        if ((approved > 0 || defective > 0) && reviewed > delivered) {
+        // Only consider discrepancy if user has entered values (approved > 0 OR defective > 0)
+        if ((approved > 0 || defective > 0) && delivered !== reviewed) {
           discrepancies.push({
             item,
             delivered,
@@ -897,7 +897,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                 <div className="flex justify-end">
                   <Button 
                     onClick={handleQualitySubmit} 
-                    disabled={loading}
+                    disabled={loading || hasDiscrepancies}
+                    className={hasDiscrepancies ? 'opacity-50 cursor-not-allowed' : ''}
                   >
                     <Save className="w-4 h-4 mr-2" />
                     Procesar Control de Calidad
@@ -909,13 +910,6 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                 <p className="text-sm text-orange-600 text-center">
                   <AlertTriangle className="w-4 h-4 inline mr-1" />
                   Corrige las discrepancias antes de procesar el control de calidad
-                </p>
-              )}
-              
-              {/* Informative message about processing with unreviewed variants */}
-              {!isEditing && !hasDiscrepancies && (
-                <p className="text-sm text-blue-600 text-center">
-                  Las advertencias son informativas. Puedes procesar el control de calidad aunque haya variantes sin revisar.
                 </p>
               )}
             </div>
