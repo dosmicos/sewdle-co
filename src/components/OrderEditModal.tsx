@@ -11,7 +11,9 @@ import { useOrderActions } from '@/hooks/useOrderActions';
 import { useUserContext } from '@/hooks/useUserContext';
 import OrderQuantityEditor from './OrderQuantityEditor';
 import ProductSelector from './ProductSelector';
-import { Settings, Package, AlertTriangle, Plus } from 'lucide-react';
+import { useMaterials } from '@/hooks/useMaterials';
+import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
+import { Settings, Package, AlertTriangle, Plus, Wrench } from 'lucide-react';
 
 interface OrderEditModalProps {
   order: any;
@@ -26,7 +28,10 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [status, setStatus] = useState('');
   const [activeTab, setActiveTab] = useState('details');
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [selectedMaterials, setSelectedMaterials] = useState<any[]>([]);
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
+  const { materials } = useMaterials();
+  const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
 
   const canEditQuantities = isAdmin || isDesigner;
@@ -38,6 +43,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
       setStatus(order.status || 'pending');
       setActiveTab('details'); // Reset to details tab when order changes
       setSelectedProducts([]); // Reset selected products
+      setSelectedMaterials([]); // Reset selected materials
     }
   }, [order]);
 
@@ -87,6 +93,32 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     return selectedProducts.reduce((total, product) => total + product.quantity, 0);
   };
 
+  const handleAddMaterials = async () => {
+    if (selectedMaterials.length === 0) {
+      return;
+    }
+
+    const consumptions = selectedMaterials.map(material => ({
+      material_id: material.id,
+      quantity: material.quantity
+    }));
+
+    const success = await consumeOrderMaterials(order.id, consumptions);
+    if (success) {
+      setSelectedMaterials([]);
+      onSuccess();
+      setActiveTab('details'); // Switch back to details tab
+    }
+  };
+
+  const handleMaterialsChange = (materials: any[]) => {
+    setSelectedMaterials(materials);
+  };
+
+  const getTotalMaterialsToAdd = () => {
+    return selectedMaterials.reduce((total, material) => total + material.quantity, 0);
+  };
+
   if (!order) return null;
 
   return (
@@ -99,7 +131,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
               <span>Información General</span>
@@ -111,6 +143,10 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
             <TabsTrigger value="add-products" className="flex items-center space-x-2">
               <Plus className="w-4 h-4" />
               <span>Agregar Productos</span>
+            </TabsTrigger>
+            <TabsTrigger value="add-materials" className="flex items-center space-x-2">
+              <Wrench className="w-4 h-4" />
+              <span>Agregar Materiales</span>
             </TabsTrigger>
           </TabsList>
 
@@ -240,6 +276,141 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                   className="bg-green-500 hover:bg-green-600 text-white"
                 >
                   {loading ? 'Agregando...' : `Agregar ${selectedProducts.length} Productos`}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="add-materials" className="space-y-6 mt-6">
+            <div className="space-y-4">
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <h4 className="font-medium text-orange-900 mb-2">Registrar consumo de materiales</h4>
+                <p className="text-sm text-orange-700">
+                  Selecciona los materiales que se consumieron durante la producción de esta orden.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-4">Materiales Consumidos</h4>
+                  
+                  {selectedMaterials.map((material, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                      <div className="space-y-2">
+                        <Label>Material</Label>
+                        <Select
+                          value={material.id || ''}
+                          onValueChange={(value) => {
+                            const selectedMat = materials.find(m => m.id === value);
+                            if (selectedMat) {
+                              const updatedMaterials = [...selectedMaterials];
+                              updatedMaterials[index] = {
+                                ...updatedMaterials[index],
+                                id: selectedMat.id,
+                                name: selectedMat.name,
+                                unit: selectedMat.unit
+                              };
+                              setSelectedMaterials(updatedMaterials);
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar material..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {materials.map((mat) => (
+                              <SelectItem key={mat.id} value={mat.id}>
+                                {mat.name} - {mat.sku}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Cantidad</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={material.quantity || ''}
+                          onChange={(e) => {
+                            const updatedMaterials = [...selectedMaterials];
+                            updatedMaterials[index] = {
+                              ...updatedMaterials[index],
+                              quantity: parseFloat(e.target.value) || 0
+                            };
+                            setSelectedMaterials(updatedMaterials);
+                          }}
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Unidad</Label>
+                        <Input
+                          value={material.unit || ''}
+                          readOnly
+                          className="bg-gray-100"
+                          placeholder="Selecciona un material"
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const updatedMaterials = selectedMaterials.filter((_, i) => i !== index);
+                            setSelectedMaterials(updatedMaterials);
+                          }}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedMaterials([...selectedMaterials, { id: '', name: '', quantity: 0, unit: '' }]);
+                    }}
+                    className="mt-2"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Agregar Material
+                  </Button>
+                </div>
+              </div>
+
+              {selectedMaterials.length > 0 && (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <h4 className="font-medium text-green-900 mb-2">Resumen de materiales a consumir</h4>
+                  <p className="text-sm text-green-700">
+                    Se consumirán {getTotalMaterialsToAdd()} unidades en total ({selectedMaterials.length} materiales diferentes)
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-4 pt-6 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveTab('details')}
+                  disabled={consumingMaterials}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleAddMaterials}
+                  disabled={consumingMaterials || selectedMaterials.length === 0}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  {consumingMaterials ? 'Registrando...' : `Registrar ${selectedMaterials.length} Materiales`}
                 </Button>
               </div>
             </div>
