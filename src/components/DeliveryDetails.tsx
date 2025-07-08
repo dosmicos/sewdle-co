@@ -329,8 +329,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
       const qualityDataWithEvidence = {
         ...qualityData,
         generalNotes,
-        evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined,
-        skipAlreadySynced: true // Nueva flag para evitar sincronizar items ya sincronizados
+        evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined
       };
 
       await processQualityReview(delivery.id, qualityDataWithEvidence);

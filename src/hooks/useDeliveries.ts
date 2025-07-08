@@ -569,60 +569,62 @@ export const useDeliveries = () => {
         throw deliveryError;
       }
 
-      // Solo sincronizar si no se especificó saltar ya sincronizados
-      if (!deliveryData.synced_to_shopify && !qualityData.skipAlreadySynced) {
-        const approvedItems = deliveryData.delivery_items
-          ?.filter((item: any) => item.quantity_approved > 0 && !item.synced_to_shopify)
-          .map((item: any) => ({
-            variantId: item.order_items?.product_variant_id || '',
-            skuVariant: item.order_items?.product_variants?.sku_variant || '',
-            quantityApproved: item.quantity_approved
-          }))
-          .filter((item: any) => item.skuVariant) || [];
+      // Filtrar solo items que tienen cantidad aprobada y no están sincronizados
+      const approvedItems = deliveryData.delivery_items
+        ?.filter((item: any) => item.quantity_approved > 0 && !item.synced_to_shopify)
+        .map((item: any) => ({
+          variantId: item.order_items?.product_variant_id || '',
+          skuVariant: item.order_items?.product_variants?.sku_variant || '',
+          quantityApproved: item.quantity_approved
+        }))
+        .filter((item: any) => item.skuVariant) || [];
 
-        if (approvedItems.length > 0) {
-          try {
-            await syncApprovedItemsToShopify({
-              deliveryId,
-              approvedItems
-            });
-            
-            // Marcar los items como sincronizados
-            for (const item of deliveryData.delivery_items) {
-              if (item.quantity_approved > 0 && !item.synced_to_shopify) {
-                await supabase
-                  .from('delivery_items')
-                  .update({
-                    synced_to_shopify: true,
-                    last_sync_attempt: new Date().toISOString()
-                  })
-                  .eq('id', item.id);
-              }
+      if (approvedItems.length > 0) {
+        try {
+          console.log('Sincronizando items aprobados:', approvedItems);
+          await syncApprovedItemsToShopify({
+            deliveryId,
+            approvedItems
+          });
+          
+          // Marcar los items como sincronizados
+          for (const item of deliveryData.delivery_items) {
+            if (item.quantity_approved > 0 && !item.synced_to_shopify) {
+              await supabase
+                .from('delivery_items')
+                .update({
+                  synced_to_shopify: true,
+                  last_sync_attempt: new Date().toISOString()
+                })
+                .eq('id', item.id);
             }
-            
-            toast({
-              title: "Revisión completada",
-              description: `Calidad procesada y inventario sincronizado con Shopify para ${approvedItems.length} items`,
-            });
-          } catch (syncError) {
-            console.error('Error in Shopify sync:', syncError);
-            toast({
-              title: "Revisión completada",
-              description: "Calidad procesada correctamente. Error en sincronización con Shopify, se puede reintentar manualmente.",
-              variant: "destructive",
-            });
           }
+          
+          toast({
+            title: "Revisión completada",
+            description: `Calidad procesada y inventario sincronizado con Shopify para ${approvedItems.length} items`,
+          });
+        } catch (syncError) {
+          console.error('Error in Shopify sync:', syncError);
+          toast({
+            title: "Revisión completada",
+            description: "Calidad procesada correctamente. Error en sincronización con Shopify, se puede reintentar manualmente.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        const alreadySyncedCount = deliveryData.delivery_items?.filter((item: any) => item.synced_to_shopify && item.quantity_approved > 0).length || 0;
+        if (alreadySyncedCount > 0) {
+          toast({
+            title: "Revisión completada",
+            description: `Los resultados de calidad han sido guardados. ${alreadySyncedCount} items ya estaban sincronizados.`,
+          });
         } else {
           toast({
             title: "Revisión completada",
             description: "Los resultados de calidad han sido guardados",
           });
         }
-      } else {
-        toast({
-          title: "Revisión completada",
-          description: "Los resultados de calidad han sido guardados. Esta entrega ya fue sincronizada con Shopify.",
-        });
       }
 
       return true;
