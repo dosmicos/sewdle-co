@@ -636,7 +636,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                             
                             {/* Botones de acciones por variante */}
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {canSaveVariant && (
+                              {canSaveVariant && !item.synced_to_shopify && (
                                 <Button
                                   size="sm"
                                   variant="outline"
