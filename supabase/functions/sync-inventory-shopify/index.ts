@@ -41,7 +41,8 @@ serve(async (req) => {
     console.log('Items a sincronizar:', approvedItems.length)
     console.log('Items:', JSON.stringify(approvedItems, null, 2))
 
-    // Verificar si ya está sincronizada
+    // Verificar si ya está sincronizada a nivel de delivery (para sincronización completa)
+    // Para sincronización por variante individual, verificamos cada item específico
     const { data: delivery, error: deliveryError } = await supabase
       .from('deliveries')
       .select('synced_to_shopify, sync_attempts')
@@ -52,16 +53,50 @@ serve(async (req) => {
       throw new Error(`Error verificando entrega: ${deliveryError.message}`)
     }
 
-    if (delivery.synced_to_shopify) {
+    // Verificar si estamos sincronizando variantes específicas que ya están sincronizadas
+    const { data: deliveryItems, error: itemsError } = await supabase
+      .from('delivery_items')
+      .select('id, synced_to_shopify, order_items(product_variants(sku_variant))')
+      .eq('delivery_id', deliveryId)
+
+    if (itemsError) {
+      throw new Error(`Error verificando items de entrega: ${itemsError.message}`)
+    }
+
+    // Filtrar items que ya están sincronizados
+    const alreadySyncedSkus = []
+    const itemsToSync = []
+
+    for (const approvedItem of approvedItems) {
+      const deliveryItem = deliveryItems.find(item => 
+        item.order_items?.product_variants?.sku_variant === approvedItem.skuVariant
+      )
+      
+      if (deliveryItem && deliveryItem.synced_to_shopify) {
+        alreadySyncedSkus.push(approvedItem.skuVariant)
+      } else {
+        itemsToSync.push(approvedItem)
+      }
+    }
+
+    if (alreadySyncedSkus.length > 0) {
+      console.log('Items ya sincronizados:', alreadySyncedSkus)
+    }
+
+    if (itemsToSync.length === 0) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Esta entrega ya fue sincronizada con Shopify',
+          error: 'Todos los items seleccionados ya fueron sincronizados con Shopify',
+          alreadySynced: alreadySyncedSkus,
           summary: { successful: 0, failed: 0 }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Actualizar approvedItems para solo incluir los que necesitan sincronización
+    const finalApprovedItems = itemsToSync
 
     // Incrementar contador de intentos
     await supabase
@@ -119,7 +154,7 @@ serve(async (req) => {
     console.log('✅ Location ID obtenido:', locationId, '- Nombre:', primaryLocation.name)
 
     console.log('=== PASO 3: VALIDACIÓN Y OBTENCIÓN DE DATOS DE PRODUCTOS ===')
-    const skusToValidate = approvedItems.map(item => item.skuVariant)
+    const skusToValidate = finalApprovedItems.map(item => item.skuVariant)
     const validationResults = []
 
     // Obtener TODOS los productos de Shopify con sus variantes
@@ -221,7 +256,7 @@ serve(async (req) => {
         sku: missing.sku,
         status: 'error',
         error: `SKU '${missing.sku}' no existe en Shopify`,
-        quantityAttempted: approvedItems.find(item => item.skuVariant === missing.sku)?.quantityApproved || 0
+        quantityAttempted: finalApprovedItems.find(item => item.skuVariant === missing.sku)?.quantityApproved || 0
       }))
 
       const logData = {
@@ -236,7 +271,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          summary: { successful: 0, failed: missingSkus.length, total: approvedItems.length },
+          summary: { successful: 0, failed: missingSkus.length, total: finalApprovedItems.length },
           details: syncResults,
           error: `${missingSkus.length} SKUs no encontrados en Shopify`
         }),
@@ -249,7 +284,7 @@ serve(async (req) => {
     let successCount = 0
     let errorCount = 0
 
-    for (const item of approvedItems) {
+    for (const item of finalApprovedItems) {
       try {
         console.log(`\n=== PROCESANDO ITEM: ${item.skuVariant} ===`)
         
@@ -409,6 +444,22 @@ serve(async (req) => {
 
         successCount++
 
+        // Marcar el delivery_item específico como sincronizado
+        const deliveryItem = deliveryItems.find(di => 
+          di.order_items?.product_variants?.sku_variant === item.skuVariant
+        )
+        
+        if (deliveryItem) {
+          await supabase
+            .from('delivery_items')
+            .update({
+              synced_to_shopify: true,
+              last_sync_attempt: new Date().toISOString(),
+              sync_error_message: null
+            })
+            .eq('id', deliveryItem.id)
+        }
+
       } catch (error) {
         console.error(`❌ Error sincronizando ${item.skuVariant}:`, error.message)
         
@@ -468,7 +519,7 @@ serve(async (req) => {
       summary: {
         successful: successCount,
         failed: errorCount,
-        total: approvedItems.length
+        total: finalApprovedItems.length
       },
       details: syncResults,
       error: errorCount > 0 ? `${errorCount} items fallaron en la sincronización` : null,
