@@ -444,24 +444,51 @@ serve(async (req) => {
 
         successCount++
 
-        // Marcar el delivery_item específico como sincronizado
+        // CRÍTICO: Solo marcar como sincronizado después de verificar que Shopify se actualizó correctamente
         const deliveryItem = deliveryItems.find(di => 
           di.order_items?.product_variants?.sku_variant === item.skuVariant
         )
         
         if (deliveryItem) {
-          await supabase
+          console.log(`✅ Marcando delivery_item ${deliveryItem.id} como sincronizado exitosamente`)
+          
+          const { error: updateError } = await supabase
             .from('delivery_items')
             .update({
               synced_to_shopify: true,
               last_sync_attempt: new Date().toISOString(),
+              sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1,
               sync_error_message: null
             })
             .eq('id', deliveryItem.id)
+          
+          if (updateError) {
+            console.error('Error actualizando delivery_item:', updateError)
+            throw new Error(`Error actualizando estado de sincronización: ${updateError.message}`)
+          }
         }
 
       } catch (error) {
         console.error(`❌ Error sincronizando ${item.skuVariant}:`, error.message)
+        
+        // Marcar el delivery_item específico como fallido
+        const deliveryItem = deliveryItems.find(di => 
+          di.order_items?.product_variants?.sku_variant === item.skuVariant
+        )
+        
+        if (deliveryItem) {
+          console.log(`❌ Marcando delivery_item ${deliveryItem.id} como fallido`)
+          
+          await supabase
+            .from('delivery_items')
+            .update({
+              synced_to_shopify: false,
+              last_sync_attempt: new Date().toISOString(),
+              sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1,
+              sync_error_message: error.message
+            })
+            .eq('id', deliveryItem.id)
+        }
         
         syncResults.push({
           sku: item.skuVariant,
