@@ -490,19 +490,13 @@ serve(async (req) => {
       console.error('Error guardando log:', logError)
     }
 
-    // Marcar entrega como sincronizada solo si TODO fue exitoso Y verificado
-    if (successCount > 0 && errorCount === 0) {
-      await supabase
-        .from('deliveries')
-        .update({ 
-          synced_to_shopify: true,
-          sync_error_message: null
-        })
-        .eq('id', deliveryId)
-      
-      console.log(`✅ Entrega ${deliveryId} marcada como sincronizada`)
-    } else if (errorCount > 0) {
-      // Registrar mensaje de error detallado
+    // Ya no actualizamos manualmente deliveries.synced_to_shopify
+    // El trigger automático se encarga de esto basado en el estado de TODOS los delivery_items
+    console.log('=== ESTADO DE SINCRONIZACIÓN ===')
+    console.log('El trigger automático actualizará el estado de la entrega basado en todos los items')
+    
+    if (errorCount > 0) {
+      // Solo registrar mensaje de error detallado si hay errores
       const errorMessage = syncResults
         .filter(r => r.status === 'error')
         .map(r => `${r.sku}: ${r.error}`)
@@ -512,6 +506,16 @@ serve(async (req) => {
         .from('deliveries')
         .update({ sync_error_message: errorMessage })
         .eq('id', deliveryId)
+        
+      console.log('❌ Errores registrados en la entrega')
+    } else {
+      // Limpiar mensaje de error si todo fue exitoso
+      await supabase
+        .from('deliveries')
+        .update({ sync_error_message: null })
+        .eq('id', deliveryId)
+        
+      console.log('✅ Errores limpiados de la entrega')
     }
 
     const response = {
