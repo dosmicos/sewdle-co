@@ -124,11 +124,14 @@ export const useUsers = () => {
   }) => {
     try {
       logger.info('Creating user', userData.email);
+      console.log('useUsers: Starting user creation with data:', userData);
 
       // Llamar a la Edge Function para crear el usuario
       const { data, error } = await supabase.functions.invoke('create-user', {
         body: userData
       });
+      
+      console.log('useUsers: Raw response from edge function:', { data, error });
 
       if (error) {
         logger.error('Error in Edge Function', error);
@@ -136,18 +139,25 @@ export const useUsers = () => {
       }
 
       if (!data.success) {
+        console.log('useUsers: Edge function returned error:', data.error);
         throw new Error(data.error || 'Error desconocido al crear usuario');
       }
 
+      console.log('useUsers: User created successfully, temp password:', data.tempPassword);
       await fetchUsers();
+      
+      const successResult = { success: true, tempPassword: data.tempPassword };
+      console.log('useUsers: Returning success result:', successResult);
+      
       
       toast({
         title: "Usuario creado exitosamente",
         description: `Usuario ${userData.email} creado. Contraseña temporal: ${data.tempPassword}`,
       });
 
-      return { success: true, tempPassword: data.tempPassword };
+      return successResult;
     } catch (err: any) {
+      console.log('useUsers: Error in createUser:', err);
       logger.error('Error creating user', err);
       toast({
         title: "Error al crear usuario",

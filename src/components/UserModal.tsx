@@ -99,9 +99,9 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
     setIsLoading(true);
 
     try {
+      console.log('UserModal: Calling onSave with data:', formData);
       const result = await onSave(formData);
-      
-      // Si es un nuevo usuario y se generó una contraseña temporal, mostrarla prominentemente
+      console.log('UserModal: Received result from onSave:', result);
       if (!user && result?.success && result?.tempPassword) {
         toast({
           title: "¡Usuario creado exitosamente!",

@@ -111,12 +111,16 @@ const UsersRolesPage = () => {
     setShowRoleModal(true);
   };
   const handleUserSave = async (userData: any) => {
+    console.log('UsersRolesPage: handleUserSave called with:', userData);
     let result;
     if (selectedUser) {
+      console.log('UsersRolesPage: Updating existing user');
       result = await updateUser(selectedUser.id, userData);
     } else {
+      console.log('UsersRolesPage: Creating new user');
       result = await createUser(userData);
     }
+    console.log('UsersRolesPage: Result from user operation:', result);
     
     // El modal se cierra desde UserModal para manejar mejor la UX
     // Solo limpiamos el estado si hay error de red o fallo completo
