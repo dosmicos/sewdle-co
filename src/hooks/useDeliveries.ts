@@ -548,6 +548,28 @@ export const useDeliveries = () => {
         }
       }
 
+      // Update delivery with general notes
+      if (qualityData.generalNotes && qualityData.generalNotes.trim()) {
+        console.log('Updating delivery with general notes:', qualityData.generalNotes);
+        const { error: notesError } = await supabase
+          .from('deliveries')
+          .update({
+            notes: qualityData.generalNotes.trim()
+          })
+          .eq('id', deliveryId);
+
+        if (notesError) {
+          console.error('Error updating delivery general notes:', notesError);
+          toast({
+            title: "Advertencia",
+            description: "La revisión fue procesada pero hubo un error al guardar las notas generales.",
+            variant: "default",
+          });
+        } else {
+          console.log('Successfully updated delivery general notes');
+        }
+      }
+
       const { data: deliveryData, error: deliveryError } = await supabase
         .from('deliveries')
         .select(`

@@ -67,6 +67,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         };
       });
       setQualityData(initialQualityData);
+      
+      // Initialize general notes from delivery data
+      setGeneralNotes(refreshedDelivery.notes || '');
     }
   };
 
