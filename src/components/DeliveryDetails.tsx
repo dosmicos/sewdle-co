@@ -200,10 +200,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         return;
       }
 
-      // Si es la última variante, guardar notas generales y evidencia
+      // Si es la última variante, ejecutar proceso secuencial
       if (isLastVariant) {
-        // Guardar notas generales si están presentes
-        if (generalNotes.trim()) {
+        console.log('🔄 Es la última variante - Iniciando proceso de finalización secuencial');
+        
+        try {
+          // PASO 1: Guardar notas generales de calidad
+          console.log('📝 Paso 1: Guardando notas generales');
+          if (generalNotes.trim()) {
           const { error: notesError } = await supabase
             .from('deliveries')
             .update({
@@ -357,6 +361,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
           toast({
             title: "Revisión finalizada",
             description: "Última variante guardada exitosamente",
+          });
+        }
+        } catch (error) {
+          console.error('❌ Error en proceso de finalización:', error);
+          toast({
+            title: "Error en finalización",
+            description: "Ocurrió un error durante el proceso de finalización. Por favor revise manualmente.",
+            variant: "destructive",
           });
         }
       } else {
