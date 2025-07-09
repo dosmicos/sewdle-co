@@ -93,6 +93,7 @@ export type Database = {
         Row: {
           created_at: string
           delivery_id: string
+          file_category: string | null
           file_name: string
           file_size: number | null
           file_type: string
@@ -104,6 +105,7 @@ export type Database = {
         Insert: {
           created_at?: string
           delivery_id: string
+          file_category?: string | null
           file_name: string
           file_size?: number | null
           file_type: string
@@ -115,6 +117,7 @@ export type Database = {
         Update: {
           created_at?: string
           delivery_id?: string
+          file_category?: string | null
           file_name?: string
           file_size?: number | null
           file_type?: string

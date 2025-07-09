@@ -29,8 +29,13 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
 
   const loadEvidence = async () => {
     try {
-      const evidence = await fetchEvidenceFiles(deliveryId);
-      setEvidenceFiles(evidence);
+      const allFiles = await fetchEvidenceFiles(deliveryId);
+      // Filtrar solo archivos de evidencia fotográfica
+      const evidenceFiles = allFiles.filter(file => 
+        file.file_category === 'evidence' || 
+        (!file.file_category && file.file_type.startsWith('image/'))
+      );
+      setEvidenceFiles(evidenceFiles);
     } catch (error) {
       console.error('Error loading evidence:', error);
     } finally {

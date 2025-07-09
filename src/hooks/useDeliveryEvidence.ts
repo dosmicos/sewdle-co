@@ -7,7 +7,7 @@ export const useDeliveryEvidence = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const uploadEvidenceFiles = async (deliveryId: string, files: File[], description?: string) => {
+  const uploadEvidenceFiles = async (deliveryId: string, files: File[], description?: string, fileCategory: 'evidence' | 'invoice' = 'evidence') => {
     if (!files || files.length === 0) {
       console.log('No files to upload');
       return;
@@ -71,7 +71,8 @@ export const useDeliveryEvidence = () => {
             file_type: file.type,
             file_size: file.size,
             uploaded_by: user.id,
-            notes: description || null
+            notes: description || null,
+            file_category: fileCategory
           };
 
           console.log('Inserting file record to database:', fileRecord);
@@ -149,6 +150,7 @@ export const useDeliveryEvidence = () => {
           file_url,
           file_type,
           file_size,
+          file_category,
           created_at,
           notes,
           uploaded_by

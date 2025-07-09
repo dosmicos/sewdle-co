@@ -378,7 +378,8 @@ export const useDeliveries = () => {
                 file_type: file.type,
                 file_size: file.size,
                 uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-                notes: 'Archivo de cuenta de cobro/remisión'
+                notes: 'Archivo de cuenta de cobro/remisión',
+                file_category: 'invoice'
               };
 
               console.log('💾 Saving file record to database:', fileRecord);

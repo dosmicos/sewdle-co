@@ -24,13 +24,10 @@ const DeliveryInvoiceFiles = ({ deliveryId }: DeliveryInvoiceFilesProps) => {
 
   const loadFiles = async () => {
     const allFiles = await fetchEvidenceFiles(deliveryId);
-    // Filtrar solo archivos PDF (cuenta de cobro/remisión)
+    // Filtrar solo archivos de cuenta de cobro/remisión
     const invoiceFiles = allFiles.filter(file => 
-      file.file_type === 'application/pdf' || 
-      file.file_name.toLowerCase().includes('remision') ||
-      file.file_name.toLowerCase().includes('cuenta') ||
-      file.file_name.toLowerCase().includes('cobro') ||
-      file.file_name.toLowerCase().includes('factura')
+      file.file_category === 'invoice' ||
+      (!file.file_category && file.file_type === 'application/pdf')
     );
     setFiles(invoiceFiles);
   };
