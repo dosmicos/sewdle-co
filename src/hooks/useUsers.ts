@@ -149,12 +149,7 @@ export const useUsers = () => {
       const successResult = { success: true, tempPassword: data.tempPassword };
       console.log('useUsers: Returning success result:', successResult);
       
-      
-      toast({
-        title: "Usuario creado exitosamente",
-        description: `Usuario ${userData.email} creado. Contraseña temporal: ${data.tempPassword}`,
-      });
-
+      // No mostrar toast aquí - se maneja en UserModal para mejor UX
       return successResult;
     } catch (err: any) {
       console.log('useUsers: Error in createUser:', err);
