@@ -13,7 +13,6 @@ import OrderDetailsModal from '@/components/OrderDetailsModal';
 import OrderCard from '@/components/OrderCard';
 import OrderFilters from '@/components/OrderFilters';
 import OrdersEmptyState from '@/components/OrdersEmptyState';
-import ManualSyncButton from '@/components/ManualSyncButton';
 
 const OrdersPage = () => {
   const { orders, loading, refetch } = useFilteredOrders();
@@ -191,11 +190,6 @@ const OrdersPage = () => {
         canCreateOrders={canCreateOrders}
         onCreateOrder={() => setShowCreateForm(true)}
       />
-
-      {/* Botón de sincronización manual temporal para DEL-0014 */}
-      <div className="flex justify-center mb-6">
-        <ManualSyncButton />
-      </div>
 
       {showCreateForm && canCreateOrders && (
         <OrderForm onClose={handleFormClose} />
