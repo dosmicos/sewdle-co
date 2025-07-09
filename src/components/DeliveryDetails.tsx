@@ -291,24 +291,40 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
           }
         }
 
-        // Sincronizar todas las variantes aprobadas pendientes
+        // Sincronizar todas las variantes aprobadas pendientes + la variante actual
         const pendingVariants = getPendingSyncVariants();
-        if (pendingVariants.length > 0) {
+        
+        // Incluir la variante que acabamos de guardar
+        const currentItem = delivery.delivery_items?.find((item: any) => item.id === itemId);
+        const allVariantsToSync = [...pendingVariants];
+        
+        if (currentItem && variantData.approved > 0) {
+          // Actualizar los datos de la variante actual con los valores recién guardados
+          const updatedCurrentItem = {
+            ...currentItem,
+            quantity_approved: variantData.approved,
+            quantity_defective: variantData.defective,
+            quality_notes: variantData.reason || null
+          };
+          allVariantsToSync.push(updatedCurrentItem);
+        }
+        
+        if (allVariantsToSync.length > 0) {
           try {
             const syncData = {
               deliveryId: delivery.id,
-              approvedItems: pendingVariants.map(item => ({
+              approvedItems: allVariantsToSync.map(item => ({
                 variantId: item.order_items?.product_variants?.id,
                 skuVariant: item.order_items?.product_variants?.sku_variant,
                 quantityApproved: item.quantity_approved
-              }))
+              })).filter(item => item.quantityApproved > 0) // Solo sincronizar las que tienen unidades aprobadas
             };
 
             const result = await syncApprovedItemsToShopify(syncData);
 
             if (result.success) {
-              // Marcar todas las variantes como sincronizadas
-              for (const item of pendingVariants) {
+              // Marcar todas las variantes como sincronizadas (incluyendo la actual)
+              for (const item of allVariantsToSync) {
                 await supabase
                   .from('delivery_items')
                   .update({
@@ -320,7 +336,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
 
               toast({
                 title: "Revisión finalizada",
-                description: `Última variante guardada y ${pendingVariants.length} variante(s) sincronizada(s) con Shopify`,
+                description: `Última variante guardada y ${allVariantsToSync.length} variante(s) sincronizada(s) con Shopify`,
               });
             } else {
               toast({
@@ -330,7 +346,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
               });
             }
           } catch (syncError) {
-            console.error('Error syncing pending variants:', syncError);
+            console.error('Error syncing all variants:', syncError);
             toast({
               title: "Guardado",
               description: "Última variante guardada. Error en sincronización con Shopify - puede reintentar manualmente",
