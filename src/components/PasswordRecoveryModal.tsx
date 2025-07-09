@@ -33,7 +33,9 @@ const PasswordRecoveryModal = ({ isOpen, onClose }: PasswordRecoveryModalProps) 
     setIsLoading(true);
     try {
       // Use the current origin to build the redirect URL
-      const redirectUrl = `${window.location.origin}/reset-password`;
+      // CORRECCIÓN: Usar la URL completa correcta para el entorno actual
+      const baseUrl = window.location.origin;
+      const redirectUrl = `${baseUrl}/reset-password`;
       
       console.log('Sending password reset email to:', email);
       console.log('Redirect URL:', redirectUrl);

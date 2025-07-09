@@ -111,13 +111,24 @@ const UsersRolesPage = () => {
     setShowRoleModal(true);
   };
   const handleUserSave = async (userData: any) => {
+    let result;
     if (selectedUser) {
-      await updateUser(selectedUser.id, userData);
+      result = await updateUser(selectedUser.id, userData);
     } else {
-      await createUser(userData);
+      result = await createUser(userData);
     }
-    setShowUserModal(false);
-    setSelectedUser(null);
+    
+    // El modal se cierra desde UserModal para manejar mejor la UX
+    // Solo limpiamos el estado si hay error de red o fallo completo
+    if (result && !result.success && !selectedUser) {
+      setShowUserModal(false);
+      setSelectedUser(null);
+    } else if (selectedUser && result && !result.success) {
+      setShowUserModal(false);
+      setSelectedUser(null);
+    }
+    
+    return result;
   };
   const handleRoleSave = async (roleData: any) => {
     if (selectedRole) {

@@ -22,7 +22,7 @@ interface UserFormData {
 interface UserModalProps {
   user: any | null;
   onClose: () => void;
-  onSave: (userData: UserFormData) => void;
+  onSave: (userData: UserFormData) => Promise<any>;
 }
 
 const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
@@ -99,7 +99,33 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
     setIsLoading(true);
 
     try {
-      await onSave(formData);
+      const result = await onSave(formData);
+      
+      // Si es un nuevo usuario y se generó una contraseña temporal, mostrarla prominentemente
+      if (!user && result?.success && result?.tempPassword) {
+        toast({
+          title: "¡Usuario creado exitosamente!",
+          description: (
+            <div className="space-y-2">
+              <p>Usuario {formData.email} creado correctamente.</p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
+                <p className="text-sm font-semibold text-yellow-800">Contraseña temporal:</p>
+                <p className="text-lg font-mono font-bold text-yellow-900 break-all">{result.tempPassword}</p>
+                <p className="text-xs text-yellow-700 mt-1">⚠️ Guarda esta contraseña, no se mostrará nuevamente</p>
+              </div>
+            </div>
+          ),
+          duration: 15000, // 15 segundos para que el usuario pueda copiar la contraseña
+        });
+        onClose(); // Cerrar el modal después de mostrar la contraseña
+        return;
+      }
+      
+      // Para edición exitosa, también cerrar el modal
+      if (user && result?.success) {
+        onClose();
+        return;
+      }
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       toast({
