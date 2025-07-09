@@ -272,53 +272,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         }
       }
 
-      // Si hay unidades aprobadas, intentar sincronizar automáticamente
-      if (variantData.approved > 0) {
-        try {
-          const syncData = {
-            deliveryId: delivery.id,
-            approvedItems: [{
-              variantId: deliveredItem.order_items?.product_variants?.id,
-              skuVariant: deliveredItem.order_items?.product_variants?.sku_variant,
-              quantityApproved: variantData.approved
-            }]
-          };
-
-          const result = await syncApprovedItemsToShopify(syncData);
-
-          if (result.success) {
-            // Marcar como sincronizado
-            await supabase
-              .from('delivery_items')
-              .update({
-                synced_to_shopify: true,
-                last_sync_attempt: new Date().toISOString()
-              })
-              .eq('id', itemId);
-
-            toast({
-              title: "Guardado y sincronizado",
-              description: "Revisión guardada y inventario sincronizado con Shopify exitosamente",
-            });
-          } else {
-            toast({
-              title: "Guardado",
-              description: "Revisión guardada. La sincronización con Shopify fallö y se puede reintentar manualmente.",
-            });
-          }
-        } catch (syncError) {
-          console.error('Error syncing variant after save:', syncError);
-          toast({
-            title: "Guardado",
-            description: "Revisión guardada exitosamente. La sincronización con Shopify se puede hacer manualmente.",
-          });
-        }
-      } else {
-        toast({
-          title: "Guardado",
-          description: "Revisión de calidad guardada exitosamente",
-        });
-      }
+      toast({
+        title: "Guardado",
+        description: "Revisión de calidad guardada exitosamente",
+      });
 
       // Recargar datos de la entrega
       loadDelivery();
