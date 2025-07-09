@@ -162,6 +162,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
     }
 
     try {
+      // Actualizar datos de calidad de la variante
       const { error } = await supabase
         .from('delivery_items')
         .update({
@@ -181,10 +182,143 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         return;
       }
 
-      toast({
-        title: "Guardado",
-        description: "Revisión de calidad guardada exitosamente",
-      });
+      // Guardar notas generales si están presentes
+      if (generalNotes.trim()) {
+        const { error: notesError } = await supabase
+          .from('deliveries')
+          .update({
+            notes: generalNotes.trim()
+          })
+          .eq('id', delivery.id);
+
+        if (notesError) {
+          console.error('Error saving general notes:', notesError);
+          // No fallar todo el proceso por esto, solo avisar
+          toast({
+            title: "Advertencia",
+            description: "La variante fue guardada pero hubo un error al guardar las notas generales",
+            variant: "default",
+          });
+        }
+      }
+
+      // Subir archivos de evidencia si están presentes
+      if (evidenceFiles.length > 0) {
+        try {
+          console.log('Uploading evidence files from variant save:', evidenceFiles.length);
+          
+          // Subir cada archivo
+          for (let i = 0; i < evidenceFiles.length; i++) {
+            const file = evidenceFiles[i];
+            
+            try {
+              // Upload to storage
+              const fileExt = file.name.split('.').pop();
+              const fileName = `${delivery.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+              
+              const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('delivery-evidence')
+                .upload(fileName, file);
+
+              if (uploadError) {
+                console.error(`Upload error for ${file.name}:`, uploadError);
+                continue;
+              }
+
+              // Get public URL
+              const { data: { publicUrl } } = supabase.storage
+                .from('delivery-evidence')
+                .getPublicUrl(fileName);
+
+              // Save file record to database
+              const fileRecord = {
+                delivery_id: delivery.id,
+                file_name: file.name,
+                file_url: publicUrl,
+                file_type: file.type,
+                file_size: file.size,
+                uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+                notes: `Evidencia guardada con variante ${deliveredItem.order_items?.product_variants?.sku_variant}`,
+                file_category: 'evidence'
+              };
+
+              const { error: dbError } = await supabase
+                .from('delivery_files')
+                .insert([fileRecord]);
+
+              if (dbError) {
+                console.error(`Database insert error for ${file.name}:`, dbError);
+              }
+            } catch (fileError) {
+              console.error(`Error processing file ${file.name}:`, fileError);
+            }
+          }
+
+          // Limpiar archivos después de subirlos exitosamente
+          setEvidenceFiles([]);
+          setEvidencePreviews([]);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+
+          console.log('Evidence files uploaded successfully from variant save');
+        } catch (evidenceError) {
+          console.error('Error uploading evidence files:', evidenceError);
+          toast({
+            title: "Advertencia",
+            description: "La variante fue guardada pero hubo un error al subir la evidencia fotográfica",
+            variant: "default",
+          });
+        }
+      }
+
+      // Si hay unidades aprobadas, intentar sincronizar automáticamente
+      if (variantData.approved > 0) {
+        try {
+          const syncData = {
+            deliveryId: delivery.id,
+            approvedItems: [{
+              variantId: deliveredItem.order_items?.product_variants?.id,
+              skuVariant: deliveredItem.order_items?.product_variants?.sku_variant,
+              quantityApproved: variantData.approved
+            }]
+          };
+
+          const result = await syncApprovedItemsToShopify(syncData);
+
+          if (result.success) {
+            // Marcar como sincronizado
+            await supabase
+              .from('delivery_items')
+              .update({
+                synced_to_shopify: true,
+                last_sync_attempt: new Date().toISOString()
+              })
+              .eq('id', itemId);
+
+            toast({
+              title: "Guardado y sincronizado",
+              description: "Revisión guardada y inventario sincronizado con Shopify exitosamente",
+            });
+          } else {
+            toast({
+              title: "Guardado",
+              description: "Revisión guardada. La sincronización con Shopify fallö y se puede reintentar manualmente.",
+            });
+          }
+        } catch (syncError) {
+          console.error('Error syncing variant after save:', syncError);
+          toast({
+            title: "Guardado",
+            description: "Revisión guardada exitosamente. La sincronización con Shopify se puede hacer manualmente.",
+          });
+        }
+      } else {
+        toast({
+          title: "Guardado",
+          description: "Revisión de calidad guardada exitosamente",
+        });
+      }
 
       // Recargar datos de la entrega
       loadDelivery();
