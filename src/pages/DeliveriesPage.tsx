@@ -29,6 +29,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ManualVariantSync } from '@/components/ManualVariantSync';
 
 const DeliveriesPage = () => {
   const { deliveries, loading, refetch } = useFilteredDeliveries();
@@ -281,6 +282,9 @@ const DeliveriesPage = () => {
           onDeliveryCreated={handleFormClose}
         />
       )}
+
+      {/* Manual Variant Sync - Temporary component for fixing 46312745304299 */}
+      <ManualVariantSync />
 
       {/* Statistics Cards - Mobile First Design */}
       <div className={`${isMobile ? 'space-y-2' : 'grid grid-cols-5 gap-4'}`}>
