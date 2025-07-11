@@ -8,6 +8,7 @@ import { RefreshCw, CheckCircle, AlertTriangle, Clock, Zap, Shield, X } from 'lu
 import { useInventorySync } from '@/hooks/useInventorySync';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useToast } from '@/hooks/use-toast';
+import { resyncDeliveryDEL0022 } from '@/utils/resyncDelivery';
 
 interface InventorySyncManagerProps {
   deliveryId?: string;
@@ -52,6 +53,24 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
           description: "Esta entrega ya fue sincronizada con Shopify",
           variant: "destructive",
         });
+        return;
+      }
+
+      // Caso especial para DEL-0022 que necesita resincronización con SKUs actualizados
+      if (delivery.tracking_number === 'DEL-0022') {
+        console.log('Resyncing DEL-0022 with updated SKUs...');
+        const result = await resyncDeliveryDEL0022();
+        
+        if (result.success) {
+          toast({
+            title: "DEL-0022 Resincronizada",
+            description: `${result.summary.successful} productos actualizados con SKUs corregidos`,
+          });
+        } else {
+          throw new Error(result.error || 'Error en resincronización de DEL-0022');
+        }
+        
+        await loadData();
         return;
       }
 
