@@ -202,6 +202,94 @@ export type Database = {
           },
         ]
       }
+      delivery_payments: {
+        Row: {
+          advance_deduction: number
+          billable_units: number
+          created_at: string
+          created_by: string | null
+          delivery_id: string
+          gross_amount: number
+          id: string
+          net_amount: number
+          notes: string | null
+          order_id: string
+          paid_by: string | null
+          payment_date: string | null
+          payment_method: string | null
+          payment_status: string
+          reference_number: string | null
+          total_units: number
+          unit_price: number
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          advance_deduction?: number
+          billable_units: number
+          created_at?: string
+          created_by?: string | null
+          delivery_id: string
+          gross_amount: number
+          id?: string
+          net_amount: number
+          notes?: string | null
+          order_id: string
+          paid_by?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          reference_number?: string | null
+          total_units: number
+          unit_price: number
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          advance_deduction?: number
+          billable_units?: number
+          created_at?: string
+          created_by?: string | null
+          delivery_id?: string
+          gross_amount?: number
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          order_id?: string
+          paid_by?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          reference_number?: string | null
+          total_units?: number
+          unit_price?: number
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_payments_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: true
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_payments_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_sync_logs: {
         Row: {
           created_at: string
@@ -349,6 +437,69 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      order_advances: {
+        Row: {
+          advance_date: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          notes: string | null
+          order_id: string
+          payment_method: string | null
+          receipt_url: string | null
+          reference_number: string | null
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          advance_date?: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          notes?: string | null
+          order_id: string
+          payment_method?: string | null
+          receipt_url?: string | null
+          reference_number?: string | null
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          advance_date?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          notes?: string | null
+          order_id?: string
+          payment_method?: string | null
+          receipt_url?: string | null
+          reference_number?: string | null
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_advances_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_advances_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_files: {
         Row: {
@@ -513,6 +664,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      payment_receipts: {
+        Row: {
+          delivery_payment_id: string
+          file_name: string
+          file_size: number | null
+          file_type: string
+          file_url: string
+          id: string
+          notes: string | null
+          receipt_type: string
+          upload_date: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          delivery_payment_id: string
+          file_name: string
+          file_size?: number | null
+          file_type: string
+          file_url: string
+          id?: string
+          notes?: string | null
+          receipt_type?: string
+          upload_date?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          delivery_payment_id?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          file_url?: string
+          id?: string
+          notes?: string | null
+          receipt_type?: string
+          upload_date?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_receipts_delivery_payment_id_fkey"
+            columns: ["delivery_payment_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_payments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_variants: {
         Row: {
@@ -822,6 +1020,63 @@ export type Database = {
           },
         ]
       }
+      workshop_pricing: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          effective_from: string
+          effective_until: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          unit_price: number
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          effective_from?: string
+          effective_until?: string | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          unit_price: number
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          effective_from?: string
+          effective_until?: string | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          unit_price?: number
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_pricing_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workshop_pricing_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workshops: {
         Row: {
           address: string | null
@@ -833,6 +1088,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          payment_method: string | null
           phone: string | null
           specialties: string[] | null
           status: string | null
@@ -850,6 +1106,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          payment_method?: string | null
           phone?: string | null
           specialties?: string[] | null
           status?: string | null
@@ -867,6 +1124,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          payment_method?: string | null
           phone?: string | null
           specialties?: string[] | null
           status?: string | null
