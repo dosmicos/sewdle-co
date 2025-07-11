@@ -1148,6 +1148,17 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_delivery_payment: {
+        Args: { delivery_id_param: string }
+        Returns: {
+          total_units: number
+          billable_units: number
+          gross_amount: number
+          advance_deduction: number
+          net_amount: number
+          workshop_payment_method: string
+        }[]
+      }
       cleanup_old_sku_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1272,6 +1283,28 @@ export type Database = {
           rejected_deliveries: number
         }[]
       }
+      get_financial_report: {
+        Args: {
+          workshop_id_param?: string
+          start_date?: string
+          end_date?: string
+        }
+        Returns: {
+          delivery_id: string
+          tracking_number: string
+          workshop_name: string
+          order_number: string
+          delivery_date: string
+          total_units: number
+          billable_units: number
+          gross_amount: number
+          advance_deduction: number
+          net_amount: number
+          payment_status: string
+          payment_date: string
+          payment_method: string
+        }[]
+      }
       get_material_deliveries_with_real_balance: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1386,6 +1419,31 @@ export type Database = {
           available_capacity: number
           completion_rate: number
         }[]
+      }
+      get_workshop_financial_summary: {
+        Args: {
+          workshop_id_param: string
+          start_date?: string
+          end_date?: string
+        }
+        Returns: {
+          total_deliveries: number
+          pending_payments: number
+          paid_deliveries: number
+          total_gross_amount: number
+          total_advances: number
+          total_net_amount: number
+          total_paid_amount: number
+          pending_amount: number
+        }[]
+      }
+      get_workshop_product_price: {
+        Args: {
+          workshop_id_param: string
+          product_id_param: string
+          calculation_date?: string
+        }
+        Returns: number
       }
       has_permission: {
         Args: { user_uuid: string; module_name: string; action_name: string }

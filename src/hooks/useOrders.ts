@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
@@ -29,6 +29,7 @@ interface CreateOrderData {
 }
 
 export const useOrders = () => {
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { consumeOrderMaterials } = useMaterialConsumption();
@@ -341,6 +342,7 @@ export const useOrders = () => {
         throw error;
       }
 
+      setOrders(data || []);
       return data;
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -349,13 +351,19 @@ export const useOrders = () => {
         description: "No se pudieron cargar las órdenes de producción.",
         variant: "destructive",
       });
+      setOrders([]);
       return [];
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
   return {
+    orders,
     createOrder,
     fetchOrders,
     loading
