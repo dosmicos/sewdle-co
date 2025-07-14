@@ -15,6 +15,7 @@ import SuppliesPage from "@/pages/SuppliesPage";
 import WorkshopsPage from "@/pages/WorkshopsPage";
 import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
+import FinancialPage from "@/pages/FinancialPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import NotFound from "@/pages/NotFound";
 
@@ -152,6 +153,12 @@ const AppContent = () => {
         <Route path="deliveries" element={
           <PermissionRoute module="deliveries" action="view">
             <DeliveriesPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="financial" element={
+          <PermissionRoute module="deliveries" action="view">
+            <FinancialPage />
           </PermissionRoute>
         } />
         
