@@ -77,8 +77,7 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
     const materialsToDeliver = missingMaterials || materialValidation?.insufficientMaterials || [];
     setPendingMissingMaterials(materialsToDeliver);
     
-    // Cerrar el formulario de orden y abrir el de entrega
-    setShowOrderForm(false);
+    // Solo abrir el modal de entrega sin cerrar el formulario principal
     setShowDeliveryForm(true);
   };
 
@@ -86,9 +85,6 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
     console.log('OrderForm: handleDeliveryCreated called');
     setShowDeliveryForm(false);
     setPendingMissingMaterials([]);
-    
-    // Reabrir el formulario de orden
-    setShowOrderForm(true);
     
     // Re-validar materiales después de crear entrega
     if (selectedWorkshop && supplies.length > 0) {
@@ -100,9 +96,6 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
     console.log('OrderForm: handleDeliveryFormClose called');
     setShowDeliveryForm(false);
     setPendingMissingMaterials([]);
-    
-    // Reabrir el formulario de orden
-    setShowOrderForm(true);
   };
 
   const handleOrderFormClose = () => {
