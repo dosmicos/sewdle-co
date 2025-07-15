@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Trash2, AlertTriangle, Package, Truck } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import WorkshopMaterialSingleSelector from '@/components/WorkshopMaterialSingleSelector';
 
 interface Supply {
   materialId: string;
@@ -218,33 +219,20 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                   <label className="block text-sm font-medium text-black mb-2">
                     Material *
                   </label>
-                  <Select
-                    value={supply.materialId}
-                    onValueChange={(value) => updateSupply(index, 'materialId', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar material..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {materials.map((material) => (
-                        <SelectItem key={material.id} value={material.id}>
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex flex-col">
-                              <span className="font-medium">{formatMaterialDisplayName(material)}</span>
-                              {material.color && (
-                                <span className="text-xs text-gray-500">Color: {material.color}</span>
-                              )}
-                            </div>
-                            {selectedWorkshop && (
-                              <Badge variant="outline" className="ml-2">
-                                {workshopStock[material.id] || 0} {material.unit}
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {selectedWorkshop ? (
+                    <WorkshopMaterialSingleSelector
+                      selectedMaterial={supply.materialId}
+                      onMaterialSelect={(value) => updateSupply(index, 'materialId', value)}
+                      workshopId={selectedWorkshop}
+                      placeholder="Seleccionar material..."
+                    />
+                  ) : (
+                    <Select disabled>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un taller primero..." />
+                      </SelectTrigger>
+                    </Select>
+                  )}
                 </div>
 
                 <div>
