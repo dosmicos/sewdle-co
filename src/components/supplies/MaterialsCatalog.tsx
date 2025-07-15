@@ -41,6 +41,7 @@ const MaterialsCatalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterSupplier, setFilterSupplier] = useState('all');
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -55,6 +56,12 @@ const MaterialsCatalog = () => {
   const categories = React.useMemo(() => {
     if (!materials || materials.length === 0) return [];
     return [...new Set(materials.map(m => m.category).filter(Boolean))];
+  }, [materials]);
+
+  // Obtener proveedores únicos para el filtro
+  const suppliers = React.useMemo(() => {
+    if (!materials || materials.length === 0) return [];
+    return [...new Set(materials.map(m => m.supplier).filter(Boolean))];
   }, [materials]);
 
   // Filtrar materiales
@@ -87,9 +94,14 @@ const MaterialsCatalog = () => {
         }
       }
 
+      // Filtro de proveedor
+      if (filterSupplier !== 'all' && material.supplier !== filterSupplier) {
+        return false;
+      }
+
       return true;
     });
-  }, [materials, searchQuery, filterCategory, filterStatus]);
+  }, [materials, searchQuery, filterCategory, filterStatus, filterSupplier]);
 
   const getStockStatus = (material: any) => {
     const currentStock = material.current_stock || 0;
@@ -195,6 +207,20 @@ const MaterialsCatalog = () => {
               <SelectItem value="good">Stock OK</SelectItem>
               <SelectItem value="warning">Stock Bajo</SelectItem>
               <SelectItem value="critical">Sin Stock</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filtrar por proveedor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los proveedores</SelectItem>
+              {suppliers.map((supplier) => (
+                <SelectItem key={supplier} value={supplier}>
+                  {supplier}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -353,6 +379,7 @@ const MaterialsCatalog = () => {
                 setSearchQuery('');
                 setFilterCategory('all');
                 setFilterStatus('all');
+                setFilterSupplier('all');
               }}
               variant="outline"
             >
