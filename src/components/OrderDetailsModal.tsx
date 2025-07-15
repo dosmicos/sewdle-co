@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle } from 'lucide-react';
+import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle, Zap } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import OrderDeliveryTracker from './OrderDeliveryTracker';
 import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
+import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 
 interface OrderDetailsModalProps {
   order: any;
@@ -21,6 +22,7 @@ interface OrderDetailsModalProps {
 
 const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDetailsModalProps) => {
   const { canEditOrders, canDeleteOrders } = useUserContext();
+  const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(order?.id);
   
   if (!order) return null;
 
@@ -295,6 +297,59 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                         </div>
                       ))}
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Consumos de Materiales */}
+              {materialConsumptions && materialConsumptions.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Zap className="w-5 h-5" />
+                      <span>Consumos de Materiales ({materialConsumptions.length})</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingConsumptions ? (
+                      <div className="text-center py-4 text-gray-500">
+                        Cargando consumos...
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {materialConsumptions.map((consumption: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-black">
+                                {consumption.materials?.name || 'Material'}
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                SKU: {consumption.materials?.sku} • Categoría: {consumption.materials?.category}
+                              </p>
+                              {consumption.materials?.color && (
+                                <p className="text-sm text-gray-600">
+                                  Color: {consumption.materials.color}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                Consumido el: {formatDateSafe(consumption.delivery_date)}
+                              </p>
+                              {consumption.notes && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  Notas: {consumption.notes}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-orange-600">
+                                -{consumption.quantity_consumed} {consumption.materials?.unit}
+                              </p>
+                              <p className="text-xs text-gray-500">Consumido</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
