@@ -1,1 +1,4 @@
 project_id = "ysdcsqsfnckeuafjyrbc"
+
+[functions.intelligent-replenishment]
+verify_jwt = false

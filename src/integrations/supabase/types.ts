@@ -825,6 +825,135 @@ export type Database = {
         }
         Relationships: []
       }
+      replenishment_config: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          lead_time_days: number
+          max_stock_level: number
+          min_stock_level: number
+          product_variant_id: string
+          safety_days: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          lead_time_days?: number
+          max_stock_level?: number
+          min_stock_level?: number
+          product_variant_id: string
+          safety_days?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          lead_time_days?: number
+          max_stock_level?: number
+          min_stock_level?: number
+          product_variant_id?: string
+          safety_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "replenishment_config_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "replenishment_config_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      replenishment_suggestions: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          calculation_date: string
+          created_at: string
+          current_stock: number
+          days_of_stock: number
+          executed_at: string | null
+          id: string
+          open_orders_quantity: number
+          product_variant_id: string
+          projected_demand: number
+          reason: string | null
+          sales_velocity: number
+          status: string
+          suggested_quantity: number
+          updated_at: string
+          urgency_level: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calculation_date?: string
+          created_at?: string
+          current_stock?: number
+          days_of_stock?: number
+          executed_at?: string | null
+          id?: string
+          open_orders_quantity?: number
+          product_variant_id: string
+          projected_demand?: number
+          reason?: string | null
+          sales_velocity?: number
+          status?: string
+          suggested_quantity: number
+          updated_at?: string
+          urgency_level?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calculation_date?: string
+          created_at?: string
+          current_stock?: number
+          days_of_stock?: number
+          executed_at?: string | null
+          id?: string
+          open_orders_quantity?: number
+          product_variant_id?: string
+          projected_demand?: number
+          reason?: string | null
+          sales_velocity?: number
+          status?: string
+          suggested_quantity?: number
+          updated_at?: string
+          urgency_level?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "replenishment_suggestions_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "replenishment_suggestions_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           created_at: string
@@ -854,6 +983,44 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sales_metrics: {
+        Row: {
+          avg_order_size: number
+          created_at: string
+          id: string
+          metric_date: string
+          orders_count: number
+          product_variant_id: string
+          sales_quantity: number
+        }
+        Insert: {
+          avg_order_size?: number
+          created_at?: string
+          id?: string
+          metric_date?: string
+          orders_count?: number
+          product_variant_id: string
+          sales_quantity?: number
+        }
+        Update: {
+          avg_order_size?: number
+          created_at?: string
+          id?: string
+          metric_date?: string
+          orders_count?: number
+          product_variant_id?: string
+          sales_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_metrics_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sku_assignment_logs: {
         Row: {
@@ -1159,6 +1326,24 @@ export type Database = {
           workshop_payment_method: string
         }[]
       }
+      calculate_replenishment_suggestions: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          variant_id: string
+          product_name: string
+          variant_size: string
+          variant_color: string
+          sku_variant: string
+          current_stock: number
+          sales_velocity: number
+          days_of_stock: number
+          open_orders: number
+          projected_demand: number
+          suggested_quantity: number
+          urgency_level: string
+          reason: string
+        }[]
+      }
       cleanup_old_sku_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1395,6 +1580,27 @@ export type Database = {
           total_approved: number
           total_pending: number
           completion_percentage: number
+        }[]
+      }
+      get_replenishment_suggestions_with_details: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          product_name: string
+          variant_size: string
+          variant_color: string
+          sku_variant: string
+          suggested_quantity: number
+          current_stock: number
+          sales_velocity: number
+          days_of_stock: number
+          open_orders_quantity: number
+          projected_demand: number
+          urgency_level: string
+          reason: string
+          status: string
+          calculation_date: string
+          created_at: string
         }[]
       }
       get_user_role: {
