@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,9 +12,9 @@ import { useOrderActions } from '@/hooks/useOrderActions';
 import { useUserContext } from '@/hooks/useUserContext';
 import OrderQuantityEditor from './OrderQuantityEditor';
 import ProductSelector from './ProductSelector';
-import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 import { Settings, Package, AlertTriangle, Plus, Wrench } from 'lucide-react';
+import WorkshopMaterialSelector from './WorkshopMaterialSelector';
 
 interface OrderEditModalProps {
   order: any;
@@ -29,8 +30,8 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [activeTab, setActiveTab] = useState('details');
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [selectedMaterials, setSelectedMaterials] = useState<any[]>([]);
+  const [orderWorkshopId, setOrderWorkshopId] = useState<string>('');
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
-  const { materials } = useMaterials();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
 
@@ -44,8 +45,35 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
       setActiveTab('details'); // Reset to details tab when order changes
       setSelectedProducts([]); // Reset selected products
       setSelectedMaterials([]); // Reset selected materials
+      
+      // Obtener el workshop_id de la orden
+      fetchOrderWorkshop();
     }
   }, [order]);
+
+  const fetchOrderWorkshop = async () => {
+    if (!order?.id) return;
+    
+    try {
+      // Buscar la asignación de taller para esta orden
+      const { data, error } = await supabase
+        .from('workshop_assignments')
+        .select('workshop_id')
+        .eq('order_id', order.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching workshop assignment:', error);
+        return;
+      }
+
+      if (data?.workshop_id) {
+        setOrderWorkshopId(data.workshop_id);
+      }
+    } catch (error) {
+      console.error('Error fetching order workshop:', error);
+    }
+  };
 
   const handleGeneralSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,102 +318,20 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="border rounded-lg p-4">
-                  <h4 className="font-medium mb-4">Materiales Consumidos</h4>
-                  
-                  {selectedMaterials.map((material, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="space-y-2">
-                        <Label>Material</Label>
-                        <Select
-                          value={material.id || ''}
-                          onValueChange={(value) => {
-                            const selectedMat = materials.find(m => m.id === value);
-                            if (selectedMat) {
-                              const updatedMaterials = [...selectedMaterials];
-                              updatedMaterials[index] = {
-                                ...updatedMaterials[index],
-                                id: selectedMat.id,
-                                name: selectedMat.name,
-                                unit: selectedMat.unit
-                              };
-                              setSelectedMaterials(updatedMaterials);
-                            }
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar material..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {materials.map((mat) => (
-                              <SelectItem key={mat.id} value={mat.id}>
-                                {mat.name} - {mat.sku}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Cantidad</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={material.quantity || ''}
-                          onChange={(e) => {
-                            const updatedMaterials = [...selectedMaterials];
-                            updatedMaterials[index] = {
-                              ...updatedMaterials[index],
-                              quantity: parseFloat(e.target.value) || 0
-                            };
-                            setSelectedMaterials(updatedMaterials);
-                          }}
-                          placeholder="0.00"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Unidad</Label>
-                        <Input
-                          value={material.unit || ''}
-                          readOnly
-                          className="bg-gray-100"
-                          placeholder="Selecciona un material"
-                        />
-                      </div>
-
-                      <div className="flex items-end">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const updatedMaterials = selectedMaterials.filter((_, i) => i !== index);
-                            setSelectedMaterials(updatedMaterials);
-                          }}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedMaterials([...selectedMaterials, { id: '', name: '', quantity: 0, unit: '' }]);
-                    }}
-                    className="mt-2"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar Material
-                  </Button>
+              {orderWorkshopId ? (
+                <WorkshopMaterialSelector
+                  workshopId={orderWorkshopId}
+                  selectedMaterials={selectedMaterials}
+                  onMaterialsChange={setSelectedMaterials}
+                />
+              ) : (
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <h4 className="font-medium text-yellow-900 mb-2">Orden sin taller asignado</h4>
+                  <p className="text-sm text-yellow-700">
+                    Esta orden no tiene un taller asignado. Para agregar materiales, primero debe asignarse a un taller.
+                  </p>
                 </div>
-              </div>
+              )}
 
               {selectedMaterials.length > 0 && (
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
