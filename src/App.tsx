@@ -16,6 +16,7 @@ import WorkshopsPage from "@/pages/WorkshopsPage";
 import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
+import ReplenishmentPage from "@/pages/ReplenishmentPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import NotFound from "@/pages/NotFound";
 
@@ -160,6 +161,12 @@ const AppContent = () => {
           <PermissionRoute module="deliveries" action="view">
             <FinancialPage />
           </PermissionRoute>
+        } />
+        
+        <Route path="replenishment" element={
+          <AdminRoute>
+            <ReplenishmentPage />
+          </AdminRoute>
         } />
         
         <Route path="users-roles" element={

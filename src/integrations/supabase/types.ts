@@ -1679,6 +1679,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      trigger_replenishment_calculation: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       user_has_workshop_permissions: {
         Args: Record<PropertyKey, never>
         Returns: boolean
