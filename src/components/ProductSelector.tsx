@@ -62,6 +62,52 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     }
   }, [internalProducts]);
 
+  // Restaurar estado interno desde productos externos al montar el componente
+  useEffect(() => {
+    if (selectedProducts.length > 0 && internalProducts.length === 0 && availableProducts.length > 0) {
+      restoreInternalFromExternal();
+    }
+  }, [selectedProducts, availableProducts]);
+
+  const restoreInternalFromExternal = () => {
+    const groupedProducts: { [productId: string]: any[] } = {};
+    
+    // Agrupar productos por productId
+    selectedProducts.forEach(product => {
+      if (!groupedProducts[product.productId]) {
+        groupedProducts[product.productId] = [];
+      }
+      groupedProducts[product.productId].push(product);
+    });
+
+    const restoredProducts = Object.keys(groupedProducts).map(productId => {
+      const productData = availableProducts.find(p => p.id === productId);
+      if (!productData) return null;
+
+      const variants: any = {};
+      productData.variants.forEach(variant => {
+        const existingVariant = groupedProducts[productId].find(p => p.variantId === variant.id);
+        variants[variant.id] = {
+          id: variant.id,
+          size: variant.size || '',
+          color: variant.color || '',
+          price: productData.base_price + (variant.additional_price || 0),
+          stock: variant.stock_quantity || 0,
+          quantity: existingVariant ? existingVariant.quantity : 0
+        };
+      });
+
+      return {
+        tempId: `restored_${productId}_${Date.now()}`,
+        productId: productId,
+        productName: productData.name,
+        variants: variants
+      };
+    }).filter(Boolean);
+
+    setInternalProducts(restoredProducts);
+  };
+
   const fetchProducts = async () => {
     try {
       setLoading(true);
