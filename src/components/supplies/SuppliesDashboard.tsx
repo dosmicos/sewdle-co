@@ -36,7 +36,17 @@ const SuppliesDashboard = () => {
   const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
 
   const { materials, loading: materialsLoading } = useMaterials();
-  const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
+  const { materialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
+
+  // DEBUG: Log deliveries data when it changes
+  React.useEffect(() => {
+    console.log('=== MATERIAL DELIVERIES UPDATED ===');
+    console.log('Material deliveries from hook:', {
+      count: materialDeliveries?.length || 0,
+      isArray: Array.isArray(materialDeliveries),
+      data: materialDeliveries
+    });
+  }, [materialDeliveries]);
 
   // Determinar si es usuario de taller
   const isWorkshopUser = !isAdmin && !isDesigner;
@@ -66,15 +76,9 @@ const SuppliesDashboard = () => {
         setLoading(true);
         setError(null);
 
-        // Timeout para evitar carga infinita
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout loading deliveries')), 30000);
-        });
-
-        const deliveriesPromise = fetchMaterialDeliveries();
-        
-        console.log('🔄 Fetching deliveries with timeout protection...');
-        const deliveries = await Promise.race([deliveriesPromise, timeoutPromise]) as any[];
+        // Use materialDeliveries directly from React Query hook instead of manual fetch
+        console.log('🔄 Using materialDeliveries from React Query hook...');
+        const deliveries = materialDeliveries;
         
         if (!isMountedRef.current || controller.signal.aborted) {
           console.log('⚠️  Component unmounted or aborted, stopping...');
@@ -208,7 +212,7 @@ const SuppliesDashboard = () => {
     return () => {
       controller.abort();
     };
-  }, [fetchMaterialDeliveries, isAdmin, isDesigner, isWorkshopUser]);
+  }, [materialDeliveries, isAdmin, isDesigner, isWorkshopUser]);
 
   // Calcular estadísticas de materiales de forma segura
   const materialStats = React.useMemo(() => {
@@ -332,11 +336,11 @@ const SuppliesDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-900">{deliveryStats.totalDeliveries}</div>
-            <p className="text-xs text-green-700">
+            <div className="text-xs text-green-700">
               <Badge variant="outline" className="text-green-700 border-green-300">
                 {deliveryStats.recentDeliveries} últimos 30 días
               </Badge>
-            </p>
+            </div>
           </CardContent>
         </Card>
 
