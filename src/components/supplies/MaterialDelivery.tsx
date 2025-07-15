@@ -57,6 +57,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
   const {
+    individualDeliveries,
     fetchIndividualMaterialDeliveries,
     deleteMaterialDelivery,
     loading
@@ -68,9 +69,15 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
     loadDeliveries();
   }, []);
 
+  // Sincronizar el estado local con los datos de React Query
+  useEffect(() => {
+    if (individualDeliveries) {
+      setDeliveries(individualDeliveries);
+    }
+  }, [individualDeliveries]);
+
   const loadDeliveries = async () => {
-    const data = await fetchIndividualMaterialDeliveries();
-    setDeliveries(data);
+    await fetchIndividualMaterialDeliveries();
   };
 
   const handleDeliveryCreated = () => {

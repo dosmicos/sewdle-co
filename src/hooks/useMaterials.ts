@@ -1,41 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Material, CreateMaterialData } from '@/types/materials';
 
 export const useMaterials = () => {
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const fetchMaterials = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .rpc('get_materials_with_stock_status');
+  const fetchMaterialsQuery = async () => {
+    const { data, error } = await supabase
+      .rpc('get_materials_with_stock_status');
 
-      if (error) {
-        console.error('Error fetching materials:', error);
-        throw error;
-      }
-
-      console.log('Fetched materials:', data);
-      setMaterials(data || []);
-    } catch (error) {
+    if (error) {
       console.error('Error fetching materials:', error);
-      toast({
-        title: "Error al cargar materiales",
-        description: "No se pudieron cargar los materiales.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+      throw error;
     }
+
+    console.log('Fetched materials:', data);
+    return data || [];
   };
 
-  const createMaterial = async (materialData: CreateMaterialData) => {
-    setLoading(true);
-    try {
+  const { data: materials = [], isLoading: loading, refetch: fetchMaterials } = useQuery({
+    queryKey: ['materials'],
+    queryFn: fetchMaterialsQuery,
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+
+  const createMaterialMutation = useMutation({
+    mutationFn: async (materialData: CreateMaterialData) => {
       console.log('Creating material with data:', materialData);
 
       // Generar SKU automáticamente
@@ -71,32 +63,30 @@ export const useMaterials = () => {
       }
 
       console.log('Created material:', material);
-
+      return material;
+    },
+    onSuccess: (material) => {
       toast({
         title: "¡Material creado exitosamente!",
         description: `El material ${material.name} (${material.sku}) ha sido creado.`,
       });
-
-      // Refrescar la lista
-      await fetchMaterials();
-
-      return material;
-    } catch (error) {
+      // Invalidar y refrescar la query de materiales
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+    },
+    onError: (error) => {
       console.error('Error creating material:', error);
       toast({
         title: "Error al crear material",
         description: "Hubo un problema al crear el material. Por favor intenta de nuevo.",
         variant: "destructive",
       });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
-  const updateMaterial = async (id: string, materialData: Partial<CreateMaterialData>) => {
-    setLoading(true);
-    try {
+  const createMaterial = createMaterialMutation.mutateAsync;
+
+  const updateMaterialMutation = useMutation({
+    mutationFn: async ({ id, materialData }: { id: string; materialData: Partial<CreateMaterialData> }) => {
       console.log('Updating material:', id, materialData);
 
       const { data: material, error } = await supabase
@@ -112,32 +102,32 @@ export const useMaterials = () => {
       }
 
       console.log('Updated material:', material);
-
+      return material;
+    },
+    onSuccess: (material) => {
       toast({
         title: "¡Material actualizado exitosamente!",
         description: `El material ${material.name} ha sido actualizado.`,
       });
-
-      // Refrescar la lista
-      await fetchMaterials();
-
-      return material;
-    } catch (error) {
+      // Invalidar y refrescar la query de materiales
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+    },
+    onError: (error) => {
       console.error('Error updating material:', error);
       toast({
         title: "Error al actualizar material",
         description: "Hubo un problema al actualizar el material. Por favor intenta de nuevo.",
         variant: "destructive",
       });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  const updateMaterial = async (id: string, materialData: Partial<CreateMaterialData>) => {
+    return updateMaterialMutation.mutateAsync({ id, materialData });
   };
 
-  const deleteMaterial = async (id: string) => {
-    setLoading(true);
-    try {
+  const deleteMaterialMutation = useMutation({
+    mutationFn: async (id: string) => {
       console.log('Deleting material:', id);
 
       const { error } = await supabase
@@ -149,30 +139,29 @@ export const useMaterials = () => {
         console.error('Error deleting material:', error);
         throw error;
       }
-
+    },
+    onSuccess: () => {
       toast({
         title: "¡Material eliminado exitosamente!",
         description: "El material ha sido eliminado del catálogo.",
       });
-
-      // Refrescar la lista
-      await fetchMaterials();
-    } catch (error) {
+      // Invalidar y refrescar la query de materiales
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+    },
+    onError: (error) => {
       console.error('Error deleting material:', error);
       toast({
         title: "Error al eliminar material",
         description: "Hubo un problema al eliminar el material. Por favor intenta de nuevo.",
         variant: "destructive",
       });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
-  const updateStock = async (id: string, newStock: number) => {
-    setLoading(true);
-    try {
+  const deleteMaterial = deleteMaterialMutation.mutateAsync;
+
+  const updateStockMutation = useMutation({
+    mutationFn: async ({ id, newStock }: { id: string; newStock: number }) => {
       console.log('Updating stock for material:', id, 'new stock:', newStock);
 
       const { data: material, error } = await supabase
@@ -188,36 +177,33 @@ export const useMaterials = () => {
       }
 
       console.log('Updated material stock:', material);
-
+      return material;
+    },
+    onSuccess: (material) => {
       toast({
         title: "¡Stock actualizado exitosamente!",
         description: `El stock de ${material.name} ha sido actualizado.`,
       });
-
-      // Refrescar la lista
-      await fetchMaterials();
-
-      return material;
-    } catch (error) {
+      // Invalidar y refrescar la query de materiales
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+    },
+    onError: (error) => {
       console.error('Error updating stock:', error);
       toast({
         title: "Error al actualizar stock",
         description: "Hubo un problema al actualizar el stock. Por favor intenta de nuevo.",
         variant: "destructive",
       });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+  });
 
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
+  const updateStock = async (id: string, newStock: number) => {
+    return updateStockMutation.mutateAsync({ id, newStock });
+  };
 
   return {
     materials,
-    loading,
+    loading: loading || createMaterialMutation.isPending || updateMaterialMutation.isPending || deleteMaterialMutation.isPending || updateStockMutation.isPending,
     fetchMaterials,
     createMaterial,
     updateMaterial,

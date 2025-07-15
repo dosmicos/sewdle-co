@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -67,6 +68,7 @@ export const useMaterialDeliveries = () => {
   const { toast } = useToast();
   const { workshopFilter, isAdmin, isDesigner } = useUserContext();
   const isMountedRef = useRef(true);
+  const queryClient = useQueryClient();
 
   // Cleanup ref cuando el componente se desmonte
   React.useEffect(() => {
@@ -81,9 +83,8 @@ export const useMaterialDeliveries = () => {
     }
   }, []);
 
-  const createMaterialDelivery = async (deliveryData: MaterialDeliveryData) => {
-    safeSetLoading(true);
-    try {
+  const createMaterialDeliveryMutation = useMutation({
+    mutationFn: async (deliveryData: MaterialDeliveryData) => {
       console.log('Creating material delivery with data:', deliveryData);
 
       // Enhanced authentication check
@@ -138,18 +139,22 @@ export const useMaterialDeliveries = () => {
       });
 
       const results = await Promise.all(deliveryPromises);
-
       console.log('All material deliveries created successfully:', results);
-
+      return results;
+    },
+    onSuccess: (results, deliveryData) => {
       if (isMountedRef.current) {
         toast({
           title: "¡Entrega registrada exitosamente!",
           description: `Se registraron ${deliveryData.materials.length} materiales entregados.`,
         });
       }
-
-      return results;
-    } catch (error: any) {
+      // Invalidar queries relacionadas
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['material-deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['individual-material-deliveries'] });
+    },
+    onError: (error: any) => {
       console.error('Error creating material delivery:', error);
       
       let errorMessage = "No se pudo registrar la entrega de materiales";
@@ -179,11 +184,10 @@ export const useMaterialDeliveries = () => {
           variant: "destructive",
         });
       }
-      throw error;
-    } finally {
-      safeSetLoading(false);
-    }
-  };
+    },
+  });
+
+  const createMaterialDelivery = createMaterialDeliveryMutation.mutateAsync;
 
   const deleteMaterialDelivery = async (deliveryId: string) => {
     safeSetLoading(true);
@@ -410,6 +414,13 @@ export const useMaterialDeliveries = () => {
     }
   }, [workshopFilter, isAdmin, isDesigner, toast, safeSetLoading]);
 
+  // Convert to React Query
+  const { data: individualDeliveries = [], isLoading: loadingIndividual, refetch: refetchIndividual } = useQuery({
+    queryKey: ['individual-material-deliveries', workshopFilter],
+    queryFn: fetchIndividualMaterialDeliveries,
+    staleTime: 1000 * 60 * 2, // 2 minutos
+  });
+
   const fetchMaterialDeliveries = useCallback(async (): Promise<MaterialDeliveryWithBalance[]> => {
     safeSetLoading(true);
     try {
@@ -517,11 +528,20 @@ export const useMaterialDeliveries = () => {
     }
   }, [workshopFilter, isAdmin, isDesigner, toast, safeSetLoading]);
 
+  // Convert to React Query
+  const { data: materialDeliveries = [], isLoading: loadingDeliveries, refetch: refetchDeliveries } = useQuery({
+    queryKey: ['material-deliveries', workshopFilter],
+    queryFn: fetchMaterialDeliveries,
+    staleTime: 1000 * 60 * 2, // 2 minutos
+  });
+
   return {
-    loading,
+    loading: loading || createMaterialDeliveryMutation.isPending || loadingIndividual || loadingDeliveries,
     createMaterialDelivery,
     deleteMaterialDelivery,
-    fetchMaterialDeliveries,
-    fetchIndividualMaterialDeliveries
+    fetchMaterialDeliveries: refetchDeliveries,
+    fetchIndividualMaterialDeliveries: refetchIndividual,
+    materialDeliveries,
+    individualDeliveries
   };
 };

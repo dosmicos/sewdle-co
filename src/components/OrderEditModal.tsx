@@ -41,7 +41,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
-  const { fetchMaterialDeliveries } = useMaterialDeliveries();
+  const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
   const { materials } = useMaterials();
 
   const canEditQuantities = isAdmin || isDesigner;
@@ -100,11 +100,11 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     if (!orderWorkshopId) return;
     
     try {
-      const deliveries = await fetchMaterialDeliveries();
+      await fetchMaterialDeliveries();
       const stock: Record<string, number> = {};
       
       // Calcular stock disponible por material en el taller seleccionado usando el nuevo campo real_balance
-      deliveries
+      materialDeliveries
         .filter(delivery => delivery.workshop_id === orderWorkshopId)
         .forEach(delivery => {
           const materialId = delivery.material_id;

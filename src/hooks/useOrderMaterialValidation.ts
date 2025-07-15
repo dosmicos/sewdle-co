@@ -17,7 +17,7 @@ interface ValidationResult {
 
 export const useOrderMaterialValidation = () => {
   const [loading, setLoading] = useState(false);
-  const { fetchMaterialDeliveries } = useMaterialDeliveries();
+  const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
 
   const validateMaterialsForWorkshop = async (
     workshopId: string,
@@ -28,10 +28,10 @@ export const useOrderMaterialValidation = () => {
       console.log('Validating materials for workshop:', workshopId, materials);
 
       // Obtener stock disponible en el taller usando el nuevo campo real_balance
-      const deliveries = await fetchMaterialDeliveries();
+      await fetchMaterialDeliveries();
       const workshopStock: Record<string, number> = {};
       
-      deliveries
+      materialDeliveries
         .filter(delivery => delivery.workshop_id === workshopId)
         .forEach(delivery => {
           const materialId = delivery.material_id;

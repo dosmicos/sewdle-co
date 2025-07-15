@@ -28,7 +28,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
   const [workshopStock, setWorkshopStock] = useState<Record<string, number>>({});
   const [missingMaterials, setMissingMaterials] = useState<Supply[]>([]);
   const { materials, loading: materialsLoading } = useMaterials();
-  const { fetchMaterialDeliveries } = useMaterialDeliveries();
+  const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
 
   useEffect(() => {
     if (selectedWorkshop) {
@@ -46,11 +46,11 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
     if (!selectedWorkshop) return;
     
     try {
-      const deliveries = await fetchMaterialDeliveries();
+      await fetchMaterialDeliveries();
       const stock: Record<string, number> = {};
       
       // Calcular stock disponible por material en el taller seleccionado usando el nuevo campo real_balance
-      deliveries
+      materialDeliveries
         .filter(delivery => delivery.workshop_id === selectedWorkshop)
         .forEach(delivery => {
           const materialId = delivery.material_id;

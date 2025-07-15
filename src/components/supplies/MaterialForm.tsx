@@ -11,9 +11,10 @@ import { Material } from '@/types/materials';
 interface MaterialFormProps {
   material?: Material;
   onClose: () => void;
+  onMaterialSaved?: () => void;
 }
 
-const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
+const MaterialForm = ({ material, onClose, onMaterialSaved }: MaterialFormProps) => {
   const { createMaterial, updateMaterial, loading } = useMaterials();
   const [formData, setFormData] = useState({
     name: material?.name || '',
@@ -107,6 +108,9 @@ const MaterialForm = ({ material, onClose }: MaterialFormProps) => {
         });
       }
       
+      if (onMaterialSaved) {
+        onMaterialSaved();
+      }
       onClose();
     } catch (error) {
       console.error('Error saving material:', error);

@@ -29,7 +29,7 @@ const MaterialConsumptionManager = () => {
   const [dataLoading, setDataLoading] = useState(true);
 
   const { workshops, loading: workshopsLoading } = useWorkshops();
-  const { fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
+  const { materialDeliveries, fetchMaterialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
 
   useEffect(() => {
     loadConsumptionHistory();
@@ -40,10 +40,10 @@ const MaterialConsumptionManager = () => {
       setDataLoading(true);
       console.log('=== LOADING CONSUMPTION HISTORY ===');
       
-      const deliveries = await fetchMaterialDeliveries();
-      console.log('Deliveries data received for consumption:', deliveries?.length || 0);
+      await fetchMaterialDeliveries();
+      console.log('Deliveries data received for consumption:', materialDeliveries?.length || 0);
       
-      if (!deliveries || !Array.isArray(deliveries)) {
+      if (!materialDeliveries || !Array.isArray(materialDeliveries)) {
         console.log('No deliveries data available');
         setConsumptionHistory([]);
         return;
@@ -52,7 +52,7 @@ const MaterialConsumptionManager = () => {
       // PROCESAMIENTO CORRECTO: Generar registros de consumo únicos por taller + material
       const consumptions: ConsumptionRecord[] = [];
       
-      deliveries.forEach(delivery => {
+      materialDeliveries.forEach(delivery => {
         const totalConsumed = Number(delivery.total_consumed) || 0;
         
         // Solo incluir si hay consumo registrado
