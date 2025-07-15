@@ -13,8 +13,12 @@ import { useUserContext } from '@/hooks/useUserContext';
 import OrderQuantityEditor from './OrderQuantityEditor';
 import ProductSelector from './ProductSelector';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
-import { Settings, Package, AlertTriangle, Plus, Wrench } from 'lucide-react';
+import { Settings, Package, AlertTriangle, Plus, Wrench, Truck } from 'lucide-react';
 import WorkshopMaterialSelector from './WorkshopMaterialSelector';
+import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import MaterialDeliveryForm from './supplies/MaterialDeliveryForm';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useMaterials } from '@/hooks/useMaterials';
 
 interface OrderEditModalProps {
   order: any;
@@ -31,9 +35,14 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [selectedMaterials, setSelectedMaterials] = useState<any[]>([]);
   const [orderWorkshopId, setOrderWorkshopId] = useState<string>('');
+  const [workshopStock, setWorkshopStock] = useState<Record<string, number>>({});
+  const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
+  const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
+  const { fetchMaterialDeliveries } = useMaterialDeliveries();
+  const { materials } = useMaterials();
 
   const canEditQuantities = isAdmin || isDesigner;
 
@@ -50,6 +59,18 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
       fetchOrderWorkshop();
     }
   }, [order]);
+
+  useEffect(() => {
+    if (orderWorkshopId) {
+      loadWorkshopStock();
+    }
+  }, [orderWorkshopId]);
+
+  useEffect(() => {
+    if (orderWorkshopId && selectedMaterials.length > 0) {
+      checkMaterialAvailability();
+    }
+  }, [selectedMaterials, workshopStock, orderWorkshopId]);
 
   const fetchOrderWorkshop = async () => {
     if (!order?.id) return;
@@ -73,6 +94,58 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     } catch (error) {
       console.error('Error fetching order workshop:', error);
     }
+  };
+
+  const loadWorkshopStock = async () => {
+    if (!orderWorkshopId) return;
+    
+    try {
+      const deliveries = await fetchMaterialDeliveries();
+      const stock: Record<string, number> = {};
+      
+      // Calcular stock disponible por material en el taller seleccionado usando el nuevo campo real_balance
+      deliveries
+        .filter(delivery => delivery.workshop_id === orderWorkshopId)
+        .forEach(delivery => {
+          const materialId = delivery.material_id;
+          const available = delivery.real_balance || 0;
+          stock[materialId] = (stock[materialId] || 0) + available;
+        });
+      
+      setWorkshopStock(stock);
+    } catch (error) {
+      console.error('Error loading workshop stock:', error);
+    }
+  };
+
+  const checkMaterialAvailability = () => {
+    const missing: any[] = [];
+    
+    selectedMaterials.forEach(material => {
+      const availableStock = workshopStock[material.id] || 0;
+      if (availableStock < material.quantity) {
+        missing.push({
+          ...material,
+          missingQuantity: material.quantity - availableStock
+        });
+      }
+    });
+    
+    setMissingMaterials(missing);
+  };
+
+  const handleCreateDeliveryForMissing = () => {
+    setShowDeliveryForm(true);
+  };
+
+  const handleDeliverySuccess = () => {
+    setShowDeliveryForm(false);
+    loadWorkshopStock(); // Recargar stock después de crear entrega
+  };
+
+  const formatMaterialDisplayName = (material: any) => {
+    const baseName = `${material.name} (${material.sku})`;
+    return material.color ? `${baseName} - ${material.color}` : baseName;
   };
 
   const handleGeneralSubmit = async (e: React.FormEvent) => {
@@ -318,6 +391,39 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                 </p>
               </div>
 
+              {/* Alertas de materiales faltantes */}
+              {orderWorkshopId && missingMaterials.length > 0 && (
+                <Alert className="border-yellow-200 bg-yellow-50">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <strong>Materiales insuficientes en el taller:</strong>
+                        <ul className="mt-1 text-sm">
+                          {missingMaterials.map((material, index) => {
+                            const mat = materials.find(m => m.id === material.id);
+                            return (
+                              <li key={index}>
+                                • {formatMaterialDisplayName(mat)}: faltan {material.missingQuantity} {mat?.unit}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleCreateDeliveryForMissing}
+                        size="sm"
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                      >
+                        <Truck className="w-4 h-4 mr-1" />
+                        Crear Entrega
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {orderWorkshopId ? (
                 <WorkshopMaterialSelector
                   workshopId={orderWorkshopId}
@@ -353,7 +459,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                 </Button>
                 <Button
                   onClick={handleAddMaterials}
-                  disabled={consumingMaterials || selectedMaterials.length === 0}
+                  disabled={consumingMaterials || selectedMaterials.length === 0 || missingMaterials.length > 0}
                   className="bg-orange-500 hover:bg-orange-600 text-white"
                 >
                   {consumingMaterials ? 'Registrando...' : `Registrar ${selectedMaterials.length} Materiales`}
@@ -363,6 +469,23 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
           </TabsContent>
         </Tabs>
       </DialogContent>
+      
+      {/* Modal para crear entrega de materiales */}
+      {showDeliveryForm && orderWorkshopId && (
+        <MaterialDeliveryForm
+          onClose={() => setShowDeliveryForm(false)}
+          onDeliveryCreated={handleDeliverySuccess}
+          prefilledData={{
+            workshopId: orderWorkshopId,
+            materials: missingMaterials.map(material => ({
+              materialId: material.id,
+              quantity: material.missingQuantity,
+              unit: materials.find(m => m.id === material.id)?.unit || '',
+              notes: `Entrega para orden ${order.order_number}`
+            }))
+          }}
+        />
+      )}
     </Dialog>
   );
 };
