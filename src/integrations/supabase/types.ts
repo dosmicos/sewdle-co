@@ -1697,6 +1697,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      sync_shopify_inventory: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       trigger_replenishment_calculation: {
         Args: Record<PropertyKey, never>
         Returns: Json

@@ -22,6 +22,7 @@ interface ShopifyProduct {
   variants: Array<{
     id: number;
     sku: string;
+    inventory_item_id: number;
   }>;
 }
 
@@ -150,6 +151,69 @@ Deno.serve(async (req) => {
       }
 
       console.log(`✅ Insertadas ${salesMetrics.length} métricas de ventas`);
+      
+      // Sincronizar stock actual desde Shopify
+      console.log('🔄 Sincronizando stock actual desde Shopify...');
+      
+      // Obtener información de productos y variantes de Shopify
+      const productsUrl = `https://${shopifyDomain}/admin/api/2024-07/products.json?limit=250&fields=id,variants`;
+      
+      const productsResponse = await fetch(productsUrl, {
+        headers: {
+          'X-Shopify-Access-Token': shopifyToken,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (productsResponse.ok) {
+        const productsData = await productsResponse.json();
+        const products: ShopifyProduct[] = productsData.products || [];
+        
+        // Actualizar stock de variantes locales con datos de Shopify
+        for (const product of products) {
+          for (const variant of product.variants) {
+            if (!variant.sku) continue;
+            
+            const localVariantId = skuToVariantMap.get(variant.sku);
+            if (!localVariantId) continue;
+            
+            // Obtener nivel de inventario específico de la variante
+            const inventoryUrl = `https://${shopifyDomain}/admin/api/2024-07/inventory_levels.json?inventory_item_ids=${variant.inventory_item_id}`;
+            
+            try {
+              const inventoryResponse = await fetch(inventoryUrl, {
+                headers: {
+                  'X-Shopify-Access-Token': shopifyToken,
+                  'Content-Type': 'application/json',
+                },
+              });
+              
+              if (inventoryResponse.ok) {
+                const inventoryData = await inventoryResponse.json();
+                const inventoryLevels = inventoryData.inventory_levels || [];
+                
+                // Sumar stock de todas las ubicaciones
+                const totalStock = inventoryLevels.reduce((sum: number, level: any) => 
+                  sum + (level.available || 0), 0);
+                
+                // Actualizar stock en la base de datos local
+                await supabase
+                  .from('product_variants')
+                  .update({ stock_quantity: totalStock })
+                  .eq('id', localVariantId);
+                  
+                console.log(`📦 Stock actualizado para SKU ${variant.sku}: ${totalStock}`);
+              }
+            } catch (error) {
+              console.error(`⚠️ Error obteniendo inventario para SKU ${variant.sku}:`, error);
+            }
+          }
+        }
+        
+        console.log('✅ Sincronización de stock completada');
+      } else {
+        console.log('⚠️ No se pudo obtener información de productos para sincronizar stock');
+      }
     }
 
     // Generar estadísticas del proceso
