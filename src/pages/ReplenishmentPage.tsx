@@ -148,6 +148,7 @@ export default function ReplenishmentPage() {
     suggestions,
     loading,
     calculating,
+    syncShopifySales,
     calculateSuggestions,
     triggerReplenishmentFunction,
     updateSuggestionStatus,
@@ -192,6 +193,14 @@ export default function ReplenishmentPage() {
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
+          </Button>
+          <Button 
+            variant="secondary"
+            onClick={syncShopifySales}
+            disabled={calculating}
+          >
+            <TrendingUp className={`w-4 h-4 mr-2 ${calculating ? 'animate-spin' : ''}`} />
+            Sincronizar Shopify
           </Button>
           <Button 
             variant="secondary"

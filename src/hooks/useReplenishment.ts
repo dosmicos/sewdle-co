@@ -89,6 +89,45 @@ export const useReplenishment = () => {
     }
   };
 
+  const syncShopifySales = async () => {
+    try {
+      setCalculating(true);
+      
+      toast({
+        title: "Iniciando sincronización",
+        description: "Sincronizando ventas de Shopify...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('sync-shopify-sales');
+      
+      if (error) {
+        console.error('Error syncing Shopify sales:', error);
+        toast({
+          title: "Error",
+          description: "Error al sincronizar ventas de Shopify",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Shopify sales synced successfully:', data);
+      toast({
+        title: "Sincronización completada",
+        description: `Ventas de Shopify sincronizadas: ${data.summary?.total_sales_quantity || 0} unidades`,
+      });
+      
+    } catch (error) {
+      console.error('Error syncing Shopify sales:', error);
+      toast({
+        title: "Error",
+        description: "Error al sincronizar ventas de Shopify",
+        variant: "destructive",
+      });
+    } finally {
+      setCalculating(false);
+    }
+  };
+
   const calculateSuggestions = async () => {
     try {
       setCalculating(true);
@@ -264,6 +303,7 @@ export const useReplenishment = () => {
     calculating,
     fetchSuggestions,
     fetchConfigs,
+    syncShopifySales,
     calculateSuggestions,
     triggerReplenishmentFunction,
     updateSuggestionStatus,
