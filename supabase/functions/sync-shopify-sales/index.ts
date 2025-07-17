@@ -22,7 +22,7 @@ interface ShopifyProduct {
   variants: Array<{
     id: number;
     sku: string;
-    inventory_item_id: number;
+    inventory_quantity: number;
   }>;
 }
 
@@ -114,15 +114,14 @@ Deno.serve(async (req) => {
             metric_date: orderDate,
             sales_quantity: 0,
             orders_count: 0,
-            total_order_value: 0
+            avg_order_size: 0
           });
         }
 
         const salesData = salesByVariantAndDate.get(key);
         salesData.sales_quantity += item.quantity;
         salesData.orders_count += 1;
-        salesData.total_order_value += parseFloat(item.price) * item.quantity;
-        salesData.avg_order_size = salesData.total_order_value / salesData.orders_count;
+        salesData.avg_order_size = (salesData.avg_order_size * (salesData.orders_count - 1) + parseFloat(item.price) * item.quantity) / salesData.orders_count;
       });
     });
 
@@ -155,8 +154,8 @@ Deno.serve(async (req) => {
       // Sincronizar stock actual desde Shopify
       console.log('🔄 Sincronizando stock actual desde Shopify...');
       
-      // Obtener información de productos y variantes de Shopify
-      const productsUrl = `https://${shopifyDomain}/admin/api/2024-07/products.json?limit=250&fields=id,variants`;
+      // Obtener información de productos y variantes de Shopify con inventario
+      const productsUrl = `https://${shopifyDomain}/admin/api/2024-07/products.json?limit=250`;
       
       const productsResponse = await fetch(productsUrl, {
         headers: {
@@ -167,7 +166,7 @@ Deno.serve(async (req) => {
 
       if (productsResponse.ok) {
         const productsData = await productsResponse.json();
-        const products: ShopifyProduct[] = productsData.products || [];
+        const products = productsData.products || [];
         
         // Actualizar stock de variantes locales con datos de Shopify
         for (const product of products) {
@@ -177,35 +176,19 @@ Deno.serve(async (req) => {
             const localVariantId = skuToVariantMap.get(variant.sku);
             if (!localVariantId) continue;
             
-            // Obtener nivel de inventario específico de la variante
-            const inventoryUrl = `https://${shopifyDomain}/admin/api/2024-07/inventory_levels.json?inventory_item_ids=${variant.inventory_item_id}`;
+            // Usar inventory_quantity directamente del variant
+            const shopifyStock = variant.inventory_quantity || 0;
             
-            try {
-              const inventoryResponse = await fetch(inventoryUrl, {
-                headers: {
-                  'X-Shopify-Access-Token': shopifyToken,
-                  'Content-Type': 'application/json',
-                },
-              });
-              
-              if (inventoryResponse.ok) {
-                const inventoryData = await inventoryResponse.json();
-                const inventoryLevels = inventoryData.inventory_levels || [];
-                
-                // Sumar stock de todas las ubicaciones
-                const totalStock = inventoryLevels.reduce((sum: number, level: any) => 
-                  sum + (level.available || 0), 0);
-                
-                // Actualizar stock en la base de datos local
-                await supabase
-                  .from('product_variants')
-                  .update({ stock_quantity: totalStock })
-                  .eq('id', localVariantId);
-                  
-                console.log(`📦 Stock actualizado para SKU ${variant.sku}: ${totalStock}`);
-              }
-            } catch (error) {
-              console.error(`⚠️ Error obteniendo inventario para SKU ${variant.sku}:`, error);
+            // Actualizar stock en la base de datos local
+            const { error: updateError } = await supabase
+              .from('product_variants')
+              .update({ stock_quantity: shopifyStock })
+              .eq('id', localVariantId);
+            
+            if (updateError) {
+              console.error(`⚠️ Error actualizando stock para SKU ${variant.sku}:`, updateError.message);
+            } else {
+              console.log(`📦 Stock actualizado para SKU ${variant.sku}: ${shopifyStock}`);
             }
           }
         }
