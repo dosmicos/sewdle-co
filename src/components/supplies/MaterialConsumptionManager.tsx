@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Package, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ConsumptionRecord {
   id: string;
@@ -40,44 +41,80 @@ const MaterialConsumptionManager = () => {
       setDataLoading(true);
       console.log('=== LOADING CONSUMPTION HISTORY ===');
       
-      await fetchMaterialDeliveries();
-      console.log('Deliveries data received for consumption:', materialDeliveries?.length || 0);
+      // Obtener consumos directamente con información de assignment
+      const { data: consumptionData, error } = await supabase
+        .from('material_deliveries')
+        .select(`
+          id,
+          material_id,
+          order_id,
+          quantity_consumed,
+          delivery_date,
+          created_at,
+          updated_at,
+          materials (
+            id,
+            name,
+            sku,
+            unit,
+            category,
+            color
+          ),
+          orders (
+            id,
+            order_number,
+            workshop_assignments (
+              workshop_id,
+              workshops (
+                id,
+                name
+              )
+            )
+          )
+        `)
+        .gt('quantity_consumed', 0)
+        .not('order_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading consumption history:', error);
+        throw error;
+      }
+
+      console.log('Consumption data received:', consumptionData?.length || 0);
       
-      if (!materialDeliveries || !Array.isArray(materialDeliveries)) {
-        console.log('No deliveries data available');
+      if (!consumptionData || !Array.isArray(consumptionData)) {
+        console.log('No consumption data available');
         setConsumptionHistory([]);
         return;
       }
 
-      // PROCESAMIENTO CORRECTO: Generar registros de consumo únicos por taller + material
-      const consumptions: ConsumptionRecord[] = [];
-      
-      materialDeliveries.forEach(delivery => {
-        const totalConsumed = Number(delivery.total_consumed) || 0;
+      // Procesar consumos obteniendo el workshop desde la asignación de la orden
+      const consumptions: ConsumptionRecord[] = consumptionData.map(consumption => {
+        // Obtener workshop desde la asignación de la orden
+        const orderAssignment = consumption.orders?.workshop_assignments?.[0];
+        const assignedWorkshop = orderAssignment?.workshops;
         
-        // Solo incluir si hay consumo registrado y está asociado a una orden
-        if (totalConsumed > 0 && delivery.order_id) {
-          console.log('Processing consumption:', {
-            material: delivery.material_name,
-            workshop: delivery.workshop_name,
-            order: delivery.order_id,
-            orderNumber: delivery.order_number,
-            consumed: totalConsumed
-          });
-          
-          consumptions.push({
-            id: delivery.id,
-            orderId: delivery.order_id,
-            materialId: delivery.material_id,
-            materialName: delivery.material_name || 'Material desconocido',
-            workshopId: delivery.workshop_id,
-            workshopName: delivery.workshop_name || 'Taller desconocido',
-            quantityConsumed: totalConsumed,
-            materialUnit: delivery.material_unit || 'unidad',
-            consumedDate: delivery.updated_at,
-            orderNumber: delivery.order_number || 'Sin orden asignada'
-          });
-        }
+        console.log('Processing consumption:', {
+          material: consumption.materials?.name,
+          workshop: assignedWorkshop?.name,
+          order: consumption.order_id,
+          orderNumber: consumption.orders?.order_number,
+          consumed: consumption.quantity_consumed
+        });
+        
+        return {
+          id: consumption.id,
+          orderId: consumption.order_id || '',
+          materialId: consumption.material_id,
+          materialName: consumption.materials?.name || 'Material desconocido',
+          workshopId: orderAssignment?.workshop_id || '',
+          workshopName: assignedWorkshop?.name || 'Sin asignar',
+          quantityConsumed: Number(consumption.quantity_consumed),
+          materialUnit: consumption.materials?.unit || 'unidad',
+          consumedDate: consumption.created_at,
+          orderNumber: consumption.orders?.order_number || 'Sin orden asignada'
+        };
       });
 
       console.log('Processed consumptions:', consumptions.length, consumptions);
