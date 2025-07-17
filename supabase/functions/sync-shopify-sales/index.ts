@@ -113,15 +113,15 @@ Deno.serve(async (req) => {
             metric_date: orderDate,
             sales_quantity: 0,
             orders_count: 0,
-            total_value: 0
+            total_order_value: 0
           });
         }
 
         const salesData = salesByVariantAndDate.get(key);
         salesData.sales_quantity += item.quantity;
         salesData.orders_count += 1;
-        salesData.total_value += parseFloat(item.price) * item.quantity;
-        salesData.avg_order_size = salesData.total_value / salesData.orders_count;
+        salesData.total_order_value += parseFloat(item.price) * item.quantity;
+        salesData.avg_order_size = salesData.total_order_value / salesData.orders_count;
       });
     });
 
