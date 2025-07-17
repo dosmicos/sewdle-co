@@ -55,11 +55,13 @@ const MaterialConsumptionManager = () => {
       materialDeliveries.forEach(delivery => {
         const totalConsumed = Number(delivery.total_consumed) || 0;
         
-        // Solo incluir si hay consumo registrado
-        if (totalConsumed > 0) {
+        // Solo incluir si hay consumo registrado y está asociado a una orden
+        if (totalConsumed > 0 && delivery.order_id) {
           console.log('Processing consumption:', {
             material: delivery.material_name,
             workshop: delivery.workshop_name,
+            order: delivery.order_id,
+            orderNumber: delivery.order_number,
             consumed: totalConsumed
           });
           
