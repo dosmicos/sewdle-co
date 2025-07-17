@@ -41,40 +41,9 @@ const MaterialConsumptionManager = () => {
       setDataLoading(true);
       console.log('=== LOADING CONSUMPTION HISTORY ===');
       
-      // Obtener consumos directamente con información de assignment
+      // Usar la nueva RPC para obtener consumos con el workshop correcto
       const { data: consumptionData, error } = await supabase
-        .from('material_deliveries')
-        .select(`
-          id,
-          material_id,
-          order_id,
-          quantity_consumed,
-          delivery_date,
-          created_at,
-          updated_at,
-          materials (
-            id,
-            name,
-            sku,
-            unit,
-            category,
-            color
-          ),
-          orders (
-            id,
-            order_number,
-            workshop_assignments (
-              workshop_id,
-              workshops (
-                id,
-                name
-              )
-            )
-          )
-        `)
-        .gt('quantity_consumed', 0)
-        .not('order_id', 'is', null)
-        .order('created_at', { ascending: false });
+        .rpc('get_material_consumptions_by_order');
 
       if (error) {
         console.error('Error loading consumption history:', error);
@@ -89,17 +58,13 @@ const MaterialConsumptionManager = () => {
         return;
       }
 
-      // Procesar consumos obteniendo el workshop desde la asignación de la orden
+      // Procesar consumos con el workshop correcto obtenido de la asignación
       const consumptions: ConsumptionRecord[] = consumptionData.map(consumption => {
-        // Obtener workshop desde la asignación de la orden
-        const orderAssignment = consumption.orders?.workshop_assignments?.[0];
-        const assignedWorkshop = orderAssignment?.workshops;
-        
         console.log('Processing consumption:', {
-          material: consumption.materials?.name,
-          workshop: assignedWorkshop?.name,
+          material: consumption.material_name,
+          workshop: consumption.workshop_name,
           order: consumption.order_id,
-          orderNumber: consumption.orders?.order_number,
+          orderNumber: consumption.order_number,
           consumed: consumption.quantity_consumed
         });
         
@@ -107,13 +72,13 @@ const MaterialConsumptionManager = () => {
           id: consumption.id,
           orderId: consumption.order_id || '',
           materialId: consumption.material_id,
-          materialName: consumption.materials?.name || 'Material desconocido',
-          workshopId: orderAssignment?.workshop_id || '',
-          workshopName: assignedWorkshop?.name || 'Sin asignar',
+          materialName: consumption.material_name || 'Material desconocido',
+          workshopId: consumption.workshop_id,
+          workshopName: consumption.workshop_name || 'Sin asignar',
           quantityConsumed: Number(consumption.quantity_consumed),
-          materialUnit: consumption.materials?.unit || 'unidad',
+          materialUnit: consumption.material_unit || 'unidad',
           consumedDate: consumption.created_at,
-          orderNumber: consumption.orders?.order_number || 'Sin orden asignada'
+          orderNumber: consumption.order_number || 'Sin orden asignada'
         };
       });
 

@@ -1490,6 +1490,24 @@ export type Database = {
           payment_method: string
         }[]
       }
+      get_material_consumptions_by_order: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          material_id: string
+          workshop_id: string
+          order_id: string
+          quantity_consumed: number
+          delivery_date: string
+          created_at: string
+          updated_at: string
+          material_name: string
+          material_unit: string
+          material_category: string
+          workshop_name: string
+          order_number: string
+        }[]
+      }
       get_material_deliveries_with_real_balance: {
         Args: Record<PropertyKey, never>
         Returns: {
