@@ -93,6 +93,10 @@ const SuggestionRow = ({
         <div className="text-xs text-muted-foreground">actual</div>
       </TableCell>
       <TableCell className="text-center">
+        <div className="font-semibold">{suggestion.sales_30_days || 0}</div>
+        <div className="text-xs text-muted-foreground">unidades</div>
+      </TableCell>
+      <TableCell className="text-center">
         <div>{suggestion.sales_velocity.toFixed(2)}</div>
         <div className="text-xs text-muted-foreground">unid/día</div>
       </TableCell>
@@ -329,6 +333,7 @@ export default function ReplenishmentPage() {
                         <TableHead>Producto</TableHead>
                         <TableHead className="text-center">Sugerencia</TableHead>
                         <TableHead className="text-center">Stock Actual</TableHead>
+                        <TableHead className="text-center">Vendidas 30d</TableHead>
                         <TableHead className="text-center">Velocidad</TableHead>
                         <TableHead className="text-center">Días Stock</TableHead>
                         <TableHead className="text-center">Órdenes</TableHead>
