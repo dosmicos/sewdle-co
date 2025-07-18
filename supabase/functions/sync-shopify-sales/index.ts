@@ -393,17 +393,30 @@ Deno.serve(async (req) => {
     
     console.log(`📦 TOTAL MEJORADO obtenidas ${allOrders.length} órdenes válidas de ${dateChunks.length} chunks`);
     
+    // Calculate requested date range for coverage calculation
+    const requestedStartDate = new Date(startDate);
+    const requestedEndDate = new Date(endDate);
+    const requestedDays = Math.ceil((requestedEndDate.getTime() - requestedStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    let daysWithOrders = 0;
+    let daysWithoutOrders = requestedDays;
+    
     if (allOrders.length > 0) {
       // Sort orders by date to verify coverage
       allOrders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       console.log(`📊 Primera orden: ${allOrders[0]?.created_at}, Última: ${allOrders[allOrders.length-1]?.created_at}`);
       
-      // Calculate actual days covered
-      const firstOrderDate = new Date(allOrders[0]?.created_at);
-      const lastOrderDate = new Date(allOrders[allOrders.length-1]?.created_at);
-      const daysCovered = Math.ceil((lastOrderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      console.log(`📊 Días realmente cubiertos: ${daysCovered} días de ${days} solicitados`);
+      // Calculate unique dates with orders
+      const uniqueOrderDates = new Set();
+      allOrders.forEach(order => {
+        const orderDate = new Date(order.created_at).toISOString().split('T')[0];
+        uniqueOrderDates.add(orderDate);
+      });
+      
+      daysWithOrders = uniqueOrderDates.size;
+      daysWithoutOrders = requestedDays - daysWithOrders;
+      
+      console.log(`📊 Días solicitados: ${requestedDays}, Días con órdenes: ${daysWithOrders}, Días sin órdenes: ${daysWithoutOrders}`);
       
       // Track order statuses for final summary
       allOrders.forEach(order => {
@@ -611,12 +624,12 @@ Deno.serve(async (req) => {
       financial_status_breakdown: Object.fromEntries(statusSummary),
       fulfillment_status_breakdown: Object.fromEntries(fulfillmentSummary),
       date_range_verified: {
-        requested_days: days,
-        actual_days: dateMetrics.size,
-        coverage_percentage: Math.round((dateMetrics.size / days) * 100),
+        requested_days: requestedDays,
+        actual_days: daysWithOrders,
+        coverage_percentage: Math.round((daysWithOrders / requestedDays) * 100),
         oldest_order: sortedDates.length > 0 ? sortedDates[0] : null,
         newest_order: sortedDates.length > 0 ? sortedDates[sortedDates.length-1] : null,
-        date_gaps: days - dateMetrics.size
+        date_gaps: daysWithoutOrders
       },
       status: 'completed'
     };
