@@ -1094,6 +1094,54 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_control_logs: {
+        Row: {
+          created_at: string
+          days_processed: number
+          end_time: string | null
+          error_message: string | null
+          execution_details: Json | null
+          id: string
+          metrics_created: number
+          orders_processed: number
+          start_time: string
+          status: string
+          sync_mode: string
+          sync_type: string
+          variants_updated: number
+        }
+        Insert: {
+          created_at?: string
+          days_processed?: number
+          end_time?: string | null
+          error_message?: string | null
+          execution_details?: Json | null
+          id?: string
+          metrics_created?: number
+          orders_processed?: number
+          start_time?: string
+          status?: string
+          sync_mode: string
+          sync_type: string
+          variants_updated?: number
+        }
+        Update: {
+          created_at?: string
+          days_processed?: number
+          end_time?: string | null
+          error_message?: string | null
+          execution_details?: Json | null
+          id?: string
+          metrics_created?: number
+          orders_processed?: number
+          start_time?: string
+          status?: string
+          sync_mode?: string
+          sync_type?: string
+          variants_updated?: number
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -1680,6 +1728,10 @@ export type Database = {
       }
       is_current_user_admin: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_sync_in_progress: {
+        Args: { sync_type_param: string; sync_mode_param: string }
         Returns: boolean
       }
       make_user_admin: {
