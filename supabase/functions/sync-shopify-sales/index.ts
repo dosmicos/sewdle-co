@@ -46,14 +46,14 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Calcular fecha de hace 30 días para obtener ventas recientes
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const dateFilter = thirtyDaysAgo.toISOString();
+    // CAMBIO IMPORTANTE: Obtener órdenes de los últimos 60 días para tener suficientes datos históricos
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const dateFilter = sixtyDaysAgo.toISOString();
 
-    console.log(`📅 Obteniendo órdenes desde: ${dateFilter}`);
+    console.log(`📅 Obteniendo órdenes desde: ${dateFilter} (60 días para datos históricos completos)`);
 
-    // Obtener órdenes de Shopify de los últimos 30 días
+    // Obtener órdenes de Shopify de los últimos 60 días
     const ordersUrl = `https://${shopifyDomain}/admin/api/2024-07/orders.json?status=any&created_at_min=${dateFilter}&limit=250`;
     
     const ordersResponse = await fetch(ordersUrl, {
@@ -127,11 +127,11 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Procesadas ${salesByVariantAndDate.size} métricas de ventas únicas`);
 
-    // Limpiar métricas existentes de los últimos 30 días
+    // Limpiar métricas existentes de los últimos 60 días
     const { error: deleteError } = await supabase
       .from('sales_metrics')
       .delete()
-      .gte('metric_date', thirtyDaysAgo.toISOString().split('T')[0]);
+      .gte('metric_date', sixtyDaysAgo.toISOString().split('T')[0]);
 
     if (deleteError) {
       console.error('⚠️ Error al limpiar métricas anteriores:', deleteError);
@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
 
     const summary = {
       sync_date: new Date().toISOString(),
-      period_days: 30,
+      period_days: 60,
       shopify_orders_processed: orders.length,
       unique_variants_with_sales: uniqueVariants,
       total_sales_quantity: totalSalesQuantity,

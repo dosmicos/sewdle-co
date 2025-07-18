@@ -1611,6 +1611,7 @@ export type Database = {
           suggested_quantity: number
           current_stock: number
           sales_velocity: number
+          sales_30_days: number
           days_of_stock: number
           open_orders_quantity: number
           projected_demand: number
