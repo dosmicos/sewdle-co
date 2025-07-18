@@ -41,21 +41,36 @@ export const ReplenishmentSuggestions: React.FC = () => {
     const variants = {
       critical: 'destructive',
       high: 'secondary',
-      normal: 'outline',
-      low: 'default'
+      normal: 'default',
+      low: 'outline'
     } as const;
     
-    const colors = {
+    const labels = {
+      critical: 'CRÍTICA',
+      high: 'ALTA',
+      normal: 'NORMAL',
+      low: 'BAJA'
+    };
+    
+    const icons = {
       critical: '🔴',
-      high: '🟡',
+      high: '🟠',
       normal: '🟢',
       low: '🔵'
     };
     
     return (
-      <Badge variant={variants[urgency as keyof typeof variants] || 'outline'}>
-        {colors[urgency as keyof typeof colors]} {urgency.toUpperCase()}
-      </Badge>
+      <div className="flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${
+          urgency === 'critical' ? 'bg-red-500 animate-pulse' : 
+          urgency === 'high' ? 'bg-orange-500' : 
+          urgency === 'normal' ? 'bg-green-500' : 
+          'bg-blue-500'
+        }`} />
+        <Badge variant={variants[urgency as keyof typeof variants] || 'outline'} className="font-medium">
+          {labels[urgency as keyof typeof labels] || urgency.toUpperCase()}
+        </Badge>
+      </div>
     );
   };
 
@@ -67,9 +82,16 @@ export const ReplenishmentSuggestions: React.FC = () => {
       executed: 'secondary'
     } as const;
     
+    const labels = {
+      pending: 'PENDIENTE',
+      approved: 'APROBADA',
+      rejected: 'RECHAZADA',
+      executed: 'EJECUTADA'
+    };
+    
     return (
       <Badge variant={variants[status as keyof typeof variants] || 'outline'}>
-        {status.toUpperCase()}
+        {labels[status as keyof typeof labels] || status.toUpperCase()}
       </Badge>
     );
   };
@@ -229,9 +251,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
-                    <TableHead>SKU</TableHead>
                     <TableHead>Stock Actual</TableHead>
                     <TableHead>Ventas 30d</TableHead>
+                    <TableHead>Velocidad</TableHead>
                     <TableHead>Días de Stock</TableHead>
                     <TableHead>Cantidad Sugerida</TableHead>
                     <TableHead>Urgencia</TableHead>
@@ -250,10 +272,10 @@ export const ReplenishmentSuggestions: React.FC = () => {
                               {[suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' - ')}
                             </p>
                           )}
+                          <p className="text-xs text-muted-foreground font-mono mt-1">
+                            SKU: {suggestion.sku_variant}
+                          </p>
                         </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {suggestion.sku_variant}
                       </TableCell>
                       <TableCell>
                         <span className={`font-medium ${
@@ -264,7 +286,16 @@ export const ReplenishmentSuggestions: React.FC = () => {
                           {suggestion.current_stock}
                         </span>
                       </TableCell>
-                      <TableCell>{suggestion.sales_30_days}</TableCell>
+                      <TableCell>
+                        <span className="font-medium">
+                          {suggestion.sales_30_days}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-medium text-primary">
+                          {suggestion.sales_velocity ? Number(suggestion.sales_velocity).toFixed(2) : '0.00'} /día
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <span className={`font-medium ${
                           suggestion.days_of_stock <= 7 ? 'text-red-600' : 
