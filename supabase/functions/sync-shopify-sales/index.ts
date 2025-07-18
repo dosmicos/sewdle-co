@@ -46,15 +46,18 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // CAMBIO IMPORTANTE: Obtener órdenes de los últimos 60 días para tener suficientes datos históricos
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-    const dateFilter = sixtyDaysAgo.toISOString();
+    // CAMBIO CRÍTICO: Obtener órdenes de los últimos 90 días para asegurar datos históricos completos
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const dateFilter = ninetyDaysAgo.toISOString();
 
-    console.log(`📅 Obteniendo órdenes desde: ${dateFilter} (60 días para datos históricos completos)`);
+    console.log(`📅 Obteniendo órdenes desde: ${dateFilter} (90 días para datos históricos completos)`);
+    console.log(`🏪 Shopify Store: ${shopifyDomain}`);
 
-    // Obtener órdenes de Shopify de los últimos 60 días
-    const ordersUrl = `https://${shopifyDomain}/admin/api/2024-07/orders.json?status=any&created_at_min=${dateFilter}&limit=250`;
+    // CAMBIO: Usar API más reciente y parámetros mejorados
+    const ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&created_at_min=${dateFilter}&limit=250&fields=id,created_at,line_items`;
+    
+    console.log(`🔗 URL de consulta: ${ordersUrl}`);
     
     const ordersResponse = await fetch(ordersUrl, {
       headers: {
@@ -65,6 +68,7 @@ Deno.serve(async (req) => {
 
     if (!ordersResponse.ok) {
       const errorText = await ordersResponse.text();
+      console.error(`❌ Error respuesta Shopify: ${ordersResponse.status} - ${errorText}`);
       throw new Error(`Error al obtener órdenes de Shopify: ${ordersResponse.status} - ${errorText}`);
     }
 
@@ -72,6 +76,7 @@ Deno.serve(async (req) => {
     const orders: ShopifyOrder[] = ordersData.orders || [];
     
     console.log(`📦 Obtenidas ${orders.length} órdenes de Shopify`);
+    console.log(`📊 Primera orden: ${orders[0]?.created_at}, Última: ${orders[orders.length-1]?.created_at}`);
 
     // Obtener mapeo de SKUs de Shopify a variantes locales
     const { data: localVariants, error: variantsError } = await supabase
@@ -97,14 +102,23 @@ Deno.serve(async (req) => {
     orders.forEach(order => {
       const orderDate = new Date(order.created_at).toISOString().split('T')[0];
       
+      console.log(`🛒 Procesando orden ${order.id} del ${orderDate} con ${order.line_items.length} items`);
+      
       order.line_items.forEach(item => {
-        if (!item.sku) return;
+        if (!item.sku) {
+          console.log(`⚠️ Item sin SKU en orden ${order.id}`);
+          return;
+        }
+        
+        console.log(`🔍 Procesando item SKU: ${item.sku}, cantidad: ${item.quantity}`);
         
         const localVariantId = skuToVariantMap.get(item.sku);
         if (!localVariantId) {
           console.log(`⚠️ SKU no encontrado en sistema local: ${item.sku}`);
           return;
         }
+        
+        console.log(`✅ SKU ${item.sku} mapeado a variante local: ${localVariantId}`);
 
         const key = `${localVariantId}_${orderDate}`;
         
@@ -122,16 +136,18 @@ Deno.serve(async (req) => {
         salesData.sales_quantity += item.quantity;
         salesData.orders_count += 1;
         salesData.avg_order_size = (salesData.avg_order_size * (salesData.orders_count - 1) + parseFloat(item.price) * item.quantity) / salesData.orders_count;
+        
+        console.log(`📈 Agregadas ${item.quantity} unidades para SKU ${item.sku} el ${orderDate}. Total del día: ${salesData.sales_quantity}`);
       });
     });
 
     console.log(`📊 Procesadas ${salesByVariantAndDate.size} métricas de ventas únicas`);
 
-    // Limpiar métricas existentes de los últimos 60 días
+    // Limpiar métricas existentes de los últimos 90 días
     const { error: deleteError } = await supabase
       .from('sales_metrics')
       .delete()
-      .gte('metric_date', sixtyDaysAgo.toISOString().split('T')[0]);
+      .gte('metric_date', ninetyDaysAgo.toISOString().split('T')[0]);
 
     if (deleteError) {
       console.error('⚠️ Error al limpiar métricas anteriores:', deleteError);
@@ -139,6 +155,16 @@ Deno.serve(async (req) => {
 
     // Insertar nuevas métricas de ventas
     const salesMetrics = Array.from(salesByVariantAndDate.values());
+    
+    console.log(`📊 Métricas de ventas procesadas: ${salesMetrics.length}`);
+    
+    // Log de ejemplo para debugging
+    const targetSku = '45968944201963';
+    const targetMetrics = salesMetrics.filter(m => {
+      const variant = localVariants.find(v => v.id === m.product_variant_id);
+      return variant?.sku_variant === targetSku;
+    });
+    console.log(`🎯 Métricas para SKU ${targetSku}:`, JSON.stringify(targetMetrics, null, 2));
     
     if (salesMetrics.length > 0) {
       const { error: insertError } = await supabase
@@ -206,7 +232,7 @@ Deno.serve(async (req) => {
 
     const summary = {
       sync_date: new Date().toISOString(),
-      period_days: 60,
+      period_days: 90,
       shopify_orders_processed: orders.length,
       unique_variants_with_sales: uniqueVariants,
       total_sales_quantity: totalSalesQuantity,
