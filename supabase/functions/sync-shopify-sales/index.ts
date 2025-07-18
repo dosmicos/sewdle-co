@@ -411,7 +411,7 @@ Deno.serve(async (req) => {
         const fulfillStatus = order.fulfillment_status || 'unfulfilled';
         
         statusSummary.set(finStatus, (statusSummary.get(finStatus) || 0) + 1);
-        fulfillmentSummary.set(fulfillStatus, (fulfillmentSummary.get(fulfillmentStatus) || 0) + 1);
+        fulfillmentSummary.set(fulfillStatus, (fulfillmentSummary.get(fulfillStatus) || 0) + 1);
       });
       
       console.log(`📊 RESUMEN FINAL DE ESTADOS FINANCIEROS:`, Object.fromEntries(statusSummary));
