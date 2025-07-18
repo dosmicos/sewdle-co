@@ -293,7 +293,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-medium text-primary">
-                          {suggestion.sales_velocity ? Number(suggestion.sales_velocity).toFixed(2) : '0.00'} /día
+                          {suggestion.sales_velocity ? Number(suggestion.sales_velocity).toFixed(2) : '0.00'}
                         </span>
                       </TableCell>
                       <TableCell>
