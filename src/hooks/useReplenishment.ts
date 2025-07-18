@@ -46,19 +46,25 @@ export const useReplenishment = () => {
       setLoading(true);
       
       const { data, error } = await supabase
-        .rpc('get_replenishment_suggestions_with_details');
+        .rpc('get_replenishment_suggestions_with_details')
+        .eq('calculation_date', new Date().toISOString().split('T')[0]);
 
       if (error) {
-        console.error('Error fetching replenishment suggestions:', error);
-        throw error;
+        console.error('Error fetching suggestions:', error);
+        toast({
+          title: "Error",
+          description: "Error al cargar sugerencias de reposición",
+          variant: "destructive",
+        });
+        return;
       }
 
       setSuggestions((data || []) as ReplenishmentSuggestion[]);
     } catch (error) {
-      console.error('Error in fetchSuggestions:', error);
+      console.error('Error fetching suggestions:', error);
       toast({
         title: "Error",
-        description: "No se pudieron cargar las sugerencias de reposición",
+        description: "Error al cargar sugerencias de reposición",
         variant: "destructive",
       });
     } finally {
