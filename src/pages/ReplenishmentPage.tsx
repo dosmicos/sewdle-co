@@ -2,7 +2,7 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, Package, Sync } from 'lucide-react';
+import { TrendingUp, Package, RefreshCw } from 'lucide-react';
 import { ReplenishmentSuggestions } from '@/components/supplies/ReplenishmentSuggestions';
 import { ShopifySyncManager } from '@/components/supplies/ShopifySyncManager';
 
@@ -26,7 +26,7 @@ export const ReplenishmentPage: React.FC = () => {
             Sugerencias de Reposición
           </TabsTrigger>
           <TabsTrigger value="sync" className="flex items-center gap-2">
-            <Sync className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" />
             Sincronización Shopify
           </TabsTrigger>
         </TabsList>

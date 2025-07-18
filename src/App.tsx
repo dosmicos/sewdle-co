@@ -16,7 +16,7 @@ import WorkshopsPage from "@/pages/WorkshopsPage";
 import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
-import ReplenishmentPage from "@/pages/ReplenishmentPage";
+import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import NotFound from "@/pages/NotFound";
 
