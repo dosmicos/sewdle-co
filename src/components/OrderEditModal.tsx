@@ -13,12 +13,13 @@ import { useUserContext } from '@/hooks/useUserContext';
 import OrderQuantityEditor from './OrderQuantityEditor';
 import ProductSelector from './ProductSelector';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
-import { Settings, Package, AlertTriangle, Plus, Wrench, Truck } from 'lucide-react';
+import { Settings, Package, AlertTriangle, Plus, Wrench, Truck, FileText } from 'lucide-react';
 import WorkshopMaterialSelector from './WorkshopMaterialSelector';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import MaterialDeliveryForm from './supplies/MaterialDeliveryForm';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMaterials } from '@/hooks/useMaterials';
+import OrderFileManager from './OrderFileManager';
 
 interface OrderEditModalProps {
   order: any;
@@ -232,7 +233,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="details" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
               <span>Información General</span>
@@ -248,6 +249,10 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
             <TabsTrigger value="add-materials" className="flex items-center space-x-2">
               <Wrench className="w-4 h-4" />
               <span>Agregar Materiales</span>
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center space-x-2">
+              <FileText className="w-4 h-4" />
+              <span>Archivos</span>
             </TabsTrigger>
           </TabsList>
 
@@ -466,6 +471,15 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="files" className="space-y-6 mt-6">
+            <OrderFileManager 
+              orderId={order.id}
+              orderFiles={order.order_files || []}
+              onFilesUpdated={onSuccess}
+              editable={true}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>
