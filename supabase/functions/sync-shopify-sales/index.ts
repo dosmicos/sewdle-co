@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 
@@ -23,6 +24,127 @@ interface ShopifyProduct {
   }>;
 }
 
+interface SyncProgress {
+  totalPages: number;
+  currentPage: number;
+  totalOrders: number;
+  processedOrders: number;
+  lastOrderId?: string;
+}
+
+// Helper function to add delay for rate limiting
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function to make paginated Shopify API calls
+async function fetchAllShopifyOrders(
+  shopifyDomain: string,
+  shopifyToken: string,
+  dateFilter: string,
+  validStatuses: string[],
+  logId: string,
+  supabase: any
+): Promise<ShopifyOrder[]> {
+  const allOrders: ShopifyOrder[] = [];
+  let hasNextPage = true;
+  let pageInfo = '';
+  let pageCount = 0;
+  const maxPages = 50; // Safety limit to prevent infinite loops
+  
+  console.log(`🔄 Iniciando paginación de órdenes desde: ${dateFilter}`);
+  
+  while (hasNextPage && pageCount < maxPages) {
+    pageCount++;
+    
+    // Construct URL with pagination
+    let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&financial_status=${validStatuses.join(',')}&created_at_min=${dateFilter}&limit=250&fields=id,created_at,financial_status,line_items`;
+    
+    if (pageInfo) {
+      ordersUrl += `&since_id=${pageInfo}`;
+    }
+    
+    console.log(`📄 Página ${pageCount}: ${ordersUrl}`);
+    
+    // Update progress in sync log
+    await supabase
+      .from('sync_control_logs')
+      .update({ 
+        execution_details: {
+          currentPage: pageCount,
+          totalProcessed: allOrders.length,
+          status: 'paginating'
+        }
+      })
+      .eq('id', logId);
+    
+    try {
+      const response = await fetch(ordersUrl, {
+        headers: {
+          'X-Shopify-Access-Token': shopifyToken,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Error en página ${pageCount}: ${response.status} - ${errorText}`);
+        
+        // Handle rate limiting
+        if (response.status === 429) {
+          console.log('⏳ Rate limit hit, esperando 2 segundos...');
+          await delay(2000);
+          continue; // Retry same page
+        }
+        
+        throw new Error(`Error en página ${pageCount}: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const orders = data.orders || [];
+      
+      console.log(`📦 Página ${pageCount}: ${orders.length} órdenes obtenidas`);
+      
+      if (orders.length === 0) {
+        hasNextPage = false;
+        break;
+      }
+      
+      allOrders.push(...orders);
+      
+      // Determine if there are more pages
+      if (orders.length < 250) {
+        hasNextPage = false;
+      } else {
+        // Use the last order ID for pagination
+        pageInfo = orders[orders.length - 1].id.toString();
+      }
+      
+      // Rate limiting: wait 500ms between requests
+      await delay(500);
+      
+    } catch (error) {
+      console.error(`❌ Error en paginación página ${pageCount}:`, error);
+      
+      // Update sync log with error
+      await supabase
+        .from('sync_control_logs')
+        .update({ 
+          error_message: `Error en paginación página ${pageCount}: ${error.message}`,
+          execution_details: {
+            currentPage: pageCount,
+            totalProcessed: allOrders.length,
+            status: 'error'
+          }
+        })
+        .eq('id', logId);
+      
+      throw error;
+    }
+  }
+  
+  console.log(`✅ Paginación completada: ${pageCount} páginas, ${allOrders.length} órdenes totales`);
+  return allOrders;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -38,7 +160,7 @@ Deno.serve(async (req) => {
     const days = body.days || 90; // Default to 90 days for initial sync
     const scheduled = body.scheduled || false;
 
-    console.log(`🔄 Iniciando sincronización Shopify - Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
+    console.log(`🔄 Iniciando sincronización Shopify MEJORADA - Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -77,7 +199,12 @@ Deno.serve(async (req) => {
         sync_type: mode,
         sync_mode: 'sales',
         status: 'running',
-        days_processed: days
+        days_processed: days,
+        execution_details: {
+          pagination_enabled: true,
+          rate_limiting: true,
+          version: '2.0'
+        }
       })
       .select()
       .single();
@@ -100,27 +227,18 @@ Deno.serve(async (req) => {
 
     // Get orders with financial status filter to exclude cancelled/refunded orders
     const validStatuses = ['paid', 'partially_paid'];
-    const ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&financial_status=${validStatuses.join(',')}&created_at_min=${dateFilter}&limit=250&fields=id,created_at,financial_status,line_items`;
     
-    console.log(`🔗 URL de consulta: ${ordersUrl}`);
+    // Use the new paginated function to get ALL orders
+    const orders = await fetchAllShopifyOrders(
+      shopifyDomain,
+      shopifyToken,
+      dateFilter,
+      validStatuses,
+      logId,
+      supabase
+    );
     
-    const ordersResponse = await fetch(ordersUrl, {
-      headers: {
-        'X-Shopify-Access-Token': shopifyToken,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!ordersResponse.ok) {
-      const errorText = await ordersResponse.text();
-      console.error(`❌ Error respuesta Shopify: ${ordersResponse.status} - ${errorText}`);
-      throw new Error(`Error al obtener órdenes de Shopify: ${ordersResponse.status} - ${errorText}`);
-    }
-
-    const ordersData = await ordersResponse.json();
-    const orders: ShopifyOrder[] = ordersData.orders || [];
-    
-    console.log(`📦 Obtenidas ${orders.length} órdenes válidas de Shopify`);
+    console.log(`📦 TOTAL obtenidas ${orders.length} órdenes válidas con paginación completa`);
     if (orders.length > 0) {
       console.log(`📊 Primera orden: ${orders[0]?.created_at}, Última: ${orders[orders.length-1]?.created_at}`);
     }
@@ -128,7 +246,16 @@ Deno.serve(async (req) => {
     // Update sync log with orders count
     await supabase
       .from('sync_control_logs')
-      .update({ orders_processed: orders.length })
+      .update({ 
+        orders_processed: orders.length,
+        execution_details: {
+          pagination_enabled: true,
+          rate_limiting: true,
+          version: '2.0',
+          total_orders_found: orders.length,
+          status: 'processing_orders'
+        }
+      })
       .eq('id', logId);
 
     // Get mapping from Shopify SKUs to local variants
@@ -154,7 +281,7 @@ Deno.serve(async (req) => {
     let processedItems = 0;
     let skippedItems = 0;
 
-    orders.forEach(order => {
+    orders.forEach((order, index) => {
       // Skip orders with invalid financial status (additional safety check)
       if (!validStatuses.includes(order.financial_status)) {
         console.log(`⚠️ Orden ${order.id} omitida por estado financiero: ${order.financial_status}`);
@@ -163,11 +290,13 @@ Deno.serve(async (req) => {
 
       const orderDate = new Date(order.created_at).toISOString().split('T')[0];
       
-      console.log(`🛒 Procesando orden ${order.id} del ${orderDate} (${order.financial_status}) con ${order.line_items.length} items`);
+      // Progress logging every 100 orders
+      if (index % 100 === 0) {
+        console.log(`🔄 Procesando orden ${index + 1}/${orders.length}: ${order.id} del ${orderDate}`);
+      }
       
       order.line_items.forEach(item => {
         if (!item.sku) {
-          console.log(`⚠️ Item sin SKU en orden ${order.id}`);
           skippedItems++;
           return;
         }
@@ -180,7 +309,6 @@ Deno.serve(async (req) => {
         }
         
         processedItems++;
-        console.log(`✅ SKU ${item.sku} mapeado a variante local: ${localVariantId}`);
 
         const key = `${localVariantId}_${orderDate}`;
         
@@ -198,8 +326,6 @@ Deno.serve(async (req) => {
         salesData.sales_quantity += item.quantity;
         salesData.orders_count += 1;
         salesData.avg_order_size = (salesData.avg_order_size * (salesData.orders_count - 1) + parseFloat(item.price) * item.quantity) / salesData.orders_count;
-        
-        console.log(`📈 Agregadas ${item.quantity} unidades para SKU ${item.sku} el ${orderDate}. Total del día: ${salesData.sales_quantity}`);
       });
     });
 
@@ -271,7 +397,6 @@ Deno.serve(async (req) => {
                 console.error(`⚠️ Error actualizando stock para SKU ${variant.sku}:`, updateError.message);
               } else {
                 variantsUpdated++;
-                console.log(`📦 Stock actualizado para SKU ${variant.sku}: ${shopifyStock}`);
               }
             }
           }
@@ -300,6 +425,7 @@ Deno.serve(async (req) => {
       total_orders_processed: totalOrders,
       metrics_created: salesMetrics.length,
       variants_updated: variantsUpdated,
+      pagination_used: true,
       status: 'completed'
     };
 
@@ -315,12 +441,12 @@ Deno.serve(async (req) => {
       })
       .eq('id', logId);
 
-    console.log('📋 Resumen de sincronización:', JSON.stringify(summary, null, 2));
+    console.log('📋 Resumen de sincronización COMPLETA:', JSON.stringify(summary, null, 2));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Sincronización de ventas Shopify completada - Modo: ${mode}`,
+        message: `Sincronización de ventas Shopify completada con paginación - Modo: ${mode}`,
         summary
       }),
       {
