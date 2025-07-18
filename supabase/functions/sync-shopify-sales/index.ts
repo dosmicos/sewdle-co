@@ -6,6 +6,7 @@ interface ShopifyOrder {
   id: number;
   created_at: string;
   financial_status: string;
+  fulfillment_status: string;
   line_items: Array<{
     product_id: number;
     variant_id: number;
@@ -78,13 +79,17 @@ async function fetchOrdersForChunk(
   let pageCount = 0;
   const maxPages = 50; // Reduced for smaller chunks
   
+  // Status tracking
+  const statusCounts = new Map<string, number>();
+  const fulfillmentStatusCounts = new Map<string, number>();
+  
   console.log(`🔄 Chunk ${chunk.chunk_number}/${chunk.total_chunks}: Sincronizando desde ${chunk.start_date} hasta ${chunk.end_date}`);
   
   while (hasNextPage && pageCount < maxPages) {
     pageCount++;
     
-    // Construct URL with temporal pagination
-    let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&financial_status=${validStatuses.join(',')}&created_at_min=${encodeURIComponent(chunk.start_date)}&created_at_max=${encodeURIComponent(chunk.end_date)}&limit=50&fields=id,created_at,financial_status,line_items`;
+    // Construct URL with temporal pagination - REMOVE financial_status filter to get ALL orders
+    let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&created_at_min=${encodeURIComponent(chunk.start_date)}&created_at_max=${encodeURIComponent(chunk.end_date)}&limit=50&fields=id,created_at,financial_status,fulfillment_status,line_items`;
     
     if (pageInfo) {
       ordersUrl += `&since_id=${pageInfo}`;
@@ -146,8 +151,24 @@ async function fetchOrdersForChunk(
         break;
       }
       
-      // All orders should be within our date range since we're using created_at_min/max
-      allOrders.push(...orders);
+      // Track all financial and fulfillment statuses we encounter
+      orders.forEach(order => {
+        const finStatus = order.financial_status || 'unknown';
+        const fulfillStatus = order.fulfillment_status || 'unfulfilled';
+        
+        statusCounts.set(finStatus, (statusCounts.get(finStatus) || 0) + 1);
+        fulfillmentStatusCounts.set(fulfillStatus, (fulfillmentStatusCounts.get(fulfillStatus) || 0) + 1);
+      });
+      
+      // Filter orders AFTER fetching to understand what we're excluding
+      const validOrders = orders.filter(order => validStatuses.includes(order.financial_status));
+      const excludedCount = orders.length - validOrders.length;
+      
+      if (excludedCount > 0) {
+        console.log(`⚠️ Chunk ${chunk.chunk_number}, Página ${pageCount}: Excluidas ${excludedCount} órdenes por estado financiero`);
+      }
+      
+      allOrders.push(...validOrders);
       
       // Determine if there are more pages
       if (orders.length < 50) {
@@ -189,7 +210,10 @@ async function fetchOrdersForChunk(
     }
   }
   
-  console.log(`✅ Chunk ${chunk.chunk_number} completado: ${pageCount} páginas procesadas, ${allOrders.length} órdenes en el rango`);
+  // Log status distribution for this chunk
+  console.log(`📊 Chunk ${chunk.chunk_number} - Estados financieros encontrados:`, Object.fromEntries(statusCounts));
+  console.log(`📊 Chunk ${chunk.chunk_number} - Estados de fulfillment encontrados:`, Object.fromEntries(fulfillmentStatusCounts));
+  console.log(`✅ Chunk ${chunk.chunk_number} completado: ${pageCount} páginas procesadas, ${allOrders.length} órdenes válidas de un total procesado`);
   
   return allOrders;
 }
@@ -209,7 +233,7 @@ Deno.serve(async (req) => {
     const days = body.days || 90; // Default to 90 days for initial sync
     const scheduled = body.scheduled || false;
 
-    console.log(`🔄 Iniciando sincronización Shopify SEGMENTADA - Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
+    console.log(`🔄 Iniciando sincronización Shopify EXPANDIDA - Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -252,8 +276,9 @@ Deno.serve(async (req) => {
         execution_details: {
           segmented_sync: true,
           rate_limiting: true,
-          version: '4.0-segmented',
-          target_days: days
+          version: '5.0-expanded-statuses',
+          target_days: days,
+          expanded_financial_statuses: true
         }
       })
       .select()
@@ -276,7 +301,7 @@ Deno.serve(async (req) => {
     const endDate = new Date(now);
     endDate.setHours(23, 59, 59, 999); // End at end of current day
 
-    console.log(`📅 SEGMENTADO: Obteniendo órdenes desde: ${startDate.toISOString()} hasta ${endDate.toISOString()} (${days} días - modo ${mode})`);
+    console.log(`📅 EXPANDIDO: Obteniendo órdenes desde: ${startDate.toISOString()} hasta ${endDate.toISOString()} (${days} días - modo ${mode})`);
     console.log(`🏪 Shopify Store: ${shopifyDomain}`);
 
     // Create date chunks for segmented sync
@@ -285,10 +310,21 @@ Deno.serve(async (req) => {
     
     console.log(`📊 Creados ${dateChunks.length} chunks de ${chunkSizeDays} días cada uno`);
 
-    // Get orders with financial status filter to exclude cancelled/refunded orders
-    const validStatuses = ['paid', 'partially_paid'];
+    // EXPANDED FINANCIAL STATUSES - Capture almost all orders except completely voided/refunded
+    const validStatuses = [
+      'pending',           // Pagos pendientes
+      'authorized',        // Pagos autorizados pero no capturados
+      'partially_paid',    // Pagos parciales
+      'paid',             // Pagos completados
+      'partially_refunded' // Reembolsos parciales
+      // Excluded: 'voided', 'refunded' (completely cancelled orders)
+    ];
+    
+    console.log(`💰 Estados financieros incluidos: ${validStatuses.join(', ')}`);
     
     let allOrders: ShopifyOrder[] = [];
+    const statusSummary = new Map<string, number>();
+    const fulfillmentSummary = new Map<string, number>();
     
     // Process each chunk sequentially
     for (const chunk of dateChunks) {
@@ -306,7 +342,7 @@ Deno.serve(async (req) => {
         
         allOrders.push(...chunkOrders);
         
-        console.log(`✅ Chunk ${chunk.chunk_number} completado: ${chunkOrders.length} órdenes obtenidas`);
+        console.log(`✅ Chunk ${chunk.chunk_number} completado: ${chunkOrders.length} órdenes válidas obtenidas`);
         
         // Longer delay between chunks to respect rate limits
         if (chunk.chunk_number < chunk.total_chunks) {
@@ -320,7 +356,7 @@ Deno.serve(async (req) => {
       }
     }
     
-    console.log(`📦 TOTAL SEGMENTADO obtenidas ${allOrders.length} órdenes válidas de ${dateChunks.length} chunks`);
+    console.log(`📦 TOTAL EXPANDIDO obtenidas ${allOrders.length} órdenes válidas de ${dateChunks.length} chunks`);
     
     if (allOrders.length > 0) {
       // Sort orders by date to verify coverage
@@ -333,6 +369,18 @@ Deno.serve(async (req) => {
       const lastOrderDate = new Date(allOrders[allOrders.length-1]?.created_at);
       const daysCovered = Math.ceil((lastOrderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       console.log(`📊 Días realmente cubiertos: ${daysCovered} días de ${days} solicitados`);
+      
+      // Track order statuses for final summary
+      allOrders.forEach(order => {
+        const finStatus = order.financial_status || 'unknown';
+        const fulfillStatus = order.fulfillment_status || 'unfulfilled';
+        
+        statusSummary.set(finStatus, (statusSummary.get(finStatus) || 0) + 1);
+        fulfillmentSummary.set(fulfillStatus, (fulfillmentSummary.get(fulfillStatus) || 0) + 1);
+      });
+      
+      console.log(`📊 RESUMEN DE ESTADOS FINANCIEROS FINALES:`, Object.fromEntries(statusSummary));
+      console.log(`📊 RESUMEN DE ESTADOS DE FULFILLMENT FINALES:`, Object.fromEntries(fulfillmentSummary));
     }
 
     // Update sync log with orders count
@@ -343,7 +391,7 @@ Deno.serve(async (req) => {
         execution_details: {
           segmented_sync: true,
           rate_limiting: true,
-          version: '4.0-segmented',
+          version: '5.0-expanded-statuses',
           target_days: days,
           chunks_processed: dateChunks.length,
           total_orders_found: allOrders.length,
@@ -351,7 +399,10 @@ Deno.serve(async (req) => {
           date_range: {
             from: startDate.toISOString(),
             to: endDate.toISOString()
-          }
+          },
+          expanded_financial_statuses: true,
+          financial_status_summary: Object.fromEntries(statusSummary),
+          fulfillment_status_summary: Object.fromEntries(fulfillmentSummary)
         }
       })
       .eq('id', logId);
@@ -381,12 +432,6 @@ Deno.serve(async (req) => {
     const dateMetrics = new Map(); // Track sales by date
 
     allOrders.forEach((order, index) => {
-      // Skip orders with invalid financial status (additional safety check)
-      if (!validStatuses.includes(order.financial_status)) {
-        console.log(`⚠️ Orden ${order.id} omitida por estado financiero: ${order.financial_status}`);
-        return;
-      }
-
       const orderDate = new Date(order.created_at).toISOString().split('T')[0];
       
       // Track dates for verification
@@ -397,7 +442,7 @@ Deno.serve(async (req) => {
       
       // Progress logging every 100 orders
       if (index % 100 === 0) {
-        console.log(`🔄 Procesando orden ${index + 1}/${allOrders.length}: ${order.id} del ${orderDate}`);
+        console.log(`🔄 Procesando orden ${index + 1}/${allOrders.length}: ${order.id} del ${orderDate} (${order.financial_status})`);
       }
       
       order.line_items.forEach(item => {
@@ -550,7 +595,9 @@ Deno.serve(async (req) => {
       total_orders_processed: totalOrders,
       metrics_created: salesMetrics.length,
       variants_updated: variantsUpdated,
-      segmented_sync: true,
+      expanded_sync: true,
+      financial_status_breakdown: Object.fromEntries(statusSummary),
+      fulfillment_status_breakdown: Object.fromEntries(fulfillmentSummary),
       date_range_verified: {
         requested_days: days,
         actual_days: dateMetrics.size,
@@ -574,12 +621,12 @@ Deno.serve(async (req) => {
       })
       .eq('id', logId);
 
-    console.log('📋 Resumen de sincronización SEGMENTADA COMPLETA:', JSON.stringify(summary, null, 2));
+    console.log('📋 Resumen de sincronización EXPANDIDA COMPLETA:', JSON.stringify(summary, null, 2));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Sincronización de ventas Shopify SEGMENTADA completada - Modo: ${mode} - ${dateMetrics.size}/${days} días procesados (${Math.round((dateMetrics.size / days) * 100)}% cobertura)`,
+        message: `Sincronización de ventas Shopify EXPANDIDA completada - Modo: ${mode} - ${allOrders.length} órdenes de ${Object.keys(statusSummary).length} estados diferentes - ${dateMetrics.size}/${days} días procesados (${Math.round((dateMetrics.size / days) * 100)}% cobertura)`,
         summary
       }),
       {
@@ -589,7 +636,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Error en sincronización de ventas de Shopify:', error);
+    console.error('❌ Error en sincronización expandida de ventas de Shopify:', error);
     
     // Update sync log with error if we have logId
     if (logId) {
