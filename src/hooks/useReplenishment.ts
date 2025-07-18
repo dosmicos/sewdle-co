@@ -20,6 +20,7 @@ export interface ReplenishmentSuggestion {
   status: 'pending' | 'approved' | 'rejected' | 'executed';
   calculation_date: string;
   created_at: string;
+  pending_production_quantity: number;
 }
 
 export interface ReplenishmentConfig {

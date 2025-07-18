@@ -1668,6 +1668,7 @@ export type Database = {
           status: string
           calculation_date: string
           created_at: string
+          pending_production_quantity: number
         }[]
       }
       get_user_role: {

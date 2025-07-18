@@ -255,6 +255,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     <TableHead>Ventas 30d</TableHead>
                     <TableHead>Velocidad</TableHead>
                     <TableHead>Días de Stock</TableHead>
+                    <TableHead>Pendiente Producción</TableHead>
                     <TableHead>Cantidad Sugerida</TableHead>
                     <TableHead>Urgencia</TableHead>
                     <TableHead>Estado</TableHead>
@@ -303,6 +304,13 @@ export const ReplenishmentSuggestions: React.FC = () => {
                           'text-green-600'
                         }`}>
                           {Math.round(suggestion.days_of_stock)}d
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`font-medium ${
+                          suggestion.pending_production_quantity > 0 ? 'text-blue-600' : 'text-muted-foreground'
+                        }`}>
+                          {suggestion.pending_production_quantity || 0}
                         </span>
                       </TableCell>
                       <TableCell className="font-bold text-primary">
