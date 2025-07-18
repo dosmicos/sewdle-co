@@ -296,7 +296,7 @@ Deno.serve(async (req) => {
         execution_details: {
           segmented_sync: true,
           rate_limiting: true,
-          version: '6.0-robust-validation',
+          version: '6.1-fulfillment-fix',
           target_days: days,
           expanded_financial_statuses: true,
           environment_validated: true
