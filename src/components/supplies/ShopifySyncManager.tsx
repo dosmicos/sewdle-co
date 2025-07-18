@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useShopifySync } from '@/hooks/useShopifySync';
-import { RefreshCw, Calendar, AlertCircle, CheckCircle, Clock, Database, TrendingUp } from 'lucide-react';
+import { RefreshCw, Calendar, AlertCircle, CheckCircle, Clock, Database, TrendingUp, Target, Layers } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -81,13 +81,19 @@ export const ShopifySyncManager: React.FC = () => {
     );
   };
 
+  const getCoverageColor = (coverage: number) => {
+    if (coverage >= 90) return 'text-green-600';
+    if (coverage >= 70) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
   const latestSync = syncLogs.length > 0 ? syncLogs[0] : null;
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
       {latestSync && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center space-x-2">
@@ -123,13 +129,31 @@ export const ShopifySyncManager: React.FC = () => {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center space-x-2">
+                <Target className={`h-5 w-5 ${latestSync.execution_details?.date_range_verified?.coverage_percentage >= 90 ? 'text-green-500' : latestSync.execution_details?.date_range_verified?.coverage_percentage >= 70 ? 'text-yellow-500' : 'text-red-500'}`} />
+                <div>
+                  <p className="text-sm text-muted-foreground">Cobertura Temporal</p>
+                  <p className={`text-lg font-bold ${getCoverageColor(latestSync.execution_details?.date_range_verified?.coverage_percentage || 0)}`}>
+                    {latestSync.execution_details?.date_range_verified?.coverage_percentage || 0}%
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {latestSync.execution_details?.date_range_verified?.actual_days || 0}/{latestSync.execution_details?.date_range_verified?.requested_days || 0} días
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-2">
                 {getStatusIcon(latestSync.status)}
                 <div>
                   <p className="text-sm text-muted-foreground">Estado</p>
                   <p className="text-lg font-bold">{latestSync.status}</p>
-                  {latestSync.execution_details?.date_range_verified && (
-                    <p className="text-xs text-muted-foreground">
-                      {latestSync.execution_details.date_range_verified.actual_days}/{latestSync.execution_details.date_range_verified.requested_days} días cubiertos
+                  {latestSync.execution_details?.segmented_sync && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <Layers className="h-3 w-3" />
+                      Sincronización segmentada
                     </p>
                   )}
                 </div>
@@ -143,10 +167,11 @@ export const ShopifySyncManager: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
-            Sincronización de Ventas Shopify
+            Sincronización de Ventas Shopify (Segmentada)
           </CardTitle>
           <CardDescription>
-            Ejecuta sincronizaciones manuales y monitorea el progreso. La sincronización inicial captura todos los datos históricos con paginación completa.
+            Ejecuta sincronizaciones manuales con estrategia segmentada para obtener el máximo de datos históricos. 
+            La sincronización divide el período en chunks más pequeños para trabajar mejor con las limitaciones de la API de Shopify.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -187,9 +212,9 @@ export const ShopifySyncManager: React.FC = () => {
             <div className="flex items-center gap-2 text-blue-600 mb-4 p-4 bg-blue-50 rounded-lg">
               <RefreshCw className="h-4 w-4 animate-spin" />
               <div>
-                <p className="font-medium">Ejecutando sincronización...</p>
+                <p className="font-medium">Ejecutando sincronización segmentada...</p>
                 <p className="text-sm text-muted-foreground">
-                  Esto puede tomar varios minutos para obtener todos los datos históricos.
+                  Procesando datos en chunks pequeños para maximizar la cobertura temporal. Esto puede tomar varios minutos.
                 </p>
               </div>
             </div>
@@ -202,7 +227,7 @@ export const ShopifySyncManager: React.FC = () => {
           <div>
             <CardTitle>Historial de Sincronizaciones</CardTitle>
             <CardDescription>
-              Últimas 10 sincronizaciones ejecutadas con detalles completos
+              Últimas 10 sincronizaciones ejecutadas con detalles de cobertura temporal
             </CardDescription>
           </div>
           <Button
@@ -234,6 +259,12 @@ export const ShopifySyncManager: React.FC = () => {
                           {log.sync_type} Sync ({log.days_processed} días solicitados)
                         </span>
                         {getStatusBadge(log.status)}
+                        {log.execution_details?.segmented_sync && (
+                          <Badge variant="outline" className="text-xs">
+                            <Layers className="h-3 w-3 mr-1" />
+                            Segmentada
+                          </Badge>
+                        )}
                       </div>
                       
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600 mb-2">
@@ -246,17 +277,32 @@ export const ShopifySyncManager: React.FC = () => {
                         <div>
                           <span className="font-medium">Variantes:</span> {log.variants_updated}
                         </div>
-                        {log.execution_details?.actual_days_covered && (
+                        {log.execution_details?.chunks_processed && (
                           <div>
-                            <span className="font-medium">Días cubiertos:</span> {log.execution_details.actual_days_covered}
+                            <span className="font-medium">Chunks:</span> {log.execution_details.chunks_processed}
                           </div>
                         )}
                       </div>
 
                       {log.execution_details?.date_range_verified && (
-                        <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
-                          <p><strong>Rango procesado:</strong> {log.execution_details.date_range_verified.oldest_order} a {log.execution_details.date_range_verified.newest_order}</p>
-                          <p><strong>Cobertura:</strong> {log.execution_details.date_range_verified.actual_days}/{log.execution_details.date_range_verified.requested_days} días ({Math.round((log.execution_details.date_range_verified.actual_days / log.execution_details.date_range_verified.requested_days) * 100)}%)</p>
+                        <div className="text-xs text-muted-foreground bg-muted p-2 rounded mb-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                              <p><strong>Rango procesado:</strong> {log.execution_details.date_range_verified.oldest_order} a {log.execution_details.date_range_verified.newest_order}</p>
+                              <p><strong>Cobertura:</strong> 
+                                <span className={`font-medium ml-1 ${getCoverageColor(log.execution_details.date_range_verified.coverage_percentage)}`}>
+                                  {log.execution_details.date_range_verified.actual_days}/{log.execution_details.date_range_verified.requested_days} días ({log.execution_details.date_range_verified.coverage_percentage}%)
+                                </span>
+                              </p>
+                            </div>
+                            {log.execution_details.date_range_verified.date_gaps > 0 && (
+                              <div>
+                                <p className="text-amber-600">
+                                  <strong>Gaps detectados:</strong> {log.execution_details.date_range_verified.date_gaps} días sin datos
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                       
@@ -267,9 +313,9 @@ export const ShopifySyncManager: React.FC = () => {
                       )}
                       
                       {log.execution_details?.version && (
-                        <div className="text-xs text-green-600 mt-1">
-                          ✅ Versión: {log.execution_details.version}
-                          {log.execution_details.pagination_used && ' • Paginación completa'}
+                        <div className="text-xs text-green-600 mt-1 flex items-center gap-2">
+                          <span>✅ Versión: {log.execution_details.version}</span>
+                          {log.execution_details.segmented_sync && <span>• Sincronización segmentada activa</span>}
                         </div>
                       )}
                     </div>

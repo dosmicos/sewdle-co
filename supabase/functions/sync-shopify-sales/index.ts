@@ -15,23 +15,59 @@ interface ShopifyOrder {
   }>;
 }
 
-interface ShopifyProduct {
-  id: number;
-  variants: Array<{
-    id: number;
-    sku: string;
-    inventory_quantity: number;
-  }>;
+interface SyncChunk {
+  start_date: string;
+  end_date: string;
+  chunk_number: number;
+  total_chunks: number;
 }
 
 // Helper function to add delay for rate limiting
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper function to make paginated Shopify API calls with proper date handling
-async function fetchAllShopifyOrders(
+// Helper function to format date for Shopify API
+const formatShopifyDate = (date: Date): string => {
+  return date.toISOString();
+};
+
+// Helper function to create date chunks for segmented sync
+function createDateChunks(startDate: Date, endDate: Date, chunkSizeDays: number = 7): SyncChunk[] {
+  const chunks: SyncChunk[] = [];
+  let currentStart = new Date(startDate);
+  let chunkNumber = 1;
+  
+  while (currentStart < endDate) {
+    const currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + chunkSizeDays);
+    
+    // Don't exceed the end date
+    if (currentEnd > endDate) {
+      currentEnd.setTime(endDate.getTime());
+    }
+    
+    chunks.push({
+      start_date: formatShopifyDate(currentStart),
+      end_date: formatShopifyDate(currentEnd),
+      chunk_number: chunkNumber,
+      total_chunks: 0 // Will be set after all chunks are created
+    });
+    
+    // Move to next chunk
+    currentStart = new Date(currentEnd);
+    currentStart.setSeconds(currentStart.getSeconds() + 1); // Avoid overlap
+    chunkNumber++;
+  }
+  
+  // Set total chunks for all
+  chunks.forEach(chunk => chunk.total_chunks = chunks.length);
+  return chunks;
+}
+
+// Helper function to fetch orders for a specific date chunk with robust pagination
+async function fetchOrdersForChunk(
   shopifyDomain: string,
   shopifyToken: string,
-  dateFilter: string,
+  chunk: SyncChunk,
   validStatuses: string[],
   logId: string,
   supabase: any
@@ -40,31 +76,37 @@ async function fetchAllShopifyOrders(
   let hasNextPage = true;
   let pageInfo = '';
   let pageCount = 0;
-  const maxPages = 200; // Increased limit for large datasets
+  const maxPages = 50; // Reduced for smaller chunks
   
-  console.log(`🔄 Iniciando paginación completa de órdenes desde: ${dateFilter}`);
+  console.log(`🔄 Chunk ${chunk.chunk_number}/${chunk.total_chunks}: Sincronizando desde ${chunk.start_date} hasta ${chunk.end_date}`);
   
   while (hasNextPage && pageCount < maxPages) {
     pageCount++;
     
-    // Construct URL with pagination - FIXED: using proper date range
-    let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&financial_status=${validStatuses.join(',')}&created_at_min=${dateFilter}&limit=250&fields=id,created_at,financial_status,line_items`;
+    // Construct URL with temporal pagination
+    let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&financial_status=${validStatuses.join(',')}&created_at_min=${encodeURIComponent(chunk.start_date)}&created_at_max=${encodeURIComponent(chunk.end_date)}&limit=50&fields=id,created_at,financial_status,line_items`;
     
     if (pageInfo) {
       ordersUrl += `&since_id=${pageInfo}`;
     }
     
-    console.log(`📄 Página ${pageCount}: Procesando desde orden ID ${pageInfo || 'inicio'}`);
+    console.log(`📄 Chunk ${chunk.chunk_number}, Página ${pageCount}: Procesando desde orden ID ${pageInfo || 'inicio'}`);
     
     // Update progress in sync log
     await supabase
       .from('sync_control_logs')
       .update({ 
         execution_details: {
+          currentChunk: chunk.chunk_number,
+          totalChunks: chunk.total_chunks,
           currentPage: pageCount,
           totalProcessed: allOrders.length,
-          status: 'paginating',
-          lastOrderId: pageInfo
+          status: 'processing_chunk',
+          lastOrderId: pageInfo,
+          currentDateRange: {
+            from: chunk.start_date,
+            to: chunk.end_date
+          }
         }
       })
       .eq('id', logId);
@@ -79,67 +121,66 @@ async function fetchAllShopifyOrders(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ Error en página ${pageCount}: ${response.status} - ${errorText}`);
+        console.error(`❌ Error en chunk ${chunk.chunk_number}, página ${pageCount}: ${response.status} - ${errorText}`);
         
         // Handle rate limiting with exponential backoff
         if (response.status === 429) {
-          const waitTime = Math.min(2000 * Math.pow(2, pageCount % 5), 10000);
-          console.log(`⏳ Rate limit hit, esperando ${waitTime}ms...`);
+          const waitTime = Math.min(5000 * Math.pow(2, pageCount % 4), 30000);
+          console.log(`⏳ Rate limit hit en chunk ${chunk.chunk_number}, esperando ${waitTime}ms...`);
           await delay(waitTime);
           pageCount--; // Retry same page
           continue;
         }
         
-        throw new Error(`Error en página ${pageCount}: ${response.status} - ${errorText}`);
+        throw new Error(`Error en chunk ${chunk.chunk_number}, página ${pageCount}: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
       const orders = data.orders || [];
       
-      console.log(`📦 Página ${pageCount}: ${orders.length} órdenes obtenidas`);
+      console.log(`📦 Chunk ${chunk.chunk_number}, Página ${pageCount}: ${orders.length} órdenes obtenidas`);
       
       if (orders.length === 0) {
-        console.log(`✅ No más órdenes disponibles en página ${pageCount}`);
+        console.log(`✅ No más órdenes en chunk ${chunk.chunk_number}, página ${pageCount}`);
         hasNextPage = false;
         break;
       }
       
-      // Filter orders by date to ensure we're within our range
-      const filteredOrders = orders.filter(order => {
-        const orderDate = new Date(order.created_at);
-        const filterDate = new Date(dateFilter);
-        return orderDate >= filterDate;
-      });
-      
-      console.log(`🔍 Página ${pageCount}: ${filteredOrders.length}/${orders.length} órdenes dentro del rango de fecha`);
-      allOrders.push(...filteredOrders);
+      // All orders should be within our date range since we're using created_at_min/max
+      allOrders.push(...orders);
       
       // Determine if there are more pages
-      if (orders.length < 250) {
-        console.log(`✅ Última página alcanzada (${orders.length} < 250 órdenes)`);
+      if (orders.length < 50) {
+        console.log(`✅ Última página de chunk ${chunk.chunk_number} alcanzada (${orders.length} < 50 órdenes)`);
         hasNextPage = false;
       } else {
         // Use the last order ID for pagination
         pageInfo = orders[orders.length - 1].id.toString();
-        console.log(`➡️ Continuando con orden ID: ${pageInfo}`);
+        console.log(`➡️ Chunk ${chunk.chunk_number} continuando con orden ID: ${pageInfo}`);
       }
       
-      // Rate limiting: wait between requests
-      await delay(500);
+      // Rate limiting: wait between requests (longer for historical data)
+      await delay(1000);
       
     } catch (error) {
-      console.error(`❌ Error en paginación página ${pageCount}:`, error);
+      console.error(`❌ Error en chunk ${chunk.chunk_number}, página ${pageCount}:`, error);
       
       // Update sync log with error
       await supabase
         .from('sync_control_logs')
         .update({ 
-          error_message: `Error en paginación página ${pageCount}: ${error.message}`,
+          error_message: `Error en chunk ${chunk.chunk_number}, página ${pageCount}: ${error.message}`,
           execution_details: {
+            currentChunk: chunk.chunk_number,
+            totalChunks: chunk.total_chunks,
             currentPage: pageCount,
             totalProcessed: allOrders.length,
             status: 'error',
-            lastOrderId: pageInfo
+            lastOrderId: pageInfo,
+            currentDateRange: {
+              from: chunk.start_date,
+              to: chunk.end_date
+            }
           }
         })
         .eq('id', logId);
@@ -148,19 +189,7 @@ async function fetchAllShopifyOrders(
     }
   }
   
-  console.log(`✅ Paginación completada: ${pageCount} páginas procesadas, ${allOrders.length} órdenes totales en el rango`);
-  
-  // Verify date range coverage
-  if (allOrders.length > 0) {
-    const oldestOrder = allOrders.reduce((oldest, current) => 
-      new Date(current.created_at) < new Date(oldest.created_at) ? current : oldest
-    );
-    const newestOrder = allOrders.reduce((newest, current) => 
-      new Date(current.created_at) > new Date(newest.created_at) ? current : newest
-    );
-    
-    console.log(`📊 Rango de órdenes obtenidas: ${oldestOrder.created_at} a ${newestOrder.created_at}`);
-  }
+  console.log(`✅ Chunk ${chunk.chunk_number} completado: ${pageCount} páginas procesadas, ${allOrders.length} órdenes en el rango`);
   
   return allOrders;
 }
@@ -180,7 +209,7 @@ Deno.serve(async (req) => {
     const days = body.days || 90; // Default to 90 days for initial sync
     const scheduled = body.scheduled || false;
 
-    console.log(`🔄 Iniciando sincronización Shopify CORREGIDA - Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
+    console.log(`🔄 Iniciando sincronización Shopify SEGMENTADA - Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -221,9 +250,9 @@ Deno.serve(async (req) => {
         status: 'running',
         days_processed: days,
         execution_details: {
-          pagination_enabled: true,
+          segmented_sync: true,
           rate_limiting: true,
-          version: '3.0-corrected',
+          version: '4.0-segmented',
           target_days: days
         }
       })
@@ -238,55 +267,90 @@ Deno.serve(async (req) => {
     logId = logEntry.id;
     console.log(`📝 Log de sincronización creado: ${logId}`);
 
-    // FIXED: Calculate proper date filter to ensure EXACTLY the requested days
+    // Calculate date range for sync
     const now = new Date();
-    const targetDate = new Date(now);
-    targetDate.setDate(targetDate.getDate() - days);
-    targetDate.setHours(0, 0, 0, 0); // Start from beginning of day
-    const dateFilter = targetDate.toISOString();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0); // Start from beginning of day
+    
+    const endDate = new Date(now);
+    endDate.setHours(23, 59, 59, 999); // End at end of current day
 
-    console.log(`📅 CORREGIDO: Obteniendo órdenes desde: ${dateFilter} hasta ahora (${days} días completos - modo ${mode})`);
+    console.log(`📅 SEGMENTADO: Obteniendo órdenes desde: ${startDate.toISOString()} hasta ${endDate.toISOString()} (${days} días - modo ${mode})`);
     console.log(`🏪 Shopify Store: ${shopifyDomain}`);
+
+    // Create date chunks for segmented sync
+    const chunkSizeDays = mode === 'initial' ? 7 : (mode === 'monthly' ? 10 : 3); // Smaller chunks for initial sync
+    const dateChunks = createDateChunks(startDate, endDate, chunkSizeDays);
+    
+    console.log(`📊 Creados ${dateChunks.length} chunks de ${chunkSizeDays} días cada uno`);
 
     // Get orders with financial status filter to exclude cancelled/refunded orders
     const validStatuses = ['paid', 'partially_paid'];
     
-    // Use the improved paginated function to get ALL orders in date range
-    const orders = await fetchAllShopifyOrders(
-      shopifyDomain,
-      shopifyToken,
-      dateFilter,
-      validStatuses,
-      logId,
-      supabase
-    );
+    let allOrders: ShopifyOrder[] = [];
     
-    console.log(`📦 TOTAL obtenidas ${orders.length} órdenes válidas con paginación completa mejorada`);
-    if (orders.length > 0) {
-      console.log(`📊 Primera orden: ${orders[0]?.created_at}, Última: ${orders[orders.length-1]?.created_at}`);
+    // Process each chunk sequentially
+    for (const chunk of dateChunks) {
+      try {
+        console.log(`🔄 Procesando chunk ${chunk.chunk_number}/${chunk.total_chunks}: ${chunk.start_date} a ${chunk.end_date}`);
+        
+        const chunkOrders = await fetchOrdersForChunk(
+          shopifyDomain,
+          shopifyToken,
+          chunk,
+          validStatuses,
+          logId,
+          supabase
+        );
+        
+        allOrders.push(...chunkOrders);
+        
+        console.log(`✅ Chunk ${chunk.chunk_number} completado: ${chunkOrders.length} órdenes obtenidas`);
+        
+        // Longer delay between chunks to respect rate limits
+        if (chunk.chunk_number < chunk.total_chunks) {
+          console.log(`⏳ Esperando 3 segundos antes del siguiente chunk...`);
+          await delay(3000);
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error procesando chunk ${chunk.chunk_number}:`, error);
+        throw new Error(`Error en chunk ${chunk.chunk_number}: ${error.message}`);
+      }
+    }
+    
+    console.log(`📦 TOTAL SEGMENTADO obtenidas ${allOrders.length} órdenes válidas de ${dateChunks.length} chunks`);
+    
+    if (allOrders.length > 0) {
+      // Sort orders by date to verify coverage
+      allOrders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      console.log(`📊 Primera orden: ${allOrders[0]?.created_at}, Última: ${allOrders[allOrders.length-1]?.created_at}`);
       
       // Calculate actual days covered
-      const firstOrderDate = new Date(orders[orders.length-1]?.created_at);
-      const lastOrderDate = new Date(orders[0]?.created_at);
-      const daysCovered = Math.ceil((lastOrderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24));
-      console.log(`📊 Días realmente cubiertos: ${daysCovered} días`);
+      const firstOrderDate = new Date(allOrders[0]?.created_at);
+      const lastOrderDate = new Date(allOrders[allOrders.length-1]?.created_at);
+      const daysCovered = Math.ceil((lastOrderDate.getTime() - firstOrderDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      console.log(`📊 Días realmente cubiertos: ${daysCovered} días de ${days} solicitados`);
     }
 
     // Update sync log with orders count
     await supabase
       .from('sync_control_logs')
       .update({ 
-        orders_processed: orders.length,
+        orders_processed: allOrders.length,
         execution_details: {
-          pagination_enabled: true,
+          segmented_sync: true,
           rate_limiting: true,
-          version: '3.0-corrected',
+          version: '4.0-segmented',
           target_days: days,
-          total_orders_found: orders.length,
+          chunks_processed: dateChunks.length,
+          total_orders_found: allOrders.length,
           status: 'processing_orders',
           date_range: {
-            from: dateFilter,
-            to: now.toISOString()
+            from: startDate.toISOString(),
+            to: endDate.toISOString()
           }
         }
       })
@@ -316,7 +380,7 @@ Deno.serve(async (req) => {
     let skippedItems = 0;
     const dateMetrics = new Map(); // Track sales by date
 
-    orders.forEach((order, index) => {
+    allOrders.forEach((order, index) => {
       // Skip orders with invalid financial status (additional safety check)
       if (!validStatuses.includes(order.financial_status)) {
         console.log(`⚠️ Orden ${order.id} omitida por estado financiero: ${order.financial_status}`);
@@ -331,9 +395,9 @@ Deno.serve(async (req) => {
       }
       dateMetrics.set(orderDate, dateMetrics.get(orderDate) + 1);
       
-      // Progress logging every 50 orders
-      if (index % 50 === 0) {
-        console.log(`🔄 Procesando orden ${index + 1}/${orders.length}: ${order.id} del ${orderDate}`);
+      // Progress logging every 100 orders
+      if (index % 100 === 0) {
+        console.log(`🔄 Procesando orden ${index + 1}/${allOrders.length}: ${order.id} del ${orderDate}`);
       }
       
       order.line_items.forEach(item => {
@@ -383,8 +447,8 @@ Deno.serve(async (req) => {
       console.log(`📊 Rango de fechas procesadas: ${sortedDates[0]} a ${sortedDates[sortedDates.length-1]}`);
     }
 
-    // Clean existing metrics for the specific period only (selective cleaning based on mode)
-    const deleteStartDate = targetDate.toISOString().split('T')[0];
+    // Clean existing metrics for the specific period only
+    const deleteStartDate = startDate.toISOString().split('T')[0];
     const { error: deleteError } = await supabase
       .from('sales_metrics')
       .delete()
@@ -477,7 +541,8 @@ Deno.serve(async (req) => {
       mode,
       period_days: days,
       actual_days_covered: dateMetrics.size,
-      shopify_orders_processed: orders.length,
+      chunks_processed: dateChunks.length,
+      shopify_orders_processed: allOrders.length,
       items_processed: processedItems,
       items_skipped: skippedItems,
       unique_variants_with_sales: uniqueVariants,
@@ -485,12 +550,14 @@ Deno.serve(async (req) => {
       total_orders_processed: totalOrders,
       metrics_created: salesMetrics.length,
       variants_updated: variantsUpdated,
-      pagination_used: true,
+      segmented_sync: true,
       date_range_verified: {
         requested_days: days,
         actual_days: dateMetrics.size,
+        coverage_percentage: Math.round((dateMetrics.size / days) * 100),
         oldest_order: sortedDates.length > 0 ? sortedDates[0] : null,
-        newest_order: sortedDates.length > 0 ? sortedDates[sortedDates.length-1] : null
+        newest_order: sortedDates.length > 0 ? sortedDates[sortedDates.length-1] : null,
+        date_gaps: days - dateMetrics.size
       },
       status: 'completed'
     };
@@ -507,12 +574,12 @@ Deno.serve(async (req) => {
       })
       .eq('id', logId);
 
-    console.log('📋 Resumen de sincronización CORREGIDA COMPLETA:', JSON.stringify(summary, null, 2));
+    console.log('📋 Resumen de sincronización SEGMENTADA COMPLETA:', JSON.stringify(summary, null, 2));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Sincronización de ventas Shopify CORREGIDA completada - Modo: ${mode} - ${dateMetrics.size}/${days} días procesados`,
+        message: `Sincronización de ventas Shopify SEGMENTADA completada - Modo: ${mode} - ${dateMetrics.size}/${days} días procesados (${Math.round((dateMetrics.size / days) * 100)}% cobertura)`,
         summary
       }),
       {
