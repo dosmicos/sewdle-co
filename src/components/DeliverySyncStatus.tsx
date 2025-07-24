@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,10 +43,6 @@ export const DeliverySyncStatus = ({
       (item.quantity_approved || 0) + (item.quantity_defective || 0) > 0
     );
     
-    const syncedItems = items.filter((item: any) => 
-      item.synced_to_shopify || item.quantity_approved === 0
-    ).length;
-    
     const itemsWithApprovedQty = items.filter((item: any) => 
       item.quantity_approved > 0
     ).length;
@@ -54,25 +51,35 @@ export const DeliverySyncStatus = ({
       item.quantity_approved > 0 && !item.synced_to_shopify && item.sync_error_message
     ).length;
 
-    // Verificar si la entrega está en estado de revisión (solo pending e in_quality)
+    // CORRECCIÓN: Verificar si la entrega está en estado de revisión (solo pending e in_quality)
     const isInReview = delivery.status === 'in_quality' || delivery.status === 'pending';
     
     // Las entregas aprobadas (approved) y parcialmente aprobadas (partial_approved) pueden sincronizarse
     const canBeSynced = delivery.status === 'approved' || delivery.status === 'partial_approved';
     
-    // Una entrega está completamente sincronizada si:
-    // 1. No está en revisión Y
+    // CORRECCIÓN: Items que están realmente sincronizados (solo contar los aprobados y sincronizados)
+    const syncedApprovedItems = items.filter((item: any) => 
+      item.quantity_approved > 0 && item.synced_to_shopify
+    ).length;
+    
+    // CORRECCIÓN: Items que no necesitan sincronización (cantidad aprobada = 0 en entregas NO en revisión)
+    const itemsNotNeedingSync = items.filter((item: any) => 
+      item.quantity_approved === 0 && !isInReview
+    ).length;
+    
+    // CORRECCIÓN: Una entrega está completamente sincronizada si:
+    // 1. NO está en revisión Y
     // 2. Todos los items con cantidad aprobada > 0 están sincronizados Y
     // 3. Tiene al menos un item procesado
     const itemsNeedingSync = items.filter((item: any) => item.quantity_approved > 0);
-    const syncedApprovedItems = itemsNeedingSync.filter((item: any) => item.synced_to_shopify);
     const isFullySynced = !isInReview && canBeSynced && 
-      (itemsNeedingSync.length === 0 || syncedApprovedItems.length === itemsNeedingSync.length) &&
+      (itemsNeedingSync.length === 0 || syncedApprovedItems === itemsNeedingSync.length) &&
       totalItems > 0;
 
     return {
       totalItems,
-      syncedItems,
+      syncedApprovedItems,
+      itemsNotNeedingSync,
       itemsWithApprovedQty,
       failedItems,
       reviewedItems: reviewedItems.length,
@@ -80,15 +87,15 @@ export const DeliverySyncStatus = ({
       isInReview,
       canBeSynced,
       hasFailures: failedItems > 0,
-      needsSync: itemsWithApprovedQty > 0 && syncedItems < totalItems && canBeSynced
+      needsSync: itemsWithApprovedQty > 0 && syncedApprovedItems < itemsWithApprovedQty && canBeSynced
     };
   };
 
   const syncStats = getSyncStats();
 
-  // Determinar estado visual
+  // Determinar estado visual - CORRECCIÓN: priorizar "En Revisión"
   const getSyncStatusInfo = () => {
-    // Si está en revisión, mostrar estado de revisión
+    // PRIORIDAD 1: Si está en revisión, mostrar estado de revisión SIN IMPORTAR nada más
     if (syncStats.isInReview) {
       return {
         icon: Clock,
@@ -99,16 +106,7 @@ export const DeliverySyncStatus = ({
       };
     }
 
-    if (syncStats.isFullySynced) {
-      return {
-        icon: CheckCircle,
-        color: 'bg-green-100 text-green-800 border-green-200',
-        text: size === 'sm' ? '' : 'Sincronizado',
-        variant: 'default' as const,
-        showIcon: true
-      };
-    }
-
+    // PRIORIDAD 2: Si tiene errores de sincronización
     if (syncStats.hasFailures) {
       return {
         icon: XCircle,
@@ -119,6 +117,7 @@ export const DeliverySyncStatus = ({
       };
     }
 
+    // PRIORIDAD 3: Si necesita sincronización
     if (syncStats.needsSync) {
       return {
         icon: AlertTriangle,
@@ -129,7 +128,18 @@ export const DeliverySyncStatus = ({
       };
     }
 
-    // Para entregas aprobadas/parciales sin items aprobados (solo defectuosos)
+    // PRIORIDAD 4: Si está completamente sincronizado
+    if (syncStats.isFullySynced) {
+      return {
+        icon: CheckCircle,
+        color: 'bg-green-100 text-green-800 border-green-200',
+        text: size === 'sm' ? '' : 'Sincronizado',
+        variant: 'default' as const,
+        showIcon: true
+      };
+    }
+
+    // PRIORIDAD 5: Para entregas aprobadas/parciales sin items aprobados (solo defectuosos)
     if (syncStats.canBeSynced && syncStats.itemsWithApprovedQty === 0) {
       return {
         icon: CheckCircle,
@@ -140,20 +150,11 @@ export const DeliverySyncStatus = ({
       };
     }
 
-    if (syncStats.itemsWithApprovedQty === 0 && !syncStats.canBeSynced) {
-      return {
-        icon: Info,
-        color: 'bg-gray-100 text-gray-800 border-gray-200',
-        text: size === 'sm' ? '' : 'Sin Items',
-        variant: 'outline' as const,
-        showIcon: true
-      };
-    }
-
+    // PRIORIDAD 6: Sin items o estado indefinido
     return {
-      icon: Clock,
+      icon: Info,
       color: 'bg-gray-100 text-gray-800 border-gray-200',
-      text: size === 'sm' ? '' : 'Pendiente',
+      text: size === 'sm' ? '' : 'Sin Items',
       variant: 'outline' as const,
       showIcon: true
     };
@@ -209,17 +210,20 @@ export const DeliverySyncStatus = ({
     }
   };
 
-  // Obtener información detallada para tooltip
+  // Obtener información detallada para tooltip - MEJORADA
   const getTooltipContent = () => {
     const details = [
       `Total items: ${syncStats.totalItems}`,
       `Items revisados: ${syncStats.reviewedItems}`,
-      `Sincronizados: ${syncStats.syncedItems}`,
       `Con cantidad aprobada: ${syncStats.itemsWithApprovedQty}`,
+      `Items aprobados sincronizados: ${syncStats.syncedApprovedItems}`,
     ];
 
     if (syncStats.isInReview) {
       details.push(`Estado: En proceso de revisión de calidad`);
+      details.push(`Nota: La sincronización se realizará tras la aprobación`);
+    } else if (syncStats.canBeSynced) {
+      details.push(`Estado: Puede sincronizarse`);
     }
 
     if (syncStats.failedItems > 0) {
@@ -310,7 +314,7 @@ export const DeliverySyncStatus = ({
             <Alert className="mt-2">
               <Clock className="h-4 w-4" />
               <AlertDescription>
-                Hay {syncStats.itemsWithApprovedQty - (syncStats.syncedItems - (syncStats.totalItems - syncStats.itemsWithApprovedQty))} items pendientes de sincronización
+                Hay {syncStats.itemsWithApprovedQty - syncStats.syncedApprovedItems} items pendientes de sincronización
               </AlertDescription>
             </Alert>
           )}
