@@ -32,9 +32,13 @@ export const useInventorySync = () => {
       const result = data;
       
       if (result.success) {
+        const alreadySyncedCount = result.summary.already_synced || 0;
+        const successfulCount = result.summary.successful || 0;
+        const totalProcessed = successfulCount + alreadySyncedCount;
+        
         toast({
           title: "Inventario sincronizado",
-          description: `${result.summary.successful} productos actualizados en Shopify`,
+          description: `${totalProcessed} productos procesados (${successfulCount} sincronizados, ${alreadySyncedCount} ya estaban sincronizados)`,
         });
         
         if (result.summary.failed > 0) {
@@ -87,9 +91,29 @@ export const useInventorySync = () => {
     }
   };
 
+  const checkSyncStatus = async (deliveryId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select('sync_in_progress, last_sync_attempt, synced_to_shopify')
+        .eq('id', deliveryId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error checking sync status:', error);
+      return null;
+    }
+  };
+
   return {
     syncApprovedItemsToShopify,
     fetchSyncLogs,
+    checkSyncStatus,
     loading
   };
 };

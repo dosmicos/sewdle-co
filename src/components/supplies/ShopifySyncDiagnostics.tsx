@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, CheckCircle, XCircle, RefreshCw, Search, Package } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertTriangle, CheckCircle, XCircle, RefreshCw, Search, Package, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import InventoryDuplicationFixer from './InventoryDuplicationFixer';
 
 interface SyncLogItem {
   sku: string;
@@ -22,6 +24,7 @@ interface SyncLogItem {
 interface DeliverySyncInfo {
   id: string;
   tracking_number: string;
+  sync_in_progress: boolean;
   sync_logs: {
     id: string;
     synced_at: string;
@@ -61,7 +64,7 @@ const ShopifySyncDiagnostics = () => {
       const deliveryIds = [...new Set(syncLogs?.map(log => log.delivery_id))];
       const { data: deliveriesData, error: deliveriesError } = await supabase
         .from('deliveries')
-        .select('id, tracking_number')
+        .select('id, tracking_number, sync_in_progress')
         .in('id', deliveryIds);
 
       if (deliveriesError) throw deliveriesError;
@@ -82,6 +85,7 @@ const ShopifySyncDiagnostics = () => {
           deliveryMap.set(deliveryId, {
             id: deliveryId,
             tracking_number: delivery.tracking_number,
+            sync_in_progress: delivery.sync_in_progress,
             sync_logs: []
           });
         }
@@ -149,6 +153,15 @@ const ShopifySyncDiagnostics = () => {
   );
 
   const getStatusBadge = (delivery: DeliverySyncInfo) => {
+    if (delivery.sync_in_progress) {
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1">
+          <RefreshCw className="w-3 h-3 animate-spin" />
+          Sincronizando
+        </Badge>
+      );
+    }
+
     const latestLog = delivery.sync_logs[0];
     if (!latestLog) return null;
 
@@ -178,6 +191,15 @@ const ShopifySyncDiagnostics = () => {
       .map(item => item.sku);
   };
 
+  const getSyncCount = (delivery: DeliverySyncInfo): number => {
+    return delivery.sync_logs.length;
+  };
+
+  const hasDuplicatedSyncs = (delivery: DeliverySyncInfo): boolean => {
+    const successfulSyncs = delivery.sync_logs.filter(log => log.success_count > 0);
+    return successfulSyncs.length > 1;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -188,138 +210,173 @@ const ShopifySyncDiagnostics = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Diagnóstico de Sincronización Shopify
-          </CardTitle>
-          <CardDescription>
-            Revisa y corrige problemas de sincronización de inventario con Shopify
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Buscar por número de entrega..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Button onClick={loadSyncData} variant="outline">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Actualizar
-              </Button>
-            </div>
+      <Tabs defaultValue="diagnostics" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="diagnostics" className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            Diagnóstico de Sincronización
+          </TabsTrigger>
+          <TabsTrigger value="duplications" className="flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            Corrector de Duplicaciones
+          </TabsTrigger>
+        </TabsList>
 
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Entrega</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Última Sincronización</TableHead>
-                    <TableHead>Éxitos / Errores</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredDeliveries.map((delivery) => {
-                    const latestLog = delivery.sync_logs[0];
-                    const failedSkus = getFailedSkus(delivery);
-                    
-                    return (
-                      <TableRow key={delivery.id}>
-                        <TableCell className="font-medium">
-                          {delivery.tracking_number}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(delivery)}
-                        </TableCell>
-                        <TableCell>
-                          {latestLog ? new Date(latestLog.synced_at).toLocaleString('es-ES') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {latestLog ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-600">{latestLog.success_count}</span>
-                              <span>/</span>
-                              <span className="text-red-600">{latestLog.error_count}</span>
-                            </div>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {failedSkus.length > 0 ? (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => resyncDelivery(delivery.id, delivery.tracking_number, failedSkus)}
-                              disabled={resyncing === delivery.id}
-                            >
-                              {resyncing === delivery.id ? (
-                                <RefreshCw className="w-3 h-3 animate-spin mr-1" />
-                              ) : (
-                                <AlertTriangle className="w-3 h-3 mr-1" />
-                              )}
-                              Corregir Errores ({failedSkus.length})
-                            </Button>
-                          ) : (
-                            <Badge variant="default" className="bg-green-100 text-green-800">
-                              Sin errores
-                            </Badge>
-                          )}
-                        </TableCell>
+        <TabsContent value="diagnostics" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Diagnóstico de Sincronización Shopify
+              </CardTitle>
+              <CardDescription>
+                Revisa y corrige problemas de sincronización de inventario con Shopify
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Buscar por número de entrega..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button onClick={loadSyncData} variant="outline">
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Actualizar
+                  </Button>
+                </div>
+
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Entrega</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Sincronizaciones</TableHead>
+                        <TableHead>Última Sincronización</TableHead>
+                        <TableHead>Éxitos / Errores</TableHead>
+                        <TableHead>Acciones</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Detalles de errores expandibles */}
-            {filteredDeliveries.map((delivery) => {
-              const latestLog = delivery.sync_logs[0];
-              const errorItems = latestLog?.sync_results.filter(item => item.status === 'error') || [];
-              
-              if (errorItems.length === 0) return null;
-
-              return (
-                <Card key={`${delivery.id}-details`} className="mt-4">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Errores en {delivery.tracking_number}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {errorItems.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                          <div className="flex-1">
-                            <div className="font-medium">SKU: {item.sku}</div>
-                            {item.productTitle && (
-                              <div className="text-sm text-gray-600">{item.productTitle}</div>
-                            )}
-                            <div className="text-sm text-red-600">
-                              Error: {item.error}
-                            </div>
-                            {item.quantityAttempted && (
-                              <div className="text-sm text-gray-500">
-                                Cantidad intentada: {item.quantityAttempted}
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDeliveries.map((delivery) => {
+                        const latestLog = delivery.sync_logs[0];
+                        const failedSkus = getFailedSkus(delivery);
+                        const syncCount = getSyncCount(delivery);
+                        const hasDuplicates = hasDuplicatedSyncs(delivery);
+                        
+                        return (
+                          <TableRow key={delivery.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {delivery.tracking_number}
+                                {hasDuplicates && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    Duplicada
+                                  </Badge>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            </TableCell>
+                            <TableCell>
+                              {getStatusBadge(delivery)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={syncCount > 1 ? "destructive" : "default"}>
+                                {syncCount}x
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {latestLog ? new Date(latestLog.synced_at).toLocaleString('es-ES') : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {latestLog ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-green-600">{latestLog.success_count}</span>
+                                  <span>/</span>
+                                  <span className="text-red-600">{latestLog.error_count}</span>
+                                </div>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {failedSkus.length > 0 ? (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => resyncDelivery(delivery.id, delivery.tracking_number, failedSkus)}
+                                  disabled={resyncing === delivery.id || delivery.sync_in_progress}
+                                >
+                                  {resyncing === delivery.id ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+                                  ) : (
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                  )}
+                                  Corregir Errores ({failedSkus.length})
+                                </Button>
+                              ) : (
+                                <Badge variant="default" className="bg-green-100 text-green-800">
+                                  Sin errores
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Detalles de errores expandibles */}
+                {filteredDeliveries.map((delivery) => {
+                  const latestLog = delivery.sync_logs[0];
+                  const errorItems = latestLog?.sync_results.filter(item => item.status === 'error') || [];
+                  
+                  if (errorItems.length === 0) return null;
+
+                  return (
+                    <Card key={`${delivery.id}-details`} className="mt-4">
+                      <CardHeader>
+                        <CardTitle className="text-lg">Errores en {delivery.tracking_number}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {errorItems.map((item, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                              <div className="flex-1">
+                                <div className="font-medium">SKU: {item.sku}</div>
+                                {item.productTitle && (
+                                  <div className="text-sm text-gray-600">{item.productTitle}</div>
+                                )}
+                                <div className="text-sm text-red-600">
+                                  Error: {item.error}
+                                </div>
+                                {item.quantityAttempted && (
+                                  <div className="text-sm text-gray-500">
+                                    Cantidad intentada: {item.quantityAttempted}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="duplications">
+          <InventoryDuplicationFixer />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
