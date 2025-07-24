@@ -36,24 +36,40 @@ export const DeliverySyncStatus = ({
   const getSyncStats = () => {
     const items = delivery.delivery_items || [];
     const totalItems = items.length;
+    
+    // Solo considerar items que han sido revisados en calidad (approved + defective > 0)
+    const reviewedItems = items.filter((item: any) => 
+      (item.quantity_approved || 0) + (item.quantity_defective || 0) > 0
+    );
+    
     const syncedItems = items.filter((item: any) => 
       item.synced_to_shopify || item.quantity_approved === 0
     ).length;
+    
     const itemsWithApprovedQty = items.filter((item: any) => 
       item.quantity_approved > 0
     ).length;
+    
     const failedItems = items.filter((item: any) => 
       item.quantity_approved > 0 && !item.synced_to_shopify && item.sync_error_message
     ).length;
+
+    // Verificar si la entrega está en estado de revisión
+    const isInReview = delivery.status === 'in_quality' || delivery.status === 'pending';
+    
+    // Si está en revisión, no puede estar sincronizada
+    const isFullySynced = !isInReview && syncedItems === totalItems && totalItems > 0;
 
     return {
       totalItems,
       syncedItems,
       itemsWithApprovedQty,
       failedItems,
-      isFullySynced: syncedItems === totalItems,
+      reviewedItems: reviewedItems.length,
+      isFullySynced,
+      isInReview,
       hasFailures: failedItems > 0,
-      needsSync: itemsWithApprovedQty > 0 && syncedItems < totalItems
+      needsSync: itemsWithApprovedQty > 0 && syncedItems < totalItems && !isInReview
     };
   };
 
@@ -61,12 +77,24 @@ export const DeliverySyncStatus = ({
 
   // Determinar estado visual
   const getSyncStatusInfo = () => {
+    // Si está en revisión, mostrar estado de revisión
+    if (syncStats.isInReview) {
+      return {
+        icon: Clock,
+        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        text: size === 'sm' ? '' : 'En Revisión',
+        variant: 'secondary' as const,
+        showIcon: true
+      };
+    }
+
     if (syncStats.isFullySynced) {
       return {
         icon: CheckCircle,
         color: 'bg-green-100 text-green-800 border-green-200',
-        text: 'Sincronizado',
-        variant: 'default' as const
+        text: size === 'sm' ? '' : 'Sincronizado',
+        variant: 'default' as const,
+        showIcon: true
       };
     }
 
@@ -74,8 +102,9 @@ export const DeliverySyncStatus = ({
       return {
         icon: XCircle,
         color: 'bg-red-100 text-red-800 border-red-200',
-        text: 'Error de Sync',
-        variant: 'destructive' as const
+        text: size === 'sm' ? '' : 'Error de Sync',
+        variant: 'destructive' as const,
+        showIcon: true
       };
     }
 
@@ -83,25 +112,28 @@ export const DeliverySyncStatus = ({
       return {
         icon: AlertTriangle,
         color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        text: 'Pendiente Sync',
-        variant: 'secondary' as const
+        text: size === 'sm' ? '' : 'Pendiente Sync',
+        variant: 'secondary' as const,
+        showIcon: true
       };
     }
 
     if (syncStats.itemsWithApprovedQty === 0) {
       return {
         icon: Info,
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
-        text: 'Sin Items Aprobados',
-        variant: 'outline' as const
+        color: 'bg-gray-100 text-gray-800 border-gray-200',
+        text: size === 'sm' ? '' : 'Sin Items',
+        variant: 'outline' as const,
+        showIcon: true
       };
     }
 
     return {
       icon: Clock,
       color: 'bg-gray-100 text-gray-800 border-gray-200',
-      text: 'Pendiente',
-      variant: 'outline' as const
+      text: size === 'sm' ? '' : 'Pendiente',
+      variant: 'outline' as const,
+      showIcon: true
     };
   };
 
@@ -159,9 +191,14 @@ export const DeliverySyncStatus = ({
   const getTooltipContent = () => {
     const details = [
       `Total items: ${syncStats.totalItems}`,
+      `Items revisados: ${syncStats.reviewedItems}`,
       `Sincronizados: ${syncStats.syncedItems}`,
       `Con cantidad aprobada: ${syncStats.itemsWithApprovedQty}`,
     ];
+
+    if (syncStats.isInReview) {
+      details.push(`Estado: En proceso de revisión de calidad`);
+    }
 
     if (syncStats.failedItems > 0) {
       details.push(`Con errores: ${syncStats.failedItems}`);
@@ -187,13 +224,20 @@ export const DeliverySyncStatus = ({
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge 
-              variant={statusInfo.variant}
-              className={`${statusInfo.color} ${badgeSize} flex items-center gap-1 cursor-help`}
-            >
-              <IconComponent className={iconSize} />
-              {statusInfo.text}
-            </Badge>
+            {/* Para tamaño sm, mostrar solo el ícono sin texto */}
+            {size === 'sm' && statusInfo.text === '' ? (
+              <div className={`${statusInfo.color} ${badgeSize} flex items-center justify-center rounded-full cursor-help`}>
+                <IconComponent className={iconSize} />
+              </div>
+            ) : (
+              <Badge 
+                variant={statusInfo.variant}
+                className={`${statusInfo.color} ${badgeSize} flex items-center gap-1 cursor-help`}
+              >
+                <IconComponent className={iconSize} />
+                {statusInfo.text}
+              </Badge>
+            )}
           </TooltipTrigger>
           <TooltipContent>
             <pre className="text-xs whitespace-pre-wrap">{getTooltipContent()}</pre>
@@ -201,8 +245,8 @@ export const DeliverySyncStatus = ({
         </Tooltip>
       </TooltipProvider>
 
-      {/* Botón de reintento para casos con error o pendientes */}
-      {(syncStats.hasFailures || syncStats.needsSync) && (
+      {/* Botón de reintento para casos con error o pendientes (solo si no está en revisión) */}
+      {(syncStats.hasFailures || (syncStats.needsSync && !syncStats.isInReview)) && (
         <Button
           variant="ghost"
           size="sm"
@@ -217,6 +261,15 @@ export const DeliverySyncStatus = ({
       {/* Detalles expandidos */}
       {showDetails && (
         <div className="ml-4">
+          {syncStats.isInReview && (
+            <Alert className="mt-2">
+              <Clock className="h-4 w-4" />
+              <AlertDescription>
+                Esta entrega está en proceso de revisión de calidad. La sincronización se realizará automáticamente una vez aprobada.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {syncStats.hasFailures && (
             <Alert variant="destructive" className="mt-2">
               <AlertTriangle className="h-4 w-4" />
@@ -231,7 +284,7 @@ export const DeliverySyncStatus = ({
             </Alert>
           )}
 
-          {syncStats.needsSync && !syncStats.hasFailures && (
+          {syncStats.needsSync && !syncStats.hasFailures && !syncStats.isInReview && (
             <Alert className="mt-2">
               <Clock className="h-4 w-4" />
               <AlertDescription>
