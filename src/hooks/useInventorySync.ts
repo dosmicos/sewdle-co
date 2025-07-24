@@ -18,8 +18,42 @@ export const useInventorySync = () => {
 
   const syncApprovedItemsToShopify = async (syncData: SyncInventoryData) => {
     setLoading(true);
+    
+    // Prevenir sincronizaciones duplicadas
+    const lockKey = `sync_delivery_${syncData.deliveryId}`;
+    
     try {
-      console.log('Syncing approved items to Shopify with enhanced rate limiting:', syncData);
+      console.log('🔄 Iniciando sincronización con Shopify:', syncData);
+      
+      // Verificar si ya hay una sincronización en progreso
+      const { data: existingLock } = await supabase
+        .from('deliveries')
+        .select('last_sync_attempt, sync_attempts')
+        .eq('id', syncData.deliveryId)
+        .single();
+      
+      if (existingLock?.last_sync_attempt) {
+        const lastAttempt = new Date(existingLock.last_sync_attempt);
+        const now = new Date();
+        const timeDiff = now.getTime() - lastAttempt.getTime();
+        
+        // Si hay un intento reciente (menos de 30 segundos), prevenir duplicación
+        if (timeDiff < 30000) {
+          console.log('⚠️ Sincronización reciente detectada, evitando duplicación');
+          throw new Error('Sincronización ya en progreso. Espere unos segundos antes de reintentar.');
+        }
+      }
+      
+      // Marcar inicio de sincronización
+      await supabase
+        .from('deliveries')
+        .update({ 
+          last_sync_attempt: new Date().toISOString(),
+          sync_attempts: (existingLock?.sync_attempts || 0) + 1
+        })
+        .eq('id', syncData.deliveryId);
+      
+      console.log('✅ Lock establecido, procediendo con sincronización:', syncData);
 
       const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
         body: syncData

@@ -11,6 +11,7 @@ export const useFilteredDeliveries = () => {
 
   const loadDeliveries = async () => {
     try {
+      // Fetch deliveries with sync status information
       const data = await fetchDeliveries();
       
       if (isWorkshopUser && workshopFilter) {

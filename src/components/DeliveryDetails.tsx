@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import DeliverySyncStatus from './DeliverySyncStatus';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useInventorySync } from '@/hooks/useInventorySync';
@@ -637,9 +638,17 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
             </p>
           </div>
         </div>
-        <Badge className={getStatusColor(delivery.status)}>
-          {getStatusText(delivery.status)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={getStatusColor(delivery.status)}>
+            {getStatusText(delivery.status)}
+          </Badge>
+          <DeliverySyncStatus 
+            delivery={delivery} 
+            onSyncSuccess={loadDelivery} 
+            showDetails={true}
+            size="md"
+          />
+        </div>
       </div>
 
       {/* Resumen de Revisión - Solo mostrar si ha sido procesada */}

@@ -26,6 +26,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical } from 'lucide-react';
+import DeliverySyncStatus from '@/components/DeliverySyncStatus';
+import SyncMonitoringDashboard from '@/components/SyncMonitoringDashboard';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -607,6 +609,7 @@ const DeliveriesPage = () => {
 
         {isAdmin && (
           <TabsContent value="sync" className="space-y-4 mt-3">
+            <SyncMonitoringDashboard />
             <InventorySyncManager />
           </TabsContent>
         )}
@@ -744,6 +747,15 @@ const DeliveryCards = ({
                 </div>
               </div>
 
+              {/* Estado de sincronización */}
+              <div className="mb-3">
+                <DeliverySyncStatus 
+                  delivery={delivery} 
+                  onSyncSuccess={() => window.location.reload()} 
+                  size="sm"
+                />
+              </div>
+
               <div className="flex items-center gap-2">
                 <Button 
                   variant="outline" 
@@ -842,6 +854,7 @@ const DeliveryTable = ({
               <TableHead>Aprobadas</TableHead>
               <TableHead>Defectuosas</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Sync Shopify</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
@@ -867,6 +880,13 @@ const DeliveryTable = ({
                     <Badge className={getStatusColor(delivery.status)}>
                       {getStatusText(delivery.status)}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DeliverySyncStatus 
+                      delivery={delivery} 
+                      onSyncSuccess={() => window.location.reload()} 
+                      size="sm"
+                    />
                   </TableCell>
                   <TableCell>
                     {delivery.delivery_date ? format(new Date(delivery.delivery_date), 'dd/MM/yyyy', { locale: es }) : 'Sin fecha'}
