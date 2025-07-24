@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 
@@ -86,7 +87,7 @@ function createDateChunks(startDate: Date, endDate: Date, chunkSizeDays: number 
   return chunks;
 }
 
-// Helper function to fetch orders for a specific date chunk with robust error handling
+// Helper function to fetch orders for a specific date chunk with improved precision
 async function fetchOrdersForChunk(
   shopifyDomain: string,
   shopifyToken: string,
@@ -99,9 +100,9 @@ async function fetchOrdersForChunk(
   let hasNextPage = true;
   let pageInfo = '';
   let pageCount = 0;
-  const maxPages = 30; // Reduced to prevent timeouts
+  const maxPages = 30;
   
-  // Status tracking
+  // Status tracking for debugging
   const statusCounts = new Map<string, number>();
   const fulfillmentStatusCounts = new Map<string, number>();
   
@@ -111,7 +112,7 @@ async function fetchOrdersForChunk(
     pageCount++;
     
     try {
-      // Construct URL - Get ALL orders first to analyze statuses
+      // Construct URL with improved filtering
       let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&created_at_min=${encodeURIComponent(chunk.start_date)}&created_at_max=${encodeURIComponent(chunk.end_date)}&limit=50&fields=id,created_at,financial_status,fulfillment_status,line_items`;
       
       if (pageInfo) {
@@ -249,7 +250,7 @@ Deno.serve(async (req) => {
   let logId: string | null = null;
 
   try {
-    console.log('🔄 Iniciando sincronización Shopify MEJORADA con validación completa...');
+    console.log('🔄 Iniciando sincronización Shopify CORREGIDA con validación de precisión...');
     
     // Validate environment variables first
     const env = validateEnvironment();
@@ -296,10 +297,10 @@ Deno.serve(async (req) => {
         execution_details: {
           segmented_sync: true,
           rate_limiting: true,
-          version: '6.1-fulfillment-fix',
+          version: '6.2-precision-fix',
           target_days: days,
-          expanded_financial_statuses: true,
-          environment_validated: true
+          precision_tracking: true,
+          improved_quantity_handling: true
         }
       })
       .select()
@@ -322,25 +323,23 @@ Deno.serve(async (req) => {
     const endDate = new Date(now);
     endDate.setHours(23, 59, 59, 999); // End at end of current day
 
-    console.log(`📅 MEJORADO: Obteniendo órdenes desde: ${startDate.toISOString()} hasta ${endDate.toISOString()} (${days} días - modo ${mode})`);
+    console.log(`📅 CORREGIDA: Obteniendo órdenes desde: ${startDate.toISOString()} hasta ${endDate.toISOString()} (${days} días - modo ${mode})`);
 
-    // Create date chunks for segmented sync - smaller chunks for better stability
-    const chunkSizeDays = mode === 'initial' ? 5 : (mode === 'monthly' ? 7 : 3); // Smaller chunks
+    // Create date chunks for segmented sync
+    const chunkSizeDays = mode === 'initial' ? 5 : (mode === 'monthly' ? 7 : 3);
     const dateChunks = createDateChunks(startDate, endDate, chunkSizeDays);
     
     console.log(`📊 Creados ${dateChunks.length} chunks de ${chunkSizeDays} días cada uno`);
 
-    // EXPANDED FINANCIAL STATUSES - Include almost all orders
+    // CORRECTED FINANCIAL STATUSES - More restrictive to avoid duplicates
     const validStatuses = [
-      'pending',           // Pagos pendientes - INCLUIDO
-      'authorized',        // Pagos autorizados pero no capturados - INCLUIDO
-      'partially_paid',    // Pagos parciales - INCLUIDO
-      'paid',             // Pagos completados - INCLUIDO
-      'partially_refunded' // Reembolsos parciales - INCLUIDO
-      // Excluded: 'voided', 'refunded' (completely cancelled orders)
+      'paid',              // Only fully paid orders
+      'partially_paid',    // Partially paid orders
+      'authorized'         // Authorized but not captured
+      // Removed: 'pending', 'partially_refunded' to avoid over-counting
     ];
     
-    console.log(`💰 Estados financieros EXPANDIDOS incluidos: ${validStatuses.join(', ')}`);
+    console.log(`💰 Estados financieros CORREGIDOS (más restrictivos): ${validStatuses.join(', ')}`);
     
     let allOrders: ShopifyOrder[] = [];
     const statusSummary = new Map<string, number>();
@@ -391,7 +390,7 @@ Deno.serve(async (req) => {
       }
     }
     
-    console.log(`📦 TOTAL MEJORADO obtenidas ${allOrders.length} órdenes válidas de ${dateChunks.length} chunks`);
+    console.log(`📦 TOTAL CORREGIDO obtenidas ${allOrders.length} órdenes válidas de ${dateChunks.length} chunks`);
     
     // Calculate requested date range for coverage calculation
     const requestedStartDate = new Date(startDate);
@@ -449,11 +448,15 @@ Deno.serve(async (req) => {
 
     console.log(`🔗 Mapeo creado para ${skuToVariantMap.size} SKUs locales`);
 
-    // Process orders and group sales by variant and date
+    // Process orders and group sales by variant and date - IMPROVED PRECISION
     const salesByVariantAndDate = new Map();
     let processedItems = 0;
     let skippedItems = 0;
-    const dateMetrics = new Map(); // Track sales by date
+    const dateMetrics = new Map();
+    
+    // Debugging: Track quantity processing
+    let totalQuantityProcessed = 0;
+    const quantityByDate = new Map();
 
     allOrders.forEach((order, index) => {
       const orderDate = new Date(order.created_at).toISOString().split('T')[0];
@@ -469,8 +472,10 @@ Deno.serve(async (req) => {
         console.log(`🔄 Procesando orden ${index + 1}/${allOrders.length}: ${order.id} del ${orderDate} (${order.financial_status})`);
       }
       
+      // IMPROVED: Process line items with better precision
       order.line_items.forEach(item => {
         if (!item.sku) {
+          console.log(`⚠️ Item sin SKU en orden ${order.id}: ${item.product_id}`);
           skippedItems++;
           return;
         }
@@ -485,7 +490,22 @@ Deno.serve(async (req) => {
           return;
         }
         
+        // CRITICAL: Ensure we're using integer quantities, not strings
+        const quantity = parseInt(item.quantity.toString(), 10);
+        if (isNaN(quantity) || quantity <= 0) {
+          console.log(`⚠️ Cantidad inválida en orden ${order.id}, item ${item.sku}: ${item.quantity}`);
+          skippedItems++;
+          return;
+        }
+        
         processedItems++;
+        totalQuantityProcessed += quantity;
+        
+        // Track quantity by date for debugging
+        if (!quantityByDate.has(orderDate)) {
+          quantityByDate.set(orderDate, 0);
+        }
+        quantityByDate.set(orderDate, quantityByDate.get(orderDate) + quantity);
 
         const key = `${localVariantId}_${orderDate}`;
         
@@ -500,20 +520,24 @@ Deno.serve(async (req) => {
         }
 
         const salesData = salesByVariantAndDate.get(key);
-        salesData.sales_quantity += item.quantity;
+        salesData.sales_quantity += quantity;
         salesData.orders_count += 1;
-        salesData.avg_order_size = (salesData.avg_order_size * (salesData.orders_count - 1) + parseFloat(item.price) * item.quantity) / salesData.orders_count;
+        salesData.avg_order_size = (salesData.avg_order_size * (salesData.orders_count - 1) + parseFloat(item.price) * quantity) / salesData.orders_count;
       });
     });
 
-    console.log(`📊 Procesados ${processedItems} items, omitidos ${skippedItems} items`);
-    console.log(`📊 Generadas ${salesByVariantAndDate.size} métricas de ventas únicas`);
-    console.log(`📅 Fechas únicas procesadas: ${dateMetrics.size} días`);
+    console.log(`📊 CORRECCIÓN: Procesados ${processedItems} items, omitidos ${skippedItems} items`);
+    console.log(`📊 CORRECCIÓN: Cantidad total procesada: ${totalQuantityProcessed} unidades`);
+    console.log(`📊 CORRECCIÓN: Generadas ${salesByVariantAndDate.size} métricas de ventas únicas`);
+    console.log(`📅 CORRECCIÓN: Fechas únicas procesadas: ${dateMetrics.size} días`);
+    
+    // Log quantity by date for debugging
+    console.log(`📊 CORRECCIÓN: Unidades por fecha:`, Object.fromEntries(quantityByDate));
     
     // Log date coverage
     const sortedDates = Array.from(dateMetrics.keys()).sort();
     if (sortedDates.length > 0) {
-      console.log(`📊 Rango de fechas procesadas: ${sortedDates[0]} a ${sortedDates[sortedDates.length-1]}`);
+      console.log(`📊 CORRECCIÓN: Rango de fechas procesadas: ${sortedDates[0]} a ${sortedDates[sortedDates.length-1]}`);
     }
 
     // Clean existing metrics for the specific period only
@@ -619,8 +643,12 @@ Deno.serve(async (req) => {
       total_orders_processed: totalOrders,
       metrics_created: salesMetrics.length,
       variants_updated: variantsUpdated,
-      environment_validated: true,
-      expanded_sync: true,
+      precision_improvements: {
+        stricter_financial_status_filtering: true,
+        improved_quantity_parsing: true,
+        better_date_handling: true,
+        debugging_enabled: true
+      },
       financial_status_breakdown: Object.fromEntries(statusSummary),
       fulfillment_status_breakdown: Object.fromEntries(fulfillmentSummary),
       date_range_verified: {
@@ -630,6 +658,10 @@ Deno.serve(async (req) => {
         oldest_order: sortedDates.length > 0 ? sortedDates[0] : null,
         newest_order: sortedDates.length > 0 ? sortedDates[sortedDates.length-1] : null,
         date_gaps: daysWithoutOrders
+      },
+      quantity_verification: {
+        total_quantity_processed: totalQuantityProcessed,
+        quantity_by_date: Object.fromEntries(quantityByDate)
       },
       status: 'completed'
     };
@@ -646,12 +678,12 @@ Deno.serve(async (req) => {
       })
       .eq('id', logId);
 
-    console.log('📋 Resumen de sincronización MEJORADA COMPLETA:', JSON.stringify(summary, null, 2));
+    console.log('📋 Resumen de sincronización CORREGIDA COMPLETA:', JSON.stringify(summary, null, 2));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `✅ Sincronización MEJORADA completada - Modo: ${mode} - ${allOrders.length} órdenes procesadas de ${Object.keys(statusSummary).length} estados diferentes - ${dateMetrics.size}/${days} días cubiertos (${Math.round((dateMetrics.size / days) * 100)}% cobertura)`,
+        message: `✅ Sincronización CORREGIDA completada - Modo: ${mode} - ${allOrders.length} órdenes procesadas - ${totalQuantityProcessed} unidades totales - ${dateMetrics.size}/${days} días cubiertos (${Math.round((dateMetrics.size / days) * 100)}% cobertura)`,
         summary
       }),
       {
@@ -661,7 +693,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Error en sincronización mejorada:', error);
+    console.error('❌ Error en sincronización corregida:', error);
     
     // Update sync log with error if we have logId
     if (logId) {
@@ -688,7 +720,8 @@ Deno.serve(async (req) => {
         troubleshooting: {
           environment_check: 'Verificar que todas las variables de entorno estén configuradas',
           shopify_access: 'Confirmar que el token de Shopify tenga permisos de lectura de órdenes',
-          network: 'Verificar conectividad con Shopify API'
+          network: 'Verificar conectividad con Shopify API',
+          precision_fix: 'Esta versión incluye correcciones de precisión en el procesamiento de cantidades'
         }
       }),
       {

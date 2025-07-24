@@ -3,51 +3,48 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-interface DiagnosisResult {
-  success: boolean;
-  analysis: {
-    localProducts: number;
-    shopifyProducts: number;
-    matchedSkus: any[];
-    unmatchedSkus: any[];
-    duplicateSkus: any[];
-    emptySkus: any[];
-    formatIssues: any[];
+interface DiagnosticResult {
+  shopify_data: {
+    orders_count: number;
+    total_units: number;
+    unique_products: number;
+    orders: any[];
   };
-  patterns: {
-    localPatterns: any;
-    shopifyPatterns: any;
-    suggestions: any[];
+  local_data: {
+    metrics_count: number;
+    total_units: number;
+    unique_variants: number;
+    date_range: string;
   };
-  summary: {
-    totalLocalProducts: number;
-    totalShopifyProducts: number;
-    matchedSkus: number;
-    unmatchedSkus: number;
-    emptySkus: number;
-    matchRate: string;
+  discrepancies: {
+    unit_difference: number;
+    missing_orders: number;
+    duplicate_entries: number;
   };
 }
 
-interface SyncLogDetails {
-  delivery_id: string;
-  sync_results: any[];
-  success_count: number;
-  error_count: number;
-  synced_at: string;
+interface DiagnosticSummary {
+  date: string;
+  shopify_units: number;
+  local_units: number;
+  difference: number;
+  accuracy_percentage: number;
 }
 
 export const useShopifyDiagnosis = () => {
   const [loading, setLoading] = useState(false);
-  const [diagnosisResult, setDiagnosisResult] = useState<DiagnosisResult | null>(null);
+  const [diagnostic, setDiagnostic] = useState<DiagnosticResult | null>(null);
+  const [summary, setSummary] = useState<DiagnosticSummary | null>(null);
   const { toast } = useToast();
 
-  const runDiagnosis = async () => {
+  const runDiagnosis = async (date: string = '2025-07-23') => {
     setLoading(true);
     try {
-      console.log('Ejecutando diagnóstico de Shopify...');
+      console.log(`🔍 Ejecutando diagnóstico para ${date}...`);
 
-      const { data, error } = await supabase.functions.invoke('diagnose-shopify-sync');
+      const { data, error } = await supabase.functions.invoke('diagnose-shopify-sync', {
+        body: { date }
+      });
 
       if (error) {
         throw error;
@@ -57,19 +54,30 @@ export const useShopifyDiagnosis = () => {
         throw new Error(data.error || 'Error en el diagnóstico');
       }
 
-      setDiagnosisResult(data);
+      setDiagnostic(data.diagnostic);
+      setSummary(data.summary);
 
-      toast({
-        title: "Diagnóstico completado",
-        description: `${data.summary.matchedSkus} SKUs coinciden de ${data.summary.totalLocalProducts} productos locales`,
-      });
+      const { difference, shopify_units, local_units } = data.summary;
+      
+      if (difference === 0) {
+        toast({
+          title: "✅ Sincronización correcta",
+          description: `Los datos están sincronizados correctamente: ${shopify_units} unidades`,
+        });
+      } else {
+        toast({
+          title: "⚠️ Discrepancia encontrada",
+          description: `Shopify: ${shopify_units} unidades vs Local: ${local_units} unidades (diferencia: ${difference})`,
+          variant: "destructive",
+        });
+      }
 
       return data;
 
     } catch (error) {
       console.error('Error en diagnóstico:', error);
       toast({
-        title: "Error en diagnóstico",
+        title: "Error de diagnóstico",
         description: error instanceof Error ? error.message : "No se pudo ejecutar el diagnóstico",
         variant: "destructive",
       });
@@ -79,119 +87,16 @@ export const useShopifyDiagnosis = () => {
     }
   };
 
-  const getSyncLogDetails = async (deliveryId: string): Promise<SyncLogDetails[]> => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('inventory_sync_logs')
-        .select('*')
-        .eq('delivery_id', deliveryId)
-        .order('synced_at', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      // Type conversion to handle Supabase Json type
-      const typedData = (data || []).map(item => ({
-        ...item,
-        sync_results: Array.isArray(item.sync_results) 
-          ? item.sync_results 
-          : typeof item.sync_results === 'string' 
-            ? JSON.parse(item.sync_results)
-            : []
-      })) as SyncLogDetails[];
-
-      return typedData;
-    } catch (error) {
-      console.error('Error obteniendo logs de sincronización:', error);
-      toast({
-        title: "Error obteniendo logs",
-        description: error instanceof Error ? error.message : "No se pudieron obtener los logs",
-        variant: "destructive",
-      });
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const testShopifyConnection = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
-        body: {
-          deliveryId: 'test',
-          approvedItems: []
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Test de conexión exitoso",
-        description: `Conectado a ${data.diagnostics?.location_name || 'Shopify'}. API: ${data.diagnostics?.api_method || 'inventory_levels_api'}`,
-      });
-
-      return data;
-    } catch (error) {
-      console.error('Error en test de conexión:', error);
-      toast({
-        title: "Error de conexión",
-        description: error instanceof Error ? error.message : "No se pudo conectar con Shopify",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runInventoryDiagnosis = async () => {
-    setLoading(true);
-    try {
-      console.log('Ejecutando diagnóstico de inventario...');
-
-      // Hacer una llamada de prueba para obtener información de configuración
-      const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
-        body: {
-          deliveryId: 'diagnosis-test',
-          approvedItems: []
-        }
-      });
-
-      if (error && !error.message.includes('Datos de sincronización inválidos')) {
-        throw error;
-      }
-
-      toast({
-        title: "Diagnóstico de inventario completado",
-        description: "Revisa los logs para ver la configuración de Shopify",
-      });
-
-      return data;
-
-    } catch (error) {
-      console.error('Error en diagnóstico de inventario:', error);
-      toast({
-        title: "Error en diagnóstico de inventario",
-        description: error instanceof Error ? error.message : "No se pudo ejecutar el diagnóstico de inventario",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+  const clearDiagnosis = () => {
+    setDiagnostic(null);
+    setSummary(null);
   };
 
   return {
     runDiagnosis,
-    getSyncLogDetails,
-    testShopifyConnection,
-    runInventoryDiagnosis,
-    diagnosisResult,
+    clearDiagnosis,
+    diagnostic,
+    summary,
     loading
   };
 };

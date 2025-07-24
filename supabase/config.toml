@@ -1,7 +1,14 @@
+
 project_id = "ysdcsqsfnckeuafjyrbc"
 
 [functions.intelligent-replenishment]
 verify_jwt = false
 
 [functions.sync-shopify-sales]
+verify_jwt = false
+
+[functions.sync-inventory-shopify]
+verify_jwt = false
+
+[functions.diagnose-shopify-sync]
 verify_jwt = false

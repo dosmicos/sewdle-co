@@ -1,95 +1,74 @@
-import React, { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Package, TruckIcon, BarChart3, Activity } from 'lucide-react';
-import MaterialsCatalog from '@/components/supplies/MaterialsCatalog';
-import MaterialDelivery from '@/components/supplies/MaterialDelivery';
-import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
-import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
-import MaterialForm from '@/components/supplies/MaterialForm';
-import { useAuth } from '@/contexts/AuthContext';
+import { ShopifySyncManager } from '@/components/supplies/ShopifySyncManager';
+import { ShopifySyncDiagnostics } from '@/components/supplies/ShopifySyncDiagnostics';
+import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
+import { SuppliesDashboard } from '@/components/supplies/SuppliesDashboard';
+import { MaterialsCatalog } from '@/components/supplies/MaterialsCatalog';
+import { MaterialDelivery } from '@/components/supplies/MaterialDelivery';
+import { MaterialConsumptionManager } from '@/components/supplies/MaterialConsumptionManager';
+import { ReplenishmentSuggestions } from '@/components/supplies/ReplenishmentSuggestions';
+import { InventorySyncManager } from '@/components/supplies/InventorySyncManager';
+
 const SuppliesPage = () => {
-  const [showMaterialForm, setShowMaterialForm] = useState(false);
-  const {
-    hasPermission
-  } = useAuth();
-
-  // Using correct English module names
-  const canCreateMaterials = hasPermission('insumos', 'create');
-  const canCreateDeliveries = hasPermission('insumos', 'create');
-  const canManageConsumption = hasPermission('insumos', 'edit');
-  return <>
-      <div className="p-6 space-y-8 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-black">Gestión de Insumos</h1>
-            <p className="text-gray-600">Administra materiales, entregas y consumo por taller</p>
-          </div>
-        </div>
-
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="dashboard" className="flex items-center space-x-2">
-              <BarChart3 className="w-4 h-4" />
-              <span>Dashboard</span>
-            </TabsTrigger>
-            <TabsTrigger value="catalog" className="flex items-center space-x-2">
-              <Package className="w-4 h-4" />
-              <span>Catálogo</span>
-            </TabsTrigger>
-            <TabsTrigger value="deliveries" className="flex items-center space-x-2">
-              <TruckIcon className="w-4 h-4" />
-              <span>Entregas</span>
-            </TabsTrigger>
-            <TabsTrigger value="consumption" className="flex items-center space-x-2">
-              <Activity className="w-4 h-4" />
-              <span>Consumo</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dashboard">
-            <SuppliesDashboard />
-          </TabsContent>
-
-          <TabsContent value="catalog">
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-black">Catálogo de Materiales</h2>
-                {canCreateMaterials && <Button onClick={() => setShowMaterialForm(true)} className="text-white bg-[#ff5c02]">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nuevo Material
-                  </Button>}
-              </div>
-              <MaterialsCatalog />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="deliveries">
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-black">Registro de Entregas</h2>
-              <MaterialDelivery canCreateDeliveries={canCreateDeliveries} />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="consumption">
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-black">Gestión de Consumos</h2>
-              {canManageConsumption ? <MaterialConsumptionManager /> : <div className="text-center py-12">
-                  <Activity className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Activity className="w-8 h-8 text-gray-600" />
-                  </Activity>
-                  <h3 className="text-lg font-semibold mb-2 text-black">Sin permisos para gestionar consumos</h3>
-                  <p className="text-gray-600">
-                    No tienes permisos para gestionar el consumo de materiales. Contacta al administrador.
-                  </p>
-                </div>}
-            </div>
-          </TabsContent>
-        </Tabs>
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Gestión de Suministros</h1>
+        <p className="text-gray-600">
+          Administra materiales, entregas, consumos y sincronización con Shopify
+        </p>
       </div>
 
-      {showMaterialForm && canCreateMaterials && <MaterialForm onClose={() => setShowMaterialForm(false)} />}
-    </>;
+      <Tabs defaultValue="dashboard" className="w-full">
+        <TabsList className="grid w-full grid-cols-8">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="materials">Materiales</TabsTrigger>
+          <TabsTrigger value="deliveries">Entregas</TabsTrigger>
+          <TabsTrigger value="consumption">Consumos</TabsTrigger>
+          <TabsTrigger value="replenishment">Reposición</TabsTrigger>
+          <TabsTrigger value="sync-sales">Sync Ventas</TabsTrigger>
+          <TabsTrigger value="sync-inventory">Sync Inventario</TabsTrigger>
+          <TabsTrigger value="diagnostics">Diagnóstico</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6">
+          <SuppliesDashboard />
+        </TabsContent>
+
+        <TabsContent value="materials" className="space-y-6">
+          <MaterialsCatalog />
+        </TabsContent>
+
+        <TabsContent value="deliveries" className="space-y-6">
+          <MaterialDelivery />
+        </TabsContent>
+
+        <TabsContent value="consumption" className="space-y-6">
+          <MaterialConsumptionManager />
+        </TabsContent>
+
+        <TabsContent value="replenishment" className="space-y-6">
+          <ReplenishmentSuggestions />
+        </TabsContent>
+
+        <TabsContent value="sync-sales" className="space-y-6">
+          <ShopifySyncManager />
+        </TabsContent>
+
+        <TabsContent value="sync-inventory" className="space-y-6">
+          <InventorySyncManager />
+        </TabsContent>
+
+        <TabsContent value="diagnostics" className="space-y-6">
+          <div className="space-y-6">
+            <ShopifyDiagnosticTool />
+            <ShopifySyncDiagnostics />
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 };
+
 export default SuppliesPage;
