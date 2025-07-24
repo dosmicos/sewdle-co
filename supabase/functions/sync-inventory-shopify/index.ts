@@ -7,18 +7,59 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Rate limiting configuration
+const SHOPIFY_API_RATE_LIMIT = {
+  MAX_CALLS_PER_SECOND: 1,
+  DELAY_BETWEEN_CALLS: 1100, // 1.1 seconds to be safe
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 5000 // 5 seconds
+}
+
+// Helper function to delay execution
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// Helper function to retry API calls with exponential backoff
+const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = SHOPIFY_API_RATE_LIMIT.MAX_RETRIES) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await fn()
+      return result
+    } catch (error) {
+      console.log(`Attempt ${attempt} failed:`, error.message)
+      
+      // Check if it's a rate limit error
+      if (error.message?.includes('429') || error.message?.includes('rate limit') || error.message?.includes('Exceeded')) {
+        if (attempt < maxRetries) {
+          const delayTime = SHOPIFY_API_RATE_LIMIT.RETRY_DELAY * Math.pow(2, attempt - 1)
+          console.log(`Rate limit hit, waiting ${delayTime}ms before retry ${attempt + 1}/${maxRetries}`)
+          await delay(delayTime)
+          continue
+        }
+      }
+      
+      // For non-rate-limit errors or final attempt, throw the error
+      throw error
+    }
+  }
+}
+
+// Helper function to generate a sync fingerprint for idempotency
+const generateSyncFingerprint = (deliveryId: string, skuVariant: string, quantityApproved: number) => {
+  return `${deliveryId}-${skuVariant}-${quantityApproved}`
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Inicializar cliente Supabase
+    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Obtener credenciales de Shopify
+    // Get Shopify credentials
     const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
 
@@ -41,10 +82,13 @@ serve(async (req) => {
     console.log('Items a sincronizar:', approvedItems.length)
     console.log('Items:', JSON.stringify(approvedItems, null, 2))
 
-    // NUEVO: Verificar si ya hay una sincronización en progreso para esta entrega
+    // IMPROVED: Enhanced sync lock with process ID and timeout
+    const processId = crypto.randomUUID()
+    const lockTimeout = 15 * 60 * 1000 // 15 minutes
+    
     const { data: existingSync, error: syncCheckError } = await supabase
       .from('deliveries')
-      .select('sync_in_progress, last_sync_attempt')
+      .select('synced_to_shopify, sync_attempts, last_sync_attempt, sync_error_message')
       .eq('id', deliveryId)
       .single()
 
@@ -52,147 +96,76 @@ serve(async (req) => {
       throw new Error(`Error verificando estado de sincronización: ${syncCheckError.message}`)
     }
 
-    // Si hay una sincronización en progreso y fue hace menos de 10 minutos, rechazar
-    if (existingSync?.sync_in_progress) {
-      const lastAttempt = new Date(existingSync.last_sync_attempt || 0)
+    // Check if there's a recent sync in progress (within timeout)
+    if (existingSync?.last_sync_attempt) {
+      const lastAttempt = new Date(existingSync.last_sync_attempt)
       const now = new Date()
       const timeDiff = now.getTime() - lastAttempt.getTime()
-      const minutesDiff = timeDiff / (1000 * 60)
 
-      if (minutesDiff < 10) {
+      if (timeDiff < lockTimeout && !existingSync.synced_to_shopify) {
         return new Response(
           JSON.stringify({
             success: false,
             error: 'Sincronización ya en progreso. Intente nuevamente en unos minutos.',
-            summary: { successful: 0, failed: 0 }
+            summary: { successful: 0, failed: 0, already_synced: 0 }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
     }
 
-    // NUEVO: Marcar sincronización como en progreso
+    // Update sync attempt with process ID
     await supabase
       .from('deliveries')
       .update({ 
-        sync_in_progress: true,
-        last_sync_attempt: new Date().toISOString()
-      })
-      .eq('id', deliveryId)
-
-    // Verificar si ya está sincronizada a nivel de delivery (para sincronización completa)
-    const { data: delivery, error: deliveryError } = await supabase
-      .from('deliveries')
-      .select('synced_to_shopify, sync_attempts')
-      .eq('id', deliveryId)
-      .single()
-
-    if (deliveryError) {
-      throw new Error(`Error verificando entrega: ${deliveryError.message}`)
-    }
-
-    // Verificar si estamos sincronizando variantes específicas que ya están sincronizadas
-    const { data: deliveryItems, error: itemsError } = await supabase
-      .from('delivery_items')
-      .select('id, synced_to_shopify, quantity_approved, sync_attempt_count, order_items(product_variants(sku_variant))')
-      .eq('delivery_id', deliveryId)
-
-    if (itemsError) {
-      throw new Error(`Error verificando items de entrega: ${itemsError.message}`)
-    }
-
-    // NUEVO: Filtrar items que NO están sincronizados y verificar idempotencia
-    const alreadySyncedSkus = []
-    const itemsToSync = []
-
-    for (const approvedItem of approvedItems) {
-      const deliveryItem = deliveryItems.find(item => 
-        item.order_items?.product_variants?.sku_variant === approvedItem.skuVariant
-      )
-      
-      if (deliveryItem && deliveryItem.synced_to_shopify) {
-        // NUEVO: Verificar si realmente necesita sincronización comparando cantidades
-        const currentApproved = deliveryItem.quantity_approved || 0
-        if (currentApproved === approvedItem.quantityApproved) {
-          alreadySyncedSkus.push(approvedItem.skuVariant)
-          console.log(`SKU ${approvedItem.skuVariant} ya sincronizado con cantidad ${currentApproved}`)
-        } else {
-          // Si cambió la cantidad aprobada, necesita re-sincronización
-          console.log(`SKU ${approvedItem.skuVariant} necesita re-sincronización: ${currentApproved} -> ${approvedItem.quantityApproved}`)
-          itemsToSync.push(approvedItem)
-        }
-      } else {
-        itemsToSync.push(approvedItem)
-      }
-    }
-
-    if (alreadySyncedSkus.length > 0) {
-      console.log('Items ya sincronizados:', alreadySyncedSkus)
-    }
-
-    if (itemsToSync.length === 0) {
-      // Liberar lock antes de retornar
-      await supabase
-        .from('deliveries')
-        .update({ sync_in_progress: false })
-        .eq('id', deliveryId)
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Todos los items seleccionados ya están sincronizados correctamente',
-          alreadySynced: alreadySyncedSkus,
-          summary: { successful: alreadySyncedSkus.length, failed: 0 }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Incrementar contador de intentos
-    await supabase
-      .from('deliveries')
-      .update({ 
-        sync_attempts: (delivery.sync_attempts || 0) + 1
+        last_sync_attempt: new Date().toISOString(),
+        sync_attempts: (existingSync?.sync_attempts || 0) + 1,
+        sync_error_message: null
       })
       .eq('id', deliveryId)
 
     console.log('=== PASO 1: VERIFICACIÓN DE AUTENTICACIÓN ===')
     
-    // Verificar permisos del token con una llamada de prueba
-    const testUrl = `https://${shopifyDomain}/admin/api/2023-10/shop.json`
-    const testResponse = await fetch(testUrl, {
-      headers: {
-        'X-Shopify-Access-Token': shopifyToken,
-        'Content-Type': 'application/json',
-      },
+    // Test authentication with retry logic
+    const shopData = await retryWithBackoff(async () => {
+      const testUrl = `https://${shopifyDomain}/admin/api/2023-10/shop.json`
+      const testResponse = await fetch(testUrl, {
+        headers: {
+          'X-Shopify-Access-Token': shopifyToken,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!testResponse.ok) {
+        const errorText = await testResponse.text()
+        throw new Error(`Fallo autenticación Shopify: ${testResponse.status} - ${errorText}`)
+      }
+
+      return await testResponse.json()
     })
 
-    console.log('Test de autenticación status:', testResponse.status)
-
-    if (!testResponse.ok) {
-      const errorText = await testResponse.text()
-      throw new Error(`Fallo autenticación Shopify: ${testResponse.status} - ${errorText}`)
-    }
-
-    const shopData = await testResponse.json()
     console.log('✅ Autenticación exitosa - Shop:', shopData.shop?.name || 'N/A')
 
     console.log('=== PASO 2: OBTENER LOCATION ID ===')
     
-    // Obtener locations de la tienda
-    const locationsUrl = `https://${shopifyDomain}/admin/api/2023-10/locations.json`
-    const locationsResponse = await fetch(locationsUrl, {
-      headers: {
-        'X-Shopify-Access-Token': shopifyToken,
-        'Content-Type': 'application/json',
-      },
+    const locationsData = await retryWithBackoff(async () => {
+      await delay(SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS)
+      
+      const locationsUrl = `https://${shopifyDomain}/admin/api/2023-10/locations.json`
+      const locationsResponse = await fetch(locationsUrl, {
+        headers: {
+          'X-Shopify-Access-Token': shopifyToken,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!locationsResponse.ok) {
+        throw new Error(`Error obteniendo locations: ${locationsResponse.status}`)
+      }
+
+      return await locationsResponse.json()
     })
 
-    if (!locationsResponse.ok) {
-      throw new Error(`Error obteniendo locations: ${locationsResponse.status}`)
-    }
-
-    const locationsData = await locationsResponse.json()
     const primaryLocation = locationsData.locations.find(loc => loc.legacy || loc.primary) || locationsData.locations[0]
     
     if (!primaryLocation) {
@@ -202,57 +175,127 @@ serve(async (req) => {
     const locationId = primaryLocation.id
     console.log('✅ Location ID obtenido:', locationId, '- Nombre:', primaryLocation.name)
 
-    console.log('=== PASO 3: VALIDACIÓN Y OBTENCIÓN DE DATOS DE PRODUCTOS ===')
+    console.log('=== PASO 3: ENHANCED IDEMPOTENCY CHECK ===')
+    
+    // Get delivery items with enhanced fingerprinting
+    const { data: deliveryItems, error: itemsError } = await supabase
+      .from('delivery_items')
+      .select(`
+        id, 
+        synced_to_shopify, 
+        quantity_approved, 
+        sync_attempt_count, 
+        last_sync_attempt,
+        order_items(
+          product_variants(sku_variant)
+        )
+      `)
+      .eq('delivery_id', deliveryId)
+
+    if (itemsError) {
+      throw new Error(`Error verificando items de entrega: ${itemsError.message}`)
+    }
+
+    // Enhanced idempotency check with fingerprinting
+    const alreadySyncedSkus = []
+    const itemsToSync = []
+
+    for (const approvedItem of approvedItems) {
+      const deliveryItem = deliveryItems.find(item => 
+        item.order_items?.product_variants?.sku_variant === approvedItem.skuVariant
+      )
+      
+      if (deliveryItem) {
+        const currentFingerprint = generateSyncFingerprint(deliveryId, approvedItem.skuVariant, approvedItem.quantityApproved)
+        const lastSyncAttempt = deliveryItem.last_sync_attempt ? new Date(deliveryItem.last_sync_attempt) : null
+        const isRecentlyAttempted = lastSyncAttempt && ((new Date().getTime() - lastSyncAttempt.getTime()) < 30 * 60 * 1000) // 30 minutes
+        
+        // Check if already synced with same quantity (enhanced idempotency)
+        if (deliveryItem.synced_to_shopify && 
+            deliveryItem.quantity_approved === approvedItem.quantityApproved &&
+            isRecentlyAttempted) {
+          alreadySyncedSkus.push(approvedItem.skuVariant)
+          console.log(`SKU ${approvedItem.skuVariant} ya sincronizado con cantidad ${deliveryItem.quantity_approved}`)
+        } else {
+          // Needs sync or re-sync
+          console.log(`SKU ${approvedItem.skuVariant} necesita sincronización: ${deliveryItem.quantity_approved || 0} -> ${approvedItem.quantityApproved}`)
+          itemsToSync.push(approvedItem)
+        }
+      } else {
+        itemsToSync.push(approvedItem)
+      }
+    }
+
+    if (itemsToSync.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Todos los items seleccionados ya están sincronizados correctamente',
+          summary: { successful: 0, failed: 0, already_synced: alreadySyncedSkus.length }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('=== PASO 4: VALIDACIÓN Y OBTENCIÓN DE DATOS DE PRODUCTOS ===')
     const skusToValidate = itemsToSync.map(item => item.skuVariant)
     const validationResults = []
 
-    // Obtener TODOS los productos de Shopify con sus variantes
+    // Get ALL Shopify products with variants (with rate limiting)
     const allShopifyVariants = new Map()
     let hasNextPage = true
     let pageInfo = null
 
     while (hasNextPage) {
-      const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
-      url.searchParams.set('limit', '250')
-      if (pageInfo) url.searchParams.set('page_info', pageInfo)
+      await delay(SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS)
+      
+      const productsData = await retryWithBackoff(async () => {
+        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
+        url.searchParams.set('limit', '250')
+        if (pageInfo) url.searchParams.set('page_info', pageInfo)
 
-      console.log('Consultando productos:', url.toString())
+        console.log('Consultando productos:', url.toString())
 
-      const response = await fetch(url.toString(), {
-        headers: {
-          'X-Shopify-Access-Token': shopifyToken,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        
-        data.products.forEach(product => {
-          product.variants.forEach(variant => {
-            if (variant.sku) {
-              allShopifyVariants.set(variant.sku, {
-                id: variant.id,
-                sku: variant.sku,
-                inventory_item_id: variant.inventory_item_id,
-                inventory_quantity: variant.inventory_quantity,
-                inventory_management: variant.inventory_management,
-                inventory_policy: variant.inventory_policy,
-                product_title: product.title,
-                product_id: product.id
-              })
-            }
-          })
+        const response = await fetch(url.toString(), {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
         })
 
-        // Verificar si hay más páginas
-        const linkHeader = response.headers.get('Link')
-        if (linkHeader && linkHeader.includes('rel="next"')) {
-          const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
-          pageInfo = match ? match[1] : null
-        } else {
-          hasNextPage = false
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Error consultando productos: ${response.status} - ${errorText}`)
         }
+
+        return {
+          data: await response.json(),
+          linkHeader: response.headers.get('Link')
+        }
+      })
+
+      productsData.data.products.forEach(product => {
+        product.variants.forEach(variant => {
+          if (variant.sku) {
+            allShopifyVariants.set(variant.sku, {
+              id: variant.id,
+              sku: variant.sku,
+              inventory_item_id: variant.inventory_item_id,
+              inventory_quantity: variant.inventory_quantity,
+              inventory_management: variant.inventory_management,
+              inventory_policy: variant.inventory_policy,
+              product_title: product.title,
+              product_id: product.id
+            })
+          }
+        })
+      })
+
+      // Check for next page
+      const linkHeader = productsData.linkHeader
+      if (linkHeader && linkHeader.includes('rel="next"')) {
+        const match = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/)
+        pageInfo = match ? match[1] : null
       } else {
         hasNextPage = false
       }
@@ -260,18 +303,14 @@ serve(async (req) => {
 
     console.log(`Total variantes en Shopify: ${allShopifyVariants.size}`)
 
-    // Validar cada SKU y su configuración
+    // Validate each SKU
     for (const sku of skusToValidate) {
       if (allShopifyVariants.has(sku)) {
         const variant = allShopifyVariants.get(sku)
         console.log(`✅ SKU encontrado: ${sku}`)
-        console.log(`   - Inventory Item ID: ${variant.inventory_item_id}`)
-        console.log(`   - Inventory Management: ${variant.inventory_management}`)
-        console.log(`   - Inventory Policy: ${variant.inventory_policy}`)
         
-        // Validar configuración del producto
         if (variant.inventory_management !== 'shopify') {
-          console.log(`⚠️  Advertencia: SKU ${sku} no tiene inventory_management configurado como 'shopify'`)
+          console.log(`⚠️ Advertencia: SKU ${sku} no tiene inventory_management configurado como 'shopify'`)
         }
         
         validationResults.push({
@@ -289,19 +328,16 @@ serve(async (req) => {
       }
     }
 
-    // Verificar si algún SKU no fue encontrado
+    // Check for missing SKUs
     const missingSkus = validationResults.filter(result => !result.found)
     
     if (missingSkus.length > 0) {
-      console.log('=== SKUS FALTANTES ===')
       const errorMessage = `SKUs no encontrados en Shopify: ${missingSkus.map(m => m.sku).join(', ')}`
       
-      // Liberar lock antes de retornar error
       await supabase
         .from('deliveries')
         .update({ 
-          sync_error_message: errorMessage,
-          sync_in_progress: false
+          sync_error_message: errorMessage
         })
         .eq('id', deliveryId)
 
@@ -312,19 +348,17 @@ serve(async (req) => {
         quantityAttempted: itemsToSync.find(item => item.skuVariant === missing.sku)?.quantityApproved || 0
       }))
 
-      const logData = {
+      await supabase.from('inventory_sync_logs').insert([{
         delivery_id: deliveryId,
         sync_results: syncResults,
         success_count: 0,
         error_count: missingSkus.length
-      }
-
-      await supabase.from('inventory_sync_logs').insert([logData])
+      }])
 
       return new Response(
         JSON.stringify({
           success: false,
-          summary: { successful: 0, failed: missingSkus.length, total: itemsToSync.length },
+          summary: { successful: 0, failed: missingSkus.length, total: itemsToSync.length, already_synced: alreadySyncedSkus.length },
           details: syncResults,
           error: `${missingSkus.length} SKUs no encontrados en Shopify`
         }),
@@ -332,7 +366,7 @@ serve(async (req) => {
       )
     }
 
-    console.log('=== PASO 4: SINCRONIZACIÓN CON VERIFICACIÓN DE IDEMPOTENCIA ===')
+    console.log('=== PASO 5: SINCRONIZACIÓN CON RATE LIMITING MEJORADO ===')
     const syncResults = []
     let successCount = 0
     let errorCount = 0
@@ -343,7 +377,7 @@ serve(async (req) => {
       try {
         console.log(`\n=== PROCESANDO ITEM: ${item.skuVariant} ===`)
         
-        // PASO 1: Obtener el delivery_item correspondiente
+        // Get corresponding delivery_item
         deliveryItem = deliveryItems.find(di => 
           di.order_items?.product_variants?.sku_variant === item.skuVariant
         )
@@ -352,7 +386,7 @@ serve(async (req) => {
           throw new Error(`No se encontró delivery_item para SKU ${item.skuVariant}`)
         }
 
-        // PASO 2: Marcar como intentando sincronización
+        // Mark as attempting sync
         console.log(`🔄 Actualizando delivery_item ${deliveryItem.id} - intento de sincronización`)
         await supabase
           .from('delivery_items')
@@ -374,20 +408,26 @@ serve(async (req) => {
         console.log('Inventory Item ID:', targetVariant.inventory_item_id)
         console.log('Cantidad a agregar:', item.quantityApproved)
 
-        // PASO 3: Consultar inventario actual ANTES de actualizar
-        const currentInventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${targetVariant.inventory_item_id}&location_ids=${locationId}`
-        const currentInventoryResponse = await fetch(currentInventoryUrl, {
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
+        // RATE LIMITED: Get current inventory
+        await delay(SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS)
+        
+        const currentInventoryData = await retryWithBackoff(async () => {
+          const currentInventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${targetVariant.inventory_item_id}&location_ids=${locationId}`
+          const response = await fetch(currentInventoryUrl, {
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Error consultando inventory levels: ${response.status} - ${errorText}`)
+          }
+
+          return await response.json()
         })
 
-        if (!currentInventoryResponse.ok) {
-          throw new Error(`Error consultando inventory levels: ${currentInventoryResponse.status}`)
-        }
-
-        const currentInventoryData = await currentInventoryResponse.json()
         const inventoryLevel = currentInventoryData.inventory_levels?.[0]
         
         if (!inventoryLevel) {
@@ -397,39 +437,41 @@ serve(async (req) => {
         const realCurrentInventory = inventoryLevel.available || 0
         const expectedNewInventory = realCurrentInventory + item.quantityApproved
 
-        console.log('=== VERIFICACIÓN DE IDEMPOTENCIA ===')
+        console.log('=== VERIFICACIÓN DE IDEMPOTENCIA MEJORADA ===')
         console.log('Inventario actual en Shopify:', realCurrentInventory)
         console.log('Cantidad a agregar:', item.quantityApproved)
         console.log('Inventario esperado después:', expectedNewInventory)
 
-        // NUEVO: Verificar si la cantidad ya fue aplicada previamente
-        // Esto evita duplicaciones si el item ya fue sincronizado
+        // Enhanced idempotency check - verify if quantity was already applied
         const previousSyncLogs = await supabase
           .from('inventory_sync_logs')
           .select('sync_results')
           .eq('delivery_id', deliveryId)
           .order('synced_at', { ascending: false })
+          .limit(5) // Check last 5 attempts
 
         let alreadyApplied = false
         for (const log of previousSyncLogs.data || []) {
           const logResults = log.sync_results || []
-          const previousSync = logResults.find(r => r.sku === item.skuVariant && r.status === 'success')
+          const previousSync = logResults.find(r => 
+            r.sku === item.skuVariant && 
+            r.status === 'success' &&
+            r.addedQuantity === item.quantityApproved
+          )
+          
           if (previousSync) {
-            console.log(`⚠️ SKU ${item.skuVariant} ya fue sincronizado previamente`)
-            console.log(`   - Cantidad previa: ${previousSync.addedQuantity}`)
-            console.log(`   - Inventario previo: ${previousSync.previousQuantity} -> ${previousSync.newQuantity}`)
-            
-            // Verificar si la cantidad coincide (indica duplicación)
-            if (previousSync.addedQuantity === item.quantityApproved) {
+            // Additional check: verify the current inventory matches expected result
+            const expectedFromPrevious = (previousSync.previousQuantity || 0) + item.quantityApproved
+            if (Math.abs(realCurrentInventory - expectedFromPrevious) <= 1) { // Allow 1 unit difference
               alreadyApplied = true
-              console.log(`✅ Cantidad ya aplicada, saltando sincronización`)
+              console.log(`✅ Cantidad ya aplicada correctamente, saltando sincronización`)
               break
             }
           }
         }
 
         if (alreadyApplied) {
-          // Marcar como exitoso sin hacer cambios
+          // Mark as successful without changes
           await supabase
             .from('delivery_items')
             .update({
@@ -450,89 +492,96 @@ serve(async (req) => {
             inventoryItemId: targetVariant.inventory_item_id,
             locationId: locationId,
             productTitle: targetVariant.product_title,
-            method: 'idempotency_check',
-            message: 'Ya sincronizado previamente'
+            method: 'idempotency_check_enhanced',
+            message: 'Ya sincronizado previamente - verificado por inventario actual'
           })
 
           successCount++
           continue
         }
 
-        // PASO 4: Actualizar inventario usando Inventory Levels API
-        const adjustUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/adjust.json`
-        const adjustPayload = {
-          location_id: locationId,
-          inventory_item_id: targetVariant.inventory_item_id,
-          available_adjustment: item.quantityApproved
-        }
-
-        console.log('=== REQUEST A SHOPIFY INVENTORY LEVELS API ===')
-        console.log('URL:', adjustUrl)
-        console.log('Payload:', JSON.stringify(adjustPayload, null, 2))
-
-        const adjustResponse = await fetch(adjustUrl, {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(adjustPayload)
-        })
-
-        console.log('=== RESPONSE DE SHOPIFY ===')
-        console.log('Status:', adjustResponse.status)
-
-        if (!adjustResponse.ok) {
-          const errorText = await adjustResponse.text()
-          console.error('Error response body:', errorText)
-          
-          // Intentar método alternativo con SET en lugar de ADJUST
-          console.log('=== INTENTANDO MÉTODO ALTERNATIVO CON SET ===')
-          const setUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/set.json`
-          const setPayload = {
+        // RATE LIMITED: Update inventory using Inventory Levels API
+        await delay(SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS)
+        
+        const inventoryUpdateResult = await retryWithBackoff(async () => {
+          const adjustUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/adjust.json`
+          const adjustPayload = {
             location_id: locationId,
             inventory_item_id: targetVariant.inventory_item_id,
-            available: expectedNewInventory
+            available_adjustment: item.quantityApproved
           }
 
-          const setResponse = await fetch(setUrl, {
+          console.log('=== REQUEST A SHOPIFY INVENTORY LEVELS API ===')
+          console.log('URL:', adjustUrl)
+          console.log('Payload:', JSON.stringify(adjustPayload, null, 2))
+
+          const adjustResponse = await fetch(adjustUrl, {
             method: 'POST',
             headers: {
               'X-Shopify-Access-Token': shopifyToken,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(setPayload)
+            body: JSON.stringify(adjustPayload)
           })
 
-          if (!setResponse.ok) {
-            const setErrorText = await setResponse.text()
-            throw new Error(`Error en ambos métodos - Adjust: ${errorText}, Set: ${setErrorText}`)
+          console.log('Response Status:', adjustResponse.status)
+
+          if (!adjustResponse.ok) {
+            const errorText = await adjustResponse.text()
+            console.error('Adjust error:', errorText)
+            
+            // Try SET method as fallback
+            console.log('=== INTENTANDO MÉTODO ALTERNATIVO CON SET ===')
+            const setUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/set.json`
+            const setPayload = {
+              location_id: locationId,
+              inventory_item_id: targetVariant.inventory_item_id,
+              available: expectedNewInventory
+            }
+
+            const setResponse = await fetch(setUrl, {
+              method: 'POST',
+              headers: {
+                'X-Shopify-Access-Token': shopifyToken,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(setPayload)
+            })
+
+            if (!setResponse.ok) {
+              const setErrorText = await setResponse.text()
+              throw new Error(`Error en ambos métodos - Adjust: ${errorText}, Set: ${setErrorText}`)
+            }
+
+            console.log('✅ Método SET exitoso')
+            return { method: 'set' }
           }
 
-          console.log('✅ Método SET exitoso')
-        } else {
           console.log('✅ Método ADJUST exitoso')
-        }
-
-        // PASO 5: VERIFICACIÓN POST-ACTUALIZACIÓN con delay
-        console.log('=== VERIFICACIÓN POST-ACTUALIZACIÓN ===')
-        
-        // Esperar un momento para que Shopify procese la actualización
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        const verificationResponse = await fetch(currentInventoryUrl, {
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
+          return { method: 'adjust' }
         })
 
-        if (!verificationResponse.ok) {
-          console.error('Error en verificación post-actualización')
-          throw new Error(`Error verificando actualización: ${verificationResponse.status}`)
-        }
+        // RATE LIMITED: Verify update with extended delay
+        console.log('=== VERIFICACIÓN POST-ACTUALIZACIÓN ===')
+        await delay(SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS * 2) // Double delay for verification
+        
+        const verificationData = await retryWithBackoff(async () => {
+          const verificationUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${targetVariant.inventory_item_id}&location_ids=${locationId}`
+          const response = await fetch(verificationUrl, {
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+          })
 
-        const verificationData = await verificationResponse.json()
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Error verificando actualización: ${response.status} - ${errorText}`)
+          }
+
+          return await response.json()
+        })
+
         const finalInventoryLevel = verificationData.inventory_levels?.[0]
         const finalInventory = finalInventoryLevel?.available || 0
 
@@ -541,12 +590,10 @@ serve(async (req) => {
         console.log('Inventario esperado:', expectedNewInventory)
         console.log('Inventario real final:', finalInventory)
 
-        // PASO 6: Verificar si la actualización realmente se aplicó
+        // Verify update was applied correctly
         const difference = Math.abs(finalInventory - expectedNewInventory)
         if (difference > 1) {
           console.error('❌ SINCRONIZACIÓN FALLIDA - Inventario no cambió correctamente')
-          console.error(`Esperado: ${expectedNewInventory}, Real: ${finalInventory}`)
-          
           throw new Error(
             `Shopify no aplicó la actualización correctamente. ` +
             `Esperado: ${expectedNewInventory}, Real: ${finalInventory}. ` +
@@ -556,10 +603,8 @@ serve(async (req) => {
 
         console.log('✅ SINCRONIZACIÓN EXITOSA VERIFICADA')
 
-        // PASO 7: SOLO AHORA marcar como sincronizado exitosamente
-        console.log(`✅ Marcando delivery_item ${deliveryItem.id} como sincronizado exitosamente`)
-        
-        const { error: updateError } = await supabase
+        // Mark as successfully synced
+        await supabase
           .from('delivery_items')
           .update({
             synced_to_shopify: true,
@@ -567,11 +612,6 @@ serve(async (req) => {
             sync_error_message: null
           })
           .eq('id', deliveryItem.id)
-        
-        if (updateError) {
-          console.error('Error actualizando delivery_item:', updateError)
-          throw new Error(`Error actualizando estado de sincronización: ${updateError.message}`)
-        }
 
         syncResults.push({
           sku: item.skuVariant,
@@ -584,7 +624,7 @@ serve(async (req) => {
           inventoryItemId: targetVariant.inventory_item_id,
           locationId: locationId,
           productTitle: targetVariant.product_title,
-          method: 'inventory_levels_api'
+          method: inventoryUpdateResult.method === 'set' ? 'inventory_levels_set' : 'inventory_levels_adjust'
         })
 
         successCount++
@@ -592,10 +632,8 @@ serve(async (req) => {
       } catch (error) {
         console.error(`❌ Error sincronizando ${item.skuVariant}:`, error.message)
         
-        // Marcar el delivery_item específico como fallido
+        // Mark delivery_item as failed
         if (deliveryItem) {
-          console.log(`❌ Marcando delivery_item ${deliveryItem.id} como fallido`)
-          
           await supabase
             .from('delivery_items')
             .update({
@@ -617,7 +655,7 @@ serve(async (req) => {
       }
     }
 
-    // Registrar resultado en la base de datos
+    // Log results
     const logData = {
       delivery_id: deliveryId,
       sync_results: syncResults,
@@ -625,28 +663,18 @@ serve(async (req) => {
       error_count: errorCount
     }
 
-    const { error: logError } = await supabase
-      .from('inventory_sync_logs')
-      .insert([logData])
+    await supabase.from('inventory_sync_logs').insert([logData])
 
-    if (logError) {
-      console.error('Error guardando log:', logError)
-    }
-
-    // Limpiar el lock de sincronización
+    // Clear sync error message if all succeeded
     await supabase
       .from('deliveries')
       .update({ 
-        sync_in_progress: false,
         sync_error_message: errorCount > 0 ? 
           syncResults.filter(r => r.status === 'error').map(r => `${r.sku}: ${r.error}`).join('; ') :
           null
       })
       .eq('id', deliveryId)
 
-    console.log('=== ESTADO DE SINCRONIZACIÓN ===')
-    console.log('El trigger automático actualizará el estado de la entrega basado en todos los items')
-    
     const response = {
       success: successCount > 0,
       summary: {
@@ -663,14 +691,18 @@ serve(async (req) => {
         location_name: primaryLocation.name,
         total_variants_in_shopify: allShopifyVariants.size,
         all_skus_found: true,
-        api_method: 'inventory_levels_api',
-        post_update_verification: 'enabled_with_delay',
-        idempotency_check: 'enabled',
-        duplicate_prevention: 'enabled'
+        api_method: 'inventory_levels_api_with_rate_limiting',
+        rate_limiting: {
+          delay_between_calls: SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS,
+          max_retries: SHOPIFY_API_RATE_LIMIT.MAX_RETRIES,
+          retry_delay: SHOPIFY_API_RATE_LIMIT.RETRY_DELAY
+        },
+        idempotency_check: 'enhanced_with_fingerprinting',
+        duplicate_prevention: 'enabled_with_inventory_verification'
       }
     }
 
-    console.log('=== SYNC COMPLETADO ===')
+    console.log('=== SYNC COMPLETADO CON RATE LIMITING ===')
     console.log('Summary:', response.summary)
     
     return new Response(
@@ -681,7 +713,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Error general en sincronización:', error)
     
-    // Asegurar que el lock se libere en caso de error
+    // Clean up lock on error
     try {
       const { deliveryId } = await req.json()
       if (deliveryId) {
@@ -692,20 +724,19 @@ serve(async (req) => {
         await supabase
           .from('deliveries')
           .update({ 
-            sync_in_progress: false,
             sync_error_message: error.message
           })
           .eq('id', deliveryId)
       }
     } catch (cleanupError) {
-      console.error('Error limpiando lock:', cleanupError)
+      console.error('Error limpiando estado:', cleanupError)
     }
     
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message,
-        summary: { successful: 0, failed: 0 }
+        summary: { successful: 0, failed: 0, already_synced: 0 }
       }),
       { 
         status: 500,

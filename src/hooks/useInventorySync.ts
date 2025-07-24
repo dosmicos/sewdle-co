@@ -19,7 +19,7 @@ export const useInventorySync = () => {
   const syncApprovedItemsToShopify = async (syncData: SyncInventoryData) => {
     setLoading(true);
     try {
-      console.log('Syncing approved items to Shopify:', syncData);
+      console.log('Syncing approved items to Shopify with enhanced rate limiting:', syncData);
 
       const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
         body: syncData
@@ -36,15 +36,32 @@ export const useInventorySync = () => {
         const successfulCount = result.summary.successful || 0;
         const totalProcessed = successfulCount + alreadySyncedCount;
         
+        // Enhanced success message with rate limiting info
+        let message = `${totalProcessed} productos procesados`;
+        if (successfulCount > 0) {
+          message += ` (${successfulCount} sincronizados`;
+          if (alreadySyncedCount > 0) {
+            message += `, ${alreadySyncedCount} ya estaban sincronizados`;
+          }
+          message += ')';
+        } else if (alreadySyncedCount > 0) {
+          message += ` - todos ya estaban sincronizados correctamente`;
+        }
+
+        // Add rate limiting info if available
+        if (result.diagnostics?.rate_limiting) {
+          message += `. Sincronización optimizada con control de velocidad.`;
+        }
+
         toast({
           title: "Inventario sincronizado",
-          description: `${totalProcessed} productos procesados (${successfulCount} sincronizados, ${alreadySyncedCount} ya estaban sincronizados)`,
+          description: message,
         });
         
         if (result.summary.failed > 0) {
           toast({
             title: "Advertencia",
-            description: `${result.summary.failed} productos no se pudieron sincronizar`,
+            description: `${result.summary.failed} productos no se pudieron sincronizar. Revisa los detalles en el diagnóstico.`,
             variant: "destructive",
           });
         }
@@ -56,9 +73,23 @@ export const useInventorySync = () => {
 
     } catch (error) {
       console.error('Error syncing inventory:', error);
+      
+      // Enhanced error handling for rate limiting
+      let errorMessage = "No se pudo sincronizar el inventario con Shopify";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('rate limit') || error.message.includes('429')) {
+          errorMessage = "Shopify está limitando las peticiones. La sincronización se reintentará automáticamente con velocidad controlada.";
+        } else if (error.message.includes('Sincronización ya en progreso')) {
+          errorMessage = "Ya hay una sincronización en progreso. Espera unos minutos e intenta nuevamente.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       toast({
         title: "Error de sincronización",
-        description: error instanceof Error ? error.message : "No se pudo sincronizar el inventario con Shopify",
+        description: errorMessage,
         variant: "destructive",
       });
       throw error;
@@ -95,7 +126,7 @@ export const useInventorySync = () => {
     try {
       const { data, error } = await supabase
         .from('deliveries')
-        .select('sync_in_progress, last_sync_attempt, synced_to_shopify')
+        .select('synced_to_shopify, sync_attempts, last_sync_attempt, sync_error_message')
         .eq('id', deliveryId)
         .single();
 
