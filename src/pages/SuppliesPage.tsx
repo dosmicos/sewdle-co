@@ -1,14 +1,14 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ShopifySyncManager } from '@/components/supplies/ShopifySyncManager';
-import { ShopifySyncDiagnostics } from '@/components/supplies/ShopifySyncDiagnostics';
+import ShopifySyncDiagnostics from '@/components/supplies/ShopifySyncDiagnostics';
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
-import { SuppliesDashboard } from '@/components/supplies/SuppliesDashboard';
-import { MaterialsCatalog } from '@/components/supplies/MaterialsCatalog';
-import { MaterialDelivery } from '@/components/supplies/MaterialDelivery';
-import { MaterialConsumptionManager } from '@/components/supplies/MaterialConsumptionManager';
+import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
+import MaterialsCatalog from '@/components/supplies/MaterialsCatalog';
+import MaterialDelivery from '@/components/supplies/MaterialDelivery';
+import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
 import { ReplenishmentSuggestions } from '@/components/supplies/ReplenishmentSuggestions';
-import { InventorySyncManager } from '@/components/supplies/InventorySyncManager';
+import InventorySyncManager from '@/components/supplies/InventorySyncManager';
 
 const SuppliesPage = () => {
   return (
