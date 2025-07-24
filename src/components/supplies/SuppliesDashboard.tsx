@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Package, 
   TruckIcon, 
@@ -16,6 +17,12 @@ import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import WorkshopInventoryTable from './WorkshopInventoryTable';
+import MaterialsCatalog from './MaterialsCatalog';
+import MaterialDelivery from './MaterialDelivery';
+import { ReplenishmentSuggestions } from './ReplenishmentSuggestions';
+import { ShopifySyncManager } from './ShopifySyncManager';
+import ShopifyDiagnosticTool from './ShopifyDiagnosticTool';
+import { ShopifySyncDiagnostics } from './ShopifySyncDiagnostics';
 
 const SuppliesDashboard = () => {
   const { isAdmin, isDesigner, currentUser } = useUserContext();
@@ -312,6 +319,20 @@ const SuppliesDashboard = () => {
         </div>
       )}
 
+      <Tabs defaultValue="dashboard" className="w-full">
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="catalog">Catálogo</TabsTrigger>
+          <TabsTrigger value="deliveries">Entregas</TabsTrigger>
+          <TabsTrigger value="replenishment">Reposición</TabsTrigger>
+          <TabsTrigger value="shopify-sync">Sincronización Shopify</TabsTrigger>
+          <TabsTrigger value="shopify-diagnostics">Diagnósticos Shopify</TabsTrigger>
+          <TabsTrigger value="sync-diagnostics">Diagnóstico Entregas</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard">
+          <div className="space-y-6">
+
       {/* Estadísticas Generales */}
       <div className={`grid grid-cols-1 md:grid-cols-2 ${isWorkshopUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6`}>
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -453,6 +474,33 @@ const SuppliesDashboard = () => {
           </div>
         </Card>
       )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="catalog">
+          <MaterialsCatalog />
+        </TabsContent>
+
+        <TabsContent value="deliveries">
+          <MaterialDelivery canCreateDeliveries={isAdmin || isDesigner} />
+        </TabsContent>
+
+        <TabsContent value="replenishment">
+          <ReplenishmentSuggestions />
+        </TabsContent>
+
+        <TabsContent value="shopify-sync">
+          <ShopifySyncManager />
+        </TabsContent>
+
+        <TabsContent value="shopify-diagnostics">
+          <ShopifyDiagnosticTool />
+        </TabsContent>
+
+        <TabsContent value="sync-diagnostics">
+          <ShopifySyncDiagnostics />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
