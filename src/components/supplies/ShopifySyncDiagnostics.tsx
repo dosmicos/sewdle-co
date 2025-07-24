@@ -253,36 +253,25 @@ const ShopifySyncDiagnostics = () => {
                           ) : '-'}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            {failedSkus.length > 0 && (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => resyncDelivery(delivery.id, delivery.tracking_number, failedSkus)}
-                                disabled={resyncing === delivery.id}
-                              >
-                                {resyncing === delivery.id ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin mr-1" />
-                                ) : (
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                )}
-                                Corregir Errores
-                              </Button>
-                            )}
+                          {failedSkus.length > 0 ? (
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={() => resyncDelivery(delivery.id, delivery.tracking_number)}
+                              variant="destructive"
+                              onClick={() => resyncDelivery(delivery.id, delivery.tracking_number, failedSkus)}
                               disabled={resyncing === delivery.id}
                             >
                               {resyncing === delivery.id ? (
                                 <RefreshCw className="w-3 h-3 animate-spin mr-1" />
                               ) : (
-                                <RefreshCw className="w-3 h-3 mr-1" />
+                                <AlertTriangle className="w-3 h-3 mr-1" />
                               )}
-                              Re-sincronizar Todo
+                              Corregir Errores ({failedSkus.length})
                             </Button>
-                          </div>
+                          ) : (
+                            <Badge variant="default" className="bg-green-100 text-green-800">
+                              Sin errores
+                            </Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
