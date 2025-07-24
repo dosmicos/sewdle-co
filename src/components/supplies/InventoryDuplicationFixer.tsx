@@ -31,28 +31,39 @@ const InventoryDuplicationFixer = () => {
   const detectDuplications = async (specificTracking?: string) => {
     setLoading(true);
     try {
-      // Obtener todas las entregas con sus logs de sincronización
-      let query = supabase
+      // Primero obtener todos los logs de sincronización
+      let syncLogsQuery = supabase
         .from('inventory_sync_logs')
-        .select(`
-          delivery_id,
-          sync_results,
-          synced_at,
-          deliveries (
-            tracking_number
-          )
-        `)
+        .select('*')
         .order('synced_at', { ascending: false });
 
-      if (specificTracking) {
-        // Obtener el delivery_id del tracking number
-        const { data: delivery, error: deliveryError } = await supabase
-          .from('deliveries')
-          .select('id')
-          .eq('tracking_number', specificTracking)
-          .single();
+      const { data: allLogs, error: logsError } = await syncLogsQuery;
 
-        if (deliveryError || !delivery) {
+      if (logsError) throw logsError;
+
+      // Luego obtener información de las entregas
+      let deliveriesQuery = supabase
+        .from('deliveries')
+        .select('id, tracking_number');
+
+      if (specificTracking) {
+        deliveriesQuery = deliveriesQuery.eq('tracking_number', specificTracking);
+      }
+
+      const { data: deliveries, error: deliveriesError } = await deliveriesQuery;
+
+      if (deliveriesError) throw deliveriesError;
+
+      // Crear mapa de entregas para búsqueda rápida
+      const deliveriesMap = new Map(deliveries?.map(d => [d.id, d.tracking_number]) || []);
+
+      // Filtrar logs por entrega específica si se proporcionó
+      let filteredLogs = allLogs || [];
+      if (specificTracking) {
+        const targetDelivery = deliveries?.find(d => d.tracking_number === specificTracking);
+        if (targetDelivery) {
+          filteredLogs = allLogs?.filter(log => log.delivery_id === targetDelivery.id) || [];
+        } else {
           toast({
             title: "Error",
             description: "No se encontró la entrega especificada",
@@ -60,18 +71,12 @@ const InventoryDuplicationFixer = () => {
           });
           return;
         }
-
-        query = query.eq('delivery_id', delivery.id);
       }
-
-      const { data: logs, error } = await query;
-
-      if (error) throw error;
 
       // Agrupar por delivery_id y analizar duplicaciones
       const deliveryGroups = new Map<string, any[]>();
       
-      logs?.forEach(log => {
+      filteredLogs.forEach(log => {
         const deliveryId = log.delivery_id;
         if (!deliveryGroups.has(deliveryId)) {
           deliveryGroups.set(deliveryId, []);
@@ -82,7 +87,7 @@ const InventoryDuplicationFixer = () => {
       const detectedDuplications: DuplicationIssue[] = [];
 
       for (const [deliveryId, deliveryLogs] of deliveryGroups) {
-        const trackingNumber = deliveryLogs[0]?.deliveries?.tracking_number || 'Unknown';
+        const trackingNumber = deliveriesMap.get(deliveryId) || 'Unknown';
         
         // Buscar duplicaciones por SKU
         const skuSyncCount = new Map<string, { count: number, totalQuantity: number, logs: any[] }>();
