@@ -206,6 +206,28 @@ serve(async (req) => {
       )
       
       if (deliveryItem) {
+        // Si la cantidad aprobada es 0, marcar como sincronizado automáticamente
+        if (approvedItem.quantityApproved === 0) {
+          console.log(`✅ SKU ${approvedItem.skuVariant} tiene cantidad 0 - marcando como sincronizado automáticamente`)
+          
+          // Actualizar el estado del item como sincronizado
+          await supabase
+            .from('delivery_items')
+            .update({
+              synced_to_shopify: true,
+              last_sync_attempt: new Date().toISOString(),
+              sync_error_message: 'Auto-marcado como sincronizado (cantidad 0)'
+            })
+            .eq('id', deliveryItem.id)
+
+          alreadySyncedSkus.push({
+            sku: approvedItem.skuVariant,
+            reason: 'quantity_zero_auto_sync',
+            fingerprint: generateSyncFingerprint(deliveryId, approvedItem.skuVariant, 0)
+          })
+          continue
+        }
+        
         const currentFingerprint = generateSyncFingerprint(deliveryId, approvedItem.skuVariant, approvedItem.quantityApproved)
         const lastSyncAttempt = deliveryItem.last_sync_attempt ? new Date(deliveryItem.last_sync_attempt) : null
         const isRecentlyAttempted = lastSyncAttempt && ((new Date().getTime() - lastSyncAttempt.getTime()) < 30 * 60 * 1000) // 30 minutes
