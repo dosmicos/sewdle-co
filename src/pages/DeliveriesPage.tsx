@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
+import ShopifySyncDiagnostics from '@/components/supplies/ShopifySyncDiagnostics';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -517,6 +518,18 @@ const DeliveriesPage = () => {
                 )}
               </TabsTrigger>
             )}
+            {isAdmin && (
+              <TabsTrigger value="diagnosis" className="whitespace-nowrap text-xs px-2">
+                {isMobile ? (
+                  <AlertTriangle className="w-4 h-4" />
+                ) : (
+                  <>
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    Diagnóstico
+                  </>
+                )}
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -595,6 +608,12 @@ const DeliveriesPage = () => {
         {isAdmin && (
           <TabsContent value="sync" className="space-y-4 mt-3">
             <InventorySyncManager />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="diagnosis" className="space-y-4 mt-3">
+            <ShopifySyncDiagnostics />
           </TabsContent>
         )}
       </Tabs>
