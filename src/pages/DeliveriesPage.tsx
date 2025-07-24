@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
-import { ShopifySyncDiagnostics } from '@/components/supplies/ShopifySyncDiagnostics';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
