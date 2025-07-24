@@ -16,6 +16,7 @@ import {
 import { useInventorySync } from '@/hooks/useInventorySync';
 import { useToast } from '@/hooks/use-toast';
 import { SyncLockManager } from './SyncLockManager';
+import { resyncDeliveryStatus } from '@/utils/resyncDeliveryStatus';
 
 interface DeliverySyncStatusProps {
   delivery: any;
@@ -181,46 +182,59 @@ export const DeliverySyncStatus = ({
 
   // Función para reintentar sincronización
   const handleRetrySync = async () => {
-    if (syncStats.itemsWithApprovedQty === 0) {
-      toast({
-        title: "Sin elementos para sincronizar",
-        description: "No hay items con cantidad aprobada mayor a 0 para sincronizar",
-        variant: "default"
-      });
-      return;
-    }
-
+    if (isRetrying) return;
+    
     setIsRetrying(true);
+    
     try {
-      const approvedItems = delivery.delivery_items
+      // First try to fix any status inconsistencies
+      await resyncDeliveryStatus(delivery.id);
+      
+      // Get items that need to be synced (approved items that aren't synced yet)
+      const itemsToSync = delivery.delivery_items
         ?.filter((item: any) => item.quantity_approved > 0 && !item.synced_to_shopify)
         ?.map((item: any) => ({
           variantId: item.order_items?.product_variants?.id,
           skuVariant: item.order_items?.product_variants?.sku_variant,
           quantityApproved: item.quantity_approved
-        })) || [];
+        }))
+        ?.filter((item: any) => item.variantId && item.skuVariant);
 
-      if (approvedItems.length === 0) {
+      if (!itemsToSync || itemsToSync.length === 0) {
+        // Recalculate status and refresh
+        if (onSyncSuccess) {
+          onSyncSuccess();
+        }
+        
         toast({
-          title: "Ya sincronizado",
-          description: "Todos los items aprobados ya están sincronizados",
-          variant: "default"
+          title: "Estado actualizado",
+          description: "No hay elementos pendientes de sincronización. Estado corregido.",
         });
         return;
       }
 
       const syncData = {
         deliveryId: delivery.id,
-        approvedItems
+        approvedItems: itemsToSync
       };
 
-      const result = await syncApprovedItemsToShopify(syncData);
-
-      if (result.success && onSyncSuccess) {
+      await syncApprovedItemsToShopify(syncData);
+      
+      if (onSyncSuccess) {
         onSyncSuccess();
       }
-    } catch (error) {
-      console.error('Error retrying sync:', error);
+      
+      toast({
+        title: "Sincronización completada",
+        description: `Se sincronizaron ${itemsToSync.length} elementos exitosamente.`,
+      });
+    } catch (error: any) {
+      console.error('Error en retry sync:', error);
+      toast({
+        title: "Error en sincronización",
+        description: error.message || "Ocurrió un error durante la sincronización",
+        variant: "destructive",
+      });
     } finally {
       setIsRetrying(false);
     }

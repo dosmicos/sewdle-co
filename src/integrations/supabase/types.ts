@@ -1411,6 +1411,17 @@ export type Database = {
         Args: { order_id_param: string; consumption_data: Json }
         Returns: undefined
       }
+      fix_delivery_sync_status_inconsistencies: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          delivery_id: string
+          tracking_number: string
+          status_before: string
+          status_after: string
+          items_synced: number
+          items_total: number
+        }[]
+      }
       generate_delivery_number: {
         Args: Record<PropertyKey, never>
         Returns: string

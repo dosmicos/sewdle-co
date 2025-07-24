@@ -509,15 +509,18 @@ serve(async (req) => {
         }
 
         if (alreadyApplied) {
-          // Mark as successful without changes
+          // Mark as successful without changes - IDEMPOTENCY SUCCESS
           await supabase
             .from('delivery_items')
             .update({
               synced_to_shopify: true,
               last_sync_attempt: new Date().toISOString(),
-              sync_error_message: null
+              sync_error_message: null,
+              sync_attempt_count: (deliveryItem.sync_attempt_count || 0) // Keep current count
             })
             .eq('id', deliveryItem.id)
+          
+          console.log(`✅ Item ${item.skuVariant} marcado como sincronizado (idempotencia)`)
 
           syncResults.push({
             sku: item.skuVariant,
@@ -647,9 +650,12 @@ serve(async (req) => {
           .update({
             synced_to_shopify: true,
             last_sync_attempt: new Date().toISOString(),
-            sync_error_message: null
+            sync_error_message: null,
+            sync_attempt_count: (deliveryItem.sync_attempt_count || 0) // Keep current count for successful syncs
           })
           .eq('id', deliveryItem.id)
+        
+        console.log(`✅ Item ${item.skuVariant} marcado como sincronizado (nueva sincronización)`)
 
         syncResults.push({
           sku: item.skuVariant,
@@ -677,9 +683,12 @@ serve(async (req) => {
             .update({
               synced_to_shopify: false,
               last_sync_attempt: new Date().toISOString(),
-              sync_error_message: error.message
+              sync_error_message: error.message,
+              sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1 // Increment on failure
             })
             .eq('id', deliveryItem.id)
+          
+          console.log(`❌ Item ${item.skuVariant} marcado como fallido: ${error.message}`)
         }
         
         syncResults.push({
