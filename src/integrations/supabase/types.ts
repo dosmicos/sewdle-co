@@ -1402,10 +1402,7 @@ export type Database = {
       }
       clear_stale_sync_locks: {
         Args: Record<PropertyKey, never>
-        Returns: {
-          cleared_deliveries_count: number
-          cleared_delivery_ids: string[]
-        }[]
+        Returns: Json[]
       }
       consume_order_materials: {
         Args: { order_id_param: string; consumption_data: Json }
@@ -1413,14 +1410,7 @@ export type Database = {
       }
       fix_delivery_sync_status_inconsistencies: {
         Args: Record<PropertyKey, never>
-        Returns: {
-          delivery_id: string
-          tracking_number: string
-          status_before: string
-          status_after: string
-          items_synced: number
-          items_total: number
-        }[]
+        Returns: Json
       }
       generate_delivery_number: {
         Args: Record<PropertyKey, never>

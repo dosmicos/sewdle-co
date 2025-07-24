@@ -194,7 +194,7 @@ export const useInventorySync = () => {
         throw error;
       }
 
-      const clearedCount = data?.[0]?.cleared_deliveries_count || 0;
+      const clearedCount = (data?.[0] as any)?.cleared_deliveries_count || 0;
       
       if (clearedCount > 0) {
         toast({

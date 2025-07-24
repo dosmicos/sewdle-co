@@ -712,15 +712,26 @@ serve(async (req) => {
 
     await supabase.from('inventory_sync_logs').insert([logData])
 
-    // Clear sync error message if all succeeded
+    // Update delivery sync status comprehensively
+    const totalItems = successCount + errorCount + alreadySyncedSkus.length
+    const allItemsProcessed = successCount + alreadySyncedSkus.length
+    const deliveryFullySynced = allItemsProcessed === totalItems && errorCount === 0
+    
+    console.log(`📊 Delivery Sync Status: ${allItemsProcessed}/${totalItems} items synced, ${errorCount} errors`)
+    
     await supabase
       .from('deliveries')
       .update({ 
+        synced_to_shopify: deliveryFullySynced,
+        sync_attempts: deliveryData.sync_attempts + 1,
+        last_sync_attempt: new Date().toISOString(),
         sync_error_message: errorCount > 0 ? 
           syncResults.filter(r => r.status === 'error').map(r => `${r.sku}: ${r.error}`).join('; ') :
           null
       })
       .eq('id', deliveryId)
+      
+    console.log(`✅ Delivery ${deliveryData.tracking_number} sync status updated: ${deliveryFullySynced ? 'FULLY_SYNCED' : 'PARTIAL_OR_FAILED'}`)
 
     const response = {
       success: successCount > 0,
