@@ -29,7 +29,7 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
           ? `Sincronizado el ${format(new Date(delivery.last_sync_attempt), 'dd/MM/yyyy HH:mm', { locale: es })}`
           : 'Inventario actualizado en Shopify'
       };
-    } else if (delivery.sync_attempts > 0) {
+    } else if (delivery.sync_attempts > 0 && !delivery.synced_to_shopify && delivery.sync_error_message) {
       return {
         icon: XCircle,
         color: 'text-red-600',

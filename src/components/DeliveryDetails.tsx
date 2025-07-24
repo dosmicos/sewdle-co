@@ -885,7 +885,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                                 </Button>
                               )}
                               
-                              {item.sync_attempt_count > 0 && !item.synced_to_shopify && (
+                              {item.sync_attempt_count > 0 && !item.synced_to_shopify && item.sync_error_message && (
                                 <div className="text-xs text-red-600">
                                   {item.sync_attempt_count} intento(s) fallidos
                                 </div>
