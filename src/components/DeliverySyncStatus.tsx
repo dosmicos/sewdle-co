@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useInventorySync } from '@/hooks/useInventorySync';
 import { useToast } from '@/hooks/use-toast';
+import { SyncLockManager } from './SyncLockManager';
 
 interface DeliverySyncStatusProps {
   delivery: any;
@@ -92,6 +93,21 @@ export const DeliverySyncStatus = ({
   };
 
   const syncStats = getSyncStats();
+
+  // Check if delivery has a sync lock
+  const getSyncLockInfo = () => {
+    if (!delivery.last_sync_attempt) return { isLocked: false, lockAgeMinutes: 0 };
+    
+    const lastAttempt = new Date(delivery.last_sync_attempt);
+    const now = new Date();
+    const timeDiff = now.getTime() - lastAttempt.getTime();
+    const lockAgeMinutes = Math.round(timeDiff / 60000);
+    const isLocked = timeDiff < (15 * 60 * 1000) && !delivery.synced_to_shopify; // 15 minutes
+    
+    return { isLocked, lockAgeMinutes };
+  };
+
+  const lockInfo = getSyncLockInfo();
 
   // Determinar estado visual - CORRECCIÓN: priorizar "En Revisión"
   const getSyncStatusInfo = () => {
@@ -286,7 +302,17 @@ export const DeliverySyncStatus = ({
 
       {/* Detalles expandidos */}
       {showDetails && (
-        <div className="ml-4">
+        <div className="ml-4 space-y-2">
+          {/* Sync Lock Manager */}
+          {lockInfo.isLocked && (
+            <SyncLockManager 
+              deliveryId={delivery.id}
+              isLocked={lockInfo.isLocked}
+              lockAgeMinutes={lockInfo.lockAgeMinutes}
+              onLockCleared={onSyncSuccess}
+            />
+          )}
+
           {syncStats.isInReview && (
             <Alert className="mt-2">
               <Clock className="h-4 w-4" />

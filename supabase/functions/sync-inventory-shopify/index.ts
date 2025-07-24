@@ -82,9 +82,22 @@ serve(async (req) => {
     console.log('Items a sincronizar:', approvedItems.length)
     console.log('Items:', JSON.stringify(approvedItems, null, 2))
 
-    // IMPROVED: Enhanced sync lock with process ID and timeout
+    // IMPROVED: Enhanced sync lock with automatic cleanup and better error handling
     const processId = crypto.randomUUID()
     const lockTimeout = 15 * 60 * 1000 // 15 minutes
+    
+    // First, clear any stale locks automatically
+    console.log('🧹 Clearing stale sync locks...')
+    const { data: clearResult, error: clearError } = await supabase.rpc('clear_stale_sync_locks')
+    
+    if (clearError) {
+      console.warn('Warning: Failed to clear stale locks:', clearError.message)
+    } else if (clearResult && clearResult.length > 0) {
+      const clearedCount = clearResult[0]?.cleared_deliveries_count || 0
+      if (clearedCount > 0) {
+        console.log(`✅ Cleared ${clearedCount} stale sync locks`)
+      }
+    }
     
     const { data: existingSync, error: syncCheckError } = await supabase
       .from('deliveries')
@@ -103,10 +116,13 @@ serve(async (req) => {
       const timeDiff = now.getTime() - lastAttempt.getTime()
 
       if (timeDiff < lockTimeout && !existingSync.synced_to_shopify) {
+        const minutesAgo = Math.round(timeDiff / 60000)
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'Sincronización ya en progreso. Intente nuevamente en unos minutos.',
+            error: `Sincronización ya en progreso (iniciada hace ${minutesAgo} minutos). Intente nuevamente en unos minutos.`,
+            canRetryAt: new Date(lastAttempt.getTime() + lockTimeout).toISOString(),
+            lockAgeMinutes: minutesAgo,
             summary: { successful: 0, failed: 0, already_synced: 0 }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

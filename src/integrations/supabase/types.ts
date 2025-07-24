@@ -1396,6 +1396,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      clear_delivery_sync_lock: {
+        Args: { delivery_id_param: string }
+        Returns: Json
+      }
+      clear_stale_sync_locks: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          cleared_deliveries_count: number
+          cleared_delivery_ids: string[]
+        }[]
+      }
       consume_order_materials: {
         Args: { order_id_param: string; consumption_data: Json }
         Returns: undefined
@@ -1514,6 +1525,20 @@ export type Database = {
           in_quality_deliveries: number
           approved_deliveries: number
           rejected_deliveries: number
+        }[]
+      }
+      get_delivery_sync_status: {
+        Args: { delivery_id_param?: string }
+        Returns: {
+          delivery_id: string
+          tracking_number: string
+          synced_to_shopify: boolean
+          sync_attempts: number
+          last_sync_attempt: string
+          sync_error_message: string
+          is_locked: boolean
+          lock_age_minutes: number
+          can_sync: boolean
         }[]
       }
       get_financial_report: {
