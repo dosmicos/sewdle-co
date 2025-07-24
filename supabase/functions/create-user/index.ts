@@ -4,6 +4,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
+// Generate cryptographically secure password
+function generateSecurePassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  const array = new Uint8Array(12)
+  crypto.getRandomValues(array)
+  return Array.from(array, byte => chars[byte % chars.length]).join('')
+}
+
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
@@ -18,8 +26,8 @@ serve(async (req) => {
     
     const { name, email, role, workshopId, requiresPasswordChange = true } = await req.json()
 
-    // Generate a temporary password
-    const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase()
+    // Generate a cryptographically secure temporary password
+    const tempPassword = generateSecurePassword()
     
     // Create user in auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
