@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -285,8 +284,31 @@ serve(async (req) => {
     let errorCount = 0
 
     for (const item of finalApprovedItems) {
+      let deliveryItem = null
+      
       try {
         console.log(`\n=== PROCESANDO ITEM: ${item.skuVariant} ===`)
+        
+        // PASO 1: Obtener el delivery_item correspondiente
+        deliveryItem = deliveryItems.find(di => 
+          di.order_items?.product_variants?.sku_variant === item.skuVariant
+        )
+        
+        if (!deliveryItem) {
+          throw new Error(`No se encontró delivery_item para SKU ${item.skuVariant}`)
+        }
+
+        // PASO 2: Marcar como intentando sincronización (NO como sincronizado)
+        console.log(`🔄 Marcando delivery_item ${deliveryItem.id} como intentando sincronización`)
+        await supabase
+          .from('delivery_items')
+          .update({
+            synced_to_shopify: false, // IMPORTANTE: Marcar como NO sincronizado mientras se intenta
+            last_sync_attempt: new Date().toISOString(),
+            sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1,
+            sync_error_message: null
+          })
+          .eq('id', deliveryItem.id)
         
         const validatedVariant = validationResults.find(v => v.sku === item.skuVariant && v.found)
         if (!validatedVariant) {
@@ -298,7 +320,7 @@ serve(async (req) => {
         console.log('Inventory Item ID:', targetVariant.inventory_item_id)
         console.log('Cantidad a agregar:', item.quantityApproved)
 
-        // PASO 4A: Consultar inventario actual usando Inventory Levels API
+        // PASO 3: Consultar inventario actual usando Inventory Levels API
         const currentInventoryUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels.json?inventory_item_ids=${targetVariant.inventory_item_id}&location_ids=${locationId}`
         const currentInventoryResponse = await fetch(currentInventoryUrl, {
           headers: {
@@ -325,7 +347,7 @@ serve(async (req) => {
         console.log('Inventario real actual:', realCurrentInventory)
         console.log('Nuevo inventario calculado:', newInventoryQuantity)
 
-        // PASO 4B: Actualizar inventario usando Inventory Levels API
+        // PASO 4: Actualizar inventario usando Inventory Levels API
         const adjustUrl = `https://${shopifyDomain}/admin/api/2023-10/inventory_levels/adjust.json`
         const adjustPayload = {
           location_id: locationId,
@@ -381,7 +403,7 @@ serve(async (req) => {
           console.log('✅ Método ADJUST exitoso')
         }
 
-        // PASO 4C: VERIFICACIÓN POST-ACTUALIZACIÓN con delay
+        // PASO 5: VERIFICACIÓN POST-ACTUALIZACIÓN con delay
         console.log('=== VERIFICACIÓN POST-ACTUALIZACIÓN ===')
         
         // Esperar un momento para que Shopify procese la actualización
@@ -408,7 +430,7 @@ serve(async (req) => {
         console.log('Inventario esperado:', newInventoryQuantity)
         console.log('Inventario real final:', finalInventory)
 
-        // Verificar si la actualización realmente se aplicó
+        // PASO 6: Verificar si la actualización realmente se aplicó
         if (finalInventory !== newInventoryQuantity) {
           console.error('❌ SINCRONIZACIÓN FALLIDA - Inventario no cambió correctamente')
           console.error(`Esperado: ${newInventoryQuantity}, Real: ${finalInventory}`)
@@ -428,6 +450,23 @@ serve(async (req) => {
           console.log('✅ SINCRONIZACIÓN EXITOSA VERIFICADA')
         }
 
+        // PASO 7: SOLO AHORA marcar como sincronizado exitosamente
+        console.log(`✅ Marcando delivery_item ${deliveryItem.id} como sincronizado exitosamente`)
+        
+        const { error: updateError } = await supabase
+          .from('delivery_items')
+          .update({
+            synced_to_shopify: true, // SOLO marcar como sincronizado DESPUÉS de verificar éxito
+            last_sync_attempt: new Date().toISOString(),
+            sync_error_message: null
+          })
+          .eq('id', deliveryItem.id)
+        
+        if (updateError) {
+          console.error('Error actualizando delivery_item:', updateError)
+          throw new Error(`Error actualizando estado de sincronización: ${updateError.message}`)
+        }
+
         syncResults.push({
           sku: item.skuVariant,
           status: 'success',
@@ -444,47 +483,18 @@ serve(async (req) => {
 
         successCount++
 
-        // CRÍTICO: Solo marcar como sincronizado después de verificar que Shopify se actualizó correctamente
-        const deliveryItem = deliveryItems.find(di => 
-          di.order_items?.product_variants?.sku_variant === item.skuVariant
-        )
-        
-        if (deliveryItem) {
-          console.log(`✅ Marcando delivery_item ${deliveryItem.id} como sincronizado exitosamente`)
-          
-          const { error: updateError } = await supabase
-            .from('delivery_items')
-            .update({
-              synced_to_shopify: true,
-              last_sync_attempt: new Date().toISOString(),
-              sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1,
-              sync_error_message: null
-            })
-            .eq('id', deliveryItem.id)
-          
-          if (updateError) {
-            console.error('Error actualizando delivery_item:', updateError)
-            throw new Error(`Error actualizando estado de sincronización: ${updateError.message}`)
-          }
-        }
-
       } catch (error) {
         console.error(`❌ Error sincronizando ${item.skuVariant}:`, error.message)
         
-        // Marcar el delivery_item específico como fallido
-        const deliveryItem = deliveryItems.find(di => 
-          di.order_items?.product_variants?.sku_variant === item.skuVariant
-        )
-        
+        // PASO 8: Marcar el delivery_item específico como fallido
         if (deliveryItem) {
           console.log(`❌ Marcando delivery_item ${deliveryItem.id} como fallido`)
           
           await supabase
             .from('delivery_items')
             .update({
-              synced_to_shopify: false,
+              synced_to_shopify: false, // IMPORTANTE: Marcar explícitamente como NO sincronizado
               last_sync_attempt: new Date().toISOString(),
-              sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1,
               sync_error_message: error.message
             })
             .eq('id', deliveryItem.id)
