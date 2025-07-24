@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,10 @@ interface SyncLogItem {
 interface DeliverySyncInfo {
   id: string;
   tracking_number: string;
-  sync_in_progress: boolean;
+  synced_to_shopify: boolean;
+  sync_attempts: number;
+  last_sync_attempt: string | null;
+  sync_error_message: string | null;
   sync_logs: {
     id: string;
     synced_at: string;
@@ -60,11 +64,11 @@ const ShopifySyncDiagnostics = () => {
 
       if (error) throw error;
 
-      // Obtener información de entregas por separado
+      // Obtener información de entregas por separado con los campos correctos
       const deliveryIds = [...new Set(syncLogs?.map(log => log.delivery_id))];
       const { data: deliveriesData, error: deliveriesError } = await supabase
         .from('deliveries')
-        .select('id, tracking_number, sync_in_progress')
+        .select('id, tracking_number, synced_to_shopify, sync_attempts, last_sync_attempt, sync_error_message')
         .in('id', deliveryIds);
 
       if (deliveriesError) throw deliveriesError;
@@ -85,7 +89,10 @@ const ShopifySyncDiagnostics = () => {
           deliveryMap.set(deliveryId, {
             id: deliveryId,
             tracking_number: delivery.tracking_number,
-            sync_in_progress: delivery.sync_in_progress,
+            synced_to_shopify: delivery.synced_to_shopify,
+            sync_attempts: delivery.sync_attempts,
+            last_sync_attempt: delivery.last_sync_attempt,
+            sync_error_message: delivery.sync_error_message,
             sync_logs: []
           });
         }
@@ -153,7 +160,12 @@ const ShopifySyncDiagnostics = () => {
   );
 
   const getStatusBadge = (delivery: DeliverySyncInfo) => {
-    if (delivery.sync_in_progress) {
+    // Verificar si está sincronizando (último intento fue hace menos de 5 minutos)
+    const now = new Date();
+    const lastAttempt = delivery.last_sync_attempt ? new Date(delivery.last_sync_attempt) : null;
+    const isRecentAttempt = lastAttempt && (now.getTime() - lastAttempt.getTime()) < 5 * 60 * 1000; // 5 minutos
+
+    if (isRecentAttempt && delivery.sync_attempts > 0 && !delivery.synced_to_shopify) {
       return (
         <Badge variant="secondary" className="flex items-center gap-1">
           <RefreshCw className="w-3 h-3 animate-spin" />
@@ -162,22 +174,33 @@ const ShopifySyncDiagnostics = () => {
       );
     }
 
-    const latestLog = delivery.sync_logs[0];
-    if (!latestLog) return null;
-
-    if (latestLog.error_count > 0) {
+    // Si hay mensaje de error reciente
+    if (delivery.sync_error_message) {
+      const latestLog = delivery.sync_logs[0];
+      const errorCount = latestLog?.error_count || 0;
       return (
         <Badge variant="destructive" className="flex items-center gap-1">
           <XCircle className="w-3 h-3" />
-          {latestLog.error_count} errores
+          {errorCount} errores
         </Badge>
       );
     }
 
+    // Si está sincronizada
+    if (delivery.synced_to_shopify) {
+      return (
+        <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
+          <CheckCircle className="w-3 h-3" />
+          Sincronizada
+        </Badge>
+      );
+    }
+
+    // Estado por defecto
     return (
-      <Badge variant="default" className="flex items-center gap-1 bg-green-100 text-green-800">
-        <CheckCircle className="w-3 h-3" />
-        Sincronizada
+      <Badge variant="secondary" className="flex items-center gap-1">
+        <AlertTriangle className="w-3 h-3" />
+        Pendiente
       </Badge>
     );
   };
@@ -309,7 +332,7 @@ const ShopifySyncDiagnostics = () => {
                                   size="sm"
                                   variant="destructive"
                                   onClick={() => resyncDelivery(delivery.id, delivery.tracking_number, failedSkus)}
-                                  disabled={resyncing === delivery.id || delivery.sync_in_progress}
+                                  disabled={resyncing === delivery.id}
                                 >
                                   {resyncing === delivery.id ? (
                                     <RefreshCw className="w-3 h-3 animate-spin mr-1" />
