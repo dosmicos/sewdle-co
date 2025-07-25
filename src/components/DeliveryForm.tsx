@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 interface DeliveryFormProps {
   onClose: () => void;
   onDeliveryCreated?: () => void;
+  preselectedOrderId?: string;
 }
 
 interface FormData {
@@ -34,7 +35,7 @@ interface FileUploadStatus {
   progress?: number;
 }
 
-const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated }) => {
+const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated, preselectedOrderId }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
     orderId: '',
@@ -58,6 +59,12 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
   useEffect(() => {
     loadAvailableOrders();
   }, []);
+
+  useEffect(() => {
+    if (preselectedOrderId && availableOrders.length > 0) {
+      handleOrderSelect(preselectedOrderId);
+    }
+  }, [preselectedOrderId, availableOrders]);
 
   const loadAvailableOrders = async () => {
     const orders = await fetchAvailableOrders();
@@ -290,10 +297,10 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated 
           <div className="space-y-4">
             <div>
               <Label htmlFor="order">Seleccionar Orden</Label>
-              <Select value={formData.orderId} onValueChange={handleOrderSelect} disabled={ordersLoading}>
-                <SelectTrigger>
-                  <SelectValue placeholder={ordersLoading ? "Cargando órdenes..." : "Seleccione una orden..."} />
-                </SelectTrigger>
+               <Select value={formData.orderId} onValueChange={handleOrderSelect} disabled={ordersLoading || !!preselectedOrderId}>
+                 <SelectTrigger>
+                   <SelectValue placeholder={ordersLoading ? "Cargando órdenes..." : "Seleccione una orden..."} />
+                 </SelectTrigger>
                 <SelectContent>
                   {availableOrders.length === 0 && !ordersLoading && (
                     <SelectItem value="no-orders" disabled>

@@ -483,6 +483,7 @@ const OrderDetailsPage = () => {
       {/* Modal de creación de entrega */}
       {showDeliveryForm && (
         <DeliveryForm 
+          preselectedOrderId={orderId}
           onClose={() => setShowDeliveryForm(false)}
           onDeliveryCreated={handleDeliveryCreated}
         />
