@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useWorkshopPricing, WorkshopPricingInsert } from "@/hooks/useWorkshopPricing";
 import { useWorkshops } from "@/hooks/useWorkshops";
 import { useProducts } from "@/hooks/useProducts";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PricingFormData {
   workshop_id: string;
@@ -40,6 +41,87 @@ export const WorkshopPricingManager = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPricing, setEditingPricing] = useState<string | null>(null);
   const [formData, setFormData] = useState<PricingFormData>(initialFormData);
+  const [workshopProductIds, setWorkshopProductIds] = useState<string[]>([]);
+
+  // Filtrar productos disponibles para el taller seleccionado
+  const getAvailableProducts = () => {
+    if (!formData.workshop_id) return [];
+    
+    // Obtener productos que ya tienen precio asignado a este taller
+    const productsWithPricing = pricing.filter(p => 
+      p.workshop_id === formData.workshop_id && 
+      isCurrentPrice(p.effective_from, p.effective_until)
+    ).map(p => p.product_id);
+    
+    // Filtrar productos que no tienen precio asignado
+    return products.filter(product => 
+      !productsWithPricing.includes(product.id)
+    );
+  };
+
+  // Obtener productos con órdenes asignadas al taller
+  const getProductsWithOrders = async (workshopId: string) => {
+    try {
+      const { data: workshopAssignments, error } = await supabase
+        .from('workshop_assignments')
+        .select(`
+          order_id,
+          orders!inner(
+            id,
+            order_items!inner(
+              product_variant_id,
+              product_variants!inner(
+                product_id,
+                products!inner(
+                  id,
+                  name
+                )
+              )
+            )
+          )
+        `)
+        .eq('workshop_id', workshopId);
+      
+      if (error) throw error;
+      
+      const productIds = new Set();
+      workshopAssignments?.forEach(assignment => {
+        assignment.orders?.order_items?.forEach(item => {
+          if (item.product_variants?.products?.id) {
+            productIds.add(item.product_variants.products.id);
+          }
+        });
+      });
+      
+      return Array.from(productIds);
+    } catch (error) {
+      console.error('Error fetching products with orders:', error);
+      return [];
+    }
+  };
+
+  // Cargar productos con órdenes cuando se selecciona un taller
+  useEffect(() => {
+    if (formData.workshop_id) {
+      getProductsWithOrders(formData.workshop_id).then((productIds) => {
+        setWorkshopProductIds(productIds as string[]);
+      });
+    } else {
+      setWorkshopProductIds([]);
+    }
+  }, [formData.workshop_id]);
+
+  // Filtrar productos finales considerando ambos criterios
+  const getFilteredProducts = () => {
+    if (!formData.workshop_id) return [];
+    
+    const availableProducts = getAvailableProducts();
+    
+    // Solo mostrar productos que el taller tiene órdenes asignadas
+    return availableProducts.filter(product => 
+      workshopProductIds.includes(product.id)
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,10 +210,10 @@ export const WorkshopPricingManager = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="workshop_id">Taller</Label>
-                  <Select
-                    value={formData.workshop_id}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, workshop_id: value }))}
-                  >
+                   <Select
+                     value={formData.workshop_id}
+                     onValueChange={(value) => setFormData(prev => ({ ...prev, workshop_id: value, product_id: "" }))}
+                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar taller" />
                     </SelectTrigger>
@@ -155,7 +237,7 @@ export const WorkshopPricingManager = () => {
                       <SelectValue placeholder="Seleccionar producto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map((product) => (
+                      {getFilteredProducts().map((product) => (
                         <SelectItem key={product.id} value={product.id}>
                           {product.name}
                         </SelectItem>
