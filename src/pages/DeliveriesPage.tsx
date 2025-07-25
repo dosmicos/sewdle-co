@@ -251,6 +251,7 @@ const DeliveriesPage = () => {
       <DeliveryDetails
         delivery={selectedDelivery}
         onBack={handleDeliveryDetailsBack}
+        onDeliveryUpdated={refetch}
       />
     );
   }

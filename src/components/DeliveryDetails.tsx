@@ -24,9 +24,10 @@ import DeliveryInvoiceFiles from './DeliveryInvoiceFiles';
 interface DeliveryDetailsProps {
   delivery: any;
   onBack: (shouldRefresh?: boolean) => void;
+  onDeliveryUpdated?: () => void;
 }
 
-const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsProps) => {
+const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated }: DeliveryDetailsProps) => {
   const [delivery, setDelivery] = useState(initialDelivery);
   const [isEditing, setIsEditing] = useState(false);
   const [quantityData, setQuantityData] = useState<any>({});
@@ -125,6 +126,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
     if (success) {
       setIsEditing(false);
       loadDelivery();
+      onDeliveryUpdated?.();
     }
   };
 
@@ -382,8 +384,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         });
       }
 
-      // Recargar datos de la entrega
+      // Recargar datos de la entrega y notificar al componente padre
       loadDelivery();
+      onDeliveryUpdated?.();
     } catch (error) {
       console.error('Error saving variant quality:', error);
       toast({
@@ -452,6 +455,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
         });
 
         loadDelivery();
+        onDeliveryUpdated?.();
       }
     } catch (error) {
       console.error('Error syncing variant:', error);
