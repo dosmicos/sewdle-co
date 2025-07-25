@@ -53,11 +53,14 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  let deliveryId = null
+  let supabase = null
+
   try {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    supabase = createClient(supabaseUrl, supabaseKey)
 
     // Get Shopify credentials
     const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
@@ -71,7 +74,9 @@ serve(async (req) => {
     console.log('Domain:', shopifyDomain)
     console.log('Token presente:', shopifyToken ? 'Sí' : 'No')
 
-    const { deliveryId, approvedItems } = await req.json()
+    const requestData = await req.json()
+    deliveryId = requestData.deliveryId
+    const approvedItems = requestData.approvedItems
 
     if (!deliveryId || !approvedItems || !Array.isArray(approvedItems)) {
       throw new Error('Datos de sincronización inválidos')
@@ -723,7 +728,7 @@ serve(async (req) => {
       .from('deliveries')
       .update({ 
         synced_to_shopify: deliveryFullySynced,
-        sync_attempts: deliveryData.sync_attempts + 1,
+        sync_attempts: (existingSync?.sync_attempts || 0) + 1,
         last_sync_attempt: new Date().toISOString(),
         sync_error_message: errorCount > 0 ? 
           syncResults.filter(r => r.status === 'error').map(r => `${r.sku}: ${r.error}`).join('; ') :
@@ -731,7 +736,7 @@ serve(async (req) => {
       })
       .eq('id', deliveryId)
       
-    console.log(`✅ Delivery ${deliveryData.tracking_number} sync status updated: ${deliveryFullySynced ? 'FULLY_SYNCED' : 'PARTIAL_OR_FAILED'}`)
+    console.log(`✅ Delivery ${deliveryId} sync status updated: ${deliveryFullySynced ? 'FULLY_SYNCED' : 'PARTIAL_OR_FAILED'}`)
 
     const response = {
       success: successCount > 0,
@@ -773,12 +778,7 @@ serve(async (req) => {
     
     // Clean up lock on error
     try {
-      const { deliveryId } = await req.json()
       if (deliveryId) {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        const supabase = createClient(supabaseUrl, supabaseKey)
-        
         await supabase
           .from('deliveries')
           .update({ 
