@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DollarSign, TrendingUp, Receipt, PiggyBank } from 'lucide-react';
 import { WorkshopPricingManager } from '@/components/financial/WorkshopPricingManager';
-import { DeliveryPaymentManager } from '@/components/financial/DeliveryPaymentManager';
+import { DeliveryPaymentsList } from '@/components/financial/DeliveryPaymentsList';
 import { OrderAdvancesManager } from '@/components/financial/OrderAdvancesManager';
 
 const FinancialPage = () => {
@@ -82,22 +82,7 @@ const FinancialPage = () => {
         </TabsList>
 
         <TabsContent value="payments" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gestión de Pagos de Entregas</CardTitle>
-              <CardDescription>
-                Administra los pagos a talleres por entregas realizadas
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Gestiona los pagos de entregas desde la página de entregas individuales. 
-                  Ve a "Entregas" para ver y procesar pagos específicos.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <DeliveryPaymentsList />
         </TabsContent>
 
         <TabsContent value="pricing" className="space-y-6">
