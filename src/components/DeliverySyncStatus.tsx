@@ -324,6 +324,7 @@ export const DeliverySyncStatus = ({
               isLocked={lockInfo.isLocked}
               lockAgeMinutes={lockInfo.lockAgeMinutes}
               onLockCleared={onSyncSuccess}
+              onAutoRetry={handleRetrySync}
             />
           )}
 
