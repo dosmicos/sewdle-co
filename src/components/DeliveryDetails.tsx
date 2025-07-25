@@ -565,6 +565,53 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
     }
   };
 
+  // Helper function to get individual item sync status
+  const getItemSyncStatus = (item: any) => {
+    const hasApproved = item.quantity_approved > 0;
+    const hasDefective = item.quantity_defective > 0;
+    const hasReviewed = hasApproved || hasDefective;
+    const isSynced = item.synced_to_shopify;
+    
+    if (!hasReviewed) {
+      return {
+        text: 'En Revisión',
+        variant: 'secondary' as const,
+        color: 'bg-blue-100 text-blue-800'
+      };
+    }
+    
+    if (hasReviewed && !isSynced) {
+      return {
+        text: 'Guardado',
+        variant: 'outline' as const,
+        color: 'bg-yellow-100 text-yellow-800'
+      };
+    }
+    
+    if (hasApproved && isSynced) {
+      return {
+        text: 'Sincronizado',
+        variant: 'default' as const,
+        color: 'bg-green-100 text-green-800'
+      };
+    }
+    
+    // Caso especial: procesado pero sin unidades aprobadas (faltante)
+    if (hasReviewed && !hasApproved && hasDefective) {
+      return {
+        text: 'Procesado',
+        variant: 'destructive' as const,
+        color: 'bg-red-100 text-red-800'
+      };
+    }
+    
+    return {
+      text: 'Guardado',
+      variant: 'outline' as const,
+      color: 'bg-yellow-100 text-yellow-800'
+    };
+  };
+
   const getTotalQuantities = () => {
     if (!delivery.delivery_items) return { delivered: 0, approved: 0, defective: 0 };
     
@@ -749,16 +796,17 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack }: DeliveryDetailsP
                             <p className="font-medium text-sm">
                               {item.order_items?.product_variants?.products?.name}
                             </p>
-                            {item.synced_to_shopify && (
-                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                                ✓ Sincronizado
-                              </Badge>
-                            )}
-                            {isVariantReviewed && !item.synced_to_shopify && (
-                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                Revisado
-                              </Badge>
-                            )}
+                            {(() => {
+                              const status = getItemSyncStatus(item);
+                              return (
+                                <Badge 
+                                  variant={status.variant} 
+                                  className={`text-xs ${status.color}`}
+                                >
+                                  {status.text}
+                                </Badge>
+                              );
+                            })()}
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                             <span className="bg-gray-100 px-2 py-1 rounded">
