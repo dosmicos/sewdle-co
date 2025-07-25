@@ -225,9 +225,9 @@ const DeliveriesPage = () => {
     };
 
     return (
-      <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor()}`}>
+      <div className={`inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-xs font-medium ${getStatusColor()}`}>
         {getStatusIcon()}
-        <span className="hidden sm:inline">{getStatusText()}</span>
+        <span className="hidden sm:inline text-xs">{getStatusText()}</span>
       </div>
     );
   };
@@ -587,10 +587,6 @@ const DeliveriesPage = () => {
         </div>
 
         <TabsContent value="all" className="space-y-4 mt-3">
-          {(() => {
-            console.log('Parent - PaymentStatusIndicator:', typeof PaymentStatusIndicator, PaymentStatusIndicator);
-            return null;
-          })()}
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
@@ -776,10 +772,12 @@ const DeliveryCards = ({
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                   <div className="flex items-center gap-2">
-                     <div className="font-semibold text-sm">{delivery.tracking_number}</div>
-                     {PaymentStatusIndicator && <PaymentStatusIndicator deliveryId={delivery.id} />}
-                   </div>
+                  <div className="font-semibold text-sm">{delivery.tracking_number}</div>
+                  {PaymentStatusIndicator && (
+                    <div className="mt-1">
+                      <PaymentStatusIndicator deliveryId={delivery.id} />
+                    </div>
+                  )}
                   <div className="text-xs text-muted-foreground">
                     Orden: {delivery.order_number}
                   </div>
@@ -935,16 +933,14 @@ const DeliveryTable = ({
               return (
                  <TableRow key={delivery.id} className="hover:bg-muted/50">
                    <TableCell className="font-medium">
-                         <div className="flex items-center gap-2">
-                           <span>{delivery.tracking_number}</span>
-                           {(() => {
-                             console.log('DeliveryTable - PaymentStatusIndicator:', typeof PaymentStatusIndicator, PaymentStatusIndicator);
-                             console.log('DeliveryTable - deliveryId:', delivery.id);
-                             return PaymentStatusIndicator && (
-                               <PaymentStatusIndicator deliveryId={delivery.id} />
-                             );
-                           })()}
+                     <div>
+                       <div>{delivery.tracking_number}</div>
+                       {PaymentStatusIndicator && (
+                         <div className="mt-1">
+                           <PaymentStatusIndicator deliveryId={delivery.id} />
                          </div>
+                       )}
+                     </div>
                    </TableCell>
                   <TableCell>{delivery.order_number}</TableCell>
                   <TableCell>{delivery.workshop_name || 'Sin asignar'}</TableCell>
