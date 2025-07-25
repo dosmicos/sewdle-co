@@ -84,7 +84,7 @@ serve(async (req) => {
 
     // IMPROVED: Enhanced sync lock with automatic cleanup and better error handling
     const processId = crypto.randomUUID()
-    const lockTimeout = 15 * 60 * 1000 // 15 minutes
+    const lockTimeout = 2 * 60 * 1000 // 2 minutes (reduces blocking while maintaining duplicate protection)
     
     // First, clear any stale locks automatically
     console.log('🧹 Clearing stale sync locks...')
@@ -120,7 +120,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: `Sincronización ya en progreso (iniciada hace ${minutesAgo} minutos). Intente nuevamente en unos minutos.`,
+            error: `Sincronización temporal en progreso (${minutesAgo} min). Solo se bloquean duplicados simultáneos, no sincronizaciones individuales.`,
             canRetryAt: new Date(lastAttempt.getTime() + lockTimeout).toISOString(),
             lockAgeMinutes: minutesAgo,
             summary: { successful: 0, failed: 0, already_synced: 0 }
