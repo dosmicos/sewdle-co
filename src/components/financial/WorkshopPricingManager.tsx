@@ -28,7 +28,7 @@ const initialFormData: PricingFormData = {
   workshop_id: "",
   product_id: "",
   unit_price: "",
-  currency: "USD",
+  currency: "COP",
   effective_from: new Date().toISOString().split('T')[0],
   effective_until: "",
   notes: ""
