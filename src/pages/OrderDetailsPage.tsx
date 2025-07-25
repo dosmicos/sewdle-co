@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrders } from '@/hooks/useOrders';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,11 @@ const OrderDetailsPage = () => {
   const { canEditOrders, canDeleteOrders, canCreateDeliveries } = useUserContext();
   const order = orders.find(o => o.id === orderId);
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(orderId || '');
+
+  // Scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   if (loading) {
     return (
