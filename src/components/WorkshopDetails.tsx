@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building2, MapPin, Phone, Mail, Star, Calendar, Package, Clock, User } from 'lucide-react';
+import { ArrowLeft, Building2, MapPin, Phone, Mail, Star, Calendar, Package, Clock, User, DollarSign } from 'lucide-react';
 import { useWorkshopStats } from '@/hooks/useWorkshopStats';
 import { useWorkshopOrders } from '@/hooks/useWorkshopOrders';
 import type { Workshop } from '@/hooks/useWorkshops';
@@ -155,7 +155,7 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
           )}
 
           {/* Información adicional */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {workshop.city && (
               <div className="text-center p-3 bg-gray-50 rounded-xl">
                 <p className="text-sm text-gray-600">Ciudad</p>
@@ -169,6 +169,15 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
             <div className="text-center p-3 bg-gray-50 rounded-xl">
               <p className="text-sm text-gray-600">Estado</p>
               <p className="font-semibold text-black">{workshop.status === 'active' ? 'Activo' : 'Inactivo'}</p>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-xl">
+              <div className="flex items-center justify-center mb-1">
+                <DollarSign className="w-4 h-4 text-green-600 mr-1" />
+                <p className="text-sm text-gray-600">Método de Pago</p>
+              </div>
+              <p className="font-semibold text-black">
+                {workshop.paymentMethod === 'approved' ? 'Por Aprobadas' : 'Por Entregadas'}
+              </p>
             </div>
           </div>
 

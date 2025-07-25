@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Building2, Phone, Star } from 'lucide-react';
+import { Building2, Phone, Star, DollarSign } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 
 interface WorkshopFormProps {
@@ -23,7 +23,8 @@ const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
     phone: '',
     email: '',
     contact_person: '',
-    notes: ''
+    notes: '',
+    payment_method: 'approved'
   });
 
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
@@ -67,7 +68,8 @@ const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
       contact_person: formData.contact_person,
       specialties: selectedSpecialties,
       notes: formData.notes,
-      status: 'active' as const
+      status: 'active' as const,
+      payment_method: formData.payment_method as 'approved' | 'delivered'
     };
 
     const { error } = await createWorkshop(workshopData);
@@ -81,7 +83,8 @@ const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
         phone: '',
         email: '',
         contact_person: '',
-        notes: ''
+        notes: '',
+        payment_method: 'approved'
       });
       setSelectedSpecialties([]);
       
@@ -225,6 +228,36 @@ const WorkshopForm = ({ onSuccess }: WorkshopFormProps) => {
                     {specialty}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Configuración de Pago */}
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold flex items-center space-x-2">
+                <DollarSign className="w-5 h-5 text-green-500" />
+                <span>Configuración de Pago</span>
+              </h3>
+              
+              <div className="space-y-2">
+                <Label htmlFor="payment_method">Método de Pago del Taller</Label>
+                <Select 
+                  value={formData.payment_method} 
+                  onValueChange={(value) => handleInputChange('payment_method', value)}
+                >
+                  <SelectTrigger className="apple-input">
+                    <SelectValue placeholder="Selecciona el método de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approved">Por unidades aprobadas</SelectItem>
+                    <SelectItem value="delivered">Por unidades entregadas</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Por unidades aprobadas:</strong> El taller solo cobra por las unidades que pasan control de calidad.<br />
+                  <strong>Por unidades entregadas:</strong> El taller cobra por todas las unidades entregadas, independientemente del control de calidad.
+                </p>
               </div>
             </div>
 

@@ -17,6 +17,7 @@ export interface Workshop {
   workingHoursStart?: string;
   workingHoursEnd?: string;
   notes?: string;
+  paymentMethod: 'approved' | 'delivered';
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +56,7 @@ export const useWorkshops = () => {
         workingHoursStart: workshop.working_hours_start,
         workingHoursEnd: workshop.working_hours_end,
         notes: workshop.notes,
+        paymentMethod: workshop.payment_method || 'approved',
         createdAt: workshop.created_at,
         updatedAt: workshop.updated_at
       })) || [];
@@ -83,6 +85,7 @@ export const useWorkshops = () => {
     specialties?: string[];
     notes?: string;
     status: 'active' | 'inactive';
+    payment_method?: 'approved' | 'delivered';
   }) => {
     try {
       const { data, error } = await supabase
@@ -96,7 +99,8 @@ export const useWorkshops = () => {
           contact_person: workshopData.contact_person,
           specialties: workshopData.specialties || [],
           notes: workshopData.notes,
-          status: workshopData.status
+          status: workshopData.status,
+          payment_method: workshopData.payment_method || 'approved'
         })
         .select()
         .single();

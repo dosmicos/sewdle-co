@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign } from 'lucide-react';
 import DeliverySyncStatus from './DeliverySyncStatus';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -20,6 +20,7 @@ import { sortVariants } from '@/lib/variantSorting';
 import DeliveryEvidenceGallery from './DeliveryEvidenceGallery';
 import DeliveryReviewSummary from './DeliveryReviewSummary';
 import DeliveryInvoiceFiles from './DeliveryInvoiceFiles';
+import { DeliveryPaymentManager } from './financial/DeliveryPaymentManager';
 
 interface DeliveryDetailsProps {
   delivery: any;
@@ -1088,6 +1089,19 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Información de Pago */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <DollarSign className="w-5 h-5" />
+            <span>Información de Pago</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DeliveryPaymentManager deliveryId={delivery.id} />
         </CardContent>
       </Card>
 
