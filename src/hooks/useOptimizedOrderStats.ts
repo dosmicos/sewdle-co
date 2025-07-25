@@ -75,10 +75,10 @@ export const useOptimizedOrderStats = (orderId: string) => {
 
       if (orderStats) {
         const newStats = {
-          totalOrdered: orderStats.total_ordered,
-          totalApproved: orderStats.total_approved,
-          totalPending: orderStats.total_pending,
-          completionPercentage: orderStats.completion_percentage
+          totalOrdered: orderStats.total_ordered || 0,
+          totalApproved: orderStats.total_approved || 0,
+          totalPending: orderStats.total_pending || 0,
+          completionPercentage: orderStats.completion_percentage || 0
         };
 
         setStats(newStats);
@@ -99,17 +99,43 @@ export const useOptimizedOrderStats = (orderId: string) => {
           completionPercentage: 0
         };
         setStats(defaultStats);
+        
+        // Guardar en cache con valores por defecto
+        statsCache.set(id, {
+          stats: defaultStats,
+          timestamp: now,
+          loading: false,
+          error: null
+        });
       }
     } catch (err: any) {
       console.error('Error fetching order stats:', err);
       
+      // Usar valores por defecto si hay error
+      const defaultStats = {
+        totalOrdered: 0,
+        totalApproved: 0,
+        totalPending: 0,
+        completionPercentage: 0
+      };
+      
       // Si hay datos en cache, usarlos como fallback
       const cached = statsCache.get(id);
-      if (cached) {
+      if (cached && cached.stats) {
         setStats(cached.stats);
+      } else {
+        setStats(defaultStats);
       }
       
       setError('Error al cargar estadísticas');
+      
+      // Guardar error en cache para evitar re-llamadas inmediatas
+      statsCache.set(id, {
+        stats: cached?.stats || defaultStats,
+        timestamp: now,
+        loading: false,
+        error: 'Error al cargar estadísticas'
+      });
     } finally {
       setLoading(false);
     }
