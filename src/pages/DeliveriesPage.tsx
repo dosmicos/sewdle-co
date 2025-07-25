@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useDeliveries } from '@/hooks/useDeliveries';
+import { useDeliveryPayments } from '@/hooks/useDeliveryPayments';
 import { useAuth } from '@/contexts/AuthContext';
 import DeliveryForm from '@/components/DeliveryForm';
 import DeliveryDetails from '@/components/DeliveryDetails';
@@ -25,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical } from 'lucide-react';
+import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical, DollarSign } from 'lucide-react';
 import DeliverySyncStatus from '@/components/DeliverySyncStatus';
 import SyncMonitoringDashboard from '@/components/SyncMonitoringDashboard';
 import { format } from 'date-fns';
@@ -36,6 +37,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 const DeliveriesPage = () => {
   const { deliveries, loading, refetch } = useFilteredDeliveries();
   const { deleteDelivery } = useDeliveries();
+  const { payments } = useDeliveryPayments();
   const { isAdmin } = useUserContext();
   const { hasPermission } = useAuth();
   const { toast } = useToast();
@@ -180,6 +182,54 @@ const DeliveriesPage = () => {
       setShowDeleteDialog(false);
       setDeliveryToDelete(null);
     }
+  };
+
+  const getPaymentStatus = (deliveryId: string) => {
+    const payment = payments.find(p => p.delivery_id === deliveryId);
+    if (!payment) return null;
+    return payment.payment_status;
+  };
+
+  const PaymentStatusIndicator = ({ deliveryId }: { deliveryId: string }) => {
+    const status = getPaymentStatus(deliveryId);
+    if (!status) return null;
+
+    const getStatusIcon = () => {
+      switch (status) {
+        case 'paid': return <DollarSign className="w-3 h-3" />;
+        case 'pending': return <Clock className="w-3 h-3" />;
+        case 'partial': return <AlertTriangle className="w-3 h-3" />;
+        case 'cancelled': return <XCircle className="w-3 h-3" />;
+        default: return <DollarSign className="w-3 h-3" />;
+      }
+    };
+
+    const getStatusColor = () => {
+      switch (status) {
+        case 'paid': return 'bg-green-100 text-green-700';
+        case 'pending': return 'bg-yellow-100 text-yellow-700';
+        case 'partial': return 'bg-orange-100 text-orange-700';
+        case 'cancelled': return 'bg-red-100 text-red-700';
+        default: return 'bg-gray-100 text-gray-700';
+      }
+    };
+
+    const getStatusText = () => {
+      switch (status) {
+        case 'paid': return 'Pagado';
+        case 'pending': return 'Pendiente';
+        case 'partial': return 'Parcial';
+        case 'cancelled': return 'Cancelado';
+        default: return 'Sin pago';
+      }
+    };
+
+    return (
+      <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor()}`}>
+        {getStatusIcon()}
+        <span className="hidden sm:inline">{getStatusText()}</span>
+      </div>
+    );
   };
 
   // Componente para el contenido de filtros
@@ -543,6 +593,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           ) : (
             <DeliveryTable 
@@ -550,6 +601,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           )}
         </TabsContent>
@@ -561,6 +613,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           ) : (
             <DeliveryTable 
@@ -568,6 +621,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           )}
         </TabsContent>
@@ -579,6 +633,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           ) : (
             <DeliveryTable 
@@ -586,6 +641,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           )}
         </TabsContent>
@@ -597,6 +653,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           ) : (
             <DeliveryTable 
@@ -604,6 +661,7 @@ const DeliveriesPage = () => {
               onViewDetails={setSelectedDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
+              PaymentStatusIndicator={PaymentStatusIndicator}
             />
           )}
         </TabsContent>
@@ -652,12 +710,14 @@ const DeliveryCards = ({
   deliveries, 
   onViewDetails, 
   onDeleteDelivery, 
-  canDeleteDeliveries 
+  canDeleteDeliveries,
+  PaymentStatusIndicator 
 }: { 
   deliveries: any[], 
   onViewDetails: (delivery: any) => void,
   onDeleteDelivery: (delivery: any) => void,
-  canDeleteDeliveries: boolean
+  canDeleteDeliveries: boolean,
+  PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -712,7 +772,10 @@ const DeliveryCards = ({
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  <div className="font-semibold text-sm">{delivery.tracking_number}</div>
+                   <div className="flex items-center gap-2">
+                     <div className="font-semibold text-sm">{delivery.tracking_number}</div>
+                     {PaymentStatusIndicator && <PaymentStatusIndicator deliveryId={delivery.id} />}
+                   </div>
                   <div className="text-xs text-muted-foreground">
                     Orden: {delivery.order_number}
                   </div>
@@ -791,12 +854,14 @@ const DeliveryTable = ({
   deliveries, 
   onViewDetails, 
   onDeleteDelivery, 
-  canDeleteDeliveries 
+  canDeleteDeliveries,
+  PaymentStatusIndicator 
 }: { 
   deliveries: any[], 
   onViewDetails: (delivery: any) => void,
   onDeleteDelivery: (delivery: any) => void,
-  canDeleteDeliveries: boolean
+  canDeleteDeliveries: boolean,
+  PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -864,8 +929,13 @@ const DeliveryTable = ({
             {deliveries.map((delivery) => {
               const quantities = getQuantities(delivery);
               return (
-                <TableRow key={delivery.id} className="hover:bg-muted/50">
-                  <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
+                 <TableRow key={delivery.id} className="hover:bg-muted/50">
+                   <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{delivery.tracking_number}</span>
+                        {PaymentStatusIndicator && <PaymentStatusIndicator deliveryId={delivery.id} />}
+                      </div>
+                   </TableCell>
                   <TableCell>{delivery.order_number}</TableCell>
                   <TableCell>{delivery.workshop_name || 'Sin asignar'}</TableCell>
                   <TableCell>
