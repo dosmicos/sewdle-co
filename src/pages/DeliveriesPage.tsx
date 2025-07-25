@@ -587,6 +587,10 @@ const DeliveriesPage = () => {
         </div>
 
         <TabsContent value="all" className="space-y-4 mt-3">
+          {(() => {
+            console.log('Parent - PaymentStatusIndicator:', typeof PaymentStatusIndicator, PaymentStatusIndicator);
+            return null;
+          })()}
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
@@ -931,10 +935,16 @@ const DeliveryTable = ({
               return (
                  <TableRow key={delivery.id} className="hover:bg-muted/50">
                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <span>{delivery.tracking_number}</span>
-                        {PaymentStatusIndicator && <PaymentStatusIndicator deliveryId={delivery.id} />}
-                      </div>
+                         <div className="flex items-center gap-2">
+                           <span>{delivery.tracking_number}</span>
+                           {(() => {
+                             console.log('DeliveryTable - PaymentStatusIndicator:', typeof PaymentStatusIndicator, PaymentStatusIndicator);
+                             console.log('DeliveryTable - deliveryId:', delivery.id);
+                             return PaymentStatusIndicator && (
+                               <PaymentStatusIndicator deliveryId={delivery.id} />
+                             );
+                           })()}
+                         </div>
                    </TableCell>
                   <TableCell>{delivery.order_number}</TableCell>
                   <TableCell>{delivery.workshop_name || 'Sin asignar'}</TableCell>
