@@ -1639,6 +1639,17 @@ export type Database = {
           delivery_notes: string
         }[]
       }
+      get_order_delivery_stats_v2: {
+        Args: { order_id_param: string }
+        Returns: {
+          total_ordered: number
+          total_delivered: number
+          total_approved: number
+          total_defective: number
+          total_pending: number
+          completion_percentage: number
+        }[]
+      }
       get_order_variants_breakdown: {
         Args: { order_id_param: string }
         Returns: {
