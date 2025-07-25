@@ -173,10 +173,10 @@ export const WorkshopPricingManager = () => {
   };
 
   const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: currency
-    }).format(amount);
+    return `COP $${new Intl.NumberFormat('es-ES', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)}`;
   };
 
   const isCurrentPrice = (effectiveFrom: string, effectiveUntil?: string) => {
@@ -269,9 +269,9 @@ export const WorkshopPricingManager = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="COP">COP</SelectItem>
                       <SelectItem value="USD">USD</SelectItem>
                       <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="COP">COP</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

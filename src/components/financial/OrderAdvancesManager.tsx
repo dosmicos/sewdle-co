@@ -29,7 +29,7 @@ const initialFormData: AdvanceFormData = {
   order_id: "",
   workshop_id: "",
   amount: "",
-  currency: "USD",
+  currency: "COP",
   advance_date: new Date().toISOString().split('T')[0],
   payment_method: "",
   reference_number: "",
@@ -114,10 +114,10 @@ export const OrderAdvancesManager = ({ orderId, workshopId }: OrderAdvancesManag
   };
 
   const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: currency
-    }).format(amount);
+    return `COP $${new Intl.NumberFormat('es-ES', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)}`;
   };
 
   return (
@@ -129,7 +129,7 @@ export const OrderAdvancesManager = ({ orderId, workshopId }: OrderAdvancesManag
             Anticipos
             {totalAdvances > 0 && (
               <span className="text-sm font-normal text-muted-foreground">
-                (Total: {formatCurrency(totalAdvances, "USD")})
+                (Total: {formatCurrency(totalAdvances, "COP")})
               </span>
             )}
           </CardTitle>
@@ -219,9 +219,9 @@ export const OrderAdvancesManager = ({ orderId, workshopId }: OrderAdvancesManag
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="COP">COP</SelectItem>
                       <SelectItem value="USD">USD</SelectItem>
                       <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="COP">COP</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

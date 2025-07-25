@@ -85,10 +85,10 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+    return `COP $${new Intl.NumberFormat('es-ES', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)}`;
   };
 
   const getPaymentStatusBadge = (status: string) => {
