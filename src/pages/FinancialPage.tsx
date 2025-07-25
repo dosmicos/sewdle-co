@@ -5,9 +5,20 @@ import { DollarSign, TrendingUp, Receipt, PiggyBank } from 'lucide-react';
 import { WorkshopPricingManager } from '@/components/financial/WorkshopPricingManager';
 import { DeliveryPaymentsList } from '@/components/financial/DeliveryPaymentsList';
 import { OrderAdvancesManager } from '@/components/financial/OrderAdvancesManager';
+import { useFinancialSummary } from '@/hooks/useFinancialSummary';
 
 const FinancialPage = () => {
   const [activeTab, setActiveTab] = useState('payments');
+  const { summary, loading } = useFinancialSummary();
+  
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount).replace('COP', 'COP $');
+  };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -27,9 +38,11 @@ const FinancialPage = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$12,430</div>
+            <div className="text-2xl font-bold">
+              {loading ? 'Cargando...' : formatCurrency(summary.pendingPayments)}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +5% desde el mes pasado
+              Pagos pendientes de entregas
             </p>
           </CardContent>
         </Card>
@@ -40,9 +53,11 @@ const FinancialPage = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$45,231</div>
+            <div className="text-2xl font-bold">
+              {loading ? 'Cargando...' : formatCurrency(summary.completedPayments)}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +12% desde el mes pasado
+              Pagos completados este período
             </p>
           </CardContent>
         </Card>
@@ -53,22 +68,26 @@ const FinancialPage = () => {
             <PiggyBank className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$8,920</div>
+            <div className="text-2xl font-bold">
+              {loading ? 'Cargando...' : formatCurrency(summary.totalAdvances)}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +3% desde el mes pasado
+              Total en anticipos de órdenes
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Facturas</CardTitle>
+            <CardTitle className="text-sm font-medium">Entregas</CardTitle>
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
+            <div className="text-2xl font-bold">
+              {loading ? 'Cargando...' : summary.totalDeliveries}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +8 este mes
+              Total de entregas registradas
             </p>
           </CardContent>
         </Card>
