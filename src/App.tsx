@@ -18,6 +18,7 @@ import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
 import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
+import OrderDetailsPage from "@/pages/OrderDetailsPage";
 import NotFound from "@/pages/NotFound";
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -131,6 +132,12 @@ const AppContent = () => {
           <PermissionRoute module="orders" action="view">
             <OrdersPage />
           </PermissionRoute>
+        } />
+        
+        <Route path="orders/:orderId" element={
+          <ProtectedRoute>
+            <OrderDetailsPage />
+          </ProtectedRoute>
         } />
         
         <Route path="supplies" element={

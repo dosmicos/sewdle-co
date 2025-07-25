@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFilteredOrders } from '@/hooks/useFilteredOrders';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useWorkshops } from '@/hooks/useWorkshops';
@@ -9,12 +10,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { TrendingUp } from 'lucide-react';
 import OrderForm from '@/components/OrderForm';
 import OrderEditModal from '@/components/OrderEditModal';
-import OrderDetailsModal from '@/components/OrderDetailsModal';
 import OrderCard from '@/components/OrderCard';
 import OrderFilters from '@/components/OrderFilters';
 import OrdersEmptyState from '@/components/OrdersEmptyState';
 
 const OrdersPage = () => {
+  const navigate = useNavigate();
   const { orders, loading, refetch } = useFilteredOrders();
   const { isAdmin } = useUserContext();
   const { hasPermission } = useAuth();
@@ -24,7 +25,6 @@ const OrdersPage = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWorkshop, setSelectedWorkshop] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -87,8 +87,7 @@ const OrdersPage = () => {
   };
 
   const handleViewDetails = (order: any) => {
-    setSelectedOrder(order);
-    setShowDetailsModal(true);
+    navigate(`/orders/${order.id}`);
   };
 
   const handleFormClose = () => {
@@ -236,18 +235,6 @@ const OrdersPage = () => {
         />
       )}
 
-      {selectedOrder && showDetailsModal && (
-        <OrderDetailsModal
-          order={selectedOrder}
-          open={showDetailsModal}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedOrder(null);
-          }}
-          onEdit={handleEditOrder}
-          onDelete={handleDeleteOrder}
-        />
-      )}
 
       {/* AlertDialog para confirmación de eliminación */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
