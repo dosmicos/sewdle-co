@@ -45,12 +45,14 @@ const MaterialsCatalog = () => {
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<Material | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const { materials, loading, fetchMaterials, deleteMaterial } = useMaterials();
   const { hasPermission } = useAuth();
 
   const canEditMaterials = hasPermission('insumos', 'edit');
   const canDeleteMaterials = hasPermission('insumos', 'delete');
+  const canCreateMaterials = hasPermission('insumos', 'create');
 
   // Obtener categorías únicas para el filtro
   const categories = React.useMemo(() => {
@@ -225,18 +227,30 @@ const MaterialsCatalog = () => {
           </Select>
         </div>
 
-        <Button 
-          onClick={handleRefresh}
-          variant="outline"
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4 mr-2" />
+        <div className="flex items-center space-x-2">
+          {canCreateMaterials && (
+            <Button 
+              onClick={() => setShowCreateForm(true)}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              <Package className="w-4 h-4 mr-2" />
+              Nuevo Material
+            </Button>
           )}
-          Actualizar
-        </Button>
+          
+          <Button 
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       <Card className="p-6">
@@ -388,6 +402,13 @@ const MaterialsCatalog = () => {
           </div>
         )}
       </Card>
+
+      {/* Modal de Creación */}
+      {showCreateForm && canCreateMaterials && (
+        <MaterialForm 
+          onClose={() => setShowCreateForm(false)} 
+        />
+      )}
 
       {/* Modal de Edición */}
       {editingMaterial && canEditMaterials && (

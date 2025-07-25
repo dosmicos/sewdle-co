@@ -32,7 +32,7 @@ const SuppliesPage = () => {
         </TabsContent>
 
         <TabsContent value="deliveries" className="space-y-6">
-          <MaterialDelivery />
+          <MaterialDelivery canCreateDeliveries={true} />
         </TabsContent>
 
         <TabsContent value="consumption" className="space-y-6">
