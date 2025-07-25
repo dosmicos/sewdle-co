@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Building2, Star, Calendar, ArrowLeft, Trash2, Edit } from 'lucide-react';
 import WorkshopForm from '@/components/WorkshopForm';
 import WorkshopDetails from '@/components/WorkshopDetails';
+import WorkshopEditModal from '@/components/WorkshopEditModal';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -11,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 const WorkshopsPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedWorkshop, setSelectedWorkshop] = useState<any>(null);
+  const [editingWorkshop, setEditingWorkshop] = useState<any>(null);
   const {
     workshops,
     loading,
@@ -23,6 +25,7 @@ const WorkshopsPage = () => {
 
   // Verificar permisos
   const canCreateWorkshops = hasPermission('workshops', 'create');
+  const canEditWorkshops = hasPermission('workshops', 'edit');
   const canDeleteWorkshops = hasPermission('workshops', 'delete');
   
   const handleWorkshopClick = (workshop: any) => {
@@ -37,10 +40,20 @@ const WorkshopsPage = () => {
     e.stopPropagation();
     await deleteWorkshop(workshopId);
   };
+
+  const handleEditWorkshop = (workshop: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingWorkshop(workshop);
+  };
   
   const handleFormSuccess = async () => {
     await refetch(); // Refetch the workshops list
     setShowForm(false);
+  };
+
+  const handleEditSuccess = async () => {
+    await refetch(); // Refetch the workshops list
+    setEditingWorkshop(null);
   };
 
   if (showForm) {
@@ -102,10 +115,21 @@ const WorkshopsPage = () => {
                       <p className="text-sm text-gray-600">{workshop.email}</p>
                     </div>
                   </div>
-                  {canDeleteWorkshops && <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center space-x-1">
+                    {canEditWorkshops && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" 
+                        onClick={(e) => handleEditWorkshop(workshop, e)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canDeleteWorkshops && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={e => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </AlertDialogTrigger>
@@ -124,7 +148,8 @@ const WorkshopsPage = () => {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </div>}
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -156,6 +181,16 @@ const WorkshopsPage = () => {
               </div>
             </Card>)}
         </div>}
+
+      {/* Edit Workshop Modal */}
+      {editingWorkshop && (
+        <WorkshopEditModal
+          workshop={editingWorkshop}
+          open={!!editingWorkshop}
+          onOpenChange={(open) => !open && setEditingWorkshop(null)}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </div>;
 };
 

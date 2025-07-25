@@ -157,6 +157,59 @@ export const useWorkshops = () => {
     }
   };
 
+  const updateWorkshop = async (workshopId: string, workshopData: {
+    name?: string;
+    address?: string;
+    city?: string;
+    phone?: string;
+    email?: string;
+    contact_person?: string;
+    specialties?: string[];
+    notes?: string;
+    status?: 'active' | 'inactive';
+    payment_method?: 'approved' | 'delivered';
+    capacity?: number;
+  }) => {
+    try {
+      const { error } = await supabase
+        .from('workshops')
+        .update({
+          name: workshopData.name,
+          address: workshopData.address,
+          city: workshopData.city,
+          phone: workshopData.phone,
+          email: workshopData.email,
+          contact_person: workshopData.contact_person,
+          specialties: workshopData.specialties,
+          notes: workshopData.notes,
+          status: workshopData.status,
+          payment_method: workshopData.payment_method,
+          capacity: workshopData.capacity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', workshopId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Taller actualizado",
+        description: "El taller ha sido actualizado exitosamente",
+      });
+
+      return { error: null };
+    } catch (err: any) {
+      console.error('Error updating workshop:', err);
+      toast({
+        title: "Error al actualizar taller",
+        description: err.message || "Hubo un problema al actualizar el taller",
+        variant: "destructive",
+      });
+      return { error: err.message };
+    }
+  };
+
   useEffect(() => {
     fetchWorkshops();
   }, []);
@@ -166,6 +219,7 @@ export const useWorkshops = () => {
     loading,
     error,
     createWorkshop,
+    updateWorkshop,
     deleteWorkshop,
     refetch: fetchWorkshops
   };
