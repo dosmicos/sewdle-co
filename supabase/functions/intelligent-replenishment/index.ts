@@ -26,10 +26,16 @@ Deno.serve(async (req) => {
   try {
     console.log('🔄 Iniciando cálculo de reposición inteligente...');
     
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ Variables de entorno de Supabase no configuradas');
+      throw new Error('Variables de entorno de Supabase no configuradas');
+    }
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('✅ Cliente de Supabase inicializado');
 
     // Ejecutar función de cálculo de reposición
     console.log('📊 Ejecutando cálculo de sugerencias...');
@@ -38,7 +44,7 @@ Deno.serve(async (req) => {
 
     if (calcError) {
       console.error('❌ Error en cálculo de reposición:', calcError);
-      throw calcError;
+      throw new Error(`Error en función RPC: ${calcError.message || JSON.stringify(calcError)}`);
     }
 
     const results = calculations as ReplenishmentCalculation[];
