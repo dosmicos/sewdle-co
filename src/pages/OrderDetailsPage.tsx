@@ -237,10 +237,10 @@ const OrderDetailsPage = () => {
       </div>
 
       {/* Content */}
-      <Tabs defaultValue="details" className="space-y-6">
+      <Tabs defaultValue="deliveries" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="details">Detalles de la Orden</TabsTrigger>
           <TabsTrigger value="deliveries">Seguimiento de Entregas</TabsTrigger>
+          <TabsTrigger value="details">Detalles de la Orden</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-6">
