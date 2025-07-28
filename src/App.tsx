@@ -17,6 +17,7 @@ import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
 import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
+import SalesPage from "@/pages/SalesPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import OrderDetailsPage from "@/pages/OrderDetailsPage";
 import NotFound from "@/pages/NotFound";
@@ -173,6 +174,12 @@ const AppContent = () => {
         <Route path="replenishment" element={
           <AdminRoute>
             <ReplenishmentPage />
+          </AdminRoute>
+        } />
+        
+        <Route path="sales" element={
+          <AdminRoute>
+            <SalesPage />
           </AdminRoute>
         } />
         
