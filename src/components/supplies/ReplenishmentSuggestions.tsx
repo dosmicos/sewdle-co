@@ -181,9 +181,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle>Sugerencias Inteligentes de Reposición</CardTitle>
+              <CardTitle>Análisis con Datos Automáticos</CardTitle>
               <CardDescription>
-                Basado en análisis de ventas, stock actual y demanda proyectada
+                Usando datos en tiempo real de Shopify via webhook - stock actual, ventas y demanda proyectada
               </CardDescription>
             </div>
             <Button 
@@ -192,7 +192,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
               className="flex items-center gap-2"
             >
               <RefreshCw className={`h-4 w-4 ${calculating ? 'animate-spin' : ''}`} />
-              Recalcular
+              {calculating ? 'Calculando...' : 'Calcular Sugerencias'}
             </Button>
           </div>
         </CardHeader>
@@ -240,7 +240,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 {suggestions.length === 0 
-                  ? "No hay sugerencias de reposición disponibles. Ejecuta una sincronización de Shopify primero."
+                  ? "No hay sugerencias disponibles. Los datos se actualizan automáticamente con las ventas de Shopify."
                   : "No se encontraron sugerencias que coincidan con los filtros aplicados."
                 }
               </AlertDescription>

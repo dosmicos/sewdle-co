@@ -97,60 +97,18 @@ export const useReplenishment = () => {
     }
   };
 
-  const syncShopifySales = async () => {
-    try {
-      setCalculating(true);
-      
-      toast({
-        title: "Iniciando sincronización",
-        description: "Sincronizando ventas de Shopify...",
-      });
-
-      const { data, error } = await supabase.functions.invoke('sync-shopify-sales');
-      
-      if (error) {
-        console.error('Error syncing Shopify sales:', error);
-        toast({
-          title: "Error",
-          description: "Error al sincronizar ventas de Shopify",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      console.log('Shopify sales synced successfully:', data);
-      toast({
-        title: "Sincronización completada",
-        description: `Ventas de Shopify sincronizadas: ${data.summary?.total_sales_quantity || 0} unidades`,
-      });
-      
-    } catch (error) {
-      console.error('Error syncing Shopify sales:', error);
-      toast({
-        title: "Error",
-        description: "Error al sincronizar ventas de Shopify",
-        variant: "destructive",
-      });
-    } finally {
-      setCalculating(false);
-    }
-  };
 
   const calculateSuggestions = async () => {
     try {
       setCalculating(true);
       
-      // First sync sales metrics from Shopify data
-      console.log('Sincronizando métricas de ventas desde Shopify...');
-      const { error: syncError } = await supabase.rpc('sync_sales_metrics_from_shopify');
+      toast({
+        title: "Calculando sugerencias",
+        description: "Procesando datos automáticos de Shopify...",
+      });
       
-      if (syncError) {
-        console.error('Error syncing sales metrics:', syncError);
-        throw syncError;
-      }
-      
-      // Then call the calculation function
-      console.log('Calculando sugerencias de reposición...');
+      // Call the calculation function (it already handles sync internally)
+      console.log('Calculando sugerencias de reposición con datos automáticos...');
       const { data, error } = await supabase
         .rpc('calculate_replenishment_suggestions');
 
@@ -161,7 +119,7 @@ export const useReplenishment = () => {
 
       toast({
         title: "Éxito",
-        description: `Cálculo completado usando datos reales de Shopify. Se procesaron ${data?.length || 0} variantes.`,
+        description: `Sugerencias calculadas con datos automáticos de Shopify. Se procesaron ${data?.length || 0} variantes.`,
       });
 
       // Recargar sugerencias después del cálculo
@@ -321,7 +279,6 @@ export const useReplenishment = () => {
     calculating,
     fetchSuggestions,
     fetchConfigs,
-    syncShopifySales,
     calculateSuggestions,
     triggerReplenishmentFunction,
     updateSuggestionStatus,
