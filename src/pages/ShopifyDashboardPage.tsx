@@ -10,6 +10,7 @@ import { ProductAnalyticsTable } from '@/components/ProductAnalyticsTable';
 import { ShopifyDashboardStats } from '@/components/ShopifyDashboardStats';
 import { ShopifyWebhookConfig } from '@/components/ShopifyWebhookConfig';
 import { WebhookStatusIndicator } from '@/components/WebhookStatusIndicator';
+import { ShopifyRealTimeStats } from '@/components/ShopifyRealTimeStats';
 import { useShopifySync } from '@/hooks/useShopifySync';
 
 export const ShopifyDashboardPage: React.FC = () => {
@@ -70,11 +71,18 @@ export const ShopifyDashboardPage: React.FC = () => {
       </div>
 
       {/* Stats Overview */}
-      <ShopifyDashboardStats 
-        orders={orders}
-        customerAnalytics={customerAnalytics}
-        productAnalytics={productAnalytics}
-      />
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="md:col-span-2">
+          <ShopifyDashboardStats 
+            orders={orders}
+            customerAnalytics={customerAnalytics}
+            productAnalytics={productAnalytics}
+          />
+        </div>
+        <div>
+          <ShopifyRealTimeStats />
+        </div>
+      </div>
 
       {/* Main Content */}
       <Tabs defaultValue="orders" className="space-y-6">
