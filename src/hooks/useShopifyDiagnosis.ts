@@ -37,13 +37,13 @@ export const useShopifyDiagnosis = () => {
   const [summary, setSummary] = useState<DiagnosticSummary | null>(null);
   const { toast } = useToast();
 
-  const runDiagnosis = async (date: string = '2025-07-23') => {
+  const runDiagnosis = async (date: string = '2025-07-23', specificSku?: string) => {
     setLoading(true);
     try {
-      console.log(`🔍 Ejecutando diagnóstico para ${date}...`);
+      console.log(`🔍 Ejecutando diagnóstico para ${date}${specificSku ? ` - SKU: ${specificSku}` : ''}...`);
 
       const { data, error } = await supabase.functions.invoke('diagnose-shopify-sync', {
-        body: { date }
+        body: { date, specificSku }
       });
 
       if (error) {

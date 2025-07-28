@@ -63,6 +63,13 @@ const formatShopifyDate = (date: Date): string => {
   return date.toISOString();
 };
 
+const formatColombianDate = (date: Date): string => {
+  // Convert UTC to Colombian time (UTC-5)
+  const colombianDate = new Date(date.getTime() - (5 * 60 * 60 * 1000));
+  return colombianDate.toISOString().split('T')[0] + ' ' + 
+         colombianDate.toTimeString().split(' ')[0] + ' COT';
+};
+
 async function fetchShopifyOrdersForDate(
   shopifyDomain: string,
   shopifyToken: string,
@@ -119,8 +126,9 @@ Deno.serve(async (req) => {
     // Obtener fecha objetivo del cuerpo de la solicitud
     const body = await req.json().catch(() => ({}));
     const targetDate = body.date || '2025-07-23'; // Por defecto ayer
+    const specificSku = body.specificSku;
     
-    console.log(`📅 Fecha objetivo: ${targetDate}`);
+    console.log(`📅 Fecha objetivo: ${targetDate}${specificSku ? ` - SKU específico: ${specificSku}` : ''}`);
     
     // 1. Obtener datos de Shopify para la fecha específica
     const shopifyOrders = await fetchShopifyOrdersForDate(
@@ -134,27 +142,46 @@ Deno.serve(async (req) => {
     const productMap = new Map<string, number>();
     
     shopifyOrders.forEach(order => {
-      console.log(`📋 Procesando orden ${order.id} (${order.financial_status})`);
+      console.log(`📋 Procesando orden ${order.id} (${order.financial_status}) - ${formatColombianDate(new Date(order.created_at))}`);
       
       order.line_items.forEach(item => {
+        // Si hay SKU específico, solo procesar ese SKU
+        if (specificSku && item.sku !== specificSku) {
+          return;
+        }
+        
         const quantity = item.quantity;
         totalShopifyUnits += quantity;
         
         const key = `${item.sku || item.name}`;
         productMap.set(key, (productMap.get(key) || 0) + quantity);
         
-        console.log(`  - ${item.name} (${item.sku}): ${quantity} unidades`);
+        console.log(`  - ${item.name} (${item.sku}): ${quantity} unidades ${specificSku ? '⭐ SKU OBJETIVO' : ''}`);
       });
     });
     
     console.log(`📊 Total unidades Shopify: ${totalShopifyUnits}`);
     console.log(`📊 Productos únicos: ${productMap.size}`);
     
-    // 2. Obtener datos locales de sales_metrics
-    const { data: localMetrics, error: localError } = await supabase
+    // 2. Obtener datos locales de sales_metrics con filtro de SKU específico si aplica
+    let localMetricsQuery = supabase
       .from('sales_metrics')
-      .select('*')
+      .select(`
+        *,
+        product_variants!inner(
+          sku_variant,
+          size,
+          color,
+          products!inner(name)
+        )
+      `)
       .eq('metric_date', targetDate);
+    
+    if (specificSku) {
+      localMetricsQuery = localMetricsQuery.eq('product_variants.sku_variant', specificSku);
+    }
+    
+    const { data: localMetrics, error: localError } = await localMetricsQuery;
     
     if (localError) {
       throw new Error(`Error obteniendo métricas locales: ${localError.message}`);
@@ -165,6 +192,13 @@ Deno.serve(async (req) => {
     
     console.log(`📊 Total unidades locales: ${totalLocalUnits}`);
     console.log(`📊 Variantes únicas locales: ${uniqueLocalVariants}`);
+    
+    // Log detalles de métricas locales para SKU específico
+    if (specificSku && localMetrics) {
+      localMetrics.forEach(metric => {
+        console.log(`  📊 Local: ${metric.product_variants?.products?.name} (${metric.product_variants?.sku_variant}): ${metric.sales_quantity} unidades, ${metric.orders_count} órdenes`);
+      });
+    }
     
     // 3. Calcular discrepancias
     const unitDifference = totalLocalUnits - totalShopifyUnits;
@@ -194,17 +228,20 @@ Deno.serve(async (req) => {
         orders: shopifyOrders.map(order => ({
           id: order.id,
           created_at: order.created_at,
+          created_at_colombian: formatColombianDate(new Date(order.created_at)),
           financial_status: order.financial_status,
           fulfillment_status: order.fulfillment_status,
-          line_items: order.line_items.map(item => ({
-            product_id: item.product_id,
-            variant_id: item.variant_id,
-            quantity: item.quantity,
-            sku: item.sku,
-            price: item.price,
-            name: item.name
-          }))
-        }))
+          line_items: order.line_items
+            .filter(item => !specificSku || item.sku === specificSku)
+            .map(item => ({
+              product_id: item.product_id,
+              variant_id: item.variant_id,
+              quantity: item.quantity,
+              sku: item.sku,
+              price: item.price,
+              name: item.name
+            }))
+        })).filter(order => order.line_items.length > 0)
       },
       local_data: {
         metrics_count: uniqueLocalVariants,

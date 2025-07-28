@@ -11,11 +11,12 @@ import { useShopifyDiagnosis } from '@/hooks/useShopifyDiagnosis';
 import { Search, AlertTriangle, CheckCircle, TrendingUp, Package, Calendar } from 'lucide-react';
 
 const ShopifyDiagnosticTool = () => {
-  const [targetDate, setTargetDate] = useState('2025-07-23');
+  const [targetDate, setTargetDate] = useState('2025-07-27');
+  const [specificSku, setSpecificSku] = useState('46347965268203');
   const { runDiagnosis, clearDiagnosis, diagnostic, summary, loading } = useShopifyDiagnosis();
 
   const handleDiagnosis = async () => {
-    await runDiagnosis(targetDate);
+    await runDiagnosis(targetDate, specificSku);
   };
 
   const getDifferenceColor = (difference: number) => {
@@ -51,6 +52,17 @@ const ShopifyDiagnosticTool = () => {
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="specific-sku">SKU específico (opcional)</Label>
+              <Input
+                id="specific-sku"
+                type="text"
+                value={specificSku}
+                onChange={(e) => setSpecificSku(e.target.value)}
+                placeholder="46347965268203"
                 className="mt-1"
               />
             </div>
@@ -228,9 +240,15 @@ const ShopifyDiagnosticTool = () => {
                           <Badge variant="outline">{order.financial_status}</Badge>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          <p>Fecha: {new Date(order.created_at).toLocaleDateString()}</p>
+                          <p>Fecha UTC: {new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString()}</p>
+                          {order.created_at_colombian && <p>Fecha COT: {order.created_at_colombian}</p>}
                           <p>Items: {order.line_items.length}</p>
                           <p>Total unidades: {order.line_items.reduce((sum, item) => sum + item.quantity, 0)}</p>
+                          {order.line_items.map((item, idx) => (
+                            <p key={idx} className="ml-2 text-xs">
+                              • {item.name} ({item.sku}): {item.quantity} unidades
+                            </p>
+                          ))}
                         </div>
                       </div>
                     ))}
