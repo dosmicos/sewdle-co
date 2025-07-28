@@ -255,7 +255,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
       </div>
 
       {/* Secondary Stats */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div>
         {/* Total Performance */}
         <Card>
           <CardHeader>
@@ -277,18 +277,6 @@ export const ShopifyRealTimeStats: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Top Product */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Producto Destacado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-medium truncate" title={stats.top_selling_product}>
-              {stats.top_selling_product}
-            </p>
-            <p className="text-sm text-muted-foreground">Más vendido</p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
