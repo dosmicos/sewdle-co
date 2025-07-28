@@ -269,10 +269,21 @@ Deno.serve(async (req) => {
 
     console.log(`📋 Webhook topic: ${topic}`);
 
+    // Debug logging for signature verification
+    console.log('🔍 Signature verification details:');
+    console.log('- Received signature header:', signature);
+    console.log('- Secret configured:', shopifyWebhookSecret ? 'YES' : 'NO');
+    console.log('- Secret length:', shopifyWebhookSecret?.length || 0);
+    console.log('- Body length:', body.length);
+    
     // Verify webhook signature
     const isValid = await verifyShopifyWebhook(body, signature, shopifyWebhookSecret);
     if (!isValid) {
       console.log('❌ Firma de webhook inválida');
+      console.log('- This could mean:');
+      console.log('  1. Wrong secret configured');
+      console.log('  2. Shopify sending different signature format');
+      console.log('  3. Body modification during transit');
       return new Response(
         JSON.stringify({ error: 'Invalid webhook signature' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
