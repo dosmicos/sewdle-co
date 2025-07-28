@@ -28,11 +28,11 @@ export const ShopifyRealTimeStats: React.FC = () => {
   const fetchRealTimeStats = async () => {
     setLoading(true);
     try {
-      // Get overall statistics
+      // Get overall statistics (matching the analytics filters)
       const { data: overallStats, error: overallError } = await supabase
         .from('shopify_orders')
         .select('total_price, customer_email, created_at_shopify')
-        .eq('financial_status', 'paid');
+        .in('financial_status', ['paid', 'partially_paid', 'pending']);
 
       if (overallError) throw overallError;
 
@@ -41,7 +41,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
       const { data: todayStats, error: todayError } = await supabase
         .from('shopify_orders')
         .select('total_price')
-        .eq('financial_status', 'paid')
+        .in('financial_status', ['paid', 'partially_paid', 'pending'])
         .gte('created_at_shopify', today + 'T00:00:00Z')
         .lt('created_at_shopify', today + 'T23:59:59Z');
 
@@ -55,7 +55,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
       const { data: yesterdayStats, error: yesterdayError } = await supabase
         .from('shopify_orders')
         .select('total_price')
-        .eq('financial_status', 'paid')
+        .in('financial_status', ['paid', 'partially_paid', 'pending'])
         .gte('created_at_shopify', yesterdayStr + 'T00:00:00Z')
         .lt('created_at_shopify', yesterdayStr + 'T23:59:59Z');
 
