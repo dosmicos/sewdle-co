@@ -13,11 +13,19 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
   );
   
   const hash = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
-  const expectedSignature = Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
   
+  // Convert hash to Base64 for comparison (Shopify sends Base64, not hex)
+  const hashArray = new Uint8Array(hash);
+  const expectedSignature = btoa(String.fromCharCode(...hashArray));
+  
+  // Shopify sends signature directly in Base64 format, no prefix
   const receivedSignature = signature.replace('sha256=', '');
+  
+  console.log('🔍 Signature comparison:');
+  console.log('- Expected (Base64):', expectedSignature);
+  console.log('- Received (Base64):', receivedSignature);
+  console.log('- Match:', expectedSignature === receivedSignature);
+  
   return expectedSignature === receivedSignature;
 }
 
