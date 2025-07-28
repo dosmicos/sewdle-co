@@ -448,7 +448,7 @@ Deno.serve(async (req) => {
 
     console.log(`🔗 Mapeo creado para ${skuToVariantMap.size} SKUs locales`);
 
-    // Process orders and group sales by variant and date - IMPROVED PRECISION
+    // Process orders and group sales by variant and date - FIXED ORDER COUNTING
     const salesByVariantAndDate = new Map();
     let processedItems = 0;
     let skippedItems = 0;
@@ -457,6 +457,9 @@ Deno.serve(async (req) => {
     // Debugging: Track quantity processing
     let totalQuantityProcessed = 0;
     const quantityByDate = new Map();
+    
+    // CRITICAL FIX: Track unique orders per variant+date to fix orders_count bug
+    const uniqueOrdersPerVariantDate = new Map(); // key: variant_date, value: Set of order IDs
 
     allOrders.forEach((order, index) => {
       const orderDate = new Date(order.created_at).toISOString().split('T')[0];
@@ -518,11 +521,29 @@ Deno.serve(async (req) => {
             avg_order_size: 0
           });
         }
-
+        
+        // CRITICAL FIX: Track unique orders for this variant+date combination
+        if (!uniqueOrdersPerVariantDate.has(key)) {
+          uniqueOrdersPerVariantDate.set(key, new Set());
+        }
+        
         const salesData = salesByVariantAndDate.get(key);
         salesData.sales_quantity += quantity;
-        salesData.orders_count += 1;
-        salesData.avg_order_size = (salesData.avg_order_size * (salesData.orders_count - 1) + parseFloat(item.price) * quantity) / salesData.orders_count;
+        
+        // FIXED: Only increment orders_count if this order hasn't been counted for this variant+date
+        const orderSet = uniqueOrdersPerVariantDate.get(key);
+        if (!orderSet.has(order.id)) {
+          orderSet.add(order.id);
+          salesData.orders_count += 1;
+        }
+        
+        // Recalculate average order size based on total revenue / unique orders
+        const totalRevenue = parseFloat(item.price) * quantity;
+        if (salesData.orders_count > 0) {
+          // This is an approximation - we're adding this item's revenue to average
+          const currentTotalRevenue = salesData.avg_order_size * (salesData.orders_count - 1);
+          salesData.avg_order_size = (currentTotalRevenue + totalRevenue) / salesData.orders_count;
+        }
       });
     });
 
