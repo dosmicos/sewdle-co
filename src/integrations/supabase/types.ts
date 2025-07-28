@@ -2004,6 +2004,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      sync_sales_metrics_from_shopify: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       sync_shopify_inventory: {
         Args: Record<PropertyKey, never>
         Returns: Json
