@@ -235,30 +235,6 @@ export const ShopifyRealTimeStats: React.FC = () => {
         </Card>
       </div>
 
-      {/* Secondary Stats */}
-      <div>
-        {/* Total Performance */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Rendimiento Total</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Órdenes Totales</p>
-                <p className="text-xl font-bold">{stats.total_orders}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Ingresos Totales</p>
-                <p className="text-xl font-bold">
-                  {formatCurrency(stats.total_revenue)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-      </div>
     </div>
   );
 };
