@@ -13,6 +13,8 @@ interface RealTimeStats {
   avg_order_value: number;
   orders_today: number;
   revenue_today: number;
+  orders_yesterday?: number;
+  revenue_yesterday?: number;
   top_selling_product: string;
   last_updated: string;
 }
@@ -45,6 +47,20 @@ export const ShopifyRealTimeStats: React.FC = () => {
 
       if (todayError) throw todayError;
 
+      // Get yesterday's statistics for comparison
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      const { data: yesterdayStats, error: yesterdayError } = await supabase
+        .from('shopify_orders')
+        .select('total_price')
+        .eq('financial_status', 'paid')
+        .gte('created_at_shopify', yesterdayStr + 'T00:00:00Z')
+        .lt('created_at_shopify', yesterdayStr + 'T23:59:59Z');
+
+      if (yesterdayError) throw yesterdayError;
+
       // Get top selling product
       const { data: topProduct, error: productError } = await supabase
         .from('shopify_order_line_items')
@@ -65,6 +81,10 @@ export const ShopifyRealTimeStats: React.FC = () => {
       
       const ordersToday = todayStats.length;
       const revenueToday = todayStats.reduce((sum, order) => sum + (order.total_price || 0), 0);
+      
+      // Calculate yesterday's metrics for comparison
+      const ordersYesterday = yesterdayStats.length;
+      const revenueYesterday = yesterdayStats.reduce((sum, order) => sum + (order.total_price || 0), 0);
 
       const calculatedStats: RealTimeStats = {
         total_orders: totalOrders,
@@ -77,7 +97,11 @@ export const ShopifyRealTimeStats: React.FC = () => {
         last_updated: new Date().toISOString()
       };
 
-      setStats(calculatedStats);
+      setStats({
+        ...calculatedStats,
+        orders_yesterday: ordersYesterday,
+        revenue_yesterday: revenueYesterday
+      } as any);
       setLastSync(new Date().toLocaleTimeString());
 
     } catch (error: any) {
@@ -109,120 +133,163 @@ export const ShopifyRealTimeStats: React.FC = () => {
     }).format(amount);
   };
 
-  const getTrendIcon = (current: number, threshold: number = 0) => {
-    if (current > threshold) return <TrendingUp className="h-4 w-4 text-green-600" />;
-    if (current < threshold) return <TrendingDown className="h-4 w-4 text-red-600" />;
-    return <Minus className="h-4 w-4 text-gray-600" />;
+  const calculatePercentageChange = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const getTrendIcon = (percentage: number) => {
+    if (percentage > 0) return <TrendingUp className="h-4 w-4" />;
+    if (percentage < 0) return <TrendingDown className="h-4 w-4" />;
+    return <Minus className="h-4 w-4" />;
+  };
+
+  const getTrendColor = (percentage: number) => {
+    if (percentage > 0) return "text-success";
+    if (percentage < 0) return "text-destructive";
+    return "text-muted-foreground";
   };
 
   if (!stats) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-            Estadísticas en Tiempo Real
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="animate-pulse space-y-2">
-              <div className="h-4 bg-muted rounded w-3/4"></div>
-              <div className="h-4 bg-muted rounded w-1/2"></div>
-              <div className="h-4 bg-muted rounded w-2/3"></div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-6">
+              <div className="space-y-2">
+                <div className="h-4 bg-muted rounded w-1/2"></div>
+                <div className="h-8 bg-muted rounded w-3/4"></div>
+                <div className="h-3 bg-muted rounded w-1/3"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     );
   }
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
-          Estadísticas en Tiempo Real
-        </CardTitle>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            {lastSync}
-          </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchRealTimeStats}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Today's Performance */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-muted-foreground">Hoy</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">{stats.orders_today}</span>
-                {getTrendIcon(stats.orders_today)}
-              </div>
-              <p className="text-xs text-muted-foreground">Órdenes</p>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">
-                  {formatCurrency(stats.revenue_today)}
-                </span>
-                {getTrendIcon(stats.revenue_today)}
-              </div>
-              <p className="text-xs text-muted-foreground">Ingresos</p>
-            </div>
-          </div>
-        </div>
+  const revenueChange = calculatePercentageChange(stats.revenue_today, stats.revenue_yesterday || 0);
+  const ordersChange = calculatePercentageChange(stats.orders_today, stats.orders_yesterday || 0);
 
-        {/* Overall Performance */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-muted-foreground">Total</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <span className="text-xl font-bold">{stats.total_orders}</span>
-              <p className="text-xs text-muted-foreground">Órdenes Totales</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-xl font-bold">
-                {formatCurrency(stats.total_revenue)}
-              </span>
-              <p className="text-xs text-muted-foreground">Ingresos Totales</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-xl font-bold">{stats.total_customers}</span>
-              <p className="text-xs text-muted-foreground">Clientes Únicos</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-xl font-bold">
-                {formatCurrency(stats.avg_order_value)}
-              </span>
-              <p className="text-xs text-muted-foreground">Valor Promedio</p>
-            </div>
-          </div>
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Estadísticas en Tiempo Real</h2>
+          <p className="text-muted-foreground">
+            Última actualización: {lastSync}
+          </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchRealTimeStats}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+
+      {/* Main Stats Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {/* Ventas totales */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Ventas totales</p>
+              <div className="flex items-center space-x-2">
+                <p className="text-2xl font-bold">
+                  {formatCurrency(stats.revenue_today)}
+                </p>
+                <div className={`flex items-center text-sm ${getTrendColor(revenueChange)}`}>
+                  {getTrendIcon(revenueChange)}
+                  <span className="ml-1">
+                    {Math.abs(revenueChange).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pedidos */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Pedidos</p>
+              <div className="flex items-center space-x-2">
+                <p className="text-2xl font-bold">{stats.orders_today}</p>
+                <div className={`flex items-center text-sm ${getTrendColor(ordersChange)}`}>
+                  {getTrendIcon(ordersChange)}
+                  <span className="ml-1">
+                    {Math.abs(ordersChange).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Clientes Únicos */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Clientes Únicos</p>
+              <p className="text-2xl font-bold">{stats.total_customers}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Valor Promedio */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Valor Promedio</p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(stats.avg_order_value)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Secondary Stats */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Total Performance */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Rendimiento Total</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Órdenes Totales</p>
+                <p className="text-xl font-bold">{stats.total_orders}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Ingresos Totales</p>
+                <p className="text-xl font-bold">
+                  {formatCurrency(stats.total_revenue)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Top Product */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-muted-foreground">Producto Top</h4>
-          <p className="text-sm font-medium truncate" title={stats.top_selling_product}>
-            {stats.top_selling_product}
-          </p>
-        </div>
-
-        {/* Last Update */}
-        <div className="pt-2 border-t">
-          <p className="text-xs text-muted-foreground">
-            Última actualización: {new Date(stats.last_updated).toLocaleString()}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Producto Destacado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg font-medium truncate" title={stats.top_selling_product}>
+              {stats.top_selling_product}
+            </p>
+            <p className="text-sm text-muted-foreground">Más vendido</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 };
