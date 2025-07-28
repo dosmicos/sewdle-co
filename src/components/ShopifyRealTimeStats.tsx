@@ -192,26 +192,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
       </div>
 
       {/* Main Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {/* Ventas totales */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Ventas totales</p>
-              <div className="flex items-center space-x-2">
-                <p className="text-2xl font-bold">
-                  {formatCurrency(stats.revenue_today)}
-                </p>
-                <div className={`flex items-center text-sm ${getTrendColor(revenueChange)}`}>
-                  {getTrendIcon(revenueChange)}
-                  <span className="ml-1">
-                    {Math.abs(revenueChange).toFixed(0)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
 
         {/* Pedidos */}
         <Card>
