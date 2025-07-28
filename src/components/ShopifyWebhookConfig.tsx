@@ -9,21 +9,22 @@ import { Copy, Check, Webhook, Settings, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export const ShopifyWebhookConfig: React.FC = () => {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string>('');
   const { toast } = useToast();
   
-  // URL del webhook - reemplaza con tu dominio de proyecto
-  const webhookUrl = `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/shopify-webhook`;
+  // URLs de webhooks
+  const ordersWebhookUrl = `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/shopify-webhook`;
+  const inventoryWebhookUrl = `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/shopify-inventory-webhook`;
   
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, type: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
+      setCopied(type);
       toast({
         title: "¡Copiado!",
         description: "URL copiada al portapapeles",
       });
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(''), 2000);
     } catch (err) {
       toast({
         title: "Error",
@@ -66,25 +67,25 @@ export const ShopifyWebhookConfig: React.FC = () => {
       )
     },
     {
-      title: "3. Crear Nuevo Webhook",
+      title: "3. Crear Webhook para Órdenes",
       description: "Configura el webhook para órdenes creadas",
       content: (
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="webhook-url">URL del Webhook</Label>
+            <Label htmlFor="orders-webhook-url">URL del Webhook de Órdenes</Label>
             <div className="flex gap-2">
               <Input 
-                id="webhook-url"
-                value={webhookUrl}
+                id="orders-webhook-url"
+                value={ordersWebhookUrl}
                 readOnly
                 className="font-mono text-sm"
               />
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => copyToClipboard(webhookUrl)}
+                onClick={() => copyToClipboard(ordersWebhookUrl, 'orders')}
               >
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied === 'orders' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -103,17 +104,61 @@ export const ShopifyWebhookConfig: React.FC = () => {
       )
     },
     {
-      title: "4. Configurar Autenticación",
-      description: "Asegura que el webhook sea verificado",
+      title: "4. Crear Webhook para Inventario",
+      description: "Configura el webhook para actualizaciones de inventario en tiempo real",
+      content: (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="inventory-webhook-url">URL del Webhook de Inventario</Label>
+            <div className="flex gap-2">
+              <Input 
+                id="inventory-webhook-url"
+                value={inventoryWebhookUrl}
+                readOnly
+                className="font-mono text-sm"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copyToClipboard(inventoryWebhookUrl, 'inventory')}
+              >
+                {copied === 'inventory' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Evento</Label>
+              <Badge variant="secondary" className="mt-1">Inventory levels update</Badge>
+            </div>
+            <div>
+              <Label>Formato</Label>
+              <Badge variant="secondary" className="mt-1">JSON</Badge>
+            </div>
+          </div>
+          
+          <Alert>
+            <Webhook className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Importante:</strong> Esto habilitará actualizaciones automáticas de inventario cada vez que cambien los niveles de stock en Shopify.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )
+    },
+    {
+      title: "5. Configurar Autenticación",
+      description: "Asegura que ambos webhooks sean verificados",
       content: (
         <div className="space-y-2">
           <p className="text-sm">
-            En la configuración del webhook, asegúrate de usar el mismo secret que configuraste en Supabase.
+            En la configuración de ambos webhooks, asegúrate de usar el mismo secret que configuraste en Supabase.
           </p>
           <Alert>
             <Webhook className="h-4 w-4" />
             <AlertDescription>
-              Shopify enviará el hash HMAC en el header <code>X-Shopify-Hmac-Sha256</code>
+              Shopify enviará el hash HMAC en el header <code>X-Shopify-Hmac-Sha256</code> para ambos webhooks
             </AlertDescription>
           </Alert>
         </div>
@@ -126,10 +171,10 @@ export const ShopifyWebhookConfig: React.FC = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Webhook className="h-5 w-5" />
-          Configuración de Webhook en Tiempo Real
+          Configuración de Webhooks en Tiempo Real
         </CardTitle>
         <CardDescription>
-          Configura webhooks de Shopify para sincronizar automáticamente cada nueva orden
+          Configura webhooks de Shopify para sincronizar automáticamente órdenes e inventario en tiempo real
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -144,8 +189,12 @@ export const ShopifyWebhookConfig: React.FC = () => {
         <Alert>
           <Check className="h-4 w-4" />
           <AlertDescription>
-            <strong>¡Importante!</strong> Una vez configurado, cada nueva orden en Shopify se sincronizará automáticamente 
-            en tiempo real con tu dashboard, actualizando tanto las órdenes como las métricas de ventas.
+            <strong>¡Importante!</strong> Una vez configurados ambos webhooks:
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li>Cada nueva orden en Shopify se sincronizará automáticamente en tiempo real</li>
+              <li>Los cambios de inventario se actualizarán instantáneamente sin necesidad de hacer click en "Actualizar Stock"</li>
+              <li>Las métricas de ventas se mantendrán siempre actualizadas</li>
+            </ul>
           </AlertDescription>
         </Alert>
       </CardContent>

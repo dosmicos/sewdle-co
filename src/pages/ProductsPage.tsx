@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, RefreshCw, Package, Settings } from 'lucide-react';
+import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 import SkuCorrectionTool from '@/components/SkuCorrectionTool';
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
+import { ShopifyWebhookConfig } from '@/components/ShopifyWebhookConfig';
 import { useProducts } from '@/hooks/useProducts';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,7 +20,12 @@ const ProductsPage = () => {
     products,
     loading,
     error,
-    refetch
+    lastUpdated,
+    autoRefreshEnabled,
+    syncStatus,
+    refetch,
+    setAutoRefreshEnabled,
+    refreshNow
   } = useProducts();
   const {
     toast
@@ -115,13 +121,60 @@ const ProductsPage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-black">Productos</h1>
-            <p className="text-gray-600">Gestión de catálogo y sincronización con Shopify</p>
+            <p className="text-gray-600">Gestión de catálogo y sincronización automática con Shopify</p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={updateStockFromShopify} disabled={updatingStock} variant="outline" className="font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98]">
-              <RefreshCw className={`w-4 h-4 mr-2 ${updatingStock ? 'animate-spin' : ''}`} />
-              {updatingStock ? 'Actualizando...' : 'Actualizar Stock'}
+            {/* Status de sincronización en tiempo real */}
+            <div className="flex items-center gap-3 px-4 py-2 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-center gap-2">
+                {syncStatus === 'syncing' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                ) : (
+                  <Wifi className="w-4 h-4 text-green-500" />
+                )}
+                <span className="text-sm font-medium">
+                  {syncStatus === 'syncing' ? 'Sincronizando...' : 'En tiempo real'}
+                </span>
+              </div>
+              
+              {lastUpdated && (
+                <div className="flex items-center gap-1 text-sm text-gray-500 border-l pl-3">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    {new Date(lastUpdated).toLocaleTimeString('es-ES', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Toggle auto-refresh */}
+            <Button
+              onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+              variant="outline"
+              className="font-medium rounded-xl px-4 py-3 transition-all duration-200 active:scale-[0.98]"
+            >
+              {autoRefreshEnabled ? (
+                <ToggleRight className="w-4 h-4 mr-2 text-green-500" />
+              ) : (
+                <ToggleLeft className="w-4 h-4 mr-2 text-gray-400" />
+              )}
+              Auto-sync
             </Button>
+
+            {/* Botón de actualización manual */}
+            <Button 
+              onClick={() => refreshNow()} 
+              disabled={syncStatus === 'syncing'} 
+              variant="outline" 
+              className="font-medium rounded-xl px-4 py-3 transition-all duration-200 active:scale-[0.98]"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
+            
             <Button onClick={() => setShowProductForm(true)} className="text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98] bg-[#ff5c02]">
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Producto
@@ -142,7 +195,24 @@ const ProductsPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="catalog" className="space-y-6 mt-6">
+           <TabsContent value="catalog" className="space-y-6 mt-6">
+            {/* Información de sincronización automática */}
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Wifi className="w-5 h-5 text-green-600" />
+                <h3 className="font-semibold text-green-900">Sincronización Automática Activa</h3>
+              </div>
+              <p className="text-sm text-green-800">
+                El inventario se actualiza automáticamente desde Shopify usando webhooks y polling inteligente. 
+                Ya no necesitas hacer click en "Actualizar Stock" manualmente.
+              </p>
+              {lastUpdated && (
+                <p className="text-xs text-green-700 mt-2">
+                  Última actualización: {lastUpdated.toLocaleString('es-ES')}
+                </p>
+              )}
+            </div>
+
             {/* Barra de búsqueda para catálogo */}
             <div className="flex items-center space-x-4">
               <div className="relative flex-1">
@@ -162,8 +232,12 @@ const ProductsPage = () => {
                 <h3 className="font-semibold text-blue-900 mb-2">Herramientas de Sincronización con Shopify</h3>
                 <p className="text-sm text-blue-800">
                   Conjunto de herramientas para gestionar la sincronización y corrección de productos entre tu sistema local y Shopify.
+                  Configura webhooks para actualizaciones automáticas de inventario en tiempo real.
                 </p>
               </div>
+
+              {/* Configuración de Webhooks */}
+              <ShopifyWebhookConfig />
 
               {/* Herramientas organizadas */}
               <div className="grid gap-6">
