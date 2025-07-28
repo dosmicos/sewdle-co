@@ -2,14 +2,11 @@ import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Users, Package, RefreshCw, Calendar, Webhook } from 'lucide-react';
+import { ShoppingCart, Users, Package, RefreshCw, Calendar } from 'lucide-react';
 import { useShopifyOrders } from '@/hooks/useShopifyOrders';
 import { ShopifyOrdersTable } from '@/components/ShopifyOrdersTable';
 import { CustomerAnalyticsTable } from '@/components/CustomerAnalyticsTable';
 import { ProductAnalyticsTable } from '@/components/ProductAnalyticsTable';
-import { ShopifyDashboardStats } from '@/components/ShopifyDashboardStats';
-import { ShopifyWebhookConfig } from '@/components/ShopifyWebhookConfig';
-import { WebhookStatusIndicator } from '@/components/WebhookStatusIndicator';
 import { ShopifyRealTimeStats } from '@/components/ShopifyRealTimeStats';
 import { useShopifySync } from '@/hooks/useShopifySync';
 
@@ -71,22 +68,11 @@ export const ShopifyDashboardPage: React.FC = () => {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="md:col-span-2">
-          <ShopifyDashboardStats 
-            orders={orders}
-            customerAnalytics={customerAnalytics}
-            productAnalytics={productAnalytics}
-          />
-        </div>
-        <div>
-          <ShopifyRealTimeStats />
-        </div>
-      </div>
+      <ShopifyRealTimeStats />
 
       {/* Main Content */}
       <Tabs defaultValue="orders" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="orders" className="flex items-center gap-2">
             <ShoppingCart className="h-4 w-4" />
             Órdenes
@@ -98,10 +84,6 @@ export const ShopifyDashboardPage: React.FC = () => {
           <TabsTrigger value="products" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Productos
-          </TabsTrigger>
-          <TabsTrigger value="webhook" className="flex items-center gap-2">
-            <Webhook className="h-4 w-4" />
-            Configuración
           </TabsTrigger>
         </TabsList>
 
@@ -147,10 +129,6 @@ export const ShopifyDashboardPage: React.FC = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="webhook" className="space-y-6">
-          <WebhookStatusIndicator />
-          <ShopifyWebhookConfig />
-        </TabsContent>
       </Tabs>
     </div>
   );
