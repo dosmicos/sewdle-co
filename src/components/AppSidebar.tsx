@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
-import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users, Package2, Palette, Shield, DollarSign, Brain, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users, Package2, Palette, Shield, DollarSign, Brain, TrendingUp, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -18,6 +18,7 @@ const AppSidebar = () => {
     { title: 'Productos', url: '/products', icon: Package },
     { title: 'Entregas', url: '/deliveries', icon: Truck },
     { title: 'Ventas', url: '/sales', icon: TrendingUp },
+    { title: 'Shopify', url: '/shopify', icon: ShoppingCart },
     { title: 'Reposición IA', url: '/replenishment', icon: Brain },
     { title: 'Finanzas', url: '/financial', icon: DollarSign },
     { title: 'Usuarios & Roles', url: '/users-roles', icon: Users }

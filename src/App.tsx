@@ -18,6 +18,7 @@ import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
 import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import SalesPage from "@/pages/SalesPage";
+import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import OrderDetailsPage from "@/pages/OrderDetailsPage";
 import NotFound from "@/pages/NotFound";
@@ -180,6 +181,12 @@ const AppContent = () => {
         <Route path="sales" element={
           <AdminRoute>
             <SalesPage />
+          </AdminRoute>
+        } />
+        
+        <Route path="shopify" element={
+          <AdminRoute>
+            <ShopifyDashboardPage />
           </AdminRoute>
         } />
         
