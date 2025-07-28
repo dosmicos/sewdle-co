@@ -1022,6 +1022,218 @@ export type Database = {
           },
         ]
       }
+      shopify_order_line_items: {
+        Row: {
+          created_at: string
+          fulfillment_service: string | null
+          fulfillment_status: string | null
+          gift_card: boolean | null
+          id: string
+          price: number
+          product_id: number | null
+          product_type: string | null
+          properties: Json | null
+          quantity: number
+          requires_shipping: boolean | null
+          shopify_line_item_id: number
+          shopify_order_id: number
+          sku: string | null
+          taxable: boolean | null
+          title: string
+          total_discount: number | null
+          updated_at: string
+          variant_id: number | null
+          variant_title: string | null
+          vendor: string | null
+        }
+        Insert: {
+          created_at?: string
+          fulfillment_service?: string | null
+          fulfillment_status?: string | null
+          gift_card?: boolean | null
+          id?: string
+          price: number
+          product_id?: number | null
+          product_type?: string | null
+          properties?: Json | null
+          quantity: number
+          requires_shipping?: boolean | null
+          shopify_line_item_id: number
+          shopify_order_id: number
+          sku?: string | null
+          taxable?: boolean | null
+          title: string
+          total_discount?: number | null
+          updated_at?: string
+          variant_id?: number | null
+          variant_title?: string | null
+          vendor?: string | null
+        }
+        Update: {
+          created_at?: string
+          fulfillment_service?: string | null
+          fulfillment_status?: string | null
+          gift_card?: boolean | null
+          id?: string
+          price?: number
+          product_id?: number | null
+          product_type?: string | null
+          properties?: Json | null
+          quantity?: number
+          requires_shipping?: boolean | null
+          shopify_line_item_id?: number
+          shopify_order_id?: number
+          sku?: string | null
+          taxable?: boolean | null
+          title?: string
+          total_discount?: number | null
+          updated_at?: string
+          variant_id?: number | null
+          variant_title?: string | null
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_order_line_items_shopify_order_id_fkey"
+            columns: ["shopify_order_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_orders"
+            referencedColumns: ["shopify_order_id"]
+          },
+        ]
+      }
+      shopify_orders: {
+        Row: {
+          billing_address: Json | null
+          browser_ip: string | null
+          cancelled_at: string | null
+          closed_at: string | null
+          created_at: string
+          created_at_shopify: string
+          currency: string | null
+          customer_accepts_marketing: boolean | null
+          customer_email: string | null
+          customer_first_name: string | null
+          customer_id: number | null
+          customer_last_name: string | null
+          customer_orders_count: number | null
+          customer_phone: string | null
+          customer_total_spent: number | null
+          email: string | null
+          financial_status: string | null
+          fulfillment_status: string | null
+          id: string
+          landing_site: string | null
+          note: string | null
+          order_number: string
+          order_source_url: string | null
+          order_status_url: string | null
+          processed_at: string | null
+          raw_data: Json | null
+          referring_site: string | null
+          shipping_address: Json | null
+          shopify_order_id: number
+          source_name: string | null
+          subtotal_price: number | null
+          sync_version: number | null
+          synced_at: string
+          tags: string | null
+          total_discounts: number | null
+          total_line_items_price: number | null
+          total_price: number
+          total_shipping: number | null
+          total_tax: number | null
+          updated_at: string
+          updated_at_shopify: string
+        }
+        Insert: {
+          billing_address?: Json | null
+          browser_ip?: string | null
+          cancelled_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_at_shopify: string
+          currency?: string | null
+          customer_accepts_marketing?: boolean | null
+          customer_email?: string | null
+          customer_first_name?: string | null
+          customer_id?: number | null
+          customer_last_name?: string | null
+          customer_orders_count?: number | null
+          customer_phone?: string | null
+          customer_total_spent?: number | null
+          email?: string | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          landing_site?: string | null
+          note?: string | null
+          order_number: string
+          order_source_url?: string | null
+          order_status_url?: string | null
+          processed_at?: string | null
+          raw_data?: Json | null
+          referring_site?: string | null
+          shipping_address?: Json | null
+          shopify_order_id: number
+          source_name?: string | null
+          subtotal_price?: number | null
+          sync_version?: number | null
+          synced_at?: string
+          tags?: string | null
+          total_discounts?: number | null
+          total_line_items_price?: number | null
+          total_price?: number
+          total_shipping?: number | null
+          total_tax?: number | null
+          updated_at?: string
+          updated_at_shopify: string
+        }
+        Update: {
+          billing_address?: Json | null
+          browser_ip?: string | null
+          cancelled_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_at_shopify?: string
+          currency?: string | null
+          customer_accepts_marketing?: boolean | null
+          customer_email?: string | null
+          customer_first_name?: string | null
+          customer_id?: number | null
+          customer_last_name?: string | null
+          customer_orders_count?: number | null
+          customer_phone?: string | null
+          customer_total_spent?: number | null
+          email?: string | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          landing_site?: string | null
+          note?: string | null
+          order_number?: string
+          order_source_url?: string | null
+          order_status_url?: string | null
+          processed_at?: string | null
+          raw_data?: Json | null
+          referring_site?: string | null
+          shipping_address?: Json | null
+          shopify_order_id?: number
+          source_name?: string | null
+          subtotal_price?: number | null
+          sync_version?: number | null
+          synced_at?: string
+          tags?: string | null
+          total_discounts?: number | null
+          total_line_items_price?: number | null
+          total_price?: number
+          total_shipping?: number | null
+          total_tax?: number | null
+          updated_at?: string
+          updated_at_shopify?: string
+        }
+        Relationships: []
+      }
       sku_assignment_logs: {
         Row: {
           completed_at: string | null
@@ -1444,6 +1656,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_customer_analytics: {
+        Args: { start_date?: string; end_date?: string }
+        Returns: {
+          customer_email: string
+          customer_name: string
+          orders_count: number
+          total_spent: number
+          avg_order_value: number
+          first_order_date: string
+          last_order_date: string
+          customer_segment: string
+        }[]
+      }
       get_deliveries_with_details: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1661,6 +1886,19 @@ export type Database = {
           total_approved: number
           total_pending: number
           completion_percentage: number
+        }[]
+      }
+      get_product_sales_analytics: {
+        Args: { start_date?: string; end_date?: string }
+        Returns: {
+          sku: string
+          product_title: string
+          variant_title: string
+          total_quantity: number
+          total_revenue: number
+          avg_price: number
+          orders_count: number
+          customers_count: number
         }[]
       }
       get_replenishment_suggestions_with_details: {

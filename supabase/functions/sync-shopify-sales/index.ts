@@ -4,15 +4,69 @@ import { corsHeaders } from '../_shared/cors.ts'
 
 interface ShopifyOrder {
   id: number;
+  order_number: string;
+  email: string;
   created_at: string;
+  updated_at: string;
+  cancelled_at?: string;
+  closed_at?: string;
+  processed_at?: string;
   financial_status: string;
   fulfillment_status: string;
+  order_status_url?: string;
+  
+  // Customer information
+  customer?: {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    accepts_marketing: boolean;
+    orders_count: number;
+    total_spent: string;
+  };
+  
+  // Addresses
+  billing_address?: any;
+  shipping_address?: any;
+  
+  // Financial info
+  currency: string;
+  total_price: string;
+  subtotal_price: string;
+  total_tax: string;
+  total_discounts: string;
+  total_shipping?: string;
+  total_line_items_price: string;
+  
+  // Additional info
+  tags?: string;
+  note?: string;
+  source_name?: string;
+  referring_site?: string;
+  landing_site?: string;
+  browser_ip?: string;
+  order_source_url?: string;
+  
   line_items: Array<{
+    id: number;
     product_id: number;
     variant_id: number;
-    quantity: number;
+    title: string;
+    variant_title?: string;
+    vendor?: string;
+    product_type?: string;
     sku: string;
+    quantity: number;
     price: string;
+    total_discount: string;
+    properties?: any[];
+    gift_card: boolean;
+    taxable: boolean;
+    fulfillment_status?: string;
+    fulfillment_service?: string;
+    requires_shipping: boolean;
   }>;
 }
 
@@ -112,8 +166,8 @@ async function fetchOrdersForChunk(
     pageCount++;
     
     try {
-      // Construct URL with improved filtering
-      let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&created_at_min=${encodeURIComponent(chunk.start_date)}&created_at_max=${encodeURIComponent(chunk.end_date)}&limit=50&fields=id,created_at,financial_status,fulfillment_status,line_items`;
+      // Construct URL with complete order data
+      let ordersUrl = `https://${shopifyDomain}/admin/api/2025-07/orders.json?status=any&created_at_min=${encodeURIComponent(chunk.start_date)}&created_at_max=${encodeURIComponent(chunk.end_date)}&limit=50`;
       
       if (pageInfo) {
         ordersUrl += `&since_id=${pageInfo}`;
@@ -241,6 +295,140 @@ async function fetchOrdersForChunk(
   return allOrders;
 }
 
+// Function to store complete Shopify orders in database
+async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any): Promise<void> {
+  if (orders.length === 0) return;
+
+  console.log(`💾 Almacenando ${orders.length} órdenes completas...`);
+
+  // Prepare orders for database insertion
+  const ordersToInsert = orders.map(order => ({
+    shopify_order_id: order.id,
+    order_number: order.order_number || `#${order.id}`,
+    email: order.email,
+    created_at_shopify: order.created_at,
+    updated_at_shopify: order.updated_at,
+    cancelled_at: order.cancelled_at || null,
+    closed_at: order.closed_at || null,
+    processed_at: order.processed_at || null,
+    
+    // Estados
+    financial_status: order.financial_status,
+    fulfillment_status: order.fulfillment_status,
+    order_status_url: order.order_status_url || null,
+    
+    // Información del cliente
+    customer_id: order.customer?.id || null,
+    customer_email: order.customer?.email || order.email,
+    customer_first_name: order.customer?.first_name || null,
+    customer_last_name: order.customer?.last_name || null,
+    customer_phone: order.customer?.phone || null,
+    customer_accepts_marketing: order.customer?.accepts_marketing || false,
+    customer_orders_count: order.customer?.orders_count || 0,
+    customer_total_spent: parseFloat(order.customer?.total_spent || '0'),
+    
+    // Direcciones como JSON
+    billing_address: order.billing_address || null,
+    shipping_address: order.shipping_address || null,
+    
+    // Información financiera
+    currency: order.currency || 'USD',
+    total_price: parseFloat(order.total_price || '0'),
+    subtotal_price: parseFloat(order.subtotal_price || '0'),
+    total_tax: parseFloat(order.total_tax || '0'),
+    total_discounts: parseFloat(order.total_discounts || '0'),
+    total_shipping: parseFloat(order.total_shipping || '0'),
+    total_line_items_price: parseFloat(order.total_line_items_price || '0'),
+    
+    // Información adicional
+    tags: order.tags || null,
+    note: order.note || null,
+    source_name: order.source_name || null,
+    referring_site: order.referring_site || null,
+    landing_site: order.landing_site || null,
+    browser_ip: order.browser_ip || null,
+    order_source_url: order.order_source_url || null,
+    
+    // Metadatos
+    raw_data: order
+  }));
+
+  // Insert orders using upsert to handle duplicates
+  const { error: ordersError } = await supabase
+    .from('shopify_orders')
+    .upsert(ordersToInsert, { 
+      onConflict: 'shopify_order_id',
+      ignoreDuplicates: false 
+    });
+
+  if (ordersError) {
+    console.error('❌ Error insertando órdenes:', ordersError);
+    throw new Error(`Error al insertar órdenes: ${ordersError.message}`);
+  }
+
+  console.log(`✅ ${ordersToInsert.length} órdenes almacenadas correctamente`);
+
+  // Now insert line items
+  const lineItemsToInsert = [];
+  
+  for (const order of orders) {
+    for (const item of order.line_items) {
+      lineItemsToInsert.push({
+        shopify_order_id: order.id,
+        shopify_line_item_id: item.id,
+        
+        // Información del producto
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        title: item.title,
+        variant_title: item.variant_title || null,
+        vendor: item.vendor || null,
+        product_type: item.product_type || null,
+        sku: item.sku,
+        
+        // Cantidades y precios
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        total_discount: parseFloat(item.total_discount || '0'),
+        
+        // Propiedades
+        properties: item.properties || null,
+        gift_card: item.gift_card || false,
+        taxable: item.taxable !== false, // Default to true
+        
+        // Información de fulfillment
+        fulfillment_status: item.fulfillment_status || null,
+        fulfillment_service: item.fulfillment_service || null,
+        requires_shipping: item.requires_shipping !== false // Default to true
+      });
+    }
+  }
+
+  if (lineItemsToInsert.length > 0) {
+    // Insert line items in batches
+    const batchSize = 1000;
+    for (let i = 0; i < lineItemsToInsert.length; i += batchSize) {
+      const batch = lineItemsToInsert.slice(i, i + batchSize);
+      
+      const { error: lineItemsError } = await supabase
+        .from('shopify_order_line_items')
+        .upsert(batch, { 
+          onConflict: 'shopify_line_item_id',
+          ignoreDuplicates: false 
+        });
+
+      if (lineItemsError) {
+        console.error('❌ Error insertando line items:', lineItemsError);
+        throw new Error(`Error al insertar line items: ${lineItemsError.message}`);
+      }
+      
+      console.log(`✅ Lote ${Math.floor(i/batchSize) + 1}/${Math.ceil(lineItemsToInsert.length/batchSize)} de line items insertado`);
+    }
+
+    console.log(`✅ ${lineItemsToInsert.length} line items almacenados correctamente`);
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -360,6 +548,9 @@ Deno.serve(async (req) => {
         );
         
         allOrders.push(...chunkOrders);
+        
+        // Store complete orders in database
+        await storeCompleteOrders(chunkOrders, supabase);
         
         console.log(`✅ Chunk ${chunk.chunk_number} completado: ${chunkOrders.length} órdenes válidas obtenidas`);
         
