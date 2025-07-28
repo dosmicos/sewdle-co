@@ -17,7 +17,7 @@ const AppSidebar = () => {
     { title: 'Talleres', url: '/workshops', icon: Building2 },
     { title: 'Productos', url: '/products', icon: Package },
     { title: 'Entregas', url: '/deliveries', icon: Truck },
-    { title: 'Ventas', url: '/sales', icon: TrendingUp },
+    
     { title: 'Shopify', url: '/shopify', icon: ShoppingCart },
     { title: 'Reposición IA', url: '/replenishment', icon: Brain },
     { title: 'Finanzas', url: '/financial', icon: DollarSign },
