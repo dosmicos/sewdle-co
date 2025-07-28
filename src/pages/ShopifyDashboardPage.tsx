@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Users, Package, RefreshCw, Calendar } from 'lucide-react';
+import { ShoppingCart, Users, Package } from 'lucide-react';
 import { useShopifyOrders } from '@/hooks/useShopifyOrders';
 import { ShopifyOrdersTable } from '@/components/ShopifyOrdersTable';
 import { CustomerAnalyticsTable } from '@/components/CustomerAnalyticsTable';
 import { ProductAnalyticsTable } from '@/components/ProductAnalyticsTable';
 import { ShopifyRealTimeStats } from '@/components/ShopifyRealTimeStats';
-import { useShopifySync } from '@/hooks/useShopifySync';
 
 export const ShopifyDashboardPage: React.FC = () => {
   const {
@@ -19,51 +18,17 @@ export const ShopifyDashboardPage: React.FC = () => {
     refetch
   } = useShopifyOrders();
 
-  const { triggerSync, loading: syncLoading } = useShopifySync();
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-
-  const handleSync = async () => {
-    try {
-      await triggerSync('daily', 30);
-      setLastSyncTime(new Date());
-      // Refetch data after sync
-      setTimeout(() => {
-        refetch();
-      }, 2000);
-    } catch (error) {
-      console.error('Error during sync:', error);
-    }
-  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ShoppingCart className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard Shopify</h1>
-            <p className="text-gray-600">
-              Análisis completo de órdenes, clientes y productos de Shopify
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          {lastSyncTime && (
-            <div className="text-sm text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Última sincronización: {lastSyncTime.toLocaleString()}
-            </div>
-          )}
-          <Button 
-            onClick={handleSync} 
-            disabled={syncLoading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncLoading ? 'animate-spin' : ''}`} />
-            {syncLoading ? 'Sincronizando...' : 'Sincronizar'}
-          </Button>
+      <div className="flex items-center gap-3">
+        <ShoppingCart className="h-8 w-8 text-primary" />
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard Shopify</h1>
+          <p className="text-muted-foreground">
+            Análisis automático con datos en tiempo real de Shopify
+          </p>
         </div>
       </div>
 
