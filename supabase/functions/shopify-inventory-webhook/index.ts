@@ -146,8 +146,40 @@ Deno.serve(async (req) => {
 
     console.log('✅ Webhook de inventario verificado correctamente');
 
-    // Parse inventory data
-    const inventoryLevel = JSON.parse(body);
+    // Initialize Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if body is empty or minimal (test webhook)
+    if (!body || body.length <= 10) {
+      console.log('ℹ️ Webhook de inventario vacío o de test - ignorando');
+      return new Response(
+        JSON.stringify({ message: 'Test webhook received - ignoring empty payload' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse inventory data safely
+    let inventoryLevel;
+    try {
+      inventoryLevel = JSON.parse(body);
+    } catch (parseError) {
+      console.error('❌ Error parseando JSON del webhook:', parseError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON payload' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate payload has required data
+    if (!inventoryLevel || typeof inventoryLevel !== 'object') {
+      console.log('ℹ️ Webhook recibido sin datos de inventario válidos - ignorando');
+      return new Response(
+        JSON.stringify({ message: 'Webhook received without valid inventory data' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('📊 Payload del webhook:', JSON.stringify(inventoryLevel, null, 2));
     
     // Only process inventory level update webhooks
     if (!['inventory_levels/update', 'inventory_levels/connect'].includes(topic)) {
@@ -158,8 +190,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Initialize Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Validate inventory level has required fields
+    if (!inventoryLevel.inventory_item_id && !inventoryLevel.variant_id) {
+      console.log('ℹ️ Webhook sin inventory_item_id o variant_id - probablemente test');
+      return new Response(
+        JSON.stringify({ message: 'Webhook without inventory identifiers - likely test webhook' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Log webhook event
     const logEntry = await supabase
@@ -170,10 +208,11 @@ Deno.serve(async (req) => {
         status: 'running',
         execution_details: {
           webhook_topic: topic,
-          inventory_item_id: inventoryLevel.inventory_item_id,
-          location_id: inventoryLevel.location_id,
-          available_quantity: inventoryLevel.available,
-          timestamp: new Date().toISOString()
+          inventory_item_id: inventoryLevel.inventory_item_id || null,
+          location_id: inventoryLevel.location_id || null,
+          available_quantity: inventoryLevel.available || null,
+          timestamp: new Date().toISOString(),
+          raw_payload: inventoryLevel
         }
       })
       .select('id')
