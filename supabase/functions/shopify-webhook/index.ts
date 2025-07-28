@@ -137,10 +137,7 @@ async function processSingleOrder(order: any, supabase: any) {
   if (lineItemsToInsert.length > 0) {
     const { error: lineItemsError } = await supabase
       .from('shopify_order_line_items')
-      .upsert(lineItemsToInsert, { 
-        onConflict: 'shopify_line_item_id',
-        ignoreDuplicates: false 
-      });
+      .insert(lineItemsToInsert);
 
     if (lineItemsError) {
       console.error('❌ Error insertando line items:', lineItemsError);
