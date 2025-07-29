@@ -140,8 +140,7 @@ async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
     const { error: updateError } = await supabase
       .from('product_variants')
       .update({ 
-        stock_quantity: newStockQuantity,
-        updated_at: new Date().toISOString()
+        stock_quantity: newStockQuantity
       })
       .eq('id', localVariant.id);
 
