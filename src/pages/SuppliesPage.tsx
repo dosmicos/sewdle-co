@@ -4,8 +4,6 @@ import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
 import MaterialsCatalog from '@/components/supplies/MaterialsCatalog';
 import MaterialDelivery from '@/components/supplies/MaterialDelivery';
 import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
-import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
-import SyncDuplicationFixer from '@/components/supplies/SyncDuplicationFixer';
 
 const SuppliesPage = () => {
   return (
@@ -18,13 +16,11 @@ const SuppliesPage = () => {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="materials">Materiales</TabsTrigger>
           <TabsTrigger value="deliveries">Entregas</TabsTrigger>
           <TabsTrigger value="consumption">Consumos</TabsTrigger>
-          <TabsTrigger value="diagnostic">Diagnóstico</TabsTrigger>
-          <TabsTrigger value="duplications">Duplicaciones</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6">
@@ -41,14 +37,6 @@ const SuppliesPage = () => {
 
         <TabsContent value="consumption" className="space-y-6">
           <MaterialConsumptionManager />
-        </TabsContent>
-
-        <TabsContent value="diagnostic" className="space-y-6">
-          <ShopifyDiagnosticTool />
-        </TabsContent>
-
-        <TabsContent value="duplications" className="space-y-6">
-          <SyncDuplicationFixer />
         </TabsContent>
       </Tabs>
     </div>
