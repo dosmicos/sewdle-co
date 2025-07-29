@@ -286,16 +286,8 @@ const ProductsPage = () => {
            <TabsContent value="catalog" className="space-y-6 mt-6">
             {/* Información de sincronización automática */}
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Wifi className="w-5 h-5 text-green-600" />
-                <h3 className="font-semibold text-green-900">Sincronización Automática Activa</h3>
-              </div>
-              <p className="text-sm text-green-800">
-                El inventario se actualiza automáticamente desde Shopify usando webhooks y polling inteligente. 
-                Ya no necesitas hacer click en "Actualizar Stock" manualmente.
-              </p>
               {lastUpdated && (
-                <p className="text-xs text-green-700 mt-2">
+                <p className="text-xs text-green-700">
                   Última actualización: {lastUpdated.toLocaleString('es-ES')}
                 </p>
               )}
