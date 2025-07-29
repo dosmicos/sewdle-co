@@ -223,31 +223,6 @@ const ProductsPage = () => {
             <p className="text-gray-600">Gestión de catálogo y sincronización automática con Shopify</p>
           </div>
           <div className="flex gap-3">
-            {/* Status de sincronización en tiempo real */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-white border border-gray-200 rounded-xl">
-              <div className="flex items-center gap-2">
-                {syncStatus === 'syncing' ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                ) : (
-                  <Wifi className="w-4 h-4 text-green-500" />
-                )}
-                <span className="text-sm font-medium">
-                  {syncStatus === 'syncing' ? 'Sincronizando...' : 'En tiempo real'}
-                </span>
-              </div>
-              
-              {lastUpdated && (
-                <div className="flex items-center gap-1 text-sm text-gray-500 border-l pl-3">
-                  <Clock className="w-3 h-3" />
-                  <span>
-                    {new Date(lastUpdated).toLocaleTimeString('es-ES', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </span>
-                </div>
-              )}
-            </div>
 
             {/* Toggle auto-refresh */}
             <Button
