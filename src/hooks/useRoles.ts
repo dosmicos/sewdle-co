@@ -33,9 +33,8 @@ const MODULE_MAPPING = {
   'insumos': 'Insumos',
   'deliveries': 'Entregas',
   'users': 'Usuarios',
-  'reports': 'Reportes',
-  'qc': 'QC (Control de Calidad)',
   'finances': 'Finanzas',
+  'replenishment': 'Reposición IA',
   'shopify': 'Shopify'
 };
 
