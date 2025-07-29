@@ -34,7 +34,9 @@ const MODULE_MAPPING = {
   'deliveries': 'Entregas',
   'users': 'Usuarios',
   'reports': 'Reportes',
-  'qc': 'QC (Control de Calidad)'
+  'qc': 'QC (Control de Calidad)',
+  'finances': 'Finanzas',
+  'shopify': 'Shopify'
 };
 
 // Mapeo inverso: Interfaz → Base de datos

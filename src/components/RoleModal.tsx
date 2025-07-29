@@ -31,7 +31,9 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
     'Entregas',
     'Usuarios',
     'Reportes',
-    'QC (Control de Calidad)'
+    'QC (Control de Calidad)',
+    'Finanzas',
+    'Shopify'
   ];
 
   const actions = [
