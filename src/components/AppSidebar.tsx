@@ -37,7 +37,10 @@ const AppSidebar = () => {
     { title: 'Insumos', url: '/supplies', icon: Package2 },
     { title: 'Productos', url: '/products', icon: Package },
     { title: 'Talleres', url: '/workshops', icon: Building2 },
-    { title: 'Entregas', url: '/deliveries', icon: Truck }
+    { title: 'Entregas', url: '/deliveries', icon: Truck },
+    { title: 'Reposición IA', url: '/replenishment', icon: Brain },
+    { title: 'Finanzas', url: '/financial', icon: DollarSign },
+    { title: 'Shopify', url: '/shopify', icon: ShoppingCart }
   ];
 
   const qcLeaderMenuItems = [
@@ -70,6 +73,12 @@ const AppSidebar = () => {
           return hasPermission('workshops', 'view');
         case '/deliveries':
           return hasPermission('deliveries', 'view');
+        case '/replenishment':
+          return hasPermission('replenishment', 'view');
+        case '/financial':
+          return hasPermission('finances', 'view');
+        case '/shopify':
+          return hasPermission('shopify', 'view');
         default:
           return true;
       }

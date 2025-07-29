@@ -167,22 +167,22 @@ const AppContent = () => {
         } />
         
         <Route path="financial" element={
-          <PermissionRoute module="deliveries" action="view">
+          <PermissionRoute module="finances" action="view">
             <FinancialPage />
           </PermissionRoute>
         } />
         
         <Route path="replenishment" element={
-          <AdminRoute>
+          <PermissionRoute module="replenishment" action="view">
             <ReplenishmentPage />
-          </AdminRoute>
+          </PermissionRoute>
         } />
         
         
         <Route path="shopify" element={
-          <AdminRoute>
+          <PermissionRoute module="shopify" action="view">
             <ShopifyDashboardPage />
-          </AdminRoute>
+          </PermissionRoute>
         } />
         
         <Route path="users-roles" element={
