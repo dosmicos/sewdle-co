@@ -43,7 +43,7 @@ const ProductsPage = () => {
   const updateStockFromShopify = async () => {
     setUpdatingStock(true);
     try {
-      console.log('Updating stock from Shopify for all products');
+      console.log('🔄 Iniciando actualización de stock desde Shopify...');
 
       // Obtener productos de Shopify
       const {
@@ -54,59 +54,120 @@ const ProductsPage = () => {
           searchTerm: ''
         }
       });
+      
       if (error) {
-        console.error('Error calling shopify-products function:', error);
+        console.error('❌ Error llamando función shopify-products:', error);
         throw new Error(error.message || 'Error en la conexión con Shopify');
       }
       if (data?.error) {
+        console.error('❌ Error de Shopify:', data.error);
         throw new Error(data.error);
       }
       if (!data?.products) {
+        console.error('❌ Respuesta inválida de Shopify:', data);
         throw new Error('Respuesta inválida de Shopify');
       }
+
+      console.log(`📦 Productos obtenidos de Shopify: ${data.products.length}`);
+      
+      // Obtener todas las variantes locales
+      const { data: allLocalVariants, error: variantsError } = await supabase
+        .from('product_variants')
+        .select(`
+          id,
+          sku_variant,
+          stock_quantity,
+          product_id,
+          size,
+          color,
+          products!inner(name)
+        `);
+
+      if (variantsError) {
+        console.error('❌ Error obteniendo variantes locales:', variantsError);
+        throw new Error('Error obteniendo variantes locales');
+      }
+
+      console.log(`🏠 Variantes locales encontradas: ${allLocalVariants?.length || 0}`);
+
       let updatedCount = 0;
+      let matchedCount = 0;
+      const updateDetails: string[] = [];
 
-      // Para cada producto local, buscar coincidencia en Shopify y actualizar stock
-      for (const localProduct of products) {
-        // Buscar producto en Shopify por nombre o SKU similar
-        const shopifyProduct = data.products.find((sp: any) => sp.title.toLowerCase().includes(localProduct.name.toLowerCase()) || localProduct.name.toLowerCase().includes(sp.title.toLowerCase()) || sp.variants?.some((v: any) => v.sku && localProduct.sku.includes(v.sku.substring(0, 5))));
-        if (shopifyProduct && shopifyProduct.variants) {
-          // Actualizar variantes del producto local
-          const {
-            data: localVariants
-          } = await supabase.from('product_variants').select('*').eq('product_id', localProduct.id);
-          if (localVariants) {
-            for (const localVariant of localVariants) {
-              // Buscar variante correspondiente en Shopify
-              const shopifyVariant = shopifyProduct.variants.find((sv: any) => {
-                const sizeMatch = !localVariant.size || sv.title.toLowerCase().includes(localVariant.size.toLowerCase());
-                const colorMatch = !localVariant.color || sv.title.toLowerCase().includes(localVariant.color.toLowerCase());
-                return sizeMatch && colorMatch;
-              }) || shopifyProduct.variants[0]; // Usar primera variante si no hay coincidencia exacta
-
-              if (shopifyVariant) {
-                const newStock = shopifyVariant.stock_quantity || shopifyVariant.inventory_quantity || 0;
-
-                // Actualizar stock en la base de datos
-                await supabase.from('product_variants').update({
-                  stock_quantity: newStock
-                }).eq('id', localVariant.id);
-                console.log(`Updated stock for ${localProduct.name} - ${localVariant.size || 'Default'}: ${newStock}`);
-              }
+      // Crear un mapa de todas las variantes de Shopify para búsqueda eficiente
+      const shopifyVariantsMap = new Map();
+      data.products.forEach((product: any) => {
+        if (product.variants) {
+          product.variants.forEach((variant: any) => {
+            if (variant.sku) {
+              shopifyVariantsMap.set(variant.sku, {
+                ...variant,
+                productTitle: product.title
+              });
             }
-            updatedCount++;
+          });
+        }
+      });
+
+      console.log(`🛍️ Total de variantes en Shopify: ${shopifyVariantsMap.size}`);
+
+      // Iterar sobre cada variante local
+      for (const localVariant of allLocalVariants || []) {
+        if (!localVariant.sku_variant) {
+          console.log(`⚠️ Variante sin SKU: ${localVariant.products.name} - ${localVariant.size || 'Default'}`);
+          continue;
+        }
+
+        // Buscar variante exacta por SKU
+        const shopifyVariant = shopifyVariantsMap.get(localVariant.sku_variant);
+        
+        if (shopifyVariant) {
+          matchedCount++;
+          const shopifyStock = shopifyVariant.inventory_quantity || shopifyVariant.stock_quantity || 0;
+          const currentStock = localVariant.stock_quantity || 0;
+
+          console.log(`🔍 Coincidencia encontrada:`);
+          console.log(`   📋 SKU: ${localVariant.sku_variant}`);
+          console.log(`   🏷️ Producto: ${localVariant.products.name}`);
+          console.log(`   📦 Stock actual: ${currentStock} -> Shopify: ${shopifyStock}`);
+
+          // Solo actualizar si el stock es diferente
+          if (currentStock !== shopifyStock) {
+            const { error: updateError } = await supabase
+              .from('product_variants')
+              .update({ stock_quantity: shopifyStock })
+              .eq('id', localVariant.id);
+
+            if (updateError) {
+              console.error(`❌ Error actualizando ${localVariant.sku_variant}:`, updateError);
+            } else {
+              updatedCount++;
+              const detail = `${localVariant.sku_variant}: ${currentStock} → ${shopifyStock}`;
+              updateDetails.push(detail);
+              console.log(`✅ Actualizado: ${detail}`);
+            }
+          } else {
+            console.log(`✓ Stock ya actualizado para ${localVariant.sku_variant}`);
           }
+        } else {
+          console.log(`❌ No encontrado en Shopify: ${localVariant.sku_variant} (${localVariant.products.name})`);
         }
       }
+
+      console.log(`📊 Resumen de actualización:`);
+      console.log(`   🔗 Coincidencias encontradas: ${matchedCount}`);
+      console.log(`   ✅ Variantes actualizadas: ${updatedCount}`);
+      console.log(`   📝 Detalles:`, updateDetails);
+
       toast({
         title: "Stock actualizado",
-        description: `Se actualizó el stock de ${updatedCount} productos desde Shopify.`
+        description: `Se actualizaron ${updatedCount} variantes de ${matchedCount} coincidencias encontradas.`
       });
 
       // Recargar productos para mostrar los cambios
       refetch();
     } catch (error: any) {
-      console.error('Error updating stock from Shopify:', error);
+      console.error('❌ Error updating stock from Shopify:', error);
       toast({
         title: "Error al actualizar stock",
         description: error.message || "Hubo un problema al sincronizar con Shopify.",
