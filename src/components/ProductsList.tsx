@@ -3,8 +3,7 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, Trash2, Package, Eye } from 'lucide-react';
+import { Edit, Trash2, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ProductEditModal from '@/components/ProductEditModal';
@@ -162,10 +161,7 @@ const ProductsList = ({
           <div className="overflow-x-auto">
             {/* Header de la tabla */}
             <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-              <div className="grid grid-cols-12 gap-4 items-center text-sm font-medium text-gray-700">
-                <div className="col-span-1">
-                  <Checkbox />
-                </div>
+              <div className="grid grid-cols-11 gap-4 items-center text-sm font-medium text-gray-700">
                 <div className="col-span-3">Producto</div>
                 <div className="col-span-1">Estado</div>
                 <div className="col-span-2">SKU</div>
@@ -179,11 +175,7 @@ const ProductsList = ({
             <div className="divide-y divide-gray-100">
               {products.map((product) => (
                 <div key={product.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="grid grid-cols-12 gap-4 items-center">
-                    {/* Checkbox */}
-                    <div className="col-span-1">
-                      <Checkbox />
-                    </div>
+                  <div className="grid grid-cols-11 gap-4 items-center">
 
                     {/* Producto (imagen + nombre) */}
                     <div className="col-span-3 flex items-center space-x-3">
