@@ -262,17 +262,6 @@ const ProductsPage = () => {
               )}
               Auto-sync
             </Button>
-
-            {/* Botón de actualización manual */}
-            <Button 
-              onClick={() => refreshNow()} 
-              disabled={syncStatus === 'syncing'} 
-              variant="outline" 
-              className="font-medium rounded-xl px-4 py-3 transition-all duration-200 active:scale-[0.98]"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
             
             <Button onClick={() => setShowProductForm(true)} className="text-white font-medium rounded-xl px-6 py-3 transition-all duration-200 active:scale-[0.98] bg-[#ff5c02]">
               <Plus className="w-4 h-4 mr-2" />
