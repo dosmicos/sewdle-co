@@ -34,50 +34,135 @@ async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
   console.log(`📦 Procesando actualización de inventario: ${inventoryLevel.inventory_item_id}`);
 
   try {
-    // Get the inventory item details from Shopify to find the SKU
-    const { data: existingVariants, error: variantsError } = await supabase
-      .from('product_variants')
-      .select('id, sku_variant, product_id')
-      .not('sku_variant', 'is', null);
-
-    if (variantsError) {
-      console.error('⚠️ Error obteniendo variantes locales:', variantsError);
-      return { success: false, error: 'Error fetching local variants' };
-    }
-
-    // Find the variant that matches this inventory item
-    // Note: We'll need to match by inventory_item_id or variant_id from Shopify
-    // For now, we'll try to match using the available field if present
-    let targetVariant = null;
-    
-    if (inventoryLevel.variant_id) {
-      // If we have variant_id, we can try to match it with Shopify data
-      console.log(`🔍 Buscando variante con variant_id: ${inventoryLevel.variant_id}`);
-      
-      // Here we would need to have stored the Shopify variant_id in our database
-      // For now, let's update based on available quantity if we can find a match
-    }
-
     const newStockQuantity = inventoryLevel.available || 0;
+    const inventoryItemId = inventoryLevel.inventory_item_id;
+
+    // Get Shopify credentials
+    const shopifyApiKey = Deno.env.get('SHOPIFY_API_KEY');
+    const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+    const shopifyShop = Deno.env.get('SHOPIFY_SHOP_DOMAIN');
+
+    if (!shopifyApiKey || !shopifyAccessToken || !shopifyShop) {
+      console.error('⚠️ Missing Shopify API credentials');
+      return { success: false, error: 'Missing Shopify API credentials' };
+    }
+
+    // Call Shopify API to get the variant details using inventory_item_id
+    console.log(`🔍 Consultando API de Shopify para inventory_item_id: ${inventoryItemId}`);
     
-    // If we can't find a specific variant, let's log the event for debugging
-    console.log(`📊 Actualización de inventario recibida:`, {
-      inventory_item_id: inventoryLevel.inventory_item_id,
-      location_id: inventoryLevel.location_id,
-      available: inventoryLevel.available,
-      updated_at: inventoryLevel.updated_at
+    const shopifyUrl = `https://${shopifyShop}/admin/api/2024-07/graphql.json`;
+    const query = `
+      query getInventoryItem($inventoryItemId: ID!) {
+        inventoryItem(id: $inventoryItemId) {
+          id
+          sku
+          variant {
+            id
+            sku
+            product {
+              id
+              handle
+            }
+          }
+        }
+      }
+    `;
+
+    const shopifyResponse = await fetch(shopifyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': shopifyAccessToken,
+      },
+      body: JSON.stringify({
+        query,
+        variables: {
+          inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`
+        }
+      })
     });
 
-    // Store the inventory update log for tracking
+    if (!shopifyResponse.ok) {
+      console.error(`⚠️ Error en API de Shopify: ${shopifyResponse.status}`);
+      return { success: false, error: 'Shopify API error' };
+    }
+
+    const shopifyData = await shopifyResponse.json();
+    
+    if (shopifyData.errors) {
+      console.error('⚠️ Errores en GraphQL:', shopifyData.errors);
+      return { success: false, error: 'GraphQL errors' };
+    }
+
+    const inventoryItem = shopifyData.data?.inventoryItem;
+    if (!inventoryItem || !inventoryItem.variant) {
+      console.log(`ℹ️ No se encontró variante para inventory_item_id: ${inventoryItemId}`);
+      return { success: false, error: 'Variant not found in Shopify' };
+    }
+
+    const shopifySku = inventoryItem.variant.sku;
+    console.log(`📋 SKU encontrado en Shopify: ${shopifySku}`);
+
+    // Find the matching variant in our database by SKU
+    const { data: localVariant, error: variantError } = await supabase
+      .from('product_variants')
+      .select('id, sku_variant, stock_quantity, product_id')
+      .eq('sku_variant', shopifySku)
+      .single();
+
+    if (variantError || !localVariant) {
+      console.log(`ℹ️ SKU ${shopifySku} no encontrado en base de datos local`);
+      
+      // Log for debugging - store unknown SKU for future mapping
+      const { error: logError } = await supabase
+        .from('inventory_sync_logs')
+        .insert({
+          delivery_id: null,
+          sync_results: {
+            type: 'webhook_inventory_update_unmapped',
+            inventory_item_id: inventoryItemId,
+            sku: shopifySku,
+            available_quantity: newStockQuantity,
+            error: 'SKU not found in local database',
+            updated_at: inventoryLevel.updated_at,
+            processed_at: new Date().toISOString()
+          },
+          success_count: 0,
+          error_count: 1
+        });
+
+      return { success: false, error: `SKU ${shopifySku} not found in local database` };
+    }
+
+    const previousStock = localVariant.stock_quantity;
+    
+    // Update the stock quantity in our database
+    const { error: updateError } = await supabase
+      .from('product_variants')
+      .update({ 
+        stock_quantity: newStockQuantity,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', localVariant.id);
+
+    if (updateError) {
+      console.error('⚠️ Error actualizando stock en base de datos:', updateError);
+      return { success: false, error: 'Database update failed' };
+    }
+
+    // Log successful update
     const { error: logError } = await supabase
       .from('inventory_sync_logs')
       .insert({
-        delivery_id: null, // This is from webhook, not delivery
+        delivery_id: null,
         sync_results: {
-          type: 'webhook_inventory_update',
-          inventory_item_id: inventoryLevel.inventory_item_id,
-          location_id: inventoryLevel.location_id,
-          available_quantity: inventoryLevel.available,
+          type: 'webhook_inventory_update_success',
+          inventory_item_id: inventoryItemId,
+          sku: shopifySku,
+          variant_id: localVariant.id,
+          previous_stock: previousStock,
+          new_stock: newStockQuantity,
+          stock_change: newStockQuantity - previousStock,
           updated_at: inventoryLevel.updated_at,
           processed_at: new Date().toISOString()
         },
@@ -89,16 +174,41 @@ async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
       console.error('⚠️ Error registrando log de inventario:', logError);
     }
 
-    console.log(`✅ Actualización de inventario procesada: item ${inventoryLevel.inventory_item_id}, stock: ${newStockQuantity}`);
+    console.log(`✅ Stock actualizado exitosamente:`);
+    console.log(`   - SKU: ${shopifySku}`);
+    console.log(`   - Stock anterior: ${previousStock}`);
+    console.log(`   - Stock nuevo: ${newStockQuantity}`);
+    console.log(`   - Cambio: ${newStockQuantity - previousStock}`);
     
     return { 
       success: true, 
-      inventory_item_id: inventoryLevel.inventory_item_id,
-      new_quantity: newStockQuantity
+      inventory_item_id: inventoryItemId,
+      sku: shopifySku,
+      variant_id: localVariant.id,
+      previous_quantity: previousStock,
+      new_quantity: newStockQuantity,
+      stock_change: newStockQuantity - previousStock
     };
 
   } catch (error) {
     console.error('❌ Error procesando actualización de inventario:', error);
+    
+    // Log error
+    const { error: logError } = await supabase
+      .from('inventory_sync_logs')
+      .insert({
+        delivery_id: null,
+        sync_results: {
+          type: 'webhook_inventory_update_error',
+          inventory_item_id: inventoryLevel.inventory_item_id,
+          error: error.message,
+          updated_at: inventoryLevel.updated_at,
+          processed_at: new Date().toISOString()
+        },
+        success_count: 0,
+        error_count: 1
+      });
+    
     throw error;
   }
 }
