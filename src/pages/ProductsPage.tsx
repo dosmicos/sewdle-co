@@ -7,7 +7,7 @@ import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 import SkuCorrectionTool from '@/components/SkuCorrectionTool';
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
-import { ShopifyWebhookConfig } from '@/components/ShopifyWebhookConfig';
+
 import { useProducts } from '@/hooks/useProducts';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -369,8 +369,6 @@ const ProductsPage = () => {
                 </div>
               </div>
 
-              {/* Configuración de Webhooks */}
-              <ShopifyWebhookConfig />
 
               {/* Herramientas organizadas */}
               <div className="grid gap-6">
