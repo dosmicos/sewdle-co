@@ -29,7 +29,8 @@ const SuppliesDashboard = () => {
   const [consumptionStats, setConsumptionStats] = useState({
     totalConsumed: 0,
     remainingStock: 0,
-    utilizationRate: 0
+    utilizationRate: 0,
+    stockByCategory: {}
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +157,18 @@ const SuppliesDashboard = () => {
             return sum + balance;
           }, 0);
 
+          // Calcular stock por categoría
+          const stockByCategory = deliveries.reduce((acc, delivery) => {
+            const category = delivery.material_category || 'Sin categoría';
+            const balance = Number(delivery.real_balance) || 0;
+            
+            if (!acc[category]) {
+              acc[category] = 0;
+            }
+            acc[category] += balance;
+            return acc;
+          }, {} as Record<string, number>);
+
           const utilizationRate = totalMaterialsDelivered > 0 
             ? Math.round((totalConsumed / totalMaterialsDelivered) * 100)
             : 0;
@@ -163,14 +176,16 @@ const SuppliesDashboard = () => {
           console.log('📈 Consumption stats calculated:', {
             totalConsumed,
             remainingStock,
-            utilizationRate
+            utilizationRate,
+            stockByCategory
           });
 
           if (isMountedRef.current) {
             setConsumptionStats({
               totalConsumed,
               remainingStock,
-              utilizationRate
+              utilizationRate,
+              stockByCategory
             });
           }
 
@@ -181,7 +196,7 @@ const SuppliesDashboard = () => {
           
           if (isMountedRef.current) {
             setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
-            setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
+            setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0, stockByCategory: {} });
           }
         }
         
@@ -197,7 +212,7 @@ const SuppliesDashboard = () => {
           setError(errorMessage);
           // Establecer valores por defecto en caso de error
           setDeliveryStats({ totalDeliveries: 0, recentDeliveries: 0, totalMaterialsDelivered: 0 });
-          setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0 });
+          setConsumptionStats({ totalConsumed: 0, remainingStock: 0, utilizationRate: 0, stockByCategory: {} });
         }
       } finally {
         if (isMountedRef.current && !controller.signal.aborted) {
@@ -373,7 +388,7 @@ const SuppliesDashboard = () => {
       </div>
 
       {/* Estadísticas de Consumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-black">
@@ -389,19 +404,6 @@ const SuppliesDashboard = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-black">
-              {isWorkshopUser ? 'Mi Stock Disponible' : 'Stock Restante'}
-            </CardTitle>
-            <Clock className="h-4 w-4 text-gray-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-black">{consumptionStats.remainingStock}</div>
-            <p className="text-xs text-gray-600">Unidades disponibles</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-black">Tasa de Utilización</CardTitle>
             <BarChart3 className="h-4 w-4 text-gray-600" />
           </CardHeader>
@@ -410,6 +412,43 @@ const SuppliesDashboard = () => {
             <p className="text-xs text-gray-600">Eficiencia de consumo</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Stock Restante por Categoría */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-black">
+          {isWorkshopUser ? 'Mi Stock Disponible por Categoría' : 'Stock Restante por Categoría'}
+        </h3>
+        
+        {Object.keys(consumptionStats.stockByCategory).length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Object.entries(consumptionStats.stockByCategory)
+              .sort(([,a], [,b]) => (b as number) - (a as number)) // Ordenar por cantidad descendente
+              .map(([category, stock]) => (
+                <Card key={category} className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-indigo-800">
+                      {category}
+                    </CardTitle>
+                    <Package className="h-4 w-4 text-indigo-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-indigo-900">
+                      {(stock as number).toLocaleString()}
+                    </div>
+                    <p className="text-xs text-indigo-700">Unidades disponibles</p>
+                  </CardContent>
+                </Card>
+              ))}
+          </div>
+        ) : (
+          <Card className="p-6">
+            <div className="text-center">
+              <Package className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600">No hay stock disponible por categoría</p>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Inventario por Taller (con datos filtrados) */}
