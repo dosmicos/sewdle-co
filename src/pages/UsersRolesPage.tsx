@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTriangle } from 'lucide-react';
 import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
+import DemoTallerAccess from '@/components/DemoTallerAccess';
 import { useUsers } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useUserTracking } from '@/hooks/useUserTracking';
@@ -162,6 +163,9 @@ const UsersRolesPage = () => {
           <p className="text-gray-600">Gestiona usuarios, roles y permisos del sistema</p>
         </div>
       </div>
+
+      {/* Demo Access Component */}
+      <DemoTallerAccess />
 
       <Tabs defaultValue="users" className="space-y-6">
         <TabsList className="grid w-fit grid-cols-2">
