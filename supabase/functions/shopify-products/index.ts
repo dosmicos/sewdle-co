@@ -89,9 +89,15 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔥 SHOPIFY-PRODUCTS FUNCTION STARTED AT:', new Date().toISOString());
+    
     // Obtener credenciales desde los secretos de Supabase
     const storeDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+    
+    console.log('📊 Checking credentials...');
+    console.log('Store Domain:', storeDomain ? 'CONFIGURED' : 'MISSING');
+    console.log('Access Token:', accessToken ? 'CONFIGURED' : 'MISSING');
 
     if (!storeDomain || !accessToken) {
       console.error('Missing Shopify credentials in environment variables')
@@ -131,7 +137,13 @@ serve(async (req) => {
     }
 
     const data = await response.json()
-    console.log(`Successfully fetched ${data.products?.length || 0} products from Shopify`)
+    console.log(`✅ Successfully fetched ${data.products?.length || 0} products from Shopify at ${new Date().toISOString()}`)
+    
+    // Verificar que tenemos datos válidos
+    if (!data.products || !Array.isArray(data.products)) {
+      console.error('❌ Invalid response from Shopify API - no products array');
+      throw new Error('Invalid response from Shopify API');
+    }
 
     // Procesar los productos
     if (data.products && data.products.length > 0) {
@@ -143,6 +155,11 @@ serve(async (req) => {
           for (const variant of product.variants) {
             // Usar la cantidad de inventario básica disponible en la variante
             variant.stock_quantity = variant.inventory_quantity || 0
+            
+            // Log detallado para variantes específicas que están causando problemas
+            if (variant.sku === '46092135956715' || variant.sku === '46581502771435') {
+              console.log(`🎯 VARIANT DEBUG - SKU: ${variant.sku}, Stock: ${variant.stock_quantity}, ID: ${variant.id}`);
+            }
           }
         }
       }
@@ -164,8 +181,21 @@ serve(async (req) => {
       }
     }
 
+    // Agregar metadata para validación
+    const responseData = {
+      ...data,
+      _metadata: {
+        timestamp: new Date().toISOString(),
+        total_products: data.products?.length || 0,
+        total_variants: data.products?.reduce((sum: number, p: any) => sum + (p.variants?.length || 0), 0) || 0,
+        function_version: '2.0'
+      }
+    };
+
+    console.log(`📤 Returning ${responseData._metadata.total_products} products with ${responseData._metadata.total_variants} variants`);
+
     return new Response(
-      JSON.stringify(data),
+      JSON.stringify(responseData),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
