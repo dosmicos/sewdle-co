@@ -236,6 +236,40 @@ const ProductsPage = () => {
                 </p>
               </div>
 
+              {/* Actualización Manual de Inventario */}
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-amber-900">Actualización Manual de Inventario</h3>
+                    <p className="text-sm text-amber-800 mt-1">
+                      Sincroniza manualmente el stock de todos los productos desde Shopify
+                    </p>
+                  </div>
+                  <Button
+                    onClick={updateStockFromShopify}
+                    disabled={updatingStock}
+                    variant="outline"
+                    className="min-w-[160px] font-medium"
+                  >
+                    {updatingStock ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Actualizando...
+                      </>
+                    ) : (
+                      <>
+                        <Package className="w-4 h-4 mr-2" />
+                        Actualizar Inventario
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="text-xs text-amber-700 bg-amber-100 p-2 rounded">
+                  <strong>Nota:</strong> Esta función obtiene el stock actual de todos los productos desde Shopify 
+                  y actualiza las cantidades en tu catálogo local. Útil para ventas pasadas que no activaron webhooks.
+                </div>
+              </div>
+
               {/* Configuración de Webhooks */}
               <ShopifyWebhookConfig />
 
