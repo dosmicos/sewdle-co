@@ -44,22 +44,29 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
   ];
 
   useEffect(() => {
+    // Siempre inicializar con todos los módulos disponibles
+    const allModules = modules.map(module => {
+      // Si estamos editando un rol, buscar permisos existentes para este módulo
+      const existingPermission = role?.permissions?.find(p => p.module === module);
+      
+      return {
+        module,
+        actions: existingPermission?.actions || { view: false, create: false, edit: false, delete: false }
+      };
+    });
+
     if (role) {
       setFormData({
         name: role.name,
         description: role.description,
-        permissions: role.permissions
+        permissions: allModules
       });
     } else {
-      // Initialize with default permissions structure
-      const defaultPermissions = modules.map(module => ({
-        module,
-        actions: { view: false, create: false, edit: false, delete: false }
-      }));
+      // Para roles nuevos, inicializar con todos los permisos en falso
       setFormData({
         name: '',
         description: '',
-        permissions: defaultPermissions
+        permissions: allModules
       });
     }
   }, [role]);
