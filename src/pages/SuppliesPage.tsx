@@ -4,8 +4,14 @@ import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
 import MaterialsCatalog from '@/components/supplies/MaterialsCatalog';
 import MaterialDelivery from '@/components/supplies/MaterialDelivery';
 import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
+import { useAuth } from '@/contexts/AuthContext';
 
 const SuppliesPage = () => {
+  const { hasPermission } = useAuth();
+  
+  // Verificar si el usuario puede crear entregas
+  const canCreateDeliveries = hasPermission('Entregas', 'Crear');
+  
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
@@ -32,7 +38,7 @@ const SuppliesPage = () => {
         </TabsContent>
 
         <TabsContent value="deliveries" className="space-y-6">
-          <MaterialDelivery canCreateDeliveries={true} />
+          <MaterialDelivery canCreateDeliveries={canCreateDeliveries} />
         </TabsContent>
 
         <TabsContent value="consumption" className="space-y-6">
