@@ -74,11 +74,11 @@ const AppSidebar = () => {
         case '/deliveries':
           return hasPermission('deliveries', 'view');
         case '/replenishment':
-          return hasPermission('Reposición IA', 'Ver');
+          return hasPermission('replenishment', 'view');
         case '/financial':
-          return hasPermission('Finanzas', 'Ver');
+          return hasPermission('finances', 'view');
         case '/shopify':
-          return hasPermission('Shopify', 'Ver');
+          return hasPermission('shopify', 'view');
         default:
           return true;
       }
