@@ -12,6 +12,7 @@ import { Plus, Trash2, Package, Truck } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import { useUserContext } from '@/hooks/useUserContext';
 
 interface MaterialDeliveryItem {
   materialId: string;
@@ -32,7 +33,10 @@ interface MaterialDeliveryFormProps {
 }
 
 const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: MaterialDeliveryFormProps) => {
-  const [selectedWorkshop, setSelectedWorkshop] = useState(prefilledData?.workshopId || '');
+  const { workshopFilter, isWorkshopUser } = useUserContext();
+  const [selectedWorkshop, setSelectedWorkshop] = useState(
+    isWorkshopUser ? workshopFilter || '' : prefilledData?.workshopId || ''
+  );
   const [deliveryItems, setDeliveryItems] = useState<MaterialDeliveryItem[]>(
     prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', notes: '' }]
   );
@@ -142,16 +146,22 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
           {/* Selección de Taller */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 text-black">Taller Destino</h3>
-            <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+            <Select 
+              value={selectedWorkshop} 
+              onValueChange={setSelectedWorkshop}
+              disabled={isWorkshopUser} // Deshabilitar para usuarios de taller
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Seleccionar taller..." />
+                <SelectValue placeholder={isWorkshopUser ? "Tu taller" : "Seleccionar taller..."} />
               </SelectTrigger>
               <SelectContent>
-                {workshops.map((workshop) => (
-                  <SelectItem key={workshop.id} value={workshop.id}>
-                    {workshop.name}
-                  </SelectItem>
-                ))}
+                {workshops
+                  .filter(workshop => !isWorkshopUser || workshop.id === workshopFilter)
+                  .map((workshop) => (
+                    <SelectItem key={workshop.id} value={workshop.id}>
+                      {workshop.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </Card>

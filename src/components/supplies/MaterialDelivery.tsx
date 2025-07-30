@@ -21,6 +21,7 @@ import {
 import MaterialDeliveryForm from './MaterialDeliveryForm';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserContext } from '@/hooks/useUserContext';
 
 interface IndividualMaterialDelivery {
   id: string;
@@ -64,6 +65,14 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   } = useMaterialDeliveries();
   
   const { isAdmin, isDesigner } = useAuth();
+  const { workshopFilter, isWorkshopUser } = useUserContext();
+  
+  // Establecer filtro inicial para usuarios de taller
+  React.useEffect(() => {
+    if (isWorkshopUser && workshopFilter) {
+      setFilterWorkshop(workshopFilter);
+    }
+  }, [isWorkshopUser, workshopFilter]);
 
   useEffect(() => {
     loadDeliveries();
@@ -101,6 +110,10 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const workshopOptions = [...new Set(deliveries.map(d => d.workshop_name).filter(Boolean))];
   
   const filteredDeliveries = deliveries.filter(delivery => {
+    // Si es usuario de taller, solo mostrar entregas de su taller
+    if (isWorkshopUser && workshopFilter && delivery.workshop_id !== workshopFilter) {
+      return false;
+    }
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = 
@@ -189,17 +202,25 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
             />
           </div>
           
-          <Select value={filterWorkshop} onValueChange={setFilterWorkshop}>
+          <Select 
+            value={filterWorkshop} 
+            onValueChange={setFilterWorkshop}
+            disabled={isWorkshopUser} // Deshabilitar filtro para usuarios de taller
+          >
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por taller" />
+              <SelectValue placeholder={isWorkshopUser ? "Tu taller" : "Filtrar por taller"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos los talleres</SelectItem>
-              {workshopOptions.map((workshop) => (
-                <SelectItem key={workshop} value={workshop}>
-                  {workshop}
-                </SelectItem>
-              ))}
+              {!isWorkshopUser && <SelectItem value="all">Todos los talleres</SelectItem>}
+              {workshopOptions
+                .filter(workshop => !isWorkshopUser || workshop === workshopOptions.find(w => 
+                  deliveries.find(d => d.workshop_name === w)?.workshop_id === workshopFilter
+                ))
+                .map((workshop) => (
+                  <SelectItem key={workshop} value={workshop}>
+                    {workshop}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 

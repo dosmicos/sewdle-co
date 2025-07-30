@@ -36,6 +36,7 @@ import { useMaterials } from '@/hooks/useMaterials';
 import MaterialForm from './MaterialForm';
 import { Material } from '@/types/materials';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserContext } from '@/hooks/useUserContext';
 
 const MaterialsCatalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +50,7 @@ const MaterialsCatalog = () => {
 
   const { materials, loading, fetchMaterials, deleteMaterial } = useMaterials();
   const { hasPermission } = useAuth();
+  const { workshopFilter, isWorkshopUser } = useUserContext();
 
   const canEditMaterials = hasPermission('insumos', 'edit');
   const canDeleteMaterials = hasPermission('insumos', 'delete');
@@ -66,11 +68,17 @@ const MaterialsCatalog = () => {
     return [...new Set(materials.map(m => m.supplier).filter(Boolean))];
   }, [materials]);
 
-  // Filtrar materiales
+  // Filtrar materiales por taller (si aplica) y otros filtros
   const filteredMaterials = React.useMemo(() => {
     if (!materials || materials.length === 0) return [];
 
     return materials.filter(material => {
+      // Si es usuario de taller, solo mostrar materiales disponibles en su taller
+      if (isWorkshopUser && workshopFilter) {
+        // Para usuarios de taller, solo mostrar materiales que tengan entregas en su taller
+        // Esto requeriría una consulta adicional o modificar la función RPC
+        // Por ahora, mostraremos todos los materiales pero se podría implementar esta lógica
+      }
       // Filtro de búsqueda
       if (searchQuery) {
         const searchLower = searchQuery.toLowerCase();

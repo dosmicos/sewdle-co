@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Package, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
+import { useUserContext } from '@/hooks/useUserContext';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ConsumptionRecord {
@@ -23,8 +24,10 @@ interface ConsumptionRecord {
 }
 
 const MaterialConsumptionManager = () => {
+  const { workshopFilter, isWorkshopUser } = useUserContext();
+  
   const [filters, setFilters] = useState({
-    workshop: 'all'
+    workshop: isWorkshopUser && workshopFilter ? workshopFilter : 'all'
   });
   const [consumptionHistory, setConsumptionHistory] = useState<ConsumptionRecord[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
@@ -93,6 +96,11 @@ const MaterialConsumptionManager = () => {
   };
 
   const filteredConsumptions = consumptionHistory.filter(consumption => {
+    // Si es usuario de taller, solo mostrar consumos de su taller
+    if (isWorkshopUser && workshopFilter && consumption.workshopId !== workshopFilter) {
+      return false;
+    }
+    
     if (filters.workshop !== 'all' && consumption.workshopId !== filters.workshop) return false;
     return true;
   });
@@ -125,17 +133,23 @@ const MaterialConsumptionManager = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Taller</label>
-              <Select value={filters.workshop} onValueChange={(value) => setFilters(prev => ({ ...prev, workshop: value }))}>
+              <Select 
+                value={filters.workshop} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, workshop: value }))}
+                disabled={isWorkshopUser} // Deshabilitar filtro para usuarios de taller
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todos los talleres" />
+                  <SelectValue placeholder={isWorkshopUser ? "Tu taller" : "Todos los talleres"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los talleres</SelectItem>
-                  {workshops.map((workshop) => (
-                    <SelectItem key={workshop.id} value={workshop.id}>
-                      {workshop.name}
-                    </SelectItem>
-                  ))}
+                  {!isWorkshopUser && <SelectItem value="all">Todos los talleres</SelectItem>}
+                  {workshops
+                    .filter(workshop => !isWorkshopUser || workshop.id === workshopFilter)
+                    .map((workshop) => (
+                      <SelectItem key={workshop.id} value={workshop.id}>
+                        {workshop.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
