@@ -167,20 +167,20 @@ const AppContent = () => {
         } />
         
         <Route path="financial" element={
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="Finanzas" action="Ver">
             <FinancialPage />
           </PermissionRoute>
         } />
         
         <Route path="replenishment" element={
-          <PermissionRoute module="replenishment" action="view">
+          <PermissionRoute module="Reposición IA" action="Ver">
             <ReplenishmentPage />
           </PermissionRoute>
         } />
         
         
         <Route path="shopify" element={
-          <PermissionRoute module="shopify" action="view">
+          <PermissionRoute module="Shopify" action="Ver">
             <ShopifyDashboardPage />
           </PermissionRoute>
         } />
