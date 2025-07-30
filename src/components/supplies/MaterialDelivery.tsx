@@ -67,12 +67,6 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const { isAdmin, isDesigner } = useAuth();
   const { workshopFilter, isWorkshopUser } = useUserContext();
   
-  // Establecer filtro inicial para usuarios de taller
-  React.useEffect(() => {
-    if (isWorkshopUser && workshopFilter) {
-      setFilterWorkshop(workshopFilter);
-    }
-  }, [isWorkshopUser, workshopFilter]);
 
   useEffect(() => {
     loadDeliveries();
@@ -110,10 +104,6 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const workshopOptions = [...new Set(deliveries.map(d => d.workshop_name).filter(Boolean))];
   
   const filteredDeliveries = deliveries.filter(delivery => {
-    // Si es usuario de taller, solo mostrar entregas de su taller
-    if (isWorkshopUser && workshopFilter && delivery.workshop_id !== workshopFilter) {
-      return false;
-    }
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = 
