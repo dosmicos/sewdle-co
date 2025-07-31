@@ -18,24 +18,62 @@ const extractNumber = (str: string): number => {
 };
 
 /**
- * Extrae rango de edad (ej: "0 a 3 meses" -> 0, "3 a 6 meses" -> 3)
+ * Extrae rango de edad (ej: "0 a 3 meses" -> 0, "3 a 6 meses" -> 3, "6 (3-4 años)" -> 36)
  */
 const extractAgeRangeStart = (str: string): number => {
   const lowerStr = str.toLowerCase();
   
-  // Patrones comunes de edad
+  // Primero revisar si hay paréntesis con rangos de edad
+  const parenthesesMatch = lowerStr.match(/\(([^)]+)\)/);
+  if (parenthesesMatch) {
+    const insideParentheses = parenthesesMatch[1];
+    
+    // Patrones dentro de paréntesis
+    const parenthesesPatterns = [
+      /(\d+)\s*a\s*\d+\s*mes/i,     // "12 a 24 meses"
+      /(\d+)\s*-\s*\d+\s*mes/i,     // "12-24 meses"
+      /(\d+)\s*a\s*\d+\s*año/i,     // "3 a 4 años"
+      /(\d+)\s*-\s*\d+\s*año/i,     // "3-4 años"
+      /(\d+)\s*to\s*\d+\s*month/i,  // "12 to 24 months"
+      /(\d+)\s*to\s*\d+\s*year/i,   // "3 to 4 years"
+    ];
+
+    for (const pattern of parenthesesPatterns) {
+      const match = insideParentheses.match(pattern);
+      if (match) {
+        const ageValue = parseInt(match[1]);
+        // Si son años, convertir a meses
+        if (pattern.source.includes('año') || pattern.source.includes('year')) {
+          return ageValue * 12;
+        }
+        return ageValue;
+      }
+    }
+  }
+  
+  // Patrones normales de edad (sin paréntesis)
   const agePatterns = [
-    /(\d+)\s*a\s*\d+\s*mes/i,  // "0 a 3 meses", "3 a 6 meses"
-    /(\d+)\s*-\s*\d+\s*mes/i,  // "0-3 meses", "3-6 meses"
-    /(\d+)\s*to\s*\d+\s*month/i, // "0 to 3 months"
-    /(\d+)\s*mes/i,             // "3 meses"
-    /(\d+)m/i,                  // "3m", "6m"
+    /(\d+)\s*a\s*\d+\s*mes/i,     // "0 a 3 meses", "3 a 6 meses"
+    /(\d+)\s*-\s*\d+\s*mes/i,     // "0-3 meses", "3-6 meses"
+    /(\d+)\s*a\s*\d+\s*año/i,     // "1 a 2 años"
+    /(\d+)\s*-\s*\d+\s*año/i,     // "1-2 años"
+    /(\d+)\s*to\s*\d+\s*month/i,  // "0 to 3 months"
+    /(\d+)\s*to\s*\d+\s*year/i,   // "1 to 2 years"
+    /(\d+)\s*mes/i,               // "3 meses"
+    /(\d+)\s*año/i,               // "2 años"
+    /(\d+)m/i,                    // "3m", "6m"
+    /(\d+)y/i,                    // "2y", "3y"
   ];
 
   for (const pattern of agePatterns) {
     const match = lowerStr.match(pattern);
     if (match) {
-      return parseInt(match[1]);
+      const ageValue = parseInt(match[1]);
+      // Si son años, convertir a meses
+      if (pattern.source.includes('año') || pattern.source.includes('year') || pattern.source.includes('y')) {
+        return ageValue * 12;
+      }
+      return ageValue;
     }
   }
 
@@ -69,6 +107,17 @@ const getStandardSizeOrder = (size: string): number => {
  */
 const isAgeVariant = (str: string): boolean => {
   const lowerStr = str.toLowerCase();
+  
+  // Revisar patrones con paréntesis primero (ej: "6 (3-4 años)")
+  if (/\([^)]*\d+[^)]*\)/i.test(lowerStr)) {
+    const parenthesesMatch = lowerStr.match(/\(([^)]+)\)/);
+    if (parenthesesMatch) {
+      const insideParentheses = parenthesesMatch[1];
+      return /\d+\s*(a|to|-)\s*\d+\s*(mes|month|año|year)|^\d+\s*(mes|month|m|año|year|y)/.test(insideParentheses);
+    }
+  }
+  
+  // Patrones normales de edad
   return /\d+\s*(a|to|-)\s*\d+\s*(mes|month|año|year)|^\d+\s*(mes|month|m|año|year|y)/.test(lowerStr);
 };
 
