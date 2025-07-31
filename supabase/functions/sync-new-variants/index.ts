@@ -41,10 +41,13 @@ Deno.serve(async (req) => {
 
     for (const shopifyVariant of variants_to_sync) {
       try {
-        console.log(`🔄 Processing variant: ${shopifyVariant.sku}`)
+        console.log(`🔄 Processing variant: ${shopifyVariant.sku || shopifyVariant.title}`)
+        console.log(`   - Size: ${shopifyVariant.option1}`)
+        console.log(`   - Color: ${shopifyVariant.option2}`)
+        console.log(`   - Title: ${shopifyVariant.title}`)
 
         // Check if we have an existing product with similar name
-        const productName = shopifyVariant.title.split(' - ')[0]
+        const productName = shopifyVariant.product_title || shopifyVariant.title.split(' - ')[0]
         
         const { data: existingProducts, error: searchError } = await supabase
           .from('products')
@@ -130,15 +133,17 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Create the new variant
+        // Create the new variant with improved size/color extraction
         const variantData = {
           product_id: targetProductId,
-          sku_variant: shopifyVariant.sku,
-          size: shopifyVariant.option1 || null,
-          color: shopifyVariant.option2 || null,
+          sku_variant: shopifyVariant.sku || `VARIANT-${shopifyVariant.id}`,
+          size: shopifyVariant.option1 || extractSizeFromTitle(shopifyVariant.title),
+          color: shopifyVariant.option2 || extractColorFromTitle(shopifyVariant.title),
           additional_price: 0,
           stock_quantity: shopifyVariant.inventory_quantity || 0
         }
+
+        console.log(`📝 Creating variant with data:`, variantData)
 
         const { data: newVariant, error: createVariantError } = await supabase
           .from('product_variants')
@@ -201,3 +206,33 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+// Helper functions to extract size and color from variant title
+function extractSizeFromTitle(title: string): string | null {
+  const sizePatterns = [
+    /\b(XS|S|M|L|XL|XXL|XXXL)\b/i,
+    /\b(\d{1,2})\b/,
+    /\b(Newborn|NB|0-3|3-6|6-9|9-12|12-18|18-24)\b/i,
+    /\b(\d+\s*a\s*\d+\s*(meses?|años?))\b/i
+  ]
+  
+  for (const pattern of sizePatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+function extractColorFromTitle(title: string): string | null {
+  const colorPatterns = [
+    /\b(rojo|azul|verde|amarillo|negro|blanco|gris|rosa|morado|naranja|café|marrón|beige|crema)\b/i,
+    /\b(red|blue|green|yellow|black|white|gray|grey|pink|purple|orange|brown|beige|cream)\b/i,
+    /\b(leopardo|estrella|star|dino|rex)\b/i
+  ]
+  
+  for (const pattern of colorPatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}

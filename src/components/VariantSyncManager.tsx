@@ -41,10 +41,16 @@ export const VariantSyncManager = () => {
 
     // Convert to format expected by sync function
     const formattedVariants = variantsToSync.map(variant => ({
-      sku: variant.shopify_sku,
+      id: variant.shopify_variant_id,
+      sku: variant.has_sku ? variant.shopify_sku : null,
       title: variant.variant_title,
+      product_title: variant.product_title,
       price: variant.shopify_price.toString(),
-      inventory_quantity: variant.shopify_stock
+      inventory_quantity: variant.shopify_stock,
+      // Extract size and color from variant title
+      option1: extractSizeFromTitle(variant.variant_title),
+      option2: extractColorFromTitle(variant.variant_title),
+      option3: null
     }))
 
     await syncVariants(formattedVariants)
@@ -289,4 +295,34 @@ const VariantCard: React.FC<VariantCardProps> = ({
       </CardContent>
     </Card>
   )
+}
+
+// Helper functions to extract size and color from variant title
+const extractSizeFromTitle = (title: string): string | null => {
+  const sizePatterns = [
+    /\b(XS|S|M|L|XL|XXL|XXXL)\b/i,
+    /\b(\d{1,2})\b/,
+    /\b(Newborn|NB|0-3|3-6|6-9|9-12|12-18|18-24)\b/i,
+    /\b(\d+\s*a\s*\d+\s*(meses?|años?))\b/i
+  ]
+  
+  for (const pattern of sizePatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+const extractColorFromTitle = (title: string): string | null => {
+  const colorPatterns = [
+    /\b(rojo|azul|verde|amarillo|negro|blanco|gris|rosa|morado|naranja|café|marrón|beige|crema)\b/i,
+    /\b(red|blue|green|yellow|black|white|gray|grey|pink|purple|orange|brown|beige|cream)\b/i,
+    /\b(leopardo|estrella|star|dino|rex)\b/i
+  ]
+  
+  for (const pattern of colorPatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1]
+  }
+  return null
 }
