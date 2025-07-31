@@ -46,11 +46,23 @@ export const useShopifyOrders = () => {
   const [customerAnalytics, setCustomerAnalytics] = useState<CustomerAnalytics[]>([]);
   const [productAnalytics, setProductAnalytics] = useState<ProductAnalytics[]>([]);
   const [loading, setLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const { toast } = useToast();
 
   const fetchOrders = async (limit = 50, offset = 0) => {
-    setLoading(true);
+    setOrdersLoading(true);
     try {
+      // Get total count
+      const { count } = await supabase
+        .from('shopify_orders')
+        .select('*', { count: 'exact', head: true });
+      
+      setTotalOrders(count || 0);
+
+      // Get paginated data
       const { data, error } = await supabase
         .from('shopify_orders')
         .select(`
@@ -72,6 +84,7 @@ export const useShopifyOrders = () => {
 
       if (error) throw error;
       setOrders(data || []);
+      return data || [];
     } catch (error) {
       console.error('Error fetching Shopify orders:', error);
       toast({
@@ -79,21 +92,41 @@ export const useShopifyOrders = () => {
         description: "No se pudieron cargar las órdenes de Shopify",
         variant: "destructive",
       });
+      return [];
     } finally {
-      setLoading(false);
+      setOrdersLoading(false);
     }
   };
 
-  const fetchCustomerAnalytics = async (startDate?: string, endDate?: string) => {
-    setLoading(true);
+  const fetchCustomerAnalytics = async (limit = 50, offset = 0, startDate?: string, endDate?: string) => {
+    setCustomersLoading(true);
     try {
+      // First get total count (aproximado desde shopify_orders para evitar crear nueva función RPC)
+      const { count } = await supabase
+        .from('shopify_orders')
+        .select('customer_email', { count: 'exact', head: true });
+      
+      // Estimado aproximado de clientes únicos (será actualizado con datos reales)
+      setTotalCustomers(Math.ceil((count || 0) / 3)); // Estimación: promedio 3 órdenes por cliente
+
       const { data, error } = await supabase.rpc('get_customer_analytics', {
         start_date: startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         end_date: endDate || new Date().toISOString().split('T')[0]
       });
 
       if (error) throw error;
-      setCustomerAnalytics(data || []);
+      
+      // Update total customers with real count
+      if (data) {
+        setTotalCustomers(data.length);
+        // Apply pagination on client side since RPC doesn't support LIMIT/OFFSET
+        const paginatedData = data.slice(offset, offset + limit);
+        setCustomerAnalytics(paginatedData);
+      } else {
+        setCustomerAnalytics([]);
+      }
+      
+      return data || [];
     } catch (error) {
       console.error('Error fetching customer analytics:', error);
       toast({
@@ -101,8 +134,9 @@ export const useShopifyOrders = () => {
         description: "No se pudieron cargar los análisis de clientes",
         variant: "destructive",
       });
+      return [];
     } finally {
-      setLoading(false);
+      setCustomersLoading(false);
     }
   };
 
@@ -139,12 +173,16 @@ export const useShopifyOrders = () => {
     customerAnalytics,
     productAnalytics,
     loading,
+    ordersLoading,
+    customersLoading,
+    totalOrders,
+    totalCustomers,
     fetchOrders,
     fetchCustomerAnalytics,
     fetchProductAnalytics,
     refetch: () => {
-      fetchOrders();
-      fetchCustomerAnalytics();
+      fetchOrders(50, 0);
+      fetchCustomerAnalytics(50, 0);
       fetchProductAnalytics();
     }
   };

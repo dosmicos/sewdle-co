@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -9,6 +9,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -30,6 +38,9 @@ interface ShopifyOrder {
 interface ShopifyOrdersTableProps {
   orders: ShopifyOrder[];
   loading: boolean;
+  totalOrders: number;
+  onPageChange: (page: number) => void;
+  currentPage: number;
 }
 
 const getStatusBadgeVariant = (status: string, type: 'financial' | 'fulfillment') => {
@@ -72,7 +83,19 @@ const getStatusText = (status: string, type: 'financial' | 'fulfillment') => {
   }
 };
 
-export const ShopifyOrdersTable: React.FC<ShopifyOrdersTableProps> = ({ orders, loading }) => {
+export const ShopifyOrdersTable: React.FC<ShopifyOrdersTableProps> = ({ 
+  orders, 
+  loading, 
+  totalOrders, 
+  onPageChange, 
+  currentPage 
+}) => {
+  const itemsPerPage = 50;
+  const totalPages = Math.ceil(totalOrders / itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    onPageChange(page);
+  };
   if (loading) {
     return (
       <Card>
@@ -166,6 +189,58 @@ export const ShopifyOrdersTable: React.FC<ShopifyOrdersTableProps> = ({ orders, 
             </TableBody>
           </Table>
         </div>
+        
+        {totalPages > 1 && (
+          <div className="mt-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+                    className={currentPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                
+                {/* Páginas */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNumber;
+                  if (totalPages <= 5) {
+                    pageNumber = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNumber = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNumber = totalPages - 4 + i;
+                  } else {
+                    pageNumber = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <PaginationItem key={pageNumber}>
+                      <PaginationLink
+                        onClick={() => handlePageChange(pageNumber)}
+                        isActive={currentPage === pageNumber}
+                        className="cursor-pointer"
+                      >
+                        {pageNumber}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
+                    className={currentPage >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+            
+            <div className="text-sm text-muted-foreground text-center mt-2">
+              Página {currentPage} de {totalPages} • {totalOrders} órdenes totales
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

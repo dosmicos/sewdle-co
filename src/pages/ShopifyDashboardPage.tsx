@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,29 @@ export const ShopifyDashboardPage: React.FC = () => {
     customerAnalytics,
     productAnalytics,
     loading,
+    ordersLoading,
+    customersLoading,
+    totalOrders,
+    totalCustomers,
+    fetchOrders,
+    fetchCustomerAnalytics,
     refetch
   } = useShopifyOrders();
+  
+  const [ordersCurrentPage, setOrdersCurrentPage] = useState(1);
+  const [customersCurrentPage, setCustomersCurrentPage] = useState(1);
+
+  const handleOrdersPageChange = (page: number) => {
+    setOrdersCurrentPage(page);
+    const offset = (page - 1) * 50;
+    fetchOrders(50, offset);
+  };
+
+  const handleCustomersPageChange = (page: number) => {
+    setCustomersCurrentPage(page);
+    const offset = (page - 1) * 50;
+    fetchCustomerAnalytics(50, offset, undefined, undefined);
+  };
 
 
   return (
@@ -61,7 +82,13 @@ export const ShopifyDashboardPage: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ShopifyOrdersTable orders={orders} loading={loading} />
+              <ShopifyOrdersTable 
+                orders={orders} 
+                loading={ordersLoading} 
+                totalOrders={totalOrders}
+                onPageChange={handleOrdersPageChange}
+                currentPage={ordersCurrentPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -75,7 +102,13 @@ export const ShopifyDashboardPage: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CustomerAnalyticsTable customers={customerAnalytics} loading={loading} />
+              <CustomerAnalyticsTable 
+                customers={customerAnalytics} 
+                loading={customersLoading} 
+                totalCustomers={totalCustomers}
+                onPageChange={handleCustomersPageChange}
+                currentPage={customersCurrentPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
