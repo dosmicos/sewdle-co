@@ -263,6 +263,9 @@ const WorkshopDashboard = () => {
             <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
               Progreso Semanal
             </h3>
+            <p className="text-sm" style={{ color: 'rgb(99 99 102)' }}>
+              Unidades aprobadas por semana de cada mes
+            </p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyData}>
@@ -279,12 +282,6 @@ const WorkshopDashboard = () => {
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
-                  />
-                  <Bar 
-                    dataKey="delivered" 
-                    fill="#FF9500" 
-                    radius={[4, 4, 0, 0]} 
-                    name="Entregadas"
                   />
                   <Bar 
                     dataKey="approved" 
