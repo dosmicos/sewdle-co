@@ -1,6 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
-import { sortVariants } from '../shopify-products/index.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
