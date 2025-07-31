@@ -8,6 +8,8 @@ interface WorkshopDashboardStats {
   completedOrders: number;
   activeOrders: number;
   pendingDeliveries: number;
+  pendingUnits: number;
+  pendingUnitsUrgency: 'excellent' | 'warning' | 'urgent' | 'critical';
   completionRate: number;
   onTimeDeliveryRate: number;
   qualityScore: number;
@@ -41,6 +43,8 @@ export const useWorkshopDashboardData = () => {
     completedOrders: 0,
     activeOrders: 0,
     pendingDeliveries: 0,
+    pendingUnits: 0,
+    pendingUnitsUrgency: 'excellent',
     completionRate: 0,
     onTimeDeliveryRate: 0,
     qualityScore: 0
@@ -90,6 +94,38 @@ export const useWorkshopDashboardData = () => {
         completedOrders, 
         activeOrders
       });
+
+      // Calculate pending units (not approved) for active orders
+      const { data: pendingUnitsData, error: pendingUnitsError } = await supabase
+        .from('order_items')
+        .select(`
+          quantity,
+          delivery_items!left(quantity_approved)
+        `)
+        .in('order_id', assignments?.filter(a => 
+          a.orders?.status === 'assigned' || a.orders?.status === 'in_progress'
+        ).map(a => a.orders?.id) || []);
+
+      if (pendingUnitsError) throw pendingUnitsError;
+
+      // Calculate total pending units (ordered - approved)
+      let pendingUnits = 0;
+      pendingUnitsData?.forEach(item => {
+        const totalOrdered = item.quantity || 0;
+        const totalApproved = item.delivery_items?.reduce((sum: number, di: any) => 
+          sum + (di.quantity_approved || 0), 0) || 0;
+        pendingUnits += Math.max(0, totalOrdered - totalApproved);
+      });
+
+      // Determine urgency level for traffic light system
+      const getUrgencyLevel = (units: number): 'excellent' | 'warning' | 'urgent' | 'critical' => {
+        if (units <= 50) return 'excellent';
+        if (units <= 150) return 'warning';
+        if (units <= 300) return 'urgent';
+        return 'critical';
+      };
+
+      const pendingUnitsUrgency = getUrgencyLevel(pendingUnits);
 
       // Fetch pending deliveries for this workshop (include in_quality as pending)
       const { count: pendingDeliveriesCount, error: deliveriesError } = await supabase
@@ -148,6 +184,8 @@ export const useWorkshopDashboardData = () => {
         completedOrders,
         activeOrders,
         pendingDeliveries: pendingDeliveriesCount || 0,
+        pendingUnits,
+        pendingUnitsUrgency,
         completionRate,
         onTimeDeliveryRate,
         qualityScore

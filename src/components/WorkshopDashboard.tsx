@@ -10,13 +10,65 @@ import {
   TrendingUp,
   RefreshCw,
   Star,
-  Target
+  Target,
+  AlertTriangle,
+  Zap
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useWorkshopDashboardData } from '@/hooks/useWorkshopDashboardData';
 
 const WorkshopDashboard = () => {
   const { stats, monthlyData, statusData, recentActivity, loading, refreshData } = useWorkshopDashboardData();
+
+  const getPendingUnitsConfig = (urgency: string, units: number) => {
+    switch (urgency) {
+      case 'excellent':
+        return {
+          bgColor: 'bg-green-50',
+          borderColor: 'border-green-200',
+          iconColor: 'text-green-600',
+          icon: Target,
+          message: '¡Excelente trabajo!',
+          description: 'Muy pocas unidades pendientes'
+        };
+      case 'warning':
+        return {
+          bgColor: 'bg-yellow-50',
+          borderColor: 'border-yellow-200',
+          iconColor: 'text-yellow-600',
+          icon: Clock,
+          message: 'Atención necesaria',
+          description: 'Unidades pendientes controlables'
+        };
+      case 'urgent':
+        return {
+          bgColor: 'bg-orange-50',
+          borderColor: 'border-orange-200',
+          iconColor: 'text-orange-600',
+          icon: AlertTriangle,
+          message: '¡Acción urgente!',
+          description: 'Demasiadas unidades pendientes'
+        };
+      case 'critical':
+        return {
+          bgColor: 'bg-red-50',
+          borderColor: 'border-red-200',
+          iconColor: 'text-red-600',
+          icon: Zap,
+          message: '¡SITUACIÓN CRÍTICA!',
+          description: 'Unidades pendientes en nivel crítico'
+        };
+      default:
+        return {
+          bgColor: 'bg-gray-50',
+          borderColor: 'border-gray-200',
+          iconColor: 'text-gray-600',
+          icon: Target,
+          message: 'Estado normal',
+          description: 'Seguimiento de unidades pendientes'
+        };
+    }
+  };
 
   const getActivityIcon = (iconName: string) => {
     switch (iconName) {
@@ -83,6 +135,41 @@ const WorkshopDashboard = () => {
           <RefreshCw className="w-4 h-4" />
           <span>Actualizar</span>
         </Button>
+      </div>
+
+      {/* Pending Units Traffic Light - Most Prominent */}
+      <div className="mb-6">
+        {(() => {
+          const config = getPendingUnitsConfig(stats.pendingUnitsUrgency, stats.pendingUnits);
+          const IconComponent = config.icon;
+          return (
+            <Card className={`${config.bgColor} ${config.borderColor} border-2 shadow-lg rounded-3xl p-8 animate-pulse-subtle`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-6">
+                  <div className={`p-4 bg-white rounded-2xl shadow-sm`}>
+                    <IconComponent className={`w-12 h-12 ${config.iconColor}`} />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold mb-1" style={{ color: 'rgb(29 29 31)' }}>
+                      Unidades Pendientes por Entregar
+                    </p>
+                    <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                      {config.description}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-6xl font-bold ${config.iconColor} mb-2`}>
+                    {stats.pendingUnits}
+                  </p>
+                  <p className={`text-lg font-semibold ${config.iconColor}`}>
+                    {config.message}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          );
+        })()}
       </div>
 
       {/* Stats Cards */}
