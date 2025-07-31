@@ -240,7 +240,7 @@ const WorkshopDashboard = () => {
       </div>
 
       {/* Performance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
             <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
@@ -264,20 +264,6 @@ const WorkshopDashboard = () => {
               <TrendingUp className="w-8 h-8 text-green-500" />
               <span className="text-3xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
                 {stats.onTimeDeliveryRate}%
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-              Total Asignadas
-            </h3>
-            <div className="flex items-center space-x-2">
-              <FileText className="w-8 h-8 text-blue-500" />
-              <span className="text-3xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
-                {stats.assignedOrders}
               </span>
             </div>
           </div>
