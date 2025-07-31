@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Zap
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useWorkshopDashboardData } from '@/hooks/useWorkshopDashboardData';
 
 const WorkshopDashboard = () => {
@@ -282,6 +282,17 @@ const WorkshopDashboard = () => {
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'rgb(29 29 31)'
+                    }}
+                    formatter={(value, name) => [`${value} unidades`, name]}
+                    labelStyle={{ color: 'rgb(99 99 102)' }}
                   />
                   <Bar 
                     dataKey="approved" 
