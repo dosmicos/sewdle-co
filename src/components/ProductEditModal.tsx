@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { sortVariants } from '@/lib/variantSorting';
 
 interface Product {
   id: string;
@@ -75,8 +76,9 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
 
       console.log('Fetched variants:', data);
       const fetchedVariants = data || [];
-      setVariants(fetchedVariants);
-      setOriginalVariants(fetchedVariants);
+      const sortedVariants = sortVariants(fetchedVariants);
+      setVariants(sortedVariants);
+      setOriginalVariants(sortedVariants);
     } catch (error: any) {
       console.error('Error loading variants:', error);
       toast({
