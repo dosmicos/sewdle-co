@@ -261,16 +261,19 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
       } else {
         // Group by month for monthly view
         const monthlyStats: { [key: string]: { delivered: number; approved: number } } = {};
-        const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+        const allMonths = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const currentMonth = new Date().getMonth();
+        const monthsToShow = allMonths.slice(0, currentMonth + 1); // Show from January to current month
         
-        months.forEach(month => {
+        monthsToShow.forEach(month => {
           monthlyStats[month] = { delivered: 0, approved: 0 };
         });
 
         deliveries?.forEach(delivery => {
           const date = new Date(delivery.delivery_date);
-          const monthName = months[date.getMonth()];
-          if (monthName) {
+          const monthIndex = date.getMonth();
+          const monthName = allMonths[monthIndex];
+          if (monthName && monthsToShow.includes(monthName)) {
             delivery.delivery_items.forEach((item) => {
               monthlyStats[monthName].delivered += item.quantity_delivered || 0;
               monthlyStats[monthName].approved += item.quantity_approved || 0;
@@ -278,7 +281,7 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
           }
         });
 
-        const chartData = months.map(month => ({
+        const chartData = monthsToShow.map(month => ({
           name: month,
           delivered: monthlyStats[month].delivered,
           approved: monthlyStats[month].approved
