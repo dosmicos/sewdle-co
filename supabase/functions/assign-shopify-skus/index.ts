@@ -30,10 +30,12 @@ serve(async (req) => {
       throw new Error('Credenciales de Shopify no configuradas')
     }
 
-    // Normalize Shopify domain
+    // Normalize Shopify domain (handle cases where .myshopify.com is already included)
     const shopifyDomain = rawShopifyDomain.includes('.myshopify.com') 
       ? rawShopifyDomain.replace('.myshopify.com', '')
       : rawShopifyDomain
+
+    console.log(`🔗 Using Shopify domain: ${shopifyDomain}.myshopify.com`)
 
     const body = await req.json().catch(() => ({}))
     const { resumeFromCursor, maxVariants = 100, processId }: ProcessParams = body
@@ -135,7 +137,7 @@ serve(async (req) => {
       let totalProductsChecked = 0
 
       while (hasNextPage) {
-        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
+        const url = new URL(`https://${shopifyDomain}.myshopify.com/admin/api/2023-10/products.json`)
         url.searchParams.set('limit', '50')
         if (!tempCursor) {
           url.searchParams.set('status', 'active,draft')
@@ -191,7 +193,7 @@ serve(async (req) => {
       let productsSkipped = 0
 
       while (hasNextPage && productsNeedingWork.length < maxProducts) {
-        const url = new URL(`https://${shopifyDomain}/admin/api/2023-10/products.json`)
+        const url = new URL(`https://${shopifyDomain}.myshopify.com/admin/api/2023-10/products.json`)
         url.searchParams.set('limit', '25')
         if (!tempCursor) {
           url.searchParams.set('status', 'active,draft')
@@ -354,7 +356,7 @@ serve(async (req) => {
               const newSku = variant.id.toString()
               console.log(`  → Asignando SKU ${newSku} a variante ${variant.id}`)
 
-              const updateUrl = `https://${shopifyDomain}/admin/api/2023-10/variants/${variant.id}.json`
+              const updateUrl = `https://${shopifyDomain}.myshopify.com/admin/api/2023-10/variants/${variant.id}.json`
               const updateResponse = await makeShopifyRequest(updateUrl, {
                 method: 'PUT',
                 headers: {
