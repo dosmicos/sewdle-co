@@ -7,6 +7,7 @@ import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 import SkuCorrectionTool from '@/components/SkuCorrectionTool';
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
+import { VariantSyncManager } from '@/components/VariantSyncManager';
 
 import { useProducts } from '@/hooks/useProducts';
 import { useToast } from '@/hooks/use-toast';
@@ -247,7 +248,7 @@ const ProductsPage = () => {
 
         {/* Sistema de pestañas */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="catalog" className="flex items-center space-x-2">
               <Package className="w-4 h-4" />
               <span>Catálogo</span>
@@ -255,6 +256,10 @@ const ProductsPage = () => {
             <TabsTrigger value="shopify-sync" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
               <span>Shopify Sync</span>
+            </TabsTrigger>
+            <TabsTrigger value="variant-sync" className="flex items-center space-x-2">
+              <RefreshCw className="w-4 h-4" />
+              <span>Variantes</span>
             </TabsTrigger>
           </TabsList>
 
@@ -338,6 +343,10 @@ const ProductsPage = () => {
                 <ShopifyDiagnosticTool />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="variant-sync" className="space-y-6 mt-6">
+            <VariantSyncManager />
           </TabsContent>
         </Tabs>
       </div>
