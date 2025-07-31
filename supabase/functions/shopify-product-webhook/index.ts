@@ -1,0 +1,285 @@
+import { createClient } from '@supabase/supabase-js'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-shopify-hmac-sha256, x-shopify-topic, x-shopify-shop-domain',
+}
+
+interface ShopifyVariant {
+  id: number
+  title: string
+  option1: string | null
+  option2: string | null
+  option3: string | null
+  sku: string | null
+  price: string
+  inventory_quantity: number
+}
+
+interface ShopifyProduct {
+  id: number
+  title: string
+  handle: string
+  created_at: string
+  updated_at: string
+  variants: ShopifyVariant[]
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    console.log('🔔 Webhook de producto Shopify recibido')
+
+    // Get webhook details
+    const topic = req.headers.get('x-shopify-topic')
+    const hmacHeader = req.headers.get('x-shopify-hmac-sha256')
+    const shopDomain = req.headers.get('x-shopify-shop-domain')
+
+    console.log(`📋 Webhook topic: ${topic}`)
+    console.log(`🏪 Shop domain: ${shopDomain}`)
+
+    // Verify webhook signature
+    const body = await req.text()
+    const secret = Deno.env.get('SHOPIFY_WEBHOOK_SECRET')
+
+    if (!secret) {
+      console.error('❌ SHOPIFY_WEBHOOK_SECRET no configurado')
+      return new Response(
+        JSON.stringify({ error: 'Webhook secret not configured' }),
+        { status: 500, headers: corsHeaders }
+      )
+    }
+
+    // Verify HMAC
+    console.log('🔍 Verificando signature...')
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    )
+
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(body))
+    const expectedHmac = btoa(String.fromCharCode(...new Uint8Array(signature)))
+
+    console.log(`- Expected: ${expectedHmac}`)
+    console.log(`- Received: ${hmacHeader}`)
+    console.log(`- Match: ${expectedHmac === hmacHeader}`)
+
+    if (expectedHmac !== hmacHeader) {
+      console.error('❌ Signature verification failed')
+      return new Response(
+        JSON.stringify({ error: 'Invalid signature' }),
+        { status: 401, headers: corsHeaders }
+      )
+    }
+
+    console.log('✅ Webhook verificado correctamente')
+
+    // Parse product data
+    const productData: ShopifyProduct = JSON.parse(body)
+    console.log(`📦 Procesando producto: ${productData.title} con ${productData.variants.length} variantes`)
+
+    let processedVariants = 0
+    let newVariants = 0
+    let updatedVariants = 0
+    let errors = 0
+
+    // Process each variant
+    for (const variant of productData.variants) {
+      try {
+        console.log(`🔄 Procesando variante: ${variant.sku || `ID-${variant.id}`}`)
+
+        // Check if product exists
+        let targetProductId: string
+
+        const { data: existingProducts, error: searchError } = await supabase
+          .from('products')
+          .select('id, name')
+          .ilike('name', `%${productData.title}%`)
+
+        if (searchError) {
+          console.error('Error buscando productos:', searchError)
+          errors++
+          continue
+        }
+
+        if (existingProducts && existingProducts.length > 0) {
+          targetProductId = existingProducts[0].id
+          console.log(`📦 Producto existente encontrado: ${existingProducts[0].name}`)
+        } else {
+          // Create new product
+          console.log(`🆕 Creando nuevo producto: ${productData.title}`)
+          const { data: newProduct, error: createProductError } = await supabase
+            .from('products')
+            .insert({
+              name: productData.title,
+              description: `Producto sincronizado desde Shopify - ${productData.handle}`,
+              status: 'active'
+            })
+            .select()
+            .single()
+
+          if (createProductError) {
+            console.error('Error creando producto:', createProductError)
+            errors++
+            continue
+          }
+
+          targetProductId = newProduct.id
+          console.log(`✅ Producto creado: ${newProduct.name}`)
+        }
+
+        // Check if variant exists
+        const variantSku = variant.sku || `SHOPIFY-${variant.id}`
+        
+        const { data: existingVariant, error: variantSearchError } = await supabase
+          .from('product_variants')
+          .select('id, sku_variant')
+          .eq('product_id', targetProductId)
+          .eq('sku_variant', variantSku)
+          .single()
+
+        if (variantSearchError && variantSearchError.code !== 'PGRST116') {
+          console.error('Error buscando variante:', variantSearchError)
+          errors++
+          continue
+        }
+
+        // Extract size and color
+        const extractedSize = variant.option1 || extractSizeFromTitle(variant.title)
+        const extractedColor = variant.option2 || extractColorFromTitle(variant.title)
+
+        if (existingVariant) {
+          // Update existing variant
+          console.log(`🔄 Actualizando variante existente: ${variantSku}`)
+          
+          const { error: updateError } = await supabase
+            .from('product_variants')
+            .update({
+              size: extractedSize,
+              color: extractedColor,
+              stock_quantity: variant.inventory_quantity || 0
+            })
+            .eq('id', existingVariant.id)
+
+          if (updateError) {
+            console.error('Error actualizando variante:', updateError)
+            errors++
+          } else {
+            updatedVariants++
+            console.log(`✅ Variante actualizada: ${variantSku}`)
+          }
+        } else {
+          // Create new variant
+          console.log(`🆕 Creando nueva variante: ${variantSku}`)
+          
+          const variantData = {
+            product_id: targetProductId,
+            sku_variant: variantSku,
+            size: extractedSize,
+            color: extractedColor,
+            additional_price: 0,
+            stock_quantity: variant.inventory_quantity || 0
+          }
+
+          console.log(`📝 Datos de variante:`, variantData)
+
+          const { error: createVariantError } = await supabase
+            .from('product_variants')
+            .insert(variantData)
+
+          if (createVariantError) {
+            console.error('Error creando variante:', createVariantError)
+            errors++
+          } else {
+            newVariants++
+            console.log(`✅ Nueva variante creada: ${variantSku}`)
+          }
+        }
+
+        processedVariants++
+      } catch (variantError) {
+        console.error(`Error procesando variante ${variant.id}:`, variantError)
+        errors++
+      }
+    }
+
+    const summary = {
+      processed_variants: processedVariants,
+      new_variants: newVariants,
+      updated_variants: updatedVariants,
+      errors: errors,
+      product_title: productData.title,
+      webhook_topic: topic
+    }
+
+    console.log('📊 Resumen del procesamiento:', summary)
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Webhook procesado exitosamente',
+        summary
+      }),
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+
+  } catch (error) {
+    console.error('❌ Error procesando webhook:', error)
+    return new Response(
+      JSON.stringify({ 
+        error: 'Error interno del servidor',
+        details: error.message 
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
+  }
+})
+
+// Helper functions
+function extractSizeFromTitle(title: string): string | null {
+  const sizePatterns = [
+    /\b(XS|S|M|L|XL|XXL|XXXL)\b/i,
+    /\b(\d{1,2})\s*\(.*?\)/,
+    /\b(Newborn|NB|0-3|3-6|6-9|9-12|12-18|18-24)\b/i,
+    /\b(\d+\s*a\s*\d+\s*(meses?|años?))\b/i
+  ]
+  
+  for (const pattern of sizePatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+function extractColorFromTitle(title: string): string | null {
+  const colorPatterns = [
+    /\b(rojo|azul|verde|amarillo|negro|blanco|gris|rosa|morado|naranja|café|marrón|beige|crema)\b/i,
+    /\b(red|blue|green|yellow|black|white|gray|grey|pink|purple|orange|brown|beige|cream)\b/i,
+    /\b(leopardo|estrella|star|dino|rex)\b/i
+  ]
+  
+  for (const pattern of colorPatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
