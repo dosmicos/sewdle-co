@@ -36,7 +36,7 @@ interface RecentWorkshopActivity {
   time: string;
 }
 
-export const useWorkshopDashboardData = () => {
+export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekly') => {
   const { user } = useAuth();
   const [stats, setStats] = useState<WorkshopDashboardStats>({
     assignedOrders: 0,
@@ -204,11 +204,11 @@ export const useWorkshopDashboardData = () => {
     }
   };
 
-  const fetchMonthlyProgress = async () => {
+  const fetchProgressData = async () => {
     if (!workshopId) return;
 
     try {
-      // Get delivery data with items for weekly progress
+      // Get delivery data with items for progress view
       const { data: deliveries, error } = await supabase
         .from('deliveries')
         .select(`
@@ -219,46 +219,76 @@ export const useWorkshopDashboardData = () => {
           )
         `)
         .eq('workshop_id', workshopId)
-        .gte('delivery_date', new Date(Date.now() - 3 * 30 * 24 * 60 * 60 * 1000).toISOString())
+        .gte('delivery_date', new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000).toISOString())
         .order('delivery_date');
 
       if (error) throw error;
 
-      // Group by week and calculate delivered vs approved units
-      const weeklyStats: { [key: string]: { delivered: number; approved: number } } = {};
-      
-      deliveries?.forEach(delivery => {
-        const date = new Date(delivery.delivery_date);
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+      if (viewMode === 'weekly') {
+        // Group by week and calculate delivered vs approved units
+        const weeklyStats: { [key: string]: { delivered: number; approved: number } } = {};
         
-        const monthName = weekStart.toLocaleDateString('es-ES', { month: 'short' });
-        const weekNumber = Math.ceil(weekStart.getDate() / 7);
-        const weekKey = `${monthName} S${weekNumber}`;
-        
-        if (!weeklyStats[weekKey]) {
-          weeklyStats[weekKey] = { delivered: 0, approved: 0 };
-        }
-        
-        delivery.delivery_items.forEach((item) => {
-          weeklyStats[weekKey].delivered += item.quantity_delivered || 0;
-          weeklyStats[weekKey].approved += item.quantity_approved || 0;
+        deliveries?.forEach(delivery => {
+          const date = new Date(delivery.delivery_date);
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+          
+          const monthName = weekStart.toLocaleDateString('es-ES', { month: 'short' });
+          const weekNumber = Math.ceil(weekStart.getDate() / 7);
+          const weekKey = `${monthName} S${weekNumber}`;
+          
+          if (!weeklyStats[weekKey]) {
+            weeklyStats[weekKey] = { delivered: 0, approved: 0 };
+          }
+          
+          delivery.delivery_items.forEach((item) => {
+            weeklyStats[weekKey].delivered += item.quantity_delivered || 0;
+            weeklyStats[weekKey].approved += item.quantity_approved || 0;
+          });
         });
-      });
 
-      // Sort by date and return last 8 weeks
-      const chartData = Object.entries(weeklyStats)
-        .map(([name, stats]) => ({
-          name,
-          delivered: stats.delivered,
-          approved: stats.approved
-        }))
-        .slice(-8); // Show last 8 weeks
+        // Sort by date and return last 8 weeks
+        const chartData = Object.entries(weeklyStats)
+          .map(([name, stats]) => ({
+            name,
+            delivered: stats.delivered,
+            approved: stats.approved
+          }))
+          .slice(-8); // Show last 8 weeks
 
-      setMonthlyData(chartData);
+        setMonthlyData(chartData);
+
+      } else {
+        // Group by month for monthly view
+        const monthlyStats: { [key: string]: { delivered: number; approved: number } } = {};
+        const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+        
+        months.forEach(month => {
+          monthlyStats[month] = { delivered: 0, approved: 0 };
+        });
+
+        deliveries?.forEach(delivery => {
+          const date = new Date(delivery.delivery_date);
+          const monthName = months[date.getMonth()];
+          if (monthName) {
+            delivery.delivery_items.forEach((item) => {
+              monthlyStats[monthName].delivered += item.quantity_delivered || 0;
+              monthlyStats[monthName].approved += item.quantity_approved || 0;
+            });
+          }
+        });
+
+        const chartData = months.map(month => ({
+          name: month,
+          delivered: monthlyStats[month].delivered,
+          approved: monthlyStats[month].approved
+        }));
+
+        setMonthlyData(chartData);
+      }
 
     } catch (error) {
-      console.error('Error fetching weekly progress:', error);
+      console.error('Error fetching progress data:', error);
     }
   };
 
@@ -381,7 +411,7 @@ export const useWorkshopDashboardData = () => {
     setLoading(true);
     await Promise.all([
       fetchWorkshopStats(),
-      fetchMonthlyProgress(),
+      fetchProgressData(),
       fetchOrderStatusData(),
       fetchRecentActivity()
     ]);
@@ -390,7 +420,7 @@ export const useWorkshopDashboardData = () => {
 
   useEffect(() => {
     loadAllData();
-  }, [workshopId]);
+  }, [workshopId, viewMode]);
 
   return {
     stats,

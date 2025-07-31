@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -18,7 +18,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieCha
 import { useWorkshopDashboardData } from '@/hooks/useWorkshopDashboardData';
 
 const WorkshopDashboard = () => {
-  const { stats, monthlyData, statusData, recentActivity, loading, refreshData } = useWorkshopDashboardData();
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  const { stats, monthlyData, statusData, recentActivity, loading, refreshData } = useWorkshopDashboardData(viewMode);
 
   const getPendingUnitsConfig = (urgency: string, units: number) => {
     switch (urgency) {
@@ -260,12 +261,38 @@ const WorkshopDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-              Progreso Semanal
-            </h3>
-            <p className="text-sm" style={{ color: 'rgb(99 99 102)' }}>
-              Unidades aprobadas por semana de cada mes
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+                  Progreso de la producción
+                </h3>
+                <p className="text-sm" style={{ color: 'rgb(99 99 102)' }}>
+                  Unidades entregadas y aprobadas por {viewMode === 'weekly' ? 'semana' : 'mes'}
+                </p>
+              </div>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('weekly')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    viewMode === 'weekly'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Semanal
+                </button>
+                <button
+                  onClick={() => setViewMode('monthly')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    viewMode === 'monthly'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Mensual
+                </button>
+              </div>
+            </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyData}>
@@ -293,6 +320,12 @@ const WorkshopDashboard = () => {
                     }}
                     formatter={(value, name) => [`${value} unidades`, name]}
                     labelStyle={{ color: 'rgb(99 99 102)' }}
+                  />
+                  <Bar 
+                    dataKey="delivered" 
+                    fill="#FF9500" 
+                    radius={[4, 4, 0, 0]} 
+                    name="Entregadas"
                   />
                   <Bar 
                     dataKey="approved" 
