@@ -17,8 +17,8 @@ interface WorkshopDashboardStats {
 
 interface MonthlyProgressData {
   name: string;
-  completed: number;
-  assigned: number;
+  delivered: number;
+  approved: number;
 }
 
 interface OrderStatusData {
@@ -208,50 +208,57 @@ export const useWorkshopDashboardData = () => {
     if (!workshopId) return;
 
     try {
-      // Get assignments with real order data for accurate monthly progress
-      const { data: assignments, error } = await supabase
-        .from('workshop_assignments')
+      // Get delivery data with items for weekly progress
+      const { data: deliveries, error } = await supabase
+        .from('deliveries')
         .select(`
-          created_at,
-          orders!inner(
-            status,
-            created_at
+          delivery_date,
+          delivery_items!inner(
+            quantity_delivered,
+            quantity_approved
           )
         `)
         .eq('workshop_id', workshopId)
-        .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString())
-        .order('created_at', { ascending: true });
+        .gte('delivery_date', new Date(Date.now() - 3 * 30 * 24 * 60 * 60 * 1000).toISOString())
+        .order('delivery_date');
 
       if (error) throw error;
 
-      const monthlyStats: { [key: string]: { assigned: number; completed: number } } = {};
-      const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+      // Group by week and calculate delivered vs approved units
+      const weeklyStats: { [key: string]: { delivered: number; approved: number } } = {};
       
-      months.forEach(month => {
-        monthlyStats[month] = { assigned: 0, completed: 0 };
-      });
-
-      assignments?.forEach(assignment => {
-        const date = new Date(assignment.created_at);
-        const monthName = months[date.getMonth()];
-        if (monthName) {
-          monthlyStats[monthName].assigned++;
-          if (assignment.orders?.status === 'completed') {
-            monthlyStats[monthName].completed++;
-          }
+      deliveries?.forEach(delivery => {
+        const date = new Date(delivery.delivery_date);
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+        
+        const monthName = weekStart.toLocaleDateString('es-ES', { month: 'short' });
+        const weekNumber = Math.ceil(weekStart.getDate() / 7);
+        const weekKey = `${monthName} S${weekNumber}`;
+        
+        if (!weeklyStats[weekKey]) {
+          weeklyStats[weekKey] = { delivered: 0, approved: 0 };
         }
+        
+        delivery.delivery_items.forEach((item) => {
+          weeklyStats[weekKey].delivered += item.quantity_delivered || 0;
+          weeklyStats[weekKey].approved += item.quantity_approved || 0;
+        });
       });
 
-      const chartData = months.map(month => ({
-        name: month,
-        assigned: monthlyStats[month].assigned,
-        completed: monthlyStats[month].completed
-      }));
+      // Sort by date and return last 8 weeks
+      const chartData = Object.entries(weeklyStats)
+        .map(([name, stats]) => ({
+          name,
+          delivered: stats.delivered,
+          approved: stats.approved
+        }))
+        .slice(-8); // Show last 8 weeks
 
       setMonthlyData(chartData);
 
     } catch (error) {
-      console.error('Error fetching monthly progress:', error);
+      console.error('Error fetching weekly progress:', error);
     }
   };
 

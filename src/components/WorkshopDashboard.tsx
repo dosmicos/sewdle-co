@@ -261,7 +261,7 @@ const WorkshopDashboard = () => {
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
             <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-              Progreso Mensual
+              Progreso Semanal
             </h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -281,16 +281,16 @@ const WorkshopDashboard = () => {
                     axisLine={false}
                   />
                   <Bar 
-                    dataKey="assigned" 
+                    dataKey="delivered" 
                     fill="#FF9500" 
                     radius={[4, 4, 0, 0]} 
-                    name="Asignadas"
+                    name="Entregadas"
                   />
                   <Bar 
-                    dataKey="completed" 
+                    dataKey="approved" 
                     fill="#34C759" 
                     radius={[4, 4, 0, 0]} 
-                    name="Completadas"
+                    name="Aprobadas"
                   />
                 </BarChart>
               </ResponsiveContainer>
