@@ -92,12 +92,18 @@ serve(async (req) => {
     console.log('🔥 SHOPIFY-PRODUCTS FUNCTION STARTED AT:', new Date().toISOString());
     
     // Obtener credenciales desde los secretos de Supabase
-    const storeDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    const rawStoreDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+    
+    // Normalize Shopify domain
+    const storeDomain = rawStoreDomain?.includes('.myshopify.com') 
+      ? rawStoreDomain.replace('.myshopify.com', '')
+      : rawStoreDomain
     
     console.log('📊 Checking credentials...');
     console.log('Store Domain:', storeDomain ? 'CONFIGURED' : 'MISSING');
     console.log('Access Token:', accessToken ? 'CONFIGURED' : 'MISSING');
+    console.log(`🔗 Using Shopify domain: ${storeDomain}.myshopify.com`);
 
     if (!storeDomain || !accessToken) {
       console.error('Missing Shopify credentials in environment variables')
@@ -118,7 +124,7 @@ serve(async (req) => {
     const cleanDomain = storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
     
     // Obtener todos los productos activos y borrador
-    let apiUrl = `https://${cleanDomain}/admin/api/2023-10/products.json?status=active,draft&limit=250&published_status=any`
+    let apiUrl = `https://${cleanDomain}.myshopify.com/admin/api/2023-10/products.json?status=active,draft&limit=250&published_status=any`
 
     console.log('Fetching from Shopify API:', apiUrl)
 

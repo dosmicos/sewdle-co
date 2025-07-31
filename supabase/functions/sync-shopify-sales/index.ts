@@ -92,10 +92,15 @@ function validateEnvironment() {
     throw new Error(`Variables de entorno faltantes: ${missing.join(', ')}`);
   }
   
+  const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')!;
+  const shopifyDomain = rawShopifyDomain.includes('.myshopify.com') 
+    ? rawShopifyDomain.replace('.myshopify.com', '')
+    : rawShopifyDomain;
+
   return {
     supabaseUrl: Deno.env.get('SUPABASE_URL')!,
     supabaseServiceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    shopifyDomain: Deno.env.get('SHOPIFY_STORE_DOMAIN')!,
+    shopifyDomain,
     shopifyToken: Deno.env.get('SHOPIFY_ACCESS_TOKEN')!
   };
 }

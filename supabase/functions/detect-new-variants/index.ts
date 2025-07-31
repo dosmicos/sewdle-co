@@ -39,12 +39,19 @@ Deno.serve(async (req) => {
     console.log('🔍 Starting variant detection process...')
 
     // Get Shopify store credentials
-    const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
 
-    if (!shopifyDomain || !shopifyToken) {
+    if (!rawShopifyDomain || !shopifyToken) {
       throw new Error('Shopify credentials not configured')
     }
+
+    // Normalize Shopify domain (handle cases where .myshopify.com is already included)
+    const shopifyDomain = rawShopifyDomain.includes('.myshopify.com') 
+      ? rawShopifyDomain.replace('.myshopify.com', '')
+      : rawShopifyDomain
+
+    console.log(`🔗 Using Shopify domain: ${shopifyDomain}.myshopify.com`)
 
     // Fetch all Shopify products with variants
     console.log('📦 Fetching Shopify products...')

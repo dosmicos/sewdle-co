@@ -63,12 +63,17 @@ serve(async (req) => {
     supabase = createClient(supabaseUrl, supabaseKey)
 
     // Get Shopify credentials
-    const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
 
-    if (!shopifyDomain || !shopifyToken) {
+    if (!rawShopifyDomain || !shopifyToken) {
       throw new Error('Credenciales de Shopify no configuradas')
     }
+
+    // Normalize Shopify domain
+    const shopifyDomain = rawShopifyDomain.includes('.myshopify.com') 
+      ? rawShopifyDomain.replace('.myshopify.com', '')
+      : rawShopifyDomain
 
     console.log('=== SHOPIFY SYNC INICIADO ===')
     console.log('Domain:', shopifyDomain)
