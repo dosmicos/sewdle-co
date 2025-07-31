@@ -32,7 +32,7 @@ export const VariantSyncManager = () => {
   const handleSyncSelected = async () => {
     const newVariants = getNewVariants()
     const variantsToSync = newVariants.filter(variant => 
-      selectedVariants.has(variant.shopify_sku)
+      selectedVariants.has(variant.shopify_variant_id)
     )
     
     if (variantsToSync.length === 0) {
@@ -51,12 +51,12 @@ export const VariantSyncManager = () => {
     setSelectedVariants(new Set())
   }
 
-  const handleSelectVariant = (sku: string, checked: boolean) => {
+  const handleSelectVariant = (variantId: string, checked: boolean) => {
     const newSelection = new Set(selectedVariants)
     if (checked) {
-      newSelection.add(sku)
+      newSelection.add(variantId)
     } else {
-      newSelection.delete(sku)
+      newSelection.delete(variantId)
     }
     setSelectedVariants(newSelection)
   }
@@ -64,14 +64,14 @@ export const VariantSyncManager = () => {
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       const newVariants = getNewVariants()
-      setSelectedVariants(new Set(newVariants.map(v => v.shopify_sku)))
+      setSelectedVariants(new Set(newVariants.map(v => v.shopify_variant_id)))
     } else {
       setSelectedVariants(new Set())
     }
   }
 
   const newVariants = getNewVariants()
-  const allNewSelected = newVariants.length > 0 && newVariants.every(v => selectedVariants.has(v.shopify_sku))
+  const allNewSelected = newVariants.length > 0 && newVariants.every(v => selectedVariants.has(v.shopify_variant_id))
 
   return (
     <div className="space-y-6">
@@ -184,10 +184,10 @@ export const VariantSyncManager = () => {
                 <div className="grid gap-4">
                   {newVariants.map((variant) => (
                     <VariantCard
-                      key={variant.shopify_sku}
+                      key={variant.shopify_variant_id}
                       variant={variant}
-                      selected={selectedVariants.has(variant.shopify_sku)}
-                      onSelect={(checked) => handleSelectVariant(variant.shopify_sku, checked)}
+                      selected={selectedVariants.has(variant.shopify_variant_id)}
+                      onSelect={(checked) => handleSelectVariant(variant.shopify_variant_id, checked)}
                       disabled={syncing}
                     />
                   ))}
@@ -207,7 +207,7 @@ export const VariantSyncManager = () => {
             <div className="grid gap-4">
               {comparisons.map((variant) => (
                 <VariantCard
-                  key={variant.shopify_sku}
+                  key={variant.shopify_variant_id}
                   variant={variant}
                   showSyncStatus
                 />
@@ -256,7 +256,14 @@ const VariantCard: React.FC<VariantCardProps> = ({
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <span className="font-medium">SKU:</span> {variant.shopify_sku}
+                <span className="font-medium">SKU:</span> 
+                {variant.has_sku ? (
+                  <span className="ml-1">{variant.shopify_sku}</span>
+                ) : (
+                  <Badge variant="outline" className="ml-1 text-xs">
+                    NO SKU - ID: {variant.shopify_variant_id}
+                  </Badge>
+                )}
               </div>
               <div>
                 <span className="font-medium">Precio:</span> ${variant.shopify_price}

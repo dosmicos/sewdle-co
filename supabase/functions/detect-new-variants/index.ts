@@ -20,12 +20,14 @@ interface ShopifyVariant {
 
 interface VariantComparison {
   shopify_sku: string
+  shopify_variant_id: string
   product_title: string
   variant_title: string
   shopify_price: number
   shopify_stock: number
   exists_in_sewdle: boolean
   sewdle_product_id?: string
+  has_sku: boolean
 }
 
 Deno.serve(async (req) => {
@@ -214,14 +216,19 @@ Deno.serve(async (req) => {
       const existsInSewdle = shopifyVariant.sku && sewdleSkuMap.has(shopifyVariant.sku)
       const sewdleData = sewdleSkuMap.get(shopifyVariant.sku)
 
+      // Check if variant has all required data including SKU
+      const hasValidSku = shopifyVariant.sku && shopifyVariant.sku.trim() !== ''
+      
       comparisons.push({
-        shopify_sku: shopifyVariant.sku || '(NO SKU)',
+        shopify_sku: hasValidSku ? shopifyVariant.sku : `NO-SKU-${shopifyVariant.id}`,
+        shopify_variant_id: shopifyVariant.id.toString(),
         product_title: shopifyVariant.title.split(' - ')[0],
         variant_title: shopifyVariant.title,
         shopify_price: parseFloat(shopifyVariant.price),
         shopify_stock: shopifyVariant.inventory_quantity,
         exists_in_sewdle: existsInSewdle,
-        sewdle_product_id: sewdleData?.product_id
+        sewdle_product_id: sewdleData?.product_id,
+        has_sku: hasValidSku
       })
 
       // Only consider variants with SKU as "new" (empty SKU variants need manual handling)

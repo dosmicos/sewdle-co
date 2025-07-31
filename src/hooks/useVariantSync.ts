@@ -4,12 +4,14 @@ import { useToast } from '@/hooks/use-toast'
 
 export interface VariantComparison {
   shopify_sku: string
+  shopify_variant_id: string
   product_title: string
   variant_title: string
   shopify_price: number
   shopify_stock: number
   exists_in_sewdle: boolean
   sewdle_product_id?: string
+  has_sku: boolean
 }
 
 export interface SyncSummary {
