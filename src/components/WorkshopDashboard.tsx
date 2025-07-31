@@ -144,27 +144,24 @@ const WorkshopDashboard = () => {
           const config = getPendingUnitsConfig(stats.pendingUnitsUrgency, stats.pendingUnits);
           const IconComponent = config.icon;
           return (
-            <Card className={`${config.bgColor} ${config.borderColor} border-2 shadow-lg rounded-3xl p-8 animate-pulse-subtle`}>
+            <Card className={`${config.bgColor} ${config.borderColor} border-2 shadow-lg rounded-2xl p-6`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-6">
-                  <div className={`p-4 bg-white rounded-2xl shadow-sm`}>
-                    <IconComponent className={`w-12 h-12 ${config.iconColor}`} />
+                <div className="flex items-center space-x-4">
+                  <div className={`p-3 bg-white rounded-xl shadow-sm`}>
+                    <IconComponent className={`w-8 h-8 ${config.iconColor}`} />
                   </div>
                   <div>
-                    <p className="text-lg font-semibold mb-1" style={{ color: 'rgb(29 29 31)' }}>
+                    <p className="text-base font-semibold mb-1" style={{ color: 'rgb(29 29 31)' }}>
                       Unidades Pendientes por Entregar
                     </p>
-                    <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
-                      {config.description}
+                    <p className="text-xs font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                      {stats.maxDueDate ? `Fecha máxima: ${stats.maxDueDate}` : config.description}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`text-6xl font-bold ${config.iconColor} mb-2`}>
+                  <p className={`text-4xl font-bold ${config.iconColor} mb-1`}>
                     {stats.pendingUnits}
-                  </p>
-                  <p className={`text-lg font-semibold ${config.iconColor}`}>
-                    {config.message}
                   </p>
                 </div>
               </div>

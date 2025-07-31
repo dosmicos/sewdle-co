@@ -13,6 +13,7 @@ interface WorkshopDashboardStats {
   completionRate: number;
   onTimeDeliveryRate: number;
   qualityScore: number;
+  maxDueDate?: string;
 }
 
 interface MonthlyProgressData {
@@ -179,6 +180,24 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
         }
       }
 
+      // Calculate max due date from active orders
+      let maxDueDate: string | undefined;
+      const activeDueDates = assignments
+        ?.filter(a => a.orders?.status === 'assigned' || a.orders?.status === 'in_progress')
+        .map(a => a.orders?.due_date)
+        .filter(date => date !== null && date !== undefined) || [];
+      
+      if (activeDueDates.length > 0) {
+        const latestDate = activeDueDates.reduce((latest, current) => {
+          return new Date(current) > new Date(latest) ? current : latest;
+        });
+        maxDueDate = new Date(latestDate).toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+      }
+
       const finalStats = {
         assignedOrders,
         completedOrders,
@@ -188,7 +207,8 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
         pendingUnitsUrgency,
         completionRate,
         onTimeDeliveryRate,
-        qualityScore
+        qualityScore,
+        maxDueDate
       };
 
       console.log('Final stats:', finalStats);
