@@ -174,7 +174,7 @@ const WorkshopDashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-blue-50 rounded-xl">
@@ -191,21 +191,6 @@ const WorkshopDashboard = () => {
           </div>
         </Card>
 
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-green-50 rounded-xl">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
-                Órdenes Completadas
-              </p>
-              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
-                {stats.completedOrders}
-              </p>
-            </div>
-          </div>
-        </Card>
 
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
