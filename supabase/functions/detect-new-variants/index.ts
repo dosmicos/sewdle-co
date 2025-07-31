@@ -124,24 +124,35 @@ Deno.serve(async (req) => {
       for (const productEdge of products) {
         const product = productEdge.node
         
+        console.log(`🔍 Processing product: ${product.title} with ${product.variants.edges.length} variants`)
+        
         for (const variantEdge of product.variants.edges) {
           const variant = variantEdge.node
+          const selectedOptions = variant.selectedOptions || []
           
-          if (variant.sku) {
-            const selectedOptions = variant.selectedOptions || []
-            
-            allShopifyVariants.push({
-              id: variant.id.replace('gid://shopify/ProductVariant/', ''),
-              product_id: product.id.replace('gid://shopify/Product/', ''),
-              title: `${product.title} - ${variant.title}`,
-              sku: variant.sku,
-              price: variant.price,
-              inventory_quantity: variant.inventoryQuantity || 0,
-              option1: selectedOptions[0]?.value,
-              option2: selectedOptions[1]?.value,
-              option3: selectedOptions[2]?.value
-            })
+          // Log all variants for debugging (especially for Chaqueta Dino Rex)
+          if (product.title.toLowerCase().includes('chaqueta dino rex') || product.title.toLowerCase().includes('dino rex')) {
+            console.log(`🎯 DINO REX VARIANT DEBUG:`)
+            console.log(`   - Variant ID: ${variant.id}`)
+            console.log(`   - Variant Title: ${variant.title}`)
+            console.log(`   - SKU: ${variant.sku || 'NO SKU'}`)
+            console.log(`   - Price: ${variant.price}`)
+            console.log(`   - Inventory: ${variant.inventoryQuantity || 0}`)
+            console.log(`   - Options: ${selectedOptions.map(opt => `${opt.name}: ${opt.value}`).join(', ')}`)
           }
+          
+          // Include ALL variants, not just those with SKU
+          allShopifyVariants.push({
+            id: variant.id.replace('gid://shopify/ProductVariant/', ''),
+            product_id: product.id.replace('gid://shopify/Product/', ''),
+            title: `${product.title} - ${variant.title}`,
+            sku: variant.sku || '', // Include empty SKU
+            price: variant.price,
+            inventory_quantity: variant.inventoryQuantity || 0,
+            option1: selectedOptions[0]?.value,
+            option2: selectedOptions[1]?.value,
+            option3: selectedOptions[2]?.value
+          })
         }
       }
 
@@ -191,13 +202,20 @@ Deno.serve(async (req) => {
     // Compare variants and find new ones
     const comparisons: VariantComparison[] = []
     const newVariants: ShopifyVariant[] = []
+    let variantsWithoutSku = 0
 
     for (const shopifyVariant of allShopifyVariants) {
-      const existsInSewdle = sewdleSkuMap.has(shopifyVariant.sku)
+      // Count variants without SKU
+      if (!shopifyVariant.sku || shopifyVariant.sku.trim() === '') {
+        variantsWithoutSku++
+        console.log(`⚠️ Variant without SKU: ${shopifyVariant.title}`)
+      }
+      
+      const existsInSewdle = shopifyVariant.sku && sewdleSkuMap.has(shopifyVariant.sku)
       const sewdleData = sewdleSkuMap.get(shopifyVariant.sku)
 
       comparisons.push({
-        shopify_sku: shopifyVariant.sku,
+        shopify_sku: shopifyVariant.sku || '(NO SKU)',
         product_title: shopifyVariant.title.split(' - ')[0],
         variant_title: shopifyVariant.title,
         shopify_price: parseFloat(shopifyVariant.price),
@@ -206,10 +224,15 @@ Deno.serve(async (req) => {
         sewdle_product_id: sewdleData?.product_id
       })
 
-      if (!existsInSewdle) {
+      // Only consider variants with SKU as "new" (empty SKU variants need manual handling)
+      if (!existsInSewdle && shopifyVariant.sku && shopifyVariant.sku.trim() !== '') {
         newVariants.push(shopifyVariant)
       }
     }
+
+    console.log(`📊 SKU Analysis:`)
+    console.log(`   - Variants without SKU: ${variantsWithoutSku}`)
+    console.log(`   - Variants with SKU: ${allShopifyVariants.length - variantsWithoutSku}`)
 
     const newVariantsCount = newVariants.length
     const existingVariantsCount = comparisons.length - newVariantsCount
