@@ -2166,6 +2166,10 @@ export type Database = {
           pending_production_quantity: number
         }[]
       }
+      get_user_organizations: {
+        Args: Record<PropertyKey, never>
+        Returns: string[]
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: string
