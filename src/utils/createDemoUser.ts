@@ -42,11 +42,15 @@ export const createDemoGADKidsUser = async () => {
   try {
     console.log('🔧 Creando usuario demo del taller GAD Kids...');
     
+    // Generar email único con timestamp para evitar duplicados
+    const timestamp = Date.now();
+    const uniqueEmail = `demo-taller-gadkids-${timestamp}@dosmicos.co`;
+    
     // Llamar a la función edge para crear usuario
     const { data, error } = await supabase.functions.invoke('create-user', {
       body: {
         name: 'Demo Taller GAD Kids',
-        email: 'demo-taller-gadkids@dosmicos.co',
+        email: uniqueEmail,
         role: 'Taller',
         workshopId: '580d9878-de70-4117-93b4-16811aeeff80', // Taller GAD Kids
         requiresPasswordChange: false
@@ -62,7 +66,7 @@ export const createDemoGADKidsUser = async () => {
     
     return {
       success: true,
-      email: 'demo-taller-gadkids@dosmicos.co',
+      email: uniqueEmail,
       password: data.tempPassword,
       message: 'Usuario demo creado exitosamente'
     };
