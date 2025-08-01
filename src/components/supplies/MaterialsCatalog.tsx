@@ -245,19 +245,6 @@ const MaterialsCatalog = () => {
               Nuevo Material
             </Button>
           )}
-          
-          <Button 
-            onClick={handleRefresh}
-            variant="outline"
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
-            )}
-            Actualizar
-          </Button>
         </div>
       </div>
 
