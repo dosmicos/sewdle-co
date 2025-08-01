@@ -68,13 +68,13 @@ export const useUsers = () => {
         throw profilesError;
       }
 
-      // Paso 3: Obtener roles de usuarios de la organización
+      // Paso 3: Obtener roles de usuarios de la organización (LEFT JOIN para incluir usuarios sin rol)
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select(`
           user_id,
           workshop_id,
-          roles!inner (
+          roles (
             name
           )
         `)
