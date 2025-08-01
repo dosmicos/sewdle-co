@@ -18,6 +18,7 @@ import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
 import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
+import BillingPage from "@/pages/BillingPage";
 
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
@@ -191,6 +192,8 @@ const AppContent = () => {
             <UsersRolesPage />
           </PermissionRoute>
         } />
+        
+        <Route path="settings/billing" element={<BillingPage />} />
       </Route>
       
       <Route path="*" element={<NotFound />} />
