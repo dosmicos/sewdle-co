@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 export interface User {
   id: string;
@@ -23,23 +24,51 @@ export const useUsers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Paso 1: Obtener todos los perfiles
+      // Verificar que tengamos una organización seleccionada
+      if (!currentOrganization?.id) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+
+      // Paso 1: Obtener usuarios de la organización actual
+      const { data: orgUsers, error: orgUsersError } = await supabase
+        .from('organization_users')
+        .select('user_id')
+        .eq('organization_id', currentOrganization.id)
+        .eq('status', 'active');
+
+      if (orgUsersError) {
+        logger.error('Error fetching organization users', orgUsersError);
+        throw orgUsersError;
+      }
+
+      const userIds = orgUsers?.map(ou => ou.user_id) || [];
+      if (userIds.length === 0) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+
+      // Paso 2: Obtener perfiles de usuarios de la organización
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*');
+        .select('*')
+        .in('id', userIds);
 
       if (profilesError) {
         logger.error('Error fetching profiles', profilesError);
         throw profilesError;
       }
 
-      // Paso 2: Obtener roles de usuarios
+      // Paso 3: Obtener roles de usuarios de la organización
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select(`
@@ -48,7 +77,9 @@ export const useUsers = () => {
           roles!inner (
             name
           )
-        `);
+        `)
+        .eq('organization_id', currentOrganization.id)
+        .in('user_id', userIds);
 
       if (rolesError) {
         logger.error('Error fetching user roles', rolesError);
@@ -128,7 +159,10 @@ export const useUsers = () => {
 
       // Llamar a la Edge Function para crear el usuario
       const { data, error } = await supabase.functions.invoke('create-user', {
-        body: userData
+        body: {
+          ...userData,
+          organizationId: currentOrganization?.id
+        }
       });
       
       console.log('useUsers: Raw response from edge function:', { data, error });
@@ -199,7 +233,8 @@ export const useUsers = () => {
               .from('user_roles')
               .update({
                 role_id: role.id,
-                workshop_id: updates.workshopId || null
+                workshop_id: updates.workshopId || null,
+                organization_id: currentOrganization?.id
               })
               .eq('user_id', userId);
           } else {
@@ -209,7 +244,8 @@ export const useUsers = () => {
               .insert({
                 user_id: userId,
                 role_id: role.id,
-                workshop_id: updates.workshopId || null
+                workshop_id: updates.workshopId || null,
+                organization_id: currentOrganization?.id
               });
           }
         }
@@ -272,7 +308,7 @@ export const useUsers = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [currentOrganization?.id]);
 
   return {
     users,

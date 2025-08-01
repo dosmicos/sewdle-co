@@ -24,7 +24,7 @@ serve(async (req) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
-    const { name, email, role, workshopId, requiresPasswordChange = true } = await req.json()
+    const { name, email, role, workshopId, organizationId, requiresPasswordChange = true } = await req.json()
 
     // Generate a cryptographically secure temporary password
     const tempPassword = generateSecurePassword()
@@ -52,12 +52,30 @@ serve(async (req) => {
         id: authData.user!.id,
         name,
         email,
+        organization_id: organizationId,
         requires_password_change: requiresPasswordChange
       })
 
     if (profileError) {
       console.error('Profile error:', profileError)
       throw profileError
+    }
+
+    // Add user to organization if organizationId is provided
+    if (organizationId) {
+      const { error: orgUserError } = await supabase
+        .from('organization_users')
+        .upsert({
+          organization_id: organizationId,
+          user_id: authData.user!.id,
+          role: 'member',
+          status: 'active'
+        })
+
+      if (orgUserError) {
+        console.error('Organization user error:', orgUserError)
+        throw orgUserError
+      }
     }
 
     // Assign role if provided
@@ -80,7 +98,8 @@ serve(async (req) => {
         .insert({
           user_id: authData.user!.id,
           role_id: roleData.id,
-          workshop_id: workshopId || null
+          workshop_id: workshopId || null,
+          organization_id: organizationId
         })
 
       if (userRoleError) {
