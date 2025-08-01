@@ -4,13 +4,18 @@ export const createDemoTallerUser = async () => {
   try {
     console.log('🔧 Creando usuario demo del taller...');
     
+    // Generar email único más corto con timestamp
+    const timestamp = Date.now().toString().slice(-6); // Últimos 6 dígitos
+    const uniqueEmail = `demo-marisol-${timestamp}@demo.co`;
+    
     // Llamar a la función edge para crear usuario
     const { data, error } = await supabase.functions.invoke('create-user', {
       body: {
-        name: 'Demo Taller Marisol',
-        email: 'demo-taller-marisol@dosmicos.co',
+        name: 'Demo Marisol',
+        email: uniqueEmail,
         role: 'Taller',
         workshopId: '862d85b6-4c63-4845-a448-015ccc5c79ab', // Taller Marisol Trujillo
+        organizationId: 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb', // Misma organización
         requiresPasswordChange: false
       }
     });
@@ -24,7 +29,7 @@ export const createDemoTallerUser = async () => {
     
     return {
       success: true,
-      email: 'demo-taller-marisol@dosmicos.co',
+      email: uniqueEmail,
       password: data.tempPassword,
       message: 'Usuario demo creado exitosamente'
     };
@@ -42,17 +47,18 @@ export const createDemoGADKidsUser = async () => {
   try {
     console.log('🔧 Creando usuario demo del taller GAD Kids...');
     
-    // Generar email único con timestamp para evitar duplicados
-    const timestamp = Date.now();
-    const uniqueEmail = `demo-taller-gadkids-${timestamp}@dosmicos.co`;
+    // Generar email único más corto con timestamp
+    const timestamp = Date.now().toString().slice(-6); // Últimos 6 dígitos
+    const uniqueEmail = `demo-gad-${timestamp}@demo.co`;
     
     // Llamar a la función edge para crear usuario
     const { data, error } = await supabase.functions.invoke('create-user', {
       body: {
-        name: 'Demo Taller GAD Kids',
+        name: 'Demo GAD Kids',
         email: uniqueEmail,
         role: 'Taller',
         workshopId: '580d9878-de70-4117-93b4-16811aeeff80', // Taller GAD Kids
+        organizationId: 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb', // Misma organización que Jhon Barragan
         requiresPasswordChange: false
       }
     });
