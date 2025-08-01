@@ -62,18 +62,42 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Get Shopify credentials
-    const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
-    const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+    // Get Shopify credentials from environment OR organization
+    let rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    let shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+
+    // Fallback: Get from organization if not in env
+    if (!rawShopifyDomain || !shopifyToken) {
+      console.log('🔍 Intentando obtener credenciales de la organización...')
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .select('shopify_store_url, shopify_credentials')
+        .eq('name', 'Dosmicos')
+        .single()
+
+      if (orgError || !org) {
+        throw new Error('No se pudieron obtener credenciales de Shopify de la organización')
+      }
+
+      if (org.shopify_store_url && org.shopify_credentials?.access_token) {
+        // Extract domain from URL
+        const url = new URL(org.shopify_store_url)
+        rawShopifyDomain = url.hostname.replace('.myshopify.com', '')
+        shopifyToken = org.shopify_credentials.access_token
+        console.log('✅ Credenciales obtenidas de la organización')
+      } else {
+        throw new Error('Credenciales de Shopify no configuradas en la organización')
+      }
+    }
 
     if (!rawShopifyDomain || !shopifyToken) {
       throw new Error('Credenciales de Shopify no configuradas')
     }
 
-    // Normalize Shopify domain
+    // Normalize Shopify domain - CORREGIDO para asegurar formato correcto
     const shopifyDomain = rawShopifyDomain.includes('.myshopify.com') 
-      ? rawShopifyDomain.replace('.myshopify.com', '')
-      : rawShopifyDomain
+      ? rawShopifyDomain
+      : rawShopifyDomain + '.myshopify.com'
 
     console.log('=== SHOPIFY SYNC INICIADO ===')
     console.log('Domain:', shopifyDomain)
@@ -155,6 +179,7 @@ serve(async (req) => {
     // Test authentication with retry logic
     const shopData = await retryWithBackoff(async () => {
       const testUrl = `https://${shopifyDomain}/admin/api/2023-10/shop.json`
+      console.log(`🧪 Probando autenticación con URL: ${testUrl}`)
       const testResponse = await fetch(testUrl, {
         headers: {
           'X-Shopify-Access-Token': shopifyToken,
@@ -164,7 +189,7 @@ serve(async (req) => {
 
       if (!testResponse.ok) {
         const errorText = await testResponse.text()
-        throw new Error(`Fallo autenticación Shopify: ${testResponse.status} - ${errorText}`)
+        throw new Error(`Fallo autenticación Shopify (${testResponse.status}): ${errorText}`)
       }
 
       return await testResponse.json()
