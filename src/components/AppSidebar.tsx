@@ -1,5 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { OrganizationSelector } from './OrganizationSelector';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
 import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users, Package2, Palette, Shield, DollarSign, Brain, TrendingUp, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 const AppSidebar = () => {
   const { user, logout, isAdmin, isDesigner, isQCLeader, hasPermission } = useAuth();
+  const { canAccessFeature } = useOrganization();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -66,19 +69,19 @@ const AppSidebar = () => {
         case '/orders':
           return hasPermission('orders', 'view');
         case '/supplies':
-          return hasPermission('insumos', 'view');
+          return hasPermission('insumos', 'view') && canAccessFeature('orders');
         case '/products':
-          return hasPermission('products', 'view');
+          return hasPermission('products', 'view') && canAccessFeature('orders');
         case '/workshops':
-          return hasPermission('workshops', 'view');
+          return hasPermission('workshops', 'view') && canAccessFeature('workshops');
         case '/deliveries':
-          return hasPermission('deliveries', 'view');
+          return hasPermission('deliveries', 'view') && canAccessFeature('orders');
         case '/replenishment':
-          return hasPermission('replenishment', 'view');
+          return hasPermission('replenishment', 'view') && canAccessFeature('advanced_analytics');
         case '/financial':
-          return hasPermission('finances', 'view');
+          return hasPermission('finances', 'view') && canAccessFeature('financial_reports');
         case '/shopify':
-          return hasPermission('shopify', 'view');
+          return hasPermission('shopify', 'view') && canAccessFeature('shopify_integration');
         default:
           return true;
       }
@@ -127,7 +130,7 @@ const AppSidebar = () => {
       }}
     >
       <SidebarHeader className="p-4" style={{ backgroundColor: '#ffffff' }}>
-        <div className="flex flex-col items-start space-y-1">
+        <div className="flex flex-col items-start space-y-3">
           <div className="w-26 h-auto flex items-center justify-center">
             <img 
               src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" 
@@ -147,6 +150,9 @@ const AppSidebar = () => {
             <p className="text-xs font-medium" style={{ color: '#6b7280' }}>
               {userTypeLabel}
             </p>
+          </div>
+          <div className="w-full">
+            <OrganizationSelector />
           </div>
         </div>
       </SidebarHeader>
