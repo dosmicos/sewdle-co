@@ -10,6 +10,7 @@ import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTria
 import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
 import DemoTallerAccess from '@/components/DemoTallerAccess';
+import DemoGADKidsAccess from '@/components/DemoGADKidsAccess';
 import { useUsers } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useUserTracking } from '@/hooks/useUserTracking';
@@ -164,8 +165,11 @@ const UsersRolesPage = () => {
         </div>
       </div>
 
-      {/* Demo Access Component */}
-      <DemoTallerAccess />
+      {/* Demo Access Components */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DemoTallerAccess />
+        <DemoGADKidsAccess />
+      </div>
 
       <Tabs defaultValue="users" className="space-y-6">
         <TabsList className="grid w-fit grid-cols-2">

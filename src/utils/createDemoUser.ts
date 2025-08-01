@@ -38,6 +38,44 @@ export const createDemoTallerUser = async () => {
   }
 };
 
+export const createDemoGADKidsUser = async () => {
+  try {
+    console.log('🔧 Creando usuario demo del taller GAD Kids...');
+    
+    // Llamar a la función edge para crear usuario
+    const { data, error } = await supabase.functions.invoke('create-user', {
+      body: {
+        name: 'Demo Taller GAD Kids',
+        email: 'demo-taller-gadkids@dosmicos.co',
+        role: 'Taller',
+        workshopId: '580d9878-de70-4117-93b4-16811aeeff80', // Taller GAD Kids
+        requiresPasswordChange: false
+      }
+    });
+
+    if (error) {
+      console.error('❌ Error creando usuario demo:', error);
+      throw error;
+    }
+
+    console.log('✅ Usuario demo creado exitosamente:', data);
+    
+    return {
+      success: true,
+      email: 'demo-taller-gadkids@dosmicos.co',
+      password: data.tempPassword,
+      message: 'Usuario demo creado exitosamente'
+    };
+
+  } catch (error: any) {
+    console.error('💥 Error en createDemoGADKidsUser:', error);
+    return {
+      success: false,
+      error: error.message || 'Error desconocido al crear usuario demo'
+    };
+  }
+};
+
 export const loginAsDemoUser = async (email: string, password: string) => {
   try {
     console.log('🔑 Iniciando sesión como usuario demo...');
