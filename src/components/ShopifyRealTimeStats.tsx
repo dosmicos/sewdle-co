@@ -126,9 +126,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
   }, []);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'USD',
+    return '$' + new Intl.NumberFormat('es-CO', {
       minimumFractionDigits: 2
     }).format(amount);
   };
