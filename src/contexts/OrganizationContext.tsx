@@ -15,25 +15,44 @@ const OrganizationContext = createContext<OrganizationContextType | null>(null);
 
 const PLAN_LIMITS: PlanLimits = {
   starter: {
-    maxUsers: 5,
-    maxOrdersPerMonth: 100,
-    maxWorkshops: 3,
-    maxStorage: 1024,
+    maxOrganizationsPerUser: 1,
+    maxUsers: 3,
+    maxOrdersPerMonth: 10,
+    maxWorkshops: 5,
+    maxStorage: 1024, // 1GB
     features: ['basic_dashboard', 'orders', 'workshops', 'basic_analytics']
   },
   professional: {
-    maxUsers: 25,
-    maxOrdersPerMonth: 1000,
-    maxWorkshops: 10,
-    maxStorage: 10240,
-    features: ['advanced_dashboard', 'orders', 'workshops', 'advanced_analytics', 'shopify_integration', 'financial_reports']
+    maxOrganizationsPerUser: 1,
+    maxUsers: 10,
+    maxOrdersPerMonth: -1, // unlimited
+    maxWorkshops: 20,
+    maxStorage: 10240, // 10GB
+    features: [
+      'advanced_dashboard', 
+      'orders', 
+      'workshops', 
+      'advanced_analytics', 
+      'shopify_integration', 
+      'financial_reports',
+      'smart_replenishment',
+      'priority_support'
+    ]
   },
   enterprise: {
+    maxOrganizationsPerUser: -1, // unlimited
     maxUsers: -1,
     maxOrdersPerMonth: -1,
     maxWorkshops: -1,
     maxStorage: -1,
-    features: ['all_features', 'white_label', 'custom_integrations', 'priority_support', 'api_access']
+    features: [
+      'all_features', 
+      'custom_integrations', 
+      'api_access',
+      'unlimited_storage',
+      'white_label',
+      'priority_support'
+    ]
   }
 };
 
@@ -132,19 +151,73 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     await loadUserOrganizations();
   }, [loadUserOrganizations]);
 
+  // Verificar si el usuario puede crear una organización
+  const canCreateOrganization = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      // Contar organizaciones del usuario
+      const { count } = await supabase
+        .from('organization_users')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      const currentOrgsCount = count || 0;
+      
+      // Determinar el plan del usuario basado en sus organizaciones
+      const userPlan = getUserPlan();
+      const maxOrgs = PLAN_LIMITS[userPlan].maxOrganizationsPerUser;
+      
+      return maxOrgs === -1 || currentOrgsCount < maxOrgs;
+    } catch (err) {
+      console.error('Error checking organization limit:', err);
+      return false;
+    }
+  }, [user]);
+
+  // Obtener plan del usuario
+  const getUserPlan = useCallback((): 'starter' | 'professional' | 'enterprise' => {
+    if (!userOrganizations.length) return 'starter';
+    
+    // El plan más alto entre todas las organizaciones del usuario
+    const plans = userOrganizations.map(ou => ou.organization?.plan || 'starter');
+    
+    if (plans.includes('enterprise')) return 'enterprise';
+    if (plans.includes('professional')) return 'professional';
+    return 'starter';
+  }, [userOrganizations]);
+
   // Crear nueva organización
   const createOrganization = useCallback(async (data: CreateOrganizationData): Promise<Organization> => {
     if (!user) throw new Error('Usuario no autenticado');
 
+    // Verificar límite de organizaciones
+    const canCreate = await canCreateOrganization();
+    if (!canCreate) {
+      const userPlan = getUserPlan();
+      const maxOrgs = PLAN_LIMITS[userPlan].maxOrganizationsPerUser;
+      toast.error(`Tu plan ${userPlan} permite máximo ${maxOrgs} organización(es). Actualiza tu plan para crear más.`);
+      throw new Error('Límite de organizaciones alcanzado');
+    }
+
     try {
-      // Crear organización
+      const planToUse = data.plan || 'starter';
+      
+      // Aplicar límites según el plan
+      const planLimits = PLAN_LIMITS[planToUse];
+      
+      // Crear organización con límites del plan
       const { data: newOrg, error: createError } = await supabase
         .from('organizations')
         .insert({
           name: data.name,
           slug: data.slug,
-          plan: data.plan || 'starter',
-          status: 'active'
+          plan: planToUse,
+          status: 'active',
+          max_users: planLimits.maxUsers,
+          max_orders_per_month: planLimits.maxOrdersPerMonth,
+          max_workshops: planLimits.maxWorkshops
         })
         .select()
         .single();
@@ -178,7 +251,55 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       toast.error('Error al crear la organización');
       throw err;
     }
-  }, [user, refreshOrganizations]);
+  }, [user, refreshOrganizations, canCreateOrganization, getUserPlan]);
+
+  // Validar límites
+  const validateLimit = useCallback(async (limitType: 'orders' | 'users' | 'workshops'): Promise<boolean> => {
+    if (!currentOrganization) return false;
+
+    try {
+      const planLimits = PLAN_LIMITS[currentOrganization.plan];
+      let currentCount = 0;
+      let maxLimit = 0;
+
+      switch (limitType) {
+        case 'orders':
+          const { count: ordersCount } = await supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('organization_id', currentOrganization.id)
+            .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+          currentCount = ordersCount || 0;
+          maxLimit = planLimits.maxOrdersPerMonth;
+          break;
+
+        case 'users':
+          const { count: usersCount } = await supabase
+            .from('organization_users')
+            .select('*', { count: 'exact', head: true })
+            .eq('organization_id', currentOrganization.id)
+            .eq('status', 'active');
+          currentCount = usersCount || 0;
+          maxLimit = planLimits.maxUsers;
+          break;
+
+        case 'workshops':
+          const { count: workshopsCount } = await supabase
+            .from('workshops')
+            .select('*', { count: 'exact', head: true })
+            .eq('organization_id', currentOrganization.id)
+            .eq('status', 'active');
+          currentCount = workshopsCount || 0;
+          maxLimit = planLimits.maxWorkshops;
+          break;
+      }
+
+      return maxLimit === -1 || currentCount < maxLimit;
+    } catch (err) {
+      console.error('Error validating limit:', err);
+      return false;
+    }
+  }, [currentOrganization]);
 
   // Invitar usuario
   const inviteUser = useCallback(async (email: string, role: 'admin' | 'member') => {
@@ -291,7 +412,10 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     inviteUser,
     updateOrganization,
     canAccessFeature,
-    getUsageStats
+    getUsageStats,
+    canCreateOrganization,
+    validateLimit,
+    getUserPlan
   };
 
   return (

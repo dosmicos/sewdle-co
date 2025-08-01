@@ -46,6 +46,9 @@ export interface OrganizationContextType {
   updateOrganization: (id: string, data: Partial<Organization>) => Promise<void>;
   canAccessFeature: (feature: string) => boolean;
   getUsageStats: () => Promise<UsageStats>;
+  canCreateOrganization: () => Promise<boolean>;
+  validateLimit: (limitType: 'orders' | 'users' | 'workshops') => Promise<boolean>;
+  getUserPlan: () => 'starter' | 'professional' | 'enterprise';
 }
 
 export interface CreateOrganizationData {
@@ -67,20 +70,23 @@ export interface UsageStats {
 
 export interface PlanLimits {
   starter: {
-    maxUsers: 5;
-    maxOrdersPerMonth: 100;
-    maxWorkshops: 3;
-    maxStorage: 1024; // MB
+    maxOrganizationsPerUser: 1;
+    maxUsers: 3;
+    maxOrdersPerMonth: 10;
+    maxWorkshops: 5;
+    maxStorage: 1024; // MB (1GB)
     features: string[];
   };
   professional: {
-    maxUsers: 25;
-    maxOrdersPerMonth: 1000;
-    maxWorkshops: 10;
-    maxStorage: 10240; // MB
+    maxOrganizationsPerUser: 1;
+    maxUsers: 10;
+    maxOrdersPerMonth: -1; // unlimited
+    maxWorkshops: 20;
+    maxStorage: 10240; // MB (10GB)
     features: string[];
   };
   enterprise: {
+    maxOrganizationsPerUser: -1; // unlimited
     maxUsers: -1; // unlimited
     maxOrdersPerMonth: -1; // unlimited
     maxWorkshops: -1; // unlimited
