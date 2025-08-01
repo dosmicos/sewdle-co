@@ -78,7 +78,6 @@ export const useUsers = () => {
             name
           )
         `)
-        .eq('organization_id', currentOrganization.id)
         .in('user_id', userIds);
 
       if (rolesError) {
