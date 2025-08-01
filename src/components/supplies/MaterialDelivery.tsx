@@ -230,10 +230,10 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
         {canCreateDeliveries && (
           <Button
             onClick={() => setShowDeliveryForm(true)}
-            className="text-white bg-[#ff5c02]"
+            className="text-white bg-[#ff5c02] hover:bg-[#e5520f]"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Nueva Entrega
+            Registrar Entrega
           </Button>
         )}
       </div>

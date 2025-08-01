@@ -9,8 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 const SuppliesPage = () => {
   const { hasPermission } = useAuth();
   
-  // Verificar si el usuario puede crear entregas
-  const canCreateDeliveries = hasPermission('Entregas', 'Crear');
+  // Verificar permisos para entregas
+  const canCreateDeliveries = hasPermission('insumos', 'create') || 
+                              hasPermission('insumos', 'edit') || 
+                              hasPermission('insumos', 'delete');
   
   return (
     <div className="container mx-auto px-4 py-8">
