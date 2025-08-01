@@ -39,11 +39,14 @@ export const useUsers = () => {
       }
 
       // Paso 1: Obtener usuarios de la organización actual
+      console.log('🔍 DEBUGGING: Current organization:', currentOrganization);
       const { data: orgUsers, error: orgUsersError } = await supabase
         .from('organization_users')
         .select('user_id')
         .eq('organization_id', currentOrganization.id)
         .eq('status', 'active');
+
+      console.log('🔍 DEBUGGING: Organization users query result:', { orgUsers, orgUsersError });
 
       if (orgUsersError) {
         logger.error('Error fetching organization users', orgUsersError);
@@ -51,7 +54,10 @@ export const useUsers = () => {
       }
 
       const userIds = orgUsers?.map(ou => ou.user_id) || [];
+      console.log('🔍 DEBUGGING: User IDs found:', userIds, 'Count:', userIds.length);
+      
       if (userIds.length === 0) {
+        console.log('🔍 DEBUGGING: No user IDs found, returning empty');
         setUsers([]);
         setLoading(false);
         return;
@@ -62,6 +68,9 @@ export const useUsers = () => {
         .from('profiles')
         .select('*')
         .in('id', userIds);
+
+      console.log('🔍 DEBUGGING: Profiles query result:', { profiles, profilesError });
+      console.log('🔍 DEBUGGING: Profiles count:', profiles?.length);
 
       if (profilesError) {
         logger.error('Error fetching profiles', profilesError);
@@ -80,15 +89,20 @@ export const useUsers = () => {
         `)
         .in('user_id', userIds);
 
+      console.log('🔍 DEBUGGING: User roles query result:', { userRoles, rolesError });
+      console.log('🔍 DEBUGGING: User roles count:', userRoles?.length);
+
       if (rolesError) {
         logger.error('Error fetching user roles', rolesError);
         throw rolesError;
       }
 
-      // Paso 3: Obtener información de talleres si hay IDs de talleres
+      // Paso 4: Obtener información de talleres si hay IDs de talleres
       const workshopIds = userRoles
         ?.filter(ur => ur.workshop_id)
         .map(ur => ur.workshop_id) || [];
+
+      console.log('🔍 DEBUGGING: Workshop IDs found:', workshopIds);
 
       let workshops: any[] = [];
       if (workshopIds.length > 0) {
@@ -96,6 +110,8 @@ export const useUsers = () => {
           .from('workshops')
           .select('id, name')
           .in('id', workshopIds);
+
+        console.log('🔍 DEBUGGING: Workshops query result:', { workshopsData, workshopsError });
 
         if (workshopsError) {
           logger.warn('Error fetching workshops', workshopsError);
@@ -105,10 +121,17 @@ export const useUsers = () => {
         }
       }
 
-      // Paso 4: Combinar los datos
+      // Paso 5: Combinar los datos
+      console.log('🔍 DEBUGGING: Starting data combination...');
+      console.log('🔍 DEBUGGING: Profiles to process:', profiles?.length);
+      
       const formattedUsers: User[] = profiles?.map((profile: any) => {
+        console.log('🔍 DEBUGGING: Processing profile:', profile.id, profile.email);
+        
         // Buscar rol del usuario
         const userRole = userRoles?.find(ur => ur.user_id === profile.id);
+        console.log('🔍 DEBUGGING: Found user role for', profile.id, ':', userRole);
+        
         const roleName = userRole?.roles?.name || 'Sin Rol';
         
         // Buscar información del taller
@@ -116,7 +139,7 @@ export const useUsers = () => {
         const workshop = workshops.find(w => w.id === workshopId);
         const workshopName = workshop?.name;
         
-        return {
+        const formattedUser = {
           id: profile.id,
           name: profile.name || profile.email,
           email: profile.email,
@@ -129,7 +152,13 @@ export const useUsers = () => {
           lastLogin: undefined, // TODO: Implementar seguimiento de último login
           createdBy: 'system' // TODO: Implementar tracking de quién creó el usuario
         };
+        
+        console.log('🔍 DEBUGGING: Formatted user:', formattedUser);
+        return formattedUser;
       }) || [];
+
+      console.log('🔍 DEBUGGING: Final formatted users count:', formattedUsers.length);
+      console.log('🔍 DEBUGGING: Final formatted users:', formattedUsers);
 
       setUsers(formattedUsers);
     } catch (err: any) {
