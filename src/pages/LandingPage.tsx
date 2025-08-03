@@ -15,7 +15,7 @@ const LandingPage = () => {
   const isMobile = useIsMobile();
 
   const handleCTAClick = () => {
-    navigate('/auth');
+    navigate('/signup');
   };
 
   const scrollToSection = (sectionId: string) => {
@@ -42,18 +42,21 @@ const LandingPage = () => {
                 <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-6 w-auto" />
               </div>
 
-              {/* Desktop Navigation Links */}
-              <nav className="hidden md:flex items-center space-x-6">
-                <button onClick={() => scrollToSection('como-funciona')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
-                  {t('nav.howItWorks')}
-                </button>
-                <button onClick={() => scrollToSection('casos-de-uso')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
-                  {t('nav.useCases')}
-                </button>
-                <button onClick={() => scrollToSection('integraciones')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
-                  {t('nav.integrations')}
-                </button>
-              </nav>
+               {/* Desktop Navigation Links */}
+               <nav className="hidden md:flex items-center space-x-6">
+                 <button onClick={() => scrollToSection('como-funciona')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
+                   {t('nav.howItWorks')}
+                 </button>
+                 <button onClick={() => scrollToSection('casos-de-uso')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
+                   {t('nav.useCases')}
+                 </button>
+                 <button onClick={() => scrollToSection('pricing')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
+                   Precios
+                 </button>
+                 <button onClick={() => scrollToSection('integraciones')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
+                   {t('nav.integrations')}
+                 </button>
+               </nav>
 
               {/* Right side items */}
               <div className="flex items-center space-x-2 sm:space-x-3">
@@ -282,22 +285,184 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Pricing Section */}
+      <section id="pricing" className="py-16 sm:py-20 bg-gradient-to-br from-orange-50 via-white to-blue-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+              Planes transparentes para cada etapa
+            </h2>
+            <p className="text-lg text-gray-600 mb-8">
+              Comienza gratis y escala según tus necesidades
+            </p>
+            <div className="inline-flex items-center bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
+              ✨ 14 días de prueba gratis en todos los planes
+            </div>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto">
+            {/* Starter Plan */}
+            <Card className="relative p-6 lg:p-8 border-2 border-gray-200 bg-white rounded-2xl hover:shadow-lg transition-all duration-300">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Starter</h3>
+                <p className="text-gray-600 mb-6">Para marcas emergentes</p>
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-gray-900">$29</span>
+                  <span className="text-gray-600">/mes</span>
+                </div>
+                <Button onClick={handleCTAClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
+                  Comenzar prueba gratis
+                </Button>
+              </div>
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Hasta 10 órdenes/mes
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  3 usuarios
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  5 talleres
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Gestión básica de inventario
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Soporte por email
+                </div>
+              </div>
+            </Card>
+
+            {/* Professional Plan - Featured */}
+            <Card className="relative p-6 lg:p-8 border-2 border-orange-500 bg-white rounded-2xl shadow-xl transform scale-105 hover:shadow-2xl transition-all duration-300">
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+                  Más Popular
+                </span>
+              </div>
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Professional</h3>
+                <p className="text-gray-600 mb-6">Para marcas en crecimiento</p>
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-gray-900">$99</span>
+                  <span className="text-gray-600">/mes</span>
+                </div>
+                <Button onClick={handleCTAClick} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg py-3 rounded-xl font-medium transition-all duration-300">
+                  Comenzar prueba gratis
+                </Button>
+              </div>
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Órdenes ilimitadas
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  10 usuarios
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  20 talleres
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Integración Shopify completa
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Analytics avanzados
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Soporte prioritario
+                </div>
+              </div>
+            </Card>
+
+            {/* Enterprise Plan */}
+            <Card className="relative p-6 lg:p-8 border-2 border-gray-200 bg-white rounded-2xl hover:shadow-lg transition-all duration-300">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Enterprise</h3>
+                <p className="text-gray-600 mb-6">Para marcas establecidas</p>
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-gray-900">$299</span>
+                  <span className="text-gray-600">/mes</span>
+                </div>
+                <Button onClick={handleCTAClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
+                  Comenzar prueba gratis
+                </Button>
+              </div>
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Todo ilimitado
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Usuarios ilimitados
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  White-label disponible
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  API personalizada
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Gerente de cuenta dedicado
+                </div>
+                <div className="flex items-center text-sm text-gray-700">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                  Soporte 24/7
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* FAQ Section */}
+          <div className="mt-16 sm:mt-20 max-w-3xl mx-auto">
+            <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">Preguntas frecuentes</h3>
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <h4 className="font-semibold text-gray-900 mb-2">¿Puedo cambiar de plan en cualquier momento?</h4>
+                <p className="text-gray-600">Sí, puedes actualizar o reducir tu plan cuando lo necesites. Los cambios se reflejan inmediatamente.</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <h4 className="font-semibold text-gray-900 mb-2">¿Qué incluye la prueba gratuita?</h4>
+                <p className="text-gray-600">14 días completos con acceso a todas las funciones del plan Professional, sin restricciones.</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <h4 className="font-semibold text-gray-900 mb-2">¿Hay costos de setup o implementación?</h4>
+                <p className="text-gray-600">No, todos nuestros planes incluyen onboarding completo sin costos adicionales.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA Section */}
-      <section className="py-16 sm:py-20 bg-gradient-to-br from-orange-50 via-white to-blue-50">
+      <section className="py-16 sm:py-20 bg-gradient-to-r from-orange-500 to-red-500">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 mb-6">
-            {t('finalCta.title')}
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-white mb-6">
+            Comienza tu transformación hoy
           </h2>
-          <p className="text-lg sm:text-xl text-gray-600 mb-8 sm:mb-12 leading-relaxed">
-            {t('finalCta.subtitle')}
+          <p className="text-lg sm:text-xl text-orange-100 mb-8 sm:mb-12 leading-relaxed">
+            Miles de marcas confían en Sewdle para gestionar su producción
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button onClick={handleCTAClick} variant="outline" className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full border-2 border-gray-300 hover:border-orange-500 hover:text-orange-500 transition-all duration-300">
-              {t('finalCta.demo')}
+            <Button onClick={handleCTAClick} variant="outline" className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full border-2 border-white text-white hover:bg-white hover:text-orange-500 transition-all duration-300">
+              Ver demo
             </Button>
-            <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-              {t('finalCta.start')}
+            <Button onClick={handleCTAClick} className="bg-white text-orange-500 px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+              Empezar gratis ahora
               <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>

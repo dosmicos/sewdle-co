@@ -8,6 +8,7 @@ import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import AuthPage from "@/pages/AuthPage";
 import LandingPage from "@/pages/LandingPage";
+import SignupPage from "@/pages/SignupPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import MainLayout from "@/components/MainLayout";
 import DashboardPage from "@/pages/DashboardPage";
@@ -121,6 +122,7 @@ const AppContent = () => {
   return (
     <Routes>
       <Route path="/auth" element={!user ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/signup" element={!user ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
