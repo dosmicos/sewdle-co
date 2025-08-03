@@ -56,41 +56,38 @@ export const useAdminDashboardData = () => {
 
       if (ordersError) throw ordersError;
 
-      // Units in production (pending to deliver and approve)
-      const { data: unitsData, error: unitsError } = await supabase
+      // Units in production (total ordered - total approved)
+      // Get total units ordered in active orders
+      const { data: totalOrderedData, error: totalOrderedError } = await supabase
         .from('order_items')
         .select(`
           quantity,
-          delivery_items!inner(
-            quantity_approved
-          ),
-          orders!inner(
-            status
-          )
+          orders!inner(status)
         `)
         .in('orders.status', ['pending', 'assigned', 'in_progress']);
 
-      if (unitsError) throw unitsError;
+      if (totalOrderedError) throw totalOrderedError;
 
-      let unitsInProduction = 0;
-      if (unitsData) {
-        // Calculate units pending approval
-        const { data: totalOrderedData, error: totalError } = await supabase
-          .from('order_items')
-          .select('quantity, orders!inner(status)')
-          .in('orders.status', ['pending', 'assigned', 'in_progress']);
+      const totalOrdered = totalOrderedData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
 
-        const { data: totalApprovedData, error: approvedError } = await supabase
-          .from('delivery_items')
-          .select('quantity_approved, deliveries!inner(order_id), orders!inner(status)')
-          .in('orders.status', ['pending', 'assigned', 'in_progress']);
+      // Get total units approved from all deliveries of active orders
+      const { data: totalApprovedData, error: totalApprovedError } = await supabase
+        .from('delivery_items')
+        .select(`
+          quantity_approved,
+          deliveries!inner(
+            order_id,
+            orders!inner(status)
+          )
+        `)
+        .in('deliveries.orders.status', ['pending', 'assigned', 'in_progress']);
 
-        if (!totalError && !approvedError) {
-          const totalOrdered = totalOrderedData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
-          const totalApproved = totalApprovedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
-          unitsInProduction = Math.max(0, totalOrdered - totalApproved);
-        }
-      }
+      if (totalApprovedError) throw totalApprovedError;
+
+      const totalApproved = totalApprovedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
+
+      // Units in production = Total ordered - Total approved
+      const unitsInProduction = Math.max(0, totalOrdered - totalApproved);
 
       // Units delivered this week
       const weekAgo = new Date();
