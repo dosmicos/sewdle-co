@@ -2,35 +2,43 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { 
   FileText, 
-  Building2, 
-  Package, 
-  Truck, 
-  TrendingUp, 
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw
+  Factory, 
+  CheckCircle2, 
+  Clock, 
+  TrendingUp,
+  RefreshCw,
+  Award,
+  Target
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { useDashboardData } from '@/hooks/useDashboardData';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 
 const AdminDashboard = () => {
-  const { stats, monthlyData, statusData, recentActivity, loading, refreshData } = useDashboardData();
+  const { 
+    stats, 
+    productionData, 
+    workshopRanking, 
+    recentActivity, 
+    viewMode, 
+    setViewMode,
+    loading, 
+    refreshData 
+  } = useAdminDashboardData();
 
   const getActivityIcon = (iconName: string) => {
     switch (iconName) {
       case 'CheckCircle':
-        return CheckCircle;
+        return CheckCircle2;
       case 'Clock':
         return Clock;
-      case 'AlertCircle':
-        return AlertCircle;
       case 'TrendingUp':
         return TrendingUp;
       default:
-        return CheckCircle;
+        return CheckCircle2;
     }
   };
 
@@ -106,31 +114,15 @@ const AdminDashboard = () => {
 
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
-            <div className="p-3 bg-green-50 rounded-xl">
-              <Building2 className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-red-50 rounded-xl">
+              <Factory className="w-6 h-6 text-red-600" />
             </div>
             <div>
               <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
-                Talleres
+                Unidades en Producción
               </p>
               <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
-                {stats.workshops}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-purple-50 rounded-xl">
-              <Package className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
-                Productos
-              </p>
-              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
-                {stats.products}
+                {stats.unitsInProduction.toLocaleString()}
               </p>
             </div>
           </div>
@@ -139,14 +131,30 @@ const AdminDashboard = () => {
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-orange-50 rounded-xl">
-              <Truck className="w-6 h-6 text-orange-600" />
+              <Clock className="w-6 h-6 text-orange-600" />
             </div>
             <div>
               <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
-                Entregas Pendientes
+                Entregadas Esta Semana
               </p>
               <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
-                {stats.pendingDeliveries}
+                {stats.unitsDeliveredWeek.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-green-50 rounded-xl">
+              <CheckCircle2 className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'rgb(99 99 102)' }}>
+                Aprobadas Esta Semana
+              </p>
+              <p className="text-2xl font-bold" style={{ color: 'rgb(29 29 31)' }}>
+                {stats.unitsApprovedWeek.toLocaleString()}
               </p>
             </div>
           </div>
@@ -157,15 +165,23 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-              Órdenes por Mes
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+                Progreso de la Producción
+              </h3>
+              <Tabs value={viewMode} onValueChange={(value: 'weekly' | 'monthly') => setViewMode(value)}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="weekly">Semanal</TabsTrigger>
+                  <TabsTrigger value="monthly">Mensual</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData}>
+                <BarChart data={productionData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis 
-                    dataKey="name" 
+                    dataKey="period" 
                     stroke="#6b7280"
                     fontSize={12}
                     tickLine={false}
@@ -179,10 +195,18 @@ const AdminDashboard = () => {
                     axisLine={false}
                     tick={{ fill: '#6b7280' }}
                   />
+                  <Legend />
                   <Bar 
-                    dataKey="orders" 
-                    fill="#007AFF" 
-                    radius={[8, 8, 0, 0]} 
+                    dataKey="delivered" 
+                    name="Entregadas"
+                    fill="#FF9500" 
+                    radius={[4, 4, 0, 0]} 
+                  />
+                  <Bar 
+                    dataKey="approved" 
+                    name="Aprobadas"
+                    fill="#34C759" 
+                    radius={[4, 4, 0, 0]} 
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -192,40 +216,43 @@ const AdminDashboard = () => {
 
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-              Estado de Órdenes
-            </h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="flex items-center space-x-2">
+              <Award className="w-5 h-5 text-gold-600" />
+              <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+                Ranking de Talleres
+              </h3>
             </div>
-            <div className="space-y-2">
-              {statusData.map((item, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm" style={{ color: 'rgb(29 29 31)' }}>
-                    {item.name}: {item.value}%
-                  </span>
+            <p className="text-sm text-gray-600">Última semana - Producción y Calidad</p>
+            <div className="space-y-3">
+              {workshopRanking.length > 0 ? workshopRanking.map((workshop, index) => (
+                <div key={workshop.workshopName} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-center w-8 h-8 bg-white rounded-full border-2 border-gray-200">
+                      <span className="text-sm font-bold text-gray-600">#{index + 1}</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{workshop.workshopName}</p>
+                      <p className="text-xs text-gray-600">
+                        {workshop.approvedUnits} aprobadas / {workshop.deliveredUnits} entregadas
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary" className="text-xs">
+                      Calidad: {workshop.qualityScore}%
+                    </Badge>
+                    <div className="flex items-center space-x-1">
+                      <Target className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-bold text-blue-600">{workshop.compositeScore}</span>
+                    </div>
+                  </div>
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-8">
+                  <Award className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">No hay datos de talleres esta semana</p>
+                </div>
+              )}
             </div>
           </div>
         </Card>
