@@ -5,7 +5,7 @@ import { Plus, Building2, Star, Calendar, ArrowLeft, Trash2, Edit } from 'lucide
 import WorkshopForm from '@/components/WorkshopForm';
 import WorkshopDetails from '@/components/WorkshopDetails';
 import WorkshopEditModal from '@/components/WorkshopEditModal';
-import DemoTallerAccess from '@/components/DemoTallerAccess';
+
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -93,8 +93,6 @@ const WorkshopsPage = () => {
           </Button>}
       </div>
 
-      {/* Demo Access Component */}
-      <DemoTallerAccess />
 
       {workshops.length === 0 ? <div className="text-center py-12">
           <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
