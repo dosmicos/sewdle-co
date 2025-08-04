@@ -111,74 +111,63 @@ const LandingPage = () => {
       <section className="py-16 sm:py-20 bg-gradient-to-br from-background to-secondary relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
           {/* Central Title */}
-          <div className="flex items-center justify-center min-h-[400px] relative">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-20 max-w-2xl bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border shadow-lg">
-              {t('problem.title')}
-            </h2>
-            
-            {/* Animated Connection Lines */}
-            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 800 400">
+          <div className="flex items-center justify-center min-h-[500px] relative">
+            {/* Animated Connection Lines - Positioned absolutely */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
               {/* Line to Top Left */}
-              <path
-                d="M400 200 L150 100"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_0.8s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 0.8s forwards, pulse-line 3s ease-in-out 3s infinite'
-                }}
+              <line
+                x1="50%" y1="50%" 
+                x2="20%" y2="20%"
+                stroke="#ff5722"
+                strokeWidth="3"
+                strokeDasharray="8 4"
+                opacity="0"
+                className="animate-[draw-line_2s_ease-out_1s_forwards]"
               />
               
               {/* Line to Top Right */}
-              <path
-                d="M400 200 L650 100"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_1.3s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 1.3s forwards, pulse-line 3s ease-in-out 3.5s infinite'
-                }}
+              <line
+                x1="50%" y1="50%" 
+                x2="80%" y2="20%"
+                stroke="#ff5722"
+                strokeWidth="3"
+                strokeDasharray="8 4"
+                opacity="0"
+                className="animate-[draw-line_2s_ease-out_1.5s_forwards]"
               />
               
               {/* Line to Bottom Left */}
-              <path
-                d="M400 200 L150 300"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_1.8s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 1.8s forwards, pulse-line 3s ease-in-out 4s infinite'
-                }}
+              <line
+                x1="50%" y1="50%" 
+                x2="20%" y2="80%"
+                stroke="#ff5722"
+                strokeWidth="3"
+                strokeDasharray="8 4"
+                opacity="0"
+                className="animate-[draw-line_2s_ease-out_2s_forwards]"
               />
               
               {/* Line to Bottom Right */}
-              <path
-                d="M400 200 L650 300"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_2.3s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 2.3s forwards, pulse-line 3s ease-in-out 4.5s infinite'
-                }}
+              <line
+                x1="50%" y1="50%" 
+                x2="80%" y2="80%"
+                stroke="#ff5722"
+                strokeWidth="3"
+                strokeDasharray="8 4"
+                opacity="0"
+                className="animate-[draw-line_2s_ease-out_2.5s_forwards]"
               />
             </svg>
+            
+            {/* Central Title */}
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in max-w-2xl bg-background/90 backdrop-blur-sm rounded-2xl p-6 border border-border shadow-lg relative z-10">
+              {t('problem.title')}
+            </h2>
             
             {/* Floating Problems - Positioned around the title */}
             <div className="absolute inset-0">
               {/* Top Left */}
-              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
+              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-20" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
                 <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
@@ -188,7 +177,7 @@ const LandingPage = () => {
               </div>
               
               {/* Top Right */}
-              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
+              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-20" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
                 <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
@@ -198,7 +187,7 @@ const LandingPage = () => {
               </div>
               
               {/* Bottom Left */}
-              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
+              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-20" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
                 <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
@@ -208,7 +197,7 @@ const LandingPage = () => {
               </div>
               
               {/* Bottom Right */}
-              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
+              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-20" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
                 <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
