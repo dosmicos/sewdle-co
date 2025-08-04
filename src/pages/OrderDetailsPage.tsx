@@ -9,6 +9,7 @@ import { Calendar, FileText, Package, Settings, Truck, Factory, Download, AlertT
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import OrderDeliveryTracker from '@/components/OrderDeliveryTracker';
 import DeliveryForm from '@/components/DeliveryForm';
+import OrderEditModal from '@/components/OrderEditModal';
 import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
@@ -19,8 +20,9 @@ const OrderDetailsPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   
-  const { orders, loading } = useOrders();
+  const { orders, loading, fetchOrders } = useOrders();
   const { canEditOrders, canDeleteOrders, canCreateDeliveries } = useUserContext();
   const order = orders.find(o => o.id === orderId);
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(orderId || '');
@@ -93,10 +95,15 @@ const OrderDetailsPage = () => {
   };
 
   const handleEdit = () => {
-    // Aquí podrías abrir un modal de edición o navegar a una página de edición
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    fetchOrders();
     toast({
-      title: "Función en desarrollo",
-      description: "La edición de órdenes será implementada próximamente.",
+      title: "Orden actualizada",
+      description: "La orden ha sido actualizada correctamente.",
     });
   };
 
@@ -491,6 +498,16 @@ const OrderDetailsPage = () => {
           preselectedOrderId={orderId}
           onClose={() => setShowDeliveryForm(false)}
           onDeliveryCreated={handleDeliveryCreated}
+        />
+      )}
+
+      {/* Modal de edición de orden */}
+      {showEditModal && order && (
+        <OrderEditModal
+          order={order}
+          open={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={handleEditSuccess}
         />
       )}
     </div>
