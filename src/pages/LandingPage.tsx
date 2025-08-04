@@ -111,69 +111,134 @@ const LandingPage = () => {
       <section className="py-16 sm:py-20 bg-gradient-to-br from-background to-secondary relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
           {/* Central Title */}
-          <div className="flex items-center justify-center min-h-[400px] relative">
+          <div className="flex items-center justify-center min-h-[600px] relative">
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-20 max-w-2xl bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border shadow-lg">
               {t('problem.title')}
             </h2>
             
-            {/* Corner Connection Lines */}
-            <div className="absolute inset-0 pointer-events-none z-10">
-              {/* Top Left Corner Line */}
-              <div className="absolute top-[25%] left-[32%] w-[18%] border-b border-black/30"></div>
-              <div className="absolute top-[25%] left-[32%] h-[25%] border-l border-black/30"></div>
-              
-              {/* Top Right Corner Line */}
-              <div className="absolute top-[25%] right-[32%] w-[18%] border-b border-black/30"></div>
-              <div className="absolute top-[25%] right-[32%] h-[25%] border-r border-black/30"></div>
-              
-              {/* Bottom Left Corner Line */}
-              <div className="absolute bottom-[25%] left-[32%] w-[18%] border-t border-black/30"></div>
-              <div className="absolute bottom-[25%] left-[32%] h-[25%] border-l border-black/30"></div>
-              
-              {/* Bottom Right Corner Line */}
-              <div className="absolute bottom-[25%] right-[32%] w-[18%] border-t border-black/30"></div>
-              <div className="absolute bottom-[25%] right-[32%] h-[25%] border-r border-black/30"></div>
-            </div>
+            {/* Curved Connection Lines using SVG */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" style={{ overflow: 'visible' }}>
+              {/* Top connection */}
+              <path
+                d="M 50% 15% Q 50% 35% 50% 45%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Top Right connection */}
+              <path
+                d="M 85% 20% Q 65% 35% 55% 45%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Right connection */}
+              <path
+                d="M 85% 50% Q 70% 50% 60% 50%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Bottom Right connection */}
+              <path
+                d="M 85% 80% Q 65% 65% 55% 55%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Bottom connection */}
+              <path
+                d="M 50% 85% Q 50% 65% 50% 55%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Bottom Left connection */}
+              <path
+                d="M 15% 80% Q 35% 65% 45% 55%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Left connection */}
+              <path
+                d="M 15% 50% Q 30% 50% 40% 50%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+              {/* Top Left connection */}
+              <path
+                d="M 15% 20% Q 35% 35% 45% 45%"
+                stroke="rgba(0,0,0,0.2)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5,5"
+              />
+            </svg>
             
-            {/* Floating Problems - Positioned around the title */}
+            {/* Circular Problem Icons - Positioned around the center */}
             <div className="absolute inset-0">
-              {/* Top Left */}
-              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
-                  </div>
+              {/* Top */}
+              <div className="absolute top-[10%] left-1/2 transform -translate-x-1/2 animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
                 </div>
               </div>
               
               {/* Top Right */}
-              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
-                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
-                  </div>
+              <div className="absolute top-[15%] right-[10%] animate-fade-in z-15" style={{ animationDelay: '0.7s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
                 </div>
               </div>
               
-              {/* Bottom Left */}
-              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
-                  </div>
+              {/* Right */}
+              <div className="absolute top-1/2 right-[10%] transform -translate-y-1/2 animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
                 </div>
               </div>
               
               {/* Bottom Right */}
-              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
-                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
-                  </div>
+              <div className="absolute bottom-[15%] right-[10%] animate-fade-in z-15" style={{ animationDelay: '1.2s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
+                </div>
+              </div>
+              
+              {/* Bottom */}
+              <div className="absolute bottom-[10%] left-1/2 transform -translate-x-1/2 animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
+                </div>
+              </div>
+              
+              {/* Bottom Left */}
+              <div className="absolute bottom-[15%] left-[10%] animate-fade-in z-15" style={{ animationDelay: '1.7s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
+                </div>
+              </div>
+              
+              {/* Left */}
+              <div className="absolute top-1/2 left-[10%] transform -translate-y-1/2 animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
+                </div>
+              </div>
+              
+              {/* Top Left */}
+              <div className="absolute top-[15%] left-[10%] animate-fade-in z-15" style={{ animationDelay: '2.2s', animationFillMode: 'both' }}>
+                <div className="w-20 h-20 bg-destructive rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-4 border-background">
+                  <div className="w-3 h-3 bg-background rounded-full animate-pulse"></div>
                 </div>
               </div>
             </div>
