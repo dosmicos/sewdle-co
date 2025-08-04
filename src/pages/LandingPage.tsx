@@ -470,12 +470,12 @@ const LandingPage = () => {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 bg-gray-900">
+      <footer className="py-12 bg-gradient-to-b from-secondary to-accent border-t border-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <div className="flex justify-center mb-6">
-            <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-12 w-auto opacity-80" />
+            <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-12 w-auto" />
           </div>
-          <p className="text-gray-400">{t('footer.rights')}</p>
+          <p className="text-muted-foreground">{t('footer.rights')}</p>
         </div>
       </footer>
     </div>
