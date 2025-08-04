@@ -108,12 +108,35 @@ export default {
 						opacity: '1',
 						transform: 'translateY(0)'
 					}
+				},
+				'draw-line': {
+					'0%': { 
+						strokeDashoffset: '200', 
+						opacity: '0' 
+					},
+					'50%': { 
+						opacity: '1' 
+					},
+					'100%': { 
+						strokeDashoffset: '0', 
+						opacity: '1' 
+					}
+				},
+				'pulse-line': {
+					'0%, 100%': { 
+						opacity: '1' 
+					},
+					'50%': { 
+						opacity: '0.6' 
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
-				'fade-in': 'fade-in 0.3s ease-out'
+				'fade-in': 'fade-in 0.3s ease-out',
+				'draw-line': 'draw-line 2s ease-out forwards',
+				'pulse-line': 'pulse-line 3s ease-in-out infinite'
 			},
 			fontFamily: {
 				'system': ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']

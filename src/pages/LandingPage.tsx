@@ -112,47 +112,106 @@ const LandingPage = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
           {/* Central Title */}
           <div className="flex items-center justify-center min-h-[400px] relative">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-10 max-w-2xl">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-20 max-w-2xl bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border shadow-lg">
               {t('problem.title')}
             </h2>
+            
+            {/* Animated Connection Lines */}
+            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 800 400">
+              {/* Line to Top Left */}
+              <path
+                d="M400 200 L150 100"
+                stroke="hsl(var(--primary))"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5 5"
+                className="animate-[draw-line_2s_ease-out_0.8s_forwards] opacity-0"
+                style={{ 
+                  strokeDashoffset: 200,
+                  animation: 'draw-line 2s ease-out 0.8s forwards, pulse-line 3s ease-in-out 3s infinite'
+                }}
+              />
+              
+              {/* Line to Top Right */}
+              <path
+                d="M400 200 L650 100"
+                stroke="hsl(var(--primary))"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5 5"
+                className="animate-[draw-line_2s_ease-out_1.3s_forwards] opacity-0"
+                style={{ 
+                  strokeDashoffset: 200,
+                  animation: 'draw-line 2s ease-out 1.3s forwards, pulse-line 3s ease-in-out 3.5s infinite'
+                }}
+              />
+              
+              {/* Line to Bottom Left */}
+              <path
+                d="M400 200 L150 300"
+                stroke="hsl(var(--primary))"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5 5"
+                className="animate-[draw-line_2s_ease-out_1.8s_forwards] opacity-0"
+                style={{ 
+                  strokeDashoffset: 200,
+                  animation: 'draw-line 2s ease-out 1.8s forwards, pulse-line 3s ease-in-out 4s infinite'
+                }}
+              />
+              
+              {/* Line to Bottom Right */}
+              <path
+                d="M400 200 L650 300"
+                stroke="hsl(var(--primary))"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="5 5"
+                className="animate-[draw-line_2s_ease-out_2.3s_forwards] opacity-0"
+                style={{ 
+                  strokeDashoffset: 200,
+                  animation: 'draw-line 2s ease-out 2.3s forwards, pulse-line 3s ease-in-out 4.5s infinite'
+                }}
+              />
+            </svg>
             
             {/* Floating Problems - Positioned around the title */}
             <div className="absolute inset-0">
               {/* Top Left */}
-              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
+                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
                   </div>
                 </div>
               </div>
               
               {/* Top Right */}
-              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
-                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
+                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
                   </div>
                 </div>
               </div>
               
               {/* Bottom Left */}
-              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
+                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
                   </div>
                 </div>
               </div>
               
               {/* Bottom Right */}
-              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
-                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
+                <div className="bg-card/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-primary/50">
                   <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
                   </div>
                 </div>
