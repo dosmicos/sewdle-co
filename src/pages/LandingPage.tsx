@@ -116,42 +116,42 @@ const LandingPage = () => {
               {t('problem.title')}
             </h2>
             
-            {/* Animated Connection Lines */}
+            {/* Static Connection Lines */}
             <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 800 400">
               {/* Line to Top Left */}
               <line
                 x1="400" y1="200"
-                x2="150" y2="100"
-                stroke="#FF5C02"
-                strokeWidth="3"
-                className="animate-infinite-line-1"
+                x2="200" y2="120"
+                stroke="#000000"
+                strokeWidth="2"
+                opacity="0.3"
               />
               
               {/* Line to Top Right */}
               <line
                 x1="400" y1="200"
-                x2="650" y2="100"
-                stroke="#FF5C02"
-                strokeWidth="3"
-                className="animate-infinite-line-2"
+                x2="600" y2="120"
+                stroke="#000000"
+                strokeWidth="2"
+                opacity="0.3"
               />
               
               {/* Line to Bottom Left */}
               <line
                 x1="400" y1="200"
-                x2="150" y2="300"
-                stroke="#FF5C02"
-                strokeWidth="3"
-                className="animate-infinite-line-3"
+                x2="200" y2="280"
+                stroke="#000000"
+                strokeWidth="2"
+                opacity="0.3"
               />
               
               {/* Line to Bottom Right */}
               <line
                 x1="400" y1="200"
-                x2="650" y2="300"
-                stroke="#FF5C02"
-                strokeWidth="3"
-                className="animate-infinite-line-4"
+                x2="600" y2="280"
+                stroke="#000000"
+                strokeWidth="2"
+                opacity="0.3"
               />
             </svg>
             
