@@ -409,18 +409,12 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
       return;
     }
 
-    if (deliveredItem.synced_to_shopify) {
-      toast({
-        title: "Ya sincronizado",
-        description: "Esta variante ya ha sido sincronizada con Shopify",
-        variant: "default",
-      });
-      return;
-    }
+    // Permitir resincronización si ya está sincronizado
+    const isResync = deliveredItem.synced_to_shopify;
 
-    // Confirmar sincronización
+    // Confirmar sincronización/resincronización
     const confirmSync = window.confirm(
-      `¿Desea sincronizar ${deliveredItem.quantity_approved} unidades aprobadas de esta variante con Shopify?\n\nProducto: ${deliveredItem.order_items?.product_variants?.products?.name}\nVariante: ${deliveredItem.order_items?.product_variants?.size} - ${deliveredItem.order_items?.product_variants?.color}\nSKU: ${deliveredItem.order_items?.product_variants?.sku_variant}`
+      `¿Desea ${isResync ? 'resincronizar' : 'sincronizar'} ${deliveredItem.quantity_approved} unidades aprobadas de esta variante con Shopify?\n\nProducto: ${deliveredItem.order_items?.product_variants?.products?.name}\nVariante: ${deliveredItem.order_items?.product_variants?.size} - ${deliveredItem.order_items?.product_variants?.color}\nSKU: ${deliveredItem.order_items?.product_variants?.sku_variant}${isResync ? '\n\n⚠️ ATENCIÓN: Esta variante ya fue sincronizada. Al resincronizar se actualizará el inventario en Shopify.' : ''}`
     );
 
     if (!confirmSync) return;
@@ -451,8 +445,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
           .eq('id', itemId);
 
         toast({
-          title: "Sincronizado",
-          description: "Variante sincronizada exitosamente con Shopify",
+          title: isResync ? "Resincronizado" : "Sincronizado",
+          description: `Variante ${isResync ? 'resincronizada' : 'sincronizada'} exitosamente con Shopify`,
         });
 
         loadDelivery();
@@ -545,6 +539,90 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
       loadDelivery();
     } catch (error) {
       console.error('Error processing quality review:', error);
+    }
+  };
+
+  // Nueva función para habilitar re-edición de calidad
+  const enableQualityReEdit = () => {
+    // Reset quality data to allow re-editing
+    const resetQualityData: any = { variants: {} };
+    delivery.delivery_items?.forEach((item: any) => {
+      resetQualityData.variants[item.id] = {
+        approved: item.quantity_approved || 0,
+        defective: item.quantity_defective || 0,
+        reason: item.quality_notes || ''
+      };
+    });
+    setQualityData(resetQualityData);
+    
+    toast({
+      title: "Modo de re-edición activado",
+      description: "Ahora puede modificar las cantidades aprobadas/defectuosas y resincronizar",
+    });
+  };
+
+  // Función para resincronizar toda la entrega
+  const resyncEntireDelivery = async () => {
+    const approvedItems = delivery.delivery_items?.filter((item: any) => item.quantity_approved > 0);
+    
+    if (!approvedItems || approvedItems.length === 0) {
+      toast({
+        title: "Error",
+        description: "No hay items aprobados para resincronizar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const confirmResync = window.confirm(
+      `¿Desea resincronizar toda la entrega ${delivery.tracking_number} con Shopify?\n\nSe sincronizarán ${approvedItems.length} variante(s) con un total de ${approvedItems.reduce((sum: number, item: any) => sum + item.quantity_approved, 0)} unidades aprobadas.\n\n⚠️ ATENCIÓN: Esto actualizará el inventario en Shopify.`
+    );
+
+    if (!confirmResync) return;
+
+    try {
+      setSyncingVariants(new Set(approvedItems.map((item: any) => item.id)));
+
+      const syncData = {
+        deliveryId: delivery.id,
+        approvedItems: approvedItems.map(item => ({
+          variantId: item.order_items?.product_variants?.id,
+          skuVariant: item.order_items?.product_variants?.sku_variant,
+          quantityApproved: item.quantity_approved
+        }))
+      };
+
+      const result = await syncApprovedItemsToShopify(syncData);
+
+      if (result.success) {
+        // Marcar todas las variantes como sincronizadas
+        for (const item of approvedItems) {
+          await supabase
+            .from('delivery_items')
+            .update({
+              synced_to_shopify: true,
+              last_sync_attempt: new Date().toISOString()
+            })
+            .eq('id', item.id);
+        }
+
+        toast({
+          title: "Entrega resincronizada",
+          description: `${approvedItems.length} variante(s) resincronizada(s) exitosamente con Shopify`,
+        });
+
+        loadDelivery();
+        onDeliveryUpdated?.();
+      }
+    } catch (error) {
+      console.error('Error resyncing delivery:', error);
+      toast({
+        title: "Error de resincronización",
+        description: "Error al resincronizar la entrega con Shopify",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncingVariants(new Set());
     }
   };
 
@@ -694,6 +772,33 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
           <Badge className={getStatusColor(delivery.status)}>
             {getStatusText(delivery.status)}
           </Badge>
+          
+          {/* Botones de re-edición y resincronización para entregas procesadas */}
+          {canEditDeliveries && ['approved', 'partial_approved'].includes(delivery.status) && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={enableQualityReEdit}
+                className="text-blue-600 border-blue-600 hover:bg-blue-50"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Re-editar Calidad
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resyncEntireDelivery}
+                disabled={syncingVariants.size > 0}
+                className="text-green-600 border-green-600 hover:bg-green-50"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncingVariants.size > 0 ? 'animate-spin' : ''}`} />
+                {syncingVariants.size > 0 ? 'Resincronizando...' : 'Resincronizar Todo'}
+              </Button>
+            </>
+          )}
+          
           <DeliverySyncStatus 
             delivery={delivery} 
             onSyncSuccess={loadDelivery} 
