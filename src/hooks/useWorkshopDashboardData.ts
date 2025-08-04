@@ -54,6 +54,7 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
   const [statusData, setStatusData] = useState<OrderStatusData[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentWorkshopActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [progressLoading, setProgressLoading] = useState(false);
   const { toast } = useToast();
 
   const workshopId = user?.workshopId;
@@ -425,7 +426,8 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
     }
   };
 
-  const loadAllData = async () => {
+  // Load main dashboard data once
+  const loadMainData = async () => {
     if (!workshopId) {
       setLoading(false);
       return;
@@ -434,16 +436,37 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
     setLoading(true);
     await Promise.all([
       fetchWorkshopStats(),
-      fetchProgressData(),
       fetchOrderStatusData(),
       fetchRecentActivity()
     ]);
     setLoading(false);
   };
 
+  // Load progress data separately when viewMode changes
+  const loadProgressData = async () => {
+    if (!workshopId) return;
+    
+    setProgressLoading(true);
+    await fetchProgressData();
+    setProgressLoading(false);
+  };
+
+  // Load main data only when workshopId changes
   useEffect(() => {
-    loadAllData();
+    loadMainData();
+  }, [workshopId]);
+
+  // Load progress data when viewMode changes
+  useEffect(() => {
+    loadProgressData();
   }, [workshopId, viewMode]);
+
+  const refreshData = async () => {
+    await Promise.all([
+      loadMainData(),
+      loadProgressData()
+    ]);
+  };
 
   return {
     stats,
@@ -451,6 +474,7 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
     statusData,
     recentActivity,
     loading,
-    refreshData: loadAllData
+    progressLoading,
+    refreshData
   };
 };

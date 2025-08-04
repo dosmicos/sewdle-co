@@ -20,7 +20,7 @@ import { useWorkshopDashboardData } from '@/hooks/useWorkshopDashboardData';
 
 const WorkshopDashboard = () => {
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
-  const { stats, monthlyData, statusData, recentActivity, loading, refreshData } = useWorkshopDashboardData(viewMode);
+  const { stats, monthlyData, statusData, recentActivity, loading, progressLoading, refreshData } = useWorkshopDashboardData(viewMode);
 
   const getPendingUnitsConfig = (urgency: string, units: number) => {
     switch (urgency) {
