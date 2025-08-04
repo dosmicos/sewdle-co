@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SearchableMaterialSelector from '@/components/supplies/SearchableMaterialSelector';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -189,21 +190,21 @@ const WorkshopMaterialSelector = ({
         <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg">
           <div className="space-y-2">
             <Label>Material</Label>
-            <Select
+            <SearchableMaterialSelector
+              materials={getAvailableForSelection(material.id).map(mat => ({
+                id: mat.material_id,
+                name: mat.material_name,
+                sku: mat.material_sku,
+                color: mat.material_color,
+                category: '', // No tenemos categoría en WorkshopMaterial
+                unit: mat.material_unit,
+                current_stock: mat.real_balance,
+                supplier: ''
+              }))}
               value={material.id || ''}
               onValueChange={(value) => updateMaterial(index, 'id', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar material..." />
-              </SelectTrigger>
-              <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                {getAvailableForSelection(material.id).map((mat) => (
-                  <SelectItem key={mat.material_id} value={mat.material_id}>
-                    {formatMaterialDisplay(mat)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Buscar material..."
+            />
           </div>
 
           <div className="space-y-2">

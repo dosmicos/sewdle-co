@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Trash2, AlertTriangle, Package, Truck } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
-import WorkshopMaterialSingleSelector from '@/components/WorkshopMaterialSingleSelector';
+import SearchableMaterialSelector from '@/components/supplies/SearchableMaterialSelector';
 
 interface Supply {
   materialId: string;
@@ -220,11 +220,20 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                     Material *
                   </label>
                   {selectedWorkshop ? (
-                    <WorkshopMaterialSingleSelector
-                      selectedMaterial={supply.materialId}
-                      onMaterialSelect={(value) => updateSupply(index, 'materialId', value)}
-                      workshopId={selectedWorkshop}
-                      placeholder="Seleccionar material..."
+                    <SearchableMaterialSelector
+                      materials={materials.map(m => ({
+                        id: m.id,
+                        name: m.name,
+                        sku: m.sku,
+                        color: m.color,
+                        category: m.category,
+                        unit: m.unit,
+                        current_stock: workshopStock[m.id] || 0,
+                        supplier: m.supplier
+                      }))}
+                      value={supply.materialId}
+                      onValueChange={(value) => updateSupply(index, 'materialId', value)}
+                      placeholder="Buscar material..."
                     />
                   ) : (
                     <Select disabled>
