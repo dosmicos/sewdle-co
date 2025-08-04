@@ -81,7 +81,7 @@ const englishTranslations: Record<string, string> = {
   'hero.cta': 'Get started now',
 
   // Problem Section
-  'problem.title': 'Is your brand growing, but production becoming chaotic?',
+  'problem.title': 'Your production is becoming chaotic?',
   'problem.1': 'Orders scattered across emails and spreadsheets.',
   'problem.2': 'Zero real-time visibility of progress.',
   'problem.3': 'Fragmented communication with workshops.',
@@ -161,7 +161,7 @@ const spanishTranslations: Record<string, string> = {
   'hero.cta': 'Empezar ahora',
 
   // Problem Section
-  'problem.title': '¿Tu marca crece, pero la producción se vuelve caótica?',
+  'problem.title': '¿Tu producción se está volviendo caótica?',
   'problem.1': 'Órdenes dispersas en emails y hojas de cálculo.',
   'problem.2': 'Cero visibilidad en tiempo real del avance.',
   'problem.3': 'Comunicación fragmentada con talleres.',

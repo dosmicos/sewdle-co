@@ -108,18 +108,56 @@ const LandingPage = () => {
       </section>
 
       {/* Problem Section */}
-      <section className="py-16 sm:py-20 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-8 sm:mb-12 font-semibold">
-            {t('problem.title')}
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-4 sm:gap-6 text-left">
-            {[t('problem.1'), t('problem.2'), t('problem.3'), t('problem.4')].map((problem, index) => (
-              <div key={index} className="flex items-start space-x-3 p-4 bg-white rounded-xl shadow-sm">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-3 flex-shrink-0"></div>
-                <p className="text-base sm:text-lg text-gray-700">{problem}</p>
+      <section className="py-16 sm:py-20 bg-gradient-to-br from-background to-secondary relative overflow-hidden">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
+          {/* Central Title */}
+          <div className="flex items-center justify-center min-h-[400px] relative">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-10 max-w-2xl">
+              {t('problem.title')}
+            </h2>
+            
+            {/* Floating Problems - Positioned around the title */}
+            <div className="absolute inset-0">
+              {/* Top Left */}
+              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
+                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
+                  </div>
+                </div>
               </div>
-            ))}
+              
+              {/* Top Right */}
+              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
+                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Bottom Left */}
+              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
+                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Bottom Right */}
+              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
+                <div className="bg-card/80 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-border hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-destructive rounded-full mt-3 flex-shrink-0"></div>
+                    <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
