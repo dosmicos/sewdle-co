@@ -116,44 +116,20 @@ const LandingPage = () => {
               {t('problem.title')}
             </h2>
             
-            {/* Connection Lines between problem cards and central title */}
-            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-              {/* Line from Top Left problem card to Central title box */}
-              <line
-                x1="25" y1="35"
-                x2="40" y2="50"
-                stroke="#000000"
-                strokeWidth="0.2"
-                opacity="0.4"
-              />
+            {/* Connection Lines using CSS */}
+            <div className="absolute inset-0 pointer-events-none z-10">
+              {/* Line from Top Left to Center */}
+              <div className="absolute top-[15%] left-[20%] w-[15%] h-px bg-black opacity-30 origin-left transform rotate-[25deg]"></div>
               
-              {/* Line from Top Right problem card to Central title box */}
-              <line
-                x1="75" y1="35"
-                x2="60" y2="50"
-                stroke="#000000"
-                strokeWidth="0.2"
-                opacity="0.4"
-              />
+              {/* Line from Top Right to Center */}
+              <div className="absolute top-[15%] right-[20%] w-[15%] h-px bg-black opacity-30 origin-right transform rotate-[-25deg]"></div>
               
-              {/* Line from Bottom Left problem card to Central title box */}
-              <line
-                x1="25" y1="65"
-                x2="40" y2="50"
-                stroke="#000000"
-                strokeWidth="0.2"
-                opacity="0.4"
-              />
+              {/* Line from Bottom Left to Center */}
+              <div className="absolute bottom-[15%] left-[20%] w-[15%] h-px bg-black opacity-30 origin-left transform rotate-[-25deg]"></div>
               
-              {/* Line from Bottom Right problem card to Central title box */}
-              <line
-                x1="75" y1="65"
-                x2="60" y2="50"
-                stroke="#000000"
-                strokeWidth="0.2"
-                opacity="0.4"
-              />
-            </svg>
+              {/* Line from Bottom Right to Center */}
+              <div className="absolute bottom-[15%] right-[20%] w-[15%] h-px bg-black opacity-30 origin-right transform rotate-[25deg]"></div>
+            </div>
             
             {/* Floating Problems - Positioned around the title */}
             <div className="absolute inset-0">
