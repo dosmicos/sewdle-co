@@ -12,11 +12,12 @@ import {
 } from '@/components/ui/sheet';
 
 interface MobileNavigationProps {
-  onCTAClick: () => void;
+  onLoginClick: () => void;
+  onSignupClick: () => void;
   scrollToSection: (sectionId: string) => void;
 }
 
-const MobileNavigation: React.FC<MobileNavigationProps> = ({ onCTAClick, scrollToSection }) => {
+const MobileNavigation: React.FC<MobileNavigationProps> = ({ onLoginClick, onSignupClick, scrollToSection }) => {
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -25,9 +26,14 @@ const MobileNavigation: React.FC<MobileNavigationProps> = ({ onCTAClick, scrollT
     setIsOpen(false);
   };
 
-  const handleCTAClick = () => {
-    onCTAClick();
+  const handleLoginClick = () => {
     setIsOpen(false);
+    onLoginClick();
+  };
+
+  const handleSignupClick = () => {
+    setIsOpen(false);
+    onSignupClick();
   };
 
   return (
@@ -65,14 +71,14 @@ const MobileNavigation: React.FC<MobileNavigationProps> = ({ onCTAClick, scrollT
           
           <div className="border-t pt-6 space-y-4">
             <Button 
-              onClick={handleCTAClick} 
+              onClick={handleLoginClick} 
               variant="ghost" 
               className="w-full justify-start text-gray-600 hover:text-orange-600 font-medium"
             >
               {t('nav.login')}
             </Button>
             <Button 
-              onClick={handleCTAClick} 
+              onClick={handleSignupClick} 
               className="w-full bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white font-medium rounded-full hover:shadow-lg transition-all duration-300"
             >
               {t('nav.signup')}

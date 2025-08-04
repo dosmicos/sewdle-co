@@ -14,7 +14,11 @@ const LandingPage = () => {
   const { t } = useLanguage();
   const isMobile = useIsMobile();
 
-  const handleCTAClick = () => {
+  const handleLoginClick = () => {
+    navigate('/auth');
+  };
+
+  const handleSignupClick = () => {
     navigate('/signup');
   };
 
@@ -65,16 +69,16 @@ const LandingPage = () => {
                 
                 {/* Desktop Auth Buttons */}
                 <div className="hidden md:flex items-center space-x-3">
-                  <Button onClick={handleCTAClick} variant="ghost" className="text-sm text-gray-600 hover:text-orange-600 font-medium">
+                  <Button onClick={handleLoginClick} variant="ghost" className="text-sm text-gray-600 hover:text-orange-600 font-medium">
                     {t('nav.login')}
                   </Button>
-                  <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-4 py-2 rounded-full hover:shadow-lg transition-all duration-300">
+                  <Button onClick={handleSignupClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white text-sm px-4 py-2 rounded-full hover:shadow-lg transition-all duration-300">
                     {t('nav.signup')}
                   </Button>
                 </div>
 
                 {/* Mobile Navigation */}
-                <MobileNavigation onCTAClick={handleCTAClick} scrollToSection={scrollToSection} />
+                <MobileNavigation onLoginClick={handleLoginClick} onSignupClick={handleSignupClick} scrollToSection={scrollToSection} />
               </div>
             </div>
           </div>
@@ -98,7 +102,7 @@ const LandingPage = () => {
 
             {/* CTA */}
             <div className="pt-6">
-              <Button onClick={handleCTAClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+              <Button onClick={handleSignupClick} className="bg-gradient-to-r from-[#FF5C02] to-orange-600 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
                 {t('hero.cta')}
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
@@ -405,7 +409,7 @@ const LandingPage = () => {
                   <span className="text-4xl font-bold text-gray-900">$29</span>
                   <span className="text-gray-600">/mes</span>
                 </div>
-                <Button onClick={handleCTAClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
+                <Button onClick={handleSignupClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
                   Comenzar prueba gratis
                 </Button>
               </div>
@@ -447,7 +451,7 @@ const LandingPage = () => {
                   <span className="text-4xl font-bold text-gray-900">$99</span>
                   <span className="text-gray-600">/mes</span>
                 </div>
-                <Button onClick={handleCTAClick} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg py-3 rounded-xl font-medium transition-all duration-300">
+                <Button onClick={handleSignupClick} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg py-3 rounded-xl font-medium transition-all duration-300">
                   Comenzar prueba gratis
                 </Button>
               </div>
@@ -488,7 +492,7 @@ const LandingPage = () => {
                   <span className="text-4xl font-bold text-gray-900">$299</span>
                   <span className="text-gray-600">/mes</span>
                 </div>
-                <Button onClick={handleCTAClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
+                <Button onClick={handleSignupClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
                   Comenzar prueba gratis
                 </Button>
               </div>
@@ -553,10 +557,10 @@ const LandingPage = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button onClick={handleCTAClick} variant="outline" className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full border-2 border-white text-white hover:bg-white hover:text-orange-500 transition-all duration-300">
+            <Button onClick={handleSignupClick} variant="outline" className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full border-2 border-white text-white hover:bg-white hover:text-orange-500 transition-all duration-300">
               Ver demo
             </Button>
-            <Button onClick={handleCTAClick} className="bg-white text-orange-500 px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <Button onClick={handleSignupClick} className="bg-white text-orange-500 px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
               Empezar gratis ahora
               <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
