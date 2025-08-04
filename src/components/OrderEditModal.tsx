@@ -14,12 +14,7 @@ import OrderQuantityEditor from './OrderQuantityEditor';
 import ProductSelector from './ProductSelector';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 import { Settings, Package, AlertTriangle, Plus, Wrench, Truck, FileText } from 'lucide-react';
-import WorkshopMaterialSelector from './WorkshopMaterialSelector';
-import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
-import MaterialDeliveryForm from './supplies/MaterialDeliveryForm';
 import MaterialConsumptionForm from './supplies/MaterialConsumptionForm';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useMaterials } from '@/hooks/useMaterials';
 import OrderFileManager from './OrderFileManager';
 import { useWorkshopAssignments } from '@/hooks/useWorkshopAssignments';
 import { useWorkshops } from '@/hooks/useWorkshops';
@@ -37,18 +32,11 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [status, setStatus] = useState('');
   const [activeTab, setActiveTab] = useState('details');
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
-  const [selectedMaterials, setSelectedMaterials] = useState<any[]>([]);
   const [orderWorkshopId, setOrderWorkshopId] = useState<string>('');
-  const [workshopStock, setWorkshopStock] = useState<Record<string, number>>({});
-  const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
-  const [showDeliveryForm, setShowDeliveryForm] = useState(false);
-  const [showMaterialConsumption, setShowMaterialConsumption] = useState(false);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
+  const [showMaterialConsumption, setShowMaterialConsumption] = useState(false);
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
-  const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
-  const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
-  const { materials } = useMaterials();
   const { createAssignment, loading: assignmentLoading } = useWorkshopAssignments(false);
   const { workshops } = useWorkshops();
 
@@ -61,24 +49,12 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
       setStatus(order.status || 'pending');
       setActiveTab('details'); // Reset to details tab when order changes
       setSelectedProducts([]); // Reset selected products
-      setSelectedMaterials([]); // Reset selected materials
       
       // Obtener el workshop_id de la orden
       fetchOrderWorkshop();
     }
   }, [order]);
 
-  useEffect(() => {
-    if (orderWorkshopId) {
-      loadWorkshopStock();
-    }
-  }, [orderWorkshopId]);
-
-  useEffect(() => {
-    if (orderWorkshopId && selectedMaterials.length > 0) {
-      checkMaterialAvailability();
-    }
-  }, [selectedMaterials, workshopStock, orderWorkshopId]);
 
   const fetchOrderWorkshop = async () => {
     if (!order?.id) return;
@@ -104,57 +80,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     }
   };
 
-  const loadWorkshopStock = async () => {
-    if (!orderWorkshopId) return;
-    
-    try {
-      await fetchMaterialDeliveries();
-      const stock: Record<string, number> = {};
-      
-      // Calcular stock disponible por material en el taller seleccionado usando el nuevo campo real_balance
-      materialDeliveries
-        .filter(delivery => delivery.workshop_id === orderWorkshopId)
-        .forEach(delivery => {
-          const materialId = delivery.material_id;
-          const available = delivery.real_balance || 0;
-          stock[materialId] = (stock[materialId] || 0) + available;
-        });
-      
-      setWorkshopStock(stock);
-    } catch (error) {
-      console.error('Error loading workshop stock:', error);
-    }
-  };
 
-  const checkMaterialAvailability = () => {
-    const missing: any[] = [];
-    
-    selectedMaterials.forEach(material => {
-      const availableStock = workshopStock[material.id] || 0;
-      if (availableStock < material.quantity) {
-        missing.push({
-          ...material,
-          missingQuantity: material.quantity - availableStock
-        });
-      }
-    });
-    
-    setMissingMaterials(missing);
-  };
-
-  const handleCreateDeliveryForMissing = () => {
-    setShowDeliveryForm(true);
-  };
-
-  const handleDeliverySuccess = () => {
-    setShowDeliveryForm(false);
-    loadWorkshopStock(); // Recargar stock después de crear entrega
-  };
-
-  const formatMaterialDisplayName = (material: any) => {
-    const baseName = `${material.name} (${material.sku})`;
-    return material.color ? `${baseName} - ${material.color}` : baseName;
-  };
 
   const handleGeneralSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,31 +128,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     return selectedProducts.reduce((total, product) => total + product.quantity, 0);
   };
 
-  const handleAddMaterials = async () => {
-    if (selectedMaterials.length === 0) {
-      return;
-    }
-
-    const consumptions = selectedMaterials.map(material => ({
-      material_id: material.id,
-      quantity: material.quantity
-    }));
-
-    const success = await consumeOrderMaterials(order.id, consumptions);
-    if (success) {
-      setSelectedMaterials([]);
-      onSuccess();
-      setActiveTab('details'); // Switch back to details tab
-    }
-  };
-
-  const handleMaterialsChange = (materials: any[]) => {
-    setSelectedMaterials(materials);
-  };
-
-  const getTotalMaterialsToAdd = () => {
-    return selectedMaterials.reduce((total, material) => total + material.quantity, 0);
-  };
 
   const handleWorkshopAssignment = async () => {
     if (!selectedWorkshopId) return;
@@ -263,26 +164,22 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="details" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
-              <span>Información General</span>
+              <span>Detalles</span>
             </TabsTrigger>
             <TabsTrigger value="quantities" className="flex items-center space-x-2">
               <Package className="w-4 h-4" />
-              <span>Cantidades de Producción</span>
+              <span>Cantidades</span>
             </TabsTrigger>
             <TabsTrigger value="add-products" className="flex items-center space-x-2">
               <Plus className="w-4 h-4" />
               <span>Agregar Productos</span>
             </TabsTrigger>
-            <TabsTrigger value="add-materials" className="flex items-center space-x-2">
-              <Wrench className="w-4 h-4" />
-              <span>Agregar Materiales</span>
-            </TabsTrigger>
             <TabsTrigger value="consume-materials" className="flex items-center space-x-2">
               <Truck className="w-4 h-4" />
-              <span>Consumir Materiales</span>
+              <span>Materiales</span>
             </TabsTrigger>
             <TabsTrigger value="files" className="flex items-center space-x-2">
               <FileText className="w-4 h-4" />
@@ -484,96 +381,10 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
             </div>
           </TabsContent>
 
-          <TabsContent value="add-materials" className="space-y-6 mt-6">
-            <div className="space-y-4">
-              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                <h4 className="font-medium text-orange-900 mb-2">Registrar consumo de materiales</h4>
-                <p className="text-sm text-orange-700">
-                  Selecciona los materiales que se consumieron durante la producción de esta orden.
-                </p>
-              </div>
-
-              {/* Alertas de materiales faltantes */}
-              {orderWorkshopId && missingMaterials.length > 0 && (
-                <Alert className="border-yellow-200 bg-yellow-50">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  <AlertDescription className="text-yellow-800">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <strong>Materiales insuficientes en el taller:</strong>
-                        <ul className="mt-1 text-sm">
-                          {missingMaterials.map((material, index) => {
-                            const mat = materials.find(m => m.id === material.id);
-                            return (
-                              <li key={index}>
-                                • {formatMaterialDisplayName(mat)}: faltan {material.missingQuantity} {mat?.unit}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={handleCreateDeliveryForMissing}
-                        size="sm"
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                      >
-                        <Truck className="w-4 h-4 mr-1" />
-                        Crear Entrega
-                      </Button>
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {orderWorkshopId ? (
-                <WorkshopMaterialSelector
-                  workshopId={orderWorkshopId}
-                  selectedMaterials={selectedMaterials}
-                  onMaterialsChange={setSelectedMaterials}
-                />
-              ) : (
-                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                  <h4 className="font-medium text-yellow-900 mb-2">Orden sin taller asignado</h4>
-                  <p className="text-sm text-yellow-700">
-                    Esta orden no tiene un taller asignado. Para agregar materiales, primero debe asignarse a un taller.
-                  </p>
-                </div>
-              )}
-
-              {selectedMaterials.length > 0 && (
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                  <h4 className="font-medium text-green-900 mb-2">Resumen de materiales a consumir</h4>
-                  <p className="text-sm text-green-700">
-                    Se consumirán {getTotalMaterialsToAdd()} unidades en total ({selectedMaterials.length} materiales diferentes)
-                  </p>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-4 pt-6 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setActiveTab('details')}
-                  disabled={consumingMaterials}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleAddMaterials}
-                  disabled={consumingMaterials || selectedMaterials.length === 0 || missingMaterials.length > 0}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  {consumingMaterials ? 'Registrando...' : `Registrar ${selectedMaterials.length} Materiales`}
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-
           <TabsContent value="consume-materials" className="space-y-6 mt-6">
             <div className="space-y-4">
               <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                <h4 className="font-medium text-red-900 mb-2">Consumir Materiales</h4>
+                <h4 className="font-medium text-red-900 mb-2">Materiales</h4>
                 <p className="text-sm text-red-700">
                   Registra los materiales que fueron consumidos durante la producción de esta orden.
                 </p>
@@ -622,22 +433,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
         </Tabs>
       </DialogContent>
       
-      {/* Modal para crear entrega de materiales */}
-      {showDeliveryForm && orderWorkshopId && (
-        <MaterialDeliveryForm
-          onClose={() => setShowDeliveryForm(false)}
-          onDeliveryCreated={handleDeliverySuccess}
-          prefilledData={{
-            workshopId: orderWorkshopId,
-            materials: missingMaterials.map(material => ({
-              materialId: material.id,
-              quantity: material.missingQuantity,
-              unit: materials.find(m => m.id === material.id)?.unit || '',
-              notes: `Entrega para orden ${order.order_number}`
-            }))
-          }}
-        />
-      )}
 
       {/* Modal para consumir materiales */}
       {showMaterialConsumption && orderWorkshopId && (
