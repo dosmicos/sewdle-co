@@ -11,7 +11,7 @@ import MobileNavigation from "@/components/MobileNavigation";
 import { FadeUp } from "@/components/animations/FadeUp";
 import { LetterReveal } from "@/components/animations/LetterReveal";
 import { Ticker } from "@/components/animations/Ticker";
-import { StickyHowItWorks } from "@/components/StickyHowItWorks";
+
 import { ANIMATION, scaleInVariants, slideFromCornerVariants, getReducedMotionVariants } from "@/lib/animations";
 
 const LandingPage = () => {
@@ -81,7 +81,7 @@ const LandingPage = () => {
               <button onClick={() => scrollToSection('casos-de-uso')} className="text-sm text-muted-foreground hover:text-primary transition-colors font-medium">
                 {t('nav.useCases')}
               </button>
-              <button onClick={() => scrollToSection('pricing')} className="text-sm text-muted-foreground hover:text-primary transition-colors font-medium">
+              <button onClick={() => scrollToSection('como-funciona')} className="text-sm text-muted-foreground hover:text-primary transition-colors font-medium">
                 Precios
               </button>
               <button onClick={() => scrollToSection('integraciones')} className="text-sm text-muted-foreground hover:text-primary transition-colors font-medium">
@@ -349,8 +349,111 @@ const LandingPage = () => {
         </section>
       </FadeUp>
 
-      {/* Sticky How It Works Section */}
-      <StickyHowItWorks />
+      {/* How It Works Section */}
+      <section id="como-funciona" className="py-24 bg-background">
+        <div className="container max-w-6xl mx-auto px-4">
+          <FadeUp className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+              Cómo funciona
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              {t('landing.pricing.subtitle')}
+            </p>
+          </FadeUp>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {/* Starter */}
+            <FadeUp delay={0.1}>
+              <Card className="p-8 border-2 border-border hover:shadow-lg transition-shadow">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Starter</h3>
+                  <p className="text-muted-foreground mb-6">Para emprendedores y pequeños talleres</p>
+                  <div className="text-4xl font-bold text-foreground mb-6">Gratis</div>
+                  <div className="space-y-3 mb-8">
+                    {[
+                      "Hasta 10 órdenes por mes",
+                      "1 taller conectado",
+                      "Dashboard básico",
+                      "Soporte por email"
+                    ].map((feature, index) => (
+                      <div key={index} className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={handleCTAClick} variant="outline" className="w-full">
+                    Empezar gratis
+                  </Button>
+                </div>
+              </Card>
+            </FadeUp>
+
+            {/* Professional */}
+            <FadeUp delay={0.2}>
+              <Card className="p-8 border-2 border-primary shadow-xl relative">
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                  <span className="bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-medium">
+                    Más popular
+                  </span>
+                </div>
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Professional</h3>
+                  <p className="text-muted-foreground mb-6">Para marcas en crecimiento</p>
+                  <div className="text-4xl font-bold text-foreground mb-2">$49</div>
+                  <p className="text-muted-foreground mb-6">por mes</p>
+                  <div className="space-y-3 mb-8">
+                    {[
+                      "Órdenes ilimitadas",
+                      "Hasta 5 talleres",
+                      "Dashboard avanzado",
+                      "Integraciones con Shopify",
+                      "Soporte prioritario"
+                    ].map((feature, index) => (
+                      <div key={index} className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={handleCTAClick} className="w-full">
+                    Probar 14 días gratis
+                  </Button>
+                </div>
+              </Card>
+            </FadeUp>
+
+            {/* Enterprise */}
+            <FadeUp delay={0.3}>
+              <Card className="p-8 border-2 border-border hover:shadow-lg transition-shadow">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Enterprise</h3>
+                  <p className="text-muted-foreground mb-6">Para grandes operaciones</p>
+                  <div className="text-4xl font-bold text-foreground mb-2">Custom</div>
+                  <p className="text-muted-foreground mb-6">Contacta para precio</p>
+                  <div className="space-y-3 mb-8">
+                    {[
+                      "Talleres ilimitados",
+                      "API personalizada",
+                      "Soporte 24/7",
+                      "Integraciones custom",
+                      "Onboarding dedicado"
+                    ].map((feature, index) => (
+                      <div key={index} className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={handleCTAClick} variant="outline" className="w-full">
+                    Contactar ventas
+                  </Button>
+                </div>
+              </Card>
+            </FadeUp>
+          </div>
+        </div>
+      </section>
 
       {/* Benefits Section */}
       <section className="py-24 bg-background">
@@ -556,111 +659,6 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-24 bg-background">
-        <div className="container max-w-6xl mx-auto px-4">
-          <FadeUp className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-              {t('landing.pricing.title')}
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              {t('landing.pricing.subtitle')}
-            </p>
-          </FadeUp>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Starter */}
-            <FadeUp delay={0.1}>
-              <Card className="p-8 border-2 border-border hover:shadow-lg transition-shadow">
-                <div className="text-center">
-                  <h3 className="text-2xl font-bold text-foreground mb-2">Starter</h3>
-                  <p className="text-muted-foreground mb-6">Para emprendedores y pequeños talleres</p>
-                  <div className="text-4xl font-bold text-foreground mb-6">Gratis</div>
-                  <div className="space-y-3 mb-8">
-                    {[
-                      "Hasta 10 órdenes por mes",
-                      "1 taller conectado",
-                      "Dashboard básico",
-                      "Soporte por email"
-                    ].map((feature, index) => (
-                      <div key={index} className="flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                        <span className="text-sm text-muted-foreground">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button onClick={handleCTAClick} variant="outline" className="w-full">
-                    Empezar gratis
-                  </Button>
-                </div>
-              </Card>
-            </FadeUp>
-
-            {/* Professional */}
-            <FadeUp delay={0.2}>
-              <Card className="p-8 border-2 border-primary shadow-xl relative">
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-medium">
-                    Más popular
-                  </span>
-                </div>
-                <div className="text-center">
-                  <h3 className="text-2xl font-bold text-foreground mb-2">Professional</h3>
-                  <p className="text-muted-foreground mb-6">Para marcas en crecimiento</p>
-                  <div className="text-4xl font-bold text-foreground mb-2">$49</div>
-                  <p className="text-muted-foreground mb-6">por mes</p>
-                  <div className="space-y-3 mb-8">
-                    {[
-                      "Órdenes ilimitadas",
-                      "Hasta 5 talleres",
-                      "Dashboard avanzado",
-                      "Integraciones con Shopify",
-                      "Soporte prioritario"
-                    ].map((feature, index) => (
-                      <div key={index} className="flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                        <span className="text-sm text-muted-foreground">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button onClick={handleCTAClick} className="w-full">
-                    Probar 14 días gratis
-                  </Button>
-                </div>
-              </Card>
-            </FadeUp>
-
-            {/* Enterprise */}
-            <FadeUp delay={0.3}>
-              <Card className="p-8 border-2 border-border hover:shadow-lg transition-shadow">
-                <div className="text-center">
-                  <h3 className="text-2xl font-bold text-foreground mb-2">Enterprise</h3>
-                  <p className="text-muted-foreground mb-6">Para grandes operaciones</p>
-                  <div className="text-4xl font-bold text-foreground mb-2">Custom</div>
-                  <p className="text-muted-foreground mb-6">Contacta para precio</p>
-                  <div className="space-y-3 mb-8">
-                    {[
-                      "Talleres ilimitados",
-                      "API personalizada",
-                      "Soporte 24/7",
-                      "Integraciones custom",
-                      "Onboarding dedicado"
-                    ].map((feature, index) => (
-                      <div key={index} className="flex items-center gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                        <span className="text-sm text-muted-foreground">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button onClick={handleCTAClick} variant="outline" className="w-full">
-                    Contactar ventas
-                  </Button>
-                </div>
-              </Card>
-            </FadeUp>
-          </div>
-        </div>
-      </section>
 
       {/* Final CTA Section */}
       <section className="py-24 bg-gradient-to-br from-primary/5 to-secondary/5">
