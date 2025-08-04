@@ -66,11 +66,19 @@ export const useWorkshopAssignments = () => {
         throw new Error('Usuario no autenticado');
       }
 
+      // Obtener la organización actual del usuario
+      const { data: orgData, error: orgError } = await supabase.rpc('get_current_organization_safe');
+      
+      if (orgError) {
+        throw new Error('No se pudo obtener la organización del usuario');
+      }
+
       const { data, error } = await supabase
         .from('workshop_assignments')
         .insert({
           ...assignmentData,
-          assigned_by: session.user.id
+          assigned_by: session.user.id,
+          organization_id: orgData // Agregar organization_id requerido por RLS
         })
         .select()
         .single();
