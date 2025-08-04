@@ -85,7 +85,7 @@ export const useWorkshopAssignments = () => {
 
       if (error) throw error;
 
-      await fetchAssignments();
+      // No llamar fetchAssignments aquí para evitar errores innecesarios en el modal
       toast({
         title: "Éxito",
         description: "Asignación creada correctamente",
