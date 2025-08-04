@@ -116,41 +116,41 @@ const LandingPage = () => {
               {t('problem.title')}
             </h2>
             
-            {/* Static Connection Lines */}
-            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100">
-              {/* Line from Top Left box to Central title */}
+            {/* Connection Lines between problem cards and central title */}
+            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+              {/* Line from Top Left problem card to Central title box */}
               <line
-                x1="25" y1="25"
-                x2="35" y2="45"
+                x1="25" y1="35"
+                x2="40" y2="50"
                 stroke="#000000"
-                strokeWidth="0.3"
+                strokeWidth="0.2"
                 opacity="0.4"
               />
               
-              {/* Line from Top Right box to Central title */}
+              {/* Line from Top Right problem card to Central title box */}
               <line
-                x1="75" y1="25"
-                x2="65" y2="45"
+                x1="75" y1="35"
+                x2="60" y2="50"
                 stroke="#000000"
-                strokeWidth="0.3"
+                strokeWidth="0.2"
                 opacity="0.4"
               />
               
-              {/* Line from Bottom Left box to Central title */}
+              {/* Line from Bottom Left problem card to Central title box */}
               <line
-                x1="25" y1="75"
-                x2="35" y2="55"
+                x1="25" y1="65"
+                x2="40" y2="50"
                 stroke="#000000"
-                strokeWidth="0.3"
+                strokeWidth="0.2"
                 opacity="0.4"
               />
               
-              {/* Line from Bottom Right box to Central title */}
+              {/* Line from Bottom Right problem card to Central title box */}
               <line
-                x1="75" y1="75"
-                x2="65" y2="55"
+                x1="75" y1="65"
+                x2="60" y2="50"
                 stroke="#000000"
-                strokeWidth="0.3"
+                strokeWidth="0.2"
                 opacity="0.4"
               />
             </svg>
