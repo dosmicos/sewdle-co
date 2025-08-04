@@ -20,6 +20,8 @@ import MaterialDeliveryForm from './supplies/MaterialDeliveryForm';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMaterials } from '@/hooks/useMaterials';
 import OrderFileManager from './OrderFileManager';
+import { useWorkshopAssignments } from '@/hooks/useWorkshopAssignments';
+import { useWorkshops } from '@/hooks/useWorkshops';
 
 interface OrderEditModalProps {
   order: any;
@@ -39,11 +41,16 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [workshopStock, setWorkshopStock] = useState<Record<string, number>>({});
   const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
+  const [expectedDate, setExpectedDate] = useState('');
+  const [assignmentNotes, setAssignmentNotes] = useState('');
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
   const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
   const { materials } = useMaterials();
+  const { createAssignment, loading: assignmentLoading } = useWorkshopAssignments();
+  const { workshops } = useWorkshops();
 
   const canEditQuantities = isAdmin || isDesigner;
 
@@ -221,6 +228,31 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     return selectedMaterials.reduce((total, material) => total + material.quantity, 0);
   };
 
+  const handleWorkshopAssignment = async () => {
+    if (!selectedWorkshopId) return;
+
+    const assignmentData = {
+      order_id: order.id,
+      workshop_id: selectedWorkshopId,
+      expected_completion_date: expectedDate || null,
+      notes: assignmentNotes.trim() || null,
+      status: 'assigned' as const
+    };
+
+    const result = await createAssignment(assignmentData);
+    if (result.data) {
+      setOrderWorkshopId(selectedWorkshopId);
+      setSelectedWorkshopId('');
+      setExpectedDate('');
+      setAssignmentNotes('');
+      onSuccess(); // Actualizar la orden en la lista
+    }
+  };
+
+  const getAssignedWorkshop = () => {
+    return workshops.find(workshop => workshop.id === orderWorkshopId);
+  };
+
   if (!order) return null;
 
   return (
@@ -295,6 +327,92 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                   placeholder="Notas adicionales sobre la orden..."
                   className="min-h-[100px]"
                 />
+              </div>
+
+              {/* Sección de asignación de taller */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Asignación de Taller</h3>
+                
+                {orderWorkshopId ? (
+                  // Mostrar taller asignado
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Wrench className="w-5 h-5 text-green-600" />
+                      <h4 className="font-medium text-green-900">Taller Asignado</h4>
+                    </div>
+                    <p className="text-green-700">
+                      <strong>{getAssignedWorkshop()?.name || 'Taller no encontrado'}</strong>
+                    </p>
+                    <p className="text-sm text-green-600 mt-1">
+                      Esta orden está asignada al taller seleccionado
+                    </p>
+                  </div>
+                ) : (
+                  // Formulario de asignación
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <div className="flex items-center space-x-2 mb-4">
+                      <AlertTriangle className="w-5 h-5 text-blue-600" />
+                      <h4 className="font-medium text-blue-900">Asignar Taller a la Orden</h4>
+                    </div>
+                    <p className="text-sm text-blue-700 mb-4">
+                      Esta orden no está asignada a ningún taller. Selecciona un taller para comenzar la producción.
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="workshopSelect">Taller</Label>
+                          <Select value={selectedWorkshopId} onValueChange={setSelectedWorkshopId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar taller" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {workshops
+                                .filter(workshop => workshop.status === 'active')
+                                .map((workshop) => (
+                                <SelectItem key={workshop.id} value={workshop.id}>
+                                  {workshop.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="expectedDate">Fecha Esperada de Entrega</Label>
+                          <Input
+                            id="expectedDate"
+                            type="date"
+                            value={expectedDate}
+                            onChange={(e) => setExpectedDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="assignmentNotes">Notas de Asignación</Label>
+                        <Textarea
+                          id="assignmentNotes"
+                          value={assignmentNotes}
+                          onChange={(e) => setAssignmentNotes(e.target.value)}
+                          placeholder="Instrucciones especiales para el taller..."
+                          className="min-h-[80px]"
+                        />
+                      </div>
+                      
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={handleWorkshopAssignment}
+                          disabled={assignmentLoading || !selectedWorkshopId}
+                          className="bg-blue-500 hover:bg-blue-600 text-white"
+                        >
+                          {assignmentLoading ? 'Asignando...' : 'Asignar Taller'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end space-x-4 pt-6">
