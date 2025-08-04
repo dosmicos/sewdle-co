@@ -193,28 +193,23 @@ const LandingPage = () => {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {[
               {
-                icon: '🧵',
                 title: t('features.centralized.title'),
                 description: t('features.centralized.desc')
               },
               {
-                icon: '🔗',
                 title: t('features.connected.title'),
                 description: t('features.connected.desc')
               },
               {
-                icon: '📦',
                 title: t('features.traceability.title'),
                 description: t('features.traceability.desc')
               },
               {
-                icon: '📊',
                 title: t('features.dashboard.title'),
                 description: t('features.dashboard.desc')
               }
             ].map((feature, index) => (
               <Card key={index} className="p-6 text-center hover:shadow-lg transition-shadow duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
-                <div className="text-4xl mb-4">{feature.icon}</div>
                 <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">{feature.title}</h3>
                 <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{feature.description}</p>
               </Card>
@@ -353,7 +348,7 @@ const LandingPage = () => {
               Comienza gratis y escala según tus necesidades
             </p>
             <div className="inline-flex items-center bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-              ✨ 14 días de prueba gratis en todos los planes
+              14 días de prueba gratis en todos los planes
             </div>
           </div>
           
