@@ -214,8 +214,9 @@ const MaterialForm = ({ material, onClose, onMaterialSaved }: MaterialFormProps)
               <Input
                 type="number"
                 min="0"
+                step="0.01"
                 value={formData.min_stock_alert}
-                onChange={(e) => handleInputChange('min_stock_alert', parseInt(e.target.value) || 0)}
+                onChange={(e) => handleInputChange('min_stock_alert', parseFloat(e.target.value) || 0)}
                 placeholder="0"
               />
             </div>
