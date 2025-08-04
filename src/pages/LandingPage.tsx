@@ -246,10 +246,10 @@ const LandingPage = () => {
       </section>
 
       {/* Differentials Section */}
-      <section id="integraciones" className="py-16 sm:py-20 bg-gray-900">
+      <section id="integraciones" className="py-16 sm:py-20 bg-gradient-to-br from-cream-100 to-cream-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-white mb-4 font-semibold">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-foreground mb-4 font-semibold">
               {t('differentials.title')}
             </h2>
           </div>
@@ -273,11 +273,11 @@ const LandingPage = () => {
                 description: t('differentials.ui.desc')
               }
             ].map((differential, index) => (
-              <div key={index} className="flex items-start space-x-4 p-6 bg-gray-800 rounded-xl">
-                <div className="w-3 h-3 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div key={index} className="flex items-start space-x-4 p-6 bg-card/80 backdrop-blur-sm rounded-xl border border-border/50 hover:shadow-lg transition-all duration-300">
+                <div className="w-3 h-3 bg-primary rounded-full mt-2 flex-shrink-0"></div>
                 <div>
-                  <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">{differential.title}</h3>
-                  <p className="text-sm sm:text-base text-gray-300">{differential.description}</p>
+                  <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2">{differential.title}</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground">{differential.description}</p>
                 </div>
               </div>
             ))}
