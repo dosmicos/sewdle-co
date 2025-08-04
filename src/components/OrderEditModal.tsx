@@ -42,7 +42,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
-  const [expectedDate, setExpectedDate] = useState('');
   const [assignmentNotes, setAssignmentNotes] = useState('');
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
@@ -234,7 +233,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     const assignmentData = {
       order_id: order.id,
       workshop_id: selectedWorkshopId,
-      expected_completion_date: expectedDate || null,
+      expected_completion_date: dueDate || null, // Usar la fecha de entrega del formulario principal
       notes: assignmentNotes.trim() || null,
       status: 'assigned' as const
     };
@@ -243,7 +242,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     if (result.data) {
       setOrderWorkshopId(selectedWorkshopId);
       setSelectedWorkshopId('');
-      setExpectedDate('');
       setAssignmentNotes('');
       onSuccess(); // Actualizar la orden en la lista
     }
@@ -359,34 +357,22 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                     </p>
                     
                     <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="workshopSelect">Taller</Label>
-                          <Select value={selectedWorkshopId} onValueChange={setSelectedWorkshopId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar taller" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {workshops
-                                .filter(workshop => workshop.status === 'active')
-                                .map((workshop) => (
-                                <SelectItem key={workshop.id} value={workshop.id}>
-                                  {workshop.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="expectedDate">Fecha Esperada de Entrega</Label>
-                          <Input
-                            id="expectedDate"
-                            type="date"
-                            value={expectedDate}
-                            onChange={(e) => setExpectedDate(e.target.value)}
-                          />
-                        </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="workshopSelect">Taller</Label>
+                        <Select value={selectedWorkshopId} onValueChange={setSelectedWorkshopId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar taller" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {workshops
+                              .filter(workshop => workshop.status === 'active')
+                              .map((workshop) => (
+                              <SelectItem key={workshop.id} value={workshop.id}>
+                                {workshop.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       <div className="space-y-2">
