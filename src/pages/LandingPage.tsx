@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ArrowRight, CheckCircle } from 'lucide-react';
@@ -8,11 +8,17 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import LanguageSelector from '@/components/LanguageSelector';
 import MobileNavigation from '@/components/MobileNavigation';
+import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const isMobile = useIsMobile();
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"]
+  });
 
   const handleCTAClick = () => {
     navigate('/signup');
@@ -107,122 +113,245 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Problem Section */}
-      <section className="py-16 sm:py-20 bg-gradient-to-br from-background to-secondary relative overflow-hidden">
+      {/* Hero Problem Section - Delphi Style */}
+      <motion.section 
+        ref={heroRef}
+        className="relative py-20 overflow-hidden bg-gradient-radial from-cream-50 via-cream-100 to-cream-200"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
           {/* Mobile Layout */}
           <div className="block md:hidden">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-8 bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/20 shadow-lg mx-4">
-                {t('problem.title')}
-              </h2>
-            </div>
+            <motion.div 
+              className="text-center mb-8"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, type: "spring", stiffness: 50 }}
+            >
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-cream-300/30 shadow-lg mx-4">
+                <motion.h2 
+                  className="text-2xl sm:text-3xl font-bold text-cream-800"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ 
+                    duration: 0.5,
+                    delay: 0.2,
+                    ease: "easeOut"
+                  }}
+                >
+                  {"¿Tu producción se está volviendo caótica?".split("").map((char, index) => (
+                    <motion.span
+                      key={index}
+                      initial={{ y: 12, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{
+                        duration: 0.3,
+                        delay: 0.3 + index * 0.014,
+                        ease: "easeOut"
+                      }}
+                    >
+                      {char}
+                    </motion.span>
+                  ))}
+                </motion.h2>
+              </div>
+            </motion.div>
             
             {/* Mobile Problem Cards */}
             <div className="space-y-4 px-4">
-              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
-                <div className="flex items-start space-x-3">
-                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                  <p className="text-sm text-foreground">{t('problem.1')}</p>
-                </div>
-              </div>
-              
-              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
-                <div className="flex items-start space-x-3">
-                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                  <p className="text-sm text-foreground">{t('problem.2')}</p>
-                </div>
-              </div>
-              
-              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
-                <div className="flex items-start space-x-3">
-                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                  <p className="text-sm text-foreground">{t('problem.3')}</p>
-                </div>
-              </div>
-              
-              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
-                <div className="flex items-start space-x-3">
-                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                  <p className="text-sm text-foreground">{t('problem.4')}</p>
-                </div>
-              </div>
+              {[
+                "Órdenes dispersas en emails y hojas de cálculo",
+                "Cero visibilidad en tiempo real del avance", 
+                "Comunicación fragmentada con talleres",
+                "Escalar = más estrés y errores"
+              ].map((problem, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ 
+                    opacity: 0,
+                    x: index % 2 === 0 ? -16 : 16,
+                    y: index < 2 ? -16 : 16,
+                    filter: "blur(4px)"
+                  }}
+                  animate={{ 
+                    opacity: 1,
+                    x: 0,
+                    y: 0,
+                    filter: "blur(0px)"
+                  }}
+                  transition={{
+                    duration: 0.35,
+                    delay: 0.5 + index * 0.08,
+                    ease: "easeOut"
+                  }}
+                  className="bg-white/60 p-4 rounded-xl border border-cream-300/20 hover:shadow-md transition-all duration-300"
+                >
+                  <div className="flex items-start space-x-3">
+                     <motion.div 
+                       className="w-3 h-3 bg-orange-500 rounded-full mt-3 flex-shrink-0"
+                       animate={{ 
+                         scale: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : [1, 1.06, 1]
+                       }}
+                       transition={{
+                         duration: 2.5,
+                         repeat: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : Infinity,
+                         ease: "easeInOut",
+                         delay: index * 0.3
+                       }}
+                       style={{ 
+                         filter: "brightness(0.7)",
+                         opacity: 0.9
+                       }}
+                     />
+                    <p className="text-sm text-cream-700">{problem}</p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
 
           {/* Desktop Layout */}
           <div className="hidden md:block">
-            {/* Central Title */}
-            <div className="flex items-center justify-center min-h-[400px] relative">
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-20 max-w-2xl bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/20 shadow-lg">
-                {t('problem.title')}
-              </h2>
+            <div className="flex items-center justify-center min-h-[500px] relative">
+              {/* Central Title Card */}
+              <motion.div
+                initial={{ scale: 0.975, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ 
+                  duration: 0.45,
+                  type: "spring",
+                  stiffness: 50,
+                  delay: 0.2
+                }}
+                 style={window.matchMedia('(prefers-reduced-motion: reduce)').matches ? {} : {
+                   scale: useTransform(scrollYProgress, [0, 0.2], [1, 0.985]),
+                   opacity: useTransform(scrollYProgress, [0, 0.2], [1, 0.92])
+                 }}
+                className="z-20 max-w-3xl bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-cream-300/30 shadow-xl"
+              >
+                <h2 className="text-4xl lg:text-5xl font-bold text-center text-cream-800">
+                  {"¿Tu producción se está volviendo caótica?".split("").map((char, index) => (
+                    <motion.span
+                      key={index}
+                      initial={{ y: 12, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{
+                        duration: 0.3,
+                        delay: 0.4 + index * 0.014,
+                        ease: "easeOut"
+                      }}
+                    >
+                      {char}
+                    </motion.span>
+                  ))}
+                </h2>
+              </motion.div>
               
-              {/* Corner Connection Lines */}
-              <div className="absolute inset-0 pointer-events-none z-10">
-                {/* Top Left Corner Line */}
-                <div className="absolute top-[25%] left-[32%] w-[18%] border-b border-border/20"></div>
-                <div className="absolute top-[25%] left-[32%] h-[25%] border-l border-border/20"></div>
-                
-                {/* Top Right Corner Line */}
-                <div className="absolute top-[25%] right-[32%] w-[18%] border-b border-border/20"></div>
-                <div className="absolute top-[25%] right-[32%] h-[25%] border-r border-border/20"></div>
-                
-                {/* Bottom Left Corner Line */}
-                <div className="absolute bottom-[25%] left-[32%] w-[18%] border-t border-border/20"></div>
-                <div className="absolute bottom-[25%] left-[32%] h-[25%] border-l border-border/20"></div>
-                
-                {/* Bottom Right Corner Line */}
-                <div className="absolute bottom-[25%] right-[32%] w-[18%] border-t border-border/20"></div>
-                <div className="absolute bottom-[25%] right-[32%] h-[25%] border-r border-border/20"></div>
-              </div>
-              
-              {/* Floating Problems - Positioned around the title */}
+              {/* Problem Cards positioned in corners */}
               <div className="absolute inset-0">
-                {/* Top Left */}
-                <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
-                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                      <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Top Right */}
-                <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
-                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                      <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Bottom Left */}
-                <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
-                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                      <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Bottom Right */}
-                <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
-                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                      <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
-                    </div>
-                  </div>
-                </div>
+                {[
+                  { 
+                    text: "Órdenes dispersas en emails y hojas de cálculo",
+                    position: "top-0 left-0",
+                    initialX: -16,
+                    initialY: -16,
+                    delay: 0.6
+                  },
+                  { 
+                    text: "Cero visibilidad en tiempo real del avance",
+                    position: "top-0 right-0",
+                    initialX: 16,
+                    initialY: -16,
+                    delay: 0.72
+                  },
+                  { 
+                    text: "Comunicación fragmentada con talleres", 
+                    position: "bottom-0 left-0",
+                    initialX: -16,
+                    initialY: 16,
+                    delay: 0.84
+                  },
+                  { 
+                    text: "Escalar = más estrés y errores",
+                    position: "bottom-0 right-0", 
+                    initialX: 16,
+                    initialY: 16,
+                    delay: 0.96
+                  }
+                ].map((problem, index) => {
+                  const yOffset = useTransform(
+                    scrollYProgress, 
+                    [0, 1], 
+                    [0, index % 2 === 0 ? -12 : 12]
+                  );
+                  
+                  return (
+                    <motion.div
+                      key={index}
+                      className={`absolute ${problem.position} max-w-xs z-15`}
+                      initial={{ 
+                        opacity: 0,
+                        x: problem.initialX,
+                        y: problem.initialY,
+                        filter: "blur(4px)"
+                      }}
+                      animate={{ 
+                        opacity: 1,
+                        x: 0,
+                        y: 0,
+                        filter: "blur(0px)"
+                      }}
+                      transition={{
+                        duration: 0.4,
+                        delay: problem.delay,
+                        ease: "easeOut"
+                      }}
+                       style={window.matchMedia('(prefers-reduced-motion: reduce)').matches ? {} : {
+                         y: yOffset
+                       }}
+                    >
+                       <motion.div 
+                         className="bg-white/60 p-6 rounded-xl border border-cream-300/20 hover:shadow-lg transition-all duration-300"
+                         animate={window.matchMedia('(prefers-reduced-motion: reduce)').matches ? {} : {
+                           y: [0, -2, 0, 2, 0]
+                         }}
+                         transition={{
+                           duration: 6 + Math.random() * 2,
+                           repeat: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : Infinity,
+                           ease: "easeInOut",
+                           delay: index * 1.2
+                         }}
+                       >
+                        <div className="flex items-start space-x-3">
+                           <motion.div 
+                             className="w-4 h-4 bg-orange-500 rounded-full mt-2 flex-shrink-0"
+                             animate={{ 
+                               scale: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : [1, 1.06, 1]
+                             }}
+                             transition={{
+                               duration: 2.5,
+                               repeat: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : Infinity,
+                               ease: "easeInOut",
+                               delay: index * 0.5
+                             }}
+                             style={{ 
+                               filter: "brightness(0.7)",
+                               opacity: 0.9
+                             }}
+                           />
+                          <p className="text-base text-cream-700 leading-relaxed">{problem.text}</p>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Features Section - Sewdle en 30s */}
       <section id="como-funciona" className="py-16 sm:py-20">
