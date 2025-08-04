@@ -31,6 +31,7 @@ interface DeliveryDetailsProps {
 const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated }: DeliveryDetailsProps) => {
   const [delivery, setDelivery] = useState(initialDelivery);
   const [isEditing, setIsEditing] = useState(false);
+  const [isReEditingQuality, setIsReEditingQuality] = useState(false); // Nuevo estado para re-edición
   const [quantityData, setQuantityData] = useState<any>({});
   const [qualityData, setQualityData] = useState<any>({ variants: {} });
   const [generalNotes, setGeneralNotes] = useState('');
@@ -544,6 +545,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
 
   // Nueva función para habilitar re-edición de calidad
   const enableQualityReEdit = () => {
+    // Activar modo de re-edición
+    setIsReEditingQuality(true);
+    
     // Reset quality data to allow re-editing
     const resetQualityData: any = { variants: {} };
     delivery.delivery_items?.forEach((item: any) => {
@@ -559,6 +563,82 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
       title: "Modo de re-edición activado",
       description: "Ahora puede modificar las cantidades aprobadas/defectuosas y resincronizar",
     });
+  };
+
+  // Función para cancelar re-edición
+  const cancelQualityReEdit = () => {
+    setIsReEditingQuality(false);
+    // Restaurar datos originales
+    const originalQualityData: any = { variants: {} };
+    delivery.delivery_items?.forEach((item: any) => {
+      originalQualityData.variants[item.id] = {
+        approved: item.quantity_approved || 0,
+        defective: item.quantity_defective || 0,
+        reason: item.quality_notes || ''
+      };
+    });
+    setQualityData(originalQualityData);
+    
+    toast({
+      title: "Cancelado",
+      description: "Cambios cancelados. Se han restaurado los valores originales.",
+    });
+  };
+
+  // Función para guardar cambios de re-edición
+  const saveQualityReEdit = async () => {
+    try {
+      // Validar que las cantidades sumen correctamente
+      const hasErrors = delivery.delivery_items?.some((item: any) => {
+        const variantData = qualityData.variants[item.id];
+        const totalReviewed = (variantData?.approved || 0) + (variantData?.defective || 0);
+        return totalReviewed !== item.quantity_delivered;
+      });
+
+      if (hasErrors) {
+        toast({
+          title: "Error de validación",
+          description: "Las cantidades aprobadas + defectuosas deben sumar el total entregado para cada variante",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Actualizar todos los items
+      for (const item of delivery.delivery_items || []) {
+        const variantData = qualityData.variants[item.id];
+        if (variantData) {
+          await supabase
+            .from('delivery_items')
+            .update({
+              quantity_approved: variantData.approved,
+              quantity_defective: variantData.defective,
+              quality_notes: variantData.reason || null,
+              // Reset sync status if quantities changed
+              synced_to_shopify: false,
+              last_sync_attempt: null
+            })
+            .eq('id', item.id);
+        }
+      }
+
+      setIsReEditingQuality(false);
+      
+      toast({
+        title: "Cambios guardados",
+        description: "Los cambios en la revisión de calidad han sido guardados. Puede resincronizar si es necesario.",
+      });
+
+      loadDelivery();
+      onDeliveryUpdated?.();
+    } catch (error) {
+      console.error('Error saving quality re-edit:', error);
+      toast({
+        title: "Error",
+        description: "Error al guardar los cambios",
+        variant: "destructive",
+      });
+    }
   };
 
   // Función para resincronizar toda la entrega
@@ -745,7 +825,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
   const qualityTotals = getQualityTotals();
   const discrepancies = getDiscrepancies();
   const canEdit = canEditDeliveries && ['pending', 'in_quality'].includes(delivery.status);
-  const canProcessQuality = canEditDeliveries && ['pending', 'in_quality'].includes(delivery.status);
+  const canProcessQuality = canEditDeliveries && (['pending', 'in_quality'].includes(delivery.status) || isReEditingQuality);
   const hasDiscrepancies = discrepancies.length > 0;
 
   // Get sorted delivery items
@@ -1173,7 +1253,27 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
                 </div>
               )}
 
-              {!isEditing && (
+              {/* Botones para modo de re-edición */}
+              {isReEditingQuality && (
+                <div className="flex justify-end space-x-2">
+                  <Button 
+                    variant="outline"
+                    onClick={cancelQualityReEdit}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={saveQualityReEdit}
+                    disabled={loading}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Guardar Cambios
+                  </Button>
+                </div>
+              )}
+
+              {!isEditing && !isReEditingQuality && (
                 <div className="flex justify-end">
                   <Button 
                     onClick={handleQualitySubmit} 
@@ -1186,7 +1286,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
                 </div>
               )}
 
-              {hasDiscrepancies && !isEditing && (
+              {hasDiscrepancies && !isEditing && !isReEditingQuality && (
                 <p className="text-sm text-orange-600 text-center">
                   <AlertTriangle className="w-4 h-4 inline mr-1" />
                   Corrige las discrepancias antes de procesar el control de calidad
