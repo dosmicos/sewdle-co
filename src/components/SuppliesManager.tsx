@@ -214,8 +214,8 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-6">
                   <label className="block text-sm font-medium text-black mb-2">
                     Material *
                   </label>
@@ -244,7 +244,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                   )}
                 </div>
 
-                <div>
+                <div className="lg:col-span-3">
                   <label className="block text-sm font-medium text-black mb-2">
                     Cantidad *
                   </label>
@@ -258,7 +258,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                   />
                 </div>
 
-                <div>
+                <div className="lg:col-span-3">
                   <label className="block text-sm font-medium text-black mb-2">
                     Unidad
                   </label>

@@ -187,8 +187,8 @@ const WorkshopMaterialSelector = ({
       </div>
 
       {selectedMaterials.map((material, index) => (
-        <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg">
-          <div className="space-y-2">
+        <div key={index} className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="lg:col-span-5 space-y-2">
             <Label>Material</Label>
             <SearchableMaterialSelector
               materials={getAvailableForSelection(material.id).map(mat => ({
@@ -207,7 +207,7 @@ const WorkshopMaterialSelector = ({
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="lg:col-span-2 space-y-2">
             <Label>Cantidad</Label>
             <Input
               type="number"
@@ -226,7 +226,7 @@ const WorkshopMaterialSelector = ({
             )}
           </div>
 
-          <div className="space-y-2">
+          <div className="lg:col-span-2 space-y-2">
             <Label>Unidad</Label>
             <Input
               value={material.unit || ''}
@@ -236,7 +236,7 @@ const WorkshopMaterialSelector = ({
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="lg:col-span-2 space-y-2">
             <Label>Disponible</Label>
             <div className="flex items-center h-10 px-3 rounded-md border bg-gray-100 text-sm">
               {material.available > 0 ? (
@@ -249,7 +249,7 @@ const WorkshopMaterialSelector = ({
             </div>
           </div>
 
-          <div className="flex items-end">
+          <div className="lg:col-span-1 flex items-end">
             <Button
               type="button"
               variant="outline"
