@@ -139,7 +139,7 @@ const LandingPage = () => {
             <div className="absolute inset-0">
               {/* Top Left */}
               <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/50 p-4 rounded-xl shadow-sm border border-border/10 hover:shadow-md transition-all duration-300 hover:scale-105 hover:border-primary/20">
+                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
@@ -149,7 +149,7 @@ const LandingPage = () => {
               
               {/* Top Right */}
               <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
-                <div className="bg-card/50 p-4 rounded-xl shadow-sm border border-border/10 hover:shadow-md transition-all duration-300 hover:scale-105 hover:border-primary/20">
+                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
@@ -159,7 +159,7 @@ const LandingPage = () => {
               
               {/* Bottom Left */}
               <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/50 p-4 rounded-xl shadow-sm border border-border/10 hover:shadow-md transition-all duration-300 hover:scale-105 hover:border-primary/20">
+                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
@@ -169,7 +169,7 @@ const LandingPage = () => {
               
               {/* Bottom Right */}
               <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
-                <div className="bg-card/50 p-4 rounded-xl shadow-sm border border-border/10 hover:shadow-md transition-all duration-300 hover:scale-105 hover:border-primary/20">
+                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
                   <div className="flex items-start space-x-3">
                     <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
                     <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
