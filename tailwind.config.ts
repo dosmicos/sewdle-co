@@ -62,6 +62,19 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// Colores adicionales para el diseño elegante
+				cream: {
+					50: '#fefcf9',
+					100: '#f8f5f0',
+					200: '#f1ebe2',
+					300: '#e7ddd4',
+					400: '#d4c4b5',
+					500: '#c1a897',
+					600: '#a3968d',
+					700: '#8b5a2b',
+					800: '#6b5b54',
+					900: '#2d2826'
 				}
 			},
 			borderRadius: {
