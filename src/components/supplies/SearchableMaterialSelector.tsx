@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, ChevronDown, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -100,52 +101,54 @@ const SearchableMaterialSelector = ({
             onValueChange={setSearchTerm}
             className="h-12"
           />
-          <CommandList className="max-h-[300px]">
-            <CommandEmpty>No se encontraron materiales.</CommandEmpty>
-            {Object.entries(groupedMaterials).map(([category, categoryMaterials]) => (
-              <CommandGroup key={category} heading={category}>
-                {categoryMaterials.map((material) => (
-                  <CommandItem
-                    key={material.id}
-                    value={`${material.name} ${material.sku} ${material.color || ''}`}
-                    onSelect={() => {
-                      onValueChange(material.id);
-                      setOpen(false);
-                      setSearchTerm('');
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center flex-1 min-w-0">
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4 shrink-0",
-                            value === material.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="font-medium truncate">
-                            {formatMaterialDisplayName(material)}
-                          </span>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>Stock: {material.current_stock} {material.unit}</span>
-                            {material.supplier && (
-                              <span>• {material.supplier}</span>
+          <ScrollArea className="h-[300px]">
+            <CommandList>
+              <CommandEmpty>No se encontraron materiales.</CommandEmpty>
+              {Object.entries(groupedMaterials).map(([category, categoryMaterials]) => (
+                <CommandGroup key={category} heading={category}>
+                  {categoryMaterials.map((material) => (
+                    <CommandItem
+                      key={material.id}
+                      value={`${material.name} ${material.sku} ${material.color || ''}`}
+                      onSelect={() => {
+                        onValueChange(material.id);
+                        setOpen(false);
+                        setSearchTerm('');
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center flex-1 min-w-0">
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 shrink-0",
+                              value === material.id ? "opacity-100" : "opacity-0"
                             )}
+                          />
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="font-medium truncate">
+                              {formatMaterialDisplayName(material)}
+                            </span>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>Stock: {material.current_stock} {material.unit}</span>
+                              {material.supplier && (
+                                <span>• {material.supplier}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        {material.color && (
+                          <Badge variant="outline" className="ml-2 text-xs px-2 py-0 shrink-0">
+                            {material.color}
+                          </Badge>
+                        )}
                       </div>
-                      {material.color && (
-                        <Badge variant="outline" className="ml-2 text-xs px-2 py-0 shrink-0">
-                          {material.color}
-                        </Badge>
-                      )}
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
+            </CommandList>
+          </ScrollArea>
         </Command>
       </PopoverContent>
     </Popover>
