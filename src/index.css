@@ -79,9 +79,7 @@
     --sidebar-ring: #d4a574;
   }
 
-  * {
-    border-color: hsl(var(--border));
-  }
+  /* Removed global border-color override to allow Tailwind opacity classes to work */
   
   body {
     background-color: hsl(var(--background));
