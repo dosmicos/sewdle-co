@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   FileText, 
   CheckCircle, 
@@ -252,28 +253,12 @@ const WorkshopDashboard = () => {
                   Unidades entregadas y aprobadas por {viewMode === 'weekly' ? 'semana' : 'mes'}
                 </p>
               </div>
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('weekly')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    viewMode === 'weekly'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Semanal
-                </button>
-                <button
-                  onClick={() => setViewMode('monthly')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    viewMode === 'monthly'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Mensual
-                </button>
-              </div>
+              <Tabs value={viewMode} onValueChange={(value: 'weekly' | 'monthly') => setViewMode(value)}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="weekly">Semanal</TabsTrigger>
+                  <TabsTrigger value="monthly">Mensual</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
