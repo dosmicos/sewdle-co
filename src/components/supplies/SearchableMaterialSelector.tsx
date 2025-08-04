@@ -100,7 +100,7 @@ const SearchableMaterialSelector = ({
             onValueChange={setSearchTerm}
             className="h-12"
           />
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList className="max-h-[300px]">
             <CommandEmpty>No se encontraron materiales.</CommandEmpty>
             {Object.entries(groupedMaterials).map(([category, categoryMaterials]) => (
               <CommandGroup key={category} heading={category}>
