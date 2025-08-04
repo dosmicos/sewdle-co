@@ -17,6 +17,7 @@ import { Settings, Package, AlertTriangle, Plus, Wrench, Truck, FileText } from 
 import WorkshopMaterialSelector from './WorkshopMaterialSelector';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import MaterialDeliveryForm from './supplies/MaterialDeliveryForm';
+import MaterialConsumptionForm from './supplies/MaterialConsumptionForm';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMaterials } from '@/hooks/useMaterials';
 import OrderFileManager from './OrderFileManager';
@@ -41,6 +42,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [workshopStock, setWorkshopStock] = useState<Record<string, number>>({});
   const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [showMaterialConsumption, setShowMaterialConsumption] = useState(false);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
@@ -261,7 +263,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="details" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
               <span>Información General</span>
@@ -277,6 +279,10 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
             <TabsTrigger value="add-materials" className="flex items-center space-x-2">
               <Wrench className="w-4 h-4" />
               <span>Agregar Materiales</span>
+            </TabsTrigger>
+            <TabsTrigger value="consume-materials" className="flex items-center space-x-2">
+              <Truck className="w-4 h-4" />
+              <span>Consumir Materiales</span>
             </TabsTrigger>
             <TabsTrigger value="files" className="flex items-center space-x-2">
               <FileText className="w-4 h-4" />
@@ -564,6 +570,47 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
             </div>
           </TabsContent>
 
+          <TabsContent value="consume-materials" className="space-y-6 mt-6">
+            <div className="space-y-4">
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <h4 className="font-medium text-red-900 mb-2">Consumir Materiales</h4>
+                <p className="text-sm text-red-700">
+                  Registra los materiales que fueron consumidos durante la producción de esta orden.
+                </p>
+              </div>
+
+              {orderWorkshopId ? (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-green-900">Orden asignada al taller</h4>
+                      <p className="text-sm text-green-700">
+                        Taller: <strong>{getAssignedWorkshop()?.name || 'Taller no encontrado'}</strong>
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        Los materiales se consumirán del stock de este taller
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => setShowMaterialConsumption(true)}
+                      className="bg-red-500 hover:bg-red-600 text-white"
+                    >
+                      <Truck className="w-4 h-4 mr-2" />
+                      Consumir Materiales
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <h4 className="font-medium text-yellow-900 mb-2">Orden sin taller asignado</h4>
+                  <p className="text-sm text-yellow-700">
+                    Esta orden debe estar asignada a un taller antes de poder consumir materiales.
+                  </p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
           <TabsContent value="files" className="space-y-6 mt-6">
             <OrderFileManager 
               orderId={order.id}
@@ -588,6 +635,20 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
               unit: materials.find(m => m.id === material.id)?.unit || '',
               notes: `Entrega para orden ${order.order_number}`
             }))
+          }}
+        />
+      )}
+
+      {/* Modal para consumir materiales */}
+      {showMaterialConsumption && orderWorkshopId && (
+        <MaterialConsumptionForm
+          orderId={order.id}
+          orderNumber={order.order_number}
+          workshopId={orderWorkshopId}
+          onClose={() => setShowMaterialConsumption(false)}
+          onConsumptionCompleted={() => {
+            setShowMaterialConsumption(false);
+            onSuccess(); // Actualizar los datos de la orden
           }}
         />
       )}

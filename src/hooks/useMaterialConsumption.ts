@@ -62,21 +62,52 @@ export const useMaterialConsumption = () => {
     }
   };
 
-  const getMaterialAvailability = async (materialId: string) => {
+  const getMaterialAvailability = async (materialId: string, workshopId?: string) => {
     try {
-      const { data, error } = await supabase
-        .from('materials')
-        .select('current_stock, min_stock_alert, name, unit')
-        .eq('id', materialId)
-        .single();
+      if (workshopId) {
+        // Obtener stock específico del taller usando la función SQL
+        const { data: workshopMaterials, error: workshopError } = await supabase
+          .rpc('get_material_deliveries_with_real_balance');
 
-      if (error) throw error;
+        if (workshopError) throw workshopError;
 
-      return {
-        ...data,
-        available: data.current_stock || 0,
-        isLowStock: (data.current_stock || 0) <= (data.min_stock_alert || 0)
-      };
+        // Encontrar el material específico en el taller específico
+        const materialInWorkshop = workshopMaterials?.find(
+          (item: any) => item.material_id === materialId && item.workshop_id === workshopId
+        );
+
+        // También obtener información básica del material
+        const { data: materialData, error: materialError } = await supabase
+          .from('materials')
+          .select('min_stock_alert, name, unit')
+          .eq('id', materialId)
+          .single();
+
+        if (materialError) throw materialError;
+
+        const available = materialInWorkshop?.real_balance || 0;
+
+        return {
+          ...materialData,
+          available,
+          isLowStock: available <= (materialData.min_stock_alert || 0)
+        };
+      } else {
+        // Fallback al stock global si no se especifica taller
+        const { data, error } = await supabase
+          .from('materials')
+          .select('current_stock, min_stock_alert, name, unit')
+          .eq('id', materialId)
+          .single();
+
+        if (error) throw error;
+
+        return {
+          ...data,
+          available: data.current_stock || 0,
+          isLowStock: (data.current_stock || 0) <= (data.min_stock_alert || 0)
+        };
+      }
     } catch (error) {
       console.error('Error getting material availability:', error);
       return null;

@@ -11,6 +11,7 @@ import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 interface MaterialConsumptionFormProps {
   orderId: string;
   orderNumber: string;
+  workshopId?: string;
   onClose: () => void;
   onConsumptionCompleted?: () => void;
 }
@@ -23,7 +24,7 @@ interface ConsumptionItem {
   availableStock?: number;
 }
 
-const MaterialConsumptionForm = ({ orderId, orderNumber, onClose, onConsumptionCompleted }: MaterialConsumptionFormProps) => {
+const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, onConsumptionCompleted }: MaterialConsumptionFormProps) => {
   const [consumptions, setConsumptions] = useState<ConsumptionItem[]>([
     { material_id: '', quantity: 0 }
   ]);
@@ -49,7 +50,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, onClose, onConsumptionC
     // Si se cambia el material, obtener información adicional
     if (field === 'material_id' && value) {
       const selectedMaterial = materials.find(m => m.id === value);
-      const availability = await getMaterialAvailability(value);
+      const availability = await getMaterialAvailability(value, workshopId);
       
       if (selectedMaterial && availability) {
         updated[index] = {
@@ -81,7 +82,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, onClose, onConsumptionC
         newErrors[`quantity_${index}`] = 'La cantidad debe ser mayor a 0';
       }
       if (consumption.availableStock !== undefined && consumption.quantity > consumption.availableStock) {
-        newErrors[`quantity_${index}`] = `Stock insuficiente. Disponible: ${consumption.availableStock} ${consumption.unit || ''}`;
+        newErrors[`quantity_${index}`] = `Stock insuficiente en este taller. Disponible: ${consumption.availableStock} ${consumption.unit || ''}`;
       }
     });
 
@@ -198,9 +199,9 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, onClose, onConsumptionC
                               <SelectItem key={material.id} value={material.id}>
                                 <div className="flex items-center justify-between w-full">
                                   <span>{material.sku} - {material.name}</span>
-                                  <span className="text-xs text-gray-500 ml-2">
-                                    Stock: {material.current_stock} {material.unit}
-                                  </span>
+                                   <span className="text-xs text-gray-500 ml-2">
+                                     Stock global: {material.current_stock} {material.unit}
+                                   </span>
                                 </div>
                               </SelectItem>
                             ))}
@@ -231,13 +232,13 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, onClose, onConsumptionC
 
                       <div>
                         <label className="block text-sm font-medium text-black mb-2">
-                          Unidad / Stock Disponible
+                          Stock en Taller
                         </label>
                         <div className="p-2 bg-gray-50 rounded border text-sm">
                           {consumption.unit && (
                             <div>Unidad: {consumption.unit}</div>
                           )}
-                          {consumption.availableStock !== undefined && (
+                          {consumption.availableStock !== undefined ? (
                             <div className={`flex items-center ${
                               consumption.availableStock <= (selectedMaterial?.min_stock_alert || 0) 
                                 ? 'text-red-600' : 'text-green-600'
@@ -245,7 +246,11 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, onClose, onConsumptionC
                               {consumption.availableStock <= (selectedMaterial?.min_stock_alert || 0) && (
                                 <AlertTriangle className="w-4 h-4 mr-1" />
                               )}
-                              Disponible: {consumption.availableStock} {consumption.unit}
+                              Disponible en taller: {consumption.availableStock} {consumption.unit}
+                            </div>
+                          ) : (
+                            <div className="text-gray-500 text-xs">
+                              {workshopId ? 'Sin stock en este taller' : 'Selecciona un material'}
                             </div>
                           )}
                         </div>
