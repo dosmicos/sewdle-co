@@ -325,7 +325,7 @@ const LandingPage = () => {
                 description: t('differentials.ui.desc')
               }
             ].map((differential, index) => (
-              <div key={index} className="flex items-start space-x-4 p-6 bg-card/80 backdrop-blur-sm rounded-xl border border-border/50 hover:shadow-lg transition-all duration-300">
+              <div key={index} className="flex items-start space-x-4 p-6 bg-card/50 rounded-xl border border-border/10 hover:shadow-md transition-all duration-300">
                 <div className="w-3 h-3 bg-primary rounded-full mt-2 flex-shrink-0"></div>
                 <div>
                   <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2">{differential.title}</h3>
