@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Package, Minus } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { AlertTriangle, Package, Minus, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 
@@ -29,6 +31,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
     { material_id: '', quantity: 0 }
   ]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [openSelectors, setOpenSelectors] = useState<Record<number, boolean>>({});
 
   const { materials, loading: materialsLoading } = useMaterials();
   const { consumeOrderMaterials, loading: consumingLoading, getMaterialAvailability } = useMaterialConsumption();
@@ -187,26 +190,72 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
                         <label className="block text-sm font-medium text-black mb-2">
                           Material *
                         </label>
-                        <Select
-                          value={consumption.material_id}
-                          onValueChange={(value) => updateConsumption(index, 'material_id', value)}
+                        <Popover 
+                          open={openSelectors[index] || false} 
+                          onOpenChange={(open) => setOpenSelectors(prev => ({ ...prev, [index]: open }))}
                         >
-                          <SelectTrigger className={errors[`material_${index}`] ? 'border-red-500' : ''}>
-                            <SelectValue placeholder="Seleccionar material..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {materials.map((material) => (
-                              <SelectItem key={material.id} value={material.id}>
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{material.sku} - {material.name}</span>
-                                   <span className="text-xs text-gray-500 ml-2">
-                                     Stock global: {material.current_stock} {material.unit}
-                                   </span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openSelectors[index] || false}
+                              className={cn(
+                                "w-full justify-between",
+                                errors[`material_${index}`] ? 'border-red-500' : '',
+                                !consumption.material_id && "text-muted-foreground"
+                              )}
+                            >
+                              {consumption.material_id
+                                ? (() => {
+                                    const material = materials.find((m) => m.id === consumption.material_id);
+                                    return material ? `${material.sku} - ${material.name}` : "Seleccionar material...";
+                                  })()
+                                : "Seleccionar material..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-0 z-50 bg-white border border-gray-200 shadow-lg">
+                            <Command>
+                              <CommandInput placeholder="Buscar material..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>No se encontraron materiales.</CommandEmpty>
+                                <CommandGroup>
+                                  {materials.map((material) => (
+                                    <CommandItem
+                                      key={material.id}
+                                      value={`${material.sku} ${material.name} ${material.color || ''}`}
+                                      onSelect={() => {
+                                        updateConsumption(index, 'material_id', material.id);
+                                        setOpenSelectors(prev => ({ ...prev, [index]: false }));
+                                      }}
+                                      className="cursor-pointer"
+                                    >
+                                      <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center">
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              consumption.material_id === material.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div>
+                                            <div className="font-medium">{material.sku} - {material.name}</div>
+                                            {material.color && (
+                                              <div className="text-xs text-gray-500">{material.color}</div>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <span className="text-xs text-gray-500 ml-2">
+                                          Stock: {material.current_stock} {material.unit}
+                                        </span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         {errors[`material_${index}`] && (
                           <p className="text-red-500 text-xs mt-1">{errors[`material_${index}`]}</p>
                         )}
