@@ -641,31 +641,34 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
     }
   };
 
-  // Función para resincronizar toda la entrega
+  // Función para resincronizar solo items que necesitan sincronización
   const resyncEntireDelivery = async () => {
-    const approvedItems = delivery.delivery_items?.filter((item: any) => item.quantity_approved > 0);
+    // Filtrar solo items que tienen cantidades aprobadas Y que NO están sincronizados
+    const itemsToSync = delivery.delivery_items?.filter((item: any) => 
+      item.quantity_approved > 0 && !item.synced_to_shopify
+    );
     
-    if (!approvedItems || approvedItems.length === 0) {
+    if (!itemsToSync || itemsToSync.length === 0) {
       toast({
-        title: "Error",
-        description: "No hay items aprobados para resincronizar",
-        variant: "destructive",
+        title: "Sin cambios pendientes",
+        description: "No hay items que requieran sincronización. Todos los items aprobados ya están sincronizados con Shopify.",
+        variant: "default",
       });
       return;
     }
 
     const confirmResync = window.confirm(
-      `¿Desea resincronizar toda la entrega ${delivery.tracking_number} con Shopify?\n\nSe sincronizarán ${approvedItems.length} variante(s) con un total de ${approvedItems.reduce((sum: number, item: any) => sum + item.quantity_approved, 0)} unidades aprobadas.\n\n⚠️ ATENCIÓN: Esto actualizará el inventario en Shopify.`
+      `¿Desea sincronizar los cambios pendientes de la entrega ${delivery.tracking_number} con Shopify?\n\nSe sincronizarán ${itemsToSync.length} variante(s) con un total de ${itemsToSync.reduce((sum: number, item: any) => sum + item.quantity_approved, 0)} unidades aprobadas.\n\n⚠️ ATENCIÓN: Esto actualizará el inventario en Shopify solo con los cambios pendientes.`
     );
 
     if (!confirmResync) return;
 
     try {
-      setSyncingVariants(new Set(approvedItems.map((item: any) => item.id)));
+      setSyncingVariants(new Set(itemsToSync.map((item: any) => item.id)));
 
       const syncData = {
         deliveryId: delivery.id,
-        approvedItems: approvedItems.map(item => ({
+        approvedItems: itemsToSync.map(item => ({
           variantId: item.order_items?.product_variants?.id,
           skuVariant: item.order_items?.product_variants?.sku_variant,
           quantityApproved: item.quantity_approved
@@ -675,8 +678,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
       const result = await syncApprovedItemsToShopify(syncData);
 
       if (result.success) {
-        // Marcar todas las variantes como sincronizadas
-        for (const item of approvedItems) {
+        // Marcar solo las variantes procesadas como sincronizadas
+        for (const item of itemsToSync) {
           await supabase
             .from('delivery_items')
             .update({
@@ -687,8 +690,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
         }
 
         toast({
-          title: "Entrega resincronizada",
-          description: `${approvedItems.length} variante(s) resincronizada(s) exitosamente con Shopify`,
+          title: "Cambios sincronizados",
+          description: `${itemsToSync.length} variante(s) sincronizada(s) exitosamente con Shopify`,
         });
 
         loadDelivery();
@@ -698,7 +701,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
       console.error('Error resyncing delivery:', error);
       toast({
         title: "Error de resincronización",
-        description: "Error al resincronizar la entrega con Shopify",
+        description: "Error al sincronizar los cambios con Shopify",
         variant: "destructive",
       });
     } finally {
