@@ -68,11 +68,15 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
     const missing: Supply[] = [];
     
     supplies.forEach(supply => {
+      if (!supply.materialId) return;
+      
       const availableStock = workshopStock[supply.materialId] || 0;
+      
       if (availableStock < supply.quantity) {
+        const missingQuantity = supply.quantity - availableStock;
         missing.push({
           ...supply,
-          quantity: supply.quantity - availableStock
+          quantity: missingQuantity
         });
       }
     });
