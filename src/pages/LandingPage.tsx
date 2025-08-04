@@ -116,19 +116,23 @@ const LandingPage = () => {
               {t('problem.title')}
             </h2>
             
-            {/* Connection Lines using CSS */}
+            {/* Corner Connection Lines */}
             <div className="absolute inset-0 pointer-events-none z-10">
-              {/* Line from Top Left to Center */}
-              <div className="absolute top-[15%] left-[20%] w-[15%] h-px bg-black opacity-30 origin-left transform rotate-[25deg]"></div>
+              {/* Top Left Corner Line */}
+              <div className="absolute top-[25%] left-[32%] w-[18%] border-b border-black/30"></div>
+              <div className="absolute top-[25%] left-[32%] h-[25%] border-l border-black/30"></div>
               
-              {/* Line from Top Right to Center */}
-              <div className="absolute top-[15%] right-[20%] w-[15%] h-px bg-black opacity-30 origin-right transform rotate-[-25deg]"></div>
+              {/* Top Right Corner Line */}
+              <div className="absolute top-[25%] right-[32%] w-[18%] border-b border-black/30"></div>
+              <div className="absolute top-[25%] right-[32%] h-[25%] border-r border-black/30"></div>
               
-              {/* Line from Bottom Left to Center */}
-              <div className="absolute bottom-[15%] left-[20%] w-[15%] h-px bg-black opacity-30 origin-left transform rotate-[-25deg]"></div>
+              {/* Bottom Left Corner Line */}
+              <div className="absolute bottom-[25%] left-[32%] w-[18%] border-t border-black/30"></div>
+              <div className="absolute bottom-[25%] left-[32%] h-[25%] border-l border-black/30"></div>
               
-              {/* Line from Bottom Right to Center */}
-              <div className="absolute bottom-[15%] right-[20%] w-[15%] h-px bg-black opacity-30 origin-right transform rotate-[25deg]"></div>
+              {/* Bottom Right Corner Line */}
+              <div className="absolute bottom-[25%] right-[32%] w-[18%] border-t border-black/30"></div>
+              <div className="absolute bottom-[25%] right-[32%] h-[25%] border-r border-black/30"></div>
             </div>
             
             {/* Floating Problems - Positioned around the title */}
