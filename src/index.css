@@ -7,76 +7,76 @@
 @layer base {
   :root {
     /* Paleta de colores cálida y elegante - tonos beige/crema */
-    --background: #fefcf9;
-    --foreground: #2d2826;
-    --card: #ffffff;
-    --card-foreground: #2d2826;
-    --popover: #ffffff;
-    --popover-foreground: #2d2826;
+    --background: 36 67 98;
+    --foreground: 30 11 16;
+    --card: 0 0 100;
+    --card-foreground: 30 11 16;
+    --popover: 0 0 100;
+    --popover-foreground: 30 11 16;
     
     /* Colores de acción con gradiente elegante */
-    --primary: #8b5a2b;
-    --primary-foreground: #fefcf9;
-    --secondary: #f5f1eb;
-    --secondary-foreground: #2d2826;
+    --primary: 32 52 36;
+    --primary-foreground: 36 67 98;
+    --secondary: 39 29 89;
+    --secondary-foreground: 30 11 16;
     
     /* Colores de estado suaves */
-    --muted: #f8f5f0;
-    --muted-foreground: #6b5b54;
-    --accent: #ede7df;
-    --accent-foreground: #2d2826;
-    --destructive: #c2410c;
-    --destructive-foreground: #fefcf9;
+    --muted: 38 50 96;
+    --muted-foreground: 30 11 40;
+    --accent: 37 29 89;
+    --accent-foreground: 30 11 16;
+    --destructive: 18 89 40;
+    --destructive-foreground: 36 67 98;
     
     /* Bordes e inputs en tonos cálidos */
-    --border: #e7ddd4;
-    --input: #e7ddd4;
-    --ring: #8b5a2b;
+    --border: 39 29 89;
+    --input: 39 29 89;
+    --ring: 32 52 36;
     --radius: 0.75rem;
     
     /* Sidebar */
-    --sidebar-background: #ffffff;
-    --sidebar-foreground: #2d2826;
-    --sidebar-primary: #8b5a2b;
-    --sidebar-primary-foreground: #fefcf9;
-    --sidebar-accent: #f5f1eb;
-    --sidebar-accent-foreground: #2d2826;
-    --sidebar-border: #e7ddd4;
-    --sidebar-ring: #8b5a2b;
+    --sidebar-background: 0 0 100;
+    --sidebar-foreground: 30 11 16;
+    --sidebar-primary: 32 52 36;
+    --sidebar-primary-foreground: 36 67 98;
+    --sidebar-accent: 39 29 89;
+    --sidebar-accent-foreground: 30 11 16;
+    --sidebar-border: 39 29 89;
+    --sidebar-ring: 32 52 36;
   }
 
   .dark {
-    --background: #1a1715;
-    --foreground: #f5f1eb;
-    --card: #2d2826;
-    --card-foreground: #f5f1eb;
-    --popover: #2d2826;
-    --popover-foreground: #f5f1eb;
+    --background: 30 11 8;
+    --foreground: 39 29 89;
+    --card: 30 11 16;
+    --card-foreground: 39 29 89;
+    --popover: 30 11 16;
+    --popover-foreground: 39 29 89;
     
-    --primary: #d4a574;
-    --primary-foreground: #1a1715;
-    --secondary: #3a342f;
-    --secondary-foreground: #f5f1eb;
+    --primary: 34 46 64;
+    --primary-foreground: 30 11 8;
+    --secondary: 30 11 20;
+    --secondary-foreground: 39 29 89;
     
-    --muted: #3a342f;
-    --muted-foreground: #a3968d;
-    --accent: #3a342f;
-    --accent-foreground: #f5f1eb;
-    --destructive: #dc2626;
-    --destructive-foreground: #f5f1eb;
+    --muted: 30 11 20;
+    --muted-foreground: 30 15 60;
+    --accent: 30 11 20;
+    --accent-foreground: 39 29 89;
+    --destructive: 0 84 55;
+    --destructive-foreground: 39 29 89;
     
-    --border: #4a443e;
-    --input: #4a443e;
-    --ring: #d4a574;
+    --border: 30 11 28;
+    --input: 30 11 28;
+    --ring: 34 46 64;
     
-    --sidebar-background: #2d2826;
-    --sidebar-foreground: #f5f1eb;
-    --sidebar-primary: #d4a574;
-    --sidebar-primary-foreground: #1a1715;
-    --sidebar-accent: #3a342f;
-    --sidebar-accent-foreground: #f5f1eb;
-    --sidebar-border: #4a443e;
-    --sidebar-ring: #d4a574;
+    --sidebar-background: 30 11 16;
+    --sidebar-foreground: 39 29 89;
+    --sidebar-primary: 34 46 64;
+    --sidebar-primary-foreground: 30 11 8;
+    --sidebar-accent: 30 11 20;
+    --sidebar-accent-foreground: 39 29 89;
+    --sidebar-border: 30 11 28;
+    --sidebar-ring: 34 46 64;
   }
 
   /* Removed global border-color override to allow Tailwind opacity classes to work */
