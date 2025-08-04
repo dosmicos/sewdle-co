@@ -1,5 +1,6 @@
 import React from 'react';
 import { Toaster } from "sonner";
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -230,6 +231,7 @@ const App = () => {
                 className: 'toast-custom'
               }}
             />
+            <ShadcnToaster />
             <BrowserRouter>
               <AppContent />
             </BrowserRouter>
