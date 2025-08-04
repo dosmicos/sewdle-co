@@ -13,6 +13,7 @@ import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
+import SearchableMaterialSelector from './SearchableMaterialSelector';
 
 interface MaterialDeliveryItem {
   materialId: string;
@@ -206,26 +207,12 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
                         <Label className="text-sm font-medium text-black mb-2">
                           Material *
                         </Label>
-                        <Select
+                        <SearchableMaterialSelector
+                          materials={materials}
                           value={item.materialId}
                           onValueChange={(value) => updateDeliveryItem(index, 'materialId', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar material..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {materials.map((material) => (
-                              <SelectItem key={material.id} value={material.id}>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{formatMaterialDisplayName(material)}</span>
-                                  {material.color && (
-                                    <span className="text-xs text-gray-500">Color: {material.color}</span>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder="Buscar material..."
+                        />
                       </div>
 
                       <div>
