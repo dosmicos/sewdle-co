@@ -42,7 +42,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [missingMaterials, setMissingMaterials] = useState<any[]>([]);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
-  const [assignmentNotes, setAssignmentNotes] = useState('');
   const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
   const { consumeOrderMaterials, loading: consumingMaterials } = useMaterialConsumption();
   const { isAdmin, isDesigner } = useUserContext();
@@ -234,7 +233,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
       order_id: order.id,
       workshop_id: selectedWorkshopId,
       expected_completion_date: dueDate || null, // Usar la fecha de entrega del formulario principal
-      notes: assignmentNotes.trim() || null,
+      notes: null, // Sin notas de asignación
       status: 'assigned' as const
     };
 
@@ -242,7 +241,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     if (result.data) {
       setOrderWorkshopId(selectedWorkshopId);
       setSelectedWorkshopId('');
-      setAssignmentNotes('');
       onSuccess(); // Actualizar la orden en la lista
     }
   };
@@ -373,17 +371,6 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="assignmentNotes">Notas de Asignación</Label>
-                        <Textarea
-                          id="assignmentNotes"
-                          value={assignmentNotes}
-                          onChange={(e) => setAssignmentNotes(e.target.value)}
-                          placeholder="Instrucciones especiales para el taller..."
-                          className="min-h-[80px]"
-                        />
                       </div>
                       
                       <div className="flex justify-end">
