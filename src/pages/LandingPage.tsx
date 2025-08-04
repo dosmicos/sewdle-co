@@ -110,69 +110,112 @@ const LandingPage = () => {
       {/* Problem Section */}
       <section className="py-16 sm:py-20 bg-gradient-to-br from-background to-secondary relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative">
-          {/* Central Title */}
-          <div className="flex items-center justify-center min-h-[400px] relative">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-20 max-w-2xl bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/20 shadow-lg">
-              {t('problem.title')}
-            </h2>
-            
-            {/* Corner Connection Lines */}
-            <div className="absolute inset-0 pointer-events-none z-10">
-              {/* Top Left Corner Line */}
-              <div className="absolute top-[25%] left-[32%] w-[18%] border-b border-border/20"></div>
-              <div className="absolute top-[25%] left-[32%] h-[25%] border-l border-border/20"></div>
-              
-              {/* Top Right Corner Line */}
-              <div className="absolute top-[25%] right-[32%] w-[18%] border-b border-border/20"></div>
-              <div className="absolute top-[25%] right-[32%] h-[25%] border-r border-border/20"></div>
-              
-              {/* Bottom Left Corner Line */}
-              <div className="absolute bottom-[25%] left-[32%] w-[18%] border-t border-border/20"></div>
-              <div className="absolute bottom-[25%] left-[32%] h-[25%] border-l border-border/20"></div>
-              
-              {/* Bottom Right Corner Line */}
-              <div className="absolute bottom-[25%] right-[32%] w-[18%] border-t border-border/20"></div>
-              <div className="absolute bottom-[25%] right-[32%] h-[25%] border-r border-border/20"></div>
+          {/* Mobile Layout */}
+          <div className="block md:hidden">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-8 bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/20 shadow-lg mx-4">
+                {t('problem.title')}
+              </h2>
             </div>
             
-            {/* Floating Problems - Positioned around the title */}
-            <div className="absolute inset-0">
-              {/* Top Left */}
-              <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
-                  </div>
+            {/* Mobile Problem Cards */}
+            <div className="space-y-4 px-4">
+              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
+                <div className="flex items-start space-x-3">
+                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                  <p className="text-sm text-foreground">{t('problem.1')}</p>
                 </div>
               </div>
               
-              {/* Top Right */}
-              <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
-                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
-                  </div>
+              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
+                <div className="flex items-start space-x-3">
+                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                  <p className="text-sm text-foreground">{t('problem.2')}</p>
                 </div>
               </div>
               
-              {/* Bottom Left */}
-              <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
-                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
-                  </div>
+              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
+                <div className="flex items-start space-x-3">
+                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                  <p className="text-sm text-foreground">{t('problem.3')}</p>
                 </div>
               </div>
               
-              {/* Bottom Right */}
-              <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
-                <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
-                    <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
+              <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300">
+                <div className="flex items-start space-x-3">
+                  <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                  <p className="text-sm text-foreground">{t('problem.4')}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Layout */}
+          <div className="hidden md:block">
+            {/* Central Title */}
+            <div className="flex items-center justify-center min-h-[400px] relative">
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-foreground animate-fade-in z-20 max-w-2xl bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/20 shadow-lg">
+                {t('problem.title')}
+              </h2>
+              
+              {/* Corner Connection Lines */}
+              <div className="absolute inset-0 pointer-events-none z-10">
+                {/* Top Left Corner Line */}
+                <div className="absolute top-[25%] left-[32%] w-[18%] border-b border-border/20"></div>
+                <div className="absolute top-[25%] left-[32%] h-[25%] border-l border-border/20"></div>
+                
+                {/* Top Right Corner Line */}
+                <div className="absolute top-[25%] right-[32%] w-[18%] border-b border-border/20"></div>
+                <div className="absolute top-[25%] right-[32%] h-[25%] border-r border-border/20"></div>
+                
+                {/* Bottom Left Corner Line */}
+                <div className="absolute bottom-[25%] left-[32%] w-[18%] border-t border-border/20"></div>
+                <div className="absolute bottom-[25%] left-[32%] h-[25%] border-l border-border/20"></div>
+                
+                {/* Bottom Right Corner Line */}
+                <div className="absolute bottom-[25%] right-[32%] w-[18%] border-t border-border/20"></div>
+                <div className="absolute bottom-[25%] right-[32%] h-[25%] border-r border-border/20"></div>
+              </div>
+              
+              {/* Floating Problems - Positioned around the title */}
+              <div className="absolute inset-0">
+                {/* Top Left */}
+                <div className="absolute top-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
+                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                      <p className="text-sm sm:text-base text-foreground">{t('problem.1')}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Top Right */}
+                <div className="absolute top-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1s', animationFillMode: 'both' }}>
+                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                      <p className="text-sm sm:text-base text-foreground">{t('problem.2')}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Bottom Left */}
+                <div className="absolute bottom-0 left-0 sm:left-8 lg:left-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '1.5s', animationFillMode: 'both' }}>
+                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                      <p className="text-sm sm:text-base text-foreground">{t('problem.3')}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Bottom Right */}
+                <div className="absolute bottom-0 right-0 sm:right-8 lg:right-16 max-w-xs animate-fade-in z-15" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
+                  <div className="bg-card/30 p-4 rounded-xl border border-border/5 hover:shadow-sm transition-all duration-300 hover:border-primary/10">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-3 h-3 bg-destructive rounded-full mt-3 flex-shrink-0 animate-pulse"></div>
+                      <p className="text-sm sm:text-base text-foreground">{t('problem.4')}</p>
+                    </div>
                   </div>
                 </div>
               </div>
