@@ -119,59 +119,39 @@ const LandingPage = () => {
             {/* Animated Connection Lines */}
             <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 800 400">
               {/* Line to Top Left */}
-              <path
-                d="M400 200 L150 100"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_0.8s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 0.8s forwards, pulse-line 3s ease-in-out 3s infinite'
-                }}
+              <line
+                x1="400" y1="200"
+                x2="150" y2="100"
+                stroke="#FF5C02"
+                strokeWidth="3"
+                className="animate-infinite-line-1"
               />
               
               {/* Line to Top Right */}
-              <path
-                d="M400 200 L650 100"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_1.3s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 1.3s forwards, pulse-line 3s ease-in-out 3.5s infinite'
-                }}
+              <line
+                x1="400" y1="200"
+                x2="650" y2="100"
+                stroke="#FF5C02"
+                strokeWidth="3"
+                className="animate-infinite-line-2"
               />
               
               {/* Line to Bottom Left */}
-              <path
-                d="M400 200 L150 300"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_1.8s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 1.8s forwards, pulse-line 3s ease-in-out 4s infinite'
-                }}
+              <line
+                x1="400" y1="200"
+                x2="150" y2="300"
+                stroke="#FF5C02"
+                strokeWidth="3"
+                className="animate-infinite-line-3"
               />
               
               {/* Line to Bottom Right */}
-              <path
-                d="M400 200 L650 300"
-                stroke="hsl(var(--primary))"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5 5"
-                className="animate-[draw-line_2s_ease-out_2.3s_forwards] opacity-0"
-                style={{ 
-                  strokeDashoffset: 200,
-                  animation: 'draw-line 2s ease-out 2.3s forwards, pulse-line 3s ease-in-out 4.5s infinite'
-                }}
+              <line
+                x1="400" y1="200"
+                x2="650" y2="300"
+                stroke="#FF5C02"
+                strokeWidth="3"
+                className="animate-infinite-line-4"
               />
             </svg>
             

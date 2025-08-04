@@ -109,25 +109,22 @@ export default {
 						transform: 'translateY(0)'
 					}
 				},
-				'draw-line': {
-					'0%': { 
-						strokeDashoffset: '200', 
-						opacity: '0' 
+				'infinite-line-draw': {
+					'0%': {
+						strokeDasharray: '0, 1000',
+						opacity: '1'
 					},
-					'50%': { 
-						opacity: '1' 
+					'50%': {
+						strokeDasharray: '1000, 1000',
+						opacity: '1'
 					},
-					'100%': { 
-						strokeDashoffset: '0', 
-						opacity: '1' 
-					}
-				},
-				'pulse-line': {
-					'0%, 100%': { 
-						opacity: '1' 
+					'80%': {
+						strokeDasharray: '1000, 1000',
+						opacity: '1'
 					},
-					'50%': { 
-						opacity: '0.6' 
+					'100%': {
+						strokeDasharray: '0, 1000',
+						opacity: '0'
 					}
 				}
 			},
@@ -135,8 +132,10 @@ export default {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'fade-in': 'fade-in 0.3s ease-out',
-				'draw-line': 'draw-line 2s ease-out forwards',
-				'pulse-line': 'pulse-line 3s ease-in-out infinite'
+				'infinite-line-1': 'infinite-line-draw 4s ease-in-out 0.5s infinite',
+				'infinite-line-2': 'infinite-line-draw 4s ease-in-out 1s infinite',
+				'infinite-line-3': 'infinite-line-draw 4s ease-in-out 1.5s infinite',
+				'infinite-line-4': 'infinite-line-draw 4s ease-in-out 2s infinite'
 			},
 			fontFamily: {
 				'system': ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']
