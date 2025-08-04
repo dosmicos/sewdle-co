@@ -117,41 +117,41 @@ const LandingPage = () => {
             </h2>
             
             {/* Static Connection Lines */}
-            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 800 400">
-              {/* Line to Top Left */}
+            <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 100 100">
+              {/* Line from Top Left box to Central title */}
               <line
-                x1="400" y1="200"
-                x2="200" y2="120"
+                x1="25" y1="25"
+                x2="35" y2="45"
                 stroke="#000000"
-                strokeWidth="2"
-                opacity="0.3"
+                strokeWidth="0.3"
+                opacity="0.4"
               />
               
-              {/* Line to Top Right */}
+              {/* Line from Top Right box to Central title */}
               <line
-                x1="400" y1="200"
-                x2="600" y2="120"
+                x1="75" y1="25"
+                x2="65" y2="45"
                 stroke="#000000"
-                strokeWidth="2"
-                opacity="0.3"
+                strokeWidth="0.3"
+                opacity="0.4"
               />
               
-              {/* Line to Bottom Left */}
+              {/* Line from Bottom Left box to Central title */}
               <line
-                x1="400" y1="200"
-                x2="200" y2="280"
+                x1="25" y1="75"
+                x2="35" y2="55"
                 stroke="#000000"
-                strokeWidth="2"
-                opacity="0.3"
+                strokeWidth="0.3"
+                opacity="0.4"
               />
               
-              {/* Line to Bottom Right */}
+              {/* Line from Bottom Right box to Central title */}
               <line
-                x1="400" y1="200"
-                x2="600" y2="280"
+                x1="75" y1="75"
+                x2="65" y2="55"
                 stroke="#000000"
-                strokeWidth="2"
-                opacity="0.3"
+                strokeWidth="0.3"
+                opacity="0.4"
               />
             </svg>
             
