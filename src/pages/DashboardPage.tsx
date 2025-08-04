@@ -12,10 +12,8 @@ const DashboardPage = () => {
   return (
     <OrganizationGuard>
       <div className="p-6 space-y-6" style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
-        {isAdmin() ? (
+        {isAdmin() || isDesigner() ? (
           <AdminDashboard />
-        ) : isDesigner() ? (
-          <DesignerDashboard />
         ) : (
           <WorkshopDashboard />
         )}
