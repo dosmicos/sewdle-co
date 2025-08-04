@@ -27,7 +27,7 @@ interface AvailableOrder {
   created_at: string;
 }
 
-export const useWorkshopAssignments = () => {
+export const useWorkshopAssignments = (autoFetch: boolean = true) => {
   const [assignments, setAssignments] = useState<WorkshopAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -179,8 +179,10 @@ export const useWorkshopAssignments = () => {
   };
 
   useEffect(() => {
-    fetchAssignments();
-  }, []);
+    if (autoFetch) {
+      fetchAssignments();
+    }
+  }, [autoFetch]);
 
   return {
     assignments,

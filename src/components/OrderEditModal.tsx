@@ -47,7 +47,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const { isAdmin, isDesigner } = useUserContext();
   const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
   const { materials } = useMaterials();
-  const { createAssignment, loading: assignmentLoading } = useWorkshopAssignments();
+  const { createAssignment, loading: assignmentLoading } = useWorkshopAssignments(false);
   const { workshops } = useWorkshops();
 
   const canEditQuantities = isAdmin || isDesigner;
