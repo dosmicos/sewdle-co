@@ -15,6 +15,7 @@ interface ConsumptionRecord {
   orderId?: string;
   materialId: string;
   materialName: string;
+  materialColor: string;
   workshopId: string;
   workshopName: string;
   quantityConsumed: number;
@@ -76,6 +77,7 @@ const MaterialConsumptionManager = () => {
           orderId: consumption.order_id || '',
           materialId: consumption.material_id,
           materialName: consumption.material_name || 'Material desconocido',
+          materialColor: consumption.material_color || '',
           workshopId: consumption.workshop_id,
           workshopName: consumption.workshop_name || 'Sin asignar',
           quantityConsumed: Number(consumption.quantity_consumed),
@@ -215,6 +217,7 @@ const MaterialConsumptionManager = () => {
                 <TableRow>
                   <TableHead>Orden</TableHead>
                   <TableHead>Material</TableHead>
+                  <TableHead>Color</TableHead>
                   <TableHead>Taller</TableHead>
                   <TableHead>Cantidad Consumida</TableHead>
                   <TableHead>Fecha</TableHead>
@@ -225,6 +228,15 @@ const MaterialConsumptionManager = () => {
                   <TableRow key={`${consumption.materialId}-${consumption.workshopId}`}>
                     <TableCell className="font-medium">{consumption.orderNumber}</TableCell>
                     <TableCell>{consumption.materialName}</TableCell>
+                    <TableCell>
+                      {consumption.materialColor ? (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                          {consumption.materialColor}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-400 text-sm">Sin color</span>
+                      )}
+                    </TableCell>
                     <TableCell>{consumption.workshopName}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="border-red-500 text-red-700">

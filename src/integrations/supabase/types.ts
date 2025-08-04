@@ -2045,6 +2045,7 @@ export type Database = {
           material_name: string
           material_unit: string
           material_category: string
+          material_color: string
           workshop_name: string
           order_number: string
         }[]
