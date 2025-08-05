@@ -222,17 +222,33 @@ export const useAdminDashboardData = () => {
       });
 
       // Calculate scores and sort
-      const ranking = Object.values(workshopStats).map((workshop: any) => {
+      const workshopsArray = Object.values(workshopStats);
+      
+      // First pass: calculate quality scores
+      const workshopsWithQuality = workshopsArray.map((workshop: any) => {
         const qualityScore = workshop.deliveredUnits > 0 
           ? Math.round((workshop.approvedUnits / workshop.deliveredUnits) * 100)
           : 0;
         
-        // Composite score: rewards both volume and quality
-        const compositeScore = Math.round((workshop.approvedUnits * 100) / (workshop.deliveredUnits + 10));
+        return {
+          ...workshop,
+          qualityScore
+        };
+      });
+      
+      // Calculate volume scores based on relative ranking
+      const maxDelivered = Math.max(...workshopsWithQuality.map(w => w.deliveredUnits || 1));
+      
+      const ranking = workshopsWithQuality.map((workshop: any) => {
+        // Volume score: normalized to 0-100 based on delivered units
+        const volumeScore = Math.round((workshop.deliveredUnits / maxDelivered) * 100);
+        
+        // Hybrid balanced composite score: 70% quality + 30% volume
+        const compositeScore = Math.round((workshop.qualityScore * 0.7) + (volumeScore * 0.3));
         
         return {
           ...workshop,
-          qualityScore,
+          volumeScore,
           compositeScore
         };
       }).sort((a, b) => b.compositeScore - a.compositeScore).slice(0, 5);
