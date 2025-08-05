@@ -8,6 +8,7 @@ export interface WorkshopWithStats extends Workshop {
     unitsDeliveredLastWeek: number;
     qualityScore: number;
     activeOrders: number;
+    capacityUtilization: number;
   };
 }
 
@@ -111,12 +112,19 @@ export const useWorkshopsWithStats = () => {
             }
           }
 
+          // Calcular utilización de capacidad
+          const workshopCapacity = workshop.capacity || 0;
+          const capacityUtilization = workshopCapacity > 0 
+            ? Math.round((assignments?.length || 0) / workshopCapacity * 100)
+            : 0;
+
           return {
             ...workshop,
             stats: {
               unitsDeliveredLastWeek,
               qualityScore,
-              activeOrders: pendingUnits
+              activeOrders: pendingUnits,
+              capacityUtilization
             }
           };
         } catch (error) {
@@ -126,7 +134,8 @@ export const useWorkshopsWithStats = () => {
             stats: {
               unitsDeliveredLastWeek: 0,
               qualityScore: 0,
-              activeOrders: 0
+              activeOrders: 0,
+              capacityUtilization: 0
             }
           };
         }
