@@ -225,19 +225,24 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
                   </label>
                   {selectedWorkshop ? (
                     <SearchableMaterialSelector
-                      materials={materials.map(m => ({
-                        id: m.id,
-                        name: m.name,
-                        sku: m.sku,
-                        color: m.color,
-                        category: m.category,
-                        unit: m.unit,
-                        current_stock: workshopStock[m.id] || 0,
-                        supplier: m.supplier
-                      }))}
+                      materials={materials
+                        .filter(m => (workshopStock[m.id] || 0) > 0)
+                        .map(m => ({
+                          id: m.id,
+                          name: m.name,
+                          sku: m.sku,
+                          color: m.color,
+                          category: m.category,
+                          unit: m.unit,
+                          current_stock: workshopStock[m.id] || 0,
+                          supplier: m.supplier
+                        }))}
                       value={supply.materialId}
                       onValueChange={(value) => updateSupply(index, 'materialId', value)}
-                      placeholder="Buscar material..."
+                      placeholder={materials.filter(m => (workshopStock[m.id] || 0) > 0).length > 0 
+                        ? "Buscar material..." 
+                        : "No hay materiales disponibles en este taller"}
+                      disabled={materials.filter(m => (workshopStock[m.id] || 0) > 0).length === 0}
                     />
                   ) : (
                     <Select disabled>
