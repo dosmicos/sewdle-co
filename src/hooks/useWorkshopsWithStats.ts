@@ -30,12 +30,41 @@ export const useWorkshopsWithStats = () => {
 
       const statsPromises = workshopList.map(async (workshop) => {
         try {
-          // Obtener órdenes activas
-          const { data: activeAssignments } = await supabase
+          // Obtener asignaciones con órdenes activas
+          const { data: assignments } = await supabase
             .from('workshop_assignments')
-            .select('id')
+            .select(`
+              *,
+              orders!inner(
+                id,
+                status
+              )
+            `)
             .eq('workshop_id', workshop.id)
-            .in('status', ['assigned', 'in_progress']);
+            .in('orders.status', ['assigned', 'in_progress']);
+
+          // Calcular unidades pendientes por entregar (ordenadas - aprobadas)
+          let pendingUnits = 0;
+          if (assignments && assignments.length > 0) {
+            const activeOrderIds = assignments.map(a => a.orders?.id).filter(Boolean);
+            
+            if (activeOrderIds.length > 0) {
+              const { data: pendingUnitsData } = await supabase
+                .from('order_items')
+                .select(`
+                  quantity,
+                  delivery_items!left(quantity_approved)
+                `)
+                .in('order_id', activeOrderIds);
+
+              pendingUnitsData?.forEach(item => {
+                const totalOrdered = item.quantity || 0;
+                const totalApproved = item.delivery_items?.reduce((sum: number, di: any) => 
+                  sum + (di.quantity_approved || 0), 0) || 0;
+                pendingUnits += Math.max(0, totalOrdered - totalApproved);
+              });
+            }
+          }
 
           // Obtener entregas de la última semana
           const { data: lastWeekDeliveries } = await supabase
@@ -82,14 +111,12 @@ export const useWorkshopsWithStats = () => {
             }
           }
 
-          const activeOrders = activeAssignments?.length || 0;
-
           return {
             ...workshop,
             stats: {
               unitsDeliveredLastWeek,
               qualityScore,
-              activeOrders
+              activeOrders: pendingUnits
             }
           };
         } catch (error) {
