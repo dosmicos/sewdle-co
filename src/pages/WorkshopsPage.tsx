@@ -155,7 +155,7 @@ const WorkshopsPage = () => {
                 </div>
 
                 {/* Métricas operativas */}
-                <div className="grid grid-cols-4 gap-3 py-4 border-t border-gray-100">
+                <div className="grid grid-cols-3 gap-3 py-4 border-t border-gray-100">
                   <div className="text-center">
                     <div className="flex items-center justify-center mb-1">
                       <Package className="w-4 h-4 text-blue-500" />
@@ -176,15 +176,6 @@ const WorkshopsPage = () => {
                     </div>
                     <div className="font-bold text-lg text-black">{workshop.stats.activeOrders}</div>
                     <div className="text-xs text-gray-600">Pendientes</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-1">
-                      <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-white"></div>
-                      </div>
-                    </div>
-                    <div className="font-bold text-lg text-black">{workshop.stats.capacityUtilization}%</div>
-                    <div className="text-xs text-gray-600">Capacidad</div>
                   </div>
                 </div>
 
