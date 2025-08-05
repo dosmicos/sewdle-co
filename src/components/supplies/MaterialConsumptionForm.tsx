@@ -142,15 +142,6 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-black">Materiales a Consumir</h3>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addConsumption}
-                className="border-dashed"
-              >
-                <Package className="w-4 h-4 mr-2" />
-                Agregar Material
-              </Button>
             </div>
 
             {errors.consumptions && (
@@ -251,6 +242,18 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
                   </div>
                 );
               })}
+            </div>
+            
+            <div className="flex justify-center mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addConsumption}
+                className="border-dashed"
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Agregar Material
+              </Button>
             </div>
           </div>
 
