@@ -243,8 +243,8 @@ export const useAdminDashboardData = () => {
         // Volume score: normalized to 0-100 based on delivered units
         const volumeScore = Math.round((workshop.deliveredUnits / maxDelivered) * 100);
         
-        // Hybrid balanced composite score: 70% quality + 30% volume
-        const compositeScore = Math.round((workshop.qualityScore * 0.7) + (volumeScore * 0.3));
+        // Hybrid balanced composite score: 40% quality + 60% volume
+        const compositeScore = Math.round((workshop.qualityScore * 0.4) + (volumeScore * 0.6));
         
         return {
           ...workshop,
