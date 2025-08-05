@@ -65,38 +65,39 @@ export const useMaterialConsumption = () => {
   const getMaterialAvailability = async (materialId: string, workshopId?: string) => {
     try {
       if (workshopId) {
-        // Obtener stock específico del taller usando la función SQL
-        const { data: workshopMaterials, error: workshopError } = await supabase
-          .rpc('get_material_deliveries_with_real_balance');
+        // Usar la nueva función centralizada para obtener el stock exacto
+        const { data: stockInfo, error: stockError } = await supabase
+          .rpc('get_workshop_material_stock', {
+            material_id_param: materialId,
+            workshop_id_param: workshopId
+          });
 
-        if (workshopError) throw workshopError;
-
-        // Encontrar el material específico en el taller específico
-        const materialInWorkshop = workshopMaterials?.find(
-          (item: any) => item.material_id === materialId && item.workshop_id === workshopId
-        );
+        if (stockError) throw stockError;
 
         // También obtener información básica del material
         const { data: materialData, error: materialError } = await supabase
           .from('materials')
-          .select('min_stock_alert, name, unit')
+          .select('min_stock_alert, name, unit, sku')
           .eq('id', materialId)
           .single();
 
         if (materialError) throw materialError;
 
-        const available = materialInWorkshop?.real_balance || 0;
+        const stockRecord = stockInfo?.[0];
+        const available = stockRecord?.available_stock || 0;
 
         return {
           ...materialData,
           available,
+          total_delivered: stockRecord?.total_delivered || 0,
+          total_consumed: stockRecord?.total_consumed || 0,
           isLowStock: available <= (materialData.min_stock_alert || 0)
         };
       } else {
         // Fallback al stock global si no se especifica taller
         const { data, error } = await supabase
           .from('materials')
-          .select('current_stock, min_stock_alert, name, unit')
+          .select('current_stock, min_stock_alert, name, unit, sku')
           .eq('id', materialId)
           .single();
 
@@ -114,9 +115,27 @@ export const useMaterialConsumption = () => {
     }
   };
 
+  const validateMaterialConsumption = async (materialId: string, workshopId: string, quantity: number) => {
+    try {
+      const availability = await getMaterialAvailability(materialId, workshopId);
+      if (!availability) return { isValid: false, error: 'No se pudo verificar el stock' };
+      
+      const isValid = availability.available >= quantity;
+      return {
+        isValid,
+        available: availability.available,
+        error: isValid ? null : `Stock insuficiente. Disponible: ${availability.available}, Requerido: ${quantity}`
+      };
+    } catch (error) {
+      console.error('Error validating material consumption:', error);
+      return { isValid: false, error: 'Error al validar el stock' };
+    }
+  };
+
   return {
     loading,
     consumeOrderMaterials,
-    getMaterialAvailability
+    getMaterialAvailability,
+    validateMaterialConsumption
   };
 };

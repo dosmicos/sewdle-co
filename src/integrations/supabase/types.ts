@@ -2211,6 +2211,14 @@ export type Database = {
           pending_amount: number
         }[]
       }
+      get_workshop_material_stock: {
+        Args: { material_id_param: string; workshop_id_param: string }
+        Returns: {
+          available_stock: number
+          total_delivered: number
+          total_consumed: number
+        }[]
+      }
       get_workshop_product_price: {
         Args: {
           workshop_id_param: string

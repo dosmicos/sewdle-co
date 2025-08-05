@@ -34,7 +34,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
   const [openSelectors, setOpenSelectors] = useState<Record<number, boolean>>({});
 
   const { materials, loading: materialsLoading } = useMaterials();
-  const { consumeOrderMaterials, loading: consumingLoading, getMaterialAvailability } = useMaterialConsumption();
+  const { consumeOrderMaterials, loading: consumingLoading, getMaterialAvailability, validateMaterialConsumption } = useMaterialConsumption();
 
   const addConsumption = () => {
     setConsumptions([...consumptions, { material_id: '', quantity: 0 }]);
@@ -270,7 +270,31 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
                           min="0"
                           step="0.01"
                           value={consumption.quantity || ''}
-                          onChange={(e) => updateConsumption(index, 'quantity', parseFloat(e.target.value) || 0)}
+                          onChange={async (e) => {
+                            const newQuantity = parseFloat(e.target.value) || 0;
+                            await updateConsumption(index, 'quantity', newQuantity);
+                            
+                            // Real-time validation
+                            if (consumption.material_id && workshopId && newQuantity > 0) {
+                              const validation = await validateMaterialConsumption(
+                                consumption.material_id, 
+                                workshopId, 
+                                newQuantity
+                              );
+                              if (!validation.isValid) {
+                                setErrors(prev => ({ 
+                                  ...prev, 
+                                  [`quantity_${index}`]: validation.error || 'Stock insuficiente'
+                                }));
+                              } else {
+                                setErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors[`quantity_${index}`];
+                                  return newErrors;
+                                });
+                              }
+                            }
+                          }}
                           placeholder="0"
                           className={errors[`quantity_${index}`] ? 'border-red-500' : ''}
                         />
