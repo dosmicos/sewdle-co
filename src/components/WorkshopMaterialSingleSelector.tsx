@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -29,6 +34,8 @@ const WorkshopMaterialSingleSelector = ({
 }: WorkshopMaterialSingleSelectorProps) => {
   const [availableMaterials, setAvailableMaterials] = useState<WorkshopMaterial[]>([]);
   const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   const fetchWorkshopMaterials = async () => {
@@ -88,38 +95,97 @@ const WorkshopMaterialSingleSelector = ({
     return material.material_color ? `${baseName} - ${material.material_color}` : baseName;
   };
 
+  // Filter materials based on search term
+  const filteredMaterials = availableMaterials.filter(material => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      material.material_name.toLowerCase().includes(searchLower) ||
+      material.material_sku.toLowerCase().includes(searchLower) ||
+      (material.material_color && material.material_color.toLowerCase().includes(searchLower))
+    );
+  });
+
+  const selectedMaterialData = availableMaterials.find(m => m.material_id === selectedMaterial);
+
   return (
-    <Select
-      value={selectedMaterial}
-      onValueChange={onMaterialSelect}
-      disabled={loading}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder={loading ? "Cargando materiales..." : placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {availableMaterials.map((material) => (
-          <SelectItem key={material.material_id} value={material.material_id}>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between"
+          disabled={loading}
+        >
+          {selectedMaterialData ? (
             <div className="flex items-center justify-between w-full">
-              <div className="flex flex-col">
-                <span className="font-medium">{formatMaterialDisplayName(material)}</span>
-                {material.material_color && (
-                  <span className="text-xs text-gray-500">Color: {material.material_color}</span>
-                )}
-              </div>
-              <Badge variant="outline" className="ml-2">
-                {material.real_balance} {material.material_unit}
+              <span className="truncate">{formatMaterialDisplayName(selectedMaterialData)}</span>
+              <Badge variant="outline" className="ml-2 shrink-0">
+                {selectedMaterialData.real_balance} {selectedMaterialData.material_unit}
               </Badge>
             </div>
-          </SelectItem>
-        ))}
-        {availableMaterials.length === 0 && !loading && (
-          <SelectItem value="no-materials" disabled>
-            No hay materiales disponibles en este taller
-          </SelectItem>
-        )}
-      </SelectContent>
-    </Select>
+          ) : (
+            loading ? "Cargando materiales..." : placeholder
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+        <Command>
+          <CommandInput 
+            placeholder="Buscar material..." 
+            value={searchTerm}
+            onValueChange={setSearchTerm}
+          />
+          <CommandList>
+            <CommandEmpty>No se encontraron materiales.</CommandEmpty>
+            <ScrollArea className="h-64">
+              <CommandGroup>
+                {filteredMaterials.map((material) => (
+                  <CommandItem
+                    key={material.material_id}
+                    value={formatMaterialDisplayName(material)}
+                    onSelect={() => {
+                      onMaterialSelect(material.material_id);
+                      setOpen(false);
+                      setSearchTerm('');
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        selectedMaterial === material.material_id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex flex-col">
+                        <span className="font-medium">{formatMaterialDisplayName(material)}</span>
+                        {material.material_color && (
+                          <span className="text-xs text-muted-foreground">Color: {material.material_color}</span>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="ml-2 shrink-0">
+                        {material.real_balance} {material.material_unit}
+                      </Badge>
+                    </div>
+                  </CommandItem>
+                ))}
+                {filteredMaterials.length === 0 && availableMaterials.length > 0 && (
+                  <CommandItem disabled>
+                    No hay materiales que coincidan con la búsqueda
+                  </CommandItem>
+                )}
+                {availableMaterials.length === 0 && !loading && (
+                  <CommandItem disabled>
+                    No hay materiales disponibles en este taller
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </ScrollArea>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 };
 
