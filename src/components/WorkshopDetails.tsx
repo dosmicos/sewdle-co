@@ -129,7 +129,7 @@ const WorkshopDetails = ({ workshop, onBack }: WorkshopDetailsProps) => {
                 <Star className="w-5 h-5 text-yellow-500" />
                 <span className="text-gray-700">Calidad</span>
               </div>
-              <span className="font-bold text-black">{stats.qualityScore}/5</span>
+              <span className="font-bold text-black">{Math.round((stats.qualityScore / 5) * 100)}%</span>
             </div>
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div className="flex items-center space-x-2">
