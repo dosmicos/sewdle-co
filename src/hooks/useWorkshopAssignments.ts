@@ -60,6 +60,8 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
 
   const createAssignment = async (assignmentData: WorkshopAssignmentInsert) => {
     try {
+      setLoading(true); // Agregar loading state
+      
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.user) {
@@ -69,7 +71,8 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
       // Obtener la organización actual del usuario
       const { data: orgData, error: orgError } = await supabase.rpc('get_current_organization_safe');
       
-      if (orgError) {
+      if (orgError || !orgData) {
+        console.error('Error getting organization:', orgError);
         throw new Error('No se pudo obtener la organización del usuario');
       }
 
@@ -83,9 +86,11 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
 
-      // No llamar fetchAssignments aquí para evitar errores innecesarios en el modal
       toast({
         title: "Éxito",
         description: "Asignación creada correctamente",
@@ -99,6 +104,8 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
         variant: "destructive",
       });
       return { data: null, error };
+    } finally {
+      setLoading(false); // Asegurar que loading se resetee
     }
   };
 
