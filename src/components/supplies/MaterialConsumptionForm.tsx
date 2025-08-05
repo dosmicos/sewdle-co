@@ -1,14 +1,10 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertTriangle, Package, Minus, Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useMaterials } from '@/hooks/useMaterials';
+import { AlertTriangle, Package, Minus } from 'lucide-react';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
+import WorkshopMaterialSingleSelector from '@/components/WorkshopMaterialSingleSelector';
 
 interface MaterialConsumptionFormProps {
   orderId: string;
@@ -31,9 +27,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
     { material_id: '', quantity: 0 }
   ]);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [openSelectors, setOpenSelectors] = useState<Record<number, boolean>>({});
 
-  const { materials, loading: materialsLoading } = useMaterials();
   const { consumeOrderMaterials, loading: consumingLoading, getMaterialAvailability, validateMaterialConsumption } = useMaterialConsumption();
 
   const addConsumption = () => {
@@ -51,15 +45,12 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
     updated[index] = { ...updated[index], [field]: value };
     
     // Si se cambia el material, obtener información adicional
-    if (field === 'material_id' && value) {
-      const selectedMaterial = materials.find(m => m.id === value);
+    if (field === 'material_id' && value && workshopId) {
       const availability = await getMaterialAvailability(value, workshopId);
       
-      if (selectedMaterial && availability) {
+      if (availability) {
         updated[index] = {
           ...updated[index],
-          materialName: selectedMaterial.name,
-          unit: selectedMaterial.unit,
           availableStock: availability.available
         };
       }
@@ -68,7 +59,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
     setConsumptions(updated);
     
     // Clear errors
-    const errorKey = `consumption_${index}`;
+    const errorKey = `material_${index}`;
     if (errors[errorKey]) {
       setErrors(prev => ({ ...prev, [errorKey]: '' }));
     }
@@ -85,7 +76,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
         newErrors[`quantity_${index}`] = 'La cantidad debe ser mayor a 0';
       }
       if (consumption.availableStock !== undefined && consumption.quantity > consumption.availableStock) {
-        newErrors[`quantity_${index}`] = `Stock insuficiente en este taller. Disponible: ${consumption.availableStock} ${consumption.unit || ''}`;
+        newErrors[`quantity_${index}`] = `Stock insuficiente en este taller. Disponible: ${consumption.availableStock}`;
       }
     });
 
@@ -122,14 +113,15 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
     }
   };
 
-  if (materialsLoading) {
+  if (!workshopId) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-3xl">
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-pulse" />
-              <h3 className="text-lg font-semibold mb-2 text-black">Cargando materiales...</h3>
+              <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2 text-black">Error de Configuración</h3>
+              <p className="text-gray-600">No se ha especificado el taller para el consumo de materiales.</p>
             </div>
           </div>
         </DialogContent>
@@ -167,8 +159,6 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
 
             <div className="space-y-4">
               {consumptions.map((consumption, index) => {
-                const selectedMaterial = materials.find(m => m.id === consumption.material_id);
-                
                 return (
                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-4">
@@ -185,77 +175,17 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-black mb-2">
                           Material *
                         </label>
-                        <Popover 
-                          open={openSelectors[index] || false} 
-                          onOpenChange={(open) => setOpenSelectors(prev => ({ ...prev, [index]: open }))}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={openSelectors[index] || false}
-                              className={cn(
-                                "w-full justify-between",
-                                errors[`material_${index}`] ? 'border-red-500' : '',
-                                !consumption.material_id && "text-muted-foreground"
-                              )}
-                            >
-                              {consumption.material_id
-                                ? (() => {
-                                    const material = materials.find((m) => m.id === consumption.material_id);
-                                    return material ? `${material.sku} - ${material.name}` : "Seleccionar material...";
-                                  })()
-                                : "Seleccionar material..."}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[400px] p-0 z-50 bg-white border border-gray-200 shadow-lg">
-                            <Command>
-                              <CommandInput placeholder="Buscar material..." className="h-9" />
-                              <CommandList>
-                                <CommandEmpty>No se encontraron materiales.</CommandEmpty>
-                                <CommandGroup>
-                                  {materials.map((material) => (
-                                    <CommandItem
-                                      key={material.id}
-                                      value={`${material.sku} ${material.name} ${material.color || ''}`}
-                                      onSelect={() => {
-                                        updateConsumption(index, 'material_id', material.id);
-                                        setOpenSelectors(prev => ({ ...prev, [index]: false }));
-                                      }}
-                                      className="cursor-pointer"
-                                    >
-                                      <div className="flex items-center justify-between w-full">
-                                        <div className="flex items-center">
-                                          <Check
-                                            className={cn(
-                                              "mr-2 h-4 w-4",
-                                              consumption.material_id === material.id ? "opacity-100" : "opacity-0"
-                                            )}
-                                          />
-                                          <div>
-                                            <div className="font-medium">{material.sku} - {material.name}</div>
-                                            {material.color && (
-                                              <div className="text-xs text-gray-500">{material.color}</div>
-                                            )}
-                                          </div>
-                                        </div>
-                                        <span className="text-xs text-gray-500 ml-2">
-                                          Stock: {material.current_stock} {material.unit}
-                                        </span>
-                                      </div>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                        <WorkshopMaterialSingleSelector
+                          workshopId={workshopId}
+                          selectedMaterial={consumption.material_id}
+                          onMaterialSelect={(materialId) => updateConsumption(index, 'material_id', materialId)}
+                          placeholder="Seleccionar material del taller..."
+                        />
                         {errors[`material_${index}`] && (
                           <p className="text-red-500 text-xs mt-1">{errors[`material_${index}`]}</p>
                         )}
@@ -302,42 +232,19 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
                           <p className="text-red-500 text-xs mt-1">{errors[`quantity_${index}`]}</p>
                         )}
                       </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-black mb-2">
-                          Stock en Taller
-                        </label>
-                        <div className="p-2 bg-gray-50 rounded border text-sm">
-                          {consumption.unit && (
-                            <div>Unidad: {consumption.unit}</div>
-                          )}
-                          {consumption.availableStock !== undefined ? (
-                            <div className={`flex items-center ${
-                              consumption.availableStock <= (selectedMaterial?.min_stock_alert || 0) 
-                                ? 'text-red-600' : 'text-green-600'
-                            }`}>
-                              {consumption.availableStock <= (selectedMaterial?.min_stock_alert || 0) && (
-                                <AlertTriangle className="w-4 h-4 mr-1" />
-                              )}
-                              Disponible en taller: {consumption.availableStock} {consumption.unit}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500 text-xs">
-                              {workshopId ? 'Sin stock en este taller' : 'Selecciona un material'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
                     </div>
 
-                    {selectedMaterial && (
+                    {consumption.availableStock !== undefined && (
                       <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                        <h5 className="font-medium text-black mb-2">Información del Material</h5>
-                        <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
-                          <div>SKU: {selectedMaterial.sku}</div>
-                          <div>Categoría: {selectedMaterial.category}</div>
-                          {selectedMaterial.color && <div>Color: {selectedMaterial.color}</div>}
-                          {selectedMaterial.supplier && <div>Proveedor: {selectedMaterial.supplier}</div>}
+                        <div className={`flex items-center ${
+                          consumption.availableStock <= 10 ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {consumption.availableStock <= 10 && (
+                            <AlertTriangle className="w-4 h-4 mr-1" />
+                          )}
+                          <span className="font-medium">
+                            Stock disponible en taller: {consumption.availableStock}
+                          </span>
                         </div>
                       </div>
                     )}
