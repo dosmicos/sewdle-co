@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Building2, Star, Calendar, ArrowLeft, Trash2, Edit } from 'lucide-react';
+import { Plus, Building2, Package, Star, Clock, ArrowLeft, Trash2, Edit } from 'lucide-react';
 import WorkshopForm from '@/components/WorkshopForm';
 import WorkshopDetails from '@/components/WorkshopDetails';
 import WorkshopEditModal from '@/components/WorkshopEditModal';
 
-import { useWorkshops } from '@/hooks/useWorkshops';
+import { useWorkshopsWithStats } from '@/hooks/useWorkshopsWithStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
@@ -19,7 +19,7 @@ const WorkshopsPage = () => {
     loading,
     deleteWorkshop,
     refetch
-  } = useWorkshops();
+  } = useWorkshopsWithStats();
   const {
     hasPermission
   } = useAuth();
@@ -154,28 +154,30 @@ const WorkshopsPage = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600">{workshop.address}</p>
-                  {workshop.phone && <p className="text-sm text-gray-600">{workshop.phone}</p>}
-                  {workshop.city && <span className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full">
-                      {workshop.city}
-                    </span>}
-                </div>
-
-                {workshop.specialties && workshop.specialties.length > 0 && <div className="space-y-2">
-                    <div className="flex items-center space-x-1 text-sm text-gray-700">
+                {/* Métricas operativas */}
+                <div className="grid grid-cols-3 gap-3 py-4 border-t border-gray-100">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center mb-1">
+                      <Package className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div className="font-bold text-lg text-black">{workshop.stats.unitsDeliveredLastWeek}</div>
+                    <div className="text-xs text-gray-600">Última semana</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center mb-1">
                       <Star className="w-4 h-4 text-yellow-500" />
-                      <span>Especialidades</span>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {workshop.specialties.slice(0, 3).map((specialty, index) => <span key={index} className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
-                          {specialty}
-                        </span>)}
-                      {workshop.specialties.length > 3 && <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
-                          +{workshop.specialties.length - 3} más
-                        </span>}
+                    <div className="font-bold text-lg text-black">{workshop.stats.qualityScore}%</div>
+                    <div className="text-xs text-gray-600">Calidad</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center mb-1">
+                      <Clock className="w-4 h-4 text-orange-500" />
                     </div>
-                  </div>}
+                    <div className="font-bold text-lg text-black">{workshop.stats.activeOrders}</div>
+                    <div className="text-xs text-gray-600">Pendientes</div>
+                  </div>
+                </div>
 
                 <Button variant="outline" className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-black rounded-xl py-2">
                   Ver Detalles

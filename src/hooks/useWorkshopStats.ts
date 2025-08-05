@@ -8,6 +8,7 @@ interface WorkshopStats {
   completionRate: number;
   qualityScore: number;
   onTimeDelivery: number;
+  unitsDeliveredLastWeek: number;
 }
 
 export const useWorkshopStats = (workshopId: string) => {
@@ -15,7 +16,8 @@ export const useWorkshopStats = (workshopId: string) => {
     activeOrders: 0,
     completionRate: 0,
     qualityScore: 0,
-    onTimeDelivery: 0
+    onTimeDelivery: 0,
+    unitsDeliveredLastWeek: 0
   });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -45,10 +47,33 @@ export const useWorkshopStats = (workshopId: string) => {
         `)
         .eq('workshop_id', workshopId);
 
+      // Obtener entregas de la última semana
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
+      const { data: lastWeekDeliveries, error: lastWeekError } = await supabase
+        .from('deliveries')
+        .select(`
+          delivery_items(quantity_delivered)
+        `)
+        .eq('workshop_id', workshopId)
+        .gte('delivery_date', oneWeekAgo.toISOString().split('T')[0]);
+
       if (deliveriesError) throw deliveriesError;
+      if (lastWeekError) throw lastWeekError;
 
       // Calcular estadísticas
       const activeOrders = activeAssignments?.length || 0;
+      
+      // Calcular unidades entregadas la última semana
+      let unitsDeliveredLastWeek = 0;
+      if (lastWeekDeliveries) {
+        lastWeekDeliveries.forEach(delivery => {
+          delivery.delivery_items?.forEach(item => {
+            unitsDeliveredLastWeek += item.quantity_delivered || 0;
+          });
+        });
+      }
       
       let completionRate = 0;
       let qualityScore = 0;
@@ -87,7 +112,8 @@ export const useWorkshopStats = (workshopId: string) => {
         activeOrders,
         completionRate,
         qualityScore,
-        onTimeDelivery
+        onTimeDelivery,
+        unitsDeliveredLastWeek
       });
 
     } catch (error: any) {
