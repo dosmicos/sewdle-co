@@ -238,6 +238,15 @@ export const useOrders = () => {
         
         const { data: { session } } = await supabase.auth.getSession();
         
+        // Obtener organization_id actual
+        const { data: orgData, error: orgError } = await supabase
+          .rpc('get_current_organization_safe');
+        
+        if (orgError) {
+          console.error('Error getting current organization:', orgError);
+          throw orgError;
+        }
+        
         const { error: assignmentError } = await supabase
           .from('workshop_assignments')
           .insert([
@@ -245,6 +254,7 @@ export const useOrders = () => {
               order_id: order.id,
               workshop_id: orderData.workshopId,
               assigned_by: session?.user?.id || null,
+              organization_id: orgData,
               status: 'assigned',
               assigned_date: new Date().toISOString().split('T')[0],
               expected_completion_date: orderData.dueDate || null
