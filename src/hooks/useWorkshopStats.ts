@@ -71,7 +71,7 @@ export const useWorkshopStats = (workshopId: string) => {
         });
 
         if (totalDelivered > 0) {
-          qualityScore = Math.round((totalApproved / totalDelivered) * 5); // Escala de 5
+          qualityScore = Math.round((totalApproved / totalDelivered) * 100);
         }
 
         // Puntualidad (entregas a tiempo vs totales)
@@ -86,7 +86,7 @@ export const useWorkshopStats = (workshopId: string) => {
       setStats({
         activeOrders,
         completionRate,
-        qualityScore: Math.min(qualityScore, 5), // Máximo 5
+        qualityScore,
         onTimeDelivery
       });
 
