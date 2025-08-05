@@ -29,7 +29,7 @@ interface AvailableOrder {
 
 export const useWorkshopAssignments = (autoFetch: boolean = true) => {
   const [assignments, setAssignments] = useState<WorkshopAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(autoFetch); // Solo iniciar en loading si autoFetch es true
   const { toast } = useToast();
 
   const fetchAssignments = async () => {
