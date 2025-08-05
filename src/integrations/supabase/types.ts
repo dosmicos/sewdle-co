@@ -2251,6 +2251,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      recalculate_material_deliveries_remaining: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       recalculate_material_stock: {
         Args: Record<PropertyKey, never>
         Returns: undefined
