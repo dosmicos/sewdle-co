@@ -14,7 +14,7 @@ import {
   Award,
   Target
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell, Tooltip } from 'recharts';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 
 const AdminDashboard = () => {
@@ -194,6 +194,17 @@ const AdminDashboard = () => {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: '#6b7280' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'rgb(29 29 31)'
+                    }}
+                    formatter={(value, name) => [`${value} unidades`, name]}
+                    labelStyle={{ color: 'rgb(99 99 102)' }}
                   />
                   <Legend />
                   <Bar 
