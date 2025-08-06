@@ -54,9 +54,9 @@ const LandingPage = () => {
                  <button onClick={() => scrollToSection('casos-de-uso')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
                    {t('nav.useCases')}
                  </button>
-                 <button onClick={() => scrollToSection('pricing')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
-                   Precios
-                 </button>
+                  <button onClick={() => scrollToSection('pricing')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
+                    {t('nav.pricing')}
+                  </button>
                  <button onClick={() => scrollToSection('integraciones')} className="text-sm text-gray-600 hover:text-orange-600 transition-colors font-medium">
                    {t('nav.integrations')}
                  </button>
@@ -389,13 +389,13 @@ const LandingPage = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12 sm:mb-16">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-              Planes transparentes para cada etapa
+              {t('pricing.title')}
             </h2>
             <p className="text-lg text-gray-600 mb-8">
-              Comienza gratis y escala según tus necesidades
+              {t('pricing.subtitle')}
             </p>
             <div className="inline-flex items-center bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-              14 días de prueba gratis en todos los planes
+              {t('pricing.trial')}
             </div>
           </div>
           
@@ -403,36 +403,36 @@ const LandingPage = () => {
             {/* Starter Plan */}
             <Card className="relative p-6 lg:p-8 border-2 border-gray-200 bg-white rounded-2xl hover:shadow-lg transition-all duration-300">
               <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Starter</h3>
-                <p className="text-gray-600 mb-6">Para marcas emergentes</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{t('pricing.starter.title')}</h3>
+                <p className="text-gray-600 mb-6">{t('pricing.starter.subtitle')}</p>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-gray-900">$29</span>
-                  <span className="text-gray-600">/mes</span>
+                  <span className="text-4xl font-bold text-gray-900">{t('pricing.starter.price')}</span>
+                  <span className="text-gray-600">{t('pricing.starter.period')}</span>
                 </div>
                 <Button onClick={handleSignupClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
-                  Comenzar prueba gratis
+                  {t('pricing.starter.cta')}
                 </Button>
               </div>
               <div className="mt-8 space-y-4">
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Hasta 10 órdenes/mes
+                  {t('pricing.starter.feature1')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  3 usuarios
+                  {t('pricing.starter.feature2')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  5 talleres
+                  {t('pricing.starter.feature3')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Gestión básica de inventario
+                  {t('pricing.starter.feature4')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Soporte por email
+                  {t('pricing.starter.feature5')}
                 </div>
               </div>
             </Card>
@@ -441,44 +441,44 @@ const LandingPage = () => {
             <Card className="relative p-6 lg:p-8 border-2 border-orange-500 bg-white rounded-2xl shadow-xl transform scale-105 hover:shadow-2xl transition-all duration-300">
               <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                 <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-1 rounded-full text-sm font-medium">
-                  Más Popular
+                  {t('pricing.professional.popular')}
                 </span>
               </div>
               <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Professional</h3>
-                <p className="text-gray-600 mb-6">Para marcas en crecimiento</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{t('pricing.professional.title')}</h3>
+                <p className="text-gray-600 mb-6">{t('pricing.professional.subtitle')}</p>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-gray-900">$99</span>
-                  <span className="text-gray-600">/mes</span>
+                  <span className="text-4xl font-bold text-gray-900">{t('pricing.professional.price')}</span>
+                  <span className="text-gray-600">{t('pricing.professional.period')}</span>
                 </div>
                 <Button onClick={handleSignupClick} className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg py-3 rounded-xl font-medium transition-all duration-300">
-                  Comenzar prueba gratis
+                  {t('pricing.professional.cta')}
                 </Button>
               </div>
               <div className="mt-8 space-y-4">
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Órdenes ilimitadas
+                  {t('pricing.professional.feature1')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  10 usuarios
+                  {t('pricing.professional.feature2')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  20 talleres
+                  {t('pricing.professional.feature3')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Integración Shopify completa
+                  {t('pricing.professional.feature4')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Analytics avanzados
+                  {t('pricing.professional.feature5')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Soporte prioritario
+                  {t('pricing.professional.feature6')}
                 </div>
               </div>
             </Card>
@@ -486,40 +486,40 @@ const LandingPage = () => {
             {/* Enterprise Plan */}
             <Card className="relative p-6 lg:p-8 border-2 border-gray-200 bg-white rounded-2xl hover:shadow-lg transition-all duration-300">
               <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Enterprise</h3>
-                <p className="text-gray-600 mb-6">Para marcas establecidas</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{t('pricing.enterprise.title')}</h3>
+                <p className="text-gray-600 mb-6">{t('pricing.enterprise.subtitle')}</p>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-gray-900">$299</span>
-                  <span className="text-gray-600">/mes</span>
+                  <span className="text-4xl font-bold text-gray-900">{t('pricing.enterprise.price')}</span>
+                  <span className="text-gray-600">{t('pricing.enterprise.period')}</span>
                 </div>
                 <Button onClick={handleSignupClick} className="w-full bg-gray-900 text-white hover:bg-gray-800 py-3 rounded-xl font-medium transition-all duration-300">
-                  Comenzar prueba gratis
+                  {t('pricing.enterprise.cta')}
                 </Button>
               </div>
               <div className="mt-8 space-y-4">
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Todo ilimitado
+                  {t('pricing.enterprise.feature1')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Usuarios ilimitados
+                  {t('pricing.enterprise.feature2')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  White-label disponible
+                  {t('pricing.enterprise.feature3')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  API personalizada
+                  {t('pricing.enterprise.feature4')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Gerente de cuenta dedicado
+                  {t('pricing.enterprise.feature5')}
                 </div>
                 <div className="flex items-center text-sm text-gray-700">
                   <CheckCircle className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
-                  Soporte 24/7
+                  {t('pricing.enterprise.feature6')}
                 </div>
               </div>
             </Card>
@@ -527,19 +527,19 @@ const LandingPage = () => {
 
           {/* FAQ Section */}
           <div className="mt-16 sm:mt-20 max-w-3xl mx-auto">
-            <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">Preguntas frecuentes</h3>
+            <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">{t('pricing.faq.title')}</h3>
             <div className="space-y-6">
               <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h4 className="font-semibold text-gray-900 mb-2">¿Puedo cambiar de plan en cualquier momento?</h4>
-                <p className="text-gray-600">Sí, puedes actualizar o reducir tu plan cuando lo necesites. Los cambios se reflejan inmediatamente.</p>
+                <h4 className="font-semibold text-gray-900 mb-2">{t('pricing.faq.q1')}</h4>
+                <p className="text-gray-600">{t('pricing.faq.a1')}</p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h4 className="font-semibold text-gray-900 mb-2">¿Qué incluye la prueba gratuita?</h4>
-                <p className="text-gray-600">14 días completos con acceso a todas las funciones del plan Professional, sin restricciones.</p>
+                <h4 className="font-semibold text-gray-900 mb-2">{t('pricing.faq.q2')}</h4>
+                <p className="text-gray-600">{t('pricing.faq.a2')}</p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h4 className="font-semibold text-gray-900 mb-2">¿Hay costos de setup o implementación?</h4>
-                <p className="text-gray-600">No, todos nuestros planes incluyen onboarding completo sin costos adicionales.</p>
+                <h4 className="font-semibold text-gray-900 mb-2">{t('pricing.faq.q3')}</h4>
+                <p className="text-gray-600">{t('pricing.faq.a3')}</p>
               </div>
             </div>
           </div>
@@ -550,18 +550,18 @@ const LandingPage = () => {
       <section className="py-16 sm:py-20 bg-gradient-to-r from-orange-500 to-red-500">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-white mb-6">
-            Comienza tu transformación hoy
+            {t('finalCta.title')}
           </h2>
           <p className="text-lg sm:text-xl text-orange-100 mb-8 sm:mb-12 leading-relaxed">
-            Miles de marcas confían en Sewdle para gestionar su producción
+            {t('finalCta.subtitle')}
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button onClick={handleSignupClick} variant="outline" className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full border-2 border-white text-white hover:bg-white hover:text-orange-500 transition-all duration-300">
-              Ver demo
+              {t('finalCta.demo')}
             </Button>
             <Button onClick={handleSignupClick} className="bg-white text-orange-500 px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-full hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-              Empezar gratis ahora
+              {t('finalCta.start')}
               <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
