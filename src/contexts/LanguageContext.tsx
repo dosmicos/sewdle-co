@@ -189,6 +189,14 @@ const englishTranslations: Record<string, string> = {
   'finalCta.start': 'Start free now',
 
   // Footer
+  'footer.features': 'Features',
+  'footer.about': 'About',
+  'footer.pricing': 'Pricing',
+  'footer.support': 'Support',
+  'footer.blog': 'Blog',
+  'footer.documentation': 'Documentation',
+  'footer.privacy': 'Privacy Policy',
+  'footer.terms': 'Terms of Service',
   'footer.rights': '© 2024 Sewdle. All rights reserved.'
 };
 
@@ -315,5 +323,13 @@ const spanishTranslations: Record<string, string> = {
   'finalCta.start': 'Empezar gratis ahora',
 
   // Footer
+  'footer.features': 'Características',
+  'footer.about': 'Acerca de',
+  'footer.pricing': 'Precios',
+  'footer.support': 'Soporte',
+  'footer.blog': 'Blog',
+  'footer.documentation': 'Documentación',
+  'footer.privacy': 'Política de Privacidad',
+  'footer.terms': 'Términos de Servicio',
   'footer.rights': '© 2024 Sewdle. Todos los derechos reservados.'
 };
