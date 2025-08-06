@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { ChevronDown, Globe } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,11 +23,8 @@ const LanguageSelector = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
-          <Globe className="h-3 w-3 mr-1" />
-          <span className="hidden sm:inline">{currentLanguage?.flag}</span>
-          <span className="hidden md:inline ml-1">{currentLanguage?.label}</span>
-          <span className="sm:hidden">{currentLanguage?.code.toUpperCase()}</span>
+        <Button variant="ghost" size="sm" className="h-8 px-1 text-xs">
+          <span className="text-xs font-medium">{currentLanguage?.code.toUpperCase()}</span>
           <ChevronDown className="h-3 w-3 ml-1" />
         </Button>
       </DropdownMenuTrigger>
