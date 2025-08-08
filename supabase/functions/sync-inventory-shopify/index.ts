@@ -737,12 +737,19 @@ serve(async (req) => {
       }
     }
 
-    // Log results
+    // Log results with verification status
     const logData = {
       delivery_id: deliveryId,
       sync_results: syncResults,
       success_count: successCount,
-      error_count: errorCount
+      error_count: errorCount,
+      verification_status: errorCount === 0 ? 'verified' : 'failed',
+      mathematical_verification: {
+        total_items_processed: successCount + errorCount,
+        items_verified: successCount,
+        items_failed: errorCount,
+        verification_passed: errorCount === 0
+      }
     }
 
     await supabase.from('inventory_sync_logs').insert([logData])

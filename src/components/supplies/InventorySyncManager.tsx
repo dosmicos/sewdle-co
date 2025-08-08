@@ -18,7 +18,12 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<any[]>([]);
 
-  const { syncApprovedItemsToShopify, fetchSyncLogs, loading: syncLoading } = useInventorySync();
+  const { 
+    syncApprovedItemsToShopify, 
+    fetchSyncLogs, 
+    checkRecentSuccessfulSync,
+    loading: syncLoading 
+  } = useInventorySync();
   const { fetchDeliveries, fetchDeliveryById, loading: deliveriesLoading } = useDeliveries();
   const { toast } = useToast();
 
@@ -51,6 +56,18 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
         toast({
           title: "Ya sincronizada",
           description: "Esta entrega ya fue sincronizada con Shopify",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if there's a recent successful sync for this delivery
+      const hasRecentSync = await checkRecentSuccessfulSync(delivery.id);
+      
+      if (hasRecentSync) {
+        toast({
+          title: "Sincronización reciente detectada",
+          description: `La entrega ${delivery.tracking_number} fue sincronizada exitosamente en los últimos 30 minutos.`,
           variant: "destructive",
         });
         return;

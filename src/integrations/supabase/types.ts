@@ -316,27 +316,45 @@ export type Database = {
           delivery_id: string
           error_count: number
           id: string
+          inventory_after: Json | null
+          inventory_before: Json | null
+          mathematical_verification: Json | null
+          rollback_details: Json | null
+          rollback_performed: boolean | null
           success_count: number
           sync_results: Json
           synced_at: string
+          verification_status: string | null
         }
         Insert: {
           created_at?: string
           delivery_id: string
           error_count?: number
           id?: string
+          inventory_after?: Json | null
+          inventory_before?: Json | null
+          mathematical_verification?: Json | null
+          rollback_details?: Json | null
+          rollback_performed?: boolean | null
           success_count?: number
           sync_results: Json
           synced_at?: string
+          verification_status?: string | null
         }
         Update: {
           created_at?: string
           delivery_id?: string
           error_count?: number
           id?: string
+          inventory_after?: Json | null
+          inventory_before?: Json | null
+          mathematical_verification?: Json | null
+          rollback_details?: Json | null
+          rollback_performed?: boolean | null
           success_count?: number
           sync_results?: Json
           synced_at?: string
+          verification_status?: string | null
         }
         Relationships: []
       }
@@ -2229,6 +2247,10 @@ export type Database = {
       }
       has_permission: {
         Args: { user_uuid: string; module_name: string; action_name: string }
+        Returns: boolean
+      }
+      has_recent_successful_sync: {
+        Args: { delivery_id_param: string; minutes_threshold?: number }
         Returns: boolean
       }
       is_admin: {

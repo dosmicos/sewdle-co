@@ -16,10 +16,42 @@ export const useInventorySync = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  const checkRecentSuccessfulSync = async (deliveryId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('has_recent_successful_sync', {
+        delivery_id_param: deliveryId,
+        minutes_threshold: 30
+      });
+
+      if (error) {
+        console.error('Error checking recent sync:', error);
+        return false;
+      }
+
+      return data === true;
+    } catch (error) {
+      console.error('Error checking recent sync:', error);
+      return false;
+    }
+  };
+
   const syncApprovedItemsToShopify = async (syncData: SyncInventoryData) => {
     setLoading(true);
     
     try {
+      // Check if there's a recent successful sync for this delivery
+      const hasRecentSync = await checkRecentSuccessfulSync(syncData.deliveryId);
+      
+      if (hasRecentSync) {
+        toast({
+          title: "Sincronización ya realizada",
+          description: "Esta entrega fue sincronizada exitosamente en los últimos 30 minutos. No es necesario sincronizar nuevamente.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return { success: false, error: 'Recent sync already exists' };
+      }
+      
       console.log('🔄 Iniciando sincronización con Shopify:', syncData);
 
       const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
@@ -226,6 +258,7 @@ export const useInventorySync = () => {
     checkSyncStatus,
     clearSyncLock,
     clearAllStaleLocks,
+    checkRecentSuccessfulSync,
     loading
   };
 };
