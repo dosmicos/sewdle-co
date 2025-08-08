@@ -885,12 +885,6 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
             </>
           )}
           
-          <DeliverySyncStatus 
-            delivery={delivery} 
-            onSyncSuccess={loadDelivery} 
-            showDetails={true}
-            size="md"
-          />
         </div>
       </div>
 
@@ -920,8 +914,12 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
               <p className="font-medium text-blue-600">{totals.delivered} unidades</p>
             </div>
             <div>
-              <Label className="text-sm font-medium text-muted-foreground">Estado</Label>
-              <p className="font-medium">{getStatusText(delivery.status)}</p>
+              <Label className="text-sm font-medium text-muted-foreground">Estado de Sincronización</Label>
+              <DeliverySyncStatus 
+                delivery={delivery} 
+                onSyncSuccess={loadDelivery} 
+                size="sm"
+              />
             </div>
           </div>
           {delivery.notes && (
