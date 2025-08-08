@@ -112,7 +112,10 @@ const SignupPage = () => {
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
           data: {
-            name: formData.name
+            name: formData.name,
+            organizationName: formData.organizationName,
+            organizationType: formData.organizationType,
+            selectedPlan: formData.selectedPlan
           }
         }
       });
@@ -120,12 +123,38 @@ const SignupPage = () => {
       if (error) throw error;
 
       if (data.user) {
-        // Start checkout process for paid plans
-        if (formData.selectedPlan !== 'starter') {
+        // For starter plan, setup organization immediately
+        if (formData.selectedPlan === 'starter') {
+          try {
+            const { data: setupData, error: setupError } = await supabase.functions.invoke('complete-organization-setup', {
+              body: { 
+                userId: data.user.id,
+                organizationName: formData.organizationName,
+                organizationType: formData.organizationType,
+                selectedPlan: formData.selectedPlan,
+                userEmail: formData.email,
+                userName: formData.name
+              }
+            });
+
+            if (setupError) {
+              console.error('Organization setup error:', setupError);
+              // Don't throw here, let the user continue and complete setup later
+            }
+          } catch (setupErr) {
+            console.error('Failed to setup organization:', setupErr);
+            // Continue with signup process
+          }
+        } else {
+          // For paid plans, start checkout process
           const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
             body: { 
               planId: formData.selectedPlan === 'professional' ? 'plan_professional' : 'plan_enterprise',
-              organizationName: formData.organizationName 
+              organizationName: formData.organizationName,
+              organizationType: formData.organizationType,
+              userId: data.user.id,
+              userEmail: formData.email,
+              userName: formData.name
             }
           });
 
@@ -140,7 +169,9 @@ const SignupPage = () => {
 
         toast({
           title: "¡Registro exitoso!",
-          description: "Se ha enviado un enlace de confirmación a tu correo electrónico"
+          description: formData.selectedPlan === 'starter' 
+            ? "Tu cuenta y organización han sido creadas exitosamente"
+            : "Se ha enviado un enlace de confirmación a tu correo electrónico"
         });
         
         navigate('/auth');
