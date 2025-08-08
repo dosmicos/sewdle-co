@@ -1868,6 +1868,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json[]
       }
+      complete_user_setup: {
+        Args: {
+          p_user_id: string
+          p_organization_name?: string
+          p_organization_type?: string
+          p_selected_plan?: string
+        }
+        Returns: Json
+      }
       consume_order_materials: {
         Args: { order_id_param: string; consumption_data: Json }
         Returns: undefined
