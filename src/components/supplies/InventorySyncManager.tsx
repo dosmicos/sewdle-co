@@ -39,14 +39,25 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
 
     setSyncLogs(logs);
     
-    // Filtrar entregas aprobadas que NO han sido sincronizadas
-    const approvedDeliveries = deliveries.filter(d => 
-      ['approved', 'partial_approved'].includes(d.status) && 
-      d.total_approved > 0 && 
-      !d.synced_to_shopify
-    );
+    // Filtrar entregas aprobadas que necesitan sincronización
+    const filteredDeliveries = [];
     
-    setPendingDeliveries(approvedDeliveries);
+    for (const delivery of deliveries) {
+      // Solo incluir entregas aprobadas con items pendientes
+      if (!['approved', 'partial_approved'].includes(delivery.status) || delivery.total_approved <= 0) {
+        continue;
+      }
+      
+      // Verificar si hay sincronización exitosa reciente en los logs
+      const hasRecentSync = await checkRecentSuccessfulSync(delivery.id);
+      
+      // Si no hay sync reciente Y no está marcada como sincronizada, incluir en pendientes
+      if (!hasRecentSync && !delivery.synced_to_shopify) {
+        filteredDeliveries.push(delivery);
+      }
+    }
+    
+    setPendingDeliveries(filteredDeliveries);
   };
 
   const handleManualSync = async (delivery: any) => {
