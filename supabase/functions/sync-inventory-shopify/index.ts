@@ -106,6 +106,7 @@ serve(async (req) => {
     const requestData = await req.json()
     deliveryId = requestData.deliveryId
     const approvedItems = requestData.approvedItems
+    const intelligentSync = requestData.intelligentSync || false
 
     if (!deliveryId || !approvedItems || !Array.isArray(approvedItems)) {
       throw new Error('Datos de sincronización inválidos')
@@ -114,6 +115,7 @@ serve(async (req) => {
     console.log('=== DATOS DE ENTRADA ===')
     console.log('Delivery ID:', deliveryId)
     console.log('Items a sincronizar:', approvedItems.length)
+    console.log('Intelligent Sync:', intelligentSync)
     console.log('Items:', JSON.stringify(approvedItems, null, 2))
 
     // IMPROVED: Enhanced sync lock with automatic cleanup and better error handling
@@ -226,7 +228,7 @@ serve(async (req) => {
     const locationId = primaryLocation.id
     console.log('✅ Location ID obtenido:', locationId, '- Nombre:', primaryLocation.name)
 
-    console.log('=== PASO 3: ENHANCED IDEMPOTENCY CHECK ===')
+    console.log('=== PASO 3: INTELLIGENT SYNC CHECK ===')
     
     // Get delivery items with enhanced fingerprinting
     const { data: deliveryItems, error: itemsError } = await supabase
@@ -247,55 +249,118 @@ serve(async (req) => {
       throw new Error(`Error verificando items de entrega: ${itemsError.message}`)
     }
 
-    // Enhanced idempotency check with fingerprinting
-    const alreadySyncedSkus = []
-    const itemsToSync = []
+    // Si es sync inteligente, verificar qué SKUs ya fueron sincronizados
+    let alreadySyncedSkus = []
+    let itemsToSync = []
 
-    for (const approvedItem of approvedItems) {
-      const deliveryItem = deliveryItems.find(item => 
-        item.order_items?.product_variants?.sku_variant === approvedItem.skuVariant
-      )
+    if (intelligentSync) {
+      console.log('🧠 Modo Sync Inteligente - Verificando estado individual de cada SKU')
       
-      if (deliveryItem) {
-        // Si la cantidad aprobada es 0, marcar como sincronizado automáticamente
-        if (approvedItem.quantityApproved === 0) {
-          console.log(`✅ SKU ${approvedItem.skuVariant} tiene cantidad 0 - marcando como sincronizado automáticamente`)
-          
-          // Actualizar el estado del item como sincronizado
-          await supabase
-            .from('delivery_items')
-            .update({
-              synced_to_shopify: true,
-              last_sync_attempt: new Date().toISOString(),
-              sync_error_message: 'Auto-marcado como sincronizado (cantidad 0)'
-            })
-            .eq('id', deliveryItem.id)
+      // Obtener logs de sincronización previos para verificar SKUs individuales
+      const { data: syncLogs, error: logsError } = await supabase
+        .from('inventory_sync_logs')
+        .select('sync_results, synced_at, verification_status')
+        .eq('delivery_id', deliveryId)
+        .eq('verification_status', 'verified')
+        .order('synced_at', { ascending: false })
 
+      if (logsError) {
+        console.warn('Error al obtener logs de sincronización:', logsError.message)
+      }
+
+      for (const approvedItem of approvedItems) {
+        let shouldSkip = false;
+        let skipReason = '';
+
+        // Verificar si este SKU específico ya fue sincronizado exitosamente
+        if (syncLogs && syncLogs.length > 0) {
+          for (const log of syncLogs) {
+            if (log.sync_results && typeof log.sync_results === 'object') {
+              const syncResults = log.sync_results as any;
+              if (syncResults.results && Array.isArray(syncResults.results)) {
+                const skuResult = syncResults.results.find((r: any) => 
+                  r.sku === approvedItem.skuVariant && 
+                  r.status === 'success' && 
+                  r.addedQuantity === approvedItem.quantityApproved
+                );
+                
+                if (skuResult) {
+                  shouldSkip = true;
+                  skipReason = `Ya sincronizado el ${new Date(log.synced_at).toLocaleString()} con cantidad ${skuResult.addedQuantity}`;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (shouldSkip) {
           alreadySyncedSkus.push({
             sku: approvedItem.skuVariant,
-            reason: 'quantity_zero_auto_sync',
-            fingerprint: generateSyncFingerprint(deliveryId, approvedItem.skuVariant, 0)
-          })
-          continue
-        }
-        
-        const currentFingerprint = generateSyncFingerprint(deliveryId, approvedItem.skuVariant, approvedItem.quantityApproved)
-        const lastSyncAttempt = deliveryItem.last_sync_attempt ? new Date(deliveryItem.last_sync_attempt) : null
-        const isRecentlyAttempted = lastSyncAttempt && ((new Date().getTime() - lastSyncAttempt.getTime()) < 30 * 60 * 1000) // 30 minutes
-        
-        // Check if already synced with same quantity (enhanced idempotency)
-        if (deliveryItem.synced_to_shopify && 
-            deliveryItem.quantity_approved === approvedItem.quantityApproved &&
-            isRecentlyAttempted) {
-          alreadySyncedSkus.push(approvedItem.skuVariant)
-          console.log(`SKU ${approvedItem.skuVariant} ya sincronizado con cantidad ${deliveryItem.quantity_approved}`)
+            reason: skipReason,
+            quantityApproved: approvedItem.quantityApproved
+          });
+          console.log(`⏭️ Saltando ${approvedItem.skuVariant}: ${skipReason}`);
         } else {
-          // Needs sync or re-sync
-          console.log(`SKU ${approvedItem.skuVariant} necesita sincronización: ${deliveryItem.quantity_approved || 0} -> ${approvedItem.quantityApproved}`)
+          itemsToSync.push(approvedItem);
+          console.log(`✅ ${approvedItem.skuVariant} será sincronizado`);
+        }
+      }
+
+      console.log(`📊 Resultado Sync Inteligente: ${itemsToSync.length} a sincronizar, ${alreadySyncedSkus.length} ya sincronizados`);
+    } else {
+      console.log('🔄 Modo Sync Completo - Verificando estado básico')
+      
+      // Modo normal: usar la lógica original
+      for (const approvedItem of approvedItems) {
+        const deliveryItem = deliveryItems.find(item => 
+          item.order_items?.product_variants?.sku_variant === approvedItem.skuVariant
+        )
+        
+        if (deliveryItem) {
+          // Si la cantidad aprobada es 0, marcar como sincronizado automáticamente
+          if (approvedItem.quantityApproved === 0) {
+            console.log(`✅ SKU ${approvedItem.skuVariant} tiene cantidad 0 - marcando como sincronizado automáticamente`)
+            
+            // Actualizar el estado del item como sincronizado
+            await supabase
+              .from('delivery_items')
+              .update({
+                synced_to_shopify: true,
+                last_sync_attempt: new Date().toISOString(),
+                sync_error_message: 'Auto-marcado como sincronizado (cantidad 0)'
+              })
+              .eq('id', deliveryItem.id)
+
+            alreadySyncedSkus.push({
+              sku: approvedItem.skuVariant,
+              reason: 'quantity_zero_auto_sync',
+              fingerprint: generateSyncFingerprint(deliveryId, approvedItem.skuVariant, 0)
+            })
+            continue
+          }
+          
+          const currentFingerprint = generateSyncFingerprint(deliveryId, approvedItem.skuVariant, approvedItem.quantityApproved)
+          const lastSyncAttempt = deliveryItem.last_sync_attempt ? new Date(deliveryItem.last_sync_attempt) : null
+          const isRecentlyAttempted = lastSyncAttempt && ((new Date().getTime() - lastSyncAttempt.getTime()) < 30 * 60 * 1000) // 30 minutes
+          
+          // Check if already synced with same quantity (enhanced idempotency)
+          if (deliveryItem.synced_to_shopify && 
+              deliveryItem.quantity_approved === approvedItem.quantityApproved &&
+              isRecentlyAttempted) {
+            alreadySyncedSkus.push({
+              sku: approvedItem.skuVariant,
+              reason: 'recently_synced_same_quantity'
+            })
+            console.log(`SKU ${approvedItem.skuVariant} ya sincronizado con cantidad ${deliveryItem.quantity_approved}`)
+          } else {
+            // Needs sync or re-sync
+            console.log(`SKU ${approvedItem.skuVariant} necesita sincronización: ${deliveryItem.quantity_approved || 0} -> ${approvedItem.quantityApproved}`)
+            itemsToSync.push(approvedItem)
+          }
+        } else {
           itemsToSync.push(approvedItem)
         }
-      } else {
-        itemsToSync.push(approvedItem)
       }
     }
 
@@ -737,10 +802,16 @@ serve(async (req) => {
       }
     }
 
-    // Log results with verification status
+    // Log results with verification status and intelligent sync info
     const logData = {
       delivery_id: deliveryId,
-      sync_results: syncResults,
+      sync_results: {
+        results: syncResults,
+        intelligent_sync: intelligentSync,
+        skipped_items: alreadySyncedSkus,
+        total_items_sent: approvedItems.length,
+        items_processed: itemsToSync.length
+      },
       success_count: successCount,
       error_count: errorCount,
       verification_status: errorCount === 0 ? 'verified' : 'failed',
@@ -748,7 +819,9 @@ serve(async (req) => {
         total_items_processed: successCount + errorCount,
         items_verified: successCount,
         items_failed: errorCount,
-        verification_passed: errorCount === 0
+        items_skipped: alreadySyncedSkus.length,
+        verification_passed: errorCount === 0,
+        intelligent_sync_enabled: intelligentSync
       }
     }
 
@@ -776,15 +849,21 @@ serve(async (req) => {
     console.log(`✅ Delivery ${deliveryId} sync status updated: ${deliveryFullySynced ? 'FULLY_SYNCED' : 'PARTIAL_OR_FAILED'}`)
 
     const response = {
-      success: successCount > 0,
+      success: successCount > 0 || (alreadySyncedSkus.length > 0 && errorCount === 0),
       summary: {
         successful: successCount,
         failed: errorCount,
         total: itemsToSync.length,
-        already_synced: alreadySyncedSkus.length
+        already_synced: alreadySyncedSkus.length,
+        total_requested: approvedItems.length,
+        skipped: alreadySyncedSkus.length
       },
       details: syncResults,
+      skipped_details: alreadySyncedSkus,
       error: errorCount > 0 ? `${errorCount} items fallaron en la sincronización` : null,
+      message: intelligentSync ? 
+        `Sync inteligente: ${successCount} sincronizados, ${alreadySyncedSkus.length} ya estaban sincronizados, ${errorCount} fallaron` :
+        `Sync completo: ${successCount} sincronizados, ${alreadySyncedSkus.length} ya estaban sincronizados, ${errorCount} fallaron`,
       diagnostics: {
         authentication_verified: true,
         location_id: locationId,
@@ -792,6 +871,7 @@ serve(async (req) => {
         total_variants_in_shopify: allShopifyVariants.size,
         all_skus_found: true,
         api_method: 'inventory_levels_api_with_rate_limiting',
+        intelligent_sync_enabled: intelligentSync,
         rate_limiting: {
           delay_between_calls: SHOPIFY_API_RATE_LIMIT.DELAY_BETWEEN_CALLS,
           max_retries: SHOPIFY_API_RATE_LIMIT.MAX_RETRIES,

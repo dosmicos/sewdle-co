@@ -12,9 +12,70 @@ interface SyncInventoryData {
   }[];
 }
 
+interface SkuSyncStatus {
+  skuVariant: string;
+  needsSync: boolean;
+  lastSyncAt?: string;
+  isSynced: boolean;
+}
+
 export const useInventorySync = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  // Fase 1: Verificación por SKU Individual
+  const checkSkuSyncStatus = async (deliveryId: string, skuVariants: string[]): Promise<SkuSyncStatus[]> => {
+    try {
+      // Consultar logs de sincronización por SKU específico
+      const { data: syncLogs, error } = await supabase
+        .from('inventory_sync_logs')
+        .select('sync_results, synced_at, verification_status')
+        .eq('delivery_id', deliveryId)
+        .eq('verification_status', 'verified')
+        .order('synced_at', { ascending: false });
+
+      if (error) {
+        console.error('Error checking SKU sync status:', error);
+        return skuVariants.map(sku => ({ skuVariant: sku, needsSync: true, isSynced: false }));
+      }
+
+      const skuStatuses: SkuSyncStatus[] = [];
+
+      for (const sku of skuVariants) {
+        let needsSync = true;
+        let lastSyncAt: string | undefined;
+        let isSynced = false;
+
+        // Buscar en los logs si este SKU fue sincronizado exitosamente
+        for (const log of syncLogs || []) {
+          if (log.sync_results && typeof log.sync_results === 'object') {
+            const syncResults = log.sync_results as any;
+            if (syncResults.results && Array.isArray(syncResults.results)) {
+              const skuResult = syncResults.results.find((r: any) => r.skuVariant === sku);
+              if (skuResult?.success && skuResult?.verified) {
+                needsSync = false;
+                lastSyncAt = log.synced_at;
+                isSynced = true;
+                break;
+              }
+            }
+          }
+        }
+
+        skuStatuses.push({
+          skuVariant: sku,
+          needsSync,
+          lastSyncAt,
+          isSynced
+        });
+      }
+
+      return skuStatuses;
+    } catch (error) {
+      console.error('Error checking SKU sync status:', error);
+      return skuVariants.map(sku => ({ skuVariant: sku, needsSync: true, isSynced: false }));
+    }
+  };
 
   const checkRecentSuccessfulSync = async (deliveryId: string) => {
     try {
@@ -35,27 +96,56 @@ export const useInventorySync = () => {
     }
   };
 
-  const syncApprovedItemsToShopify = async (syncData: SyncInventoryData) => {
+  const syncApprovedItemsToShopify = async (syncData: SyncInventoryData, onlyPending: boolean = true) => {
     setLoading(true);
     
     try {
-      // Check if there's a recent successful sync for this delivery
-      const hasRecentSync = await checkRecentSuccessfulSync(syncData.deliveryId);
-      
-      if (hasRecentSync) {
-        toast({
-          title: "Sincronización ya realizada",
-          description: "Esta entrega fue sincronizada exitosamente en los últimos 30 minutos. No es necesario sincronizar nuevamente.",
-          variant: "destructive",
+      let itemsToSync = syncData.approvedItems;
+
+      if (onlyPending) {
+        // Fase 1: Verificar qué SKUs necesitan sincronización
+        const skuVariants = syncData.approvedItems.map(item => item.skuVariant);
+        const skuStatuses = await checkSkuSyncStatus(syncData.deliveryId, skuVariants);
+        
+        // Filtrar solo los items que necesitan sincronización
+        itemsToSync = syncData.approvedItems.filter(item => {
+          const status = skuStatuses.find(s => s.skuVariant === item.skuVariant);
+          return status?.needsSync !== false;
         });
-        setLoading(false);
-        return { success: false, error: 'Recent sync already exists' };
+
+        const alreadySyncedCount = syncData.approvedItems.length - itemsToSync.length;
+        
+        if (itemsToSync.length === 0) {
+          toast({
+            title: "Todos los SKUs ya sincronizados",
+            description: `Los ${alreadySyncedCount} SKUs de esta entrega ya fueron sincronizados exitosamente.`,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return { success: false, error: 'All SKUs already synced', summary: { already_synced: alreadySyncedCount } };
+        }
+
+        if (alreadySyncedCount > 0) {
+          toast({
+            title: "Sincronización inteligente",
+            description: `Se sincronizarán ${itemsToSync.length} SKUs pendientes. ${alreadySyncedCount} SKUs ya estaban sincronizados.`,
+          });
+        }
       }
       
-      console.log('🔄 Iniciando sincronización con Shopify:', syncData);
+      console.log('🔄 Iniciando sincronización con Shopify:', {
+        deliveryId: syncData.deliveryId,
+        originalItems: syncData.approvedItems.length,
+        itemsToSync: itemsToSync.length,
+        onlyPending
+      });
 
       const { data, error } = await supabase.functions.invoke('sync-inventory-shopify', {
-        body: syncData
+        body: {
+          ...syncData,
+          approvedItems: itemsToSync,
+          intelligentSync: onlyPending
+        }
       });
 
       if (error) {
@@ -259,6 +349,7 @@ export const useInventorySync = () => {
     clearSyncLock,
     clearAllStaleLocks,
     checkRecentSuccessfulSync,
+    checkSkuSyncStatus,
     loading
   };
 };

@@ -17,11 +17,13 @@ interface InventorySyncManagerProps {
 const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<any[]>([]);
+  const [skuStatuses, setSkuStatuses] = useState<{[deliveryId: string]: any[]}>({});
 
   const { 
     syncApprovedItemsToShopify, 
     fetchSyncLogs, 
     checkRecentSuccessfulSync,
+    checkSkuSyncStatus,
     loading: syncLoading 
   } = useInventorySync();
   const { fetchDeliveries, fetchDeliveryById, loading: deliveriesLoading } = useDeliveries();
@@ -41,6 +43,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     
     // Filtrar entregas aprobadas que necesitan sincronización
     const filteredDeliveries = [];
+    const newSkuStatuses: {[deliveryId: string]: any[]} = {};
     
     for (const delivery of deliveries) {
       // Solo incluir entregas aprobadas con items pendientes
@@ -51,12 +54,37 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
       // Verificar si hay sincronización exitosa reciente en los logs
       const hasRecentSync = await checkRecentSuccessfulSync(delivery.id);
       
-      // Si no hay sync reciente Y no está marcada como sincronizada, incluir en pendientes
       if (!hasRecentSync && !delivery.synced_to_shopify) {
-        filteredDeliveries.push(delivery);
+        // Obtener detalles completos de la entrega para verificar SKUs
+        const fullDelivery = await fetchDeliveryById(delivery.id);
+        
+        if (fullDelivery?.delivery_items) {
+          const skuVariants = fullDelivery.delivery_items
+            .filter((item: any) => item.quantity_approved > 0)
+            .map((item: any) => item.order_items?.product_variants?.sku_variant)
+            .filter(Boolean);
+          
+          if (skuVariants.length > 0) {
+            // Verificar estado de cada SKU
+            const skuStatuses = await checkSkuSyncStatus(delivery.id, skuVariants);
+            newSkuStatuses[delivery.id] = skuStatuses;
+            
+            // Solo incluir si hay SKUs que necesitan sincronización
+            const pendingSkus = skuStatuses.filter(s => s.needsSync);
+            if (pendingSkus.length > 0) {
+              filteredDeliveries.push({
+                ...delivery,
+                pendingSkusCount: pendingSkus.length,
+                totalSkusCount: skuStatuses.length,
+                syncedSkusCount: skuStatuses.length - pendingSkus.length
+              });
+            }
+          }
+        }
       }
     }
     
+    setSkuStatuses(newSkuStatuses);
     setPendingDeliveries(filteredDeliveries);
   };
 
@@ -126,7 +154,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
       await syncApprovedItemsToShopify({
         deliveryId: delivery.id,
         approvedItems
-      });
+      }, true); // onlyPending = true para sincronización inteligente
 
       // Recargar datos después de la sincronización
       await loadData();
@@ -205,7 +233,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
                     <TableRow>
                       <TableHead>Número de Seguimiento</TableHead>
                       <TableHead>Orden</TableHead>
-                      <TableHead>Items Aprobados</TableHead>
+                      <TableHead>SKUs</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Estado Sync</TableHead>
@@ -218,9 +246,16 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
                         <TableCell className="font-medium">{delivery.tracking_number}</TableCell>
                         <TableCell>{delivery.order_number}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="border-green-500 text-green-700">
-                            {delivery.total_approved} aprobados
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="border-blue-500 text-blue-700">
+                              {delivery.pendingSkusCount || 0} pendientes
+                            </Badge>
+                            {delivery.syncedSkusCount > 0 && (
+                              <Badge variant="outline" className="border-green-500 text-green-700">
+                                {delivery.syncedSkusCount} sincronizados
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {delivery.status === 'approved' ? (
@@ -232,15 +267,23 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
                         <TableCell>{new Date(delivery.delivery_date || delivery.created_at).toLocaleDateString()}</TableCell>
                         <TableCell>{renderDeliveryStatus(delivery)}</TableCell>
                         <TableCell>
-                          <Button
-                            onClick={() => handleManualSync(delivery)}
-                            size="sm"
-                            className="bg-blue-500 hover:bg-blue-600 text-white"
-                            disabled={loading || delivery.synced_to_shopify}
-                          >
-                            <Zap className="w-4 h-4 mr-1" />
-                            {delivery.synced_to_shopify ? 'Sincronizado' : 'Sincronizar'}
-                          </Button>
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              onClick={() => handleManualSync(delivery)}
+                              size="sm"
+                              className="bg-blue-500 hover:bg-blue-600 text-white"
+                              disabled={loading || delivery.synced_to_shopify}
+                              title={`Sincronizar ${delivery.pendingSkusCount || 0} SKUs pendientes`}
+                            >
+                              <Zap className="w-4 h-4 mr-1" />
+                              Sincronizar Pendientes
+                            </Button>
+                            {delivery.syncedSkusCount > 0 && (
+                              <span className="text-xs text-gray-500">
+                                {delivery.syncedSkusCount} ya sincronizados
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
