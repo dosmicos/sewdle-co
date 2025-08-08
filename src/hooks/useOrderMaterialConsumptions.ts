@@ -31,36 +31,17 @@ export const useOrderMaterialConsumptions = (orderId: string) => {
         throw error;
       }
 
-      // Group consumptions by material and sum quantities
-      const groupedConsumptions = (data || []).reduce((acc: any[], consumption: any) => {
-        const materialId = consumption.materials?.id;
-        if (!materialId) return acc;
+      // Return raw data without grouping to show individual records
+      // This allows users to see and edit individual consumption records
+      const processedConsumptions = (data || []).map(consumption => ({
+        ...consumption,
+        // Mark if this material has multiple records for the same order
+        has_duplicates: (data || []).filter(item => 
+          item.materials?.id === consumption.materials?.id
+        ).length > 1
+      }));
 
-        const existingIndex = acc.findIndex(item => item.materials?.id === materialId);
-        
-        if (existingIndex >= 0) {
-          // Add to existing material
-          acc[existingIndex].quantity_consumed += consumption.quantity_consumed;
-          // Keep the most recent delivery date
-          if (new Date(consumption.delivery_date) > new Date(acc[existingIndex].delivery_date)) {
-            acc[existingIndex].delivery_date = consumption.delivery_date;
-            acc[existingIndex].created_at = consumption.created_at;
-          }
-          // Combine notes if they exist and are different
-          if (consumption.notes && !acc[existingIndex].notes?.includes(consumption.notes)) {
-            acc[existingIndex].notes = acc[existingIndex].notes 
-              ? `${acc[existingIndex].notes}; ${consumption.notes}`
-              : consumption.notes;
-          }
-        } else {
-          // Add new material
-          acc.push({...consumption});
-        }
-        
-        return acc;
-      }, []);
-
-      return groupedConsumptions;
+      return processedConsumptions;
     },
     enabled: !!orderId,
   });
