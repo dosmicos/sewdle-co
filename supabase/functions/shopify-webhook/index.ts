@@ -33,6 +33,20 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
 async function processSingleOrder(order: any, supabase: any) {
   console.log(`📦 Procesando orden en tiempo real: ${order.id} - ${order.order_number}`);
 
+  // Get organization_id from shop domain
+  const shopDomain = order.shop_domain || (order.source_name ? `${order.source_name}.myshopify.com` : null);
+  
+  let organizationId = null;
+  if (shopDomain) {
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('id')
+      .ilike('shopify_store_url', `%${shopDomain}%`)
+      .single();
+    
+    organizationId = orgData?.id;
+  }
+
   // Store complete order in shopify_orders table
   const orderToInsert = {
     shopify_order_id: order.id,
@@ -82,7 +96,8 @@ async function processSingleOrder(order: any, supabase: any) {
     order_source_url: order.order_source_url || null,
     
     // Metadatos
-    raw_data: order
+    raw_data: order,
+    organization_id: organizationId
   };
 
   // Insert order using upsert
@@ -130,7 +145,8 @@ async function processSingleOrder(order: any, supabase: any) {
       // Información de fulfillment
       fulfillment_status: item.fulfillment_status || null,
       fulfillment_service: item.fulfillment_service || null,
-      requires_shipping: item.requires_shipping !== false
+      requires_shipping: item.requires_shipping !== false,
+      organization_id: organizationId
     });
   }
 

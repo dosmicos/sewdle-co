@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 interface RealTimeStats {
   total_orders: number;
@@ -24,30 +25,38 @@ export const ShopifyRealTimeStats: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string>('');
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchRealTimeStats = async () => {
     setLoading(true);
     try {
-      // Get overall statistics (matching the analytics filters)
+      if (!currentOrganization?.id) {
+        setStats(null);
+        return;
+      }
+
+      // Get overall statistics (matching the analytics filters) filtered by organization
       const { data: overallStats, error: overallError } = await supabase
         .from('shopify_orders')
         .select('total_price, customer_email, created_at_shopify')
+        .eq('organization_id', currentOrganization.id)
         .in('financial_status', ['paid', 'partially_paid', 'pending']);
 
       if (overallError) throw overallError;
 
-      // Get today's statistics
+      // Get today's statistics filtered by organization
       const today = new Date().toISOString().split('T')[0];
       const { data: todayStats, error: todayError } = await supabase
         .from('shopify_orders')
         .select('total_price')
+        .eq('organization_id', currentOrganization.id)
         .in('financial_status', ['paid', 'partially_paid', 'pending'])
         .gte('created_at_shopify', today + 'T00:00:00Z')
         .lt('created_at_shopify', today + 'T23:59:59Z');
 
       if (todayError) throw todayError;
 
-      // Get yesterday's statistics for comparison
+      // Get yesterday's statistics for comparison filtered by organization
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
@@ -55,16 +64,18 @@ export const ShopifyRealTimeStats: React.FC = () => {
       const { data: yesterdayStats, error: yesterdayError } = await supabase
         .from('shopify_orders')
         .select('total_price')
+        .eq('organization_id', currentOrganization.id)
         .in('financial_status', ['paid', 'partially_paid', 'pending'])
         .gte('created_at_shopify', yesterdayStr + 'T00:00:00Z')
         .lt('created_at_shopify', yesterdayStr + 'T23:59:59Z');
 
       if (yesterdayError) throw yesterdayError;
 
-      // Get top selling product
+      // Get top selling product filtered by organization
       const { data: topProduct, error: productError } = await supabase
         .from('shopify_order_line_items')
         .select('title, sku')
+        .eq('organization_id', currentOrganization.id)
         .order('quantity', { ascending: false })
         .limit(1)
         .single();
@@ -117,13 +128,15 @@ export const ShopifyRealTimeStats: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchRealTimeStats();
-    
-    // Set up auto-refresh every 30 seconds
-    const interval = setInterval(fetchRealTimeStats, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
+    if (currentOrganization?.id) {
+      fetchRealTimeStats();
+      
+      // Set up auto-refresh every 30 seconds
+      const interval = setInterval(fetchRealTimeStats, 30000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [currentOrganization?.id]);
 
   const formatCurrency = (amount: number) => {
     return '$' + new Intl.NumberFormat('es-CO', {
@@ -147,6 +160,16 @@ export const ShopifyRealTimeStats: React.FC = () => {
     if (percentage < 0) return "text-destructive";
     return "text-muted-foreground";
   };
+
+  if (!currentOrganization?.id) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-muted-foreground">
+          <p>No hay organización seleccionada</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!stats) {
     return (

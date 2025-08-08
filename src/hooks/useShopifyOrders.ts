@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 interface ShopifyOrder {
   id: string;
@@ -51,18 +52,26 @@ export const useShopifyOrders = () => {
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchOrders = async (limit = 50, offset = 0) => {
     setOrdersLoading(true);
     try {
-      // Get total count
+      if (!currentOrganization?.id) {
+        setOrders([]);
+        setTotalOrders(0);
+        return [];
+      }
+
+      // Get total count filtered by organization
       const { count } = await supabase
         .from('shopify_orders')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', currentOrganization.id);
       
       setTotalOrders(count || 0);
 
-      // Get paginated data
+      // Get paginated data filtered by organization
       const { data, error } = await supabase
         .from('shopify_orders')
         .select(`
@@ -79,6 +88,7 @@ export const useShopifyOrders = () => {
           total_price,
           currency
         `)
+        .eq('organization_id', currentOrganization.id)
         .order('created_at_shopify', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -101,10 +111,17 @@ export const useShopifyOrders = () => {
   const fetchCustomerAnalytics = async (limit = 50, offset = 0, startDate?: string, endDate?: string) => {
     setCustomersLoading(true);
     try {
-      // First get total count (aproximado desde shopify_orders para evitar crear nueva función RPC)
+      if (!currentOrganization?.id) {
+        setCustomerAnalytics([]);
+        setTotalCustomers(0);
+        return [];
+      }
+
+      // First get total count filtered by organization
       const { count } = await supabase
         .from('shopify_orders')
-        .select('customer_email', { count: 'exact', head: true });
+        .select('customer_email', { count: 'exact', head: true })
+        .eq('organization_id', currentOrganization.id);
       
       // Estimado aproximado de clientes únicos (será actualizado con datos reales)
       setTotalCustomers(Math.ceil((count || 0) / 3)); // Estimación: promedio 3 órdenes por cliente
@@ -143,6 +160,11 @@ export const useShopifyOrders = () => {
   const fetchProductAnalytics = async (startDate?: string, endDate?: string) => {
     setLoading(true);
     try {
+      if (!currentOrganization?.id) {
+        setProductAnalytics([]);
+        return;
+      }
+
       const { data, error } = await supabase.rpc('get_product_sales_analytics', {
         start_date: startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         end_date: endDate || new Date().toISOString().split('T')[0]
@@ -163,10 +185,12 @@ export const useShopifyOrders = () => {
   };
 
   useEffect(() => {
-    fetchOrders();
-    fetchCustomerAnalytics();
-    fetchProductAnalytics();
-  }, []);
+    if (currentOrganization?.id) {
+      fetchOrders();
+      fetchCustomerAnalytics();
+      fetchProductAnalytics();
+    }
+  }, [currentOrganization?.id]);
 
   return {
     orders,

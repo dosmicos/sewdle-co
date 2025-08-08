@@ -1240,6 +1240,7 @@ export type Database = {
           fulfillment_status: string | null
           gift_card: boolean | null
           id: string
+          organization_id: string
           price: number
           product_id: number | null
           product_type: string | null
@@ -1263,6 +1264,7 @@ export type Database = {
           fulfillment_status?: string | null
           gift_card?: boolean | null
           id?: string
+          organization_id: string
           price: number
           product_id?: number | null
           product_type?: string | null
@@ -1286,6 +1288,7 @@ export type Database = {
           fulfillment_status?: string | null
           gift_card?: boolean | null
           id?: string
+          organization_id?: string
           price?: number
           product_id?: number | null
           product_type?: string | null
@@ -1304,6 +1307,13 @@ export type Database = {
           vendor?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "shopify_order_line_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "shopify_order_line_items_shopify_order_id_fkey"
             columns: ["shopify_order_id"]
@@ -1339,6 +1349,7 @@ export type Database = {
           order_number: string
           order_source_url: string | null
           order_status_url: string | null
+          organization_id: string
           processed_at: string | null
           raw_data: Json | null
           referring_site: string | null
@@ -1382,6 +1393,7 @@ export type Database = {
           order_number: string
           order_source_url?: string | null
           order_status_url?: string | null
+          organization_id: string
           processed_at?: string | null
           raw_data?: Json | null
           referring_site?: string | null
@@ -1425,6 +1437,7 @@ export type Database = {
           order_number?: string
           order_source_url?: string | null
           order_status_url?: string | null
+          organization_id?: string
           processed_at?: string | null
           raw_data?: Json | null
           referring_site?: string | null
@@ -1443,7 +1456,15 @@ export type Database = {
           updated_at?: string
           updated_at_shopify?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shopify_orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sku_assignment_logs: {
         Row: {

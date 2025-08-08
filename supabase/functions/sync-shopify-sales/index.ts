@@ -301,7 +301,7 @@ async function fetchOrdersForChunk(
 }
 
 // Function to store complete Shopify orders in database
-async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any): Promise<void> {
+async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organizationId: string | null = null): Promise<void> {
   if (orders.length === 0) return;
 
   console.log(`💾 Almacenando ${orders.length} órdenes completas...`);
@@ -355,7 +355,8 @@ async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any): Promi
     order_source_url: order.order_source_url || null,
     
     // Metadatos
-    raw_data: order
+    raw_data: order,
+    organization_id: organizationId
   }));
 
   // Insert orders using upsert to handle duplicates
@@ -404,7 +405,8 @@ async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any): Promi
         // Información de fulfillment
         fulfillment_status: item.fulfillment_status || null,
         fulfillment_service: item.fulfillment_service || null,
-        requires_shipping: item.requires_shipping !== false // Default to true
+        requires_shipping: item.requires_shipping !== false, // Default to true
+        organization_id: organizationId
       });
     }
   }
@@ -455,6 +457,7 @@ Deno.serve(async (req) => {
     const mode = body.mode || 'initial'; // 'initial', 'daily', 'monthly'
     const days = body.days || 90; // Default to 90 days for initial sync
     const scheduled = body.scheduled || false;
+    const organizationId = body.organization_id || null;
 
     console.log(`🔄 Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
 
@@ -555,7 +558,7 @@ Deno.serve(async (req) => {
         allOrders.push(...chunkOrders);
         
         // Store complete orders in database
-        await storeCompleteOrders(chunkOrders, supabase);
+        await storeCompleteOrders(chunkOrders, supabase, organizationId);
         
         console.log(`✅ Chunk ${chunk.chunk_number} completado: ${chunkOrders.length} órdenes válidas obtenidas`);
         
