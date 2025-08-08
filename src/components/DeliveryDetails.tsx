@@ -869,16 +869,19 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
                 Re-editar Calidad
               </Button>
               
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={resyncEntireDelivery}
-                disabled={syncingVariants.size > 0}
-                className="text-green-600 border-green-600 hover:bg-green-50"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${syncingVariants.size > 0 ? 'animate-spin' : ''}`} />
-                {syncingVariants.size > 0 ? 'Resincronizando...' : 'Resincronizar Todo'}
-              </Button>
+              {/* Solo mostrar botón de resincronización si hay ítems pendientes */}
+              {getPendingSyncVariants().length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resyncEntireDelivery}
+                  disabled={syncingVariants.size > 0}
+                  className="text-green-600 border-green-600 hover:bg-green-50"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${syncingVariants.size > 0 ? 'animate-spin' : ''}`} />
+                  {syncingVariants.size > 0 ? 'Resincronizando...' : 'Resincronizar Todo'}
+                </Button>
+              )}
             </>
           )}
           
