@@ -1181,6 +1181,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
                 </div>
               )}
 
+              {/* Original Delivery Observations */}
+              {!isEditing && delivery.notes && (
+                <div className="bg-muted/50 p-4 rounded-lg border">
+                  <Label className="text-sm font-medium text-muted-foreground">Observaciones Originales de la Entrega</Label>
+                  <p className="mt-2 text-sm">{delivery.notes}</p>
+                </div>
+              )}
+
               {/* General Notes */}
               {!isEditing && (
                 <div>
