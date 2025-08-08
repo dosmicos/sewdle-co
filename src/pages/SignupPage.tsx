@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -310,28 +312,36 @@ const SignupPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-4">
                   Tipo de organización
                 </label>
-                <div className="grid md:grid-cols-3 gap-4">
+                <RadioGroup
+                  value={formData.organizationType}
+                  onValueChange={(value) => updateFormData('organizationType', value)}
+                  className="grid md:grid-cols-3 gap-4"
+                >
                   {[
                     { id: 'brand', label: 'Marca de Moda', description: 'Diseño y venta de productos' },
                     { id: 'workshop', label: 'Taller', description: 'Producción y manufactura' },
                     { id: 'other', label: 'Otro', description: 'Otro tipo de negocio' }
                   ].map((type) => (
-                    <Card
-                      key={type.id}
-                      className={`p-4 cursor-pointer transition-all ${
-                        formData.organizationType === type.id
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => updateFormData('organizationType', type.id)}
-                    >
-                      <div className="text-center">
+                    <div key={type.id} className="relative">
+                      <RadioGroupItem
+                        value={type.id}
+                        id={type.id}
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor={type.id}
+                        className={`block p-4 cursor-pointer transition-all border rounded-lg text-center peer-checked:border-orange-500 peer-checked:bg-orange-50 hover:border-gray-300 ${
+                          formData.organizationType === type.id
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200'
+                        }`}
+                      >
                         <h3 className="font-medium text-gray-900">{type.label}</h3>
                         <p className="text-sm text-gray-600 mt-1">{type.description}</p>
-                      </div>
-                    </Card>
+                      </Label>
+                    </div>
                   ))}
-                </div>
+                </RadioGroup>
               </div>
               
               <div className="flex gap-4">
