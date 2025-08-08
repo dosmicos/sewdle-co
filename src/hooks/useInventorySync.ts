@@ -23,21 +23,25 @@ export const useInventorySync = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Fase 1: Verificación por SKU Individual
+  // Fase 1: Verificación por SKU Individual (CORREGIDA)
   const checkSkuSyncStatus = async (deliveryId: string, skuVariants: string[]): Promise<SkuSyncStatus[]> => {
     try {
-      // Consultar logs de sincronización por SKU específico
+      console.log(`🔍 Verificando estado de sincronización para entrega ${deliveryId} con SKUs:`, skuVariants);
+      
+      // Consultar TODOS los logs de sincronización (verified Y failed)
       const { data: syncLogs, error } = await supabase
         .from('inventory_sync_logs')
         .select('sync_results, synced_at, verification_status')
         .eq('delivery_id', deliveryId)
-        .eq('verification_status', 'verified')
+        .in('verification_status', ['verified', 'failed'])
         .order('synced_at', { ascending: false });
 
       if (error) {
-        console.error('Error checking SKU sync status:', error);
+        console.error('❌ Error checking SKU sync status:', error);
         return skuVariants.map(sku => ({ skuVariant: sku, needsSync: true, isSynced: false }));
       }
+
+      console.log(`📊 Encontrados ${syncLogs?.length || 0} logs de sincronización`);
 
       const skuStatuses: SkuSyncStatus[] = [];
 
@@ -45,21 +49,38 @@ export const useInventorySync = () => {
         let needsSync = true;
         let lastSyncAt: string | undefined;
         let isSynced = false;
+        let lastStatus = 'never_synced';
 
-        // Buscar en los logs si este SKU fue sincronizado exitosamente
+        // Buscar el estado más reciente para este SKU
         for (const log of syncLogs || []) {
           if (log.sync_results && typeof log.sync_results === 'object') {
             const syncResults = log.sync_results as any;
             if (syncResults.results && Array.isArray(syncResults.results)) {
-              const skuResult = syncResults.results.find((r: any) => r.skuVariant === sku);
-              if (skuResult?.success && skuResult?.verified) {
-                needsSync = false;
+              const skuResult = syncResults.results.find((r: any) => r.skuVariant === sku || r.sku === sku);
+              
+              if (skuResult) {
                 lastSyncAt = log.synced_at;
-                isSynced = true;
-                break;
+                lastStatus = log.verification_status;
+                
+                // Solo marcar como sincronizado si el log es 'verified' Y el SKU fue exitoso
+                if (log.verification_status === 'verified' && skuResult.success) {
+                  needsSync = false;
+                  isSynced = true;
+                  console.log(`✅ SKU ${sku}: Ya sincronizado exitosamente el ${new Date(log.synced_at).toLocaleString()}`);
+                  break;
+                } else if (log.verification_status === 'failed' || !skuResult.success) {
+                  needsSync = true;
+                  isSynced = false;
+                  console.log(`❌ SKU ${sku}: Falló sincronización el ${new Date(log.synced_at).toLocaleString()}, necesita re-sync`);
+                  break; // El más reciente determina el estado
+                }
               }
             }
           }
+        }
+
+        if (!lastSyncAt) {
+          console.log(`🆕 SKU ${sku}: Sin logs de sincronización, necesita sync inicial`);
         }
 
         skuStatuses.push({
@@ -70,9 +91,10 @@ export const useInventorySync = () => {
         });
       }
 
+      console.log(`📋 Resultado final: ${skuStatuses.filter(s => s.needsSync).length} SKUs necesitan sync, ${skuStatuses.filter(s => s.isSynced).length} ya sincronizados`);
       return skuStatuses;
     } catch (error) {
-      console.error('Error checking SKU sync status:', error);
+      console.error('❌ Error checking SKU sync status:', error);
       return skuVariants.map(sku => ({ skuVariant: sku, needsSync: true, isSynced: false }));
     }
   };
@@ -116,11 +138,21 @@ export const useInventorySync = () => {
         const alreadySyncedCount = syncData.approvedItems.length - itemsToSync.length;
         
         if (itemsToSync.length === 0) {
-          toast({
-            title: "Todos los SKUs ya sincronizados",
-            description: `Los ${alreadySyncedCount} SKUs de esta entrega ya fueron sincronizados exitosamente.`,
-            variant: "destructive",
-          });
+          // Verificar si hay algún SKU que falló recientemente
+          const failedSkus = skuStatuses.filter(s => !s.isSynced && s.lastSyncAt);
+          
+          if (failedSkus.length > 0) {
+            toast({
+              title: "Error: SKUs requieren atención",
+              description: `${failedSkus.length} SKUs fallaron en sincronizaciones anteriores y necesitan revisión. Usa "Forzar Sincronización" para reintentarlos.`,
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Todos los SKUs ya sincronizados",
+              description: `Los ${alreadySyncedCount} SKUs de esta entrega ya fueron sincronizados exitosamente.`,
+            });
+          }
           setLoading(false);
           return { success: false, error: 'All SKUs already synced', summary: { already_synced: alreadySyncedCount } };
         }

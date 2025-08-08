@@ -590,20 +590,22 @@ serve(async (req) => {
 
         let alreadyApplied = false
         for (const log of previousSyncLogs.data || []) {
-          const logResults = log.sync_results || []
-          const previousSync = logResults.find(r => 
-            r.sku === item.skuVariant && 
-            r.status === 'success' &&
-            r.addedQuantity === item.quantityApproved
-          )
+          const logResults = log.sync_results
+          if (logResults && typeof logResults === 'object' && logResults.results && Array.isArray(logResults.results)) {
+            const previousSync = logResults.results.find(r => 
+              r.sku === item.skuVariant && 
+              r.status === 'success' &&
+              r.addedQuantity === item.quantityApproved
+            )
           
-          if (previousSync) {
-            // Additional check: verify the current inventory matches expected result
-            const expectedFromPrevious = (previousSync.previousQuantity || 0) + item.quantityApproved
-            if (Math.abs(realCurrentInventory - expectedFromPrevious) <= 1) { // Allow 1 unit difference
-              alreadyApplied = true
-              console.log(`✅ Cantidad ya aplicada correctamente, saltando sincronización`)
-              break
+            if (previousSync) {
+              // Additional check: verify the current inventory matches expected result
+              const expectedFromPrevious = (previousSync.previousQuantity || 0) + item.quantityApproved
+              if (Math.abs(realCurrentInventory - expectedFromPrevious) <= 1) { // Allow 1 unit difference
+                alreadyApplied = true
+                console.log(`✅ Cantidad ya aplicada correctamente, saltando sincronización`)
+                break
+              }
             }
           }
         }
