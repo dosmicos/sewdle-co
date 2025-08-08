@@ -1827,6 +1827,14 @@ export type Database = {
       }
     }
     Functions: {
+      assign_admin_role_to_users_without_role: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          user_id: string
+          assigned: boolean
+          error_message: string
+        }[]
+      }
       calculate_delivery_payment: {
         Args: { delivery_id_param: string }
         Returns: {

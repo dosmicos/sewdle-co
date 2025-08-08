@@ -99,11 +99,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .single();
 
         if (adminRole) {
+          // Get current organization
+          const { data: orgData } = await supabase
+            .from('organization_users')
+            .select('organization_id')
+            .eq('user_id', session.user.id)
+            .eq('status', 'active')
+            .single();
+
           const { error: roleInsertError } = await supabase
             .from('user_roles')
             .insert({
               user_id: session.user.id,
-              role_id: adminRole.id
+              role_id: adminRole.id,
+              organization_id: orgData?.organization_id
             });
 
           if (!roleInsertError) {
