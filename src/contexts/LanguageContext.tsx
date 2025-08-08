@@ -140,7 +140,7 @@ const englishTranslations: Record<string, string> = {
   // Pricing Section
   'pricing.title': 'Transparent plans for every stage',
   'pricing.subtitle': 'Start free and scale as needed',
-  'pricing.trial': '14-day free trial on all plans',
+  'pricing.trial': '30-day free trial on all plans',
   'pricing.starter.title': 'Starter',
   'pricing.starter.subtitle': 'For emerging brands',
   'pricing.starter.price': '$29',
@@ -178,7 +178,7 @@ const englishTranslations: Record<string, string> = {
   'pricing.faq.q1': 'Can I change plans at any time?',
   'pricing.faq.a1': 'Yes, you can upgrade or downgrade your plan whenever needed. Changes are reflected immediately.',
   'pricing.faq.q2': 'What does the free trial include?',
-  'pricing.faq.a2': 'Full 14 days with access to all Professional plan features, no restrictions.',
+  'pricing.faq.a2': 'Full 30 days with access to all Professional plan features, no restrictions.',
   'pricing.faq.q3': 'Are there setup or implementation costs?',
   'pricing.faq.a3': 'No, all our plans include complete onboarding at no additional cost.',
 
@@ -274,7 +274,7 @@ const spanishTranslations: Record<string, string> = {
   // Pricing Section
   'pricing.title': 'Planes transparentes para cada etapa',
   'pricing.subtitle': 'Comienza gratis y escala según tus necesidades',
-  'pricing.trial': '14 días de prueba gratis en todos los planes',
+  'pricing.trial': '30 días de prueba gratis en todos los planes',
   'pricing.starter.title': 'Starter',
   'pricing.starter.subtitle': 'Para marcas emergentes',
   'pricing.starter.price': '$29',
@@ -312,7 +312,7 @@ const spanishTranslations: Record<string, string> = {
   'pricing.faq.q1': '¿Puedo cambiar de plan en cualquier momento?',
   'pricing.faq.a1': 'Sí, puedes actualizar o reducir tu plan cuando lo necesites. Los cambios se reflejan inmediatamente.',
   'pricing.faq.q2': '¿Qué incluye la prueba gratuita?',
-  'pricing.faq.a2': '14 días completos con acceso a todas las funciones del plan Professional, sin restricciones.',
+  'pricing.faq.a2': '30 días completos con acceso a todas las funciones del plan Professional, sin restricciones.',
   'pricing.faq.q3': '¿Hay costos de setup o implementación?',
   'pricing.faq.a3': 'No, todos nuestros planes incluyen onboarding completo sin costos adicionales.',
 

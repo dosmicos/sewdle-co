@@ -197,7 +197,7 @@ const SignupPage = () => {
           </button>
           <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-12 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900">Crear tu cuenta en Sewdle</h1>
-          <p className="text-gray-600">Comienza tu prueba gratuita de 14 días</p>
+          <p className="text-gray-600">Comienza tu prueba gratuita de 30 días</p>
         </div>
 
         {/* Progress indicator */}
@@ -360,7 +360,7 @@ const SignupPage = () => {
             <div className="space-y-6">
               <div className="text-center mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Elige tu plan</h2>
-                <p className="text-gray-600">14 días gratis en cualquier plan</p>
+                <p className="text-gray-600">30 días gratis en cualquier plan</p>
               </div>
               
               <div className="grid gap-4">
