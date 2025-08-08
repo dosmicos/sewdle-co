@@ -33,6 +33,7 @@ export type Database = {
           synced_to_shopify: boolean
           tracking_number: string | null
           updated_at: string
+          user_observations: string | null
           workshop_id: string
         }
         Insert: {
@@ -53,6 +54,7 @@ export type Database = {
           synced_to_shopify?: boolean
           tracking_number?: string | null
           updated_at?: string
+          user_observations?: string | null
           workshop_id: string
         }
         Update: {
@@ -73,6 +75,7 @@ export type Database = {
           synced_to_shopify?: boolean
           tracking_number?: string | null
           updated_at?: string
+          user_observations?: string | null
           workshop_id?: string
         }
         Relationships: [

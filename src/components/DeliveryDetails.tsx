@@ -1181,11 +1181,19 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
                 </div>
               )}
 
-              {/* Original Delivery Observations */}
-              {!isEditing && delivery.notes && (
+              {/* User Observations */}
+              {!isEditing && delivery.user_observations && (
                 <div className="bg-muted/50 p-4 rounded-lg border">
-                  <Label className="text-sm font-medium text-muted-foreground">Observaciones Originales de la Entrega</Label>
-                  <p className="mt-2 text-sm">{delivery.notes}</p>
+                  <Label className="text-sm font-medium text-muted-foreground">Observaciones de la Entrega</Label>
+                  <p className="mt-2 text-sm">{delivery.user_observations}</p>
+                </div>
+              )}
+
+              {/* System Notes */}
+              {!isEditing && delivery.notes && (
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                  <Label className="text-sm font-medium text-amber-700">Notas del Sistema</Label>
+                  <p className="mt-2 text-sm text-amber-600">{delivery.notes}</p>
                 </div>
               )}
 

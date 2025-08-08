@@ -274,7 +274,8 @@ export const useDeliveries = () => {
         workshop_id: deliveryData.workshopId || null,
         delivery_date: new Date().toISOString().split('T')[0],
         status: 'pending',
-        notes: deliveryData.notes || null,
+        user_observations: deliveryData.notes || null, // Save user observations in dedicated field
+        notes: null, // Keep notes field for system messages only
         delivered_by: null,
         recipient_name: null,
         recipient_phone: null,
@@ -548,13 +549,13 @@ export const useDeliveries = () => {
         }
       }
 
-      // Update delivery with general notes
+      // Update delivery with general notes (preserving user observations)
       if (qualityData.generalNotes && qualityData.generalNotes.trim()) {
-        console.log('Updating delivery with general notes:', qualityData.generalNotes);
+        console.log('Updating delivery with general notes (quality review):', qualityData.generalNotes);
         const { error: notesError } = await supabase
           .from('deliveries')
           .update({
-            notes: qualityData.generalNotes.trim()
+            notes: `Control de Calidad: ${qualityData.generalNotes.trim()}`
           })
           .eq('id', deliveryId);
 
