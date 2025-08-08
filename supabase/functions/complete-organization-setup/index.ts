@@ -157,6 +157,36 @@ serve(async (req) => {
       throw profileError
     }
 
+    // 4. Assign Administrador role to the user
+    const { data: adminRole, error: roleError } = await supabase
+      .from('roles')
+      .select('id')
+      .eq('name', 'Administrador')
+      .eq('is_system', true)
+      .single()
+
+    if (roleError) {
+      console.error('Error fetching admin role:', roleError)
+      throw roleError
+    }
+
+    if (adminRole) {
+      const { error: userRoleError } = await supabase
+        .from('user_roles')
+        .insert({
+          user_id: userId,
+          role_id: adminRole.id,
+          organization_id: newOrg.id
+        })
+
+      if (userRoleError) {
+        console.error('Error assigning admin role:', userRoleError)
+        throw userRoleError
+      }
+
+      console.log('Admin role assigned to user:', userId)
+    }
+
     console.log('Organization setup completed successfully')
 
     return new Response(
