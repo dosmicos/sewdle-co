@@ -123,58 +123,56 @@ const SignupPage = () => {
       if (error) throw error;
 
       if (data.user) {
-        // For starter plan, setup organization immediately
-        if (formData.selectedPlan === 'starter') {
-          try {
-            const { data: setupData, error: setupError } = await supabase.functions.invoke('complete-organization-setup', {
-              body: { 
-                userId: data.user.id,
-                organizationName: formData.organizationName,
-                organizationType: formData.organizationType,
-                selectedPlan: formData.selectedPlan,
-                userEmail: formData.email,
-                userName: formData.name
-              }
-            });
-
-            if (setupError) {
-              console.error('Organization setup error:', setupError);
-              // Don't throw here, let the user continue and complete setup later
-            }
-          } catch (setupErr) {
-            console.error('Failed to setup organization:', setupErr);
-            // Continue with signup process
-          }
-        } else {
-          // For paid plans, start checkout process
-          const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
+        // Setup organization immediately for all plans
+        try {
+          const { data: setupData, error: setupError } = await supabase.functions.invoke('complete-organization-setup', {
             body: { 
-              planId: formData.selectedPlan === 'professional' ? 'plan_professional' : 'plan_enterprise',
+              userId: data.user.id,
               organizationName: formData.organizationName,
               organizationType: formData.organizationType,
-              userId: data.user.id,
+              selectedPlan: formData.selectedPlan,
               userEmail: formData.email,
               userName: formData.name
             }
           });
 
-          if (checkoutError) throw checkoutError;
-
-          // Redirect to Stripe checkout
-          if (checkoutData.url) {
-            window.location.href = checkoutData.url;
-            return;
+          if (setupError) {
+            console.error('Organization setup error:', setupError);
+            throw new Error('No se pudo crear la organización. Por favor intenta de nuevo.');
           }
+        } catch (setupErr) {
+          console.error('Failed to setup organization:', setupErr);
+          throw setupErr;
         }
 
+        // Now proceed with payment for all plans
+        const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
+          body: { 
+            planId: formData.selectedPlan === 'professional' ? 'plan_professional' : 
+                   formData.selectedPlan === 'enterprise' ? 'plan_enterprise' : 'plan_starter',
+            organizationName: formData.organizationName,
+            organizationType: formData.organizationType,
+            userId: data.user.id,
+            userEmail: formData.email,
+            userName: formData.name
+          }
+        });
+
+        if (checkoutError) throw checkoutError;
+
+        // Redirect to Stripe checkout
+        if (checkoutData.url) {
+          window.location.href = checkoutData.url;
+          return;
+        }
+
+        // Fallback if no checkout URL
         toast({
           title: "¡Registro exitoso!",
-          description: formData.selectedPlan === 'starter' 
-            ? "Tu cuenta y organización han sido creadas exitosamente"
-            : "Se ha enviado un enlace de confirmación a tu correo electrónico"
+          description: "Tu cuenta y organización han sido creadas exitosamente"
         });
         
-        navigate('/auth');
+        navigate('/dashboard');
       }
     } catch (error) {
       toast({
