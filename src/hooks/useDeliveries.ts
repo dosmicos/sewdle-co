@@ -592,6 +592,22 @@ export const useDeliveries = () => {
         throw deliveryError;
       }
 
+      // Calcular estadísticas para determinar el estado de la entrega
+      const totalItems = deliveryData.delivery_items?.length || 0;
+      const itemsWithApproved = deliveryData.delivery_items?.filter((item: any) => item.quantity_approved > 0).length || 0;
+      const itemsWithDefective = deliveryData.delivery_items?.filter((item: any) => item.quantity_defective > 0).length || 0;
+      const alreadySyncedCount = deliveryData.delivery_items?.filter((item: any) => item.synced_to_shopify && item.quantity_approved > 0).length || 0;
+
+      // Determinar el nuevo estado de la entrega
+      let newDeliveryStatus = 'pending';
+      if (itemsWithApproved > 0 && itemsWithDefective === 0) {
+        newDeliveryStatus = 'approved';
+      } else if (itemsWithApproved === 0 && itemsWithDefective > 0) {
+        newDeliveryStatus = 'rejected';
+      } else if (itemsWithApproved > 0 && itemsWithDefective > 0) {
+        newDeliveryStatus = 'partial_approved';
+      }
+
       // Filtrar solo items que tienen cantidad aprobada y no están sincronizados
       const approvedItems = deliveryData.delivery_items
         ?.filter((item: any) => item.quantity_approved > 0 && !item.synced_to_shopify)
@@ -602,6 +618,21 @@ export const useDeliveries = () => {
         }))
         .filter((item: any) => item.skuVariant) || [];
 
+      // Actualizar estado de la entrega primero
+      console.log('Updating delivery status to:', newDeliveryStatus);
+      const { error: statusError } = await supabase
+        .from('deliveries')
+        .update({
+          status: newDeliveryStatus
+        })
+        .eq('id', deliveryId);
+
+      if (statusError) {
+        console.error('Error updating delivery status:', statusError);
+        throw statusError;
+      }
+
+      // Sincronizar items pendientes si los hay
       if (approvedItems.length > 0) {
         try {
           console.log('Sincronizando items aprobados:', approvedItems);
@@ -625,7 +656,7 @@ export const useDeliveries = () => {
           
           toast({
             title: "Revisión completada",
-            description: `Calidad procesada y inventario sincronizado con Shopify para ${approvedItems.length} items`,
+            description: `Calidad procesada y inventario sincronizado con Shopify para ${approvedItems.length} items adicionales`,
           });
         } catch (syncError) {
           console.error('Error in Shopify sync:', syncError);
@@ -636,7 +667,7 @@ export const useDeliveries = () => {
           });
         }
       } else {
-        const alreadySyncedCount = deliveryData.delivery_items?.filter((item: any) => item.synced_to_shopify && item.quantity_approved > 0).length || 0;
+        // No hay items pendientes de sincronización
         if (alreadySyncedCount > 0) {
           toast({
             title: "Revisión completada",
