@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 export interface DeliveryPayment {
   id: string;
@@ -40,8 +41,11 @@ export const useDeliveryPayments = () => {
   const [payments, setPayments] = useState<DeliveryPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchPayments = async () => {
+    if (!currentOrganization) return;
+    
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -52,6 +56,7 @@ export const useDeliveryPayments = () => {
           workshops!delivery_payments_workshop_id_fkey(name),
           orders!delivery_payments_order_id_fkey(order_number)
         `)
+        .eq('organization_id', currentOrganization.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -119,6 +124,7 @@ export const useDeliveryPayments = () => {
           delivery_id: deliveryId,
           workshop_id: delivery.workshop_id,
           order_id: delivery.order_id,
+          organization_id: currentOrganization?.id,
           total_units: calculation.total_units,
           billable_units: calculation.billable_units,
           unit_price: calculation.billable_units > 0 ? calculation.gross_amount / calculation.billable_units : 0,
@@ -217,7 +223,7 @@ export const useDeliveryPayments = () => {
 
   useEffect(() => {
     fetchPayments();
-  }, []);
+  }, [currentOrganization]);
 
   return {
     payments,

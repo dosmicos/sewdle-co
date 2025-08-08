@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 interface FinancialSummary {
   pendingPayments: number;
@@ -18,32 +19,38 @@ export const useFinancialSummary = () => {
   });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchFinancialSummary = async () => {
+    if (!currentOrganization) return;
+    
     setLoading(true);
     try {
-      // Obtener pagos pendientes y realizados
+      // Obtener pagos pendientes y realizados filtrados por organización
       const { data: payments, error: paymentsError } = await supabase
         .from('delivery_payments')
-        .select('payment_status, net_amount');
+        .select('payment_status, net_amount')
+        .eq('organization_id', currentOrganization.id);
 
       if (paymentsError) {
         throw paymentsError;
       }
 
-      // Obtener total de anticipos
+      // Obtener total de anticipos filtrado por organización
       const { data: advances, error: advancesError } = await supabase
         .from('order_advances')
-        .select('amount');
+        .select('amount')
+        .eq('organization_id', currentOrganization.id);
 
       if (advancesError) {
         throw advancesError;
       }
 
-      // Obtener total de entregas
+      // Obtener total de entregas filtrado por organización
       const { data: deliveries, error: deliveriesError } = await supabase
         .from('deliveries')
-        .select('id');
+        .select('id')
+        .eq('organization_id', currentOrganization.id);
 
       if (deliveriesError) {
         throw deliveriesError;
@@ -82,7 +89,7 @@ export const useFinancialSummary = () => {
 
   useEffect(() => {
     fetchFinancialSummary();
-  }, []);
+  }, [currentOrganization]);
 
   return {
     summary,
