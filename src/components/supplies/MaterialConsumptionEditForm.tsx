@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Edit3 } from 'lucide-react';
+import { Loader2, Edit3, Trash2 } from 'lucide-react';
 
 interface MaterialConsumptionEditFormProps {
   consumption: any;
@@ -24,6 +25,7 @@ const MaterialConsumptionEditForm = ({
   const [loading, setLoading] = useState(false);
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -77,6 +79,39 @@ const MaterialConsumptionEditForm = ({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!consumption) return;
+
+    setLoading(true);
+    try {
+      // Eliminar el consumo de material
+      const { error } = await supabase
+        .from('material_deliveries')
+        .delete()
+        .eq('id', consumption.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Consumo eliminado",
+        description: "El consumo de material se ha eliminado correctamente.",
+      });
+
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error('Error deleting material consumption:', error);
+      toast({
+        title: "Error al eliminar",
+        description: error.message || "No se pudo eliminar el consumo de material",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -138,22 +173,58 @@ const MaterialConsumptionEditForm = ({
           </div>
 
           {/* Botones */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-            >
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Actualizar Consumo
-            </Button>
+          <div className="flex justify-between pt-4">
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={loading}
+                  className="flex items-center space-x-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Eliminar</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Eliminar consumo de material?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Se eliminará permanentemente el registro del consumo de este material.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={loading}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Eliminar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <div className="flex space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading}
+              >
+                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Actualizar Consumo
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
