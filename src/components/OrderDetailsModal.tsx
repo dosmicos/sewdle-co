@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle, Zap } from 'lucide-react';
+import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle, Zap, Edit3 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import OrderDeliveryTracker from './OrderDeliveryTracker';
 import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
+import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
 
 interface OrderDetailsModalProps {
   order: any;
@@ -21,8 +22,9 @@ interface OrderDetailsModalProps {
 }
 
 const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDetailsModalProps) => {
-  const { canEditOrders, canDeleteOrders } = useUserContext();
+  const { canEditOrders, canDeleteOrders, isAdmin, isDesigner } = useUserContext();
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(order?.id);
+  const [editingConsumption, setEditingConsumption] = useState<any>(null);
   
   if (!order) return null;
 
@@ -42,6 +44,14 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const handleEditConsumptionSuccess = () => {
+    setEditingConsumption(null);
+    // Refetch material consumptions
+    window.location.reload(); // Simple way to refresh data
+  };
+
+  const canEditMaterials = isAdmin || isDesigner;
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -340,11 +350,23 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                                 </p>
                               )}
                             </div>
-                            <div className="text-right">
-                              <p className="font-medium text-orange-600">
-                                -{consumption.quantity_consumed} {consumption.materials?.unit}
-                              </p>
-                              <p className="text-xs text-gray-500">Consumido</p>
+                            <div className="flex items-center space-x-3">
+                              <div className="text-right">
+                                <p className="font-medium text-orange-600">
+                                  -{consumption.quantity_consumed} {consumption.materials?.unit}
+                                </p>
+                                <p className="text-xs text-gray-500">Consumido</p>
+                              </div>
+                              {canEditMaterials && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEditingConsumption(consumption)}
+                                  className="h-8 w-8 p-0 text-gray-500 hover:text-orange-600"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -428,6 +450,16 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
           </Tabs>
         </div>
       </DialogContent>
+      
+      {/* Modal de edición de consumo de material */}
+      {editingConsumption && (
+        <MaterialConsumptionEditForm
+          consumption={editingConsumption}
+          open={!!editingConsumption}
+          onClose={() => setEditingConsumption(null)}
+          onSuccess={handleEditConsumptionSuccess}
+        />
+      )}
     </Dialog>
   );
 };

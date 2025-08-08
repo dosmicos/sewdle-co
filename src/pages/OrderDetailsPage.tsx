@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, FileText, Package, Settings, Truck, Factory, Download, AlertTriangle, Zap, ArrowLeft, Plus } from 'lucide-react';
+import { Calendar, FileText, Package, Settings, Truck, Factory, Download, AlertTriangle, Zap, ArrowLeft, Plus, Edit3 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import OrderDeliveryTracker from '@/components/OrderDeliveryTracker';
 import DeliveryForm from '@/components/DeliveryForm';
@@ -14,6 +14,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 import { useToast } from '@/hooks/use-toast';
+import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
 
 const OrderDetailsPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -21,9 +22,10 @@ const OrderDetailsPage = () => {
   const { toast } = useToast();
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editingConsumption, setEditingConsumption] = useState<any>(null);
   
   const { orders, loading, fetchOrders } = useOrders();
-  const { canEditOrders, canDeleteOrders, canCreateDeliveries } = useUserContext();
+  const { canEditOrders, canDeleteOrders, canCreateDeliveries, isAdmin, isDesigner } = useUserContext();
   const order = orders.find(o => o.id === orderId);
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(orderId || '');
 
@@ -158,6 +160,14 @@ const OrderDetailsPage = () => {
       description: "La entrega ha sido creada exitosamente.",
     });
   };
+
+  const handleEditConsumptionSuccess = () => {
+    setEditingConsumption(null);
+    // Refetch material consumptions
+    window.location.reload(); // Simple way to refresh data
+  };
+
+  const canEditMaterials = isAdmin || isDesigner;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -394,37 +404,49 @@ const OrderDetailsPage = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {materialConsumptions.map((consumption: any, index: number) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-black">
-                            {consumption.materials?.name || 'Material'}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            SKU: {consumption.materials?.sku} • Categoría: {consumption.materials?.category}
-                          </p>
-                          {consumption.materials?.color && (
-                            <p className="text-sm text-gray-600">
-                              Color: {consumption.materials.color}
-                            </p>
-                          )}
-                          <p className="text-xs text-gray-500 mt-1">
-                            Consumido el: {formatDateSafe(consumption.delivery_date)}
-                          </p>
-                          {consumption.notes && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              Notas: {consumption.notes}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-orange-600">
-                            -{consumption.quantity_consumed} {consumption.materials?.unit}
-                          </p>
-                          <p className="text-xs text-gray-500">Consumido</p>
-                        </div>
-                      </div>
-                    ))}
+                     {materialConsumptions.map((consumption: any, index: number) => (
+                       <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
+                         <div className="flex-1">
+                           <h4 className="font-medium text-black">
+                             {consumption.materials?.name || 'Material'}
+                           </h4>
+                           <p className="text-sm text-gray-600">
+                             SKU: {consumption.materials?.sku} • Categoría: {consumption.materials?.category}
+                           </p>
+                           {consumption.materials?.color && (
+                             <p className="text-sm text-gray-600">
+                               Color: {consumption.materials.color}
+                             </p>
+                           )}
+                           <p className="text-xs text-gray-500 mt-1">
+                             Consumido el: {formatDateSafe(consumption.delivery_date)}
+                           </p>
+                           {consumption.notes && (
+                             <p className="text-sm text-gray-600 mt-1">
+                               Notas: {consumption.notes}
+                             </p>
+                           )}
+                         </div>
+                         <div className="flex items-center space-x-3">
+                           <div className="text-right">
+                             <p className="font-medium text-orange-600">
+                               -{consumption.quantity_consumed} {consumption.materials?.unit}
+                             </p>
+                             <p className="text-xs text-gray-500">Consumido</p>
+                           </div>
+                           {canEditMaterials && (
+                             <Button
+                               variant="ghost"
+                               size="sm"
+                               onClick={() => setEditingConsumption(consumption)}
+                               className="h-8 w-8 p-0 text-gray-500 hover:text-orange-600"
+                             >
+                               <Edit3 className="w-4 h-4" />
+                             </Button>
+                           )}
+                         </div>
+                       </div>
+                     ))}
                   </div>
                 )}
               </CardContent>
@@ -508,6 +530,16 @@ const OrderDetailsPage = () => {
           open={showEditModal}
           onClose={() => setShowEditModal(false)}
           onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {/* Modal de edición de consumo de material */}
+      {editingConsumption && (
+        <MaterialConsumptionEditForm
+          consumption={editingConsumption}
+          open={!!editingConsumption}
+          onClose={() => setEditingConsumption(null)}
+          onSuccess={handleEditConsumptionSuccess}
         />
       )}
     </div>
