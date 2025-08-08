@@ -12,6 +12,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface OrderDetailsModalProps {
   order: any;
@@ -22,7 +23,8 @@ interface OrderDetailsModalProps {
 }
 
 const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDetailsModalProps) => {
-  const { canEditOrders, canDeleteOrders, isAdmin, isDesigner } = useUserContext();
+  const { canEditOrders, canDeleteOrders } = useUserContext();
+  const { hasPermission } = useAuth();
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(order?.id);
   const [editingConsumption, setEditingConsumption] = useState<any>(null);
   
@@ -51,7 +53,7 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
     window.location.reload(); // Simple way to refresh data
   };
 
-  const canEditMaterials = isAdmin || isDesigner;
+  const canEditMaterials = hasPermission('insumos', 'edit');
 
   const getStatusText = (status: string) => {
     switch (status) {

@@ -14,6 +14,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
 
 const OrderDetailsPage = () => {
@@ -25,8 +26,9 @@ const OrderDetailsPage = () => {
   const [editingConsumption, setEditingConsumption] = useState<any>(null);
   
   const { orders, loading, fetchOrders } = useOrders();
-  const { canEditOrders, canDeleteOrders, canCreateDeliveries, isAdmin, isDesigner } = useUserContext();
+  const { canEditOrders, canDeleteOrders, canCreateDeliveries } = useUserContext();
   const order = orders.find(o => o.id === orderId);
+  const { hasPermission } = useAuth();
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(orderId || '');
 
   // Scroll to top when component mounts
@@ -167,7 +169,7 @@ const OrderDetailsPage = () => {
     window.location.reload(); // Simple way to refresh data
   };
 
-  const canEditMaterials = isAdmin || isDesigner;
+  const canEditMaterials = hasPermission('insumos', 'edit');
 
   return (
     <div className="container mx-auto p-6 space-y-6">
