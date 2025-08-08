@@ -8,6 +8,7 @@ import { ShopifyOrdersTable } from '@/components/ShopifyOrdersTable';
 import { CustomerAnalyticsTable } from '@/components/CustomerAnalyticsTable';
 import { ProductAnalyticsTable } from '@/components/ProductAnalyticsTable';
 import { ShopifyRealTimeStats } from '@/components/ShopifyRealTimeStats';
+import { ShopifyIntegrationStatus } from '@/components/ShopifyIntegrationStatus';
 
 export const ShopifyDashboardPage: React.FC = () => {
   const {
@@ -52,6 +53,9 @@ export const ShopifyDashboardPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Integration Status */}
+      <ShopifyIntegrationStatus />
 
       {/* Stats Overview */}
       <ShopifyRealTimeStats />

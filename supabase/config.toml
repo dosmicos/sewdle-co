@@ -1,6 +1,9 @@
 
 project_id = "ysdcsqsfnckeuafjyrbc"
 
+[functions.test-shopify-connection]
+verify_jwt = false
+
 [functions.intelligent-replenishment]
 verify_jwt = false
 
