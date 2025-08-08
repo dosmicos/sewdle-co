@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MaterialConsumptionManager } from '@/components/supplies/MaterialConsumptionManager';
+import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
 import { MaterialConsumptionDuplicationFixer } from '@/components/supplies/MaterialConsumptionDuplicationFixer';
 
 export const MaterialConsumptionManagementPage: React.FC = () => {
