@@ -118,63 +118,18 @@ serve(async (req) => {
     console.log('Intelligent Sync:', intelligentSync)
     console.log('Items:', JSON.stringify(approvedItems, null, 2))
 
-    // IMPROVED: Enhanced sync lock with automatic cleanup and better error handling
-    const processId = crypto.randomUUID()
-    const lockTimeout = 2 * 60 * 1000 // 2 minutes (reduces blocking while maintaining duplicate protection)
+    console.log('=== VERIFICACIÓN SIMPLIFICADA ===')
     
-    // First, clear any stale locks automatically
-    console.log('🧹 Clearing stale sync locks...')
-    const { data: clearResult, error: clearError } = await supabase.rpc('clear_stale_sync_locks')
-    
-    if (clearError) {
-      console.warn('Warning: Failed to clear stale locks:', clearError.message)
-    } else if (clearResult && clearResult.length > 0) {
-      const clearedCount = clearResult[0]?.cleared_deliveries_count || 0
-      if (clearedCount > 0) {
-        console.log(`✅ Cleared ${clearedCount} stale sync locks`)
-      }
-    }
-    
+    // Simplified approach: No delivery-level locks, rely on SKU-level verification
     const { data: existingSync, error: syncCheckError } = await supabase
       .from('deliveries')
-      .select('synced_to_shopify, sync_attempts, last_sync_attempt, sync_error_message')
+      .select('synced_to_shopify, sync_error_message')
       .eq('id', deliveryId)
       .single()
 
     if (syncCheckError) {
       throw new Error(`Error verificando estado de sincronización: ${syncCheckError.message}`)
     }
-
-    // Check if there's a recent sync in progress (within timeout)
-    if (existingSync?.last_sync_attempt) {
-      const lastAttempt = new Date(existingSync.last_sync_attempt)
-      const now = new Date()
-      const timeDiff = now.getTime() - lastAttempt.getTime()
-
-      if (timeDiff < lockTimeout && !existingSync.synced_to_shopify) {
-        const minutesAgo = Math.round(timeDiff / 60000)
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: `Sincronización temporal en progreso (${minutesAgo} min). Solo se bloquean duplicados simultáneos, no sincronizaciones individuales.`,
-            canRetryAt: new Date(lastAttempt.getTime() + lockTimeout).toISOString(),
-            lockAgeMinutes: minutesAgo,
-            summary: { successful: 0, failed: 0, already_synced: 0 }
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-    }
-
-    // Update sync attempt with process ID
-    await supabase
-      .from('deliveries')
-      .update({ 
-        last_sync_attempt: new Date().toISOString(),
-        sync_attempts: (existingSync?.sync_attempts || 0) + 1,
-        sync_error_message: null
-      })
-      .eq('id', deliveryId)
 
     console.log('=== PASO 1: VERIFICACIÓN DE AUTENTICACIÓN ===')
     
@@ -238,7 +193,7 @@ serve(async (req) => {
         synced_to_shopify, 
         quantity_approved, 
         sync_attempt_count, 
-        last_sync_attempt,
+        
         order_items(
           product_variants(sku_variant)
         )
@@ -327,7 +282,6 @@ serve(async (req) => {
               .from('delivery_items')
               .update({
                 synced_to_shopify: true,
-                last_sync_attempt: new Date().toISOString(),
                 sync_error_message: 'Auto-marcado como sincronizado (cantidad 0)'
               })
               .eq('id', deliveryItem.id)
@@ -341,13 +295,9 @@ serve(async (req) => {
           }
           
           const currentFingerprint = generateSyncFingerprint(deliveryId, approvedItem.skuVariant, approvedItem.quantityApproved)
-          const lastSyncAttempt = deliveryItem.last_sync_attempt ? new Date(deliveryItem.last_sync_attempt) : null
-          const isRecentlyAttempted = lastSyncAttempt && ((new Date().getTime() - lastSyncAttempt.getTime()) < 30 * 60 * 1000) // 30 minutes
-          
-          // Check if already synced with same quantity (enhanced idempotency)
+          // Check if already synced with same quantity (simplified idempotency)
           if (deliveryItem.synced_to_shopify && 
-              deliveryItem.quantity_approved === approvedItem.quantityApproved &&
-              isRecentlyAttempted) {
+              deliveryItem.quantity_approved === approvedItem.quantityApproved) {
             alreadySyncedSkus.push({
               sku: approvedItem.skuVariant,
               reason: 'recently_synced_same_quantity'
@@ -530,7 +480,6 @@ serve(async (req) => {
           .from('delivery_items')
           .update({
             synced_to_shopify: false,
-            last_sync_attempt: new Date().toISOString(),
             sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1,
             sync_error_message: null
           })
@@ -616,7 +565,6 @@ serve(async (req) => {
             .from('delivery_items')
             .update({
               synced_to_shopify: true,
-              last_sync_attempt: new Date().toISOString(),
               sync_error_message: null,
               sync_attempt_count: (deliveryItem.sync_attempt_count || 0) // Keep current count
             })
@@ -751,7 +699,6 @@ serve(async (req) => {
           .from('delivery_items')
           .update({
             synced_to_shopify: true,
-            last_sync_attempt: new Date().toISOString(),
             sync_error_message: null,
             sync_attempt_count: (deliveryItem.sync_attempt_count || 0) // Keep current count for successful syncs
           })
@@ -784,7 +731,6 @@ serve(async (req) => {
             .from('delivery_items')
             .update({
               synced_to_shopify: false,
-              last_sync_attempt: new Date().toISOString(),
               sync_error_message: error.message,
               sync_attempt_count: (deliveryItem.sync_attempt_count || 0) + 1 // Increment on failure
             })
@@ -840,8 +786,6 @@ serve(async (req) => {
       .from('deliveries')
       .update({ 
         synced_to_shopify: deliveryFullySynced,
-        sync_attempts: (existingSync?.sync_attempts || 0) + 1,
-        last_sync_attempt: new Date().toISOString(),
         sync_error_message: errorCount > 0 ? 
           syncResults.filter(r => r.status === 'error').map(r => `${r.sku}: ${r.error}`).join('; ') :
           null

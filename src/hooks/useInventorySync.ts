@@ -229,27 +229,12 @@ export const useInventorySync = () => {
     } catch (error) {
       console.error('Error syncing inventory:', error);
       
-      // Enhanced error handling for sync locks and rate limiting
+      // Simplified error handling - no sync locks to worry about
       let errorMessage = "No se pudo sincronizar el inventario con Shopify";
-      let showRetryOption = false;
       
       if (error instanceof Error) {
         if (error.message.includes('rate limit') || error.message.includes('429')) {
-          errorMessage = "Shopify está limitando las peticiones. La sincronización se reintentará automáticamente con velocidad controlada.";
-        } else if (error.message.includes('Sincronización ya en progreso')) {
-          errorMessage = "Ya hay una sincronización en progreso. Espera unos minutos e intenta nuevamente.";
-          showRetryOption = true;
-        } else if (error.message.includes('canRetryAt')) {
-          // Parse enhanced lock info
-          try {
-            const errorData = JSON.parse(error.message);
-            const retryTime = new Date(errorData.canRetryAt).toLocaleTimeString();
-            errorMessage = `Sincronización en progreso (${errorData.lockAgeMinutes} min). Reintentar después de ${retryTime}.`;
-            showRetryOption = true;
-          } catch {
-            errorMessage = error.message;
-            showRetryOption = true;
-          }
+          errorMessage = "Shopify está limitando las peticiones. Intenta nuevamente en unos minutos.";
         } else {
           errorMessage = error.message;
         }
@@ -294,7 +279,7 @@ export const useInventorySync = () => {
     try {
       const { data, error } = await supabase
         .from('deliveries')
-        .select('synced_to_shopify, sync_attempts, last_sync_attempt, sync_error_message')
+        .select('synced_to_shopify, sync_error_message')
         .eq('id', deliveryId)
         .single();
 
@@ -378,8 +363,6 @@ export const useInventorySync = () => {
     syncApprovedItemsToShopify,
     fetchSyncLogs,
     checkSyncStatus,
-    clearSyncLock,
-    clearAllStaleLocks,
     checkRecentSuccessfulSync,
     checkSkuSyncStatus,
     loading

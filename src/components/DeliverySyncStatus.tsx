@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useInventorySync } from '@/hooks/useInventorySync';
 import { useToast } from '@/hooks/use-toast';
-import { SyncLockManager } from './SyncLockManager';
+
 import { resyncDeliveryStatus } from '@/utils/resyncDeliveryStatus';
 
 interface DeliverySyncStatusProps {
@@ -95,20 +95,6 @@ export const DeliverySyncStatus = ({
 
   const syncStats = getSyncStats();
 
-  // Check if delivery has a sync lock
-  const getSyncLockInfo = () => {
-    if (!delivery.last_sync_attempt) return { isLocked: false, lockAgeMinutes: 0 };
-    
-    const lastAttempt = new Date(delivery.last_sync_attempt);
-    const now = new Date();
-    const timeDiff = now.getTime() - lastAttempt.getTime();
-    const lockAgeMinutes = Math.round(timeDiff / 60000);
-    const isLocked = timeDiff < (15 * 60 * 1000) && !delivery.synced_to_shopify; // 15 minutes
-    
-    return { isLocked, lockAgeMinutes };
-  };
-
-  const lockInfo = getSyncLockInfo();
 
   // Determinar estado visual - CORRECCIÓN: priorizar "En Revisión"
   const getSyncStatusInfo = () => {
@@ -264,10 +250,6 @@ export const DeliverySyncStatus = ({
       details.push(`Error: ${delivery.sync_error_message}`);
     }
 
-    if (delivery.last_sync_attempt) {
-      const lastAttempt = new Date(delivery.last_sync_attempt).toLocaleString();
-      details.push(`Último intento: ${lastAttempt}`);
-    }
 
     return details.join('\n');
   };
@@ -317,17 +299,6 @@ export const DeliverySyncStatus = ({
       {/* Detalles expandidos */}
       {showDetails && (
         <div className="ml-4 space-y-2">
-          {/* Sync Lock Manager */}
-          {lockInfo.isLocked && (
-            <SyncLockManager 
-              deliveryId={delivery.id}
-              isLocked={lockInfo.isLocked}
-              lockAgeMinutes={lockInfo.lockAgeMinutes}
-              onLockCleared={onSyncSuccess}
-              onAutoRetry={handleRetrySync}
-            />
-          )}
-
           {syncStats.isInReview && (
             <Alert className="mt-2">
               <Clock className="h-4 w-4" />
@@ -342,11 +313,6 @@ export const DeliverySyncStatus = ({
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 {delivery.sync_error_message || 'Error de sincronización detectado'}
-                {delivery.last_sync_attempt && (
-                  <div className="text-xs mt-1 opacity-75">
-                    Último intento: {new Date(delivery.last_sync_attempt).toLocaleString()}
-                  </div>
-                )}
               </AlertDescription>
             </Alert>
           )}
@@ -365,11 +331,6 @@ export const DeliverySyncStatus = ({
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
                 Todos los items están sincronizados correctamente
-                {delivery.last_sync_attempt && (
-                  <div className="text-xs mt-1 opacity-75">
-                    Última sincronización: {new Date(delivery.last_sync_attempt).toLocaleString()}
-                  </div>
-                )}
               </AlertDescription>
             </Alert>
           )}
