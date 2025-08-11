@@ -30,21 +30,34 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
 }
 
 // Function to process and store a single Shopify order
-async function processSingleOrder(order: any, supabase: any) {
+async function processSingleOrder(order: any, supabase: any, shopDomain: string) {
   console.log(`📦 Procesando orden en tiempo real: ${order.id} - ${order.order_number}`);
+  console.log(`🏪 Shop domain recibido: ${shopDomain}`);
 
-  // Get organization_id from shop domain
-  const shopDomain = order.shop_domain || (order.source_name ? `${order.source_name}.myshopify.com` : null);
-  
+  // Get organization_id using exact matching with shop domain from header
   let organizationId = null;
   if (shopDomain) {
-    const { data: orgData } = await supabase
+    const { data: orgData, error: orgError } = await supabase
       .from('organizations')
-      .select('id')
-      .ilike('shopify_store_url', `%${shopDomain}%`)
+      .select('id, name, shopify_store_url')
+      .eq('shopify_store_url', `https://${shopDomain}`)
       .single();
     
+    if (orgError) {
+      console.error(`❌ Error buscando organización para ${shopDomain}:`, orgError);
+      // Log available organizations for debugging
+      const { data: allOrgs } = await supabase
+        .from('organizations')
+        .select('id, name, shopify_store_url')
+        .not('shopify_store_url', 'is', null);
+      console.log('📋 Organizaciones disponibles:', allOrgs);
+      throw new Error(`No se pudo encontrar organización para la tienda: ${shopDomain}`);
+    }
+    
     organizationId = orgData?.id;
+    console.log(`✅ Organización encontrada: ${orgData?.name} (${orgData?.id})`);
+  } else {
+    throw new Error('No se pudo determinar el dominio de la tienda Shopify');
   }
 
   // Store complete order in shopify_orders table
@@ -287,8 +300,10 @@ Deno.serve(async (req) => {
     const body = await req.text();
     const signature = req.headers.get('X-Shopify-Hmac-Sha256') || '';
     const topic = req.headers.get('X-Shopify-Topic') || '';
+    const shopDomain = req.headers.get('X-Shopify-Shop-Domain') || '';
 
     console.log(`📋 Webhook topic: ${topic}`);
+    console.log(`🏪 Shop domain from header: ${shopDomain}`);
 
     // Debug logging for signature verification
     console.log('🔍 Signature verification details:');
@@ -346,7 +361,7 @@ Deno.serve(async (req) => {
       });
 
     // Process the order
-    const result = await processSingleOrder(order, supabase);
+    const result = await processSingleOrder(order, supabase, shopDomain);
 
     // Update log with success
     await supabase
