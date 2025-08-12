@@ -49,9 +49,14 @@ export const DeliverySyncStatus = ({
       item.quantity_approved > 0
     ).length;
     
+    // CORRECCIÓN: Detectar errores tanto a nivel de entrega como de items
     const failedItems = items.filter((item: any) => 
-      item.quantity_approved > 0 && !item.synced_to_shopify && item.sync_error_message
+      item.quantity_approved > 0 && (!item.synced_to_shopify || item.sync_error_message)
     ).length;
+
+    // CORRECCIÓN: Detectar errores a nivel de entrega
+    const hasDeliveryError = delivery.sync_error_message || 
+      (delivery.synced_to_shopify === false && delivery.status !== 'pending' && delivery.status !== 'in_quality');
 
     // CORRECCIÓN: Verificar si la entrega está en estado de revisión (solo pending e in_quality)
     const isInReview = delivery.status === 'in_quality' || delivery.status === 'pending';
@@ -61,7 +66,7 @@ export const DeliverySyncStatus = ({
     
     // CORRECCIÓN: Items que están realmente sincronizados (solo contar los aprobados y sincronizados)
     const syncedApprovedItems = items.filter((item: any) => 
-      item.quantity_approved > 0 && item.synced_to_shopify
+      item.quantity_approved > 0 && item.synced_to_shopify && !item.sync_error_message
     ).length;
     
     // CORRECCIÓN: Items que no necesitan sincronización (cantidad aprobada = 0 en entregas NO en revisión)
@@ -72,11 +77,12 @@ export const DeliverySyncStatus = ({
     // CORRECCIÓN: Una entrega está completamente sincronizada si:
     // 1. NO está en revisión Y
     // 2. Todos los items con cantidad aprobada > 0 están sincronizados Y
-    // 3. Tiene al menos un item procesado
+    // 3. Tiene al menos un item procesado Y
+    // 4. NO hay errores a nivel de entrega
     const itemsNeedingSync = items.filter((item: any) => item.quantity_approved > 0);
     const isFullySynced = !isInReview && canBeSynced && 
       (itemsNeedingSync.length === 0 || syncedApprovedItems === itemsNeedingSync.length) &&
-      totalItems > 0;
+      totalItems > 0 && !hasDeliveryError && delivery.synced_to_shopify !== false;
 
     return {
       totalItems,
@@ -88,8 +94,9 @@ export const DeliverySyncStatus = ({
       isFullySynced,
       isInReview,
       canBeSynced,
-      hasFailures: failedItems > 0,
-      needsSync: itemsWithApprovedQty > 0 && syncedApprovedItems < itemsWithApprovedQty && canBeSynced
+      hasFailures: failedItems > 0 || hasDeliveryError,
+      hasDeliveryError,
+      needsSync: itemsWithApprovedQty > 0 && syncedApprovedItems < itemsWithApprovedQty && canBeSynced && !hasDeliveryError
     };
   };
 
@@ -242,14 +249,31 @@ export const DeliverySyncStatus = ({
       details.push(`Estado: Puede sincronizarse`);
     }
 
-    if (syncStats.failedItems > 0) {
-      details.push(`Con errores: ${syncStats.failedItems}`);
-    }
-
+    // CORRECCIÓN: Mostrar errores de entrega con prioridad
     if (delivery.sync_error_message) {
-      details.push(`Error: ${delivery.sync_error_message}`);
+      details.push(`❌ Error de entrega: ${delivery.sync_error_message}`);
     }
 
+    if (delivery.synced_to_shopify === false && !syncStats.isInReview) {
+      details.push(`⚠️ Entrega no sincronizada con Shopify`);
+    }
+
+    if (syncStats.failedItems > 0) {
+      details.push(`❌ Items con errores: ${syncStats.failedItems}`);
+      
+      // Mostrar errores específicos de items
+      const itemErrors = delivery.delivery_items
+        ?.filter((item: any) => item.quantity_approved > 0 && item.sync_error_message)
+        ?.map((item: any) => `  • ${item.order_items?.product_variants?.sku_variant}: ${item.sync_error_message}`)
+        ?.slice(0, 3); // Limitar a 3 errores para no sobrecargar el tooltip
+      
+      if (itemErrors && itemErrors.length > 0) {
+        details.push(...itemErrors);
+        if (syncStats.failedItems > 3) {
+          details.push(`  • Y ${syncStats.failedItems - 3} errores más...`);
+        }
+      }
+    }
 
     return details.join('\n');
   };
@@ -312,7 +336,18 @@ export const DeliverySyncStatus = ({
             <Alert variant="destructive" className="mt-2">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                {delivery.sync_error_message || 'Error de sincronización detectado'}
+                {delivery.sync_error_message ? (
+                  <div>
+                    <strong>Error de entrega:</strong> {delivery.sync_error_message}
+                    {syncStats.failedItems > 0 && (
+                      <div className="mt-1">
+                        <strong>Items con problemas:</strong> {syncStats.failedItems}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  `${syncStats.failedItems} items con errores de sincronización`
+                )}
               </AlertDescription>
             </Alert>
           )}
