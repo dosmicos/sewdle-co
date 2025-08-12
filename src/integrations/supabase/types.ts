@@ -1888,6 +1888,10 @@ export type Database = {
           reason: string
         }[]
       }
+      check_variant_update_safety: {
+        Args: { variant_id_param: string; new_sku_param: string }
+        Returns: Json
+      }
       cleanup_old_sku_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2336,6 +2340,10 @@ export type Database = {
       }
       trigger_replenishment_calculation: {
         Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      update_variant_sku_cascade: {
+        Args: { variant_id_param: string; new_sku_param: string }
         Returns: Json
       }
       user_belongs_to_organization: {

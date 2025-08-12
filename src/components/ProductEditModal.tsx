@@ -6,10 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Save, X } from 'lucide-react';
+import { Plus, Trash2, Save, X, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { sortVariants } from '@/lib/variantSorting';
+import { useVariantSkuUpdate, SkuUpdateSafety } from '@/hooks/useVariantSkuUpdate';
+import SkuUpdateConfirmationDialog from './SkuUpdateConfirmationDialog';
 
 interface Product {
   id: string;
@@ -53,7 +55,13 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
   const [originalVariants, setOriginalVariants] = useState<ProductVariant[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingVariants, setLoadingVariants] = useState(true);
+  const [showSkuConfirmation, setShowSkuConfirmation] = useState(false);
+  const [skuUpdateInfo, setSkuUpdateInfo] = useState<{
+    variant: ProductVariant;
+    safetyInfo: SkuUpdateSafety;
+  } | null>(null);
   const { toast } = useToast();
+  const { checkUpdateSafety, updateVariantSku, loading: skuUpdateLoading } = useVariantSkuUpdate();
 
   useEffect(() => {
     if (isOpen && product.id) {
@@ -274,29 +282,67 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
       let successCount = 0;
       const operationResults: string[] = [];
 
-      // Procesar actualizaciones
+      // Procesar actualizaciones con lógica inteligente de SKU
       for (const variant of operations.toUpdate) {
         operationsCount++;
         console.log(`Actualizando variante ${variant.id}...`);
         
-        const { error } = await supabase
-          .from('product_variants')
-          .update({
-            size: variant.size,
-            color: variant.color,
-            sku_variant: variant.sku_variant,
-            additional_price: variant.additional_price,
-            stock_quantity: variant.stock_quantity
-          })
-          .eq('id', variant.id);
-
-        if (error) {
-          console.error(`Error actualizando variante ${variant.id}:`, error);
-          operationResults.push(`❌ Error actualizando "${variant.sku_variant}": ${error.message}`);
+        const originalVariant = originalVariants.find(orig => orig.id === variant.id);
+        const skuChanged = originalVariant && originalVariant.sku_variant !== variant.sku_variant;
+        
+        if (skuChanged) {
+          // Usar cascading update para cambios de SKU
+          console.log(`SKU cambió de "${originalVariant.sku_variant}" a "${variant.sku_variant}"`);
+          const result = await updateVariantSku(variant.id!, variant.sku_variant);
+          
+          if (result?.success) {
+            // También actualizar otros campos si cambió el SKU exitosamente
+            if (originalVariant.size !== variant.size ||
+                originalVariant.color !== variant.color ||
+                originalVariant.additional_price !== variant.additional_price ||
+                originalVariant.stock_quantity !== variant.stock_quantity) {
+              
+              const { error } = await supabase
+                .from('product_variants')
+                .update({
+                  size: variant.size,
+                  color: variant.color,
+                  additional_price: variant.additional_price,
+                  stock_quantity: variant.stock_quantity
+                })
+                .eq('id', variant.id);
+              
+              if (error) {
+                console.error(`Error actualizando campos adicionales:`, error);
+                operationResults.push(`⚠️ SKU actualizado pero error en otros campos "${variant.sku_variant}": ${error.message}`);
+              }
+            }
+            successCount++;
+            operationResults.push(`✓ SKU actualizado en cascada "${variant.sku_variant}"`);
+          } else {
+            operationResults.push(`❌ Error actualizando SKU "${variant.sku_variant}"`);
+          }
         } else {
-          successCount++;
-          console.log(`✓ Variante ${variant.id} actualizada exitosamente`);
-          operationResults.push(`✓ Actualizada "${variant.sku_variant}"`);
+          // Actualización normal sin cambio de SKU
+          const { error } = await supabase
+            .from('product_variants')
+            .update({
+              size: variant.size,
+              color: variant.color,
+              sku_variant: variant.sku_variant,
+              additional_price: variant.additional_price,
+              stock_quantity: variant.stock_quantity
+            })
+            .eq('id', variant.id);
+
+          if (error) {
+            console.error(`Error actualizando variante ${variant.id}:`, error);
+            operationResults.push(`❌ Error actualizando "${variant.sku_variant}": ${error.message}`);
+          } else {
+            successCount++;
+            console.log(`✓ Variante ${variant.id} actualizada exitosamente`);
+            operationResults.push(`✓ Actualizada "${variant.sku_variant}"`);
+          }
         }
       }
 
@@ -632,6 +678,23 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
           </div>
         </form>
       </DialogContent>
+
+      {/* SKU Update Confirmation Dialog */}
+      <SkuUpdateConfirmationDialog
+        isOpen={showSkuConfirmation}
+        onClose={() => {
+          setShowSkuConfirmation(false);
+          setSkuUpdateInfo(null);
+        }}
+        onConfirm={() => {
+          // This would be used for individual SKU updates with confirmation
+          // For now, the cascading update is handled automatically in handleSubmit
+          setShowSkuConfirmation(false);
+          setSkuUpdateInfo(null);
+        }}
+        safetyInfo={skuUpdateInfo?.safetyInfo || null}
+        loading={skuUpdateLoading}
+      />
     </Dialog>
   );
 };
