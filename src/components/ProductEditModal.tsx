@@ -216,24 +216,84 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
     return errors;
   };
 
-  // Función mejorada para verificar referencias en orders
+  // Función mejorada para verificar referencias en todas las tablas relacionadas
   const checkVariantReferences = async (variantId: string) => {
     try {
-      const { data, error } = await supabase
+      console.log(`Verificando referencias para variante ${variantId}...`);
+      
+      // Verificar en order_items
+      const { data: orderItems, error: orderError } = await supabase
         .from('order_items')
         .select('id')
         .eq('product_variant_id', variantId)
         .limit(1);
 
-      if (error) {
-        console.error('Error verificando referencias:', error);
-        return false;
+      if (orderError) {
+        console.error('Error verificando referencias en order_items:', orderError);
+        return true; // Por seguridad, asumir que hay referencias si hay error
       }
 
-      return data && data.length > 0;
+      if (orderItems && orderItems.length > 0) {
+        console.log(`Variante tiene ${orderItems.length} referencias en order_items`);
+        return true;
+      }
+
+      // Verificar en replenishment_suggestions
+      const { data: replenishmentSuggestions, error: replenishmentError } = await supabase
+        .from('replenishment_suggestions')
+        .select('id')
+        .eq('product_variant_id', variantId)
+        .limit(1);
+
+      if (replenishmentError) {
+        console.error('Error verificando referencias en replenishment_suggestions:', replenishmentError);
+        return true;
+      }
+
+      if (replenishmentSuggestions && replenishmentSuggestions.length > 0) {
+        console.log(`Variante tiene ${replenishmentSuggestions.length} referencias en replenishment_suggestions`);
+        return true;
+      }
+
+      // Verificar en replenishment_config
+      const { data: replenishmentConfig, error: configError } = await supabase
+        .from('replenishment_config')
+        .select('id')
+        .eq('product_variant_id', variantId)
+        .limit(1);
+
+      if (configError) {
+        console.error('Error verificando referencias en replenishment_config:', configError);
+        return true;
+      }
+
+      if (replenishmentConfig && replenishmentConfig.length > 0) {
+        console.log(`Variante tiene ${replenishmentConfig.length} referencias en replenishment_config`);
+        return true;
+      }
+
+      // Verificar en sales_metrics
+      const { data: salesMetrics, error: salesError } = await supabase
+        .from('sales_metrics')
+        .select('id')
+        .eq('product_variant_id', variantId)
+        .limit(1);
+
+      if (salesError) {
+        console.error('Error verificando referencias en sales_metrics:', salesError);
+        return true;
+      }
+
+      if (salesMetrics && salesMetrics.length > 0) {
+        console.log(`Variante tiene ${salesMetrics.length} referencias en sales_metrics`);
+        return true;
+      }
+
+      console.log(`Variante ${variantId} no tiene referencias, se puede eliminar`);
+      return false;
     } catch (error) {
       console.error('Error en checkVariantReferences:', error);
-      return false;
+      return true; // Por seguridad, asumir que hay referencias si hay error
     }
   };
 
