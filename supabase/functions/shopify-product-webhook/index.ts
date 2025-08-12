@@ -130,15 +130,49 @@ Deno.serve(async (req) => {
           console.log(`✅ Producto creado: ${newProduct.name}`)
         }
 
-        // Check if variant exists
+        // Check if variant exists - mejorar búsqueda para evitar duplicados
         const variantSku = variant.sku || `SHOPIFY-${variant.id}`
         
-        const { data: existingVariant, error: variantSearchError } = await supabase
-          .from('product_variants')
-          .select('id, sku_variant')
-          .eq('product_id', targetProductId)
-          .eq('sku_variant', variantSku)
-          .single()
+        // Primero buscar por SKU si existe
+        let existingVariant
+        let variantSearchError
+        
+        if (variant.sku) {
+          const { data, error } = await supabase
+            .from('product_variants')
+            .select('id, sku_variant')
+            .eq('product_id', targetProductId)
+            .eq('sku_variant', variant.sku)
+            .single()
+          
+          existingVariant = data
+          variantSearchError = error
+        }
+        
+        // Si no se encontró por SKU, buscar por características similares para evitar duplicados
+        if (!existingVariant && variantSearchError?.code === 'PGRST116') {
+          const extractedSize = variant.option1 || extractSizeFromTitle(variant.title)
+          const extractedColor = variant.option2 || extractColorFromTitle(variant.title)
+          
+          const { data, error } = await supabase
+            .from('product_variants')
+            .select('id, sku_variant, size, color')
+            .eq('product_id', targetProductId)
+            
+          if (!error && data) {
+            // Buscar coincidencia por tamaño y color
+            existingVariant = data.find(v => 
+              (v.size === extractedSize || (!v.size && !extractedSize)) &&
+              (v.color === extractedColor || (!v.color && !extractedColor))
+            )
+            
+            if (existingVariant) {
+              console.log(`🔍 Variante encontrada por características: ${existingVariant.sku_variant} -> ${variantSku}`)
+            }
+          }
+          
+          variantSearchError = error
+        }
 
         if (variantSearchError && variantSearchError.code !== 'PGRST116') {
           console.error('Error buscando variante:', variantSearchError)
@@ -151,12 +185,13 @@ Deno.serve(async (req) => {
         const extractedColor = variant.option2 || extractColorFromTitle(variant.title)
 
         if (existingVariant) {
-          // Update existing variant
-          console.log(`🔄 Actualizando variante existente: ${variantSku}`)
+          // Update existing variant - incluir SKU para sincronizar cambios de Shopify
+          console.log(`🔄 Actualizando variante existente: ${existingVariant.sku_variant} -> ${variantSku}`)
           
           const { error: updateError } = await supabase
             .from('product_variants')
             .update({
+              sku_variant: variantSku, // Actualizar SKU para sincronizar cambios de Shopify
               size: extractedSize,
               color: extractedColor,
               stock_quantity: variant.inventory_quantity || 0
