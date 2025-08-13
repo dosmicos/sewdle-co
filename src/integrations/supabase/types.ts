@@ -2053,6 +2053,17 @@ export type Database = {
           rejected_deliveries: number
         }[]
       }
+      get_delivery_stats_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_deliveries: number
+          pending_deliveries: number
+          in_quality_deliveries: number
+          approved_deliveries: number
+          rejected_deliveries: number
+          organization_name: string
+        }[]
+      }
       get_delivery_sync_status: {
         Args: { delivery_id_param?: string }
         Returns: {
@@ -2304,6 +2315,10 @@ export type Database = {
       is_sync_in_progress: {
         Args: { sync_type_param: string; sync_mode_param: string }
         Returns: boolean
+      }
+      log_stats_access: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       make_user_admin: {
         Args: { user_email: string }
