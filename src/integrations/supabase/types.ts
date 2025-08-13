@@ -1872,21 +1872,7 @@ export type Database = {
       }
       calculate_replenishment_suggestions: {
         Args: Record<PropertyKey, never>
-        Returns: {
-          variant_id: string
-          product_name: string
-          variant_size: string
-          variant_color: string
-          sku_variant: string
-          current_stock: number
-          sales_velocity: number
-          days_of_stock: number
-          open_orders: number
-          projected_demand: number
-          suggested_quantity: number
-          urgency_level: string
-          reason: string
-        }[]
+        Returns: undefined
       }
       check_variant_update_safety: {
         Args: { variant_id_param: string; new_sku_param: string }
