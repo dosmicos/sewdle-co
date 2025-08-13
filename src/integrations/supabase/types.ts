@@ -1037,6 +1037,7 @@ export type Database = {
           lead_time_days: number
           max_stock_level: number
           min_stock_level: number
+          organization_id: string
           product_variant_id: string
           safety_days: number
           updated_at: string
@@ -1049,6 +1050,7 @@ export type Database = {
           lead_time_days?: number
           max_stock_level?: number
           min_stock_level?: number
+          organization_id: string
           product_variant_id: string
           safety_days?: number
           updated_at?: string
@@ -1061,6 +1063,7 @@ export type Database = {
           lead_time_days?: number
           max_stock_level?: number
           min_stock_level?: number
+          organization_id?: string
           product_variant_id?: string
           safety_days?: number
           updated_at?: string
@@ -1093,6 +1096,7 @@ export type Database = {
           executed_at: string | null
           id: string
           open_orders_quantity: number
+          organization_id: string
           product_variant_id: string
           projected_demand: number
           reason: string | null
@@ -1112,6 +1116,7 @@ export type Database = {
           executed_at?: string | null
           id?: string
           open_orders_quantity?: number
+          organization_id: string
           product_variant_id: string
           projected_demand?: number
           reason?: string | null
@@ -1131,6 +1136,7 @@ export type Database = {
           executed_at?: string | null
           id?: string
           open_orders_quantity?: number
+          organization_id?: string
           product_variant_id?: string
           projected_demand?: number
           reason?: string | null
@@ -1205,6 +1211,7 @@ export type Database = {
           id: string
           metric_date: string
           orders_count: number
+          organization_id: string
           product_variant_id: string
           sales_quantity: number
         }
@@ -1214,6 +1221,7 @@ export type Database = {
           id?: string
           metric_date?: string
           orders_count?: number
+          organization_id: string
           product_variant_id: string
           sales_quantity?: number
         }
@@ -1223,6 +1231,7 @@ export type Database = {
           id?: string
           metric_date?: string
           orders_count?: number
+          organization_id?: string
           product_variant_id?: string
           sales_quantity?: number
         }
