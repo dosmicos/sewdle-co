@@ -1245,6 +1245,39 @@ export type Database = {
           },
         ]
       }
+      security_audit_log: {
+        Row: {
+          created_at: string | null
+          event_details: Json | null
+          event_type: string
+          id: string
+          ip_address: unknown | null
+          organization_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_details?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: unknown | null
+          organization_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_details?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: unknown | null
+          organization_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       shopify_order_line_items: {
         Row: {
           created_at: string
@@ -2315,6 +2348,10 @@ export type Database = {
       is_sync_in_progress: {
         Args: { sync_type_param: string; sync_mode_param: string }
         Returns: boolean
+      }
+      log_security_event: {
+        Args: { event_type_param: string; event_details_param?: Json }
+        Returns: undefined
       }
       log_stats_access: {
         Args: Record<PropertyKey, never>
