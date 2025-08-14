@@ -20,7 +20,6 @@ interface WorkshopCapacityStats {
 interface AvailableOrder {
   id: string;
   order_number: string;
-  client_name: string;
   due_date: string | null;
   total_amount: number | null;
   status: string | null;

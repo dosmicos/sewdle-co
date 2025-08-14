@@ -26,11 +26,13 @@ export interface ReplenishmentSuggestion {
 export interface ReplenishmentConfig {
   id: string;
   product_variant_id: string;
+  organization_id: string;
   min_stock_level: number;
   max_stock_level: number;
   lead_time_days: number;
   safety_days: number;
   is_active: boolean;
+  created_by?: string;
   created_at: string;
   updated_at: string;
 }
@@ -119,7 +121,7 @@ export const useReplenishment = () => {
 
       toast({
         title: "Éxito",
-        description: `Sugerencias calculadas con datos automáticos de Shopify. Se procesaron ${data?.length || 0} variantes.`,
+        description: "Sugerencias calculadas con datos automáticos de Shopify.",
       });
 
       // Recargar sugerencias después del cálculo
@@ -205,14 +207,24 @@ export const useReplenishment = () => {
     }
   };
 
-  const createConfig = async (config: Omit<ReplenishmentConfig, 'id' | 'created_at' | 'updated_at'>) => {
+  const createConfig = async (config: Omit<ReplenishmentConfig, 'id' | 'created_at' | 'updated_at' | 'organization_id' | 'created_by'>) => {
     try {
+      // Get current organization and user
+      const user = await supabase.auth.getUser();
+      const { data: orgData } = await supabase
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', user.data.user?.id)
+        .eq('status', 'active')
+        .single();
+
       const { error } = await supabase
         .from('replenishment_config')
-        .insert([{
+        .insert({
           ...config,
-          created_by: (await supabase.auth.getUser()).data.user?.id
-        }]);
+          organization_id: orgData?.organization_id,
+          created_by: user.data.user?.id
+        });
 
       if (error) {
         console.error('Error creating replenishment config:', error);

@@ -18,7 +18,6 @@ interface WorkshopAssignmentFormProps {
 interface AvailableOrder {
   id: string;
   order_number: string;
-  client_name: string;
   due_date: string | null;
   total_amount: number | null;
   status: string | null;
@@ -99,7 +98,7 @@ const WorkshopAssignmentForm: React.FC<WorkshopAssignmentFormProps> = ({
               <SelectContent style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
                 {availableOrders.map((order) => (
                   <SelectItem key={order.id} value={order.id} style={{ color: '#000000' }}>
-                    {order.order_number} - {order.client_name}
+                    {order.order_number} - ${order.total_amount || 'Sin valor'}
                   </SelectItem>
                 ))}
               </SelectContent>

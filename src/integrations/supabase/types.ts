@@ -1976,6 +1976,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_current_organization_for_views: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_current_organization_safe: {
         Args: Record<PropertyKey, never>
         Returns: string
