@@ -2381,6 +2381,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      migrate_sleeping_walker_tigres_variants: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       recalculate_material_deliveries_remaining: {
         Args: Record<PropertyKey, never>
         Returns: undefined
