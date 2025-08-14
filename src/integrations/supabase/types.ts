@@ -2353,6 +2353,10 @@ export type Database = {
         Args: { sync_mode_param: string; sync_type_param: string }
         Returns: boolean
       }
+      is_system_or_service_role: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       log_security_event: {
         Args: { event_details_param?: Json; event_type_param: string }
         Returns: undefined
@@ -2392,6 +2396,17 @@ export type Database = {
       trigger_replenishment_calculation: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      update_sales_metrics_secure: {
+        Args: {
+          p_avg_order_size: number
+          p_metric_date: string
+          p_orders_count: number
+          p_organization_id: string
+          p_product_variant_id: string
+          p_sales_quantity: number
+        }
+        Returns: undefined
       }
       update_variant_sku_cascade: {
         Args: { new_sku_param: string; variant_id_param: string }
