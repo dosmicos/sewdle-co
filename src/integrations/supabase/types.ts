@@ -2273,6 +2273,23 @@ export type Database = {
           variant_size: string
         }[]
       }
+      get_shopify_orders_sanitized: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at_shopify: string
+          currency: string
+          customer_email_masked: string
+          customer_name_masked: string
+          financial_status: string
+          fulfillment_status: string
+          id: string
+          order_number: string
+          organization_id: string
+          shopify_order_id: number
+          total_price: number
+          updated_at_shopify: string
+        }[]
+      }
       get_user_organizations: {
         Args: Record<PropertyKey, never>
         Returns: string[]

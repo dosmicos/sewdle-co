@@ -63,38 +63,67 @@ export const useShopifyOrders = () => {
         return [];
       }
 
-      // Get total count filtered by organization
-      const { count } = await supabase
-        .from('shopify_orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', currentOrganization.id);
-      
-      setTotalOrders(count || 0);
+      // Try to get full data first (for admins/designers)
+      try {
+        const { count } = await supabase
+          .from('shopify_orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', currentOrganization.id);
+        
+        setTotalOrders(count || 0);
 
-      // Get paginated data filtered by organization
-      const { data, error } = await supabase
-        .from('shopify_orders')
-        .select(`
-          id,
-          shopify_order_id,
-          order_number,
-          customer_email,
-          customer_first_name,
-          customer_last_name,
-          customer_phone,
-          created_at_shopify,
-          financial_status,
-          fulfillment_status,
-          total_price,
-          currency
-        `)
-        .eq('organization_id', currentOrganization.id)
-        .order('created_at_shopify', { ascending: false })
-        .range(offset, offset + limit - 1);
+        const { data, error } = await supabase
+          .from('shopify_orders')
+          .select(`
+            id,
+            shopify_order_id,
+            order_number,
+            customer_email,
+            customer_first_name,
+            customer_last_name,
+            customer_phone,
+            created_at_shopify,
+            financial_status,
+            fulfillment_status,
+            total_price,
+            currency
+          `)
+          .eq('organization_id', currentOrganization.id)
+          .order('created_at_shopify', { ascending: false })
+          .range(offset, offset + limit - 1);
 
-      if (error) throw error;
-      setOrders(data || []);
-      return data || [];
+        if (error) throw error;
+        setOrders(data || []);
+        return data || [];
+      } catch (fullDataError) {
+        // If full data access fails (non-admin user), fall back to sanitized data
+        console.log('Full data access denied, using sanitized data');
+        
+        const { data: sanitizedData, error: sanitizedError } = await supabase
+          .rpc('get_shopify_orders_sanitized');
+
+        if (sanitizedError) throw sanitizedError;
+        
+        // Transform sanitized data to match expected interface
+        const transformedData = (sanitizedData || []).slice(offset, offset + limit).map((item: any) => ({
+          id: item.id,
+          shopify_order_id: item.shopify_order_id,
+          order_number: item.order_number,
+          customer_email: item.customer_email_masked,
+          customer_first_name: item.customer_name_masked.split(' ')[0] || '',
+          customer_last_name: item.customer_name_masked.split(' ')[1] || '',
+          customer_phone: '***-***-****', // Fully masked for non-privileged users
+          created_at_shopify: item.created_at_shopify,
+          financial_status: item.financial_status,
+          fulfillment_status: item.fulfillment_status,
+          total_price: item.total_price,
+          currency: item.currency
+        }));
+        
+        setTotalOrders(sanitizedData?.length || 0);
+        setOrders(transformedData);
+        return transformedData;
+      }
     } catch (error) {
       console.error('Error fetching Shopify orders:', error);
       toast({
@@ -126,6 +155,7 @@ export const useShopifyOrders = () => {
       // Estimado aproximado de clientes únicos (será actualizado con datos reales)
       setTotalCustomers(Math.ceil((count || 0) / 3)); // Estimación: promedio 3 órdenes por cliente
 
+      // Try to use secure customer analytics (for admins/designers only)
       const { data, error } = await supabase.rpc('get_customer_analytics', {
         start_date: startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         end_date: endDate || new Date().toISOString().split('T')[0]
