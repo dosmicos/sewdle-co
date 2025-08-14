@@ -48,7 +48,7 @@ const BillingPage = () => {
     },
     {
       name: 'Professional',
-      price: '$99',
+      price: '$69',
       period: '/mes',
       description: 'Para marcas en crecimiento',
       current: currentOrganization?.plan === 'professional',
@@ -57,24 +57,23 @@ const BillingPage = () => {
         'Hasta 22 usuarios',
         'Órdenes ilimitadas',
         '20 talleres máximo',
-        '10GB de almacenamiento',
+        'Integración completa Shopify',
         'Analíticas avanzadas',
-        'Integración Shopify',
         'Soporte prioritario'
       ]
     },
     {
       name: 'Enterprise',
-      price: '$299',
+      price: '$190',
       period: '/mes',
       description: 'Para marcas establecidas',
       current: currentOrganization?.plan === 'enterprise',
       features: [
+        'Todo ilimitado',
         'Usuarios ilimitados',
-        'Órdenes ilimitadas',
-        'Talleres ilimitados',
-        'Almacenamiento ilimitado',
+        'White-label disponible',
         'API personalizada',
+        'Gerente de cuenta dedicado',
         'Soporte 24/7'
       ]
     }

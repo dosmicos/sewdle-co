@@ -197,17 +197,17 @@ const SignupPage = () => {
     {
       id: 'professional',
       name: 'Professional',
-      price: 99,
+      price: 69,
       description: 'Para marcas en crecimiento',
-      features: ['Órdenes ilimitadas', '22 usuarios', '20 talleres', 'Integración Shopify', 'Analytics avanzados'],
+      features: ['Órdenes ilimitadas', '22 usuarios', '20 talleres', 'Integración completa Shopify', 'Analytics avanzados', 'Soporte prioritario'],
       popular: true
     },
     {
       id: 'enterprise',
       name: 'Enterprise',
-      price: 299,
+      price: 190,
       description: 'Para marcas establecidas',
-      features: ['Todo ilimitado', 'API personalizada', 'Soporte 24/7'],
+      features: ['Todo ilimitado', 'Usuarios ilimitados', 'White-label disponible', 'API personalizada', 'Gerente de cuenta dedicado', 'Soporte 24/7'],
       popular: false
     }
   ];
