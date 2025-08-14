@@ -18,7 +18,7 @@ interface FormData {
   
   // Organization info
   organizationName: string;
-  organizationType: 'brand' | 'workshop' | 'other';
+  organizationType: 'brand' | 'other';
   
   // Plan selection
   selectedPlan: 'starter' | 'professional' | 'enterprise';
@@ -348,7 +348,6 @@ const SignupPage = () => {
                 >
                   {[
                     { id: 'brand', label: 'Marca de Moda', description: 'Diseño y venta de productos' },
-                    { id: 'workshop', label: 'Taller', description: 'Producción y manufactura' },
                     { id: 'other', label: 'Otro', description: 'Otro tipo de negocio' }
                   ].map((type) => (
                     <div key={type.id} className="relative">
