@@ -2377,6 +2377,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      migrate_ruana_mapache_variants: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       recalculate_material_deliveries_remaining: {
         Args: Record<PropertyKey, never>
         Returns: undefined
