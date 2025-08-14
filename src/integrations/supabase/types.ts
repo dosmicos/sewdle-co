@@ -2362,7 +2362,13 @@ export type Database = {
         Returns: boolean
       }
       log_security_event: {
-        Args: { event_details_param?: Json; event_type_param: string }
+        Args:
+          | { event_details_param?: Json; event_type_param: string }
+          | {
+              event_details_param?: Json
+              event_type_param: string
+              ip_address_param?: unknown
+            }
         Returns: undefined
       }
       log_stats_access: {

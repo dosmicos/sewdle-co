@@ -141,9 +141,7 @@ export const useDeliveries = () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('deliveries_stats')
-        .select('*')
-        .single();
+        .rpc('get_delivery_stats');
 
       if (error) {
         throw error;

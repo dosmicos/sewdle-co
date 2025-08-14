@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, Mail, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { validatePassword } from '@/lib/passwordValidation';
 
 interface PasswordRecoveryModalProps {
   isOpen: boolean;

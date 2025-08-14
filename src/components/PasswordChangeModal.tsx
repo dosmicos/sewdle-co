@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from '@/components/ui/label';
 import { Loader2, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { validatePassword, validatePasswordMatch } from '@/lib/passwordValidation';
+import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator';
 
 interface PasswordChangeModalProps {
   isOpen: boolean;
@@ -26,23 +28,7 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen, onClo
   const { changePassword, markPasswordChanged, logout } = useAuth();
   const { toast } = useToast();
 
-  const validatePassword = (password: string): string[] => {
-    const errors: string[] = [];
-    
-    if (password.length < 8) {
-      errors.push('Debe tener al menos 8 caracteres');
-    }
-    
-    if (!/[A-Za-z]/.test(password)) {
-      errors.push('Debe contener al menos una letra');
-    }
-    
-    if (!/\d/.test(password)) {
-      errors.push('Debe contener al menos un número');
-    }
-    
-    return errors;
-  };
+  // Using centralized password validation
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -54,15 +40,15 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen, onClo
     if (!newPassword) {
       newErrors.newPassword = 'La nueva contraseña es requerida';
     } else {
-      const passwordErrors = validatePassword(newPassword);
-      if (passwordErrors.length > 0) {
-        newErrors.newPassword = passwordErrors[0];
+      const validation = validatePassword(newPassword);
+      if (!validation.isValid) {
+        newErrors.newPassword = validation.errors[0];
       }
     }
 
     if (!confirmPassword) {
       newErrors.confirmPassword = 'Confirma tu nueva contraseña';
-    } else if (newPassword !== confirmPassword) {
+    } else if (!validatePasswordMatch(newPassword, confirmPassword)) {
       newErrors.confirmPassword = 'Las contraseñas no coinciden';
     }
 
@@ -198,9 +184,7 @@ const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen, onClo
             {errors.newPassword && (
               <p className="text-sm text-destructive">{errors.newPassword}</p>
             )}
-            <p className="text-xs text-muted-foreground">
-              Mínimo 8 caracteres, debe incluir letras y números
-            </p>
+            <PasswordStrengthIndicator password={newPassword} className="mt-2" />
           </div>
 
           <div className="space-y-2">
