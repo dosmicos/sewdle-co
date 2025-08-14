@@ -38,129 +38,43 @@ export const useUsers = () => {
         return;
       }
 
-      // Paso 1: Obtener usuarios de la organización actual
       console.log('🔍 DEBUGGING: Current organization:', currentOrganization);
-      const { data: orgUsers, error: orgUsersError } = await supabase
-        .from('organization_users')
-        .select('user_id')
-        .eq('organization_id', currentOrganization.id)
-        .eq('status', 'active');
-
-      console.log('🔍 DEBUGGING: Organization users query result:', { orgUsers, orgUsersError });
-
-      if (orgUsersError) {
-        logger.error('Error fetching organization users', orgUsersError);
-        throw orgUsersError;
-      }
-
-      const userIds = orgUsers?.map(ou => ou.user_id) || [];
-      console.log('🔍 DEBUGGING: User IDs found:', userIds, 'Count:', userIds.length);
       
-      if (userIds.length === 0) {
-        console.log('🔍 DEBUGGING: No user IDs found, returning empty');
-        setUsers([]);
-        setLoading(false);
-        return;
+      // Usar la nueva función optimizada de base de datos
+      const { data: usersData, error: usersError } = await supabase
+        .rpc('get_organization_users_detailed');
+
+      console.log('🔍 DEBUGGING: RPC function result:', { usersData, usersError });
+
+      if (usersError) {
+        logger.error('Error fetching organization users with RPC', usersError);
+        throw usersError;
       }
 
-      // Paso 2: Obtener perfiles de usuarios de la organización
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
+      console.log('🔍 DEBUGGING: Users data fetched:', usersData?.length || 0);
 
-      console.log('🔍 DEBUGGING: Profiles query result:', { profiles, profilesError });
-      console.log('🔍 DEBUGGING: Profiles count:', profiles?.length);
-
-      if (profilesError) {
-        logger.error('Error fetching profiles', profilesError);
-        throw profilesError;
-      }
-
-      // Paso 3: Obtener roles de usuarios de la organización (LEFT JOIN para incluir usuarios sin rol)
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select(`
-          user_id,
-          workshop_id,
-          roles (
-            name
-          )
-        `)
-        .in('user_id', userIds);
-
-      console.log('🔍 DEBUGGING: User roles query result:', { userRoles, rolesError });
-      console.log('🔍 DEBUGGING: User roles count:', userRoles?.length);
-
-      if (rolesError) {
-        logger.error('Error fetching user roles', rolesError);
-        throw rolesError;
-      }
-
-      // Paso 4: Obtener información de talleres si hay IDs de talleres
-      const workshopIds = userRoles
-        ?.filter(ur => ur.workshop_id)
-        .map(ur => ur.workshop_id) || [];
-
-      console.log('🔍 DEBUGGING: Workshop IDs found:', workshopIds);
-
-      let workshops: any[] = [];
-      if (workshopIds.length > 0) {
-        const { data: workshopsData, error: workshopsError } = await supabase
-          .from('workshops')
-          .select('id, name')
-          .in('id', workshopIds);
-
-        console.log('🔍 DEBUGGING: Workshops query result:', { workshopsData, workshopsError });
-
-        if (workshopsError) {
-          logger.warn('Error fetching workshops', workshopsError);
-          // No lanzar error aquí, solo log
-        } else {
-          workshops = workshopsData || [];
-        }
-      }
-
-      // Paso 5: Combinar los datos
-      console.log('🔍 DEBUGGING: Starting data combination...');
-      console.log('🔍 DEBUGGING: Profiles to process:', profiles?.length);
-      
-      const formattedUsers: User[] = profiles?.map((profile: any) => {
-        console.log('🔍 DEBUGGING: Processing profile:', profile.id, profile.email);
-        
-        // Buscar rol del usuario
-        const userRole = userRoles?.find(ur => ur.user_id === profile.id);
-        console.log('🔍 DEBUGGING: Found user role for', profile.id, ':', userRole);
-        
-        const roleName = userRole?.roles?.name || 'Sin Rol';
-        
-        // Buscar información del taller
-        const workshopId = userRole?.workshop_id;
-        const workshop = workshops.find(w => w.id === workshopId);
-        const workshopName = workshop?.name;
-        
-        const formattedUser = {
-          id: profile.id,
-          name: profile.name || profile.email,
-          email: profile.email,
-          role: roleName,
-          workshopId: workshopId,
-          workshopName: workshopName,
-          status: 'active' as const, // Por defecto activo
-          requiresPasswordChange: profile.requires_password_change || false,
-          createdAt: profile.created_at,
-          lastLogin: undefined, // TODO: Implementar seguimiento de último login
-          createdBy: 'system' // TODO: Implementar tracking de quién creó el usuario
+      // Transformar los datos al formato esperado
+      const transformedUsers: User[] = (usersData || []).map(userData => {
+        const transformedUser = {
+          id: userData.id,
+          name: userData.name || '',
+          email: userData.email || '',
+          role: userData.role || 'Sin Rol',
+          workshopId: userData.workshop_id || undefined,
+          workshopName: userData.workshop_name || undefined,
+          status: userData.status as 'active' | 'inactive',
+          requiresPasswordChange: userData.requires_password_change || false,
+          createdAt: userData.created_at || new Date().toISOString(),
+          lastLogin: userData.last_login || undefined,
+          createdBy: userData.created_by || '',
         };
         
-        console.log('🔍 DEBUGGING: Formatted user:', formattedUser);
-        return formattedUser;
-      }) || [];
+        console.log('🔍 DEBUGGING: Transformed user:', transformedUser);
+        return transformedUser;
+      });
 
-      console.log('🔍 DEBUGGING: Final formatted users count:', formattedUsers.length);
-      console.log('🔍 DEBUGGING: Final formatted users:', formattedUsers);
-
-      setUsers(formattedUsers);
+      console.log('🔍 DEBUGGING: Final transformed users count:', transformedUsers.length);
+      setUsers(transformedUsers);
     } catch (err: any) {
       logger.error('Error fetching users', err);
       setError(err.message || 'Error al cargar usuarios');

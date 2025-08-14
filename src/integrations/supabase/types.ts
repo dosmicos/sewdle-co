@@ -2237,6 +2237,22 @@ export type Database = {
           variant_size: string
         }[]
       }
+      get_organization_users_detailed: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          created_by: string
+          email: string
+          id: string
+          last_login: string
+          name: string
+          requires_password_change: boolean
+          role: string
+          status: string
+          workshop_id: string
+          workshop_name: string
+        }[]
+      }
       get_product_sales_analytics: {
         Args: { end_date?: string; start_date?: string }
         Returns: {
