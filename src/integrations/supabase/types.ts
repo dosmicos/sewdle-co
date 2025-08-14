@@ -2070,6 +2070,16 @@ export type Database = {
           sync_error_message: string
         }[]
       }
+      get_delivery_statistics: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_deliveries: number
+          pending_deliveries: number
+          in_quality_deliveries: number
+          approved_deliveries: number
+          rejected_deliveries: number
+        }[]
+      }
       get_delivery_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
