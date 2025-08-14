@@ -2334,7 +2334,7 @@ export type Database = {
         Returns: number
       }
       has_permission: {
-        Args: { action_name: string; module_name: string; user_uuid: string }
+        Args: { action_name: string; module_name: string; user_id: string }
         Returns: boolean
       }
       has_recent_successful_sync: {
