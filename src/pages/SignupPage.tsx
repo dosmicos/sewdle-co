@@ -191,7 +191,7 @@ const SignupPage = () => {
       name: 'Starter',
       price: 29,
       description: 'Perfecto para marcas emergentes',
-      features: ['Hasta 10 órdenes/mes', '3 usuarios', '5 talleres', 'Soporte por email'],
+      features: ['Hasta 10 órdenes/mes', '7 usuarios', '5 talleres', 'Soporte por email'],
       popular: false
     },
     {
@@ -199,7 +199,7 @@ const SignupPage = () => {
       name: 'Professional',
       price: 99,
       description: 'Para marcas en crecimiento',
-      features: ['Órdenes ilimitadas', '10 usuarios', '20 talleres', 'Integración Shopify', 'Analytics avanzados'],
+      features: ['Órdenes ilimitadas', '22 usuarios', '20 talleres', 'Integración Shopify', 'Analytics avanzados'],
       popular: true
     },
     {
@@ -207,7 +207,7 @@ const SignupPage = () => {
       name: 'Enterprise',
       price: 299,
       description: 'Para marcas establecidas',
-      features: ['Todo ilimitado', 'White-label', 'API personalizada', 'Soporte 24/7'],
+      features: ['Todo ilimitado', 'API personalizada', 'Soporte 24/7'],
       popular: false
     }
   ];

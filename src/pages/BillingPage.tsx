@@ -36,11 +36,11 @@ const BillingPage = () => {
       name: 'Starter',
       price: '$29',
       period: '/mes',
-      description: 'Perfecto para pequeños talleres',
+      description: 'Perfecto para marcas emergentes',
       current: currentOrganization?.plan === 'starter',
       features: [
-        'Hasta 3 usuarios',
-        '10 órdenes por mes',
+        'Hasta 7 usuarios',
+        'Hasta 10 órdenes por mes',
         '5 talleres máximo',
         '1GB de almacenamiento',
         'Soporte por email'
@@ -50,11 +50,11 @@ const BillingPage = () => {
       name: 'Professional',
       price: '$99',
       period: '/mes',
-      description: 'Para talleres en crecimiento',
+      description: 'Para marcas en crecimiento',
       current: currentOrganization?.plan === 'professional',
       popular: true,
       features: [
-        'Hasta 10 usuarios',
+        'Hasta 22 usuarios',
         'Órdenes ilimitadas',
         '20 talleres máximo',
         '10GB de almacenamiento',
@@ -67,16 +67,15 @@ const BillingPage = () => {
       name: 'Enterprise',
       price: '$299',
       period: '/mes',
-      description: 'Para operaciones a gran escala',
+      description: 'Para marcas establecidas',
       current: currentOrganization?.plan === 'enterprise',
       features: [
         'Usuarios ilimitados',
         'Órdenes ilimitadas',
         'Talleres ilimitados',
         'Almacenamiento ilimitado',
-        'Todas las funciones',
-        'Soporte 24/7',
-        'Configuración personalizada'
+        'API personalizada',
+        'Soporte 24/7'
       ]
     }
   ];

@@ -50,7 +50,6 @@ const PLAN_LIMITS: PlanLimits = {
       'custom_integrations', 
       'api_access',
       'unlimited_storage',
-      'white_label',
       'priority_support'
     ]
   }
