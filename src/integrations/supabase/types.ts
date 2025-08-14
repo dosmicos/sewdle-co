@@ -1881,16 +1881,7 @@ export type Database = {
       }
     }
     Views: {
-      deliveries_stats: {
-        Row: {
-          approved_deliveries: number | null
-          in_quality_deliveries: number | null
-          pending_deliveries: number | null
-          rejected_deliveries: number | null
-          total_deliveries: number | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       assign_admin_role_to_users_without_role: {
