@@ -2357,6 +2357,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      is_user_admin_in_org: {
+        Args: { org_id: string }
+        Returns: boolean
+      }
       log_security_event: {
         Args: { event_details_param?: Json; event_type_param: string }
         Returns: undefined
