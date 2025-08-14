@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -1887,19 +1887,19 @@ export type Database = {
       assign_admin_role_to_users_without_role: {
         Args: Record<PropertyKey, never>
         Returns: {
-          user_id: string
           assigned: boolean
           error_message: string
+          user_id: string
         }[]
       }
       calculate_delivery_payment: {
         Args: { delivery_id_param: string }
         Returns: {
-          total_units: number
+          advance_deduction: number
           billable_units: number
           gross_amount: number
-          advance_deduction: number
           net_amount: number
+          total_units: number
           workshop_payment_method: string
         }[]
       }
@@ -1908,7 +1908,7 @@ export type Database = {
         Returns: undefined
       }
       check_variant_update_safety: {
-        Args: { variant_id_param: string; new_sku_param: string }
+        Args: { new_sku_param: string; variant_id_param: string }
         Returns: Json
       }
       cleanup_old_sku_logs: {
@@ -1925,15 +1925,15 @@ export type Database = {
       }
       complete_user_setup: {
         Args: {
-          p_user_id: string
           p_organization_name?: string
           p_organization_type?: string
           p_selected_plan?: string
+          p_user_id: string
         }
         Returns: Json
       }
       consume_order_materials: {
-        Args: { order_id_param: string; consumption_data: Json }
+        Args: { consumption_data: Json; order_id_param: string }
         Returns: undefined
       }
       fix_delivery_sync_status_inconsistencies: {
@@ -1955,12 +1955,12 @@ export type Database = {
       get_available_orders: {
         Args: Record<PropertyKey, never>
         Returns: {
+          created_at: string
+          due_date: string
           id: string
           order_number: string
-          due_date: string
-          total_amount: number
           status: string
-          created_at: string
+          total_amount: number
         }[]
       }
       get_current_organization: {
@@ -1984,293 +1984,293 @@ export type Database = {
         Returns: string
       }
       get_customer_analytics: {
-        Args: { start_date?: string; end_date?: string }
+        Args: { end_date?: string; start_date?: string }
         Returns: {
+          avg_order_value: number
           customer_email: string
           customer_name: string
-          orders_count: number
-          total_spent: number
-          avg_order_value: number
+          customer_segment: string
           first_order_date: string
           last_order_date: string
-          customer_segment: string
+          orders_count: number
+          total_spent: number
         }[]
       }
       get_deliveries_with_details: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          tracking_number: string
-          order_id: string
-          order_number: string
-          workshop_id: string
-          workshop_name: string
-          delivery_date: string
-          status: string
+          created_at: string
           delivered_by: string
           delivered_by_name: string
+          delivery_date: string
+          id: string
+          items_count: number
+          notes: string
+          order_id: string
+          order_number: string
+          recipient_address: string
           recipient_name: string
           recipient_phone: string
-          recipient_address: string
-          notes: string
-          created_at: string
-          items_count: number
+          status: string
           total_quantity: number
+          tracking_number: string
+          workshop_id: string
+          workshop_name: string
         }[]
       }
       get_deliveries_with_details_v2: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          tracking_number: string
-          order_id: string
-          order_number: string
-          workshop_id: string
-          workshop_name: string
-          delivery_date: string
-          status: string
+          created_at: string
           delivered_by: string
           delivered_by_name: string
+          delivery_date: string
+          id: string
+          items_count: number
+          notes: string
+          order_id: string
+          order_number: string
+          recipient_address: string
           recipient_name: string
           recipient_phone: string
-          recipient_address: string
-          notes: string
-          created_at: string
-          items_count: number
-          total_quantity: number
+          status: string
           total_approved: number
           total_defective: number
+          total_quantity: number
+          tracking_number: string
+          workshop_id: string
+          workshop_name: string
         }[]
       }
       get_deliveries_with_sync_status: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          tracking_number: string
-          order_id: string
-          order_number: string
-          workshop_id: string
-          workshop_name: string
-          delivery_date: string
-          status: string
+          created_at: string
           delivered_by: string
           delivered_by_name: string
+          delivery_date: string
+          id: string
+          items_count: number
+          last_sync_attempt: string
+          notes: string
+          order_id: string
+          order_number: string
+          recipient_address: string
           recipient_name: string
           recipient_phone: string
-          recipient_address: string
-          notes: string
-          created_at: string
-          items_count: number
-          total_quantity: number
+          status: string
+          sync_attempts: number
+          sync_error_message: string
+          synced_to_shopify: boolean
           total_approved: number
           total_defective: number
-          synced_to_shopify: boolean
-          sync_attempts: number
-          last_sync_attempt: string
-          sync_error_message: string
+          total_quantity: number
+          tracking_number: string
+          workshop_id: string
+          workshop_name: string
         }[]
       }
       get_delivery_statistics: {
         Args: Record<PropertyKey, never>
         Returns: {
-          total_deliveries: number
-          pending_deliveries: number
-          in_quality_deliveries: number
           approved_deliveries: number
+          in_quality_deliveries: number
+          pending_deliveries: number
           rejected_deliveries: number
+          total_deliveries: number
         }[]
       }
       get_delivery_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
-          total_deliveries: number
-          pending_deliveries: number
-          in_quality_deliveries: number
           approved_deliveries: number
+          in_quality_deliveries: number
+          pending_deliveries: number
           rejected_deliveries: number
+          total_deliveries: number
         }[]
       }
       get_delivery_stats_admin: {
         Args: Record<PropertyKey, never>
         Returns: {
-          total_deliveries: number
-          pending_deliveries: number
-          in_quality_deliveries: number
           approved_deliveries: number
-          rejected_deliveries: number
+          in_quality_deliveries: number
           organization_name: string
+          pending_deliveries: number
+          rejected_deliveries: number
+          total_deliveries: number
         }[]
       }
       get_delivery_sync_status: {
         Args: { delivery_id_param?: string }
         Returns: {
-          delivery_id: string
-          tracking_number: string
-          synced_to_shopify: boolean
-          sync_attempts: number
-          last_sync_attempt: string
-          sync_error_message: string
-          is_locked: boolean
-          lock_age_minutes: number
           can_sync: boolean
+          delivery_id: string
+          is_locked: boolean
+          last_sync_attempt: string
+          lock_age_minutes: number
+          sync_attempts: number
+          sync_error_message: string
+          synced_to_shopify: boolean
+          tracking_number: string
         }[]
       }
       get_financial_report: {
         Args: {
-          workshop_id_param?: string
-          start_date?: string
           end_date?: string
+          start_date?: string
+          workshop_id_param?: string
         }
         Returns: {
-          delivery_id: string
-          tracking_number: string
-          workshop_name: string
-          order_number: string
-          delivery_date: string
-          total_units: number
-          billable_units: number
-          gross_amount: number
           advance_deduction: number
+          billable_units: number
+          delivery_date: string
+          delivery_id: string
+          gross_amount: number
           net_amount: number
-          payment_status: string
+          order_number: string
           payment_date: string
           payment_method: string
+          payment_status: string
+          total_units: number
+          tracking_number: string
+          workshop_name: string
         }[]
       }
       get_material_consumptions_by_order: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          material_id: string
-          workshop_id: string
-          order_id: string
-          quantity_consumed: number
-          delivery_date: string
           created_at: string
-          updated_at: string
-          material_name: string
-          material_unit: string
+          delivery_date: string
+          id: string
           material_category: string
           material_color: string
-          workshop_name: string
+          material_id: string
+          material_name: string
+          material_unit: string
+          order_id: string
           order_number: string
+          quantity_consumed: number
+          updated_at: string
+          workshop_id: string
+          workshop_name: string
         }[]
       }
       get_material_deliveries_with_real_balance: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          material_id: string
-          workshop_id: string
-          order_id: string
-          delivery_date: string
-          delivered_by: string
-          notes: string
           created_at: string
-          updated_at: string
-          total_delivered: number
-          total_consumed: number
-          real_balance: number
+          delivered_by: string
+          delivery_date: string
+          id: string
+          material_category: string
+          material_color: string
+          material_id: string
           material_name: string
           material_sku: string
           material_unit: string
-          material_color: string
-          material_category: string
-          workshop_name: string
+          notes: string
+          order_id: string
           order_number: string
+          real_balance: number
+          total_consumed: number
+          total_delivered: number
+          updated_at: string
+          workshop_id: string
+          workshop_name: string
         }[]
       }
       get_materials_with_stock_status: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          sku: string
-          name: string
-          description: string
-          unit: string
-          color: string
           category: string
-          min_stock_alert: number
-          current_stock: number
-          supplier: string
-          unit_cost: number
-          image_url: string
-          stock_status: string
+          color: string
           created_at: string
+          current_stock: number
+          description: string
+          id: string
+          image_url: string
+          min_stock_alert: number
+          name: string
+          sku: string
+          stock_status: string
+          supplier: string
+          unit: string
+          unit_cost: number
         }[]
       }
       get_order_deliveries_breakdown: {
         Args: { order_id_param: string }
         Returns: {
-          delivery_id: string
-          tracking_number: string
           delivery_date: string
+          delivery_id: string
+          delivery_notes: string
           delivery_status: string
-          workshop_name: string
-          items_delivered: number
           items_approved: number
           items_defective: number
-          delivery_notes: string
+          items_delivered: number
+          tracking_number: string
+          workshop_name: string
         }[]
       }
       get_order_delivery_stats_v2: {
         Args: { order_id_param: string }
         Returns: {
-          total_ordered: number
-          total_delivered: number
+          completion_percentage: number
           total_approved: number
           total_defective: number
+          total_delivered: number
+          total_ordered: number
           total_pending: number
-          completion_percentage: number
         }[]
       }
       get_order_variants_breakdown: {
         Args: { order_id_param: string }
         Returns: {
-          product_name: string
-          variant_size: string
-          variant_color: string
-          sku_variant: string
-          total_ordered: number
-          total_approved: number
-          total_pending: number
           completion_percentage: number
+          product_name: string
+          sku_variant: string
+          total_approved: number
+          total_ordered: number
+          total_pending: number
+          variant_color: string
+          variant_size: string
         }[]
       }
       get_product_sales_analytics: {
-        Args: { start_date?: string; end_date?: string }
+        Args: { end_date?: string; start_date?: string }
         Returns: {
-          sku: string
+          avg_price: number
+          customers_count: number
+          orders_count: number
           product_title: string
-          variant_title: string
+          sku: string
           total_quantity: number
           total_revenue: number
-          avg_price: number
-          orders_count: number
-          customers_count: number
+          variant_title: string
         }[]
       }
       get_replenishment_suggestions_with_details: {
         Args: Record<PropertyKey, never>
         Returns: {
-          id: string
-          product_name: string
-          variant_size: string
-          variant_color: string
-          sku_variant: string
-          suggested_quantity: number
-          current_stock: number
-          sales_velocity: number
-          sales_30_days: number
-          days_of_stock: number
-          open_orders_quantity: number
-          projected_demand: number
-          urgency_level: string
-          reason: string
-          status: string
           calculation_date: string
           created_at: string
+          current_stock: number
+          days_of_stock: number
+          id: string
+          open_orders_quantity: number
           pending_production_quantity: number
+          product_name: string
+          projected_demand: number
+          reason: string
+          sales_30_days: number
+          sales_velocity: number
+          sku_variant: string
+          status: string
+          suggested_quantity: number
+          urgency_level: string
+          variant_color: string
+          variant_size: string
         }[]
       }
       get_user_organizations: {
@@ -2284,57 +2284,57 @@ export type Database = {
       get_user_role_info: {
         Args: { user_uuid: string }
         Returns: {
-          role_name: string
           permissions: Json
+          role_name: string
           workshop_id: string
         }[]
       }
       get_workshop_capacity_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
-          workshop_id: string
-          workshop_name: string
-          total_capacity: number
-          current_assignments: number
           available_capacity: number
           completion_rate: number
+          current_assignments: number
+          total_capacity: number
+          workshop_id: string
+          workshop_name: string
         }[]
       }
       get_workshop_financial_summary: {
         Args: {
-          workshop_id_param: string
-          start_date?: string
           end_date?: string
+          start_date?: string
+          workshop_id_param: string
         }
         Returns: {
-          total_deliveries: number
-          pending_payments: number
           paid_deliveries: number
-          total_gross_amount: number
+          pending_amount: number
+          pending_payments: number
           total_advances: number
+          total_deliveries: number
+          total_gross_amount: number
           total_net_amount: number
           total_paid_amount: number
-          pending_amount: number
         }[]
       }
       get_workshop_material_stock: {
         Args: { material_id_param: string; workshop_id_param: string }
         Returns: {
           available_stock: number
-          total_delivered: number
           total_consumed: number
+          total_delivered: number
         }[]
       }
       get_workshop_product_price: {
         Args: {
-          workshop_id_param: string
-          product_id_param: string
           calculation_date?: string
+          product_id_param: string
+          workshop_id_param: string
         }
         Returns: number
       }
       has_permission: {
-        Args: { user_uuid: string; module_name: string; action_name: string }
+        Args: { action_name: string; module_name: string; user_uuid: string }
         Returns: boolean
       }
       has_recent_successful_sync: {
@@ -2350,11 +2350,11 @@ export type Database = {
         Returns: boolean
       }
       is_sync_in_progress: {
-        Args: { sync_type_param: string; sync_mode_param: string }
+        Args: { sync_mode_param: string; sync_type_param: string }
         Returns: boolean
       }
       log_security_event: {
-        Args: { event_type_param: string; event_details_param?: Json }
+        Args: { event_details_param?: Json; event_type_param: string }
         Returns: undefined
       }
       log_stats_access: {
@@ -2394,7 +2394,7 @@ export type Database = {
         Returns: Json
       }
       update_variant_sku_cascade: {
-        Args: { variant_id_param: string; new_sku_param: string }
+        Args: { new_sku_param: string; variant_id_param: string }
         Returns: Json
       }
       user_belongs_to_organization: {
