@@ -1966,7 +1966,6 @@ export type Database = {
         Returns: {
           id: string
           order_number: string
-          client_name: string
           due_date: string
           total_amount: number
           status: string
