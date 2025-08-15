@@ -66,17 +66,16 @@ export const useOKRStats = (): OKRStats => {
     const completedObjectives = objectives.filter(obj => {
       const objKeyResults = keyResults.filter(kr => kr.objective_id === obj.id);
       if (objKeyResults.length === 0) return false;
-      const avgProgress = objKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / objKeyResults.length;
+      const avgProgress = objKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / objKeyResults.length;
       return avgProgress >= 100;
     }).length;
 
-    // Progreso promedio
     const averageProgress = keyResults.length > 0
-      ? keyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / keyResults.length
+      ? keyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / keyResults.length
       : 0;
 
     const totalKeyResults = keyResults.length;
-    const completedKeyResults = keyResults.filter(kr => kr.progress_pct >= 100).length;
+    const completedKeyResults = keyResults.filter(kr => (Number(kr.progress_pct) || 0) >= 100).length;
 
     // Estadísticas por área
     const objectivesByArea = objectives.reduce((acc, obj) => {
@@ -92,7 +91,7 @@ export const useOKRStats = (): OKRStats => {
       );
       
       acc[area] = areaKeyResults.length > 0
-        ? areaKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / areaKeyResults.length
+        ? areaKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / areaKeyResults.length
         : 0;
       
       return acc;
@@ -106,13 +105,13 @@ export const useOKRStats = (): OKRStats => {
       );
       
       const userAverageProgress = userKeyResults.length > 0
-        ? userKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / userKeyResults.length
+        ? userKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / userKeyResults.length
         : 0;
       
       const userCompletedObjectives = userObjectives.filter(obj => {
         const objKeyResults = keyResults.filter(kr => kr.objective_id === obj.id);
         if (objKeyResults.length === 0) return false;
-        const avgProgress = objKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / objKeyResults.length;
+        const avgProgress = objKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / objKeyResults.length;
         return avgProgress >= 100;
       }).length;
 
@@ -132,13 +131,13 @@ export const useOKRStats = (): OKRStats => {
       );
       
       const avgProgress = userKeyResults.length > 0
-        ? userKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / userKeyResults.length
+        ? userKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / userKeyResults.length
         : 0;
       
       const completed = userObjectives.filter(obj => {
         const objKeyResults = keyResults.filter(kr => kr.objective_id === obj.id);
         if (objKeyResults.length === 0) return false;
-        const objAvgProgress = objKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / objKeyResults.length;
+        const objAvgProgress = objKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / objKeyResults.length;
         return objAvgProgress >= 100;
       }).length;
 
@@ -157,7 +156,7 @@ export const useOKRStats = (): OKRStats => {
       );
       
       const avgProgress = areaKeyResults.length > 0
-        ? areaKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / areaKeyResults.length
+        ? areaKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / areaKeyResults.length
         : 0;
       
       const activeUsers = new Set(areaObjectives.map(obj => obj.owner_id)).size;
@@ -185,7 +184,7 @@ export const useOKRStats = (): OKRStats => {
       );
       
       const avgProgress = quarterKeyResults.length > 0
-        ? quarterKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / quarterKeyResults.length
+        ? quarterKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / quarterKeyResults.length
         : 0;
 
       return {

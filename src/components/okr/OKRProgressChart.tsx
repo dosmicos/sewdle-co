@@ -34,11 +34,14 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
   const timeSeriesData = generateTimeSeriesData();
 
   const getAreaDistributionData = () => {
-    return Object.entries(progressByArea).map(([area, progress]) => ({
-      area: area === 'sin_area' ? 'Sin Área' : area.replace('_', ' ').toUpperCase(),
-      progress: Math.round(progress),
-      objectives: objectivesByArea[area] || 0
-    }));
+    return Object.entries(progressByArea).map(([area, progress]) => {
+      const safe = Number.isFinite(progress as number) ? (progress as number) : 0;
+      return {
+        area: area === 'sin_area' ? 'Sin Área' : area.replace('_', ' ').toUpperCase(),
+        progress: Math.round(safe),
+        objectives: objectivesByArea[area] || 0
+      };
+    });
   };
 
   const getRiskDistributionData = () => {
@@ -134,11 +137,15 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
         );
 
       default: // progress
-        const progressOverviewData = progressData.slice(0, 10).map(obj => ({
-          name: obj.objectiveTitle.substring(0, 20) + '...',
-          progress: Math.round(obj.overallProgress),
-          risk: obj.riskLevel
-        }));
+        const progressOverviewData = progressData.slice(0, 10).map(obj => {
+          const val = Number(obj.overallProgress);
+          const safe = Number.isFinite(val) ? val : 0;
+          return {
+            name: obj.objectiveTitle.substring(0, 20) + '...',
+            progress: Math.round(safe),
+            risk: obj.riskLevel
+          };
+        });
 
         return (
           <ResponsiveContainer width="100%" height={height}>

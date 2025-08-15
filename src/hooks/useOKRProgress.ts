@@ -57,19 +57,25 @@ export const useOKRProgress = (): ProgressMetrics => {
           const recent = krCheckins.slice(0, 2);
           const current = recent[0];
           const previous = recent[1];
-          
-          if (current.progress_pct && previous.progress_pct) {
-            if (current.progress_pct > previous.progress_pct) trend = 'up';
-            else if (current.progress_pct < previous.progress_pct) trend = 'down';
+          const cPct = Number(current.progress_pct);
+          const pPct = Number(previous.progress_pct);
+          if (Number.isFinite(cPct) && Number.isFinite(pPct)) {
+            if (cPct > pPct) trend = 'up';
+            else if (cPct < pPct) trend = 'down';
           }
         }
+
+        const progressPct = Number(kr.progress_pct);
+        const safeProgress = Number.isFinite(progressPct) ? progressPct : 0;
+        const targetVal = Number(kr.target_value);
+        const currentVal = Number(kr.current_value);
 
         return {
           id: kr.id,
           title: kr.title,
-          progress: kr.progress_pct,
-          target: kr.target_value,
-          current: kr.current_value,
+          progress: safeProgress,
+          target: Number.isFinite(targetVal) ? targetVal : 0,
+          current: Number.isFinite(currentVal) ? currentVal : 0,
           unit: kr.unit,
           confidence: kr.confidence,
           trend,
@@ -79,7 +85,7 @@ export const useOKRProgress = (): ProgressMetrics => {
 
       // Calcular progreso general del objetivo
       const overallProgress = objKeyResults.length > 0
-        ? objKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / objKeyResults.length
+        ? objKeyResults.reduce((sum, kr) => sum + (Number(kr.progress_pct) || 0), 0) / objKeyResults.length
         : 0;
 
       // Calcular días restantes
@@ -89,8 +95,10 @@ export const useOKRProgress = (): ProgressMetrics => {
 
       // Determinar nivel de riesgo
       let riskLevel: 'low' | 'medium' | 'high' = 'low';
-      const timeProgress = daysRemaining > 0 
-        ? (1 - daysRemaining / ((endDate.getTime() - new Date(objective.period_start).getTime()) / (1000 * 60 * 60 * 24))) * 100
+      const startDate = new Date(objective.period_start);
+      const totalDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+      const timeProgress = daysRemaining > 0 && totalDays > 0
+        ? (1 - daysRemaining / totalDays) * 100
         : 100;
 
       if (overallProgress < timeProgress - 20) riskLevel = 'high';
@@ -119,7 +127,7 @@ export const useOKRProgress = (): ProgressMetrics => {
     // Progreso por área
     const progressByArea = objectives.reduce((acc, obj) => {
       const area = obj.area || 'sin_area';
-      const objProgress = progressData.find(p => p.objectiveId === obj.id)?.overallProgress || 0;
+      const objProgress = (Number(progressData.find(p => p.objectiveId === obj.id)?.overallProgress) || 0);
       
       if (!acc[area]) {
         acc[area] = { total: 0, count: 0 };
