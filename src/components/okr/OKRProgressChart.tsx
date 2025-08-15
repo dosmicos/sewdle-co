@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { useOKRProgress } from '@/hooks/useOKRProgress';
 import { useOKRStats } from '@/hooks/useOKRStats';
+import { logger } from '@/lib/logger';
 
 interface OKRProgressChartProps {
   variant?: 'line' | 'area' | 'bar' | 'pie';
@@ -34,14 +35,19 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
   const timeSeriesData = generateTimeSeriesData();
 
   const getAreaDistributionData = () => {
-    return Object.entries(progressByArea).map(([area, progress]) => {
-      const safe = Number.isFinite(progress as number) ? (progress as number) : 0;
+    const data = Object.entries(progressByArea).map(([area, progress]) => {
+      const progressNum = Number(progress);
+      const safe = Number.isFinite(progressNum) ? progressNum : 0;
+      logger.debug('Area data processing', { area, progress, progressNum, safe });
       return {
         area: area === 'sin_area' ? 'Sin Área' : area.replace('_', ' ').toUpperCase(),
         progress: Math.round(safe),
         objectives: objectivesByArea[area] || 0
       };
-    });
+    }).filter(item => Number.isFinite(item.progress) && item.progress >= 0);
+    
+    logger.debug('Final area distribution data', data);
+    return data;
   };
 
   const getRiskDistributionData = () => {
@@ -152,12 +158,19 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
         const progressOverviewData = progressData.slice(0, 10).map(obj => {
           const val = Number(obj.overallProgress);
           const safe = Number.isFinite(val) ? val : 0;
+          logger.debug('Progress data processing', { title: obj.objectiveTitle, val, safe });
           return {
             name: obj.objectiveTitle.substring(0, 20) + '...',
             progress: Math.round(safe),
             risk: obj.riskLevel
           };
-        });
+        }).filter(item => Number.isFinite(item.progress) && item.progress >= 0);
+
+        logger.debug('Final progress overview data', progressOverviewData);
+
+        if (progressOverviewData.length === 0) {
+          return <div className="text-sm text-muted-foreground">Sin datos de progreso</div>;
+        }
 
         return (
           <ResponsiveContainer width="100%" height={height}>

@@ -15,8 +15,8 @@ export const OKROverviewPage = () => {
       
       {/* Progress Chart */}
       <OKRProgressChart 
-        variant="area" 
-        dataType="progress" 
+        variant="bar" 
+        dataType="areas" 
         title="Progreso por Área" 
       />
       

@@ -24,8 +24,8 @@ export const useMaterialConsumption = () => {
       }));
 
       const { error } = await supabase.rpc('consume_order_materials', {
-        order_id_param: orderId,
-        consumption_data: consumptionData
+        p_order_id: orderId,
+        p_consumptions: consumptionData
       });
 
       if (error) {

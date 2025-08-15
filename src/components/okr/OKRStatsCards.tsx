@@ -52,7 +52,10 @@ export const OKRStatsCards: React.FC<OKRStatsCardsProps> = ({
     const inProgressObjectives = totalObjectives - completedObjectives;
     
     const avgProgress = filteredKeyResults.length > 0
-      ? filteredKeyResults.reduce((sum, kr) => sum + kr.progress_pct, 0) / filteredKeyResults.length
+      ? filteredKeyResults.reduce((sum, kr) => {
+          const progress = Number(kr.progress_pct);
+          return sum + (Number.isFinite(progress) ? progress : 0);
+        }, 0) / filteredKeyResults.length
       : 0;
 
     const totalKeyResults = filteredKeyResults.length;
