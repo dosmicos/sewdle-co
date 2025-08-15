@@ -21,6 +21,7 @@ import DeliveriesPage from "@/pages/DeliveriesPage";
 import FinancialPage from "@/pages/FinancialPage";
 import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import BillingPage from "@/pages/BillingPage";
+import OKRsPage from "@/pages/OKRsPage";
 
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
@@ -197,6 +198,8 @@ const AppContent = () => {
         } />
         
         <Route path="settings/billing" element={<BillingPage />} />
+        
+        <Route path="okrs/*" element={<OKRsPage />} />
       </Route>
       
       <Route path="*" element={<NotFound />} />
