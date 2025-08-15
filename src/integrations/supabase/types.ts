@@ -500,6 +500,362 @@ export type Database = {
           },
         ]
       }
+      okr_alignment: {
+        Row: {
+          child_objective_id: string
+          created_at: string
+          id: string
+          parent_objective_id: string
+        }
+        Insert: {
+          child_objective_id: string
+          created_at?: string
+          id?: string
+          parent_objective_id: string
+        }
+        Update: {
+          child_objective_id?: string
+          created_at?: string
+          id?: string
+          parent_objective_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_alignment_child_objective_id_fkey"
+            columns: ["child_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objective"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alignment_parent_objective_id_fkey"
+            columns: ["parent_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objective"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_checkin: {
+        Row: {
+          author_id: string
+          blockers: string | null
+          confidence: Database["public"]["Enums"]["okr_confidence"] | null
+          created_at: string
+          delta_value: number | null
+          id: string
+          kr_id: string
+          note: string | null
+          organization_id: string
+          progress_pct: number | null
+        }
+        Insert: {
+          author_id: string
+          blockers?: string | null
+          confidence?: Database["public"]["Enums"]["okr_confidence"] | null
+          created_at?: string
+          delta_value?: number | null
+          id?: string
+          kr_id: string
+          note?: string | null
+          organization_id: string
+          progress_pct?: number | null
+        }
+        Update: {
+          author_id?: string
+          blockers?: string | null
+          confidence?: Database["public"]["Enums"]["okr_confidence"] | null
+          created_at?: string
+          delta_value?: number | null
+          id?: string
+          kr_id?: string
+          note?: string | null
+          organization_id?: string
+          progress_pct?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_checkin_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_checkin_kr_id_fkey"
+            columns: ["kr_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_result"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_evidence: {
+        Row: {
+          created_at: string
+          id: string
+          kr_id: string
+          label: string | null
+          organization_id: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kr_id: string
+          label?: string | null
+          organization_id: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kr_id?: string
+          label?: string | null
+          organization_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_evidence_kr_id_fkey"
+            columns: ["kr_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_result"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_incentive: {
+        Row: {
+          created_at: string
+          id: string
+          kr_id: string | null
+          organization_id: string
+          rule_key: string
+          status: Database["public"]["Enums"]["okr_incentive_status"] | null
+          updated_at: string
+          user_id: string
+          value_num: number | null
+          value_type: Database["public"]["Enums"]["okr_incentive_value_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kr_id?: string | null
+          organization_id: string
+          rule_key: string
+          status?: Database["public"]["Enums"]["okr_incentive_status"] | null
+          updated_at?: string
+          user_id: string
+          value_num?: number | null
+          value_type: Database["public"]["Enums"]["okr_incentive_value_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kr_id?: string | null
+          organization_id?: string
+          rule_key?: string
+          status?: Database["public"]["Enums"]["okr_incentive_status"] | null
+          updated_at?: string
+          user_id?: string
+          value_num?: number | null
+          value_type?: Database["public"]["Enums"]["okr_incentive_value_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_incentive_kr_id_fkey"
+            columns: ["kr_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_result"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_incentive_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_key_result: {
+        Row: {
+          confidence: Database["public"]["Enums"]["okr_confidence"] | null
+          created_at: string
+          current_value: number | null
+          data_source: Database["public"]["Enums"]["okr_data_source"] | null
+          guardrail: boolean | null
+          id: string
+          objective_id: string
+          organization_id: string
+          owner_id: string
+          private: boolean | null
+          progress_pct: number | null
+          target_value: number
+          title: string
+          unit: Database["public"]["Enums"]["okr_unit"] | null
+          updated_at: string
+        }
+        Insert: {
+          confidence?: Database["public"]["Enums"]["okr_confidence"] | null
+          created_at?: string
+          current_value?: number | null
+          data_source?: Database["public"]["Enums"]["okr_data_source"] | null
+          guardrail?: boolean | null
+          id?: string
+          objective_id: string
+          organization_id: string
+          owner_id: string
+          private?: boolean | null
+          progress_pct?: number | null
+          target_value: number
+          title: string
+          unit?: Database["public"]["Enums"]["okr_unit"] | null
+          updated_at?: string
+        }
+        Update: {
+          confidence?: Database["public"]["Enums"]["okr_confidence"] | null
+          created_at?: string
+          current_value?: number | null
+          data_source?: Database["public"]["Enums"]["okr_data_source"] | null
+          guardrail?: boolean | null
+          id?: string
+          objective_id?: string
+          organization_id?: string
+          owner_id?: string
+          private?: boolean | null
+          progress_pct?: number | null
+          target_value?: number
+          title?: string
+          unit?: Database["public"]["Enums"]["okr_unit"] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_key_result_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objective"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_key_result_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objective: {
+        Row: {
+          area: Database["public"]["Enums"]["okr_area"] | null
+          created_at: string
+          description: string | null
+          id: string
+          level: Database["public"]["Enums"]["okr_level"]
+          organization_id: string
+          owner_id: string
+          parent_objective_id: string | null
+          period_end: string
+          period_start: string
+          tier: Database["public"]["Enums"]["okr_tier"] | null
+          title: string
+          updated_at: string
+          visibility: Database["public"]["Enums"]["okr_visibility"] | null
+        }
+        Insert: {
+          area?: Database["public"]["Enums"]["okr_area"] | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          level: Database["public"]["Enums"]["okr_level"]
+          organization_id: string
+          owner_id: string
+          parent_objective_id?: string | null
+          period_end: string
+          period_start: string
+          tier?: Database["public"]["Enums"]["okr_tier"] | null
+          title: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["okr_visibility"] | null
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["okr_area"] | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          level?: Database["public"]["Enums"]["okr_level"]
+          organization_id?: string
+          owner_id?: string
+          parent_objective_id?: string | null
+          period_end?: string
+          period_start?: string
+          tier?: Database["public"]["Enums"]["okr_tier"] | null
+          title?: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["okr_visibility"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objective_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_parent_objective_id_fkey"
+            columns: ["parent_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objective"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_score_history: {
+        Row: {
+          id: string
+          kr_id: string
+          organization_id: string
+          score_0_1: number
+          scored_at: string
+          scored_by: string
+        }
+        Insert: {
+          id?: string
+          kr_id: string
+          organization_id: string
+          score_0_1: number
+          scored_at?: string
+          scored_by: string
+        }
+        Update: {
+          id?: string
+          kr_id?: string
+          organization_id?: string
+          score_0_1?: number
+          scored_at?: string
+          scored_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_score_history_kr_id_fkey"
+            columns: ["kr_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_result"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_score_history_scored_by_fkey"
+            columns: ["scored_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_advances: {
         Row: {
           advance_date: string
@@ -1948,6 +2304,10 @@ export type Database = {
           workshop_payment_method: string
         }[]
       }
+      calculate_okr_score: {
+        Args: { kr_id_param: string }
+        Returns: number
+      }
       calculate_replenishment_suggestions: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2159,6 +2519,10 @@ export type Database = {
           synced_to_shopify: boolean
           tracking_number: string
         }[]
+      }
+      get_dosmicos_org_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       get_financial_report: {
         Args: {
@@ -2427,6 +2791,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      is_dosmicos_user: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_okr_manager: {
+        Args: { area_name?: string; user_uuid: string }
+        Returns: boolean
+      }
       is_sync_in_progress: {
         Args: { sync_mode_param: string; sync_type_param: string }
         Returns: boolean
@@ -2530,7 +2902,15 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      okr_area: "marketing" | "diseno_prod" | "operaciones"
+      okr_confidence: "low" | "med" | "high"
+      okr_data_source: "manual" | "auto" | "computed"
+      okr_incentive_status: "pending" | "approved" | "paid"
+      okr_incentive_value_type: "days" | "bonus" | "recognition"
+      okr_level: "company" | "area" | "team" | "individual"
+      okr_tier: "T1" | "T2"
+      okr_unit: "%" | "#" | "$" | "rate" | "binary"
+      okr_visibility: "public" | "area" | "private"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2657,6 +3037,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      okr_area: ["marketing", "diseno_prod", "operaciones"],
+      okr_confidence: ["low", "med", "high"],
+      okr_data_source: ["manual", "auto", "computed"],
+      okr_incentive_status: ["pending", "approved", "paid"],
+      okr_incentive_value_type: ["days", "bonus", "recognition"],
+      okr_level: ["company", "area", "team", "individual"],
+      okr_tier: ["T1", "T2"],
+      okr_unit: ["%", "#", "$", "rate", "binary"],
+      okr_visibility: ["public", "area", "private"],
+    },
   },
 } as const
