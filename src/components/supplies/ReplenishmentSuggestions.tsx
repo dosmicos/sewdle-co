@@ -17,7 +17,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
     calculating, 
     fetchSuggestions, 
     updateSuggestionStatus,
-    triggerReplenishmentFunction
+    calculateSuggestions
   } = useReplenishment();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,7 +105,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
   };
 
   const handleRecalculate = async () => {
-    await triggerReplenishmentFunction();
+    await calculateSuggestions();
   };
 
   if (loading) {
