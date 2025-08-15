@@ -62,7 +62,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
               <AreaChart data={timeSeriesData}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis dataKey="month" />
-                <YAxis />
+                <YAxis domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
                 <Tooltip />
                 <Area 
                   type="monotone" 
@@ -80,7 +80,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
             <LineChart data={timeSeriesData}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
               <XAxis dataKey="month" />
-              <YAxis />
+              <YAxis domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
               <Tooltip />
               <Line 
                 type="monotone" 
@@ -99,7 +99,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
             <BarChart data={getAreaDistributionData()}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
               <XAxis dataKey="area" />
-              <YAxis />
+              <YAxis domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
               <Tooltip />
               <Bar 
                 dataKey="progress" 
@@ -151,7 +151,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
           <ResponsiveContainer width="100%" height={height}>
             <BarChart data={progressOverviewData} layout="horizontal">
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-              <XAxis type="number" domain={[0, 100]} />
+              <XAxis type="number" domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
               <YAxis dataKey="name" type="category" width={120} />
               <Tooltip />
               <Bar 
