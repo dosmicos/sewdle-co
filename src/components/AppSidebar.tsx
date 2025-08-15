@@ -8,14 +8,16 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+import { useIsDosmicos } from '@/hooks/useIsDosmicos';
+
 const AppSidebar = () => {
   const { user, logout, isAdmin, isDesigner, isQCLeader, hasPermission } = useAuth();
-  const { canAccessFeature, currentOrganization } = useOrganization();
+  const { canAccessFeature } = useOrganization();
   const navigate = useNavigate();
   const location = useLocation();
   
   // Verificar si es organización Dosmicos para mostrar OKRs
-  const isDosmicos = currentOrganization?.slug === 'dosmicos';
+  const { isDosmicos } = useIsDosmicos();
   
   const adminMenuItems = [
     { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Building2, AlertTriangle, Target } from 'lucide-react';
-import { useOrganization } from '@/contexts/OrganizationContext';
+import { useIsDosmicos } from '@/hooks/useIsDosmicos';
 
 interface OKRGuardProps {
   children: React.ReactNode;
@@ -12,7 +12,7 @@ export const OKRGuard: React.FC<OKRGuardProps> = ({
   children,
   fallback
 }) => {
-  const { currentOrganization, isLoading } = useOrganization();
+  const { organization: currentOrganization, isLoading, isDosmicos } = useIsDosmicos();
 
   if (isLoading) {
     return (
@@ -38,8 +38,7 @@ export const OKRGuard: React.FC<OKRGuardProps> = ({
     );
   }
 
-  // Verificar si es organización Dosmicos
-  const isDosmicos = currentOrganization.slug === 'dosmicos';
+  // Verificación de Dosmicos via hook
 
   if (!isDosmicos) {
     if (fallback) {
@@ -55,7 +54,7 @@ export const OKRGuard: React.FC<OKRGuardProps> = ({
               El módulo de OKRs está disponible exclusivamente para Dosmicos.
             </p>
             <p className="text-sm text-muted-foreground">
-              Organización actual: {currentOrganization.name}
+              Organización actual: {currentOrganization.name} ({currentOrganization.slug})
             </p>
           </AlertDescription>
         </Alert>
