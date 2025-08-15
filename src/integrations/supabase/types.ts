@@ -2338,8 +2338,8 @@ export type Database = {
         Returns: Json
       }
       consume_order_materials: {
-        Args: { consumption_data: Json; order_id_param: string }
-        Returns: undefined
+        Args: { p_consumptions: Json; p_order_id: string }
+        Returns: boolean
       }
       fix_delivery_sync_status_inconsistencies: {
         Args: Record<PropertyKey, never>
