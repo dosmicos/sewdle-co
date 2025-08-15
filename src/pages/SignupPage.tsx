@@ -206,14 +206,17 @@ const SignupPage = () => {
   return <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl">
         {/* Header */}
-        <div className="text-center mb-8">
-          <button onClick={handleBack} className="inline-flex items-center text-gray-600 hover:text-gray-800 mb-4">
+        <div className="flex justify-between items-start mb-8">
+          <button onClick={handleBack} className="inline-flex items-center text-gray-600 hover:text-gray-800">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver
           </button>
-          <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-7 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">Crear tu cuenta en Sewdle</h1>
-          <p className="text-gray-600">Comienza tu prueba gratuita de 30 días</p>
+          <div className="text-center flex-1">
+            <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-7 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900">Crear tu cuenta en Sewdle</h1>
+            <p className="text-gray-600">Comienza tu prueba gratuita de 30 días</p>
+          </div>
+          <div className="w-20"></div> {/* Spacer for balance */}
         </div>
 
         {/* Progress indicator */}
