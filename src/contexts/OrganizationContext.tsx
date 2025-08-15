@@ -20,7 +20,7 @@ const PLAN_LIMITS: PlanLimits = {
     maxOrdersPerMonth: 10,
     maxWorkshops: 5,
     maxStorage: 1024, // 1GB
-    features: ['basic_dashboard', 'orders', 'workshops', 'basic_analytics']
+    features: ['basic_dashboard', 'orders', 'workshops', 'basic_analytics', 'okr_module']
   },
   professional: {
     maxOrganizationsPerUser: 1,
@@ -36,7 +36,8 @@ const PLAN_LIMITS: PlanLimits = {
       'shopify_integration', 
       'financial_reports',
       'smart_replenishment',
-      'priority_support'
+      'priority_support',
+      'okr_module'
     ]
   },
   enterprise: {
@@ -51,7 +52,8 @@ const PLAN_LIMITS: PlanLimits = {
       'api_access',
       'unlimited_storage',
       'white_label',
-      'priority_support'
+      'priority_support',
+      'okr_module'
     ]
   }
 };
