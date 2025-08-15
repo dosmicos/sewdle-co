@@ -57,9 +57,13 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
     switch (dataType) {
       case 'trends':
         if (variant === 'area') {
+          const data = timeSeriesData.filter(d => Number.isFinite(Number(d.progress)));
+          if (data.length === 0) {
+            return <div className="text-sm text-muted-foreground">Sin datos de tendencia</div>;
+          }
           return (
             <ResponsiveContainer width="100%" height={height}>
-              <AreaChart data={timeSeriesData}>
+              <AreaChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis dataKey="month" />
                 <YAxis domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
@@ -75,9 +79,13 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
             </ResponsiveContainer>
           );
         }
+        const data = timeSeriesData.filter(d => Number.isFinite(Number(d.progress)));
+        if (data.length === 0) {
+          return <div className="text-sm text-muted-foreground">Sin datos de tendencia</div>;
+        }
         return (
           <ResponsiveContainer width="100%" height={height}>
-            <LineChart data={timeSeriesData}>
+            <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
               <XAxis dataKey="month" />
               <YAxis domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
@@ -94,9 +102,13 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
         );
 
       case 'areas':
+        const areaData = getAreaDistributionData().filter(d => Number.isFinite(Number(d.progress)));
+        if (areaData.length === 0) {
+          return <div className="text-sm text-muted-foreground">Sin datos por área</div>;
+        }
         return (
           <ResponsiveContainer width="100%" height={height}>
-            <BarChart data={getAreaDistributionData()}>
+            <BarChart data={areaData}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
               <XAxis dataKey="area" />
               <YAxis domain={[0, 100]} ticks={[0,20,40,60,80,100]} allowDecimals={false} />
