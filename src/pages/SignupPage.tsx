@@ -216,7 +216,7 @@ const SignupPage = () => {
         
         {/* Logo */}
         <div className="text-center mb-6">
-          <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-8 mx-auto" />
+          <img src="/lovable-uploads/d2dedee3-0aae-4a76-a4e5-67f498c643ba.png" alt="Sewdle Logo" className="h-6 mx-auto" />
         </div>
         
         {/* Title and subtitle */}
