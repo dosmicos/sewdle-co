@@ -18,6 +18,7 @@ import SuppliesPage from "@/pages/SuppliesPage";
 import WorkshopsPage from "@/pages/WorkshopsPage";
 import ProductsPage from "@/pages/ProductsPage";
 import DeliveriesPage from "@/pages/DeliveriesPage";
+import DeliveryDetailsPage from "@/pages/DeliveryDetailsPage";
 import FinancialPage from "@/pages/FinancialPage";
 import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import BillingPage from "@/pages/BillingPage";
@@ -169,6 +170,12 @@ const AppContent = () => {
         <Route path="deliveries" element={
           <PermissionRoute module="deliveries" action="view">
             <DeliveriesPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="deliveries/:deliveryId" element={
+          <PermissionRoute module="deliveries" action="view">
+            <DeliveryDetailsPage />
           </PermissionRoute>
         } />
         

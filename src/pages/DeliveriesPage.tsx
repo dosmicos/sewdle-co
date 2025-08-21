@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useDeliveries } from '@/hooks/useDeliveries';
@@ -42,9 +43,9 @@ const DeliveriesPage = () => {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -161,11 +162,8 @@ const DeliveriesPage = () => {
     refetch();
   };
 
-  const handleDeliveryDetailsBack = (shouldRefresh?: boolean) => {
-    setSelectedDelivery(null);
-    if (shouldRefresh) {
-      refetch();
-    }
+  const handleViewDelivery = (delivery: any) => {
+    navigate(`/deliveries/${delivery.tracking_number}`);
   };
 
   const handleDeleteDelivery = (delivery: any) => {
@@ -292,17 +290,6 @@ const DeliveriesPage = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       </div>
-    );
-  }
-
-  // Show delivery details if a delivery is selected
-  if (selectedDelivery) {
-    return (
-      <DeliveryDetails
-        delivery={selectedDelivery}
-        onBack={handleDeliveryDetailsBack}
-        onDeliveryUpdated={refetch}
-      />
     );
   }
 
@@ -590,7 +577,7 @@ const DeliveriesPage = () => {
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -598,7 +585,7 @@ const DeliveriesPage = () => {
           ) : (
             <DeliveryTable 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -610,7 +597,7 @@ const DeliveriesPage = () => {
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -618,7 +605,7 @@ const DeliveriesPage = () => {
           ) : (
             <DeliveryTable 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -630,7 +617,7 @@ const DeliveriesPage = () => {
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -638,7 +625,7 @@ const DeliveriesPage = () => {
           ) : (
             <DeliveryTable 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -650,7 +637,7 @@ const DeliveriesPage = () => {
           {isMobile ? (
             <DeliveryCards 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
@@ -658,7 +645,7 @@ const DeliveriesPage = () => {
           ) : (
             <DeliveryTable 
               deliveries={filteredDeliveries} 
-              onViewDetails={setSelectedDelivery}
+              onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}

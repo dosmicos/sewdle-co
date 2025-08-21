@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,11 +25,12 @@ import { DeliveryPaymentManager } from './financial/DeliveryPaymentManager';
 
 interface DeliveryDetailsProps {
   delivery: any;
-  onBack: (shouldRefresh?: boolean) => void;
+  onBack?: (shouldRefresh?: boolean) => void;
   onDeliveryUpdated?: () => void;
 }
 
 const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated }: DeliveryDetailsProps) => {
+  const navigate = useNavigate();
   const [delivery, setDelivery] = useState(initialDelivery);
   const [isEditing, setIsEditing] = useState(false);
   const [isReEditingQuality, setIsReEditingQuality] = useState(false); // Nuevo estado para re-edición
@@ -39,6 +41,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
   const [syncingVariants, setSyncingVariants] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleBack = (shouldRefresh?: boolean) => {
+    if (onBack) {
+      onBack(shouldRefresh);
+    } else {
+      navigate('/deliveries');
+    }
+  };
   
   const { fetchDeliveryById, updateDeliveryQuantities, processQualityReview, loading } = useDeliveries();
   const { canEditDeliveries } = useUserContext();
@@ -839,7 +849,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={() => onBack()}>
+          <Button variant="outline" onClick={() => handleBack()}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver
           </Button>
