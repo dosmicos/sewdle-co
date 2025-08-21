@@ -186,6 +186,27 @@ export const useInventorySync = () => {
 
       const result = data;
       
+      // Handle 409 Conflict - sync in progress
+      if (!result.success && result.error === 'sync_in_progress') {
+        const lockDetails = result.details;
+        const lockTime = lockDetails?.lock_acquired_at ? 
+          new Date(lockDetails.lock_acquired_at).toLocaleString() : 'desconocida';
+        
+        toast({
+          title: "Sincronización en progreso",
+          description: `Ya hay una sincronización activa para ${lockDetails?.tracking_number || 'esta entrega'} desde ${lockTime}. Intenta nuevamente en unos momentos.`,
+          variant: "destructive",
+        });
+        
+        setLoading(false);
+        return { 
+          success: false, 
+          error: 'sync_in_progress',
+          lockInfo: lockDetails,
+          summary: { successful: 0, failed: 0, already_synced: 0 }
+        };
+      }
+      
       if (result.success) {
         const alreadySyncedCount = result.summary.already_synced || 0;
         const successfulCount = result.summary.successful || 0;
@@ -229,12 +250,13 @@ export const useInventorySync = () => {
     } catch (error) {
       console.error('Error syncing inventory:', error);
       
-      // Simplified error handling - no sync locks to worry about
       let errorMessage = "No se pudo sincronizar el inventario con Shopify";
       
       if (error instanceof Error) {
         if (error.message.includes('rate limit') || error.message.includes('429')) {
           errorMessage = "Shopify está limitando las peticiones. Intenta nuevamente en unos minutos.";
+        } else if (error.message.includes('sync_in_progress')) {
+          errorMessage = "Ya hay una sincronización en progreso. Espera a que termine o libera el bloqueo si está atorado.";
         } else {
           errorMessage = error.message;
         }
@@ -294,25 +316,58 @@ export const useInventorySync = () => {
     }
   };
 
-  const clearSyncLock = async (deliveryId: string) => {
+  const checkSyncLockStatus = async (deliveryId: string) => {
     try {
-      const { data, error } = await supabase.rpc('clear_delivery_sync_lock', {
-        delivery_id_param: deliveryId
+      const { data, error } = await supabase.rpc('check_delivery_sync_lock', {
+        delivery_uuid: deliveryId
       });
 
       if (error) {
         throw error;
       }
 
-      const result = data as any;
-      if (result?.success) {
+      return data === true; // Returns true if lock is held, false if not
+    } catch (error) {
+      console.error('Error checking sync lock status:', error);
+      return false;
+    }
+  };
+
+  const clearSyncLock = async (deliveryId: string) => {
+    try {
+      const { data: lockReleased, error: lockError } = await supabase.rpc('release_delivery_sync_lock', {
+        delivery_uuid: deliveryId
+      });
+
+      if (lockError) {
+        throw lockError;
+      }
+
+      // Update delivery lock tracking info
+      const { error: updateError } = await supabase
+        .from('deliveries')
+        .update({
+          sync_lock_acquired_at: null,
+          sync_lock_acquired_by: null
+        })
+        .eq('id', deliveryId);
+
+      if (updateError) {
+        console.warn('Warning: Lock released but tracking info not updated:', updateError);
+      }
+
+      if (lockReleased) {
         toast({
-          title: "Bloqueo de sincronización limpiado",
-          description: `Se ha liberado el bloqueo para la entrega ${result.tracking_number}`,
+          title: "Bloqueo de sincronización liberado",
+          description: "El bloqueo de sincronización ha sido liberado exitosamente",
         });
-        return result;
+        return true;
       } else {
-        throw new Error(result?.error || 'Error desconocido al limpiar el bloqueo');
+        toast({
+          title: "Sin bloqueo para liberar",
+          description: "No había ningún bloqueo de sincronización activo",
+        });
+        return false;
       }
     } catch (error) {
       console.error('Error clearing sync lock:', error);
@@ -327,14 +382,32 @@ export const useInventorySync = () => {
 
   const clearAllStaleLocks = async () => {
     try {
-      const { data, error } = await supabase.rpc('clear_stale_sync_locks');
+      // Clear all advisory locks older than 1 hour
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      
+      const { data: staleDeliveries, error: queryError } = await supabase
+        .from('deliveries')
+        .select('id, tracking_number, sync_lock_acquired_at')
+        .not('sync_lock_acquired_at', 'is', null)
+        .lt('sync_lock_acquired_at', oneHourAgo);
 
-      if (error) {
-        throw error;
+      if (queryError) {
+        throw queryError;
       }
 
-      const clearedCount = (data?.[0] as any)?.cleared_deliveries_count || 0;
+      let clearedCount = 0;
       
+      if (staleDeliveries && staleDeliveries.length > 0) {
+        for (const delivery of staleDeliveries) {
+          try {
+            await clearSyncLock(delivery.id);
+            clearedCount++;
+          } catch (error) {
+            console.warn(`Failed to clear lock for ${delivery.tracking_number}:`, error);
+          }
+        }
+      }
+
       if (clearedCount > 0) {
         toast({
           title: "Bloqueos antiguos limpiados",
@@ -347,7 +420,7 @@ export const useInventorySync = () => {
         });
       }
 
-      return data;
+      return clearedCount;
     } catch (error) {
       console.error('Error clearing stale locks:', error);
       toast({
@@ -365,6 +438,9 @@ export const useInventorySync = () => {
     checkSyncStatus,
     checkRecentSuccessfulSync,
     checkSkuSyncStatus,
+    checkSyncLockStatus,
+    clearSyncLock,
+    clearAllStaleLocks,
     loading
   };
 };

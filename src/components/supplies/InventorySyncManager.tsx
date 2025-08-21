@@ -24,6 +24,9 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     fetchSyncLogs, 
     checkRecentSuccessfulSync,
     checkSkuSyncStatus,
+    checkSyncLockStatus,
+    clearSyncLock,
+    clearAllStaleLocks,
     loading: syncLoading 
   } = useInventorySync();
   const { fetchDeliveries, fetchDeliveryById, loading: deliveriesLoading } = useDeliveries();
@@ -87,6 +90,26 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     setSkuStatuses(newSkuStatuses);
     setPendingDeliveries(filteredDeliveries);
   };
+
+  const handleClearSyncLock = async (deliveryId: string) => {
+    try {
+      await clearSyncLock(deliveryId)
+      // Reload data to reflect changes
+      await loadData()
+    } catch (error) {
+      // Error already handled by the hook
+    }
+  }
+
+  const handleClearAllStaleLocks = async () => {
+    try {
+      await clearAllStaleLocks()
+      // Reload data to reflect changes
+      await loadData()
+    } catch (error) {
+      // Error already handled by the hook
+    }
+  }
 
   const handleManualSync = async (delivery: any) => {
     try {

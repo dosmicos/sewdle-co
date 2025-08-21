@@ -55,12 +55,74 @@ serve(async (req) => {
 
   let deliveryId = null
   let supabase = null
+  let lockAcquired = false
 
   try {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Parse request data early to get deliveryId
+    const requestData = await req.json()
+    deliveryId = requestData.deliveryId
+
+    if (!deliveryId) {
+      throw new Error('Delivery ID es requerido')
+    }
+
+    // STEP 0: ACQUIRE ADVISORY LOCK
+    console.log('=== PASO 0: ADQUISICIÓN DE BLOQUEO DE SINCRONIZACIÓN ===')
+    console.log('Intentando adquirir bloqueo para delivery:', deliveryId)
+    
+    const { data: lockResult, error: lockError } = await supabase.rpc('acquire_delivery_sync_lock', {
+      delivery_uuid: deliveryId
+    })
+
+    if (lockError) {
+      throw new Error(`Error al intentar adquirir bloqueo: ${lockError.message}`)
+    }
+
+    if (!lockResult) {
+      console.log('❌ No se pudo adquirir el bloqueo - otra sincronización está en progreso')
+      
+      // Check existing lock info
+      const { data: deliveryInfo } = await supabase
+        .from('deliveries')
+        .select('tracking_number, sync_lock_acquired_at, sync_lock_acquired_by')
+        .eq('id', deliveryId)
+        .single()
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'sync_in_progress',
+          message: 'Una sincronización ya está en progreso para esta entrega',
+          details: {
+            delivery_id: deliveryId,
+            tracking_number: deliveryInfo?.tracking_number,
+            lock_acquired_at: deliveryInfo?.sync_lock_acquired_at,
+            lock_acquired_by: deliveryInfo?.sync_lock_acquired_by
+          }
+        }),
+        { 
+          status: 409,  // Conflict
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    lockAcquired = true
+    console.log('✅ Bloqueo adquirido exitosamente para delivery:', deliveryId)
+
+    // Update delivery with lock info
+    await supabase
+      .from('deliveries')
+      .update({
+        sync_lock_acquired_at: new Date().toISOString(),
+        sync_lock_acquired_by: 'sync-inventory-shopify' // In a real app, this could be user_id
+      })
+      .eq('id', deliveryId)
 
     // Get Shopify credentials from environment OR organization
     let rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
@@ -103,12 +165,10 @@ serve(async (req) => {
     console.log('Domain:', shopifyDomain)
     console.log('Token presente:', shopifyToken ? 'Sí' : 'No')
 
-    const requestData = await req.json()
-    deliveryId = requestData.deliveryId
     const approvedItems = requestData.approvedItems
     const intelligentSync = requestData.intelligentSync || false
 
-    if (!deliveryId || !approvedItems || !Array.isArray(approvedItems)) {
+    if (!approvedItems || !Array.isArray(approvedItems)) {
       throw new Error('Datos de sincronización inválidos')
     }
 
@@ -831,6 +891,24 @@ serve(async (req) => {
     console.log('=== SYNC COMPLETADO CON RATE LIMITING ===')
     console.log('Summary:', response.summary)
     
+    // RELEASE ADVISORY LOCK
+    if (lockAcquired && deliveryId) {
+      console.log('🔓 Liberando bloqueo de sincronización...')
+      try {
+        await supabase.rpc('release_delivery_sync_lock', { delivery_uuid: deliveryId })
+        await supabase
+          .from('deliveries')
+          .update({
+            sync_lock_acquired_at: null,
+            sync_lock_acquired_by: null
+          })
+          .eq('id', deliveryId)
+        console.log('✅ Bloqueo liberado exitosamente')
+      } catch (lockError) {
+        console.error('⚠️ Error al liberar bloqueo:', lockError)
+      }
+    }
+    
     return new Response(
       JSON.stringify(response),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -839,18 +917,32 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Error general en sincronización:', error)
     
-    // Clean up lock on error
-    try {
-      if (deliveryId) {
+    // RELEASE ADVISORY LOCK ON ERROR
+    if (lockAcquired && deliveryId && supabase) {
+      console.log('🔓 Liberando bloqueo debido a error...')
+      try {
+        await supabase.rpc('release_delivery_sync_lock', { delivery_uuid: deliveryId })
         await supabase
           .from('deliveries')
-          .update({ 
+          .update({
+            sync_lock_acquired_at: null,
+            sync_lock_acquired_by: null,
             sync_error_message: error.message
           })
           .eq('id', deliveryId)
+        console.log('✅ Bloqueo liberado después de error')
+      } catch (lockError) {
+        console.error('⚠️ Error al liberar bloqueo en cleanup:', lockError)
+        // Still try to update error message
+        try {
+          await supabase
+            .from('deliveries')
+            .update({ sync_error_message: error.message })
+            .eq('id', deliveryId)
+        } catch (updateError) {
+          console.error('Error actualizando mensaje de error:', updateError)
+        }
       }
-    } catch (cleanupError) {
-      console.error('Error limpiando estado:', cleanupError)
     }
     
     return new Response(
