@@ -22,25 +22,43 @@ const DeliveryDetailsPage = () => {
       return;
     }
 
+    // Prevent refetch if same delivery is already loaded
+    if (delivery && delivery.tracking_number === deliveryId) {
+      return;
+    }
+
+    let isCancelled = false;
+
     const loadDelivery = async () => {
       try {
         setLoading(true);
+        setError(null);
         const deliveryData = await fetchDeliveryByTrackingNumber(deliveryId);
+        
+        if (isCancelled) return;
+        
         if (!deliveryData) {
           setError('Entrega no encontrada');
           return;
         }
         setDelivery(deliveryData);
       } catch (err) {
+        if (isCancelled) return;
         console.error('Error loading delivery:', err);
         setError('Error al cargar la entrega');
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadDelivery();
-  }, [deliveryId, fetchDeliveryByTrackingNumber, canViewDeliveries, navigate]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [deliveryId, fetchDeliveryByTrackingNumber, canViewDeliveries, navigate, delivery?.tracking_number]);
 
   const handleBack = (shouldRefresh?: boolean) => {
     navigate('/deliveries');

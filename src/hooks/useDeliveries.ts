@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useInventorySync } from './useInventorySync';
@@ -34,7 +34,7 @@ export const useDeliveries = () => {
     }
   };
 
-  const fetchDeliveryById = async (deliveryId: string) => {
+  const fetchDeliveryById = useCallback(async (deliveryId: string) => {
     setLoading(true);
     try {
       console.log('Fetching delivery by ID:', deliveryId);
@@ -135,9 +135,9 @@ export const useDeliveries = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const fetchDeliveryByTrackingNumber = async (trackingNumber: string) => {
+  const fetchDeliveryByTrackingNumber = useCallback(async (trackingNumber: string) => {
     setLoading(true);
     try {
       console.log('Fetching delivery by tracking number:', trackingNumber);
@@ -238,7 +238,7 @@ export const useDeliveries = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const getDeliveryStats = async () => {
     setLoading(true);
