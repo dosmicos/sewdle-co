@@ -30,6 +30,8 @@ export type Database = {
           status: string | null
           sync_attempts: number
           sync_error_message: string | null
+          sync_lock_acquired_at: string | null
+          sync_lock_acquired_by: string | null
           synced_to_shopify: boolean
           tracking_number: string | null
           updated_at: string
@@ -51,6 +53,8 @@ export type Database = {
           status?: string | null
           sync_attempts?: number
           sync_error_message?: string | null
+          sync_lock_acquired_at?: string | null
+          sync_lock_acquired_by?: string | null
           synced_to_shopify?: boolean
           tracking_number?: string | null
           updated_at?: string
@@ -72,6 +76,8 @@ export type Database = {
           status?: string | null
           sync_attempts?: number
           sync_error_message?: string | null
+          sync_lock_acquired_at?: string | null
+          sync_lock_acquired_by?: string | null
           synced_to_shopify?: boolean
           tracking_number?: string | null
           updated_at?: string
@@ -2285,6 +2291,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_delivery_sync_lock: {
+        Args: { delivery_uuid: string }
+        Returns: boolean
+      }
       assign_admin_role_to_users_without_role: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2311,6 +2321,10 @@ export type Database = {
       calculate_replenishment_suggestions: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      check_delivery_sync_lock: {
+        Args: { delivery_uuid: string }
+        Returns: boolean
       }
       check_variant_update_safety: {
         Args: { new_sku_param: string; variant_id_param: string }
@@ -2852,6 +2866,10 @@ export type Database = {
       recalculate_material_stock: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      release_delivery_sync_lock: {
+        Args: { delivery_uuid: string }
+        Returns: boolean
       }
       require_password_change: {
         Args: { user_uuid: string }
