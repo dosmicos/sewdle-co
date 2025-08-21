@@ -13,6 +13,7 @@ import InventoryDuplicationFixer from './InventoryDuplicationFixer';
 
 interface SyncLogItem {
   sku: string;
+  skuVariant?: string; // Add skuVariant as optional property for backward compatibility
   status: 'success' | 'error';
   error?: string;
   quantityAttempted?: number;
@@ -21,6 +22,18 @@ interface SyncLogItem {
   newQuantity?: number;
   previousQuantity?: number;
 }
+
+// New sync results structure
+interface SyncResultsObject {
+  results: SyncLogItem[];
+  intelligent_sync?: boolean;
+  skipped_items?: any[];
+  total_items_sent?: number;
+  items_processed?: number;
+}
+
+// Type that can handle both old and new formats
+type SyncResults = SyncLogItem[] | SyncResultsObject;
 
 interface DeliverySyncInfo {
   id: string;
@@ -34,7 +47,7 @@ interface DeliverySyncInfo {
     synced_at: string;
     success_count: number;
     error_count: number;
-    sync_results: SyncLogItem[];
+    sync_results: SyncResults; // Updated type
   }[];
 }
 
@@ -207,11 +220,26 @@ const ShopifySyncDiagnostics = () => {
 
   const getFailedSkus = (delivery: DeliverySyncInfo): string[] => {
     const latestLog = delivery.sync_logs[0];
-    if (!latestLog) return [];
+    if (!latestLog || !latestLog.sync_results) return [];
 
-    return latestLog.sync_results
+    // Handle both old and new sync_results structure for backward compatibility
+    let results: SyncLogItem[] = [];
+    
+    // New structure: sync_results.results contains the array
+    if (typeof latestLog.sync_results === 'object' && !Array.isArray(latestLog.sync_results)) {
+      const syncResultsObj = latestLog.sync_results as SyncResultsObject;
+      if (syncResultsObj.results && Array.isArray(syncResultsObj.results)) {
+        results = syncResultsObj.results;
+      }
+    }
+    // Old structure: sync_results is directly an array
+    else if (Array.isArray(latestLog.sync_results)) {
+      results = latestLog.sync_results as SyncLogItem[];
+    }
+
+    return results
       .filter(item => item.status === 'error')
-      .map(item => item.sku);
+      .map(item => item.sku || item.skuVariant || '');
   };
 
   const getSyncCount = (delivery: DeliverySyncInfo): number => {
@@ -357,7 +385,24 @@ const ShopifySyncDiagnostics = () => {
                 {/* Detalles de errores expandibles */}
                 {filteredDeliveries.map((delivery) => {
                   const latestLog = delivery.sync_logs[0];
-                  const errorItems = latestLog?.sync_results.filter(item => item.status === 'error') || [];
+                  
+                  // Handle both old and new sync_results structure for backward compatibility
+                  let results: SyncLogItem[] = [];
+                  if (latestLog?.sync_results) {
+                    // New structure: sync_results.results contains the array
+                    if (typeof latestLog.sync_results === 'object' && !Array.isArray(latestLog.sync_results)) {
+                      const syncResultsObj = latestLog.sync_results as SyncResultsObject;
+                      if (syncResultsObj.results && Array.isArray(syncResultsObj.results)) {
+                        results = syncResultsObj.results;
+                      }
+                    }
+                    // Old structure: sync_results is directly an array
+                    else if (Array.isArray(latestLog.sync_results)) {
+                      results = latestLog.sync_results as SyncLogItem[];
+                    }
+                  }
+                  
+                  const errorItems = results.filter(item => item.status === 'error') || [];
                   
                   if (errorItems.length === 0) return null;
 
