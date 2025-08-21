@@ -28,6 +28,26 @@ const InventoryDuplicationFixer = () => {
   const [duplications, setDuplications] = useState<DuplicationIssue[]>([]);
   const { toast } = useToast();
 
+  // Helper function to normalize sync_results to always return an array
+  const normalizeSyncResults = (rawSyncResults: any): any[] => {
+    if (!rawSyncResults) return [];
+    
+    // New format: sync_results is an object with results property
+    if (typeof rawSyncResults === 'object' && !Array.isArray(rawSyncResults)) {
+      if (rawSyncResults.results && Array.isArray(rawSyncResults.results)) {
+        return rawSyncResults.results;
+      }
+      return [];
+    }
+    
+    // Old format: sync_results is directly an array
+    if (Array.isArray(rawSyncResults)) {
+      return rawSyncResults;
+    }
+    
+    return [];
+  };
+
   const detectDuplications = async (specificTracking?: string) => {
     setLoading(true);
     try {
@@ -93,21 +113,24 @@ const InventoryDuplicationFixer = () => {
         const skuSyncCount = new Map<string, { count: number, totalQuantity: number, logs: any[] }>();
         
         deliveryLogs.forEach(log => {
-          const syncResults = log.sync_results || [];
+          const syncResults = normalizeSyncResults(log.sync_results);
           syncResults.forEach((result: any) => {
-            if (result.status === 'success' && result.addedQuantity > 0) {
-              const sku = result.sku;
-              if (!skuSyncCount.has(sku)) {
+            const addedQuantity = Number(result.addedQuantity ?? 0);
+            if (result.status === 'success' && addedQuantity > 0) {
+              const sku = result.sku || result.skuVariant || '';
+              if (sku && !skuSyncCount.has(sku)) {
                 skuSyncCount.set(sku, { count: 0, totalQuantity: 0, logs: [] });
               }
-              const skuData = skuSyncCount.get(sku)!;
-              skuData.count++;
-              skuData.totalQuantity += result.addedQuantity;
-              skuData.logs.push({
-                synced_at: log.synced_at,
-                quantity: result.addedQuantity,
-                method: result.method
-              });
+              if (sku) {
+                const skuData = skuSyncCount.get(sku)!;
+                skuData.count++;
+                skuData.totalQuantity += addedQuantity;
+                skuData.logs.push({
+                  synced_at: log.synced_at,
+                  quantity: addedQuantity,
+                  method: result.method
+                });
+              }
             }
           });
         });
