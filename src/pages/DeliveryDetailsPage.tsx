@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 const DeliveryDetailsPage = () => {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const navigate = useNavigate();
-  const { fetchDeliveryById } = useDeliveries();
+  const { fetchDeliveryByTrackingNumber } = useDeliveries();
   const { hasPermission } = useAuth();
   const [delivery, setDelivery] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -25,7 +25,7 @@ const DeliveryDetailsPage = () => {
     const loadDelivery = async () => {
       try {
         setLoading(true);
-        const deliveryData = await fetchDeliveryById(deliveryId);
+        const deliveryData = await fetchDeliveryByTrackingNumber(deliveryId);
         if (!deliveryData) {
           setError('Entrega no encontrada');
           return;
@@ -40,7 +40,7 @@ const DeliveryDetailsPage = () => {
     };
 
     loadDelivery();
-  }, [deliveryId, fetchDeliveryById, canViewDeliveries, navigate]);
+  }, [deliveryId, fetchDeliveryByTrackingNumber, canViewDeliveries, navigate]);
 
   const handleBack = (shouldRefresh?: boolean) => {
     navigate('/deliveries');
