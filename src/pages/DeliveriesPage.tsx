@@ -6,7 +6,6 @@ import { useDeliveries } from '@/hooks/useDeliveries';
 import { useDeliveryPayments } from '@/hooks/useDeliveryPayments';
 import { useAuth } from '@/contexts/AuthContext';
 import DeliveryForm from '@/components/DeliveryForm';
-import DeliveryDetails from '@/components/DeliveryDetails';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
 import ShopifySyncDiagnostics from '@/components/supplies/ShopifySyncDiagnostics';
 import { Button } from '@/components/ui/button';
@@ -36,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const DeliveriesPage = () => {
+  // Force cache refresh - URLs implementation
   const { deliveries, loading, refetch } = useFilteredDeliveries();
   const { deleteDelivery } = useDeliveries();
   const { payments } = useDeliveryPayments();
