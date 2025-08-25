@@ -247,12 +247,13 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
         <div className="flex gap-2 pt-4">
           {!existingPayment && calculation && (
             <>
-              {calculation.total_advance_available > 0 && calculation.net_amount <= 0 ? (
+              {/* Always show adjust advance button when advances are available */}
+              {calculation.total_advance_available > 0 && (calculation.total_advance_available - calculation.advance_already_used) > 0 && (
                 <Dialog open={isAdvanceAdjustmentOpen} onOpenChange={setIsAdvanceAdjustmentOpen}>
                   <DialogTrigger asChild>
-                    <Button className="flex-1">
+                    <Button variant="outline" className="flex-1">
                       <DollarSign className="w-4 h-4 mr-2" />
-                      Ajustar Anticipo y Crear Pago
+                      Ajustar Anticipo
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -261,8 +262,8 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                     </DialogHeader>
                     <div className="space-y-4">
                       <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                        <p>El monto neto es negativo debido a la deducción completa del anticipo.</p>
-                        <p>Ajusta cuánto del anticipo deseas descontar en esta entrega.</p>
+                        <p>Especifica cuánto del anticipo disponible deseas descontar en esta entrega.</p>
+                        <p>El ajuste se aplicará solo a esta entrega específica.</p>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4 text-sm">
@@ -317,21 +318,23 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                         <Button type="button" variant="outline" onClick={() => setIsAdvanceAdjustmentOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button onClick={() => handleCreatePayment(true)}>
+                        <Button 
+                          onClick={() => handleCreatePayment(true)}
+                          disabled={advanceAdjustment.customAdvanceDeduction > (calculation.total_advance_available - calculation.advance_already_used)}
+                        >
                           Crear Pago con Ajuste
                         </Button>
                       </div>
                     </div>
                   </DialogContent>
                 </Dialog>
-              ) : (
-                calculation.net_amount > 0 && (
-                  <Button onClick={() => handleCreatePayment(false)} className="flex-1">
-                    <DollarSign className="w-4 h-4 mr-2" />
-                    Crear Registro de Pago
-                  </Button>
-                )
               )}
+
+              {/* Standard create payment button */}
+              <Button onClick={() => handleCreatePayment(false)} className="flex-1">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Crear Registro de Pago
+              </Button>
             </>
           )}
 
