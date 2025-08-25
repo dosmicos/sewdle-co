@@ -233,6 +233,33 @@ export const useDeliveryPayments = () => {
     }
   };
 
+  const deletePayment = async (paymentId: string) => {
+    try {
+      const { error } = await supabase
+        .from('delivery_payments')
+        .delete()
+        .eq('id', paymentId)
+        .eq('payment_status', 'pending'); // Only allow deleting pending payments
+
+      if (error) throw error;
+
+      toast({
+        title: "Pago eliminado",
+        description: "El registro de pago ha sido eliminado correctamente"
+      });
+
+      fetchPayments();
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar el pago"
+      });
+      throw error;
+    }
+  };
+
   useEffect(() => {
     fetchPayments();
   }, [currentOrganization]);
@@ -244,6 +271,7 @@ export const useDeliveryPayments = () => {
     createPayment,
     markAsPaid,
     updatePayment,
+    deletePayment,
     refetch: fetchPayments
   };
 };

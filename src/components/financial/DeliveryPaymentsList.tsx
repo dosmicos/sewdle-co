@@ -17,7 +17,8 @@ import {
   CheckCircle, 
   Download,
   Calculator,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,7 +30,7 @@ interface PaymentFormData {
 }
 
 export const DeliveryPaymentsList = () => {
-  const { payments, loading, calculatePayment, createPayment, markAsPaid, refetch } = useDeliveryPayments();
+  const { payments, loading, calculatePayment, createPayment, markAsPaid, deletePayment, refetch } = useDeliveryPayments();
   const { toast } = useToast();
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -38,6 +39,8 @@ export const DeliveryPaymentsList = () => {
   const [selectedPayments, setSelectedPayments] = useState<string[]>([]);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>({
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: "",
@@ -169,6 +172,44 @@ export const DeliveryPaymentsList = () => {
   const openPaymentDialog = (paymentId: string) => {
     setSelectedPaymentId(paymentId);
     setIsPaymentDialogOpen(true);
+  };
+
+  const openDeleteDialog = (payment: any) => {
+    setPaymentToDelete(payment);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeletePayment = async () => {
+    if (!paymentToDelete) return;
+
+    try {
+      await deletePayment(paymentToDelete.id);
+      setIsDeleteDialogOpen(false);
+      setPaymentToDelete(null);
+      toast({
+        title: "Pago eliminado",
+        description: "El registro de pago ha sido eliminado exitosamente"
+      });
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedPayments.length === 0) return;
+
+    try {
+      for (const paymentId of selectedPayments) {
+        await deletePayment(paymentId);
+      }
+      setSelectedPayments([]);
+      toast({
+        title: "Pagos eliminados",
+        description: `Se han eliminado ${selectedPayments.length} pagos exitosamente`
+      });
+    } catch (error) {
+      console.error('Error bulk deleting payments:', error);
+    }
   };
 
   const pendingPaymentsCount = filteredPayments.filter(p => p.payment_status === 'pending').length;
@@ -303,6 +344,15 @@ export const DeliveryPaymentsList = () => {
                   </Button>
                   <Button 
                     size="sm" 
+                    variant="destructive"
+                    onClick={handleBulkDelete}
+                    disabled={selectedPayments.length === 0}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Eliminar Seleccionados
+                  </Button>
+                  <Button 
+                    size="sm" 
                     variant="outline"
                     onClick={() => setSelectedPayments([])}
                   >
@@ -377,12 +427,21 @@ export const DeliveryPaymentsList = () => {
                           </Button>
                         )}
                         {payment.payment_status === 'pending' && (
-                          <Button 
-                            size="sm"
-                            onClick={() => openPaymentDialog(payment.id)}
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </Button>
+                          <>
+                            <Button 
+                              size="sm"
+                              onClick={() => openPaymentDialog(payment.id)}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => openDeleteDialog(payment)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -466,6 +525,36 @@ export const DeliveryPaymentsList = () => {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Eliminación</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>¿Estás seguro de que deseas eliminar este registro de pago?</p>
+            {paymentToDelete && (
+              <div className="bg-muted/50 p-3 rounded-lg text-sm space-y-1">
+                <p><strong>Tracking:</strong> {paymentToDelete.tracking_number || 'N/A'}</p>
+                <p><strong>Orden:</strong> {paymentToDelete.order_number || 'N/A'}</p>
+                <p><strong>Taller:</strong> {paymentToDelete.workshop_name || 'N/A'}</p>
+                <p><strong>Monto:</strong> {formatCurrency(paymentToDelete.net_amount)}</p>
+                <p><strong>Estado:</strong> {paymentToDelete.payment_status}</p>
+              </div>
+            )}
+            <p className="text-destructive text-sm">Esta acción no se puede deshacer.</p>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeletePayment}>
+                Eliminar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
