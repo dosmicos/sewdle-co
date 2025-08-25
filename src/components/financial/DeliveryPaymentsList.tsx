@@ -217,6 +217,14 @@ export const DeliveryPaymentsList = () => {
     .filter(p => p.payment_status === 'pending')
     .reduce((sum, p) => sum + p.net_amount, 0);
 
+  // Calculate total of selected payments
+  const selectedPaymentsTotal = useMemo(() => {
+    return selectedPayments.reduce((sum, paymentId) => {
+      const payment = filteredPayments.find(p => p.id === paymentId);
+      return sum + (payment?.net_amount || 0);
+    }, 0);
+  }, [selectedPayments, filteredPayments]);
+
   if (loading) {
     return (
       <Card>
@@ -330,9 +338,10 @@ export const DeliveryPaymentsList = () => {
           {selectedPayments.length > 0 && (
             <div className="mb-4 p-4 bg-muted rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm">
-                  {selectedPayments.length} pago(s) seleccionado(s)
-                </span>
+                <div className="text-sm">
+                  <div>{selectedPayments.length} pago(s) seleccionado(s)</div>
+                  <div className="font-medium text-foreground">Total: {formatCurrency(selectedPaymentsTotal)}</div>
+                </div>
                 <div className="flex gap-2">
                   <Button 
                     size="sm" 
