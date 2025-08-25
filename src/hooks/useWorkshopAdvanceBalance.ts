@@ -29,9 +29,9 @@ export const useWorkshopAdvanceBalance = () => {
         .select(`
           workshop_id,
           amount,
-          workshops!order_advances_workshop_id_fkey(name)
+          workshops!order_advances_workshop_id_fkey(name, organization_id)
         `)
-        .eq('organization_id', currentOrganization.id);
+        .eq('workshops.organization_id', currentOrganization.id);
 
       if (advancesError) throw advancesError;
 
@@ -42,9 +42,9 @@ export const useWorkshopAdvanceBalance = () => {
           workshop_id,
           advance_deduction,
           custom_advance_deduction,
-          workshops!delivery_payments_workshop_id_fkey(name)
+          workshops!delivery_payments_workshop_id_fkey(name, organization_id)
         `)
-        .eq('organization_id', currentOrganization.id);
+        .eq('workshops.organization_id', currentOrganization.id);
 
       if (paymentsError) throw paymentsError;
 
@@ -66,7 +66,7 @@ export const useWorkshopAdvanceBalance = () => {
           });
         }
         
-        workshopMap.get(workshopId)!.total_advances += advance.amount;
+        workshopMap.get(workshopId)!.total_advances += Number(advance.amount ?? 0);
       });
 
       // Subtract deductions used
@@ -84,7 +84,7 @@ export const useWorkshopAdvanceBalance = () => {
           });
         }
 
-        const deductionAmount = payment.custom_advance_deduction || payment.advance_deduction;
+        const deductionAmount = Number(payment.custom_advance_deduction ?? payment.advance_deduction ?? 0);
         workshopMap.get(workshopId)!.total_deductions_used += deductionAmount;
       });
 
