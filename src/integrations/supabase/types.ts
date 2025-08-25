@@ -224,9 +224,11 @@ export type Database = {
       delivery_payments: {
         Row: {
           advance_deduction: number
+          advance_notes: string | null
           billable_units: number
           created_at: string
           created_by: string | null
+          custom_advance_deduction: number | null
           delivery_id: string
           gross_amount: number
           id: string
@@ -246,9 +248,11 @@ export type Database = {
         }
         Insert: {
           advance_deduction?: number
+          advance_notes?: string | null
           billable_units: number
           created_at?: string
           created_by?: string | null
+          custom_advance_deduction?: number | null
           delivery_id: string
           gross_amount: number
           id?: string
@@ -268,9 +272,11 @@ export type Database = {
         }
         Update: {
           advance_deduction?: number
+          advance_notes?: string | null
           billable_units?: number
           created_at?: string
           created_by?: string | null
+          custom_advance_deduction?: number | null
           delivery_id?: string
           gross_amount?: number
           id?: string
@@ -2304,12 +2310,19 @@ export type Database = {
         }[]
       }
       calculate_delivery_payment: {
-        Args: { delivery_id_param: string }
+        Args:
+          | {
+              custom_advance_deduction_param?: number
+              delivery_id_param: string
+            }
+          | { delivery_id_param: string }
         Returns: {
+          advance_already_used: number
           advance_deduction: number
           billable_units: number
           gross_amount: number
           net_amount: number
+          total_advance_available: number
           total_units: number
           workshop_payment_method: string
         }[]

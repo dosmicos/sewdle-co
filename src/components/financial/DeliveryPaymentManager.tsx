@@ -24,27 +24,44 @@ interface PaymentFormData {
   notes: string;
 }
 
+interface AdvanceAdjustmentData {
+  customAdvanceDeduction: number;
+  advanceNotes: string;
+}
+
 export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: DeliveryPaymentManagerProps) => {
   const { payments, calculatePayment, createPayment, markAsPaid } = useDeliveryPayments();
   const { toast } = useToast();
   const [calculation, setCalculation] = useState<DeliveryPaymentCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isAdvanceAdjustmentOpen, setIsAdvanceAdjustmentOpen] = useState(false);
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>({
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: "",
     reference_number: "",
     notes: ""
   });
+  const [advanceAdjustment, setAdvanceAdjustment] = useState<AdvanceAdjustmentData>({
+    customAdvanceDeduction: 0,
+    advanceNotes: ""
+  });
 
   // Find existing payment for this delivery
   const existingPayment = payments.find(p => p.delivery_id === deliveryId);
 
-  const handleCalculatePayment = async () => {
+  const handleCalculatePayment = async (customAdvance?: number) => {
     setIsCalculating(true);
     try {
-      const result = await calculatePayment(deliveryId);
+      const result = await calculatePayment(deliveryId, customAdvance);
       setCalculation(result);
+      // Update advance adjustment max value
+      if (result && result.total_advance_available !== undefined && result.advance_already_used !== undefined) {
+        const maxDeduction = result.total_advance_available - result.advance_already_used;
+        if (advanceAdjustment.customAdvanceDeduction > maxDeduction) {
+          setAdvanceAdjustment(prev => ({ ...prev, customAdvanceDeduction: maxDeduction }));
+        }
+      }
     } catch (error) {
       console.error('Error calculating payment:', error);
     } finally {
@@ -52,10 +69,14 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
     }
   };
 
-  const handleCreatePayment = async () => {
+  const handleCreatePayment = async (useCustomAdvance: boolean = false) => {
     try {
-      await createPayment(deliveryId);
+      const customAdvance = useCustomAdvance ? advanceAdjustment.customAdvanceDeduction : undefined;
+      const advanceNotes = useCustomAdvance ? advanceAdjustment.advanceNotes : undefined;
+      
+      await createPayment(deliveryId, customAdvance, advanceNotes);
       onPaymentCreated?.();
+      setIsAdvanceAdjustmentOpen(false);
       toast({
         title: "Pago creado",
         description: "Se ha creado el registro de pago para esta entrega"
@@ -63,6 +84,12 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
     } catch (error) {
       console.error('Error creating payment:', error);
     }
+  };
+
+  const handleAdvanceAdjustmentChange = async (value: number) => {
+    setAdvanceAdjustment(prev => ({ ...prev, customAdvanceDeduction: value }));
+    // Recalculate with new advance deduction
+    await handleCalculatePayment(value);
   };
 
   const handleMarkAsPaid = async (e: React.FormEvent) => {
@@ -154,6 +181,22 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                 <span className="text-muted-foreground">Deducción Anticipos:</span>
                 <span className="ml-2 font-medium">-{formatCurrency(calculation.advance_deduction)}</span>
               </div>
+              {calculation.total_advance_available > 0 && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground">Anticipo Total:</span>
+                    <span className="ml-2 font-medium">{formatCurrency(calculation.total_advance_available)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Anticipo Usado:</span>
+                    <span className="ml-2 font-medium">{formatCurrency(calculation.advance_already_used)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Anticipo Disponible:</span>
+                    <span className="ml-2 font-medium">{formatCurrency(calculation.total_advance_available - calculation.advance_already_used)}</span>
+                  </div>
+                </>
+              )}
               <div className="col-span-2 pt-2 border-t">
                 <span className="text-muted-foreground">Monto Neto a Pagar:</span>
                 <span className="ml-2 font-bold text-lg">{formatCurrency(calculation.net_amount)}</span>
@@ -202,11 +245,94 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-4">
-          {!existingPayment && calculation && calculation.net_amount > 0 && (
-            <Button onClick={handleCreatePayment} className="flex-1">
-              <DollarSign className="w-4 h-4 mr-2" />
-              Crear Registro de Pago
-            </Button>
+          {!existingPayment && calculation && (
+            <>
+              {calculation.total_advance_available > 0 && calculation.net_amount <= 0 ? (
+                <Dialog open={isAdvanceAdjustmentOpen} onOpenChange={setIsAdvanceAdjustmentOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="flex-1">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      Ajustar Anticipo y Crear Pago
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Ajustar Deducción de Anticipo</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                        <p>El monto neto es negativo debido a la deducción completa del anticipo.</p>
+                        <p>Ajusta cuánto del anticipo deseas descontar en esta entrega.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Anticipo Total:</span>
+                          <span className="ml-2 font-medium">{formatCurrency(calculation.total_advance_available)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Ya Descontado:</span>
+                          <span className="ml-2 font-medium">{formatCurrency(calculation.advance_already_used)}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">Disponible:</span>
+                          <span className="ml-2 font-medium">{formatCurrency(calculation.total_advance_available - calculation.advance_already_used)}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="custom_advance">Anticipo a Descontar en esta Entrega</Label>
+                        <Input
+                          id="custom_advance"
+                          type="number"
+                          min="0"
+                          max={calculation.total_advance_available - calculation.advance_already_used}
+                          step="1000"
+                          value={advanceAdjustment.customAdvanceDeduction}
+                          onChange={(e) => handleAdvanceAdjustmentChange(Number(e.target.value))}
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="advance_notes">Notas sobre el Ajuste</Label>
+                        <Textarea
+                          id="advance_notes"
+                          value={advanceAdjustment.advanceNotes}
+                          onChange={(e) => setAdvanceAdjustment(prev => ({ ...prev, advanceNotes: e.target.value }))}
+                          placeholder="Razón del ajuste del anticipo"
+                          rows={2}
+                        />
+                      </div>
+
+                      {calculation && (
+                        <div className="bg-green-50 p-3 rounded-lg">
+                          <p className="text-sm text-green-700">
+                            <strong>Nuevo Monto Neto a Pagar: {formatCurrency(calculation.net_amount)}</strong>
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end space-x-2">
+                        <Button type="button" variant="outline" onClick={() => setIsAdvanceAdjustmentOpen(false)}>
+                          Cancelar
+                        </Button>
+                        <Button onClick={() => handleCreatePayment(true)}>
+                          Crear Pago con Ajuste
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                calculation.net_amount > 0 && (
+                  <Button onClick={() => handleCreatePayment(false)} className="flex-1">
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Crear Registro de Pago
+                  </Button>
+                )
+              )}
+            </>
           )}
 
           {existingPayment && existingPayment.payment_status === 'pending' && (
@@ -287,7 +413,7 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
 
           <Button
             variant="outline"
-            onClick={handleCalculatePayment}
+            onClick={() => handleCalculatePayment()}
             disabled={isCalculating}
           >
             <Calculator className="w-4 h-4 mr-2" />

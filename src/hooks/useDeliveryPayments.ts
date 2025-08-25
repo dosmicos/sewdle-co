@@ -13,6 +13,8 @@ export interface DeliveryPayment {
   unit_price: number;
   gross_amount: number;
   advance_deduction: number;
+  custom_advance_deduction?: number;
+  advance_notes?: string;
   net_amount: number;
   payment_status: 'pending' | 'paid' | 'partial' | 'cancelled';
   payment_date?: string;
@@ -35,6 +37,8 @@ export interface DeliveryPaymentCalculation {
   advance_deduction: number;
   net_amount: number;
   workshop_payment_method: string;
+  total_advance_available: number;
+  advance_already_used: number;
 }
 
 export const useDeliveryPayments = () => {
@@ -82,10 +86,16 @@ export const useDeliveryPayments = () => {
     }
   };
 
-  const calculatePayment = async (deliveryId: string): Promise<DeliveryPaymentCalculation | null> => {
+  const calculatePayment = async (
+    deliveryId: string, 
+    customAdvanceDeduction?: number
+  ): Promise<DeliveryPaymentCalculation | null> => {
     try {
       const { data, error } = await supabase
-        .rpc('calculate_delivery_payment', { delivery_id_param: deliveryId });
+        .rpc('calculate_delivery_payment', { 
+          delivery_id_param: deliveryId,
+          custom_advance_deduction_param: customAdvanceDeduction 
+        });
 
       if (error) throw error;
       return data?.[0] || null;
@@ -100,10 +110,10 @@ export const useDeliveryPayments = () => {
     }
   };
 
-  const createPayment = async (deliveryId: string) => {
+  const createPayment = async (deliveryId: string, customAdvanceDeduction?: number, advanceNotes?: string) => {
     try {
       // First calculate the payment
-      const calculation = await calculatePayment(deliveryId);
+      const calculation = await calculatePayment(deliveryId, customAdvanceDeduction);
       if (!calculation) {
         throw new Error('No se pudo calcular el pago');
       }
@@ -130,6 +140,8 @@ export const useDeliveryPayments = () => {
           unit_price: calculation.billable_units > 0 ? calculation.gross_amount / calculation.billable_units : 0,
           gross_amount: calculation.gross_amount,
           advance_deduction: calculation.advance_deduction,
+          custom_advance_deduction: customAdvanceDeduction,
+          advance_notes: advanceNotes,
           net_amount: calculation.net_amount,
           payment_status: 'pending',
           created_by: (await supabase.auth.getUser()).data.user?.id
