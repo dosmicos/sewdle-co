@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useOrderAdvances, OrderAdvanceInsert } from "@/hooks/useOrderAdvances";
 import { useWorkshops } from "@/hooks/useWorkshops";
 import { useOrders } from "@/hooks/useOrders";
+import { WorkshopAdvanceSummary } from "./WorkshopAdvanceSummary";
 
 interface AdvanceFormData {
   order_id: string;
@@ -121,7 +122,10 @@ export const OrderAdvancesManager = ({ orderId, workshopId }: OrderAdvancesManag
   };
 
   return (
-    <Card>
+    <div className="space-y-6">
+      {!orderId && !workshopId && <WorkshopAdvanceSummary />}
+      
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -357,5 +361,6 @@ export const OrderAdvancesManager = ({ orderId, workshopId }: OrderAdvancesManag
         )}
       </CardContent>
     </Card>
+    </div>
   );
 };
