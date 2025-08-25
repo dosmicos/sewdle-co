@@ -2310,12 +2310,10 @@ export type Database = {
         }[]
       }
       calculate_delivery_payment: {
-        Args:
-          | {
-              custom_advance_deduction_param?: number
-              delivery_id_param: string
-            }
-          | { delivery_id_param: string }
+        Args: {
+          custom_advance_deduction_param?: number
+          delivery_id_param: string
+        }
         Returns: {
           advance_already_used: number
           advance_deduction: number
