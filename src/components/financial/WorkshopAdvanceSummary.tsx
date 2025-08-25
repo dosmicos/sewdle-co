@@ -14,8 +14,8 @@ export const WorkshopAdvanceSummary = () => {
   };
 
   const getBalanceVariant = (balance: number) => {
-    if (balance > 0) return "destructive"; // We owe money
-    if (balance < 0) return "secondary"; // They owe us
+    if (balance > 0) return "secondary"; // They owe us work/money
+    if (balance < 0) return "destructive"; // We owe them money
     return "outline"; // Even
   };
 
@@ -100,12 +100,12 @@ export const WorkshopAdvanceSummary = () => {
                   <div className="border-t pt-2">
                     <div className="flex justify-between font-medium">
                       <span>
-                        {balance.net_balance > 0 ? 'Le debemos:' : 
-                         balance.net_balance < 0 ? 'Nos debe:' : 'Balance:'}
+                        {balance.net_balance > 0 ? 'Nos debe:' : 
+                         balance.net_balance < 0 ? 'Le debemos:' : 'Balance:'}
                       </span>
                       <span className={
-                        balance.net_balance > 0 ? 'text-destructive' :
-                        balance.net_balance < 0 ? 'text-muted-foreground' : ''
+                        balance.net_balance > 0 ? 'text-muted-foreground' :
+                        balance.net_balance < 0 ? 'text-destructive' : ''
                       }>
                         {formatCurrency(Math.abs(balance.net_balance))}
                       </span>
@@ -121,8 +121,8 @@ export const WorkshopAdvanceSummary = () => {
           <div className="mt-6 p-4 bg-muted/50 rounded-lg">
             <div className="flex items-center justify-between font-medium">
               <span>Balance Total de la Organización:</span>
-              <span className={totalNetBalance > 0 ? 'text-destructive' : 'text-muted-foreground'}>
-                {totalNetBalance > 0 ? 'Debemos: ' : 'Nos deben: '}
+              <span className={totalNetBalance > 0 ? 'text-muted-foreground' : 'text-destructive'}>
+                {totalNetBalance > 0 ? 'Nos deben: ' : 'Debemos: '}
                 {formatCurrency(Math.abs(totalNetBalance))}
               </span>
             </div>
