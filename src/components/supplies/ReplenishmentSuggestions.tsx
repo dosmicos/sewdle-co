@@ -142,21 +142,21 @@ export const ReplenishmentSuggestions: React.FC = () => {
     }, 1000);
   };
 
-// Apply filtering and then sorting
-const filteredAndSortedSuggestions = React.useMemo(() => {
-  const filtered = suggestions.filter(suggestion => {
-    const lowerSearch = searchTerm.toLowerCase();
-    const nameText = (suggestion.product_name || '').toLowerCase();
-    const skuText = (suggestion.sku || '').toLowerCase();
-    const variantText = (suggestion.variant_name || '').toLowerCase();
-    const matchesSearch = nameText.includes(lowerSearch) || skuText.includes(lowerSearch) || variantText.includes(lowerSearch);
-    const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
-    
-    return matchesSearch && matchesUrgency;
-  });
+  // Apply filtering and then sorting
+  const filteredAndSortedSuggestions = React.useMemo(() => {
+    const filtered = suggestions.filter(suggestion => {
+      const lowerSearch = searchTerm.toLowerCase();
+      const nameText = (suggestion.product_name || '').toLowerCase();
+      const skuText = (suggestion.sku || '').toLowerCase();
+      const variantText = (suggestion.variant_name || '').toLowerCase();
+      const matchesSearch = nameText.includes(lowerSearch) || skuText.includes(lowerSearch) || variantText.includes(lowerSearch);
+      const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
+      
+      return matchesSearch && matchesUrgency;
+    });
 
-  return sortSuggestions(filtered);
-}, [suggestions, searchTerm, urgencyFilter, sortColumn, sortDirection]);
+    return sortSuggestions(filtered);
+  }, [suggestions, searchTerm, urgencyFilter, sortColumn, sortDirection]);
 
   const getUrgencyBadge = (urgency: string) => {
     const variants = {
