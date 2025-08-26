@@ -25,12 +25,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
 
-  // Create unique key for each suggestion
+  // Create unique key for each suggestion - use only the product_variant_id to avoid grouping by product
   const getKey = (suggestion: ReplenishmentSuggestion): string => {
-    return suggestion.product_variant_id || 
-           suggestion.id || 
-           suggestion.sku || 
-           `${suggestion.product_name}-${suggestion.variant_name}`;
+    return suggestion.product_variant_id;
   };
 
   useEffect(() => {
@@ -322,10 +319,11 @@ const filteredSuggestions = suggestions.filter(suggestion => {
                           <div>
                             <p className="font-medium">{suggestion.product_name}</p>
                             <p className="text-sm text-muted-foreground">
-                              {suggestion.variant_name}
+                              {(suggestion.variant_name && suggestion.variant_name.trim()) ||
+                                ([suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' / ') || 'Sin variante')}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono mt-1">
-                              SKU: {suggestion.sku}
+                              SKU: {suggestion.sku || suggestion.sku_variant || '-'}
                             </p>
                           </div>
                         </TableCell>
