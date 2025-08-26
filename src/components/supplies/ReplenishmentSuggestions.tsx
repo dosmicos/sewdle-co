@@ -351,7 +351,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     <TableHead>Producto</TableHead>
                     <TableHead>Stock Actual</TableHead>
                     <TableHead className="bg-green-50">Ventas 30d</TableHead>
-                    <TableHead>Velocidad</TableHead>
+                    <TableHead>Velocidad (diario)</TableHead>
                     <TableHead>Días de Stock</TableHead>
                     <TableHead>Pendiente Producción</TableHead>
                     <TableHead>Cantidad Sugerida</TableHead>
@@ -397,7 +397,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                        </TableCell>
                        <TableCell>
                          <span className="text-sm font-medium text-primary">
-                           {suggestion.stock_days_remaining ? Number(suggestion.stock_days_remaining).toFixed(2) : '0.00'}
+                           {Number(suggestion.sales_velocity || 0).toFixed(2)}/día
                          </span>
                        </TableCell>
                        <TableCell>
@@ -410,8 +410,8 @@ export const ReplenishmentSuggestions: React.FC = () => {
                          </span>
                        </TableCell>
                        <TableCell>
-                         <span className="font-medium text-muted-foreground">
-                           -
+                         <span className="font-medium text-blue-600">
+                           {suggestion.open_orders_quantity || 0}
                          </span>
                        </TableCell>
                       <TableCell className="font-bold text-primary">

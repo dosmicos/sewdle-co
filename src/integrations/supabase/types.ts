@@ -2718,12 +2718,14 @@ export type Database = {
           id: string
           maximum_stock: number
           minimum_stock: number
+          open_orders_quantity: number
           order_id: string
           product_name: string
           product_variant_id: string
           reason: string
           sales_last_30_days: number
           sales_last_7_days: number
+          sales_velocity: number
           sku: string
           status: string
           stock_days_remaining: number
