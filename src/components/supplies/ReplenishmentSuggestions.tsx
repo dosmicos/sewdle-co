@@ -39,9 +39,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
 const filteredSuggestions = suggestions.filter(suggestion => {
   const lowerSearch = searchTerm.toLowerCase();
-  const nameText = suggestion.product_name.toLowerCase();
-  const skuText = suggestion.sku.toLowerCase();
-  const variantText = suggestion.variant_name.toLowerCase();
+  const nameText = (suggestion.product_name || '').toLowerCase();
+  const skuText = (suggestion.sku || '').toLowerCase();
+  const variantText = (suggestion.variant_name || '').toLowerCase();
   const matchesSearch = nameText.includes(lowerSearch) || skuText.includes(lowerSearch) || variantText.includes(lowerSearch);
   const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
   
