@@ -35,7 +35,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [orderWorkshopId, setOrderWorkshopId] = useState<string>('');
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
   const [showMaterialConsumption, setShowMaterialConsumption] = useState(false);
-  const { updateOrder, updateOrderItemQuantities, addProductsToOrder, loading } = useOrderActions();
+  const { updateOrder, updateOrderItemQuantities, updateOrderItemsWithDeletions, addProductsToOrder, loading } = useOrderActions();
   const { isAdmin, isDesigner } = useUserContext();
   const { createAssignment, loading: assignmentLoading } = useWorkshopAssignments(false);
   const { workshops } = useWorkshops();
@@ -98,8 +98,11 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     }
   };
 
-  const handleQuantitiesSave = async (updatedItems: { id: string; quantity: number; total_price: number }[]) => {
-    const success = await updateOrderItemQuantities(order.id, updatedItems);
+  const handleQuantitiesSave = async (
+    updatedItems: { id: string; quantity: number; total_price: number }[],
+    deletedItemIds: string[] = []
+  ) => {
+    const success = await updateOrderItemsWithDeletions(order.id, updatedItems, deletedItemIds);
     if (success) {
       onSuccess();
       return true;

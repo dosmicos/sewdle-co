@@ -296,10 +296,87 @@ export const useOrderActions = () => {
     }
   };
 
+  const updateOrderItemsWithDeletions = async (
+    orderId: string,
+    updatedItems: { id: string; quantity: number; total_price: number }[],
+    deletedItemIds: string[]
+  ): Promise<boolean> => {
+    setLoading(true);
+    try {
+      console.log('Updating order with deletions:', orderId, updatedItems, deletedItemIds);
+
+      // First delete the items marked for deletion
+      if (deletedItemIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('order_items')
+          .delete()
+          .in('id', deletedItemIds);
+
+        if (deleteError) {
+          console.error('Error deleting order items:', deleteError);
+          throw deleteError;
+        }
+      }
+
+      // Then update the remaining items
+      for (const item of updatedItems) {
+        const { error: itemError } = await supabase
+          .from('order_items')
+          .update({
+            quantity: item.quantity,
+            total_price: item.total_price,
+          })
+          .eq('id', item.id);
+
+        if (itemError) {
+          console.error('Error updating order item:', itemError);
+          throw itemError;
+        }
+      }
+
+      // Calcular y actualizar el total de la orden
+      const newTotalAmount = updatedItems.reduce((total, item) => total + item.total_price, 0);
+      
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({
+          total_amount: newTotalAmount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (orderError) {
+        console.error('Error updating order total:', orderError);
+        throw orderError;
+      }
+
+      const deletedCount = deletedItemIds.length;
+      const updatedCount = updatedItems.length;
+      
+      toast({
+        title: "Orden actualizada",
+        description: `${updatedCount} variantes actualizadas${deletedCount > 0 ? ` y ${deletedCount} eliminadas` : ''} exitosamente.`,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error updating order items with deletions:', error);
+      toast({
+        title: "Error al actualizar orden",
+        description: "Hubo un problema al actualizar la orden.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     deleteOrder,
     updateOrder,
     updateOrderItemQuantities,
+    updateOrderItemsWithDeletions,
     addProductsToOrder,
     loading
   };
