@@ -2711,7 +2711,7 @@ export type Database = {
         }[]
       }
       get_replenishment_suggestions_with_details: {
-        Args: Record<PropertyKey, never> | { org_id: string }
+        Args: Record<PropertyKey, never> | { org_id?: string }
         Returns: {
           created_at: string
           current_stock: number
