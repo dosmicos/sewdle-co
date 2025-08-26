@@ -7,8 +7,12 @@ export interface ReplenishmentSuggestion {
   product_variant_id: string;
   order_id: string | null;
   product_name: string;
-  variant_name: string;
-  sku: string;
+  // Optional fields coming from dynamic RPC results
+  variant_name?: string;
+  variant_size?: string;
+  variant_color?: string;
+  sku?: string;
+  sku_variant?: string;
   suggested_quantity: number;
   current_stock: number;
   minimum_stock: number;
@@ -18,7 +22,7 @@ export interface ReplenishmentSuggestion {
   sales_velocity: number;
   stock_days_remaining: number;
   open_orders_quantity: number;
-  urgency_level: 'critical' | 'high' | 'medium' | 'low';
+  urgency_level: 'critical' | 'high' | 'normal' | 'low';
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'executed';
   created_at: string;
