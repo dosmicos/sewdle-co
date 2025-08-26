@@ -116,14 +116,12 @@ export const ProductionOrderModal: React.FC<ProductionOrderModalProps> = ({
                 <div key={suggestion.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                   <div className="flex-1">
                     <p className="font-medium text-sm">{suggestion.product_name}</p>
-                    {(suggestion.variant_size || suggestion.variant_color) && (
-                      <p className="text-xs text-muted-foreground">
-                        {[suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' - ')}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground font-mono">
-                      SKU: {suggestion.sku_variant}
-                    </p>
+                     <p className="text-xs text-muted-foreground">
+                       {suggestion.variant_name}
+                     </p>
+                     <p className="text-xs text-muted-foreground font-mono">
+                       SKU: {suggestion.sku}
+                     </p>
                   </div>
                   <div className="text-right">
                     <Badge variant="outline" className="font-medium">

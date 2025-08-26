@@ -4,24 +4,23 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface ReplenishmentSuggestion {
   id: string;
+  product_variant_id: string;
+  order_id: string | null;
   product_name: string;
-  variant_size: string | null;
-  variant_color: string | null;
-  sku_variant: string;
+  variant_name: string;
+  sku: string;
   suggested_quantity: number;
   current_stock: number;
-  sales_velocity: number;
-  sales_30_days: number;
-  days_of_stock: number;
-  open_orders_quantity: number;
-  projected_demand: number;
-  urgency_level: 'low' | 'normal' | 'high' | 'critical';
+  minimum_stock: number;
+  maximum_stock: number;
+  sales_last_30_days: number;
+  sales_last_7_days: number;
+  stock_days_remaining: number;
+  urgency_level: 'critical' | 'high' | 'medium' | 'low';
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'executed';
-  calculation_date: string;
   created_at: string;
-  pending_production_quantity: number;
-  order_id?: string;
+  updated_at: string;
 }
 
 export interface ReplenishmentConfig {
@@ -49,9 +48,22 @@ export const useReplenishment = () => {
     try {
       setLoading(true);
       
+      // Get current organization
+      const { data: orgData } = await supabase
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .eq('status', 'active')
+        .single();
+
+      if (!orgData?.organization_id) {
+        throw new Error('No se pudo obtener la organización actual');
+      }
+
       const { data, error } = await supabase
-        .rpc('get_replenishment_suggestions_with_details')
-        .eq('calculation_date', new Date().toISOString().split('T')[0]);
+        .rpc('get_replenishment_suggestions_with_details', {
+          org_id: orgData.organization_id
+        });
 
       if (error) {
         console.error('Error fetching suggestions:', error);
@@ -63,7 +75,7 @@ export const useReplenishment = () => {
         return;
       }
 
-      setSuggestions((data || []) as ReplenishmentSuggestion[]);
+      setSuggestions((data || []) as any[]);
     } catch (error) {
       console.error('Error fetching suggestions:', error);
       toast({

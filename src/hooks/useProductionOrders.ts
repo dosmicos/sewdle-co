@@ -66,7 +66,7 @@ export const useProductionOrders = () => {
         const { data: variant } = await supabase
           .from('product_variants')
           .select('product_id')
-          .eq('id', suggestion.id)
+          .eq('id', suggestion.product_variant_id)
           .single();
 
         if (variant) {
@@ -81,7 +81,7 @@ export const useProductionOrders = () => {
 
           orderItems.push({
             order_id: order.id,
-            product_variant_id: suggestion.id,
+            product_variant_id: suggestion.product_variant_id,
             quantity: suggestion.suggested_quantity,
             unit_price: unitPrice,
             total_price: suggestion.suggested_quantity * unitPrice

@@ -23,7 +23,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedSuggestions, setSelectedSuggestions] = useState<ReplenishmentSuggestion[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
 
@@ -41,7 +41,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   const filteredSuggestions = suggestions.filter(suggestion => {
     const matchesSearch = suggestion.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suggestion.sku_variant.toLowerCase().includes(searchTerm.toLowerCase());
+                         suggestion.sku.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
     const matchesStatus = statusFilter === 'all' || suggestion.status === statusFilter;
     
@@ -108,7 +108,26 @@ export const ReplenishmentSuggestions: React.FC = () => {
   };
 
   const handleApprove = async (suggestionId: string) => {
-    await updateSuggestionStatus(suggestionId, 'approved');
+    try {
+      await updateSuggestionStatus(suggestionId, 'approved');
+      
+      // Auto-cambiar filtro a "Aprobada" y preseleccionar la sugerencia
+      setStatusFilter('approved');
+      
+      // Find the suggestion and add it to selected suggestions
+      const suggestion = suggestions.find(s => s.id === suggestionId);
+      if (suggestion) {
+        setSelectedSuggestions(prev => {
+          const exists = prev.some(s => s.id === suggestionId);
+          return exists ? prev : [...prev, suggestion];
+        });
+      }
+      
+      // Refresh suggestions
+      await fetchSuggestions();
+    } catch (error) {
+      console.error('Error approving suggestion:', error);
+    }
   };
 
   const handleReject = async (suggestionId: string) => {
@@ -351,19 +370,17 @@ export const ReplenishmentSuggestions: React.FC = () => {
                           disabled={suggestion.status !== 'approved'}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{suggestion.product_name}</p>
-                          {(suggestion.variant_size || suggestion.variant_color) && (
-                            <p className="text-sm text-muted-foreground">
-                              {[suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' - ')}
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground font-mono mt-1">
-                            SKU: {suggestion.sku_variant}
-                          </p>
-                        </div>
-                      </TableCell>
+                       <TableCell>
+                         <div>
+                           <p className="font-medium">{suggestion.product_name}</p>
+                           <p className="text-sm text-muted-foreground">
+                             {suggestion.variant_name}
+                           </p>
+                           <p className="text-xs text-muted-foreground font-mono mt-1">
+                             SKU: {suggestion.sku}
+                           </p>
+                         </div>
+                       </TableCell>
                       <TableCell>
                         <span className={`font-medium ${
                           suggestion.current_stock <= 0 ? 'text-red-600' : 
@@ -373,32 +390,30 @@ export const ReplenishmentSuggestions: React.FC = () => {
                           {suggestion.current_stock}
                         </span>
                       </TableCell>
-                      <TableCell className="bg-green-50">
-                        <span className="font-bold text-green-700 text-lg">
-                          {suggestion.sales_30_days}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm font-medium text-primary">
-                          {suggestion.sales_velocity ? Number(suggestion.sales_velocity).toFixed(2) : '0.00'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-medium ${
-                          suggestion.days_of_stock <= 7 ? 'text-red-600' : 
-                          suggestion.days_of_stock <= 15 ? 'text-yellow-600' : 
-                          'text-green-600'
-                        }`}>
-                          {Math.round(suggestion.days_of_stock)}d
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-medium ${
-                          suggestion.pending_production_quantity > 0 ? 'text-blue-600' : 'text-muted-foreground'
-                        }`}>
-                          {suggestion.pending_production_quantity || 0}
-                        </span>
-                      </TableCell>
+                       <TableCell className="bg-green-50">
+                         <span className="font-bold text-green-700 text-lg">
+                           {suggestion.sales_last_30_days}
+                         </span>
+                       </TableCell>
+                       <TableCell>
+                         <span className="text-sm font-medium text-primary">
+                           {suggestion.stock_days_remaining ? Number(suggestion.stock_days_remaining).toFixed(2) : '0.00'}
+                         </span>
+                       </TableCell>
+                       <TableCell>
+                         <span className={`font-medium ${
+                           suggestion.stock_days_remaining <= 7 ? 'text-red-600' : 
+                           suggestion.stock_days_remaining <= 15 ? 'text-yellow-600' : 
+                           'text-green-600'
+                         }`}>
+                           {Math.round(suggestion.stock_days_remaining)}d
+                         </span>
+                       </TableCell>
+                       <TableCell>
+                         <span className="font-medium text-muted-foreground">
+                           -
+                         </span>
+                       </TableCell>
                       <TableCell className="font-bold text-primary">
                         {suggestion.suggested_quantity}
                       </TableCell>
