@@ -188,39 +188,6 @@ export const useReplenishment = () => {
     }
   };
 
-  const updateSuggestionStatus = async (suggestionId: string, status: 'approved' | 'rejected') => {
-    try {
-      const { error } = await supabase
-        .from('replenishment_suggestions')
-        .update({ 
-          status,
-          approved_by: status === 'approved' ? (await supabase.auth.getUser()).data.user?.id : null,
-          approved_at: status === 'approved' ? new Date().toISOString() : null
-        })
-        .eq('id', suggestionId);
-
-      if (error) {
-        console.error('Error updating suggestion status:', error);
-        throw error;
-      }
-
-      toast({
-        title: "Éxito",
-        description: `Sugerencia ${status === 'approved' ? 'aprobada' : 'rechazada'} exitosamente`,
-      });
-
-      // Recargar sugerencias
-      await fetchSuggestions();
-      
-    } catch (error) {
-      console.error('Error in updateSuggestionStatus:', error);
-      toast({
-        title: "Error",
-        description: "Error al actualizar el estado de la sugerencia",
-        variant: "destructive",
-      });
-    }
-  };
 
   const createConfig = async (config: Omit<ReplenishmentConfig, 'id' | 'created_at' | 'updated_at' | 'organization_id' | 'created_by'>) => {
     try {
@@ -308,7 +275,6 @@ export const useReplenishment = () => {
     fetchConfigs,
     calculateSuggestions,
     triggerReplenishmentFunction,
-    updateSuggestionStatus,
     createConfig,
     updateConfig,
   };

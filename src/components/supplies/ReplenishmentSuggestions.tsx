@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
 import { ProductionOrderModal } from './ProductionOrderModal';
-import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, CheckCircle, XCircle, Factory, ExternalLink } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
@@ -17,13 +17,11 @@ export const ReplenishmentSuggestions: React.FC = () => {
     loading, 
     calculating, 
     fetchSuggestions, 
-    updateSuggestionStatus,
     calculateSuggestions
   } = useReplenishment();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedSuggestions, setSelectedSuggestions] = useState<ReplenishmentSuggestion[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
 
@@ -43,9 +41,8 @@ export const ReplenishmentSuggestions: React.FC = () => {
     const matchesSearch = suggestion.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suggestion.sku.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
-    const matchesStatus = statusFilter === 'all' || suggestion.status === statusFilter;
     
-    return matchesSearch && matchesUrgency && matchesStatus;
+    return matchesSearch && matchesUrgency;
   });
 
   const getUrgencyBadge = (urgency: string) => {
@@ -85,54 +82,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
     );
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: 'outline',
-      approved: 'default',
-      rejected: 'destructive',
-      executed: 'secondary'
-    } as const;
-    
-    const labels = {
-      pending: 'PENDIENTE',
-      approved: 'APROBADA',
-      rejected: 'RECHAZADA',
-      executed: 'EJECUTADA'
-    };
-    
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || 'outline'}>
-        {labels[status as keyof typeof labels] || status.toUpperCase()}
-      </Badge>
-    );
-  };
-
-  const handleApprove = async (suggestionId: string) => {
-    try {
-      await updateSuggestionStatus(suggestionId, 'approved');
-      
-      // Auto-cambiar filtro a "Aprobada" y preseleccionar la sugerencia
-      setStatusFilter('approved');
-      
-      // Find the suggestion and add it to selected suggestions
-      const suggestion = suggestions.find(s => s.id === suggestionId);
-      if (suggestion) {
-        setSelectedSuggestions(prev => {
-          const exists = prev.some(s => s.id === suggestionId);
-          return exists ? prev : [...prev, suggestion];
-        });
-      }
-      
-      // Refresh suggestions
-      await fetchSuggestions();
-    } catch (error) {
-      console.error('Error approving suggestion:', error);
-    }
-  };
-
-  const handleReject = async (suggestionId: string) => {
-    await updateSuggestionStatus(suggestionId, 'rejected');
-  };
 
   const handleSuggestionSelect = (suggestion: ReplenishmentSuggestion, checked: boolean) => {
     if (checked) {
@@ -144,8 +93,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const approvedSuggestions = filteredSuggestions.filter(s => s.status === 'approved');
-      setSelectedSuggestions(approvedSuggestions);
+      setSelectedSuggestions(filteredSuggestions);
     } else {
       setSelectedSuggestions([]);
     }
@@ -160,9 +108,8 @@ export const ReplenishmentSuggestions: React.FC = () => {
     fetchSuggestions(); // Refresh the data
   };
 
-  const approvedSuggestions = filteredSuggestions.filter(s => s.status === 'approved');
-  const allApprovedSelected = approvedSuggestions.length > 0 && 
-    approvedSuggestions.every(s => selectedSuggestions.some(sel => sel.id === s.id));
+  const allSuggestionsSelected = filteredSuggestions.length > 0 && 
+    filteredSuggestions.every(s => selectedSuggestions.some(sel => sel.id === s.id));
 
   if (loading) {
     return (
@@ -220,11 +167,11 @@ export const ReplenishmentSuggestions: React.FC = () => {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <Factory className="h-5 w-5 text-green-500" />
               <div>
-                <p className="text-sm text-muted-foreground">Aprobadas</p>
+                <p className="text-sm text-muted-foreground">Seleccionadas</p>
                 <p className="text-2xl font-bold">
-                  {suggestions.filter(s => s.status === 'approved').length}
+                  {selectedSuggestions.length}
                 </p>
               </div>
             </div>
@@ -312,18 +259,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
               </SelectContent>
             </Select>
             
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Filtrar por estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="pending">Pendiente</SelectItem>
-                <SelectItem value="approved">Aprobada</SelectItem>
-                <SelectItem value="rejected">Rechazada</SelectItem>
-                <SelectItem value="executed">Ejecutada</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {filteredSuggestions.length === 0 ? (
@@ -343,9 +278,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={allApprovedSelected}
+                        checked={allSuggestionsSelected}
                         onCheckedChange={handleSelectAll}
-                        disabled={approvedSuggestions.length === 0}
+                        disabled={filteredSuggestions.length === 0}
                       />
                     </TableHead>
                     <TableHead>Producto</TableHead>
@@ -356,8 +291,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     <TableHead>Pendiente Producción</TableHead>
                     <TableHead>Cantidad Sugerida</TableHead>
                     <TableHead>Urgencia</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -367,7 +300,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
                         <Checkbox
                           checked={selectedSuggestions.some(s => s.id === suggestion.id)}
                           onCheckedChange={(checked) => handleSuggestionSelect(suggestion, checked as boolean)}
-                          disabled={suggestion.status !== 'approved'}
                         />
                       </TableCell>
                        <TableCell>
@@ -420,45 +352,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       <TableCell>
                         {getUrgencyBadge(suggestion.urgency_level)}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getStatusBadge(suggestion.status)}
-                          {suggestion.status === 'executed' && suggestion.order_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => window.open(`/orders/${suggestion.order_id}`, '_blank')}
-                              title="Ver orden de producción"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {suggestion.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleApprove(suggestion.id)}
-                              className="text-green-600 hover:text-green-700"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleReject(suggestion.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
