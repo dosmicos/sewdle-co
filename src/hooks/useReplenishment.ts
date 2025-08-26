@@ -3,16 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export interface ReplenishmentSuggestion {
-  id: string;
+  id: string; // Now properly returned by RPC as product_variant_id
   product_variant_id: string;
   order_id: string | null;
   product_name: string;
-  // Optional fields coming from dynamic RPC results
-  variant_name?: string;
-  variant_size?: string;
-  variant_color?: string;
-  sku?: string;
-  sku_variant?: string;
+  variant_name: string;
+  variant_size: string;
+  variant_color: string;
+  sku: string;
+  sku_variant: string;
   suggested_quantity: number;
   current_stock: number;
   minimum_stock: number;

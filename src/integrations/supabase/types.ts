@@ -2713,25 +2713,28 @@ export type Database = {
       get_replenishment_suggestions_with_details: {
         Args: Record<PropertyKey, never> | { org_id: string }
         Returns: {
-          calculation_date: string
+          created_at: string
           current_stock: number
-          lead_time_days: number
-          max_stock_level: number
-          min_stock_level: number
+          id: string
+          maximum_stock: number
+          minimum_stock: number
           open_orders_quantity: number
+          order_id: string
           product_name: string
+          product_variant_id: string
           reason: string
-          safety_days: number
+          reorder_point: number
           sales_last_30_days: number
-          sales_last_7_days: number
           sales_velocity: number
+          sku: string
           sku_variant: string
           status: string
           stock_days_remaining: number
           suggested_quantity: number
+          updated_at: string
           urgency_level: string
           variant_color: string
-          variant_id: string
+          variant_name: string
           variant_size: string
         }[]
       }

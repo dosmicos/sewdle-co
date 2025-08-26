@@ -39,12 +39,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
 const filteredSuggestions = suggestions.filter(suggestion => {
   const lowerSearch = searchTerm.toLowerCase();
-  const nameText = (suggestion.product_name || '').toLowerCase();
-  const skuText = (suggestion.sku || suggestion.sku_variant || '').toLowerCase();
-  const variantText = (
-    (suggestion.variant_name || [suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' / '))
-    || ''
-  ).toLowerCase();
+  const nameText = suggestion.product_name.toLowerCase();
+  const skuText = suggestion.sku.toLowerCase();
+  const variantText = suggestion.variant_name.toLowerCase();
   const matchesSearch = nameText.includes(lowerSearch) || skuText.includes(lowerSearch) || variantText.includes(lowerSearch);
   const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
   
@@ -308,17 +305,17 @@ const filteredSuggestions = suggestions.filter(suggestion => {
                           onCheckedChange={(checked) => handleSuggestionSelect(suggestion, checked as boolean)}
                         />
                       </TableCell>
-<TableCell>
-  <div>
-    <p className="font-medium">{suggestion.product_name}</p>
-    <p className="text-sm text-muted-foreground">
-      {suggestion.variant_name || [suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' / ')}
-    </p>
-    <p className="text-xs text-muted-foreground font-mono mt-1">
-      SKU: {suggestion.sku || suggestion.sku_variant}
-    </p>
-  </div>
-</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{suggestion.product_name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {suggestion.variant_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground font-mono mt-1">
+                              SKU: {suggestion.sku}
+                            </p>
+                          </div>
+                        </TableCell>
                       <TableCell>
                         <span className={`font-medium ${
                           suggestion.current_stock <= 0 ? 'text-red-600' : 
