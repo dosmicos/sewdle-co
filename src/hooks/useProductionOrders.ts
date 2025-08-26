@@ -102,7 +102,8 @@ export const useProductionOrders = () => {
           order_id: order.id,
           workshop_id: orderData.workshopId,
           assigned_by: user.id,
-          assigned_at: new Date().toISOString()
+          assigned_date: new Date().toISOString().split('T')[0], // Use assigned_date with date format
+          organization_id: orgData.organization_id
         });
 
       if (assignmentError) throw assignmentError;
