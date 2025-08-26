@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 export interface Workshop {
   id: string;
@@ -27,6 +28,7 @@ export const useWorkshops = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchWorkshops = async () => {
     try {
@@ -88,6 +90,15 @@ export const useWorkshops = () => {
     payment_method?: 'approved' | 'delivered';
   }) => {
     try {
+      if (!currentOrganization?.id) {
+        toast({
+          title: "Error",
+          description: "No se pudo obtener la organización actual",
+          variant: "destructive",
+        });
+        return { error: "No organization found" };
+      }
+
       const { data, error } = await supabase
         .from('workshops')
         .insert({
@@ -100,7 +111,8 @@ export const useWorkshops = () => {
           specialties: workshopData.specialties || [],
           notes: workshopData.notes,
           status: workshopData.status,
-          payment_method: workshopData.payment_method || 'approved'
+          payment_method: workshopData.payment_method || 'approved',
+          organization_id: currentOrganization.id
         })
         .select()
         .single();
