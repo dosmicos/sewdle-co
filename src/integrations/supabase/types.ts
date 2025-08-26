@@ -2713,26 +2713,27 @@ export type Database = {
       get_replenishment_suggestions_with_details: {
         Args: Record<PropertyKey, never> | { org_id: string }
         Returns: {
+          approved_at: string
+          approved_by: string
+          calculation_date: string
           created_at: string
           current_stock: number
+          executed_at: string
           id: string
-          maximum_stock: number
-          minimum_stock: number
           open_orders_quantity: number
-          order_id: string
           product_name: string
           product_variant_id: string
           reason: string
           sales_last_30_days: number
-          sales_last_7_days: number
           sales_velocity: number
-          sku: string
+          sku_variant: string
           status: string
           stock_days_remaining: number
           suggested_quantity: number
           updated_at: string
           urgency_level: string
-          variant_name: string
+          variant_color: string
+          variant_size: string
         }[]
       }
       get_shopify_orders_sanitized: {
