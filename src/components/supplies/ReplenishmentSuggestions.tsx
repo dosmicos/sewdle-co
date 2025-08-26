@@ -13,21 +13,47 @@ import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory } from '
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
-    suggestions, 
+    suggestions: rawSuggestions, 
     loading, 
     calculating, 
     fetchSuggestions, 
     calculateSuggestions
   } = useReplenishment();
 
+  // Data validation and deduplication
+  const suggestions = React.useMemo(() => {
+    if (!rawSuggestions || rawSuggestions.length === 0) return [];
+    
+    // Filter out invalid suggestions (without valid identifiers)
+    const validSuggestions = rawSuggestions.filter(suggestion => 
+      suggestion.sku_variant || suggestion.product_variant_id
+    );
+    
+    // Remove duplicates based on sku_variant (primary) or product_variant_id (fallback)
+    const uniqueSuggestions = validSuggestions.reduce((acc, current) => {
+      const key = current.sku_variant || current.product_variant_id;
+      const existing = acc.find(item => (item.sku_variant || item.product_variant_id) === key);
+      
+      if (!existing) {
+        acc.push(current);
+      } else {
+        console.warn(`Duplicate replenishment suggestion found for key: ${key}`);
+      }
+      
+      return acc;
+    }, [] as ReplenishmentSuggestion[]);
+    
+    return uniqueSuggestions;
+  }, [rawSuggestions]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
 
-  // Create unique key for each suggestion - use only the product_variant_id to avoid grouping by product
+  // Create unique key for each suggestion - use sku_variant as primary unique identifier
   const getKey = (suggestion: ReplenishmentSuggestion): string => {
-    return suggestion.product_variant_id;
+    return suggestion.sku_variant || suggestion.product_variant_id || `fallback-${suggestion.id}`;
   };
 
   useEffect(() => {
@@ -323,7 +349,7 @@ const filteredSuggestions = suggestions.filter(suggestion => {
                                 ([suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' / ') || 'Sin variante')}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono mt-1">
-                              SKU: {suggestion.sku || suggestion.sku_variant || '-'}
+                              SKU: {suggestion.sku_variant || suggestion.sku || '-'}
                             </p>
                           </div>
                         </TableCell>
