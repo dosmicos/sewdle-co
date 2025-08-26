@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
 import { ProductionOrderModal } from './ProductionOrderModal';
-import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
@@ -50,6 +50,80 @@ export const ReplenishmentSuggestions: React.FC = () => {
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
+  
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
+
+  // Sortable columns configuration
+  const sortableColumns = [
+    { key: 'current_stock', label: 'Stock Actual' },
+    { key: 'sales_last_30_days', label: 'Ventas 30d' },
+    { key: 'sales_velocity', label: 'Velocidad (diario)' },
+    { key: 'stock_days_remaining', label: 'Días de Stock' },
+    { key: 'open_orders_quantity', label: 'Pendiente Producción' },
+    { key: 'suggested_quantity', label: 'Cantidad Sugerida' },
+    { key: 'urgency_level', label: 'Urgencia' }
+  ];
+
+  // Handle column sorting
+  const handleSort = (columnKey: string) => {
+    if (sortColumn === columnKey) {
+      // Cycle through: asc -> desc -> null
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortColumn(null);
+        setSortDirection(null);
+      } else {
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  // Get sort icon for column header
+  const getSortIcon = (columnKey: string) => {
+    if (sortColumn !== columnKey) {
+      return <ChevronsUpDown className="h-4 w-4 text-muted-foreground ml-1" />;
+    }
+    if (sortDirection === 'asc') {
+      return <ChevronUp className="h-4 w-4 text-primary ml-1" />;
+    }
+    if (sortDirection === 'desc') {
+      return <ChevronDown className="h-4 w-4 text-primary ml-1" />;
+    }
+    return <ChevronsUpDown className="h-4 w-4 text-muted-foreground ml-1" />;
+  };
+
+  // Sorting function
+  const sortSuggestions = (suggestions: ReplenishmentSuggestion[]) => {
+    if (!sortColumn || !sortDirection) return suggestions;
+
+    return [...suggestions].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      // Handle urgency specially (categorical sorting)
+      if (sortColumn === 'urgency_level') {
+        const urgencyOrder = { critical: 4, high: 3, normal: 2, low: 1 };
+        aValue = urgencyOrder[a.urgency_level as keyof typeof urgencyOrder] || 0;
+        bValue = urgencyOrder[b.urgency_level as keyof typeof urgencyOrder] || 0;
+      } else {
+        // Handle numeric columns
+        aValue = Number(a[sortColumn as keyof ReplenishmentSuggestion]) || 0;
+        bValue = Number(b[sortColumn as keyof ReplenishmentSuggestion]) || 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+  };
 
   // Create unique key for each suggestion - use sku_variant as primary unique identifier
   const getKey = (suggestion: ReplenishmentSuggestion): string => {
@@ -68,16 +142,21 @@ export const ReplenishmentSuggestions: React.FC = () => {
     }, 1000);
   };
 
-const filteredSuggestions = suggestions.filter(suggestion => {
-  const lowerSearch = searchTerm.toLowerCase();
-  const nameText = (suggestion.product_name || '').toLowerCase();
-  const skuText = (suggestion.sku || '').toLowerCase();
-  const variantText = (suggestion.variant_name || '').toLowerCase();
-  const matchesSearch = nameText.includes(lowerSearch) || skuText.includes(lowerSearch) || variantText.includes(lowerSearch);
-  const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
-  
-  return matchesSearch && matchesUrgency;
-});
+// Apply filtering and then sorting
+const filteredAndSortedSuggestions = React.useMemo(() => {
+  const filtered = suggestions.filter(suggestion => {
+    const lowerSearch = searchTerm.toLowerCase();
+    const nameText = (suggestion.product_name || '').toLowerCase();
+    const skuText = (suggestion.sku || '').toLowerCase();
+    const variantText = (suggestion.variant_name || '').toLowerCase();
+    const matchesSearch = nameText.includes(lowerSearch) || skuText.includes(lowerSearch) || variantText.includes(lowerSearch);
+    const matchesUrgency = urgencyFilter === 'all' || suggestion.urgency_level === urgencyFilter;
+    
+    return matchesSearch && matchesUrgency;
+  });
+
+  return sortSuggestions(filtered);
+}, [suggestions, searchTerm, urgencyFilter, sortColumn, sortDirection]);
 
   const getUrgencyBadge = (urgency: string) => {
     const variants = {
@@ -128,7 +207,7 @@ const filteredSuggestions = suggestions.filter(suggestion => {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedSuggestions(filteredSuggestions.map(s => getKey(s)));
+      setSelectedSuggestions(filteredAndSortedSuggestions.map(s => getKey(s)));
     } else {
       setSelectedSuggestions([]);
     }
@@ -143,8 +222,8 @@ const filteredSuggestions = suggestions.filter(suggestion => {
     fetchSuggestions(); // Refresh the data
   };
 
-  const allSuggestionsSelected = filteredSuggestions.length > 0 && 
-    filteredSuggestions.every(s => selectedSuggestions.includes(getKey(s)));
+  const allSuggestionsSelected = filteredAndSortedSuggestions.length > 0 && 
+    filteredAndSortedSuggestions.every(s => selectedSuggestions.includes(getKey(s)));
 
   const getSelectedSuggestions = (): ReplenishmentSuggestion[] => {
     return suggestions.filter(s => selectedSuggestions.includes(getKey(s)));
@@ -300,7 +379,7 @@ const filteredSuggestions = suggestions.filter(suggestion => {
             
           </div>
 
-          {filteredSuggestions.length === 0 ? (
+          {filteredAndSortedSuggestions.length === 0 ? (
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -319,21 +398,77 @@ const filteredSuggestions = suggestions.filter(suggestion => {
                       <Checkbox
                         checked={allSuggestionsSelected}
                         onCheckedChange={handleSelectAll}
-                        disabled={filteredSuggestions.length === 0}
+                        disabled={filteredAndSortedSuggestions.length === 0}
                       />
                     </TableHead>
                     <TableHead>Producto / Variante / SKU</TableHead>
-                    <TableHead>Stock Actual</TableHead>
-                    <TableHead className="bg-green-50">Ventas 30d</TableHead>
-                    <TableHead>Velocidad (diario)</TableHead>
-                    <TableHead>Días de Stock</TableHead>
-                    <TableHead>Pendiente Producción</TableHead>
-                    <TableHead>Cantidad Sugerida</TableHead>
-                    <TableHead>Urgencia</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('current_stock')}
+                    >
+                      <div className="flex items-center">
+                        Stock Actual
+                        {getSortIcon('current_stock')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="bg-green-50 cursor-pointer hover:bg-green-100 select-none"
+                      onClick={() => handleSort('sales_last_30_days')}
+                    >
+                      <div className="flex items-center">
+                        Ventas 30d
+                        {getSortIcon('sales_last_30_days')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('sales_velocity')}
+                    >
+                      <div className="flex items-center">
+                        Velocidad (diario)
+                        {getSortIcon('sales_velocity')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('stock_days_remaining')}
+                    >
+                      <div className="flex items-center">
+                        Días de Stock
+                        {getSortIcon('stock_days_remaining')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('open_orders_quantity')}
+                    >
+                      <div className="flex items-center">
+                        Pendiente Producción
+                        {getSortIcon('open_orders_quantity')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('suggested_quantity')}
+                    >
+                      <div className="flex items-center">
+                        Cantidad Sugerida
+                        {getSortIcon('suggested_quantity')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('urgency_level')}
+                    >
+                      <div className="flex items-center">
+                        Urgencia
+                        {getSortIcon('urgency_level')}
+                      </div>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSuggestions.map((suggestion) => (
+                  {filteredAndSortedSuggestions.map((suggestion) => (
                     <TableRow key={getKey(suggestion)}>
                       <TableCell>
                         <Checkbox
