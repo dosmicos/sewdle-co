@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +26,14 @@ export const ReplenishmentSuggestions: React.FC = () => {
   useEffect(() => {
     fetchSuggestions();
   }, []);
+
+  const handleRecalculate = async () => {
+    await calculateSuggestions();
+    // Add a small delay to ensure the calculation is complete before fetching
+    setTimeout(() => {
+      fetchSuggestions();
+    }, 1000);
+  };
 
   const filteredSuggestions = suggestions.filter(suggestion => {
     const matchesSearch = suggestion.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -102,10 +109,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   const handleReject = async (suggestionId: string) => {
     await updateSuggestionStatus(suggestionId, 'rejected');
-  };
-
-  const handleRecalculate = async () => {
-    await calculateSuggestions();
   };
 
   if (loading) {
@@ -252,7 +255,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead>Stock Actual</TableHead>
-                    <TableHead>Ventas 30d</TableHead>
+                    <TableHead className="bg-green-50">Ventas 30d</TableHead>
                     <TableHead>Velocidad</TableHead>
                     <TableHead>Días de Stock</TableHead>
                     <TableHead>Pendiente Producción</TableHead>
@@ -287,8 +290,8 @@ export const ReplenishmentSuggestions: React.FC = () => {
                           {suggestion.current_stock}
                         </span>
                       </TableCell>
-                      <TableCell>
-                        <span className="font-medium">
+                      <TableCell className="bg-green-50">
+                        <span className="font-bold text-green-700 text-lg">
                           {suggestion.sales_30_days}
                         </span>
                       </TableCell>
