@@ -2245,7 +2245,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
-          organization_id: string | null
+          organization_id: string
           payment_method: string | null
           phone: string | null
           specialties: string[] | null
@@ -2264,7 +2264,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
-          organization_id?: string | null
+          organization_id: string
           payment_method?: string | null
           phone?: string | null
           specialties?: string[] | null
@@ -2283,7 +2283,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
-          organization_id?: string | null
+          organization_id?: string
           payment_method?: string | null
           phone?: string | null
           specialties?: string[] | null
