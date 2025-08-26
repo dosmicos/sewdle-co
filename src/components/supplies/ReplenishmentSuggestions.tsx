@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useReplenishment } from '@/hooks/useReplenishment';
-import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
+import { ProductionOrderModal } from './ProductionOrderModal';
+import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, CheckCircle, XCircle, Factory, ExternalLink } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
@@ -22,6 +24,8 @@ export const ReplenishmentSuggestions: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [selectedSuggestions, setSelectedSuggestions] = useState<ReplenishmentSuggestion[]>([]);
+  const [showProductionModal, setShowProductionModal] = useState(false);
 
   useEffect(() => {
     fetchSuggestions();
@@ -110,6 +114,36 @@ export const ReplenishmentSuggestions: React.FC = () => {
   const handleReject = async (suggestionId: string) => {
     await updateSuggestionStatus(suggestionId, 'rejected');
   };
+
+  const handleSuggestionSelect = (suggestion: ReplenishmentSuggestion, checked: boolean) => {
+    if (checked) {
+      setSelectedSuggestions(prev => [...prev, suggestion]);
+    } else {
+      setSelectedSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const approvedSuggestions = filteredSuggestions.filter(s => s.status === 'approved');
+      setSelectedSuggestions(approvedSuggestions);
+    } else {
+      setSelectedSuggestions([]);
+    }
+  };
+
+  const handleCreateProductionOrder = () => {
+    setShowProductionModal(true);
+  };
+
+  const handleProductionOrderSuccess = () => {
+    setSelectedSuggestions([]);
+    fetchSuggestions(); // Refresh the data
+  };
+
+  const approvedSuggestions = filteredSuggestions.filter(s => s.status === 'approved');
+  const allApprovedSelected = approvedSuggestions.length > 0 && 
+    approvedSuggestions.every(s => selectedSuggestions.some(sel => sel.id === s.id));
 
   if (loading) {
     return (
@@ -200,6 +234,41 @@ export const ReplenishmentSuggestions: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Production Order Controls */}
+          {selectedSuggestions.length > 0 && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="font-medium text-blue-900">
+                      {selectedSuggestions.length} sugerencias seleccionadas
+                    </p>
+                    <p className="text-sm text-blue-700">
+                      Total: {selectedSuggestions.reduce((sum, s) => sum + s.suggested_quantity, 0)} unidades
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedSuggestions([])}
+                  >
+                    Limpiar Selección
+                  </Button>
+                  <Button
+                    onClick={handleCreateProductionOrder}
+                    className="flex items-center gap-2"
+                  >
+                    <Factory className="h-4 w-4" />
+                    Crear Orden de Producción
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -253,6 +322,13 @@ export const ReplenishmentSuggestions: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={allApprovedSelected}
+                        onCheckedChange={handleSelectAll}
+                        disabled={approvedSuggestions.length === 0}
+                      />
+                    </TableHead>
                     <TableHead>Producto</TableHead>
                     <TableHead>Stock Actual</TableHead>
                     <TableHead className="bg-green-50">Ventas 30d</TableHead>
@@ -268,6 +344,13 @@ export const ReplenishmentSuggestions: React.FC = () => {
                 <TableBody>
                   {filteredSuggestions.map((suggestion) => (
                     <TableRow key={suggestion.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedSuggestions.some(s => s.id === suggestion.id)}
+                          onCheckedChange={(checked) => handleSuggestionSelect(suggestion, checked as boolean)}
+                          disabled={suggestion.status !== 'approved'}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{suggestion.product_name}</p>
@@ -323,7 +406,20 @@ export const ReplenishmentSuggestions: React.FC = () => {
                         {getUrgencyBadge(suggestion.urgency_level)}
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(suggestion.status)}
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(suggestion.status)}
+                          {suggestion.status === 'executed' && suggestion.order_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => window.open(`/orders/${suggestion.order_id}`, '_blank')}
+                              title="Ver orden de producción"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {suggestion.status === 'pending' && (
@@ -355,6 +451,13 @@ export const ReplenishmentSuggestions: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      <ProductionOrderModal
+        isOpen={showProductionModal}
+        onClose={() => setShowProductionModal(false)}
+        selectedSuggestions={selectedSuggestions}
+        onSuccess={handleProductionOrderSuccess}
+      />
     </div>
   );
 };

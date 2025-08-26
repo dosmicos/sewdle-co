@@ -21,6 +21,7 @@ export interface ReplenishmentSuggestion {
   calculation_date: string;
   created_at: string;
   pending_production_quantity: number;
+  order_id?: string;
 }
 
 export interface ReplenishmentConfig {

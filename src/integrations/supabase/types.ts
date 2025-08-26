@@ -1464,6 +1464,7 @@ export type Database = {
           executed_at: string | null
           id: string
           open_orders_quantity: number
+          order_id: string | null
           organization_id: string
           product_variant_id: string
           projected_demand: number
@@ -1484,6 +1485,7 @@ export type Database = {
           executed_at?: string | null
           id?: string
           open_orders_quantity?: number
+          order_id?: string | null
           organization_id: string
           product_variant_id: string
           projected_demand?: number
@@ -1504,6 +1506,7 @@ export type Database = {
           executed_at?: string | null
           id?: string
           open_orders_quantity?: number
+          order_id?: string | null
           organization_id?: string
           product_variant_id?: string
           projected_demand?: number
@@ -1520,6 +1523,13 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "replenishment_suggestions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {
