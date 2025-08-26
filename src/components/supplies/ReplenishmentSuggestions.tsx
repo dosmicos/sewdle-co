@@ -22,8 +22,16 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
-  const [selectedSuggestions, setSelectedSuggestions] = useState<ReplenishmentSuggestion[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
+
+  // Create unique key for each suggestion
+  const getKey = (suggestion: ReplenishmentSuggestion): string => {
+    return suggestion.product_variant_id || 
+           suggestion.id || 
+           suggestion.sku || 
+           `${suggestion.product_name}-${suggestion.variant_name}`;
+  };
 
   useEffect(() => {
     fetchSuggestions();
@@ -87,16 +95,17 @@ const filteredSuggestions = suggestions.filter(suggestion => {
 
 
   const handleSuggestionSelect = (suggestion: ReplenishmentSuggestion, checked: boolean) => {
+    const key = getKey(suggestion);
     if (checked) {
-      setSelectedSuggestions(prev => [...prev, suggestion]);
+      setSelectedSuggestions(prev => [...prev, key]);
     } else {
-      setSelectedSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+      setSelectedSuggestions(prev => prev.filter(k => k !== key));
     }
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedSuggestions(filteredSuggestions);
+      setSelectedSuggestions(filteredSuggestions.map(s => getKey(s)));
     } else {
       setSelectedSuggestions([]);
     }
@@ -112,7 +121,11 @@ const filteredSuggestions = suggestions.filter(suggestion => {
   };
 
   const allSuggestionsSelected = filteredSuggestions.length > 0 && 
-    filteredSuggestions.every(s => selectedSuggestions.some(sel => sel.id === s.id));
+    filteredSuggestions.every(s => selectedSuggestions.includes(getKey(s)));
+
+  const getSelectedSuggestions = (): ReplenishmentSuggestion[] => {
+    return suggestions.filter(s => selectedSuggestions.includes(getKey(s)));
+  };
 
   if (loading) {
     return (
@@ -214,7 +227,7 @@ const filteredSuggestions = suggestions.filter(suggestion => {
                       {selectedSuggestions.length} sugerencias seleccionadas
                     </p>
                     <p className="text-sm text-blue-700">
-                      Total: {selectedSuggestions.reduce((sum, s) => sum + s.suggested_quantity, 0)} unidades
+                      Total: {getSelectedSuggestions().reduce((sum, s) => sum + s.suggested_quantity, 0)} unidades
                     </p>
                   </div>
                 </div>
@@ -298,10 +311,10 @@ const filteredSuggestions = suggestions.filter(suggestion => {
                 </TableHeader>
                 <TableBody>
                   {filteredSuggestions.map((suggestion) => (
-                    <TableRow key={suggestion.id}>
+                    <TableRow key={getKey(suggestion)}>
                       <TableCell>
                         <Checkbox
-                          checked={selectedSuggestions.some(s => s.id === suggestion.id)}
+                          checked={selectedSuggestions.includes(getKey(suggestion))}
                           onCheckedChange={(checked) => handleSuggestionSelect(suggestion, checked as boolean)}
                         />
                       </TableCell>
@@ -367,7 +380,7 @@ const filteredSuggestions = suggestions.filter(suggestion => {
       <ProductionOrderModal
         isOpen={showProductionModal}
         onClose={() => setShowProductionModal(false)}
-        selectedSuggestions={selectedSuggestions}
+        selectedSuggestions={getSelectedSuggestions()}
         onSuccess={handleProductionOrderSuccess}
       />
     </div>
