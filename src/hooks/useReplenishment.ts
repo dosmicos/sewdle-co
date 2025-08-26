@@ -15,7 +15,9 @@ export interface ReplenishmentSuggestion {
   maximum_stock: number;
   sales_last_30_days: number;
   sales_last_7_days: number;
+  sales_velocity: number;
   stock_days_remaining: number;
+  open_orders_quantity: number;
   urgency_level: 'critical' | 'high' | 'medium' | 'low';
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'executed';
