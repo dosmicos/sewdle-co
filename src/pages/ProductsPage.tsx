@@ -5,7 +5,7 @@ import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, Toggl
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
-import SkuCorrectionTool from '@/components/SkuCorrectionTool';
+
 import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
 import { VariantSyncManager } from '@/components/VariantSyncManager';
 
@@ -335,9 +335,6 @@ const ProductsPage = () => {
               <div className="grid gap-6">
                 {/* Asignación Inteligente de SKUs */}
                 <ShopifySkuAssignment />
-                
-                {/* Corrección Inteligente de SKUs */}
-                <SkuCorrectionTool />
                 
                 {/* Diagnóstico de Shopify */}
                 <ShopifyDiagnosticTool />
