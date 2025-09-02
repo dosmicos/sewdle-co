@@ -6,7 +6,7 @@ import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 
-import ShopifyDiagnosticTool from '@/components/supplies/ShopifyDiagnosticTool';
+
 import { VariantSyncManager } from '@/components/VariantSyncManager';
 
 import { useProducts } from '@/hooks/useProducts';
@@ -335,9 +335,6 @@ const ProductsPage = () => {
               <div className="grid gap-6">
                 {/* Asignación Inteligente de SKUs */}
                 <ShopifySkuAssignment />
-                
-                {/* Diagnóstico de Shopify */}
-                <ShopifyDiagnosticTool />
               </div>
             </div>
           </TabsContent>
