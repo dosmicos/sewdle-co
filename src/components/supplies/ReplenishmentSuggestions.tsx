@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
 import { ProductionOrderModal } from './ProductionOrderModal';
-import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
@@ -229,6 +229,77 @@ export const ReplenishmentSuggestions: React.FC = () => {
     return suggestions.filter(s => selectedSuggestions.includes(getKey(s)));
   };
 
+  // CSV generation function
+  const generateCSVContent = (suggestions: ReplenishmentSuggestion[]): string => {
+    const headers = [
+      'Producto',
+      'Variante',
+      'SKU',
+      'Stock Actual',
+      'Ventas 30 días',
+      'Velocidad (diario)',
+      'Días de Stock',
+      'Pendiente Producción',
+      'Cantidad Sugerida',
+      'Nivel de Urgencia',
+      'Motivo'
+    ];
+
+    const csvRows = [headers.join(',')];
+    
+    suggestions.forEach(suggestion => {
+      const row = [
+        `"${suggestion.product_name || ''}"`,
+        `"${suggestion.variant_name || [suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' / ') || 'Sin variante'}"`,
+        `"${suggestion.sku_variant || suggestion.sku || '-'}"`,
+        suggestion.current_stock || 0,
+        suggestion.sales_last_30_days || 0,
+        Number(suggestion.sales_velocity || 0).toFixed(2),
+        Math.round(suggestion.stock_days_remaining || 0),
+        suggestion.open_orders_quantity || 0,
+        suggestion.suggested_quantity || 0,
+        `"${suggestion.urgency_level?.toUpperCase() || 'NORMAL'}"`,
+        `"${suggestion.reason || 'Reposición automática basada en análisis de ventas'}"`,
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    // Add metadata
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-ES');
+    const timeStr = now.toLocaleTimeString('es-ES');
+    
+    csvRows.unshift(`# Recomendaciones de Reposición - Generado el ${dateStr} a las ${timeStr}`);
+    csvRows.unshift(`# Total de sugerencias: ${suggestions.length}`);
+    csvRows.unshift('');
+
+    return csvRows.join('\n');
+  };
+
+  // CSV download function
+  const handleDownloadCSV = () => {
+    const selectedData = getSelectedSuggestions();
+    if (selectedData.length === 0) return;
+
+    const csvContent = generateCSVContent(selectedData);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
+      const filename = `recomendaciones_reposicion_${timestamp}.csv`;
+      
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -340,6 +411,16 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     onClick={() => setSelectedSuggestions([])}
                   >
                     Limpiar Selección
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadCSV}
+                    className="flex items-center gap-2"
+                    disabled={selectedSuggestions.length === 0}
+                  >
+                    <Download className="h-4 w-4" />
+                    Descargar CSV
                   </Button>
                   <Button
                     onClick={handleCreateProductionOrder}
