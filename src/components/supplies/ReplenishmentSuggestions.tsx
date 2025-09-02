@@ -229,8 +229,92 @@ export const ReplenishmentSuggestions: React.FC = () => {
     return suggestions.filter(s => selectedSuggestions.includes(getKey(s)));
   };
 
+  // Matrix generation function
+  const generateMatrixSection = (suggestions: ReplenishmentSuggestion[]): string[] => {
+    // Group data by product and size, summing quantities for multiple colors
+    const matrix: { [size: string]: { [product: string]: number } } = {};
+    const products = new Set<string>();
+    const sizes = new Set<string>();
+
+    suggestions.forEach(suggestion => {
+      const product = suggestion.product_name || 'Sin nombre';
+      const size = suggestion.variant_size || 'Sin talla';
+      const quantity = suggestion.suggested_quantity || 0;
+
+      products.add(product);
+      sizes.add(size);
+
+      if (!matrix[size]) {
+        matrix[size] = {};
+      }
+      if (!matrix[size][product]) {
+        matrix[size][product] = 0;
+      }
+      matrix[size][product] += quantity;
+    });
+
+    // Sort sizes logically (numbers first, then alphabetical)
+    const sortedSizes = Array.from(sizes).sort((a, b) => {
+      const aIsNumber = !isNaN(Number(a));
+      const bIsNumber = !isNaN(Number(b));
+      
+      if (aIsNumber && bIsNumber) {
+        return Number(a) - Number(b);
+      }
+      if (aIsNumber && !bIsNumber) return -1;
+      if (!aIsNumber && bIsNumber) return 1;
+      return a.localeCompare(b);
+    });
+
+    const sortedProducts = Array.from(products).sort();
+
+    // Generate matrix section
+    const matrixRows: string[] = [];
+    
+    // Add section header
+    matrixRows.push('');
+    matrixRows.push('# MATRIZ DE CANTIDADES SUGERIDAS POR PRODUCTO');
+    matrixRows.push('');
+
+    // Create header row
+    const headerRow = ['Talla', ...sortedProducts, 'Total'];
+    matrixRows.push(headerRow.map(h => `"${h}"`).join(','));
+
+    // Create data rows
+    const columnTotals: { [product: string]: number } = {};
+    sortedProducts.forEach(product => columnTotals[product] = 0);
+    let grandTotal = 0;
+
+    sortedSizes.forEach(size => {
+      const row = [`"${size}"`];
+      let rowTotal = 0;
+
+      sortedProducts.forEach(product => {
+        const quantity = matrix[size]?.[product] || 0;
+        row.push(quantity.toString());
+        columnTotals[product] += quantity;
+        rowTotal += quantity;
+        grandTotal += quantity;
+      });
+
+      row.push(rowTotal.toString());
+      matrixRows.push(row.join(','));
+    });
+
+    // Add totals row
+    const totalsRow = ['"Total"'];
+    sortedProducts.forEach(product => {
+      totalsRow.push(columnTotals[product].toString());
+    });
+    totalsRow.push(grandTotal.toString());
+    matrixRows.push(totalsRow.join(','));
+
+    return matrixRows;
+  };
+
   // CSV generation function
   const generateCSVContent = (suggestions: ReplenishmentSuggestion[]): string => {
+    // SECTION 1: Detailed data
     const headers = [
       'Producto',
       'Variante',
@@ -269,11 +353,15 @@ export const ReplenishmentSuggestions: React.FC = () => {
     const dateStr = now.toLocaleDateString('es-ES');
     const timeStr = now.toLocaleTimeString('es-ES');
     
-    csvRows.unshift(`# Recomendaciones de Reposición - Generado el ${dateStr} a las ${timeStr}`);
+    csvRows.unshift(`# DETALLE COMPLETO DE RECOMENDACIONES`);
+    csvRows.unshift(`# Generado el ${dateStr} a las ${timeStr}`);
     csvRows.unshift(`# Total de sugerencias: ${suggestions.length}`);
     csvRows.unshift('');
 
-    return csvRows.join('\n');
+    // SECTION 2: Matrix format
+    const matrixSection = generateMatrixSection(suggestions);
+    
+    return [...csvRows, ...matrixSection].join('\n');
   };
 
   // CSV download function
