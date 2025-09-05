@@ -2372,9 +2372,22 @@ export type Database = {
         }
         Returns: Json
       }
+      consolidate_duplicate_variants: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       consume_order_materials: {
         Args: { p_consumptions: Json; p_order_id: string }
         Returns: boolean
+      }
+      find_matching_local_variant: {
+        Args: {
+          p_color: string
+          p_organization_id: string
+          p_product_name: string
+          p_size: string
+        }
+        Returns: string
       }
       fix_delivery_sync_status_inconsistencies: {
         Args: Record<PropertyKey, never>

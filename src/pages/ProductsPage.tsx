@@ -5,8 +5,7 @@ import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, Toggl
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
-
-
+import { VariantDuplicateManager } from '@/components/VariantDuplicateManager';
 import { VariantSyncManager } from '@/components/VariantSyncManager';
 
 import { useProducts } from '@/hooks/useProducts';
@@ -333,6 +332,9 @@ const ProductsPage = () => {
 
               {/* Herramientas organizadas */}
               <div className="grid gap-6">
+                {/* Gestor de Duplicados */}
+                <VariantDuplicateManager />
+                
                 {/* Asignación Inteligente de SKUs */}
                 <ShopifySkuAssignment />
               </div>

@@ -353,8 +353,36 @@ serve(async (req) => {
             })
 
             try {
+              // 🔍 NUEVA LÓGICA: Verificar si ya existe una variante local con las mismas características
+              const { data: existingVariant, error: findError } = await supabase.rpc('find_matching_local_variant', {
+                p_product_name: product.title,
+                p_size: variant.option1 || null,
+                p_color: variant.option2 || null, 
+                p_organization_id: organizationId
+              });
+
+              if (findError) {
+                console.error(`❌ Error buscando variante existente:`, findError);
+              }
+
+              if (existingVariant) {
+                console.log(`  ⚠️ Ya existe variante local para ${product.title} ${variant.option1 || ''} ${variant.option2 || ''} - actualizando SKU existente`)
+                
+                // Actualizar la variante local existente con el SKU de Shopify
+                const { error: updateLocalError } = await supabase
+                  .from('product_variants')
+                  .update({ sku_variant: variant.id.toString() })
+                  .eq('id', existingVariant);
+
+                if (updateLocalError) {
+                  console.error(`❌ Error actualizando variante local:`, updateLocalError);
+                } else {
+                  console.log(`  ✅ Variante local actualizada con SKU ${variant.id.toString()}`);
+                }
+              }
+
               const newSku = variant.id.toString()
-              console.log(`  → Asignando SKU ${newSku} a variante ${variant.id}`)
+              console.log(`  → Asignando SKU ${newSku} a variante Shopify ${variant.id}`)
 
               const updateUrl = `https://${shopifyDomain}.myshopify.com/admin/api/2023-10/variants/${variant.id}.json`
               const updateResponse = await makeShopifyRequest(updateUrl, {
