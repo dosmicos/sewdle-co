@@ -129,48 +129,80 @@ export const useAdminDashboardData = () => {
     try {
       const isWeekly = viewMode === 'weekly';
       const periods = isWeekly ? 8 : 6; // Last 8 weeks or 6 months
-      const interval = isWeekly ? 7 : 30; // days
       
       const productionStats: ProductionData[] = [];
       
-      for (let i = periods - 1; i >= 0; i--) {
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() - (i * interval));
-        
-        const startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - interval + 1);
-        
-        // Get delivered units for this period
-        const { data: deliveredData, error: deliveredError } = await supabase
-          .from('delivery_items')
-          .select('quantity_delivered, deliveries!inner(delivery_date)')
-          .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
-          .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
+      if (isWeekly) {
+        // Weekly logic remains the same
+        for (let i = periods - 1; i >= 0; i--) {
+          const endDate = new Date();
+          endDate.setDate(endDate.getDate() - (i * 7));
+          
+          const startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - 6);
+          
+          // Get delivered units for this period
+          const { data: deliveredData } = await supabase
+            .from('delivery_items')
+            .select('quantity_delivered, deliveries!inner(delivery_date)')
+            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
+            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
 
-        // Get approved units for this period  
-        const { data: approvedData, error: approvedError } = await supabase
-          .from('delivery_items')
-          .select('quantity_approved, deliveries!inner(delivery_date)')
-          .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
-          .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
+          // Get approved units for this period  
+          const { data: approvedData } = await supabase
+            .from('delivery_items')
+            .select('quantity_approved, deliveries!inner(delivery_date)')
+            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
+            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
 
-        const delivered = deliveredData?.reduce((sum, item) => sum + (item.quantity_delivered || 0), 0) || 0;
-        const approved = approvedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
+          const delivered = deliveredData?.reduce((sum, item) => sum + (item.quantity_delivered || 0), 0) || 0;
+          const approved = approvedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
 
-        let periodLabel: string;
-        if (isWeekly) {
           const month = endDate.toLocaleDateString('es-ES', { month: 'short' });
           const weekNum = Math.ceil(endDate.getDate() / 7);
-          periodLabel = `${month} S${weekNum}`;
-        } else {
-          periodLabel = endDate.toLocaleDateString('es-ES', { month: 'short' });
-        }
+          const periodLabel = `${month} S${weekNum}`;
 
-        productionStats.push({
-          period: periodLabel,
-          delivered,
-          approved
-        });
+          productionStats.push({
+            period: periodLabel,
+            delivered,
+            approved
+          });
+        }
+      } else {
+        // Monthly logic - use calendar months
+        for (let i = periods - 1; i >= 0; i--) {
+          const targetDate = new Date();
+          targetDate.setMonth(targetDate.getMonth() - i);
+          
+          // Get first and last day of this month
+          const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+          const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+          
+          // Get delivered units for this month
+          const { data: deliveredData } = await supabase
+            .from('delivery_items')
+            .select('quantity_delivered, deliveries!inner(delivery_date)')
+            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
+            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
+
+          // Get approved units for this month
+          const { data: approvedData } = await supabase
+            .from('delivery_items')
+            .select('quantity_approved, deliveries!inner(delivery_date)')
+            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
+            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
+
+          const delivered = deliveredData?.reduce((sum, item) => sum + (item.quantity_delivered || 0), 0) || 0;
+          const approved = approvedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
+
+          const periodLabel = targetDate.toLocaleDateString('es-ES', { month: 'short' });
+
+          productionStats.push({
+            period: periodLabel,
+            delivered,
+            approved
+          });
+        }
       }
 
       setProductionData(productionStats);
