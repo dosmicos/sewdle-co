@@ -5,6 +5,7 @@ import { Plus, Building2, Package, Star, Clock, ArrowLeft, Trash2, Edit } from '
 import WorkshopForm from '@/components/WorkshopForm';
 import WorkshopDetails from '@/components/WorkshopDetails';
 import WorkshopEditModal from '@/components/WorkshopEditModal';
+import { WorkshopPricingDiagnostic } from '@/components/WorkshopPricingDiagnostic';
 
 import { useWorkshopsWithStats } from '@/hooks/useWorkshopsWithStats';
 import { useAuth } from '@/contexts/AuthContext';
@@ -92,6 +93,8 @@ const WorkshopsPage = () => {
             Nuevo Taller
           </Button>}
       </div>
+
+      <WorkshopPricingDiagnostic />
 
 
       {workshops.length === 0 ? <div className="text-center py-12">

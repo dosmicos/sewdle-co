@@ -2820,6 +2820,18 @@ export type Database = {
           total_delivered: number
         }[]
       }
+      get_workshop_pricing_gaps: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avg_sale_price: number
+          base_price: number
+          deliveries_count: number
+          product_id: string
+          product_name: string
+          workshop_id: string
+          workshop_name: string
+        }[]
+      }
       get_workshop_product_price: {
         Args: {
           calculation_date?: string
