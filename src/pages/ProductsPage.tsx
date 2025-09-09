@@ -5,7 +5,7 @@ import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, Toggl
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
-import { VariantDuplicateManager } from '@/components/VariantDuplicateManager';
+import { VariantConsolidator } from '@/components/VariantConsolidator';
 import { VariantSyncManager } from '@/components/VariantSyncManager';
 
 import { useProducts } from '@/hooks/useProducts';
@@ -290,10 +290,15 @@ const ProductsPage = () => {
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <h3 className="font-semibold text-blue-900 mb-2">Herramientas de Sincronización con Shopify</h3>
                 <p className="text-sm text-blue-800">
-                  Conjunto de herramientas para gestionar la sincronización y corrección de productos entre tu sistema local y Shopify.
-                  Configura webhooks para actualizaciones automáticas de inventario en tiempo real.
+                  Flujo recomendado: 1) Asignar SKUs a todas las variantes, 2) Consolidar duplicados si es necesario, 3) Sincronizar inventario manualmente si es requerido.
                 </p>
               </div>
+
+              {/* Herramienta Principal: Asignación de SKUs */}
+              <ShopifySkuAssignment />
+
+              {/* Herramienta de Mantenimiento: Consolidación de Duplicados */}
+              <VariantConsolidator />
 
               {/* Actualización Manual de Inventario */}
               <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
@@ -327,16 +332,6 @@ const ProductsPage = () => {
                   <strong>Nota:</strong> Esta función obtiene el stock actual de todos los productos desde Shopify 
                   y actualiza las cantidades en tu catálogo local. Útil para ventas pasadas que no activaron webhooks.
                 </div>
-              </div>
-
-
-              {/* Herramientas organizadas */}
-              <div className="grid gap-6">
-                {/* Gestor de Duplicados */}
-                <VariantDuplicateManager />
-                
-                {/* Asignación Inteligente de SKUs */}
-                <ShopifySkuAssignment />
               </div>
             </div>
           </TabsContent>
