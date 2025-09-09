@@ -86,8 +86,13 @@ serve(async (req) => {
     while (hasNext) {
       const url = new URL(`https://${shopifyDomain}.myshopify.com/admin/api/2023-10/products.json`)
       url.searchParams.set('limit', '50')
-      url.searchParams.set('status', 'active,draft')
-      if (nextCursor) url.searchParams.set('page_info', nextCursor)
+      
+      // Only set status filter on first request, not during pagination
+      if (nextCursor) {
+        url.searchParams.set('page_info', nextCursor)
+      } else {
+        url.searchParams.set('status', 'active,draft')
+      }
 
       const listRes = await makeShopifyRequest(url.toString(), {
         headers: {
