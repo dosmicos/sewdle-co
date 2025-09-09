@@ -122,9 +122,25 @@ serve(async (req) => {
       throw new Error('Max retries reached')
     }
 
+    // Función para detectar SKUs artificiales que necesitan ser reemplazados
+    const isArtificialSku = (sku: string) => {
+      if (!sku || sku.trim() === '') return true
+      
+      // Patrones de SKUs artificiales
+      const artificialPatterns = [
+        /^SHOPIFY-/i,           // Comienza con "SHOPIFY-"
+        /^ID-/i,                // Comienza con "ID-"
+        /^\d{13,20}$/,          // Solo números largos (IDs de Shopify)
+        /^\d{13,20}-V\d+$/,     // Patrón ID-V# (ej: "9020496052459-V1")
+        /^[A-Z0-9]{10,}-\d+$/   // Patrones genéricos artificiales
+      ]
+      
+      return artificialPatterns.some(pattern => pattern.test(sku))
+    }
+
     // NUEVA FUNCIÓN: Verificar si un producto necesita procesamiento
     const productNeedsProcessing = (product: any) => {
-      return product.variants.some((variant: any) => !variant.sku || variant.sku.trim() === '')
+      return product.variants.some((variant: any) => isArtificialSku(variant.sku))
     }
 
     // NUEVA FUNCIÓN: Contar productos que realmente necesitan procesamiento
@@ -164,7 +180,7 @@ serve(async (req) => {
         for (const product of filteredProducts) {
           if (productNeedsProcessing(product)) {
             productsNeedingProcessing++
-            variantsNeedingProcessing += product.variants.filter((v: any) => !v.sku || v.sku.trim() === '').length
+            variantsNeedingProcessing += product.variants.filter((v: any) => isArtificialSku(v.sku)).length
           }
         }
 
@@ -223,10 +239,10 @@ serve(async (req) => {
         for (const product of filteredProducts) {
           if (productNeedsProcessing(product)) {
             productsNeedingWork.push(product)
-            console.log(`✓ Producto necesita procesamiento: ${product.title} (${product.variants.filter((v: any) => !v.sku || v.sku.trim() === '').length} variantes sin SKU)`)
+            console.log(`✓ Producto necesita procesamiento: ${product.title} (${product.variants.filter((v: any) => isArtificialSku(v.sku)).length} variantes con SKUs artificiales)`)
           } else {
             productsSkipped++
-            console.log(`○ Producto ya procesado: ${product.title} (todas las variantes tienen SKU)`)
+            console.log(`○ Producto ya procesado: ${product.title} (todas las variantes tienen SKUs reales)`)
           }
         }
 
@@ -337,9 +353,13 @@ serve(async (req) => {
             last_processed_product_id: product.id.toString()
           })
 
-          // Solo procesar variantes que realmente necesiten SKU
-          const variantsNeedingSku = product.variants.filter((v: any) => !v.sku || v.sku.trim() === '')
+          // Solo procesar variantes que realmente necesiten SKU (vacíos o artificiales)
+          const variantsNeedingSku = product.variants.filter((v: any) => isArtificialSku(v.sku))
           console.log(`  → ${variantsNeedingSku.length} variantes necesitan SKU de ${product.variants.length} totales`)
+          
+          if (variantsNeedingSku.length > 0) {
+            console.log(`  → SKUs actuales a reemplazar:`, variantsNeedingSku.map(v => `"${v.sku || 'vacío'}"`).join(', '))
+          }
 
           for (const variant of variantsNeedingSku) {
             if (variantsProcessedInBatch >= maxVariants) break
@@ -353,6 +373,23 @@ serve(async (req) => {
             })
 
             try {
+              // Obtener la organización del usuario autenticado
+              const { data: { user } } = await supabase.auth.getUser()
+              if (!user) {
+                throw new Error('Usuario no autenticado')
+              }
+
+              const { data: userProfile } = await supabase
+                .from('profiles')
+                .select('organization_id')
+                .eq('id', user.id)
+                .single()
+
+              const organizationId = userProfile?.organization_id
+              if (!organizationId) {
+                throw new Error('Usuario sin organización asignada')
+              }
+
               // 🔍 NUEVA LÓGICA: Verificar si ya existe una variante local con las mismas características
               const { data: existingVariant, error: findError } = await supabase.rpc('find_matching_local_variant', {
                 p_product_name: product.title,
@@ -382,7 +419,8 @@ serve(async (req) => {
               }
 
               const newSku = variant.id.toString()
-              console.log(`  → Asignando SKU ${newSku} a variante Shopify ${variant.id}`)
+              const oldSku = variant.sku || 'vacío'
+              console.log(`  → Reemplazando SKU artificial "${oldSku}" por "${newSku}" en variante Shopify ${variant.id}`)
 
               const updateUrl = `https://${shopifyDomain}.myshopify.com/admin/api/2023-10/variants/${variant.id}.json`
               const updateResponse = await makeShopifyRequest(updateUrl, {
