@@ -33,7 +33,7 @@ const ShopifySkuAssignment = () => {
   const handleNewAssignment = async () => {
     setIsStarting(true);
     try {
-      const assignmentResult = await startNewProcess(100);
+      const assignmentResult = await assignShopifySkus({ maxVariants: 200 });
       if (assignmentResult) {
         setResult(assignmentResult);
       }

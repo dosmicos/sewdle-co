@@ -35,7 +35,7 @@ export const useShopifySkuAssignment = () => {
     try {
       console.log('Iniciando asignación de SKUs con opciones:', options);
 
-      const { data, error } = await supabase.functions.invoke('assign-shopify-skus', {
+      const { data, error } = await supabase.functions.invoke('assign-shopify-skus-simple', {
         body: options || { maxVariants: 100 }
       });
 
