@@ -6,14 +6,14 @@ const corsHeaders = {
 }
 
 interface Params {
-  // No parameters needed - process all variants
+  mode?: 'empty-only' | 'artificial'; // 'empty-only' (default) or 'artificial'
 }
 
-// Simple, fast SKU assignment:
-// - Detects artificial SKUs (empty, SHOPIFY-, ID-)
+// Intelligent SKU assignment system:
+// - Mode 'empty-only': Only fills completely empty SKUs (safe, fast)
+// - Mode 'artificial': Also replaces SHOPIFY- and ID- prefixed SKUs
 // - Updates Shopify variant.sku to the variant.id
 // - No DB dependencies, no user auth required
-// - Optimized for speed by only processing variants that need updates
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -21,6 +21,10 @@ serve(async (req) => {
 
   try {
     const body: Params = await req.json().catch(() => ({}))
+    const mode = body.mode || 'empty-only' // Default to safe mode
+    
+    console.log(`🚀 Starting SKU assignment in mode: ${mode}`)
+    
     // Process all variants without limits
     let pageCursor: string | null = null
 
@@ -38,13 +42,21 @@ serve(async (req) => {
       ? rawShopifyDomain.replace('.myshopify.com', '')
       : rawShopifyDomain
 
-    const isArtificialSku = (sku: string | null | undefined) => {
+    const needsSkuAssignment = (sku: string | null | undefined, mode: string) => {
+      // Always handle empty SKUs
       if (!sku || sku.trim() === '') return true
-      const patterns = [
-        /^SHOPIFY-/i,
-        /^ID-/i,
-      ]
-      return patterns.some((p) => p.test(sku))
+      
+      // In artificial mode, also handle SHOPIFY- and ID- prefixes
+      if (mode === 'artificial') {
+        const artificialPatterns = [
+          /^SHOPIFY-/i,
+          /^ID-/i,
+        ]
+        return artificialPatterns.some((p) => p.test(sku))
+      }
+      
+      // In empty-only mode, only handle truly empty SKUs
+      return false
     }
 
     const makeShopifyRequest = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
@@ -93,7 +105,7 @@ serve(async (req) => {
 
       for (const product of products) {
         for (const variant of product.variants || []) {
-          if (!isArtificialSku(variant.sku)) continue
+          if (!needsSkuAssignment(variant.sku, mode)) continue
 
           processedVariants++
           const newSku = String(variant.id)
@@ -129,8 +141,8 @@ serve(async (req) => {
     }
 
     const message = updatedVariants > 0
-      ? `✅ Proceso completado: Se asignaron ${updatedVariants} SKUs automáticamente. Errores: ${errorVariants}. Total de productos revisados: ${productsScanned}.`
-      : `✅ Proceso completado: No se encontraron variantes con SKU artificial. Total de productos revisados: ${productsScanned}.`
+      ? `✅ Proceso completado en modo ${mode}: Se asignaron ${updatedVariants} SKUs automáticamente. Errores: ${errorVariants}. Total de productos revisados: ${productsScanned}.`
+      : `✅ Proceso completado en modo ${mode}: No se encontraron variantes que necesiten SKUs. Total de productos revisados: ${productsScanned}.`
 
     return new Response(
       JSON.stringify({

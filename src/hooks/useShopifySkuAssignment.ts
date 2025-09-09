@@ -26,7 +26,7 @@ export const useShopifySkuAssignment = () => {
   const [processing, setProcessing] = useState(false);
   const { toast } = useToast();
 
-  const assignShopifySkus = async (): Promise<SkuAssignmentResult | null> => {
+  const assignShopifySkus = async (mode: 'empty-only' | 'artificial' = 'empty-only'): Promise<SkuAssignmentResult | null> => {
     if (loading) return null;
     
     setLoading(true);
@@ -34,7 +34,7 @@ export const useShopifySkuAssignment = () => {
     
     try {
       const { data, error } = await supabase.functions.invoke('assign-shopify-skus-simple', {
-        body: {}
+        body: { mode }
       });
 
       if (error) {

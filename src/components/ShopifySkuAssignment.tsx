@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Zap, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Zap, Loader2, Info } from 'lucide-react';
 import { useShopifySkuAssignment } from '@/hooks/useShopifySkuAssignment';
 
 export const ShopifySkuAssignment = () => {
   const [result, setResult] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<'empty-only' | 'artificial'>('empty-only');
   
   const { assignShopifySkus, loading } = useShopifySkuAssignment();
 
   const handleAssignment = async () => {
     setIsProcessing(true);
     try {
-      const assignmentResult = await assignShopifySkus();
+      const assignmentResult = await assignShopifySkus(selectedMode);
       setResult(assignmentResult);
     } finally {
       setIsProcessing(false);
@@ -24,23 +26,58 @@ export const ShopifySkuAssignment = () => {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Zap className="h-5 w-5 text-yellow-500" />
-          Asignación Completa de SKUs Shopify
+          <Info className="h-5 w-5 text-blue-500" />
+          Asignación Inteligente de SKUs
         </CardTitle>
         <CardDescription>
-          Procesa TODAS las variantes de una sola vez, detectando y corrigiendo automáticamente SKUs artificiales 
-          generados por Shopify, asignando el ID de variante como SKU definitivo.
+          Sistema inteligente para asignar SKUs a variantes de Shopify con diferentes niveles de intervención
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
+        <div className="space-y-3">
+          <label className="text-sm font-medium">Modo de Asignación</label>
+          <Select value={selectedMode} onValueChange={(value: 'empty-only' | 'artificial') => setSelectedMode(value)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="empty-only">
+                <div>
+                  <div className="font-medium">Solo SKUs Vacíos (Recomendado)</div>
+                  <div className="text-xs text-muted-foreground">Asigna SKUs únicamente a variantes sin SKU</div>
+                </div>
+              </SelectItem>
+              <SelectItem value="artificial">
+                <div>
+                  <div className="font-medium">SKUs Artificiales</div>
+                  <div className="text-xs text-muted-foreground">Incluye SKUs con prefijos SHOPIFY- e ID-</div>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-medium text-blue-900 mb-2">¿Qué hace este proceso?</h3>
+          <h3 className="font-medium text-blue-900 mb-2">
+            {selectedMode === 'empty-only' ? 'Modo Seguro - Solo SKUs Vacíos' : 'Modo Completo - SKUs Artificiales'}
+          </h3>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Detecta SKUs artificiales como "SHOPIFY-", "ID-", o códigos numéricos largos</li>
-            <li>• Reemplaza automáticamente estos SKUs con el ID único de la variante</li>
-            <li>• Procesa TODAS las variantes de tu tienda en una sola ejecución</li>
-            <li>• Incluye reintentos inteligentes y manejo de límites de Shopify</li>
+            {selectedMode === 'empty-only' ? (
+              <>
+                <li>• Revisa todas las variantes de productos en Shopify</li>
+                <li>• Asigna SKUs únicamente a variantes completamente vacías</li>
+                <li>• Conserva todos los SKUs numéricos existentes (seguros)</li>
+                <li>• Usa el ID de la variante como nuevo SKU</li>
+              </>
+            ) : (
+              <>
+                <li>• Revisa todas las variantes de productos en Shopify</li>
+                <li>• Detecta SKUs vacíos y con prefijos artificiales (SHOPIFY-, ID-)</li>
+                <li>• Conserva SKUs numéricos normales del sistema anterior</li>
+                <li>• Asigna el ID de la variante como nuevo SKU</li>
+              </>
+            )}
           </ul>
         </div>
 
@@ -53,12 +90,12 @@ export const ShopifySkuAssignment = () => {
           {(loading || isProcessing) ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Procesando todas las variantes...
+              Procesando en modo {selectedMode === 'empty-only' ? 'seguro' : 'completo'}...
             </>
           ) : (
             <>
               <Zap className="h-4 w-4 mr-2" />
-              Procesar Todas las Variantes
+              Iniciar Asignación ({selectedMode === 'empty-only' ? 'Modo Seguro' : 'Modo Completo'})
             </>
           )}
         </Button>
