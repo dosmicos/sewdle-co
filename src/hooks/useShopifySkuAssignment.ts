@@ -26,48 +26,36 @@ export const useShopifySkuAssignment = () => {
   const [processing, setProcessing] = useState(false);
   const { toast } = useToast();
 
-  const assignShopifySkus = async (options?: {
-    processId?: string;
-    resumeFromCursor?: string;
-    maxVariants?: number;
-  }): Promise<SkuAssignmentResult | null> => {
+  const assignShopifySkus = async (): Promise<SkuAssignmentResult | null> => {
+    if (loading) return null;
+    
     setLoading(true);
+    setProcessing(true);
+    
     try {
-      console.log('Iniciando asignación de SKUs con opciones:', options);
-
       const { data, error } = await supabase.functions.invoke('assign-shopify-skus-simple', {
-        body: options || { maxVariants: 100 }
+        body: {}
       });
 
       if (error) {
         throw error;
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Error en la asignación de SKUs');
-      }
-
-      // Mostrar mensaje según el estado
-      if (data.status === 'completed') {
+      if (data?.success) {
         toast({
-          title: "🎉 Proceso completado",
+          title: "Asignación Completada",
           description: data.message,
+          duration: 5000,
         });
-      } else if (data.status === 'paused') {
-        setProcessing(true);
-        toast({
-          title: "📊 Lote procesado",
-          description: `${data.message} Haz clic en "Continuar" para procesar más.`,
-        });
+        return data;
       } else {
         toast({
-          title: "⚡ Procesando",
-          description: data.message,
+          title: "Error en asignación", 
+          description: data?.error || "Error desconocido",
+          variant: "destructive",
         });
+        return null;
       }
-
-      return data as SkuAssignmentResult;
-
     } catch (error) {
       console.error('Error asignando SKUs:', error);
       toast({
@@ -78,22 +66,14 @@ export const useShopifySkuAssignment = () => {
       return null;
     } finally {
       setLoading(false);
+      setProcessing(false);
     }
-  };
-
-  const resumeProcess = async (processId: string, cursor?: string) => {
-    return await assignShopifySkus({
-      processId,
-      resumeFromCursor: cursor,
-      maxVariants: 100
-    });
   };
 
   return {
     assignShopifySkus,
-    resumeProcess,
     loading,
     processing,
-    setProcessing
+    setProcessing,
   };
 };

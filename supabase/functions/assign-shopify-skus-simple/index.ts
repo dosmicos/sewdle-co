@@ -6,8 +6,7 @@ const corsHeaders = {
 }
 
 interface Params {
-  maxVariants?: number
-  pageCursor?: string | null
+  // No parameters needed - process all variants
 }
 
 // Simple, fast SKU assignment:
@@ -22,8 +21,8 @@ serve(async (req) => {
 
   try {
     const body: Params = await req.json().catch(() => ({}))
-    const maxVariants = Math.max(1, Math.min(500, body.maxVariants ?? 200))
-    let pageCursor = body.pageCursor ?? null
+    // Process all variants without limits
+    let pageCursor: string | null = null
 
     const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
@@ -74,7 +73,8 @@ serve(async (req) => {
     let nextCursor: string | null = pageCursor
     let hasNext = true
 
-    while (hasNext && processedVariants < maxVariants) {
+    // Process ALL products without limits
+    while (hasNext) {
       const url = new URL(`https://${shopifyDomain}.myshopify.com/admin/api/2023-10/products.json`)
       url.searchParams.set('limit', '50')
       url.searchParams.set('status', 'active,draft')
@@ -96,7 +96,6 @@ serve(async (req) => {
 
       for (const product of products) {
         for (const variant of product.variants || []) {
-          if (processedVariants >= maxVariants) break
           if (!isArtificialSku(variant.sku)) continue
 
           processedVariants++
@@ -116,10 +115,9 @@ serve(async (req) => {
           } else {
             errorVariants++
           }
-          // Small pacing to be gentle
+          // Small pacing to be gentle with Shopify API
           await new Promise((r) => setTimeout(r, 200))
         }
-        if (processedVariants >= maxVariants) break
       }
 
       const linkHeader = listRes.headers.get('Link')
@@ -132,22 +130,20 @@ serve(async (req) => {
       }
     }
 
-    const status = nextCursor ? 'partial' : 'completed'
     const message = updatedVariants > 0
-      ? `Se asignaron ${updatedVariants} SKUs. Errores: ${errorVariants}. Revisados ${productsScanned} productos.`
-      : `No se encontraron variantes con SKU artificial en este lote. Revisados ${productsScanned} productos.`
+      ? `✅ Proceso completado: Se asignaron ${updatedVariants} SKUs automáticamente. Errores: ${errorVariants}. Total de productos revisados: ${productsScanned}.`
+      : `✅ Proceso completado: No se encontraron variantes con SKU artificial. Total de productos revisados: ${productsScanned}.`
 
     return new Response(
       JSON.stringify({
         success: true,
-        status,
+        status: 'completed',
         summary: {
           processedVariants,
           updatedVariants,
           errorVariants,
           productsScanned,
         },
-        nextCursor,
         message,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

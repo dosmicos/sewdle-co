@@ -17,7 +17,7 @@ export const VariantDuplicateManager: React.FC = () => {
   };
 
   const handleImprovedSkuAssignment = async () => {
-    const result = await assignShopifySkus({ maxVariants: 50 });
+    const result = await assignShopifySkus();
     if (result?.success) {
       console.log('Asignación de SKUs completada:', result);
     }
