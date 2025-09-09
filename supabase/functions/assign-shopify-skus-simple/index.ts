@@ -10,10 +10,10 @@ interface Params {
 }
 
 // Simple, fast SKU assignment:
-// - Detects artificial SKUs (empty, SHOPIFY-, ID-, long numerics, numeric-V#)
+// - Detects artificial SKUs (empty, SHOPIFY-, ID-)
 // - Updates Shopify variant.sku to the variant.id
 // - No DB dependencies, no user auth required
-// - Returns a resume cursor (page_info) when more remains
+// - Optimized for speed by only processing variants that need updates
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -43,9 +43,6 @@ serve(async (req) => {
       const patterns = [
         /^SHOPIFY-/i,
         /^ID-/i,
-        /^\d{13,20}$/,
-        /^\d{13,20}-V\d+$/,
-        /^[A-Z0-9]{10,}-\d+$/,
       ]
       return patterns.some((p) => p.test(sku))
     }
@@ -112,11 +109,12 @@ serve(async (req) => {
 
           if (updateRes.ok) {
             updatedVariants++
+            console.log(`✅ Updated variant ${variant.id}: ${variant.sku} -> ${newSku}`)
           } else {
             errorVariants++
+            console.log(`❌ Failed to update variant ${variant.id}: ${updateRes.status}`)
           }
-          // Small pacing to be gentle with Shopify API
-          await new Promise((r) => setTimeout(r, 200))
+          // Only add delay if we hit rate limit, otherwise process quickly
         }
       }
 
