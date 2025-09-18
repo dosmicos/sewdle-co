@@ -4,6 +4,9 @@ import SuppliesDashboard from '@/components/supplies/SuppliesDashboard';
 import MaterialsCatalog from '@/components/supplies/MaterialsCatalog';
 import MaterialDelivery from '@/components/supplies/MaterialDelivery';
 import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptionManager';
+import MaterialInventoryTable from '@/components/supplies/MaterialInventoryTable';
+import MaterialTransfersList from '@/components/supplies/MaterialTransfersList';
+import MaterialTransferForm from '@/components/supplies/MaterialTransferForm';
 import { useAuth } from '@/contexts/AuthContext';
 
 const SuppliesPage = () => {
@@ -24,11 +27,13 @@ const SuppliesPage = () => {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="materials">Materiales</TabsTrigger>
           <TabsTrigger value="deliveries">Entregas</TabsTrigger>
           <TabsTrigger value="consumption">Consumos</TabsTrigger>
+          <TabsTrigger value="inventory">Inventario</TabsTrigger>
+          <TabsTrigger value="transfers">Transferencias</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6">
@@ -45,6 +50,17 @@ const SuppliesPage = () => {
 
         <TabsContent value="consumption" className="space-y-6">
           <MaterialConsumptionManager />
+        </TabsContent>
+
+        <TabsContent value="inventory" className="space-y-6">
+          <MaterialInventoryTable />
+        </TabsContent>
+
+        <TabsContent value="transfers" className="space-y-6">
+          <div className="space-y-6">
+            <MaterialTransferForm />
+            <MaterialTransfersList />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

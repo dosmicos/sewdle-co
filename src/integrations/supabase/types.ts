@@ -450,6 +450,99 @@ export type Database = {
           },
         ]
       }
+      material_inventory: {
+        Row: {
+          created_at: string
+          current_stock: number
+          id: string
+          location_id: string
+          location_type: string
+          material_id: string
+          organization_id: string
+          reserved_stock: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_stock?: number
+          id?: string
+          location_id: string
+          location_type: string
+          material_id: string
+          organization_id: string
+          reserved_stock?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_stock?: number
+          id?: string
+          location_id?: string
+          location_type?: string
+          material_id?: string
+          organization_id?: string
+          reserved_stock?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      material_transfers: {
+        Row: {
+          approved_by: string | null
+          completed_by: string | null
+          created_at: string
+          from_location_id: string
+          from_location_type: string
+          id: string
+          material_id: string
+          notes: string | null
+          organization_id: string
+          quantity: number
+          requested_by: string | null
+          status: string
+          to_location_id: string
+          to_location_type: string
+          transfer_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          completed_by?: string | null
+          created_at?: string
+          from_location_id: string
+          from_location_type: string
+          id?: string
+          material_id: string
+          notes?: string | null
+          organization_id: string
+          quantity: number
+          requested_by?: string | null
+          status?: string
+          to_location_id: string
+          to_location_type: string
+          transfer_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          completed_by?: string | null
+          created_at?: string
+          from_location_id?: string
+          from_location_type?: string
+          id?: string
+          material_id?: string
+          notes?: string | null
+          organization_id?: string
+          quantity?: number
+          requested_by?: string | null
+          status?: string
+          to_location_id?: string
+          to_location_type?: string
+          transfer_date?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       materials: {
         Row: {
           category: string
@@ -2106,6 +2199,39 @@ export type Database = {
           },
         ]
       }
+      warehouses: {
+        Row: {
+          address: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_central: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_central?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_central?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workshop_assignments: {
         Row: {
           assigned_by: string | null
@@ -2637,6 +2763,14 @@ export type Database = {
           workshop_name: string
         }[]
       }
+      get_material_stock_by_location: {
+        Args: {
+          p_location_id: string
+          p_location_type: string
+          p_material_id: string
+        }
+        Returns: number
+      }
       get_materials_with_stock_status: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2884,7 +3018,7 @@ export type Database = {
               event_type_param: string
               ip_address_param?: unknown
             }
-        Returns: undefined
+        Returns: string
       }
       log_stats_access: {
         Args: Record<PropertyKey, never>
@@ -2909,6 +3043,10 @@ export type Database = {
       migrate_sleeping_walker_tigres_variants: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      process_material_transfer: {
+        Args: { p_transfer_id: string }
+        Returns: boolean
       }
       recalculate_material_deliveries_remaining: {
         Args: Record<PropertyKey, never>
