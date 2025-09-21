@@ -64,17 +64,8 @@ Deno.serve(async (req) => {
     const organizationId = orgUser.organization_id;
     console.log(`📊 Procesando ranking para organización: ${organizationId}`);
 
-    // Calculate sales velocity data with 60-day period
-    const { data: salesData, error: salesError } = await supabase.rpc('calculate_sales_velocity_ranking', {
-      org_id: organizationId,
-      days_period: 60
-    });
-
-    if (salesError) {
-      console.error('❌ Error calculando ranking:', salesError);
-      
-      // If function doesn't exist, calculate manually
-      console.log('📝 Calculando ranking manualmente...');
+    // Force manual calculation to ensure product grouping
+    console.log('📝 Calculando ranking manualmente con agrupación por producto...');
       
       // Get all product variants with basic info
       const { data: variants, error: variantsError } = await supabase
@@ -224,37 +215,6 @@ Deno.serve(async (req) => {
           status: 200
         }
       );
-    }
-
-    // If RPC function exists and worked
-    const rankingData = salesData as SalesVelocityData[];
-    console.log(`✅ Ranking obtenido: ${rankingData.length} variantes`);
-
-    const summary = {
-      total_products: rankingData.length,
-      zero_sales: rankingData.filter(v => v.sales_60_days === 0).length,
-      low_sales: rankingData.filter(v => v.sales_60_days > 0 && v.sales_60_days <= 10).length,
-      good_sales: rankingData.filter(v => v.sales_60_days > 10).length,
-      total_units_sold: rankingData.reduce((sum, v) => sum + v.sales_60_days, 0),
-      total_revenue: rankingData.reduce((sum, v) => sum + v.revenue_60_days, 0),
-      total_variants: 0, // Not available from RPC function
-      calculation_date: new Date().toISOString().split('T')[0],
-      period_days: 60
-    };
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: rankingData,
-        summary,
-        message: 'Ranking de velocidad de ventas obtenido exitosamente'
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      }
-    );
-
   } catch (error) {
     console.error('❌ Error en función de ranking de ventas:', error);
     
