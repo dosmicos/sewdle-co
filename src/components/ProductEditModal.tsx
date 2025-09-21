@@ -295,9 +295,9 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
 
       const { data: salesMetrics, error: salesError } = await supabase
         .from('sales_metrics')
-        .select('id, date')
+        .select('id, metric_date')
         .eq('product_variant_id', variantId)
-        .gte('date', ninetyDaysAgo.toISOString().split('T')[0]);
+        .gte('metric_date', ninetyDaysAgo.toISOString().split('T')[0]);
 
       if (salesError) {
         console.error('❌ Error verificando referencias en sales_metrics:', salesError);
