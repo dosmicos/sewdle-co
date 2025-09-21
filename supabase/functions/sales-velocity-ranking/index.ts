@@ -1,0 +1,231 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { corsHeaders } from '../_shared/cors.ts'
+
+interface SalesVelocityData {
+  product_variant_id: string;
+  product_name: string;
+  variant_size: string;
+  variant_color: string;
+  sku_variant: string;
+  current_stock: number;
+  sales_60_days: number;
+  sales_velocity: number;
+  stock_days_remaining: number;
+  revenue_60_days: number;
+  orders_count: number;
+  status: string;
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    console.log('🔄 Iniciando cálculo de ranking de velocidad de ventas...');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ Variables de entorno de Supabase no configuradas');
+      throw new Error('Variables de entorno de Supabase no configuradas');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('✅ Cliente de Supabase inicializado');
+
+    // Get organization ID from JWT token
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header provided');
+    }
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    );
+
+    if (userError || !user) {
+      throw new Error('Invalid authentication token');
+    }
+
+    // Get user's organization
+    const { data: orgUser, error: orgError } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .single();
+
+    if (orgError || !orgUser) {
+      throw new Error('User not associated with any organization');
+    }
+
+    const organizationId = orgUser.organization_id;
+    console.log(`📊 Procesando ranking para organización: ${organizationId}`);
+
+    // Calculate sales velocity data with 60-day period
+    const { data: salesData, error: salesError } = await supabase.rpc('calculate_sales_velocity_ranking', {
+      org_id: organizationId,
+      days_period: 60
+    });
+
+    if (salesError) {
+      console.error('❌ Error calculando ranking:', salesError);
+      
+      // If function doesn't exist, calculate manually
+      console.log('📝 Calculando ranking manualmente...');
+      
+      // Get all product variants with basic info
+      const { data: variants, error: variantsError } = await supabase
+        .from('product_variants')
+        .select(`
+          id,
+          sku_variant,
+          size,
+          color,
+          stock_quantity,
+          products(name, status)
+        `)
+        .eq('products.organization_id', organizationId)
+        .not('products.status', 'eq', 'discontinued');
+
+      if (variantsError) {
+        throw new Error(`Error obteniendo variantes: ${variantsError.message}`);
+      }
+
+      // Calculate sales for each variant from Shopify data
+      const rankingData: SalesVelocityData[] = [];
+      
+      for (const variant of variants || []) {
+        // Get sales data from Shopify orders
+        const { data: salesMetrics, error: metricsError } = await supabase
+          .from('shopify_order_line_items')
+          .select(`
+            quantity,
+            price,
+            shopify_orders(
+              created_at_shopify,
+              financial_status,
+              organization_id
+            )
+          `)
+          .eq('sku', variant.sku_variant)
+          .eq('shopify_orders.organization_id', organizationId)
+          .in('shopify_orders.financial_status', ['paid', 'partially_paid', 'pending'])
+          .gte('shopify_orders.created_at_shopify', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString());
+
+        const sales60Days = salesMetrics?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+        const revenue60Days = salesMetrics?.reduce((sum, item) => sum + (item.quantity * item.price || 0), 0) || 0;
+        const ordersCount = new Set(salesMetrics?.map(item => item.shopify_orders?.created_at_shopify)).size || 0;
+        
+        const salesVelocity = sales60Days / 60; // daily average
+        const stockDaysRemaining = salesVelocity > 0 ? (variant.stock_quantity || 0) / salesVelocity : 9999;
+        
+        // Determine status
+        let status = 'good';
+        if (sales60Days === 0) {
+          status = 'critical'; // No sales in 60 days
+        } else if (sales60Days <= 5) {
+          status = 'low'; // Very low sales
+        } else if (sales60Days <= 20) {
+          status = 'warning'; // Low sales
+        }
+
+        rankingData.push({
+          product_variant_id: variant.id,
+          product_name: variant.products?.name || 'Sin nombre',
+          variant_size: variant.size || '',
+          variant_color: variant.color || '',
+          sku_variant: variant.sku_variant,
+          current_stock: variant.stock_quantity || 0,
+          sales_60_days: sales60Days,
+          sales_velocity: Number(salesVelocity.toFixed(3)),
+          stock_days_remaining: Math.round(stockDaysRemaining),
+          revenue_60_days: Number(revenue60Days.toFixed(2)),
+          orders_count: ordersCount,
+          status
+        });
+      }
+
+      // Sort by sales velocity (descending) and then by sales volume
+      rankingData.sort((a, b) => {
+        if (b.sales_60_days !== a.sales_60_days) {
+          return b.sales_60_days - a.sales_60_days;
+        }
+        return b.sales_velocity - a.sales_velocity;
+      });
+
+      console.log(`✅ Ranking calculado: ${rankingData.length} variantes procesadas`);
+      
+      // Generate summary statistics
+      const summary = {
+        total_variants: rankingData.length,
+        zero_sales: rankingData.filter(v => v.sales_60_days === 0).length,
+        low_sales: rankingData.filter(v => v.sales_60_days > 0 && v.sales_60_days <= 10).length,
+        good_sales: rankingData.filter(v => v.sales_60_days > 10).length,
+        total_units_sold: rankingData.reduce((sum, v) => sum + v.sales_60_days, 0),
+        total_revenue: rankingData.reduce((sum, v) => sum + v.revenue_60_days, 0),
+        calculation_date: new Date().toISOString().split('T')[0],
+        period_days: 60
+      };
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: rankingData,
+          summary,
+          message: 'Ranking de velocidad de ventas calculado exitosamente'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        }
+      );
+    }
+
+    // If RPC function exists and worked
+    const rankingData = salesData as SalesVelocityData[];
+    console.log(`✅ Ranking obtenido: ${rankingData.length} variantes`);
+
+    const summary = {
+      total_variants: rankingData.length,
+      zero_sales: rankingData.filter(v => v.sales_60_days === 0).length,
+      low_sales: rankingData.filter(v => v.sales_60_days > 0 && v.sales_60_days <= 10).length,
+      good_sales: rankingData.filter(v => v.sales_60_days > 10).length,
+      total_units_sold: rankingData.reduce((sum, v) => sum + v.sales_60_days, 0),
+      total_revenue: rankingData.reduce((sum, v) => sum + v.revenue_60_days, 0),
+      calculation_date: new Date().toISOString().split('T')[0],
+      period_days: 60
+    };
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: rankingData,
+        summary,
+        message: 'Ranking de velocidad de ventas obtenido exitosamente'
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
+    );
+
+  } catch (error) {
+    console.error('❌ Error en función de ranking de ventas:', error);
+    
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      }
+    );
+  }
+});
