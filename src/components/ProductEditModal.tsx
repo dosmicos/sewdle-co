@@ -216,84 +216,125 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
     return errors;
   };
 
-  // Función mejorada para verificar referencias en todas las tablas relacionadas
+  // Función mejorada para verificar referencias con logging detallado
   const checkVariantReferences = async (variantId: string) => {
     try {
-      console.log(`Verificando referencias para variante ${variantId}...`);
+      console.log(`🔍 Verificando referencias para variante ${variantId}...`);
+      const referencesFound: string[] = [];
       
-      // Verificar en order_items
+      // Verificar en order_items con información adicional
       const { data: orderItems, error: orderError } = await supabase
         .from('order_items')
-        .select('id')
-        .eq('product_variant_id', variantId)
-        .limit(1);
+        .select(`
+          id,
+          order_id,
+          orders!inner(order_number, status)
+        `)
+        .eq('product_variant_id', variantId);
 
       if (orderError) {
-        console.error('Error verificando referencias en order_items:', orderError);
-        return true; // Por seguridad, asumir que hay referencias si hay error
+        console.error('❌ Error verificando referencias en order_items:', orderError);
+        return { 
+          hasReferences: true, 
+          reason: 'Error de conectividad al verificar órdenes',
+          details: [`Error: ${orderError.message}`]
+        };
       }
 
       if (orderItems && orderItems.length > 0) {
-        console.log(`Variante tiene ${orderItems.length} referencias en order_items`);
-        return true;
+        const orderNumbers = orderItems.map(item => item.orders?.order_number).join(', ');
+        referencesFound.push(`${orderItems.length} órdenes (${orderNumbers})`);
+        console.log(`📋 Variante referenciada en ${orderItems.length} order_items:`, orderNumbers);
       }
 
-      // Verificar en replenishment_suggestions
+      // Verificar en replenishment_suggestions (solo activas)
       const { data: replenishmentSuggestions, error: replenishmentError } = await supabase
         .from('replenishment_suggestions')
-        .select('id')
+        .select('id, status, calculation_date')
         .eq('product_variant_id', variantId)
-        .limit(1);
+        .eq('status', 'pending'); // Solo verificar sugerencias activas
 
       if (replenishmentError) {
-        console.error('Error verificando referencias en replenishment_suggestions:', replenishmentError);
-        return true;
+        console.error('❌ Error verificando referencias en replenishment_suggestions:', replenishmentError);
+        return { 
+          hasReferences: true, 
+          reason: 'Error de conectividad al verificar sugerencias',
+          details: [`Error: ${replenishmentError.message}`]
+        };
       }
 
       if (replenishmentSuggestions && replenishmentSuggestions.length > 0) {
-        console.log(`Variante tiene ${replenishmentSuggestions.length} referencias en replenishment_suggestions`);
-        return true;
+        referencesFound.push(`${replenishmentSuggestions.length} sugerencias de reposición activas`);
+        console.log(`📊 Variante tiene ${replenishmentSuggestions.length} sugerencias de reposición activas`);
       }
 
-      // Verificar en replenishment_config
+      // Verificar en replenishment_config (solo configuraciones activas)
       const { data: replenishmentConfig, error: configError } = await supabase
         .from('replenishment_config')
-        .select('id')
+        .select('id, is_active')
         .eq('product_variant_id', variantId)
-        .limit(1);
+        .eq('is_active', true);
 
       if (configError) {
-        console.error('Error verificando referencias en replenishment_config:', configError);
-        return true;
+        console.error('❌ Error verificando referencias en replenishment_config:', configError);
+        return { 
+          hasReferences: true, 
+          reason: 'Error de conectividad al verificar configuración',
+          details: [`Error: ${configError.message}`]
+        };
       }
 
       if (replenishmentConfig && replenishmentConfig.length > 0) {
-        console.log(`Variante tiene ${replenishmentConfig.length} referencias en replenishment_config`);
-        return true;
+        referencesFound.push(`${replenishmentConfig.length} configuraciones de reposición activas`);
+        console.log(`⚙️ Variante tiene ${replenishmentConfig.length} configuraciones de reposición activas`);
       }
 
-      // Verificar en sales_metrics
+      // Verificar en sales_metrics (solo datos recientes - últimos 90 días)
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
       const { data: salesMetrics, error: salesError } = await supabase
         .from('sales_metrics')
-        .select('id')
+        .select('id, date')
         .eq('product_variant_id', variantId)
-        .limit(1);
+        .gte('date', ninetyDaysAgo.toISOString().split('T')[0]);
 
       if (salesError) {
-        console.error('Error verificando referencias en sales_metrics:', salesError);
-        return true;
+        console.error('❌ Error verificando referencias en sales_metrics:', salesError);
+        return { 
+          hasReferences: true, 
+          reason: 'Error de conectividad al verificar métricas',
+          details: [`Error: ${salesError.message}`]
+        };
       }
 
       if (salesMetrics && salesMetrics.length > 0) {
-        console.log(`Variante tiene ${salesMetrics.length} referencias en sales_metrics`);
-        return true;
+        referencesFound.push(`${salesMetrics.length} métricas de ventas recientes`);
+        console.log(`📈 Variante tiene ${salesMetrics.length} métricas de ventas de los últimos 90 días`);
       }
 
-      console.log(`Variante ${variantId} no tiene referencias, se puede eliminar`);
-      return false;
+      if (referencesFound.length > 0) {
+        console.log(`⚠️ Variante ${variantId} tiene referencias en:`, referencesFound);
+        return {
+          hasReferences: true,
+          reason: 'La variante está en uso',
+          details: referencesFound
+        };
+      }
+
+      console.log(`✅ Variante ${variantId} no tiene referencias críticas, se puede eliminar`);
+      return {
+        hasReferences: false,
+        reason: 'Sin referencias',
+        details: []
+      };
     } catch (error) {
-      console.error('Error en checkVariantReferences:', error);
-      return true; // Por seguridad, asumir que hay referencias si hay error
+      console.error('❌ Error inesperado en checkVariantReferences:', error);
+      return {
+        hasReferences: true,
+        reason: 'Error inesperado en verificación',
+        details: [`Error técnico: ${error instanceof Error ? error.message : 'Error desconocido'}`]
+      };
     }
   };
 
@@ -436,18 +477,25 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         }
       }
 
-      // Procesar eliminaciones (con verificación de referencias)
+      // Procesar eliminaciones (con verificación detallada de referencias)
       for (const variant of operations.toDelete) {
         operationsCount++;
-        console.log(`Verificando referencias para variante ${variant.id}...`);
+        console.log(`🗑️ Procesando eliminación de variante ${variant.id} (${variant.sku_variant})...`);
         
-        const hasReferences = await checkVariantReferences(variant.id!);
+        const referenceCheck = await checkVariantReferences(variant.id!);
         
-        if (hasReferences) {
-          console.log(`⚠️ Variante ${variant.id} tiene referencias, no se puede eliminar`);
-          operationResults.push(`⚠️ "${variant.sku_variant}" no se puede eliminar (en uso en órdenes)`);
+        if (referenceCheck.hasReferences) {
+          console.log(`⚠️ Variante ${variant.id} no se puede eliminar:`, referenceCheck.reason);
+          console.log(`📋 Detalles de referencias:`, referenceCheck.details);
+          
+          // Crear mensaje detallado para el usuario
+          const referencesText = referenceCheck.details.length > 0 
+            ? ` (${referenceCheck.details.join(', ')})`
+            : '';
+          
+          operationResults.push(`⚠️ "${variant.sku_variant}" no eliminada: ${referenceCheck.reason}${referencesText}`);
         } else {
-          console.log(`Eliminando variante ${variant.id}...`);
+          console.log(`🗑️ Eliminando variante ${variant.id} - sin referencias...`);
           
           const { error } = await supabase
             .from('product_variants')
@@ -455,39 +503,73 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
             .eq('id', variant.id);
 
           if (error) {
-            console.error(`Error eliminando variante ${variant.id}:`, error);
-            operationResults.push(`❌ Error eliminando "${variant.sku_variant}": ${error.message}`);
+            console.error(`❌ Error eliminando variante ${variant.id}:`, error);
+            console.error('Detalles del error:', error);
+            
+            // Proporcionar mensaje más específico basado en el tipo de error
+            let errorMessage = error.message;
+            if (error.code === '23503') {
+              errorMessage = 'No se puede eliminar: la variante está referenciada en otros registros';
+            } else if (error.code === '42501') {
+              errorMessage = 'Error de permisos: no tienes autorización para eliminar esta variante';
+            }
+            
+            operationResults.push(`❌ Error eliminando "${variant.sku_variant}": ${errorMessage}`);
           } else {
             successCount++;
-            console.log(`✓ Variante ${variant.id} eliminada exitosamente`);
-            operationResults.push(`✓ Eliminada "${variant.sku_variant}"`);
+            console.log(`✅ Variante ${variant.id} eliminada exitosamente`);
+            operationResults.push(`✅ Eliminada "${variant.sku_variant}"`);
           }
         }
       }
 
-      // 4. Mostrar resultados detallados
-      console.log('=== RESUMEN DE OPERACIONES ===');
-      console.log(`Total operaciones: ${operationsCount}`);
-      console.log(`Exitosas: ${successCount}`);
-      console.log(`Fallidas: ${operationsCount - successCount}`);
-      console.log('Detalles:', operationResults);
+      // 4. Mostrar resultados detallados y mejorar feedback al usuario
+      console.log('=== RESUMEN DETALLADO DE OPERACIONES ===');
+      console.log(`📊 Total operaciones: ${operationsCount}`);
+      console.log(`✅ Exitosas: ${successCount}`);
+      console.log(`❌ Fallidas: ${operationsCount - successCount}`);
+      console.log('📋 Detalles completos:', operationResults);
 
-      if (successCount === operationsCount) {
+      if (successCount === operationsCount && operationsCount > 0) {
         toast({
-          title: "✓ Producto actualizado completamente",
+          title: "✅ Producto actualizado completamente",
           description: `${formData.name} y todas sus variantes han sido actualizadas exitosamente.`,
         });
         
         onSuccess();
         onClose();
       } else if (successCount > 0) {
+        // Crear mensaje más descriptivo para actualizaciones parciales
+        const failedOperations = operationsCount - successCount;
+        const failedDetails = operationResults
+          .filter(result => result.includes('❌') || result.includes('⚠️'))
+          .slice(0, 3) // Mostrar máximo 3 errores
+          .join('; ');
+        
         toast({
           title: "⚠️ Producto actualizado parcialmente",
-          description: `Se completaron ${successCount} de ${operationsCount} operaciones. Revisa los detalles en la consola.`,
+          description: `Completadas ${successCount} de ${operationsCount} operaciones. ${failedOperations} fallaron. ${failedDetails}${operationResults.length > 3 ? '...' : ''}`,
           variant: "destructive",
         });
+        
+        // Si hay éxito parcial, aún refrescar para mostrar cambios
+        onSuccess();
+        
+      } else if (operationsCount > 0) {
+        // Todas las operaciones fallaron
+        const firstError = operationResults
+          .find(result => result.includes('❌') || result.includes('⚠️'))?.substring(0, 100) || 'Error desconocido';
+        
+        throw new Error(`No se completó ninguna operación de variantes. Primer error: ${firstError}`);
       } else {
-        throw new Error("No se pudieron completar las operaciones de variantes");
+        // Solo se actualizó la información básica del producto (sin operaciones de variantes)
+        toast({
+          title: "✅ Información básica actualizada",
+          description: `${formData.name} ha sido actualizado exitosamente.`,
+        });
+        
+        onSuccess();
+        onClose();
       }
 
     } catch (error: any) {
