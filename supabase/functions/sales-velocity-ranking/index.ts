@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     // Force manual calculation to ensure product grouping
     console.log('📝 Calculando ranking manualmente con agrupación por producto...');
       
-      // Get all product variants with basic info
+      // Get all product variants with basic info and product ID
       const { data: variants, error: variantsError } = await supabase
         .from('product_variants')
         .select(`
@@ -76,7 +76,8 @@ Deno.serve(async (req) => {
           size,
           color,
           stock_quantity,
-          products(name, status)
+          product_id,
+          products(id, name, status)
         `)
         .eq('products.organization_id', organizationId)
         .not('products.status', 'eq', 'discontinued');
@@ -110,8 +111,15 @@ Deno.serve(async (req) => {
         const revenue60Days = salesMetrics?.reduce((sum, item) => sum + (item.quantity * item.price || 0), 0) || 0;
         const ordersCount = new Set(salesMetrics?.map(item => item.shopify_orders?.created_at_shopify)).size || 0;
         
+        // Use product_id directly or products.id, never variant id as fallback
+        const productId = variant.product_id || variant.products?.id;
+        if (!productId) {
+          console.error(`❌ No se pudo obtener product_id para variante: ${variant.sku_variant}`);
+          continue;
+        }
+        
         variantData.push({
-          product_id: variant.products?.id || variant.id,
+          product_id: productId,
           product_name: variant.products?.name || 'Sin nombre',
           sku_variant: variant.sku_variant,
           current_stock: variant.stock_quantity || 0,
@@ -124,8 +132,11 @@ Deno.serve(async (req) => {
       // Group by product and consolidate metrics
       const productMap = new Map<string, any>();
       
+      console.log(`🔍 Agrupando ${variantData.length} variantes por producto...`);
+      
       variantData.forEach((variant) => {
-        const productKey = `${variant.product_name}_${variant.product_id}`;
+        // Use only product_id as key to ensure proper grouping
+        const productKey = variant.product_id;
         
         if (!productMap.has(productKey)) {
           productMap.set(productKey, {
@@ -149,6 +160,10 @@ Deno.serve(async (req) => {
         product.revenue_60_days += variant.revenue_60_days;
         product.orders_count += variant.orders_count;
       });
+
+      console.log(`✅ Agrupados en ${productMap.size} productos únicos`);
+      const uniqueProductIds = Array.from(productMap.keys());
+      console.log(`🏷️ Product IDs únicos: ${uniqueProductIds.slice(0, 5).join(', ')}${uniqueProductIds.length > 5 ? '...' : ''}`);
 
       // Convert to final ranking data
       const rankingData: SalesVelocityData[] = Array.from(productMap.values()).map(product => {
@@ -188,7 +203,7 @@ Deno.serve(async (req) => {
         return b.sales_velocity - a.sales_velocity;
       });
 
-      console.log(`✅ Ranking calculado: ${rankingData.length} variantes procesadas`);
+      console.log(`✅ Ranking calculado: ${rankingData.length} productos consolidados`);
       
       // Generate summary statistics
       const summary = {
