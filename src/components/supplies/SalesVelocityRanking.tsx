@@ -78,8 +78,7 @@ export const SalesVelocityRanking: React.FC = () => {
       const searchText = searchTerm.toLowerCase();
       const matchesSearch = 
         item.product_name.toLowerCase().includes(searchText) ||
-        item.sku_variant.toLowerCase().includes(searchText) ||
-        [item.variant_size, item.variant_color].filter(Boolean).join(' ').toLowerCase().includes(searchText);
+        item.main_sku.toLowerCase().includes(searchText);
       
       const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
       
@@ -136,7 +135,7 @@ export const SalesVelocityRanking: React.FC = () => {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedItems(filteredAndSortedRanking.map(item => item.product_variant_id));
+      setSelectedItems(filteredAndSortedRanking.map(item => item.product_id));
     } else {
       setSelectedItems([]);
     }
@@ -149,7 +148,7 @@ export const SalesVelocityRanking: React.FC = () => {
   };
 
   const allSelected = filteredAndSortedRanking.length > 0 && 
-    filteredAndSortedRanking.every(item => selectedItems.includes(item.product_variant_id));
+    filteredAndSortedRanking.every(item => selectedItems.includes(item.product_id));
 
   if (loading) {
     return (
@@ -195,7 +194,7 @@ export const SalesVelocityRanking: React.FC = () => {
                 <Package className="h-5 w-5 text-blue-500" />
                 <div>
                   <p className="text-sm text-muted-foreground">Total Productos</p>
-                  <p className="text-2xl font-bold">{summary.total_variants}</p>
+                  <p className="text-2xl font-bold">{summary.total_products}</p>
                 </div>
               </div>
             </CardContent>
@@ -256,7 +255,7 @@ export const SalesVelocityRanking: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => exportRankingCSV(ranking.filter(item => selectedItems.includes(item.product_variant_id)))}
+                    onClick={() => exportRankingCSV(ranking.filter(item => selectedItems.includes(item.product_id)))}
                     variant="outline"
                     size="sm"
                   >
@@ -280,12 +279,12 @@ export const SalesVelocityRanking: React.FC = () => {
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Buscar por producto, SKU o variante..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+                  <Input
+                    placeholder="Buscar por producto o SKU..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
               </div>
             </div>
             <div className="w-full sm:w-48">
@@ -325,7 +324,7 @@ export const SalesVelocityRanking: React.FC = () => {
                   </TableHead>
                   <TableHead className="w-16">#</TableHead>
                   <TableHead>Producto</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>SKU Principal</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted/50"
@@ -368,18 +367,17 @@ export const SalesVelocityRanking: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {filteredAndSortedRanking.map((item, index) => {
-                  const isSelected = selectedItems.includes(item.product_variant_id);
-                  const variant = [item.variant_size, item.variant_color].filter(Boolean).join(' / ') || 'Sin variante';
+                  const isSelected = selectedItems.includes(item.product_id);
                   
                   return (
                     <TableRow 
-                      key={item.product_variant_id}
+                      key={item.product_id}
                       className={`${isSelected ? 'bg-muted/50' : ''} ${item.status === 'critical' ? 'border-l-4 border-l-red-500' : ''}`}
                     >
                       <TableCell>
                         <Checkbox
                           checked={isSelected}
-                          onCheckedChange={(checked) => handleItemSelect(item.product_variant_id, checked as boolean)}
+                          onCheckedChange={(checked) => handleItemSelect(item.product_id, checked as boolean)}
                         />
                       </TableCell>
                       <TableCell className="font-medium">
@@ -388,11 +386,13 @@ export const SalesVelocityRanking: React.FC = () => {
                       <TableCell>
                         <div>
                           <div className="font-medium">{item.product_name}</div>
-                          <div className="text-sm text-muted-foreground">{variant}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.variant_count} {item.variant_count === 1 ? 'variante' : 'variantes'}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {item.sku_variant}
+                        {item.main_sku}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">

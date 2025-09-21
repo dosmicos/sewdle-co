@@ -3,11 +3,10 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface SalesVelocityItem {
-  product_variant_id: string;
+  product_id: string;
   product_name: string;
-  variant_size: string;
-  variant_color: string;
-  sku_variant: string;
+  variant_count: number;
+  main_sku: string;
   current_stock: number;
   sales_60_days: number;
   sales_velocity: number;
@@ -18,6 +17,7 @@ export interface SalesVelocityItem {
 }
 
 export interface SalesVelocitySummary {
+  total_products: number;
   total_variants: number;
   zero_sales: number;
   low_sales: number;
@@ -60,7 +60,7 @@ export const useSalesVelocityRanking = () => {
       }
 
       const response = data as SalesVelocityResponse;
-      console.log(`✅ Ranking obtenido: ${response.data.length} variantes`);
+      console.log(`✅ Ranking obtenido: ${response.data.length} productos`);
 
       setRanking(response.data);
       setSummary(response.summary);
@@ -99,28 +99,25 @@ export const useSalesVelocityRanking = () => {
     }
   }, [fetchRanking, toast]);
 
-  const markForDiscontinuation = useCallback(async (productVariantIds: string[]) => {
+  const markForDiscontinuation = useCallback(async (productIds: string[]) => {
     try {
-      console.log(`🔄 Marcando ${productVariantIds.length} productos para descontinuar...`);
+      console.log(`🔄 Marcando ${productIds.length} productos para descontinuar...`);
       
       // Update product status to discontinued
-      for (const variantId of productVariantIds) {
+      for (const productId of productIds) {
         const { error } = await supabase
-          .from('product_variants')
-          .select('products(id)')
-          .eq('id', variantId)
-          .single();
+          .from('products')
+          .update({ status: 'discontinued' })
+          .eq('id', productId);
 
         if (error) {
-          console.error(`❌ Error obteniendo producto para variante ${variantId}:`, error);
+          console.error(`❌ Error actualizando producto ${productId}:`, error);
           continue;
         }
       }
 
-      // For now, we'll just show a success message
-      // In a full implementation, you might want to update product status
-      toast.success("Productos marcados para revisión", {
-        description: `${productVariantIds.length} productos marcados para descontinuación`
+      toast.success("Productos marcados para descontinuación", {
+        description: `${productIds.length} productos marcados como descontinuados`
       });
 
       // Refresh ranking to reflect changes
@@ -143,9 +140,9 @@ export const useSalesVelocityRanking = () => {
     const headers = [
       'Ranking',
       'Producto',
-      'Variante',
-      'SKU',
-      'Stock Actual',
+      'Variantes',
+      'SKU Principal',
+      'Stock Total',
       'Ventas 60 días',
       'Velocidad Diaria',
       'Días de Stock',
@@ -157,12 +154,11 @@ export const useSalesVelocityRanking = () => {
     const csvRows = [headers.join(',')];
     
     dataToExport.forEach((item, index) => {
-      const variant = [item.variant_size, item.variant_color].filter(Boolean).join(' / ') || 'Sin variante';
       const row = [
         (index + 1).toString(),
         `"${item.product_name}"`,
-        `"${variant}"`,
-        `"${item.sku_variant}"`,
+        `"${item.variant_count} variantes"`,
+        `"${item.main_sku}"`,
         item.current_stock.toString(),
         item.sales_60_days.toString(),
         item.sales_velocity.toFixed(3),
@@ -178,7 +174,8 @@ export const useSalesVelocityRanking = () => {
     if (summary) {
       csvRows.push('');
       csvRows.push('# RESUMEN DEL ANÁLISIS');
-      csvRows.push(`"Total de variantes analizadas","${summary.total_variants}"`);
+      csvRows.push(`"Total de productos analizados","${summary.total_products}"`);
+      csvRows.push(`"Total de variantes","${summary.total_variants}"`);
       csvRows.push(`"Sin ventas (0 unidades)","${summary.zero_sales}"`);
       csvRows.push(`"Bajas ventas (1-10 unidades)","${summary.low_sales}"`);
       csvRows.push(`"Buenas ventas (>10 unidades)","${summary.good_sales}"`);

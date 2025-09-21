@@ -2,11 +2,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 
 interface SalesVelocityData {
-  product_variant_id: string;
+  product_id: string;
   product_name: string;
-  variant_size: string;
-  variant_color: string;
-  sku_variant: string;
+  variant_count: number;
+  main_sku: string;
   current_stock: number;
   sales_60_days: number;
   sales_velocity: number;
@@ -95,8 +94,8 @@ Deno.serve(async (req) => {
         throw new Error(`Error obteniendo variantes: ${variantsError.message}`);
       }
 
-      // Calculate sales for each variant from Shopify data
-      const rankingData: SalesVelocityData[] = [];
+      // Calculate sales for each variant and group by product
+      const variantData: any[] = [];
       
       for (const variant of variants || []) {
         // Get sales data from Shopify orders
@@ -120,34 +119,75 @@ Deno.serve(async (req) => {
         const revenue60Days = salesMetrics?.reduce((sum, item) => sum + (item.quantity * item.price || 0), 0) || 0;
         const ordersCount = new Set(salesMetrics?.map(item => item.shopify_orders?.created_at_shopify)).size || 0;
         
-        const salesVelocity = sales60Days / 60; // daily average
-        const stockDaysRemaining = salesVelocity > 0 ? (variant.stock_quantity || 0) / salesVelocity : 9999;
-        
-        // Determine status
-        let status = 'good';
-        if (sales60Days === 0) {
-          status = 'critical'; // No sales in 60 days
-        } else if (sales60Days <= 5) {
-          status = 'low'; // Very low sales
-        } else if (sales60Days <= 20) {
-          status = 'warning'; // Low sales
-        }
-
-        rankingData.push({
-          product_variant_id: variant.id,
+        variantData.push({
+          product_id: variant.products?.id || variant.id,
           product_name: variant.products?.name || 'Sin nombre',
-          variant_size: variant.size || '',
-          variant_color: variant.color || '',
           sku_variant: variant.sku_variant,
           current_stock: variant.stock_quantity || 0,
           sales_60_days: sales60Days,
-          sales_velocity: Number(salesVelocity.toFixed(3)),
-          stock_days_remaining: Math.round(stockDaysRemaining),
-          revenue_60_days: Number(revenue60Days.toFixed(2)),
-          orders_count: ordersCount,
-          status
+          revenue_60_days: revenue60Days,
+          orders_count: ordersCount
         });
       }
+
+      // Group by product and consolidate metrics
+      const productMap = new Map<string, any>();
+      
+      variantData.forEach((variant) => {
+        const productKey = `${variant.product_name}_${variant.product_id}`;
+        
+        if (!productMap.has(productKey)) {
+          productMap.set(productKey, {
+            product_id: variant.product_id,
+            product_name: variant.product_name,
+            variant_count: 0,
+            main_sku: variant.sku_variant,
+            skus: [],
+            current_stock: 0,
+            sales_60_days: 0,
+            revenue_60_days: 0,
+            orders_count: 0
+          });
+        }
+        
+        const product = productMap.get(productKey);
+        product.variant_count += 1;
+        product.skus.push(variant.sku_variant);
+        product.current_stock += variant.current_stock;
+        product.sales_60_days += variant.sales_60_days;
+        product.revenue_60_days += variant.revenue_60_days;
+        product.orders_count += variant.orders_count;
+      });
+
+      // Convert to final ranking data
+      const rankingData: SalesVelocityData[] = Array.from(productMap.values()).map(product => {
+        const salesVelocity = product.sales_60_days / 60; // daily average
+        const stockDaysRemaining = salesVelocity > 0 ? product.current_stock / salesVelocity : 9999;
+        
+        // Determine status based on total product sales
+        let status = 'good';
+        if (product.sales_60_days === 0) {
+          status = 'critical'; // No sales in 60 days
+        } else if (product.sales_60_days <= 10) {
+          status = 'low'; // Very low sales for entire product
+        } else if (product.sales_60_days <= 50) {
+          status = 'warning'; // Low sales for entire product
+        }
+
+        return {
+          product_id: product.product_id,
+          product_name: product.product_name,
+          variant_count: product.variant_count,
+          main_sku: product.variant_count > 1 ? 'Múltiples SKUs' : product.main_sku,
+          current_stock: product.current_stock,
+          sales_60_days: product.sales_60_days,
+          sales_velocity: Number(salesVelocity.toFixed(3)),
+          stock_days_remaining: Math.round(stockDaysRemaining),
+          revenue_60_days: Number(product.revenue_60_days.toFixed(2)),
+          orders_count: product.orders_count,
+          status
+        };
+      });
 
       // Sort by sales velocity (descending) and then by sales volume
       rankingData.sort((a, b) => {
@@ -161,12 +201,13 @@ Deno.serve(async (req) => {
       
       // Generate summary statistics
       const summary = {
-        total_variants: rankingData.length,
+        total_products: rankingData.length,
         zero_sales: rankingData.filter(v => v.sales_60_days === 0).length,
         low_sales: rankingData.filter(v => v.sales_60_days > 0 && v.sales_60_days <= 10).length,
         good_sales: rankingData.filter(v => v.sales_60_days > 10).length,
         total_units_sold: rankingData.reduce((sum, v) => sum + v.sales_60_days, 0),
         total_revenue: rankingData.reduce((sum, v) => sum + v.revenue_60_days, 0),
+        total_variants: rankingData.reduce((sum, v) => sum + v.variant_count, 0),
         calculation_date: new Date().toISOString().split('T')[0],
         period_days: 60
       };
@@ -190,12 +231,13 @@ Deno.serve(async (req) => {
     console.log(`✅ Ranking obtenido: ${rankingData.length} variantes`);
 
     const summary = {
-      total_variants: rankingData.length,
+      total_products: rankingData.length,
       zero_sales: rankingData.filter(v => v.sales_60_days === 0).length,
       low_sales: rankingData.filter(v => v.sales_60_days > 0 && v.sales_60_days <= 10).length,
       good_sales: rankingData.filter(v => v.sales_60_days > 10).length,
       total_units_sold: rankingData.reduce((sum, v) => sum + v.sales_60_days, 0),
       total_revenue: rankingData.reduce((sum, v) => sum + v.revenue_60_days, 0),
+      total_variants: 0, // Not available from RPC function
       calculation_date: new Date().toISOString().split('T')[0],
       period_days: 60
     };
