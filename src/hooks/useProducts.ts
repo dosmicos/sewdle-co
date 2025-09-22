@@ -26,7 +26,7 @@ interface ProductVariant {
   stock_quantity: number;
 }
 
-export const useProducts = () => {
+export const useProducts = (includeInactive: boolean = false) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,10 +46,15 @@ export const useProducts = () => {
       }
       setError(null);
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('products')
-        .select('*')
-        .eq('status', 'active')
+        .select('*');
+        
+      if (!includeInactive) {
+        query = query.eq('status', 'active');
+      }
+      
+      const { data, error } = await query
         .order('created_at', { ascending: false });
 
       if (error) {

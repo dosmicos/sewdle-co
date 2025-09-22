@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Package } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Edit, Trash2, Package, Power } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ProductEditModal from '@/components/ProductEditModal';
@@ -36,6 +37,7 @@ interface ProductsListProps {
   error: string | null;
   onProductUpdate?: () => void;
   showDiagnosticTools?: boolean;
+  showInactive?: boolean;
 }
 
 const ProductsList = ({ 
@@ -43,13 +45,15 @@ const ProductsList = ({
   loading, 
   error, 
   onProductUpdate,
-  showDiagnosticTools = true 
+  showDiagnosticTools = true,
+  showInactive = false
 }: ProductsListProps) => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleEditProduct = (product: Product) => {
@@ -68,6 +72,43 @@ const ProductsList = ({
   const handleDeleteClick = (product: Product) => {
     setProductToDelete(product);
     setDeleteConfirmOpen(true);
+  };
+
+  const handleStatusToggle = async (product: Product) => {
+    const newStatus = product.status === 'active' ? 'inactive' : 'active';
+    setUpdatingStatus(product.id);
+    
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ status: newStatus })
+        .eq('id', product.id);
+
+      if (error) {
+        console.error('Error updating product status:', error);
+        throw error;
+      }
+
+      toast({
+        title: newStatus === 'active' ? "Producto activado" : "Producto desactivado",
+        description: `${product.name} ahora está ${newStatus === 'active' ? 'activo' : 'inactivo'}.`,
+      });
+
+      // Actualizar la lista de productos
+      if (onProductUpdate) {
+        onProductUpdate();
+      }
+
+    } catch (error: any) {
+      console.error('Error updating product status:', error);
+      toast({
+        title: "Error al cambiar estado",
+        description: error.message || "Hubo un problema al cambiar el estado del producto.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -161,9 +202,10 @@ const ProductsList = ({
           <div className="overflow-x-auto">
             {/* Header de la tabla */}
             <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-              <div className="grid grid-cols-11 gap-4 items-center text-sm font-medium text-gray-700">
+              <div className="grid grid-cols-12 gap-4 items-center text-sm font-medium text-gray-700">
                 <div className="col-span-3">Producto</div>
                 <div className="col-span-1">Estado</div>
+                <div className="col-span-1">Activo</div>
                 <div className="col-span-2">SKU</div>
                 <div className="col-span-1">Precio</div>
                 <div className="col-span-2">Categoría</div>
@@ -174,8 +216,8 @@ const ProductsList = ({
             {/* Filas de productos */}
             <div className="divide-y divide-gray-100">
               {products.map((product) => (
-                <div key={product.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="grid grid-cols-11 gap-4 items-center">
+                <div key={product.id} className={`px-6 py-4 hover:bg-gray-50 transition-colors ${product.status === 'inactive' ? 'opacity-60 bg-gray-50/50' : ''}`}>
+                  <div className="grid grid-cols-12 gap-4 items-center">
 
                     {/* Producto (imagen + nombre) */}
                     <div className="col-span-3 flex items-center space-x-3">
@@ -208,9 +250,30 @@ const ProductsList = ({
 
                     {/* Estado */}
                     <div className="col-span-1">
-                      <Badge variant={product.status === 'active' ? 'default' : 'secondary'} className="bg-green-100 text-green-800 border-green-200">
+                      <Badge 
+                        variant={product.status === 'active' ? 'default' : 'secondary'} 
+                        className={product.status === 'active' 
+                          ? "bg-green-100 text-green-800 border-green-200" 
+                          : "bg-red-100 text-red-800 border-red-200"
+                        }
+                      >
                         {product.status === 'active' ? 'Activo' : 'Inactivo'}
                       </Badge>
+                    </div>
+
+                    {/* Toggle Activo/Inactivo */}
+                    <div className="col-span-1">
+                      <div className="flex items-center justify-center">
+                        <Switch
+                          checked={product.status === 'active'}
+                          onCheckedChange={() => handleStatusToggle(product)}
+                          disabled={updatingStatus === product.id}
+                          className="data-[state=checked]:bg-green-600"
+                        />
+                        {updatingStatus === product.id && (
+                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin ml-2"></div>
+                        )}
+                      </div>
                     </div>
 
                     {/* SKU */}

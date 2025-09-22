@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
@@ -16,6 +16,7 @@ const ProductsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingStock, setUpdatingStock] = useState(false);
   const [activeTab, setActiveTab] = useState('catalog');
+  const [showInactive, setShowInactive] = useState(false);
   const {
     products,
     loading,
@@ -26,7 +27,7 @@ const ProductsPage = () => {
     refetch,
     setAutoRefreshEnabled,
     refreshNow
-  } = useProducts();
+  } = useProducts(showInactive);
   const {
     toast
   } = useToast();
@@ -272,16 +273,37 @@ const ProductsPage = () => {
               )}
             </div>
 
-            {/* Barra de búsqueda para catálogo */}
+            {/* Barra de búsqueda y filtros para catálogo */}
             <div className="flex items-center space-x-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
                 <input type="text" placeholder="Buscar productos..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 bg-white border border-gray-300 rounded-xl px-4 py-3 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:ring-offset-0 transition-all duration-200" />
               </div>
+              
+              {/* Toggle para mostrar productos inactivos */}
+              <Button
+                onClick={() => setShowInactive(!showInactive)}
+                variant="outline"
+                className={`font-medium rounded-xl px-4 py-3 transition-all duration-200 active:scale-[0.98] ${showInactive ? 'bg-red-50 border-red-200 text-red-700' : 'border-gray-300'}`}
+              >
+                {showInactive ? (
+                  <EyeOff className="w-4 h-4 mr-2" />
+                ) : (
+                  <Eye className="w-4 h-4 mr-2" />
+                )}
+                {showInactive ? 'Ocultar Inactivos' : 'Mostrar Inactivos'}
+              </Button>
             </div>
 
             {/* Lista de productos simplificada */}
-            <ProductsList products={filteredProducts} loading={loading} error={error} onProductUpdate={handleProductUpdate} showDiagnosticTools={false} />
+            <ProductsList 
+              products={filteredProducts} 
+              loading={loading} 
+              error={error} 
+              onProductUpdate={handleProductUpdate} 
+              showDiagnosticTools={false}
+              showInactive={showInactive}
+            />
           </TabsContent>
 
           <TabsContent value="shopify-sync" className="space-y-6 mt-6">
