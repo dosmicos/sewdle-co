@@ -32,8 +32,18 @@ const ProductsPage = () => {
     toast
   } = useToast();
 
-  // Filtrar productos basado en el término de búsqueda
-  const filteredProducts = products.filter(product => product.name.toLowerCase().includes(searchTerm.toLowerCase()) || product.sku.toLowerCase().includes(searchTerm.toLowerCase()) || product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filtrar productos basado en el término de búsqueda y estado
+  const filteredProducts = products.filter(product => {
+    // Filtro por estado (activo/inactivo)
+    const statusFilter = showInactive || product.status === 'active';
+    
+    // Filtro por término de búsqueda
+    const searchFilter = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        product.sku.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    return statusFilter && searchFilter;
+  });
   const handleProductFormSuccess = () => {
     setShowProductForm(false);
     refetch(); // Recargar productos cuando se cierra el formulario
