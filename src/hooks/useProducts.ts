@@ -203,7 +203,7 @@ export const useProducts = (includeInactive: boolean = false) => {
       cleanup();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [includeInactive]);
 
   useEffect(() => {
     setupAutoRefresh();
