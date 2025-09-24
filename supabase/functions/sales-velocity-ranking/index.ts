@@ -10,6 +10,7 @@ interface SalesVelocityData {
   sales_60_days: number;
   sales_velocity: number;
   stock_days_remaining: number;
+  velocity_stock_ratio: number;
   revenue_60_days: number;
   orders_count: number;
   status: string;
@@ -170,6 +171,10 @@ Deno.serve(async (req) => {
         const salesVelocity = product.sales_60_days / 60; // daily average
         const stockDaysRemaining = salesVelocity > 0 ? product.current_stock / salesVelocity : 9999;
         
+        // Calculate velocity/stock ratio (replace 0 with 1 for stock days)
+        const stockDaysForRatio = stockDaysRemaining === 0 ? 1 : stockDaysRemaining;
+        const velocityStockRatio = salesVelocity / stockDaysForRatio;
+        
         // Determine status based on total product sales
         let status = 'good';
         if (product.sales_60_days === 0) {
@@ -189,6 +194,7 @@ Deno.serve(async (req) => {
           sales_60_days: product.sales_60_days,
           sales_velocity: Number(salesVelocity.toFixed(3)),
           stock_days_remaining: Math.round(stockDaysRemaining),
+          velocity_stock_ratio: Number(velocityStockRatio.toFixed(3)),
           revenue_60_days: Number(product.revenue_60_days.toFixed(2)),
           orders_count: product.orders_count,
           status

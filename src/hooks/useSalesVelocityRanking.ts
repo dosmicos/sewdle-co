@@ -11,6 +11,7 @@ export interface SalesVelocityItem {
   sales_60_days: number;
   sales_velocity: number;
   stock_days_remaining: number;
+  velocity_stock_ratio: number;
   revenue_60_days: number;
   orders_count: number;
   status: 'critical' | 'low' | 'warning' | 'good';
@@ -146,6 +147,7 @@ export const useSalesVelocityRanking = () => {
       'Ventas 60 días',
       'Velocidad Diaria',
       'Días de Stock',
+      'Ratio Velocidad/Stock',
       'Ingresos 60 días',
       'Órdenes Únicas',
       'Estado'
@@ -163,6 +165,7 @@ export const useSalesVelocityRanking = () => {
         item.sales_60_days.toString(),
         item.sales_velocity.toFixed(3),
         item.stock_days_remaining.toString(),
+        item.velocity_stock_ratio.toFixed(3),
         item.revenue_60_days.toFixed(2),
         item.orders_count.toString(),
         `"${item.status.toUpperCase()}"`

@@ -50,6 +50,7 @@ export const SalesVelocityRanking: React.FC = () => {
     { key: 'sales_velocity', label: 'Velocidad Diaria' },
     { key: 'current_stock', label: 'Stock Actual' },
     { key: 'stock_days_remaining', label: 'Días de Stock' },
+    { key: 'velocity_stock_ratio', label: 'Ratio V/S' },
     { key: 'revenue_60_days', label: 'Ingresos 60d' },
     { key: 'orders_count', label: 'Órdenes' }
   ];
@@ -355,6 +356,15 @@ export const SalesVelocityRanking: React.FC = () => {
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('velocity_stock_ratio')}
+                  >
+                    <div className="flex items-center">
+                      Ratio V/S
+                      {getSortIcon('velocity_stock_ratio')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort('revenue_60_days')}
                   >
                     <div className="flex items-center">
@@ -426,6 +436,15 @@ export const SalesVelocityRanking: React.FC = () => {
                           'text-green-600'
                         }`}>
                           {item.stock_days_remaining === 9999 ? '∞' : item.stock_days_remaining}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`font-mono text-sm font-medium ${
+                          item.velocity_stock_ratio > 0.1 ? 'text-red-600' :
+                          item.velocity_stock_ratio > 0.05 ? 'text-orange-600' :
+                          'text-green-600'
+                        }`}>
+                          {item.velocity_stock_ratio.toFixed(3)}
                         </span>
                       </TableCell>
                       <TableCell>
