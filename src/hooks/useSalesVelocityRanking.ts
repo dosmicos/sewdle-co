@@ -165,7 +165,7 @@ export const useSalesVelocityRanking = () => {
         item.sales_60_days.toString(),
         item.sales_velocity.toFixed(3),
         item.stock_days_remaining.toString(),
-        item.velocity_stock_ratio.toFixed(3),
+        (item.velocity_stock_ratio || 0).toFixed(3),
         item.revenue_60_days.toFixed(2),
         item.orders_count.toString(),
         `"${item.status.toUpperCase()}"`

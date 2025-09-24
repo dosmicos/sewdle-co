@@ -440,11 +440,11 @@ export const SalesVelocityRanking: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <span className={`font-mono text-sm font-medium ${
-                          item.velocity_stock_ratio > 0.1 ? 'text-red-600' :
-                          item.velocity_stock_ratio > 0.05 ? 'text-orange-600' :
+                          (item.velocity_stock_ratio || 0) > 0.1 ? 'text-red-600' :
+                          (item.velocity_stock_ratio || 0) > 0.05 ? 'text-orange-600' :
                           'text-green-600'
                         }`}>
-                          {item.velocity_stock_ratio.toFixed(3)}
+                          {(item.velocity_stock_ratio || 0).toFixed(3)}
                         </span>
                       </TableCell>
                       <TableCell>
