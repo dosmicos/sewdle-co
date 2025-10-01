@@ -2,25 +2,25 @@
 import { useAuth } from '@/contexts/AuthContext';
 
 export const useUserContext = () => {
-  const { user, isAdmin, isDesigner, hasPermission } = useAuth();
+  const { user, isAdmin, isDesigner, isQCLeader, hasPermission } = useAuth();
   
   const getWorkshopFilter = () => {
-    // Solo los usuarios con rol "Taller" (no admin ni diseñador) tienen filtro
-    if (isAdmin() || isDesigner()) {
-      return null; // Admins y diseñadores ven todos los datos
+    // Solo los usuarios con rol "Taller" (no admin, diseñador ni líder QC) tienen filtro
+    if (isAdmin() || isDesigner() || isQCLeader()) {
+      return null; // Admins, diseñadores y líderes QC ven todos los datos
     }
     return user?.workshopId; // Solo talleres ven sus datos filtrados
   };
   
   const getUserFilter = () => {
-    // Solo los usuarios con rol "Taller" (no admin ni diseñador) tienen filtro
-    if (isAdmin() || isDesigner()) {
-      return null; // Admins y diseñadores ven todos los datos
+    // Solo los usuarios con rol "Taller" (no admin, diseñador ni líder QC) tienen filtro
+    if (isAdmin() || isDesigner() || isQCLeader()) {
+      return null; // Admins, diseñadores y líderes QC ven todos los datos
     }
     return user?.id; // Solo talleres ven sus datos filtrados
   };
   
-  const isWorkshopUser = () => !isAdmin() && !isDesigner();
+  const isWorkshopUser = () => !isAdmin() && !isDesigner() && !isQCLeader();
   
   // Helper para verificar permisos específicos de órdenes
   const canCreateOrders = () => hasPermission('orders', 'create');
@@ -40,6 +40,7 @@ export const useUserContext = () => {
     isWorkshopUser: isWorkshopUser(),
     isAdmin: isAdmin(),
     isDesigner: isDesigner(),
+    isQCLeader: isQCLeader(),
     currentUser: user,
     // Helpers de permisos de órdenes
     canCreateOrders: canCreateOrders(),
