@@ -97,19 +97,7 @@ const AppSidebar = () => {
     userTypeLabel = 'Diseñador';
     userIcon = Palette;
   } else if (isQCLeader()) {
-    menuItems = qcLeaderMenuItems.filter(item => {
-      // Filtrar elementos del menú según permisos específicos
-      switch (item.url) {
-        case '/orders':
-          return hasPermission('orders', 'view');
-        case '/workshops':
-          return hasPermission('workshops', 'view');
-        case '/deliveries':
-          return hasPermission('deliveries', 'view');
-        default:
-          return true;
-      }
-    });
+    menuItems = qcLeaderMenuItems;
     userTypeLabel = 'Líder QC';
     userIcon = Shield;
   } else {
