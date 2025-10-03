@@ -76,6 +76,12 @@ export const useRoles = () => {
         const permissions: Permission[] = [];
         
         if (role.permissions && typeof role.permissions === 'object') {
+          // DEBUG: Log para ver qué recibimos de la BD
+          console.log('🔍 DEBUG fetchRoles - Permisos de BD para rol:', role.name, {
+            rawPermissions: role.permissions,
+            moduleMapping: MODULE_MAPPING
+          });
+          
           Object.keys(role.permissions).forEach(dbModule => {
             const modulePerms = role.permissions[dbModule];
             // Usar el mapeo para convertir nombre del módulo de BD a UI
@@ -186,6 +192,13 @@ export const useRoles = () => {
           permissionsJson[dbModule] = permission.actions;
         });
         updateData.permissions = permissionsJson;
+        
+        // DEBUG: Log para ver qué estamos guardando
+        console.log('🔍 DEBUG updateRole - Permisos a guardar:', {
+          originalPermissions: updates.permissions,
+          transformedPermissions: permissionsJson,
+          moduleMapping: REVERSE_MODULE_MAPPING
+        });
       }
 
       const { error } = await supabase
