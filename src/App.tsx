@@ -208,9 +208,9 @@ const AppContent = () => {
         <Route path="settings/billing" element={<BillingPage />} />
         
         <Route path="prospects" element={
-          <AdminRoute>
+          <PermissionRoute module="prospects" action="view">
             <ProspectsPage />
-          </AdminRoute>
+          </PermissionRoute>
         } />
         
         <Route path="okrs/*" element={<OKRsPage />} />
