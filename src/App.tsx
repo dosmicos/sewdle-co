@@ -27,6 +27,7 @@ import OKRsPage from "@/pages/OKRsPage";
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
 import OrderDetailsPage from "@/pages/OrderDetailsPage";
+import ProspectsPage from "@/pages/ProspectsPage";
 import NotFound from "@/pages/NotFound";
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -205,6 +206,12 @@ const AppContent = () => {
         } />
         
         <Route path="settings/billing" element={<BillingPage />} />
+        
+        <Route path="prospects" element={
+          <AdminRoute>
+            <ProspectsPage />
+          </AdminRoute>
+        } />
         
         <Route path="okrs/*" element={<OKRsPage />} />
       </Route>
