@@ -16,7 +16,6 @@ const STAGE_COLORS: Record<ProspectStage, string> = {
   videocall_completed: 'bg-blue-600',
   visit_scheduled: 'bg-purple-500',
   visit_completed: 'bg-purple-600',
-  sample_requested: 'bg-amber-500',
   sample_in_progress: 'bg-amber-600',
   sample_approved: 'bg-green-500',
   sample_rejected: 'bg-red-500',

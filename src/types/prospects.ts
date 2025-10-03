@@ -4,7 +4,6 @@ export type ProspectStage =
   | 'videocall_completed'
   | 'visit_scheduled'
   | 'visit_completed'
-  | 'sample_requested'
   | 'sample_in_progress'
   | 'sample_approved'
   | 'sample_rejected'
@@ -82,7 +81,6 @@ export const STAGE_LABELS: Record<ProspectStage, string> = {
   videocall_completed: 'Videollamada Realizada',
   visit_scheduled: 'Visita Agendada',
   visit_completed: 'Visita Realizada',
-  sample_requested: 'Muestra Solicitada',
   sample_in_progress: 'Muestra en Proceso',
   sample_approved: 'Muestra Aprobada',
   sample_rejected: 'Muestra Rechazada',

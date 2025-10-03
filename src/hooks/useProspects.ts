@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { WorkshopProspect } from '@/types/prospects';
+import { WorkshopProspect, ProspectStage } from '@/types/prospects';
 import { toast } from 'sonner';
+
+// Helper para convertir stages obsoletos
+const normalizeProspectStage = (stage: string): ProspectStage => {
+  // Convertir 'sample_requested' a 'sample_in_progress'
+  if (stage === 'sample_requested') {
+    return 'sample_in_progress';
+  }
+  return stage as ProspectStage;
+};
+
+const normalizeProspect = (prospect: any): WorkshopProspect => ({
+  ...prospect,
+  stage: normalizeProspectStage(prospect.stage),
+});
 
 export const useProspects = () => {
   const { user } = useAuth();
@@ -22,7 +36,7 @@ export const useProspects = () => {
 
       if (fetchError) throw fetchError;
 
-      setProspects(data || []);
+      setProspects((data || []).map(normalizeProspect));
     } catch (err: any) {
       console.error('Error fetching prospects:', err);
       setError(err.message);
@@ -48,7 +62,7 @@ export const useProspects = () => {
 
       if (createError) throw createError;
 
-      setProspects(prev => [data, ...prev]);
+      setProspects(prev => [normalizeProspect(data), ...prev]);
       toast.success('Prospecto creado exitosamente');
       return { data, error: null };
     } catch (err: any) {
@@ -69,7 +83,7 @@ export const useProspects = () => {
 
       if (updateError) throw updateError;
 
-      setProspects(prev => prev.map(p => p.id === id ? data : p));
+      setProspects(prev => prev.map(p => p.id === id ? normalizeProspect(data) : p));
       toast.success('Prospecto actualizado');
       return { data, error: null };
     } catch (err: any) {
