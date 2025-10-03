@@ -183,8 +183,18 @@ export const useRoles = () => {
       if (updates.description) updateData.description = updates.description;
       
       if (updates.permissions) {
-        // Transformar permisos al formato JSONB usando mapeo inverso
-        const permissionsJson: Record<string, any> = {};
+        // 1. Obtener permisos actuales del rol
+        const { data: currentRole } = await supabase
+          .from('roles')
+          .select('permissions')
+          .eq('id', roleId)
+          .single();
+        
+        // 2. Partir de los permisos existentes (merge)
+        const basePermissions = (currentRole?.permissions || {}) as Record<string, any>;
+        const permissionsJson: Record<string, any> = { ...basePermissions };
+        
+        // 3. Actualizar/agregar solo los módulos enviados
         updates.permissions.forEach(permission => {
           // Convertir nombre del módulo de UI a BD
           const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
@@ -193,10 +203,11 @@ export const useRoles = () => {
         });
         updateData.permissions = permissionsJson;
         
-        // DEBUG: Log para ver qué estamos guardando
-        console.log('🔍 DEBUG updateRole - Permisos a guardar:', {
-          originalPermissions: updates.permissions,
-          transformedPermissions: permissionsJson,
+        // DEBUG: Log para ver el merge
+        console.log('🔍 DEBUG updateRole - Merge de permisos:', {
+          permisosAnteriores: currentRole?.permissions,
+          permisosNuevos: updates.permissions,
+          permisosFinales: permissionsJson,
           moduleMapping: REVERSE_MODULE_MAPPING
         });
       }
