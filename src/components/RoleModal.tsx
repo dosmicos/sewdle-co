@@ -95,12 +95,12 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
       return;
     }
 
-    // Validate that at least one permission is granted
-    const hasAnyPermission = formData.permissions.some(permission =>
-      Object.values(permission.actions).some(action => action)
+    // Filtrar solo permisos con al menos una acción en true
+    const activePermissions = formData.permissions.filter(permission =>
+      Object.values(permission.actions).some(action => action === true)
     );
 
-    if (!hasAnyPermission) {
+    if (activePermissions.length === 0) {
       toast({
         title: "Error",
         description: "Debes otorgar al menos un permiso al rol",
@@ -110,12 +110,17 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
     }
 
     // DEBUG: Log para ver qué enviamos
-    console.log('🔍 DEBUG RoleModal handleSubmit - Datos a enviar:', {
-      formData,
-      reclutamientoPermission: formData.permissions.find(p => p.module === 'Reclutamiento')
+    console.log('🔍 DEBUG RoleModal handleSubmit - Enviando solo módulos activos:', {
+      totalModules: formData.permissions.length,
+      activeModules: activePermissions.length,
+      activePermissions,
+      reclutamientoPermission: activePermissions.find(p => p.module === 'Reclutamiento')
     });
 
-    onSave(formData);
+    onSave({
+      ...formData,
+      permissions: activePermissions
+    });
     
     toast({
       title: role ? "Rol actualizado" : "Rol creado",
