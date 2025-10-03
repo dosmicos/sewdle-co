@@ -35,7 +35,8 @@ const MODULE_MAPPING = {
   'users': 'Usuarios',
   'finances': 'Finanzas',
   'replenishment': 'Reposición IA',
-  'shopify': 'Shopify'
+  'shopify': 'Shopify',
+  'prospects': 'Reclutamiento'
 };
 
 // Mapeo inverso: Interfaz → Base de datos
