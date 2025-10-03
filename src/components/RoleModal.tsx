@@ -109,6 +109,12 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
       return;
     }
 
+    // DEBUG: Log para ver qué enviamos
+    console.log('🔍 DEBUG RoleModal handleSubmit - Datos a enviar:', {
+      formData,
+      reclutamientoPermission: formData.permissions.find(p => p.module === 'Reclutamiento')
+    });
+
     onSave(formData);
     
     toast({
