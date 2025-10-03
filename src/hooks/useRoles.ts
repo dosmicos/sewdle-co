@@ -196,19 +196,30 @@ export const useRoles = () => {
         
         // 3. Actualizar/agregar solo los módulos con al menos una acción en true
         updates.permissions.forEach(permission => {
-          // Verificar si al menos una acción está en true
-          const hasAnyTrueAction = Object.values(permission.actions).some(v => v === true);
-          
           // Convertir nombre del módulo de UI a BD
           const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
                           permission.module.toLowerCase();
           
+          // Verificar si al menos una acción está en true
+          const actionValues = Object.values(permission.actions);
+          const hasAnyTrueAction = actionValues.some(v => v === true);
+          
+          // LOG DETALLADO para debug
+          console.log(`🔍 Procesando módulo: ${permission.module}`, {
+            dbModule,
+            actions: permission.actions,
+            actionValues,
+            hasAnyTrueAction
+          });
+          
           if (hasAnyTrueAction) {
             // Si tiene al menos una acción en true, guardar el módulo
             permissionsJson[dbModule] = permission.actions;
+            console.log(`✅ Guardando módulo ${dbModule}:`, permission.actions);
           } else {
             // Si todas son false, eliminar el módulo si existe
             delete permissionsJson[dbModule];
+            console.log(`❌ Eliminando módulo ${dbModule} (todas las acciones en false)`);
           }
         });
         updateData.permissions = permissionsJson;
