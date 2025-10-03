@@ -194,12 +194,22 @@ export const useRoles = () => {
         const basePermissions = (currentRole?.permissions || {}) as Record<string, any>;
         const permissionsJson: Record<string, any> = { ...basePermissions };
         
-        // 3. Actualizar/agregar solo los módulos enviados
+        // 3. Actualizar/agregar solo los módulos con al menos una acción en true
         updates.permissions.forEach(permission => {
+          // Verificar si al menos una acción está en true
+          const hasAnyTrueAction = Object.values(permission.actions).some(v => v === true);
+          
           // Convertir nombre del módulo de UI a BD
           const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
                           permission.module.toLowerCase();
-          permissionsJson[dbModule] = permission.actions;
+          
+          if (hasAnyTrueAction) {
+            // Si tiene al menos una acción en true, guardar el módulo
+            permissionsJson[dbModule] = permission.actions;
+          } else {
+            // Si todas son false, eliminar el módulo si existe
+            delete permissionsJson[dbModule];
+          }
         });
         updateData.permissions = permissionsJson;
         
