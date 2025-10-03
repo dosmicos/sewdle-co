@@ -1492,6 +1492,114 @@ export type Database = {
           },
         ]
       }
+      prospect_activities: {
+        Row: {
+          activity_type: Database["public"]["Enums"]["prospect_activity_type"]
+          completed_date: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          organization_id: string
+          prospect_id: string
+          scheduled_date: string | null
+          status: Database["public"]["Enums"]["prospect_activity_status"]
+          title: string
+        }
+        Insert: {
+          activity_type: Database["public"]["Enums"]["prospect_activity_type"]
+          completed_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          organization_id: string
+          prospect_id: string
+          scheduled_date?: string | null
+          status?: Database["public"]["Enums"]["prospect_activity_status"]
+          title: string
+        }
+        Update: {
+          activity_type?: Database["public"]["Enums"]["prospect_activity_type"]
+          completed_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          organization_id?: string
+          prospect_id?: string
+          scheduled_date?: string | null
+          status?: Database["public"]["Enums"]["prospect_activity_status"]
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_activities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_activities_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "workshop_prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prospect_files: {
+        Row: {
+          created_at: string
+          file_category: Database["public"]["Enums"]["prospect_file_category"]
+          file_name: string
+          file_type: string
+          file_url: string
+          id: string
+          organization_id: string
+          prospect_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_category?: Database["public"]["Enums"]["prospect_file_category"]
+          file_name: string
+          file_type: string
+          file_url: string
+          id?: string
+          organization_id: string
+          prospect_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_category?: Database["public"]["Enums"]["prospect_file_category"]
+          file_name?: string
+          file_type?: string
+          file_url?: string
+          id?: string
+          organization_id?: string
+          prospect_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_files_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_files_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "workshop_prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       replenishment_config: {
         Row: {
           created_at: string
@@ -2363,6 +2471,84 @@ export type Database = {
           },
         ]
       }
+      workshop_prospects: {
+        Row: {
+          address: string | null
+          assigned_to: string | null
+          city: string | null
+          contact_person: string | null
+          converted_workshop_id: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          quality_index: number | null
+          source: string | null
+          specialties: string[] | null
+          stage: Database["public"]["Enums"]["prospect_stage"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          assigned_to?: string | null
+          city?: string | null
+          contact_person?: string | null
+          converted_workshop_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id: string
+          phone?: string | null
+          quality_index?: number | null
+          source?: string | null
+          specialties?: string[] | null
+          stage?: Database["public"]["Enums"]["prospect_stage"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          assigned_to?: string | null
+          city?: string | null
+          contact_person?: string | null
+          converted_workshop_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          phone?: string | null
+          quality_index?: number | null
+          source?: string | null
+          specialties?: string[] | null
+          stage?: Database["public"]["Enums"]["prospect_stage"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_prospects_converted_workshop_id_fkey"
+            columns: ["converted_workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workshop_prospects_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workshops: {
         Row: {
           address: string | null
@@ -3121,6 +3307,37 @@ export type Database = {
       okr_tier: "T1" | "T2"
       okr_unit: "%" | "#" | "$" | "rate" | "binary"
       okr_visibility: "public" | "area" | "private"
+      prospect_activity_status: "pending" | "completed" | "cancelled"
+      prospect_activity_type:
+        | "note"
+        | "call"
+        | "videocall"
+        | "visit"
+        | "email"
+        | "whatsapp"
+        | "stage_change"
+        | "sample_sent"
+        | "sample_received"
+      prospect_file_category:
+        | "facility_photo"
+        | "sample_photo"
+        | "contract"
+        | "other"
+      prospect_stage:
+        | "lead"
+        | "videocall_scheduled"
+        | "videocall_completed"
+        | "visit_scheduled"
+        | "visit_completed"
+        | "sample_requested"
+        | "sample_in_progress"
+        | "sample_approved"
+        | "sample_rejected"
+        | "trial_production"
+        | "trial_approved"
+        | "trial_rejected"
+        | "approved_workshop"
+        | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3257,6 +3474,40 @@ export const Constants = {
       okr_tier: ["T1", "T2"],
       okr_unit: ["%", "#", "$", "rate", "binary"],
       okr_visibility: ["public", "area", "private"],
+      prospect_activity_status: ["pending", "completed", "cancelled"],
+      prospect_activity_type: [
+        "note",
+        "call",
+        "videocall",
+        "visit",
+        "email",
+        "whatsapp",
+        "stage_change",
+        "sample_sent",
+        "sample_received",
+      ],
+      prospect_file_category: [
+        "facility_photo",
+        "sample_photo",
+        "contract",
+        "other",
+      ],
+      prospect_stage: [
+        "lead",
+        "videocall_scheduled",
+        "videocall_completed",
+        "visit_scheduled",
+        "visit_completed",
+        "sample_requested",
+        "sample_in_progress",
+        "sample_approved",
+        "sample_rejected",
+        "trial_production",
+        "trial_approved",
+        "trial_rejected",
+        "approved_workshop",
+        "rejected",
+      ],
     },
   },
 } as const
