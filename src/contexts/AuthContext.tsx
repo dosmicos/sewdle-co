@@ -89,6 +89,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role = roleInfo[0].role_name;
         permissions = roleInfo[0].permissions || {};
         workshopId = roleInfo[0].workshop_id;
+        
+        console.log('🔍 DEBUG AuthContext - Permisos cargados desde BD:', {
+          role,
+          permissions,
+          hasProspectsModule: 'prospects' in permissions,
+          prospectsPermissions: permissions['prospects']
+        });
       } else {
         // Si no tiene rol, asignar admin por defecto
         console.log('Assigning admin role to user:', session.user.id);
@@ -118,6 +125,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!roleInsertError) {
             role = 'Administrador';
             permissions = adminRole.permissions || {};
+            
+            console.log('🔍 DEBUG AuthContext - Permisos admin asignados:', {
+              role,
+              permissions,
+              hasProspectsModule: 'prospects' in permissions,
+              prospectsPermissions: permissions['prospects']
+            });
           }
         }
       }
