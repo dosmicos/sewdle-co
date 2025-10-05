@@ -95,12 +95,12 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
       return;
     }
 
-    // Filtrar solo permisos con al menos una acción en true
-    const activePermissions = formData.permissions.filter(permission =>
+    // Verificar que haya al menos un permiso activo
+    const hasAnyPermission = formData.permissions.some(permission =>
       Object.values(permission.actions).some(action => action === true)
     );
 
-    if (activePermissions.length === 0) {
+    if (!hasAnyPermission) {
       toast({
         title: "Error",
         description: "Debes otorgar al menos un permiso al rol",
@@ -109,17 +109,17 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
       return;
     }
 
-    // DEBUG: Log para ver qué enviamos
-    console.log('🔍 DEBUG RoleModal handleSubmit - Enviando solo módulos activos:', {
+    // CAMBIO CRÍTICO: Enviar TODOS los módulos (no solo los activos)
+    // Esto permite a updateRole saber qué eliminar y qué conservar
+    console.log('🔍 DEBUG RoleModal handleSubmit - Enviando TODOS los módulos:', {
       totalModules: formData.permissions.length,
-      activeModules: activePermissions.length,
-      activePermissions,
-      reclutamientoPermission: activePermissions.find(p => p.module === 'Reclutamiento')
+      allPermissions: formData.permissions,
+      reclutamientoPermission: formData.permissions.find(p => p.module === 'Reclutamiento')
     });
 
     onSave({
       ...formData,
-      permissions: activePermissions
+      permissions: formData.permissions // Enviar TODOS los módulos
     });
     
     toast({

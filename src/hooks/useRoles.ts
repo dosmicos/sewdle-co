@@ -183,32 +183,22 @@ export const useRoles = () => {
       if (updates.description) updateData.description = updates.description;
       
       if (updates.permissions) {
-        // 1. Obtener permisos actuales del rol
-        const { data: currentRole } = await supabase
-          .from('roles')
-          .select('permissions')
-          .eq('id', roleId)
-          .single();
+        // SIMPLIFICACIÓN: Como RoleModal ahora envía TODOS los módulos,
+        // no necesitamos hacer merge. Simplemente convertimos y filtramos.
+        const permissionsJson: Record<string, any> = {};
         
-        // 2. Partir de los permisos existentes (merge)
-        const basePermissions = (currentRole?.permissions || {}) as Record<string, any>;
-        const permissionsJson: Record<string, any> = { ...basePermissions };
-        
-        // 3. Actualizar/agregar solo los módulos con al menos una acción en true
+        // Procesar cada módulo recibido
         updates.permissions.forEach(permission => {
           // Convertir nombre del módulo de UI a BD
           const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
                           permission.module.toLowerCase();
           
           // Verificar si al menos una acción está en true
-          const actionValues = Object.values(permission.actions);
-          const hasAnyTrueAction = actionValues.some(v => v === true);
+          const hasAnyTrueAction = Object.values(permission.actions).some(v => v === true);
           
-          // LOG DETALLADO para debug
           console.log(`🔍 Procesando módulo: ${permission.module}`, {
             dbModule,
             actions: permission.actions,
-            actionValues,
             hasAnyTrueAction
           });
           
@@ -217,17 +207,17 @@ export const useRoles = () => {
             permissionsJson[dbModule] = permission.actions;
             console.log(`✅ Guardando módulo ${dbModule}:`, permission.actions);
           } else {
-            // Si todas son false, eliminar el módulo si existe
-            delete permissionsJson[dbModule];
-            console.log(`❌ Eliminando módulo ${dbModule} (todas las acciones en false)`);
+            // Si todas son false, no agregarlo (quedará fuera de la BD)
+            console.log(`⏭️ Omitiendo módulo ${dbModule} (sin permisos activos)`);
           }
         });
+        
         updateData.permissions = permissionsJson;
         
-        // DEBUG: Log para ver el merge
-        console.log('🔍 DEBUG updateRole - Merge de permisos:', {
-          permisosAnteriores: currentRole?.permissions,
-          permisosNuevos: updates.permissions,
+        // DEBUG: Log final
+        console.log('🔍 DEBUG updateRole - Permisos finales para guardar:', {
+          totalModulosEnviados: updates.permissions.length,
+          totalModulosGuardados: Object.keys(permissionsJson).length,
           permisosFinales: permissionsJson,
           moduleMapping: REVERSE_MODULE_MAPPING
         });
