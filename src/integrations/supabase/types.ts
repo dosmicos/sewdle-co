@@ -687,13 +687,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "okr_checkin_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "okr_checkin_kr_id_fkey"
             columns: ["kr_id"]
             isOneToOne: false
@@ -789,13 +782,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "okr_incentive_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
-            referencedColumns: ["id"]
-          },
         ]
       }
       okr_key_result: {
@@ -865,13 +851,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "okr_key_result_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
-            referencedColumns: ["id"]
-          },
         ]
       }
       okr_objective: {
@@ -932,13 +911,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "okr_objective_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "okr_objective_parent_objective_id_fkey"
             columns: ["parent_objective_id"]
             isOneToOne: false
@@ -985,13 +957,6 @@ export type Database = {
             columns: ["scored_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "okr_score_history_scored_by_fkey"
-            columns: ["scored_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
             referencedColumns: ["id"]
           },
         ]
@@ -1684,13 +1649,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "replenishment_config_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "replenishment_config_product_variant_id_fkey"
             columns: ["product_variant_id"]
             isOneToOne: false
@@ -1769,13 +1727,6 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "replenishment_suggestions_approved_by_fkey"
-            columns: ["approved_by"]
-            isOneToOne: false
-            referencedRelation: "profiles_limited"
             referencedColumns: ["id"]
           },
           {
@@ -2390,13 +2341,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles_limited"
-            referencedColumns: ["id"]
-          },
         ]
       }
       warehouses: {
@@ -2708,35 +2652,7 @@ export type Database = {
       }
     }
     Views: {
-      profiles_limited: {
-        Row: {
-          avatar_url: string | null
-          id: string | null
-          name: string | null
-          organization_id: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          id?: string | null
-          name?: string | null
-          organization_id?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          id?: string | null
-          name?: string | null
-          organization_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       acquire_delivery_sync_lock: {
