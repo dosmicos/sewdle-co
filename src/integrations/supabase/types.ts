@@ -3208,6 +3208,10 @@ export type Database = {
           updated_at_shopify: string
         }[]
       }
+      get_user_email_admin: {
+        Args: { user_id_param: string }
+        Returns: string
+      }
       get_user_organizations: {
         Args: Record<PropertyKey, never>
         Returns: string[]
