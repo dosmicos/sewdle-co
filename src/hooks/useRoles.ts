@@ -223,13 +223,48 @@ export const useRoles = () => {
         });
       }
 
-      const { error } = await supabase
+      // 🔥 LOGGING EXHAUSTIVO PRE-UPDATE
+      console.log('📤 ========== PRE-UPDATE SUPABASE ==========');
+      console.log('📤 Role ID:', roleId);
+      console.log('📤 Update Data COMPLETO:', JSON.stringify(updateData, null, 2));
+      console.log('📤 Permisos en updateData.permissions:', updateData.permissions);
+      console.log('📤 ¿prospects está en permissions?', 'prospects' in (updateData.permissions || {}));
+      console.log('📤 Valor de prospects:', updateData.permissions?.prospects);
+      console.log('📤 ==========================================');
+
+      const { error, data: updateResponse } = await supabase
         .from('roles')
         .update(updateData)
-        .eq('id', roleId);
+        .eq('id', roleId)
+        .select();
+
+      // 🔥 LOGGING EXHAUSTIVO POST-UPDATE
+      console.log('📥 ========== POST-UPDATE SUPABASE ==========');
+      console.log('📥 Error:', error);
+      console.log('📥 Update Response:', updateResponse);
+      console.log('📥 ==========================================');
 
       if (error) {
+        console.error('❌ ERROR EN UPDATE:', error);
         throw error;
+      }
+
+      // 🔥 VERIFICACIÓN POST-UPDATE: Leer inmediatamente de la BD
+      console.log('🔍 ========== VERIFICACIÓN POST-UPDATE ==========');
+      const { data: verifyRole, error: verifyError } = await supabase
+        .from('roles')
+        .select('permissions')
+        .eq('id', roleId)
+        .single();
+
+      const permissions = verifyRole?.permissions as Record<string, any> | null;
+      console.log('🔍 Role después del update:', verifyRole);
+      console.log('🔍 ¿prospects existe en BD?', permissions?.prospects);
+      console.log('🔍 Todos los módulos en BD:', Object.keys(permissions || {}));
+      console.log('🔍 ================================================');
+
+      if (verifyError) {
+        console.error('❌ ERROR EN VERIFICACIÓN:', verifyError);
       }
 
       await fetchRoles();
