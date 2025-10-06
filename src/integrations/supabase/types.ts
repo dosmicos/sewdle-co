@@ -1745,6 +1745,39 @@ export type Database = {
           },
         ]
       }
+      role_change_audit: {
+        Row: {
+          action: string
+          changed_by_user_id: string
+          changed_user_id: string
+          created_at: string | null
+          id: string
+          new_role_id: string | null
+          old_role_id: string | null
+          organization_id: string
+        }
+        Insert: {
+          action: string
+          changed_by_user_id: string
+          changed_user_id: string
+          created_at?: string | null
+          id?: string
+          new_role_id?: string | null
+          old_role_id?: string | null
+          organization_id: string
+        }
+        Update: {
+          action?: string
+          changed_by_user_id?: string
+          changed_user_id?: string
+          created_at?: string | null
+          id?: string
+          new_role_id?: string | null
+          old_role_id?: string | null
+          organization_id?: string
+        }
+        Relationships: []
+      }
       roles: {
         Row: {
           created_at: string
