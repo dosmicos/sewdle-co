@@ -4,23 +4,39 @@ import { useAuth } from '@/contexts/AuthContext';
 export const useUserContext = () => {
   const { user, isAdmin, isDesigner, isQCLeader, hasPermission } = useAuth();
   
-  const getWorkshopFilter = () => {
-    // Solo los usuarios con rol "Taller" (no admin, diseñador ni líder QC) tienen filtro
-    if (isAdmin() || isDesigner() || isQCLeader()) {
-      return null; // Admins, diseñadores y líderes QC ven todos los datos
+  // Determinar tipo de usuario basado en rol
+  const getUserType = () => {
+    if (!user) return 'guest';
+    
+    // Roles que ven toda la organización (acceso completo)
+    const fullAccessRoles = ['Administrador', 'Diseñador', 'Líder QC'];
+    if (fullAccessRoles.includes(user.role)) {
+      return 'full_access';
     }
-    return user?.workshopId; // Solo talleres ven sus datos filtrados
+    
+    // Usuarios de taller (acceso limitado a su taller)
+    return 'workshop';
+  };
+  
+  const getWorkshopFilter = () => {
+    // Solo usuarios de taller tienen filtro
+    const userType = getUserType();
+    if (userType === 'full_access') {
+      return null; // Sin filtro - ven toda la organización
+    }
+    return user?.workshopId; // Filtrado por taller asignado
   };
   
   const getUserFilter = () => {
-    // Solo los usuarios con rol "Taller" (no admin, diseñador ni líder QC) tienen filtro
-    if (isAdmin() || isDesigner() || isQCLeader()) {
-      return null; // Admins, diseñadores y líderes QC ven todos los datos
+    // Solo usuarios de taller tienen filtro
+    const userType = getUserType();
+    if (userType === 'full_access') {
+      return null; // Sin filtro - ven todos los usuarios
     }
-    return user?.id; // Solo talleres ven sus datos filtrados
+    return user?.id; // Filtrado por usuario específico
   };
   
-  const isWorkshopUser = () => !isAdmin() && !isDesigner() && !isQCLeader();
+  const isWorkshopUser = () => getUserType() === 'workshop';
   
   // Helper para verificar permisos específicos de órdenes
   const canCreateOrders = () => hasPermission('orders', 'create');

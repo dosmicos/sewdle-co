@@ -3213,6 +3213,10 @@ export type Database = {
         }
         Returns: number
       }
+      has_delivery_permission: {
+        Args: { action_name: string; user_uuid: string }
+        Returns: boolean
+      }
       has_permission: {
         Args: { action_name: string; module_name: string; user_id: string }
         Returns: boolean
@@ -3332,6 +3336,10 @@ export type Database = {
       }
       user_belongs_to_organization: {
         Args: { org_id: string }
+        Returns: boolean
+      }
+      user_can_view_all_deliveries: {
+        Args: { user_uuid: string }
         Returns: boolean
       }
       user_has_org_admin_role: {
