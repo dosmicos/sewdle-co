@@ -3358,6 +3358,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      user_has_role: {
+        Args: { check_user_id: string; role_name: string }
+        Returns: boolean
+      }
       user_has_workshop_permissions: {
         Args: Record<PropertyKey, never>
         Returns: boolean
