@@ -2728,6 +2728,18 @@ export type Database = {
         Args: { p_consumptions: Json; p_order_id: string }
         Returns: boolean
       }
+      debug_role_update_permissions: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          can_update_system_roles: boolean
+          org_role: string
+          org_status: string
+          organization_id: string
+          user_email: string
+          user_id: string
+          user_name: string
+        }[]
+      }
       find_matching_local_variant: {
         Args: {
           p_color: string
