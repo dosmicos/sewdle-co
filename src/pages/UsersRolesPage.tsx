@@ -6,12 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
 import { useUsers } from '@/hooks/useUsers';
 import { useRoles } from '@/hooks/useRoles';
 import { useUserTracking } from '@/hooks/useUserTracking';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 // Helper functions for status colors
 const getUserStatusColor = (status: string) => {
@@ -59,6 +61,10 @@ const UsersRolesPage = () => {
   const {
     getLastAccess
   } = useUserTracking();
+  
+  // 🔥 FASE 3: Hook para recarga manual de permisos
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   useEffect(() => {
     const loadLastAccessData = async () => {
@@ -155,12 +161,31 @@ const UsersRolesPage = () => {
       </div>;
   }
 
+  // 🔥 FASE 3: Función para recargar permisos manualmente
+  const handleReloadPermissions = () => {
+    queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
+    queryClient.invalidateQueries({ queryKey: ['roles'] });
+    toast({ 
+      title: "✅ Permisos recargados",
+      description: "Los cambios se aplicarán inmediatamente en toda la aplicación"
+    });
+  };
+
   return <div className="p-6 space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-black">Usuarios & Roles</h1>
           <p className="text-gray-600">Gestiona usuarios, roles y permisos del sistema</p>
         </div>
+        <Button 
+          onClick={handleReloadPermissions}
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Recargar Permisos
+        </Button>
       </div>
 
 

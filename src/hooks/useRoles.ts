@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface Permission {
   module: string;
@@ -49,6 +50,7 @@ export const useRoles = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const fetchRoles = async () => {
     try {
@@ -193,33 +195,30 @@ export const useRoles = () => {
           const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
                           permission.module.toLowerCase();
           
-          // Verificar si al menos una acción está en true
+          // ✅ FASE 1: Siempre guardar módulos, incluso si todas las acciones están en false
+          // Esto previene que los módulos desaparezcan de la BD
+          permissionsJson[dbModule] = permission.actions;
+          
           const hasAnyTrueAction = Object.values(permission.actions).some(v => v === true);
-          
-          console.log(`🔍 Procesando módulo: ${permission.module}`, {
-            dbModule,
+          console.log(`✅ Guardando módulo ${dbModule}:`, {
             actions: permission.actions,
-            hasAnyTrueAction
+            hasAnyTrueAction,
+            willBeSaved: true
           });
-          
-          if (hasAnyTrueAction) {
-            // Si tiene al menos una acción en true, guardar el módulo
-            permissionsJson[dbModule] = permission.actions;
-            console.log(`✅ Guardando módulo ${dbModule}:`, permission.actions);
-          } else {
-            // Si todas son false, no agregarlo (quedará fuera de la BD)
-            console.log(`⏭️ Omitiendo módulo ${dbModule} (sin permisos activos)`);
-          }
         });
         
         updateData.permissions = permissionsJson;
         
-        // DEBUG: Log final
+        // 🔍 FASE 4: Logging mejorado
         console.log('🔍 DEBUG updateRole - Permisos finales para guardar:', {
           totalModulosEnviados: updates.permissions.length,
           totalModulosGuardados: Object.keys(permissionsJson).length,
-          permisosFinales: permissionsJson,
-          moduleMapping: REVERSE_MODULE_MAPPING
+          permisosFinales: JSON.stringify(permissionsJson, null, 2),
+          moduleMapping: REVERSE_MODULE_MAPPING,
+          // Verificaciones específicas de módulos críticos
+          prospectsIncluido: 'prospects' in permissionsJson,
+          prospectsValor: permissionsJson.prospects,
+          todosLosModulos: Object.keys(permissionsJson)
         });
       }
 
@@ -268,6 +267,10 @@ export const useRoles = () => {
       }
 
       await fetchRoles();
+      
+      // 🔥 FASE 2: Invalidar caché de permisos de usuarios
+      queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
+      console.log('✅ Caché de permisos invalidado - Los usuarios verán los cambios inmediatamente');
       
       toast({
         title: "Rol actualizado",
