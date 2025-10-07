@@ -8,7 +8,7 @@ import WorkshopEditModal from '@/components/WorkshopEditModal';
 import { WorkshopPricingDiagnostic } from '@/components/WorkshopPricingDiagnostic';
 
 import { useWorkshopsWithStats } from '@/hooks/useWorkshopsWithStats';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 const WorkshopsPage = () => {
@@ -23,7 +23,7 @@ const WorkshopsPage = () => {
   } = useWorkshopsWithStats();
   const {
     hasPermission
-  } = useAuth();
+  } = usePermissions();
 
   // Verificar permisos
   const canCreateWorkshops = hasPermission('workshops', 'create');

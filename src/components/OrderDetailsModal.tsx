@@ -12,7 +12,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface OrderDetailsModalProps {
   order: any;
@@ -24,7 +24,7 @@ interface OrderDetailsModalProps {
 
 const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDetailsModalProps) => {
   const { canEditOrders, canDeleteOrders } = useUserContext();
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(order?.id);
   const [editingConsumption, setEditingConsumption] = useState<any>(null);
   

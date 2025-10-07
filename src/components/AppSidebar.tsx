@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { OrganizationSelector } from './OrganizationSelector';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
@@ -11,7 +12,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useIsDosmicos } from '@/hooks/useIsDosmicos';
 
 const AppSidebar = () => {
-  const { user, logout, isAdmin, isDesigner, isQCLeader, hasPermission } = useAuth();
+  const { user, logout, isAdmin, isDesigner, isQCLeader } = useAuth();
+  const { hasPermission } = usePermissions();
   const { canAccessFeature } = useOrganization();
   const navigate = useNavigate();
   const location = useLocation();

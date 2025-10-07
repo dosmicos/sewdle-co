@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import AuthPage from "@/pages/AuthPage";
@@ -91,7 +92,8 @@ const PermissionRoute = ({
   module: string;
   action: string;
 }) => {
-  const { user, loading, hasPermission } = useAuth();
+  const { user, loading } = useAuth();
+  const { hasPermission } = usePermissions();
   
   if (loading) {
     return (

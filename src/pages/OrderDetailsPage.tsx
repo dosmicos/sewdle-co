@@ -14,7 +14,7 @@ import { useUserContext } from '@/hooks/useUserContext';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
 
 const OrderDetailsPage = () => {
@@ -28,7 +28,7 @@ const OrderDetailsPage = () => {
   const { orders, loading, fetchOrders } = useOrders();
   const { canEditOrders, canDeleteOrders, canCreateDeliveries } = useUserContext();
   const order = orders.find(o => o.id === orderId);
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(orderId || '');
 
   // Scroll to top when component mounts

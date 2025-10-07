@@ -7,10 +7,10 @@ import MaterialConsumptionManager from '@/components/supplies/MaterialConsumptio
 import MaterialInventoryTable from '@/components/supplies/MaterialInventoryTable';
 import MaterialTransfersList from '@/components/supplies/MaterialTransfersList';
 import MaterialTransferForm from '@/components/supplies/MaterialTransferForm';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const SuppliesPage = () => {
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   
   // Verificar permisos para entregas
   const canCreateDeliveries = hasPermission('insumos', 'create') || 

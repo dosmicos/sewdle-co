@@ -35,7 +35,7 @@ import {
 import { useMaterials } from '@/hooks/useMaterials';
 import MaterialForm from './MaterialForm';
 import { Material } from '@/types/materials';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useUserContext } from '@/hooks/useUserContext';
 
 const MaterialsCatalog = () => {
@@ -49,7 +49,7 @@ const MaterialsCatalog = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const { materials, loading, fetchMaterials, deleteMaterial } = useMaterials();
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   const { workshopFilter, isWorkshopUser } = useUserContext();
 
   const canEditMaterials = hasPermission('insumos', 'edit');

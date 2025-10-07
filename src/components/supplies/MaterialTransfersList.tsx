@@ -5,13 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertCircle, CheckCircle, Clock, Package, X, ArrowRight } from 'lucide-react';
 import { useMaterialTransfers } from '@/hooks/useMaterialTransfers';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const MaterialTransfersList: React.FC = () => {
   const { transfers, loading, approveTransfer, processTransfer, cancelTransfer } = useMaterialTransfers();
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
 
   const canManageTransfers = hasPermission('insumos', 'edit') || hasPermission('insumos', 'delete');
 

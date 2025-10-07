@@ -4,7 +4,7 @@ import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useDeliveryPayments } from '@/hooks/useDeliveryPayments';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import DeliveryForm from '@/components/DeliveryForm';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
 import ShopifySyncDiagnostics from '@/components/supplies/ShopifySyncDiagnostics';
@@ -40,7 +40,7 @@ const DeliveriesPage = () => {
   const { deleteDelivery } = useDeliveries();
   const { payments } = useDeliveryPayments();
   const { isAdmin } = useUserContext();
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const navigate = useNavigate();

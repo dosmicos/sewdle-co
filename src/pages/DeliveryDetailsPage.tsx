@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import DeliveryDetails from '@/components/DeliveryDetails';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const DeliveryDetailsPage = () => {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const navigate = useNavigate();
   const { fetchDeliveryByTrackingNumber } = useDeliveries();
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   const [delivery, setDelivery] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

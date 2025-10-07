@@ -9,7 +9,6 @@ export interface UserProfile {
   role: string;
   name?: string;
   workshopId?: string;
-  permissions?: Record<string, Record<string, boolean>>;
   requiresPasswordChange?: boolean;
 }
 
@@ -19,7 +18,6 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
-  hasPermission: (module: string, action: string) => boolean;
   isAdmin: () => boolean;
   isDesigner: () => boolean;
   isQCLeader: () => boolean;
@@ -82,26 +80,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       let role = 'Administrador';
-      let permissions = {};
       let workshopId = undefined;
 
       if (roleInfo && roleInfo.length > 0) {
         role = roleInfo[0].role_name;
-        permissions = roleInfo[0].permissions || {};
         workshopId = roleInfo[0].workshop_id;
         
-        console.log('🔍 DEBUG AuthContext - Permisos cargados desde BD:', {
-          role,
-          permissions,
-          hasProspectsModule: 'prospects' in permissions,
-          prospectsPermissions: permissions['prospects']
-        });
+        console.log('🔍 DEBUG AuthContext - Rol cargado:', { role, workshopId });
       } else {
         // Si no tiene rol, asignar admin por defecto
         console.log('Assigning admin role to user:', session.user.id);
         const { data: adminRole } = await supabase
           .from('roles')
-          .select('id, permissions')
+          .select('id')
           .eq('name', 'Administrador')
           .single();
 
@@ -124,14 +115,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (!roleInsertError) {
             role = 'Administrador';
-            permissions = adminRole.permissions || {};
-            
-            console.log('🔍 DEBUG AuthContext - Permisos admin asignados:', {
-              role,
-              permissions,
-              hasProspectsModule: 'prospects' in permissions,
-              prospectsPermissions: permissions['prospects']
-            });
           }
         }
       }
@@ -142,7 +125,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role,
         name: profile?.name || session.user.user_metadata?.name || session.user.email,
         workshopId,
-        permissions,
         requiresPasswordChange: profile?.requires_password_change || false
       };
     } catch (error) {
@@ -153,7 +135,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: session.user.email || '',
         role: 'Administrador',
         name: session.user.user_metadata?.name || session.user.email,
-        permissions: {},
         requiresPasswordChange: false
       };
     }
@@ -215,15 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  const hasPermission = useCallback((module: string, action: string): boolean => {
-    if (!user || !user.permissions) return false;
-    
-    const modulePerms = user.permissions[module.toLowerCase()];
-    if (!modulePerms) return false;
-    
-    return modulePerms[action] === true;
-  }, [user]);
-
   const isAdmin = useCallback((): boolean => {
     return user?.role === 'Administrador';
   }, [user]);
@@ -252,7 +224,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: session.user.email || '',
           role: 'Administrador',
           name: session.user.email,
-          permissions: {},
           requiresPasswordChange: false
         });
       }
@@ -350,7 +321,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login, 
       logout, 
       loading, 
-      hasPermission, 
       isAdmin,
       isDesigner,
       isQCLeader,

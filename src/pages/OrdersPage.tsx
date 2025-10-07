@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFilteredOrders } from '@/hooks/useFilteredOrders';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useOrderActions } from '@/hooks/useOrderActions';
-import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { TrendingUp } from 'lucide-react';
 import OrderForm from '@/components/OrderForm';
@@ -18,7 +17,7 @@ const OrdersPage = () => {
   const navigate = useNavigate();
   const { orders, loading, refetch } = useFilteredOrders();
   const { isAdmin } = useUserContext();
-  const { hasPermission } = useAuth();
+  const { hasPermission } = usePermissions();
   const { workshops } = useWorkshops();
   const { deleteOrder } = useOrderActions();
   
