@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { Button } from '@/components/ui/button';
-import { Plus, Grid, List, Table as TableIcon } from 'lucide-react';
+import { Plus, Grid, Table as TableIcon } from 'lucide-react';
 import { useProspects } from '@/hooks/useProspects';
 import { ProspectCard } from '@/components/prospects/ProspectCard';
 import { ProspectForm } from '@/components/prospects/ProspectForm';
 import { ProspectDetailsModal } from '@/components/prospects/ProspectDetailsModal';
 import { WorkshopProspect, STAGE_LABELS, ProspectStage } from '@/types/prospects';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useIsDosmicos } from '@/hooks/useIsDosmicos';
@@ -20,7 +20,7 @@ export default function ProspectsPage() {
   const { isDosmicos } = useIsDosmicos();
   const [showForm, setShowForm] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<WorkshopProspect | null>(null);
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'table'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>(isDosmicos ? 'table' : 'kanban');
 
   const handleCreateProspect = async (data: Partial<WorkshopProspect>) => {
     if (!currentOrganization?.id) return;
@@ -70,14 +70,6 @@ export default function ProspectsPage() {
               className={viewMode === 'kanban' ? 'bg-primary text-primary-foreground' : ''}
             >
               <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setViewMode('list')}
-              className={viewMode === 'list' ? 'bg-primary text-primary-foreground' : ''}
-            >
-              <List className="h-4 w-4" />
             </Button>
             {isDosmicos && (
               <Button
@@ -157,7 +149,7 @@ export default function ProspectsPage() {
             onUpdate={updateProspect}
             onDelete={deleteProspect}
           />
-        ) : viewMode === 'kanban' ? (
+        ) : (
           /* Kanban View */
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 overflow-x-auto">
             {pipelineStages.map((stage) => (
@@ -182,62 +174,6 @@ export default function ProspectsPage() {
               </div>
             ))}
           </div>
-        ) : (
-          /* List View */
-          <Tabs defaultValue="all">
-            <TabsList>
-              <TabsTrigger value="all">Todos</TabsTrigger>
-              <TabsTrigger value="active">Activos</TabsTrigger>
-              <TabsTrigger value="approved">Aprobados</TabsTrigger>
-              <TabsTrigger value="rejected">Rechazados</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="all" className="space-y-3">
-              {prospects.map((prospect) => (
-                <ProspectCard
-                  key={prospect.id}
-                  prospect={prospect}
-                  onClick={() => setSelectedProspect(prospect)}
-                />
-              ))}
-            </TabsContent>
-
-            <TabsContent value="active" className="space-y-3">
-              {prospects
-                .filter(p => !['approved_workshop', 'rejected'].includes(p.stage))
-                .map((prospect) => (
-                  <ProspectCard
-                    key={prospect.id}
-                    prospect={prospect}
-                    onClick={() => setSelectedProspect(prospect)}
-                  />
-                ))}
-            </TabsContent>
-
-            <TabsContent value="approved" className="space-y-3">
-              {prospects
-                .filter(p => p.stage === 'approved_workshop')
-                .map((prospect) => (
-                  <ProspectCard
-                    key={prospect.id}
-                    prospect={prospect}
-                    onClick={() => setSelectedProspect(prospect)}
-                  />
-                ))}
-            </TabsContent>
-
-            <TabsContent value="rejected" className="space-y-3">
-              {prospects
-                .filter(p => p.stage === 'rejected')
-                .map((prospect) => (
-                  <ProspectCard
-                    key={prospect.id}
-                    prospect={prospect}
-                    onClick={() => setSelectedProspect(prospect)}
-                  />
-                ))}
-            </TabsContent>
-          </Tabs>
         )}
       </div>
 
