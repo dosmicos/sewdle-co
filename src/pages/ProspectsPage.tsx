@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { Button } from '@/components/ui/button';
-import { Plus, Grid, List } from 'lucide-react';
+import { Plus, Grid, List, Table as TableIcon } from 'lucide-react';
 import { useProspects } from '@/hooks/useProspects';
 import { ProspectCard } from '@/components/prospects/ProspectCard';
 import { ProspectForm } from '@/components/prospects/ProspectForm';
@@ -11,13 +11,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useIsDosmicos } from '@/hooks/useIsDosmicos';
+import { ProspectsTableView } from '@/components/prospects/table/ProspectsTableView';
 
 export default function ProspectsPage() {
   const { currentOrganization } = useOrganization();
-  const { prospects, loading, createProspect, updateProspect } = useProspects();
+  const { prospects, loading, createProspect, updateProspect, deleteProspect } = useProspects();
+  const { isDosmicos } = useIsDosmicos();
   const [showForm, setShowForm] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<WorkshopProspect | null>(null);
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'table'>('kanban');
 
   const handleCreateProspect = async (data: Partial<WorkshopProspect>) => {
     if (!currentOrganization?.id) return;
@@ -76,6 +79,17 @@ export default function ProspectsPage() {
             >
               <List className="h-4 w-4" />
             </Button>
+            {isDosmicos && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setViewMode('table')}
+                className={viewMode === 'table' ? 'bg-primary text-primary-foreground' : ''}
+                title="Vista Notion"
+              >
+                <TableIcon className="h-4 w-4" />
+              </Button>
+            )}
             <Button onClick={() => setShowForm(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Prospecto
@@ -136,6 +150,13 @@ export default function ProspectsPage() {
         {/* Content */}
         {loading ? (
           <div className="text-center py-12">Cargando prospectos...</div>
+        ) : viewMode === 'table' ? (
+          /* Table View - Notion Style */
+          <ProspectsTableView
+            prospects={prospects}
+            onUpdate={updateProspect}
+            onDelete={deleteProspect}
+          />
         ) : viewMode === 'kanban' ? (
           /* Kanban View */
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 overflow-x-auto">
