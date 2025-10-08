@@ -125,12 +125,12 @@ export const TableToolbar = ({
       />
 
       {/* Source Filter */}
-      <Select value={sourceFilter} onValueChange={onSourceFilterChange}>
+      <Select value={sourceFilter || "all"} onValueChange={(value) => onSourceFilterChange(value === "all" ? "" : value)}>
         <SelectTrigger className="w-40">
           <SelectValue placeholder="Fuente" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todas</SelectItem>
+          <SelectItem value="all">Todas</SelectItem>
           <SelectItem value="referral">Referido</SelectItem>
           <SelectItem value="direct">Directo</SelectItem>
           <SelectItem value="social_media">Redes Sociales</SelectItem>
