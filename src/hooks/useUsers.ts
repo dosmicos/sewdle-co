@@ -111,12 +111,17 @@ export const useUsers = () => {
 
       if (error) {
         logger.error('Error in Edge Function', error);
-        throw new Error(error.message || 'Error al crear usuario');
+        const errorMessage = error.message || 'Error al crear usuario';
+        throw new Error(errorMessage);
       }
 
       if (!data.success) {
         console.log('useUsers: Edge function returned error:', data.error);
-        throw new Error(data.error || 'Error desconocido al crear usuario');
+        // Manejar específicamente el error de email duplicado
+        const errorMessage = data.code === 'email_exists' 
+          ? 'Este correo electrónico ya está registrado en el sistema'
+          : data.error || 'Error desconocido al crear usuario';
+        throw new Error(errorMessage);
       }
 
       console.log('useUsers: User created successfully, temp password:', data.tempPassword);

@@ -124,10 +124,29 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error creating user:', error)
+    
+    // Manejar error de email duplicado específicamente
+    if (error.code === 'email_exists' || error.message?.includes('already been registered')) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Este correo electrónico ya está registrado en el sistema',
+          code: 'email_exists'
+        }),
+        { 
+          status: 409, // Conflict
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          } 
+        }
+      )
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message 
+        error: error.message || 'Error al crear el usuario'
       }),
       { 
         status: 400,
