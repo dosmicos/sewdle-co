@@ -220,20 +220,27 @@ export const useUsers = () => {
         .delete()
         .eq('user_id', userId);
 
+      // Soft delete: Marcar como eliminado en organization_users
+      await supabase
+        .from('organization_users')
+        .update({ 
+          status: 'inactive',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('organization_id', currentOrganization?.id);
+
       // Eliminar perfil
       await supabase
         .from('profiles')
         .delete()
         .eq('id', userId);
 
-      // Eliminar usuario de auth usando Edge Function (se podría crear otra función para esto)
-      // Por ahora, como es una operación menos frecuente, podríamos mantenerlo manual
-      
       await fetchUsers();
       
       toast({
         title: "Usuario eliminado",
-        description: "El usuario ha sido eliminado correctamente",
+        description: "El usuario ha sido eliminado correctamente de la organización",
       });
 
       return { success: true };
@@ -241,7 +248,7 @@ export const useUsers = () => {
       logger.error('Error deleting user', err);
       toast({
         title: "Error al eliminar usuario",
-        description: err.message || "Hubo un problema al eliminar el usuario. Para eliminación completa, contacte al administrador del sistema.",
+        description: err.message || "Hubo un problema al eliminar el usuario",
         variant: "destructive",
       });
       return { success: false, error: err.message };
