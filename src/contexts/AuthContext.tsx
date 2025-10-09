@@ -44,16 +44,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const createUserProfile = useCallback(async (session: Session): Promise<UserProfile> => {
     console.log('Creating user profile for:', session.user.id);
     
+    let requiresPasswordChange = false;
+    let profile = null;
+    
     try {
-      // Verificar si el usuario ya tiene un perfil
-      const { data: profile, error: profileError } = await supabase
+      // Intentar obtener perfil de la BD
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
         .single();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Error fetching profile:', profileError);
+      if (profileError) {
+        if (profileError.code !== 'PGRST116') {
+          console.warn('Error fetching profile from DB:', profileError);
+        }
+        // Fallback: leer desde user_metadata
+        requiresPasswordChange = session.user.user_metadata?.requires_password_change || false;
+        console.log('Using user_metadata for requiresPasswordChange:', requiresPasswordChange);
+      } else {
+        profile = profileData;
+        requiresPasswordChange = profile?.requires_password_change || false;
+        console.log('Using profile DB for requiresPasswordChange:', requiresPasswordChange);
       }
 
       // Si no existe perfil, crearlo
@@ -64,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: session.user.id,
             email: session.user.email,
             name: session.user.user_metadata?.name || session.user.email,
+            requires_password_change: session.user.user_metadata?.requires_password_change || false
           });
 
         if (insertError) {
@@ -125,17 +138,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role,
         name: profile?.name || session.user.user_metadata?.name || session.user.email,
         workshopId,
-        requiresPasswordChange: profile?.requires_password_change || false
+        requiresPasswordChange
       };
     } catch (error) {
       console.error('Error in createUserProfile:', error);
-      // Fallback profile
+      // Fallback profile con user_metadata
       return {
         id: session.user.id,
         email: session.user.email || '',
         role: 'Administrador',
         name: session.user.user_metadata?.name || session.user.email,
-        requiresPasswordChange: false
+        requiresPasswordChange: session.user.user_metadata?.requires_password_change || false
       };
     }
   }, []);
