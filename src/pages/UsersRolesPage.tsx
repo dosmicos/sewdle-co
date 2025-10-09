@@ -6,7 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Search, Edit, Shield, Users, UserCheck, UserX, Loader2, AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from '@/contexts/AuthContext';
 import UserModal from '@/components/UserModal';
 import RoleModal from '@/components/RoleModal';
 import { useUsers } from '@/hooks/useUsers';
@@ -35,6 +46,7 @@ const getRoleColor = (role: string) => {
 };
 
 const UsersRolesPage = () => {
+  const { user: currentUser } = useAuth();
   const [showUserModal, setShowUserModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -43,6 +55,8 @@ const UsersRolesPage = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [lastAccessData, setLastAccessData] = useState<Record<string, string>>({});
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const {
     users,
@@ -169,6 +183,52 @@ const UsersRolesPage = () => {
       title: "✅ Permisos recargados",
       description: "Los cambios se aplicarán inmediatamente en toda la aplicación"
     });
+  };
+
+  // Función para eliminar usuario con validaciones
+  const handleDeleteUser = (user: any) => {
+    // Validación: No permitir auto-eliminación
+    if (currentUser?.id === user.id) {
+      toast({
+        title: "❌ Operación no permitida",
+        description: "No puedes eliminar tu propia cuenta",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Advertencia para administradores
+    if (user.role === 'Administrador') {
+      toast({
+        title: "⚠️ Advertencia",
+        description: "Estás a punto de eliminar un usuario con rol de Administrador",
+        variant: "destructive"
+      });
+    }
+
+    setDeleteConfirmUser(user);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmUser) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteUser(deleteConfirmUser.id);
+      toast({
+        title: "✅ Usuario eliminado",
+        description: `El usuario ${deleteConfirmUser.name || deleteConfirmUser.email} ha sido eliminado correctamente`
+      });
+      setDeleteConfirmUser(null);
+    } catch (error) {
+      toast({
+        title: "❌ Error al eliminar",
+        description: "No se pudo eliminar el usuario. Inténtalo de nuevo.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return <div className="p-6 space-y-8 animate-fade-in">
@@ -322,9 +382,20 @@ const UsersRolesPage = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => handleEditUser(user)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleEditUser(user)}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleDeleteUser(user)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={currentUser?.id === user.id}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>)}
                   {filteredUsers.length === 0 && <TableRow>
@@ -392,6 +463,62 @@ const UsersRolesPage = () => {
       setShowRoleModal(false);
       setSelectedRole(null);
     }} onSave={handleRoleSave} />}
+
+      {/* Alert Dialog para confirmar eliminación */}
+      <AlertDialog open={!!deleteConfirmUser} onOpenChange={(open) => !open && setDeleteConfirmUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              ¿Eliminar usuario?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Estás a punto de eliminar al usuario:
+              </p>
+              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                <p className="font-semibold text-gray-900">
+                  {deleteConfirmUser?.name || 'Sin nombre'}
+                </p>
+                <p className="text-sm text-gray-600">{deleteConfirmUser?.email}</p>
+                <Badge className={getRoleColor(deleteConfirmUser?.role || 'Sin Rol')} variant="outline">
+                  {deleteConfirmUser?.role || 'Sin Rol'}
+                </Badge>
+              </div>
+              <p className="text-red-600 font-medium">
+                ⚠️ Esta acción es irreversible y eliminará:
+              </p>
+              <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                <li>El perfil del usuario</li>
+                <li>Sus roles y permisos asignados</li>
+                <li>Su historial de acceso</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Sí, eliminar usuario
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>;
 };
 
