@@ -1748,7 +1748,7 @@ export type Database = {
       role_change_audit: {
         Row: {
           action: string
-          changed_by_user_id: string
+          changed_by_user_id: string | null
           changed_user_id: string
           created_at: string | null
           id: string
@@ -1758,7 +1758,7 @@ export type Database = {
         }
         Insert: {
           action: string
-          changed_by_user_id: string
+          changed_by_user_id?: string | null
           changed_user_id: string
           created_at?: string | null
           id?: string
@@ -1768,7 +1768,7 @@ export type Database = {
         }
         Update: {
           action?: string
-          changed_by_user_id?: string
+          changed_by_user_id?: string | null
           changed_user_id?: string
           created_at?: string | null
           id?: string
