@@ -96,7 +96,7 @@ export const useWorkshops = () => {
           description: "No se pudo obtener la organización actual",
           variant: "destructive",
         });
-        return { error: "No organization found" };
+        return { data: null, error: "No organization found" };
       }
 
       const { data, error } = await supabase
@@ -126,7 +126,7 @@ export const useWorkshops = () => {
         description: `El taller "${workshopData.name}" ha sido creado exitosamente`,
       });
 
-      return { error: null };
+      return { data, error: null };
     } catch (err: any) {
       console.error('Error creating workshop:', err);
       toast({
@@ -134,7 +134,7 @@ export const useWorkshops = () => {
         description: err.message || "Hubo un problema al crear el taller",
         variant: "destructive",
       });
-      return { error: err.message };
+      return { data: null, error: err.message };
     }
   };
 

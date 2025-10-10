@@ -231,13 +231,14 @@ export const ProspectsTableView = ({
 
       {/* Bulk Actions Bar */}
       {selectedRows.size > 0 && (
-        <BulkActionsBar
-          selectedCount={selectedRows.size}
-          selectedIds={Array.from(selectedRows)}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-          onClear={() => setSelectedRows(new Set())}
-        />
+            <BulkActionsBar
+              selectedCount={selectedRows.size}
+              selectedIds={Array.from(selectedRows)}
+              prospects={prospects}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onClear={() => setSelectedRows(new Set())}
+            />
       )}
 
       {/* Table */}
