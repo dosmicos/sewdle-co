@@ -60,7 +60,7 @@ export const ProspectsTableView = ({
   const [columns, setColumns] = useState<ColumnConfig[]>([
     { id: 'select', label: '', visible: true, width: 'w-12', sortable: false },
     { id: 'name', label: 'Nombre', visible: true, width: 'w-48', sortable: true },
-    { id: 'contact_person', label: 'Contacto', visible: true, width: 'w-44', sortable: true },
+    { id: 'contact_person', label: 'Contacto', visible: false, width: 'w-44', sortable: true },
     { id: 'phone', label: 'Teléfono', visible: true, width: 'w-36', sortable: false },
     { id: 'address', label: 'Dirección', visible: true, width: 'w-60', sortable: false },
     { id: 'city', label: 'Ciudad', visible: true, width: 'w-32', sortable: true },
