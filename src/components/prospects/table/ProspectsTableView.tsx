@@ -17,8 +17,10 @@ import { DateCell } from './cells/DateCell';
 import { ColumnSelector } from './ColumnSelector';
 import { TableToolbar } from './TableToolbar';
 import { BulkActionsBar } from './BulkActionsBar';
-import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { ProspectDetailsModal } from '../ProspectDetailsModal';
 
 interface ProspectsTableViewProps {
   prospects: WorkshopProspect[];
@@ -53,14 +55,16 @@ export const ProspectsTableView = ({
   const [qualityRange, setQualityRange] = useState<[number, number]>([0, 10]);
   const [assignedToFilter, setAssignedToFilter] = useState('');
 
+  const [selectedProspect, setSelectedProspect] = useState<WorkshopProspect | null>(null);
+  
   const [columns, setColumns] = useState<ColumnConfig[]>([
     { id: 'select', label: '', visible: true, width: 'w-12', sortable: false },
     { id: 'name', label: 'Nombre', visible: true, width: 'w-48', sortable: true },
     { id: 'contact_person', label: 'Contacto', visible: true, width: 'w-44', sortable: true },
     { id: 'phone', label: 'Teléfono', visible: true, width: 'w-36', sortable: false },
-    { id: 'email', label: 'Email', visible: true, width: 'w-52', sortable: false },
+    { id: 'address', label: 'Dirección', visible: true, width: 'w-60', sortable: false },
     { id: 'city', label: 'Ciudad', visible: true, width: 'w-32', sortable: true },
-    { id: 'address', label: 'Dirección', visible: false, width: 'w-60', sortable: false },
+    { id: 'email', label: 'Email', visible: false, width: 'w-52', sortable: false },
     { id: 'stage', label: 'Etapa', visible: true, width: 'w-48', sortable: true },
     { id: 'source', label: 'Fuente', visible: true, width: 'w-32', sortable: true },
     { id: 'quality_index', label: 'Calidad', visible: true, width: 'w-24', sortable: true },
@@ -269,6 +273,9 @@ export const ProspectsTableView = ({
                   )}
                 </TableHead>
               ))}
+              <TableHead className="h-12 font-medium w-16">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -369,18 +376,38 @@ export const ProspectsTableView = ({
                             multiline
                           />
                         )}
-                        {columnId === 'created_at' && (
+                         {columnId === 'created_at' && (
                           <DateCell value={prospect.created_at} />
                         )}
                       </TableCell>
                     );
                   })}
+                  <TableCell className="w-16">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setSelectedProspect(prospect)}
+                      className="h-8 w-8"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Prospect Details Modal */}
+      <ProspectDetailsModal
+        prospect={selectedProspect}
+        open={!!selectedProspect}
+        onClose={() => setSelectedProspect(null)}
+        onUpdateStage={async (id: string, stage: ProspectStage) => {
+          await onUpdate(id, { stage });
+        }}
+      />
     </div>
   );
 };
