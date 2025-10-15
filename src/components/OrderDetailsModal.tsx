@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle, Zap, Edit3 } from 'lucide-react';
+import { Calendar, FileText, Package, Settings, Truck, User, Eye, Edit, Trash2, Factory, Download, AlertTriangle, Zap, Edit3, RefreshCw } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import OrderDeliveryTracker from './OrderDeliveryTracker';
@@ -13,6 +13,7 @@ import { formatDateSafe } from '@/lib/dateUtils';
 import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptions';
 import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
 import { usePermissions } from '@/hooks/usePermissions';
+import { WorkshopReassignmentDialog } from './WorkshopReassignmentDialog';
 
 interface OrderDetailsModalProps {
   order: any;
@@ -27,6 +28,7 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
   const { hasPermission } = usePermissions();
   const { data: materialConsumptions, isLoading: loadingConsumptions } = useOrderMaterialConsumptions(order?.id);
   const [editingConsumption, setEditingConsumption] = useState<any>(null);
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
   
   if (!order) return null;
 
@@ -224,10 +226,23 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                   {/* Mostrar taller asignado si existe */}
                   {order.workshop_assignments && order.workshop_assignments.length > 0 && (
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <Factory className="w-4 h-4 text-blue-600" />
-                        <p className="text-sm text-blue-600 font-medium">Taller Asignado:</p>
-                        <p className="text-sm text-blue-800">{order.workshop_assignments[0].workshops?.name}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Factory className="w-4 h-4 text-blue-600" />
+                          <p className="text-sm text-blue-600 font-medium">Taller Asignado:</p>
+                          <p className="text-sm text-blue-800">{order.workshop_assignments[0].workshops?.name}</p>
+                        </div>
+                        {canEditOrders && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowReassignDialog(true)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <RefreshCw className="w-4 h-4 mr-1" />
+                            Cambiar Taller
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -467,6 +482,25 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
           open={!!editingConsumption}
           onClose={() => setEditingConsumption(null)}
           onSuccess={handleEditConsumptionSuccess}
+        />
+      )}
+
+      {/* Modal de reasignación de taller */}
+      {order.workshop_assignments && order.workshop_assignments.length > 0 && (
+        <WorkshopReassignmentDialog
+          open={showReassignDialog}
+          onClose={() => setShowReassignDialog(false)}
+          orderId={order.id}
+          orderNumber={order.order_number}
+          currentAssignment={{
+            id: order.workshop_assignments[0].id,
+            workshop_id: order.workshop_assignments[0].workshop_id,
+            workshop_name: order.workshop_assignments[0].workshops?.name || ''
+          }}
+          onSuccess={() => {
+            setShowReassignDialog(false);
+            window.location.reload();
+          }}
         />
       )}
     </Dialog>

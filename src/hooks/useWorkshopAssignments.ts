@@ -190,12 +190,76 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
     }
   }, [autoFetch]);
 
+  const reassignWorkshop = async (
+    assignmentId: string,
+    newWorkshopId: string,
+    options?: {
+      expectedCompletionDate?: string;
+      notes?: string;
+    }
+  ) => {
+    try {
+      setLoading(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      const updateData: any = {
+        workshop_id: newWorkshopId,
+        assigned_by: session.user.id,
+        assigned_date: new Date().toISOString().split('T')[0]
+      };
+
+      if (options?.expectedCompletionDate) {
+        updateData.expected_completion_date = options.expectedCompletionDate;
+      }
+
+      if (options?.notes) {
+        updateData.notes = options.notes;
+      }
+
+      const { data, error } = await supabase
+        .from('workshop_assignments')
+        .update(updateData)
+        .eq('id', assignmentId)
+        .select(`
+          *,
+          workshops:workshop_id(name)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      await fetchAssignments();
+      toast({
+        title: "Éxito",
+        description: `Taller reasignado correctamente`,
+      });
+      
+      return { data, error: null };
+    } catch (error: any) {
+      console.error('Error reassigning workshop:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo reasignar el taller",
+        variant: "destructive",
+      });
+      return { data: null, error };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     assignments,
     loading,
     createAssignment,
     updateAssignment,
     deleteAssignment,
+    reassignWorkshop,
     getWorkshopCapacityStats,
     getAvailableOrders,
     refetch: fetchAssignments
