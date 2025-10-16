@@ -13,11 +13,12 @@ import { useUserContext } from '@/hooks/useUserContext';
 import OrderQuantityEditor from './OrderQuantityEditor';
 import ProductSelector from './ProductSelector';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
-import { Settings, Package, AlertTriangle, Plus, Wrench, Truck, FileText } from 'lucide-react';
+import { Settings, Package, AlertTriangle, Plus, Wrench, Truck, FileText, RefreshCw } from 'lucide-react';
 import MaterialConsumptionForm from './supplies/MaterialConsumptionForm';
 import OrderFileManager from './OrderFileManager';
 import { useWorkshopAssignments } from '@/hooks/useWorkshopAssignments';
 import { useWorkshops } from '@/hooks/useWorkshops';
+import { WorkshopReassignmentDialog } from './WorkshopReassignmentDialog';
 
 interface OrderEditModalProps {
   order: any;
@@ -35,6 +36,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [orderWorkshopId, setOrderWorkshopId] = useState<string>('');
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
   const [showMaterialConsumption, setShowMaterialConsumption] = useState(false);
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
   const { updateOrder, updateOrderItemQuantities, updateOrderItemsWithDeletions, addProductsToOrder, loading } = useOrderActions();
   const { isAdmin, isDesigner } = useUserContext();
   const { createAssignment, loading: assignmentLoading } = useWorkshopAssignments(false);
@@ -238,9 +240,21 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
                 {orderWorkshopId ? (
                   // Mostrar taller asignado
                   <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Wrench className="w-5 h-5 text-green-600" />
-                      <h4 className="font-medium text-green-900">Taller Asignado</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <Wrench className="w-5 h-5 text-green-600" />
+                        <h4 className="font-medium text-green-900">Taller Asignado</h4>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowReassignDialog(true)}
+                        className="text-green-600 hover:text-green-700"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-1" />
+                        Cambiar Taller
+                      </Button>
                     </div>
                     <p className="text-green-700">
                       <strong>{getAssignedWorkshop()?.name || 'Taller no encontrado'}</strong>
@@ -447,6 +461,26 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
           onConsumptionCompleted={() => {
             setShowMaterialConsumption(false);
             onSuccess(); // Actualizar los datos de la orden
+          }}
+        />
+      )}
+
+      {/* Dialog de reasignación de taller */}
+      {orderWorkshopId && order.workshop_assignments && order.workshop_assignments.length > 0 && (
+        <WorkshopReassignmentDialog
+          open={showReassignDialog}
+          onClose={() => setShowReassignDialog(false)}
+          orderId={order.id}
+          orderNumber={order.order_number}
+          currentAssignment={{
+            id: order.workshop_assignments[0].id,
+            workshop_id: orderWorkshopId,
+            workshop_name: getAssignedWorkshop()?.name || 'Taller no encontrado'
+          }}
+          onSuccess={() => {
+            setShowReassignDialog(false);
+            fetchOrderWorkshop();
+            onSuccess();
           }}
         />
       )}
