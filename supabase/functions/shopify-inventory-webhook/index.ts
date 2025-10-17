@@ -136,6 +136,15 @@ async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
 
     const previousStock = localVariant.stock_quantity;
     
+    // Get organization_id for the variant
+    const { data: productData } = await supabase
+      .from('product_variants')
+      .select('product_id, products!inner(organization_id)')
+      .eq('id', localVariant.id)
+      .single();
+
+    const organizationId = productData?.products?.organization_id;
+    
     // Update the stock quantity in our database
     const { error: updateError } = await supabase
       .from('product_variants')
@@ -147,6 +156,28 @@ async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
     if (updateError) {
       console.error('⚠️ Error actualizando stock en base de datos:', updateError);
       return { success: false, error: 'Database update failed' };
+    }
+
+    console.log(`✅ Stock actualizado exitosamente en product_variants`);
+
+    // Record stock change in history table
+    if (organizationId) {
+      const { error: historyError } = await supabase
+        .from('product_stock_history')
+        .insert({
+          product_variant_id: localVariant.id,
+          organization_id: organizationId,
+          stock_quantity: newStockQuantity,
+          source: 'shopify_webhook',
+          recorded_at: new Date().toISOString()
+        });
+
+      if (historyError) {
+        console.error('⚠️ Error registrando historial de stock:', historyError);
+        // Don't fail the sync if history recording fails
+      } else {
+        console.log(`📊 Historial de stock registrado para variant ${localVariant.id}`);
+      }
     }
 
     // Log successful update
@@ -163,7 +194,8 @@ async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
           new_stock: newStockQuantity,
           stock_change: newStockQuantity - previousStock,
           updated_at: inventoryLevel.updated_at,
-          processed_at: new Date().toISOString()
+          processed_at: new Date().toISOString(),
+          history_recorded: !!organizationId
         },
         success_count: 1,
         error_count: 0

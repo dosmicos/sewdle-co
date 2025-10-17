@@ -1354,6 +1354,51 @@ export type Database = {
           },
         ]
       }
+      product_stock_history: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          product_variant_id: string
+          recorded_at: string
+          source: string
+          stock_quantity: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          product_variant_id: string
+          recorded_at?: string
+          source?: string
+          stock_quantity: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          product_variant_id?: string
+          recorded_at?: string
+          source?: string
+          stock_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_stock_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_stock_history_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_variants: {
         Row: {
           additional_price: number | null
@@ -1665,6 +1710,7 @@ export type Database = {
           created_at: string
           current_stock: number
           days_of_stock: number
+          days_with_stock_data: number | null
           executed_at: string | null
           id: string
           open_orders_quantity: number
@@ -1686,6 +1732,7 @@ export type Database = {
           created_at?: string
           current_stock?: number
           days_of_stock?: number
+          days_with_stock_data?: number | null
           executed_at?: string | null
           id?: string
           open_orders_quantity?: number
@@ -1707,6 +1754,7 @@ export type Database = {
           created_at?: string
           current_stock?: number
           days_of_stock?: number
+          days_with_stock_data?: number | null
           executed_at?: string | null
           id?: string
           open_orders_quantity?: number
@@ -2688,7 +2736,7 @@ export type Database = {
         Returns: number
       }
       calculate_replenishment_suggestions: {
-        Args: Record<PropertyKey, never>
+        Args: Record<PropertyKey, never> | { org_id?: string }
         Returns: undefined
       }
       check_delivery_sync_lock: {

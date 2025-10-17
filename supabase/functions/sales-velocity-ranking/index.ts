@@ -14,6 +14,7 @@ interface SalesVelocityData {
   revenue_60_days: number;
   orders_count: number;
   status: string;
+  days_with_stock?: number;
 }
 
 Deno.serve(async (req) => {
@@ -166,9 +167,50 @@ Deno.serve(async (req) => {
       const uniqueProductIds = Array.from(productMap.keys());
       console.log(`🏷️ Product IDs únicos: ${uniqueProductIds.slice(0, 5).join(', ')}${uniqueProductIds.length > 5 ? '...' : ''}`);
 
-      // Convert to final ranking data
-      const rankingData: SalesVelocityData[] = Array.from(productMap.values()).map(product => {
-        const salesVelocity = product.sales_60_days / 60; // daily average
+      // Convert to final ranking data - with stock history calculation
+      const rankingData: SalesVelocityData[] = [];
+      
+      for (const product of Array.from(productMap.values())) {
+        // Get all variant IDs for this product to check stock history
+        const productVariantIds = variantData
+          .filter(v => v.product_id === product.product_id)
+          .map(v => variants.find(variant => variant.sku_variant === v.sku_variant)?.id)
+          .filter(Boolean);
+
+        // Get stock history for all variants of this product (last 60 days)
+        let daysWithStock = 0;
+        if (productVariantIds.length > 0) {
+          const { data: stockHistory } = await supabase
+            .from('product_stock_history')
+            .select('recorded_at, stock_quantity, product_variant_id')
+            .in('product_variant_id', productVariantIds)
+            .eq('organization_id', organizationId)
+            .gte('recorded_at', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString())
+            .gt('stock_quantity', 0);
+
+          // Count unique days with stock > 0 across all variants
+          if (stockHistory && stockHistory.length > 0) {
+            const uniqueDays = new Set(
+              stockHistory.map(h => new Date(h.recorded_at).toDateString())
+            );
+            daysWithStock = uniqueDays.size;
+          }
+        }
+
+        // Determine effective days for velocity calculation
+        let effectiveDays = 60; // Default fallback
+        if (daysWithStock > 0) {
+          effectiveDays = daysWithStock;
+        } else if (product.sales_60_days > 0) {
+          // If we have sales but no history, infer minimum days with stock
+          effectiveDays = Math.min(60, product.sales_60_days);
+        } else if (product.current_stock > 0) {
+          // If we have current stock but no sales/history, assume full period
+          effectiveDays = 60;
+        }
+
+        // Calculate sales velocity with effective days
+        const salesVelocity = effectiveDays > 0 ? product.sales_60_days / effectiveDays : 0;
         const stockDaysRemaining = salesVelocity > 0 ? product.current_stock / salesVelocity : 9999;
         
         // Calculate velocity/stock ratio (replace 0 with 1 for stock days)
@@ -185,7 +227,7 @@ Deno.serve(async (req) => {
           status = 'warning'; // Low sales for entire product
         }
 
-        return {
+        rankingData.push({
           product_id: product.product_id,
           product_name: product.product_name,
           variant_count: product.variant_count,
@@ -197,9 +239,10 @@ Deno.serve(async (req) => {
           velocity_stock_ratio: Number(velocityStockRatio.toFixed(3)),
           revenue_60_days: Number(product.revenue_60_days.toFixed(2)),
           orders_count: product.orders_count,
-          status
-        };
-      });
+          status,
+          days_with_stock: daysWithStock || effectiveDays
+        });
+      }
 
       // Sort by sales velocity (descending) and then by sales volume
       rankingData.sort((a, b) => {
