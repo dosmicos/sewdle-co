@@ -36,6 +36,10 @@ export default function ProspectsPage() {
     await updateProspect(id, { stage });
   };
 
+  const handleUpdateProspect = async (id: string, data: Partial<WorkshopProspect>) => {
+    await updateProspect(id, data);
+  };
+
   const prospectsByStage = prospects.reduce((acc, prospect) => {
     if (!acc[prospect.stage]) {
       acc[prospect.stage] = [];

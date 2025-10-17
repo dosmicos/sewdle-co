@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { WorkshopProspect, STAGE_LABELS, ProspectStage } from '@/types/prospects';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProspectActivities } from '@/hooks/useProspectActivities';
 import { ActivityForm } from './ActivityForm';
 import { ActivityTimeline } from './ActivityTimeline';
-import { Building2, Phone, Mail, MapPin, Calendar, Save } from 'lucide-react';
+import { Building2, Phone, Mail, MapPin, Calendar, Save, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -31,6 +33,17 @@ export const ProspectDetailsModal = ({ prospect, open, onClose, onUpdateStage }:
   const [notes, setNotes] = useState(prospect?.notes || '');
   const [savingNotes, setSavingNotes] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: prospect?.name || '',
+    contact_person: prospect?.contact_person || '',
+    phone: prospect?.phone || '',
+    email: prospect?.email || '',
+    address: prospect?.address || '',
+    city: prospect?.city || '',
+    source: prospect?.source || '',
+  });
 
   if (!prospect) return null;
 
@@ -106,54 +119,247 @@ export const ProspectDetailsModal = ({ prospect, open, onClose, onUpdateStage }:
     }
   };
 
+  const handleSaveEdit = async () => {
+    try {
+      // Validar que el nombre no esté vacío
+      if (!editFormData.name.trim()) {
+        toast.error('El nombre del taller es obligatorio');
+        return;
+      }
+
+      // Validar email si se proporcionó
+      if (editFormData.email && !editFormData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        toast.error('El email no es válido');
+        return;
+      }
+
+      setSavingEdit(true);
+
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { error } = await supabase
+        .from('workshop_prospects')
+        .update({
+          name: editFormData.name.trim(),
+          contact_person: editFormData.contact_person.trim() || null,
+          phone: editFormData.phone.trim() || null,
+          email: editFormData.email.trim() || null,
+          address: editFormData.address.trim() || null,
+          city: editFormData.city.trim() || null,
+          source: editFormData.source || null,
+        })
+        .eq('id', prospect.id);
+
+      if (error) throw error;
+
+      toast.success('Prospecto actualizado correctamente');
+      setIsEditing(false);
+
+      // Crear actividad de actualización
+      await createActivity({
+        prospect_id: prospect.id,
+        organization_id: prospect.organization_id,
+        activity_type: 'note',
+        title: 'Información del prospecto actualizada',
+        status: 'completed',
+        completed_date: new Date().toISOString(),
+      });
+
+      // Refrescar datos
+      await onUpdateStage(prospect.id, prospect.stage);
+      refetch();
+    } catch (error) {
+      toast.error('Error al actualizar el prospecto');
+      console.error('Error updating prospect:', error);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditFormData({
+      name: prospect?.name || '',
+      contact_person: prospect?.contact_person || '',
+      phone: prospect?.phone || '',
+      email: prospect?.email || '',
+      address: prospect?.address || '',
+      city: prospect?.city || '',
+      source: prospect?.source || '',
+    });
+    setIsEditing(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <Building2 className="h-6 w-6 text-primary" />
-            <DialogTitle className="text-2xl">{prospect.name}</DialogTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Building2 className="h-6 w-6 text-primary" />
+              <DialogTitle className="text-2xl">{prospect.name}</DialogTitle>
+            </div>
+            {!isEditing ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCancelEdit}
+                  disabled={savingEdit}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Guardar
+                </Button>
+              </div>
+            )}
           </div>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Info Section */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-            <div className="space-y-2">
-              {prospect.contact_person && (
-                <p><strong>Contacto:</strong> {prospect.contact_person}</p>
-              )}
-              {prospect.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  <span>{prospect.phone}</span>
+          {isEditing ? (
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="name">Nombre del Taller *</Label>
+                  <Input
+                    id="name"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nombre del taller"
+                    disabled={savingEdit}
+                  />
                 </div>
-              )}
-              {prospect.email && (
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  <span>{prospect.email}</span>
+                <div>
+                  <Label htmlFor="contact">Persona de Contacto</Label>
+                  <Input
+                    id="contact"
+                    value={editFormData.contact_person}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, contact_person: e.target.value }))}
+                    placeholder="Nombre del contacto"
+                    disabled={savingEdit}
+                  />
                 </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              {prospect.city && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  <span>{prospect.city}</span>
+                <div>
+                  <Label htmlFor="phone">Teléfono</Label>
+                  <Input
+                    id="phone"
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="Número de teléfono"
+                    disabled={savingEdit}
+                  />
                 </div>
-              )}
-              {prospect.source && (
-                <p><strong>Origen:</strong> {prospect.source}</p>
-              )}
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm text-muted-foreground">
-                  Creado: {format(new Date(prospect.created_at), 'dd MMM yyyy', { locale: es })}
-                </span>
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={editFormData.email}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="correo@ejemplo.com"
+                    disabled={savingEdit}
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="address">Dirección</Label>
+                  <Input
+                    id="address"
+                    value={editFormData.address}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="Dirección completa"
+                    disabled={savingEdit}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="city">Ciudad</Label>
+                  <Input
+                    id="city"
+                    value={editFormData.city}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, city: e.target.value }))}
+                    placeholder="Ciudad"
+                    disabled={savingEdit}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="source">Origen del Contacto</Label>
+                  <Select
+                    value={editFormData.source}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, source: value }))}
+                    disabled={savingEdit}
+                  >
+                    <SelectTrigger id="source">
+                      <SelectValue placeholder="Seleccionar origen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Facebook">Facebook</SelectItem>
+                      <SelectItem value="Instagram">Instagram</SelectItem>
+                      <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                      <SelectItem value="Referido">Referido</SelectItem>
+                      <SelectItem value="Otro">Otro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="pt-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    <span>
+                      Creado: {format(new Date(prospect.created_at), 'dd MMM yyyy', { locale: es })}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="space-y-2">
+                {prospect.contact_person && (
+                  <p><strong>Contacto:</strong> {prospect.contact_person}</p>
+                )}
+                {prospect.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    <span>{prospect.phone}</span>
+                  </div>
+                )}
+                {prospect.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    <span>{prospect.email}</span>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                {prospect.city && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    <span>{prospect.city}</span>
+                  </div>
+                )}
+                {prospect.source && (
+                  <p><strong>Origen:</strong> {prospect.source}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span className="text-sm text-muted-foreground">
+                    Creado: {format(new Date(prospect.created_at), 'dd MMM yyyy', { locale: es })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Stage Selector */}
           <div className="space-y-2">
