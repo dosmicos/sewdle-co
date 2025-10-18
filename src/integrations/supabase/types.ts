@@ -2736,7 +2736,7 @@ export type Database = {
         Returns: number
       }
       calculate_replenishment_suggestions: {
-        Args: Record<PropertyKey, never> | { org_id?: string }
+        Args: { org_id?: string }
         Returns: undefined
       }
       check_delivery_sync_lock: {
