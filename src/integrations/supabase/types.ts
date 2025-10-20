@@ -2739,18 +2739,21 @@ export type Database = {
         Returns: number
       }
       calculate_replenishment_suggestions: {
-        Args: { p_organization_id?: string }
+        Args: { p_organization_id: string }
         Returns: {
           current_stock: number
           days_of_stock: number
-          last_30_days_sales: number
-          last_7_days_sales: number
           open_orders: number
-          product_id: string
+          product_name: string
           projected_demand: number
+          reason: string
           sales_velocity: number
+          sku_variant: string
           suggested_quantity: number
-          urgency: string
+          urgency_level: string
+          variant_color: string
+          variant_id: string
+          variant_size: string
         }[]
       }
       check_delivery_sync_lock: {
