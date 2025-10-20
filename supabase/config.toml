@@ -7,6 +7,9 @@ verify_jwt = false
 [functions.intelligent-replenishment]
 verify_jwt = false
 
+[functions.snapshot-daily-inventory]
+verify_jwt = false
+
 [functions.sync-shopify-sales]
 verify_jwt = false
 

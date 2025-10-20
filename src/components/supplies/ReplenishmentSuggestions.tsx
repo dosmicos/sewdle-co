@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
 import { ProductionOrderModal } from './ProductionOrderModal';
+import { DataQualityBadge } from './DataQualityBadge';
 import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
@@ -326,7 +327,8 @@ export const ReplenishmentSuggestions: React.FC = () => {
       'Pendiente Producción',
       'Cantidad Sugerida',
       'Nivel de Urgencia',
-      'Motivo'
+      'Motivo',
+      'Calidad de Datos'
     ];
 
     const csvRows = [headers.join(',')];
@@ -344,6 +346,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
         suggestion.suggested_quantity || 0,
         `"${suggestion.urgency_level?.toUpperCase() || 'NORMAL'}"`,
         `"${suggestion.reason || 'Reposición automática basada en análisis de ventas'}"`,
+        `"${suggestion.data_quality?.toUpperCase() || 'MEDIUM'}"`,
       ];
       csvRows.push(row.join(','));
     });
@@ -634,6 +637,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                         {getSortIcon('urgency_level')}
                       </div>
                     </TableHead>
+                    <TableHead>Calidad de Datos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -695,6 +699,9 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         {getUrgencyBadge(suggestion.urgency_level)}
+                      </TableCell>
+                      <TableCell>
+                        <DataQualityBadge quality={suggestion.data_quality} />
                       </TableCell>
                      </TableRow>
                   ))}

@@ -26,6 +26,7 @@ export interface ReplenishmentSuggestion {
   status: 'pending' | 'approved' | 'rejected' | 'executed';
   created_at: string;
   updated_at: string;
+  data_quality?: 'high' | 'medium' | 'low' | 'insufficient';
 }
 
 export interface ReplenishmentConfig {
