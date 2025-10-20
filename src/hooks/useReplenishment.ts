@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 export interface ReplenishmentSuggestion {
   id: string; // Now properly returned by RPC as product_variant_id
@@ -49,6 +50,7 @@ export const useReplenishment = () => {
   const [loading, setLoading] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
 
   const fetchSuggestions = async () => {
     try {
@@ -107,6 +109,15 @@ export const useReplenishment = () => {
 
 
   const calculateSuggestions = async () => {
+    if (!currentOrganization?.id) {
+      toast({
+        title: "Error",
+        description: "No se pudo obtener la organización actual",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setCalculating(true);
       
@@ -115,10 +126,12 @@ export const useReplenishment = () => {
         description: "Procesando datos automáticos de Shopify...",
       });
       
-      // Call the calculation function (it already handles sync internally)
+      // Call the calculation function with organization_id
       console.log('Calculando sugerencias de reposición con datos automáticos...');
       const { data, error } = await supabase
-        .rpc('calculate_replenishment_suggestions');
+        .rpc('calculate_replenishment_suggestions', { 
+          p_organization_id: currentOrganization.id 
+        });
 
       if (error) {
         console.error('Error calculating replenishment:', error);
@@ -146,12 +159,24 @@ export const useReplenishment = () => {
   };
 
   const triggerReplenishmentFunction = async () => {
+    if (!currentOrganization?.id) {
+      toast({
+        title: "Error",
+        description: "No se pudo obtener la organización actual",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setCalculating(true);
       
-      // Llamar a la Edge Function
+      // Llamar a la Edge Function con organization_id
       const { data, error } = await supabase.functions.invoke('intelligent-replenishment', {
-        body: { manual_trigger: true }
+        body: { 
+          organization_id: currentOrganization.id,
+          manual_trigger: true 
+        }
       });
 
       if (error) {

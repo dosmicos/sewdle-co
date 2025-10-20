@@ -37,10 +37,19 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     console.log('✅ Cliente de Supabase inicializado');
 
-    // Ejecutar función de cálculo de reposición
+    // Get organization_id from request body
+    const { organization_id } = await req.json();
+    
+    if (!organization_id) {
+      throw new Error('organization_id es requerido');
+    }
+    
+    console.log('🏢 Organización:', organization_id);
+
+    // Ejecutar función de cálculo de reposición con organization_id
     console.log('📊 Ejecutando cálculo de sugerencias...');
     const { data: calculations, error: calcError } = await supabase
-      .rpc('calculate_replenishment_suggestions');
+      .rpc('calculate_replenishment_suggestions', { p_organization_id: organization_id });
 
     if (calcError) {
       console.error('❌ Error en cálculo de reposición:', calcError);

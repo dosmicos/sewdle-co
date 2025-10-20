@@ -2739,17 +2739,18 @@ export type Database = {
         Returns: number
       }
       calculate_replenishment_suggestions: {
-        Args: Record<PropertyKey, never>
+        Args: { p_organization_id?: string }
         Returns: {
           current_stock: number
           days_of_stock: number
-          open_orders_quantity: number
-          product_variant_id: string
+          last_30_days_sales: number
+          last_7_days_sales: number
+          open_orders: number
+          product_id: string
           projected_demand: number
-          reason: string
           sales_velocity: number
           suggested_quantity: number
-          urgency_level: string
+          urgency: string
         }[]
       }
       check_delivery_sync_lock: {
