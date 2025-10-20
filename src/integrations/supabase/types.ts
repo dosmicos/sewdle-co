@@ -2742,24 +2742,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: {
           current_stock: number
-          data_quality: string
-          maximum_stock: number
-          minimum_stock: number
-          open_orders_quantity: number
-          order_id: string
+          days_of_stock: number
+          open_orders: number
           product_name: string
-          product_variant_id: string
+          projected_demand: number
           reason: string
-          sales_last_30_days: number
-          sales_last_7_days: number
           sales_velocity: number
-          sku: string
           sku_variant: string
-          stock_days_remaining: number
           suggested_quantity: number
           urgency_level: string
           variant_color: string
-          variant_name: string
+          variant_id: string
           variant_size: string
         }[]
       }
