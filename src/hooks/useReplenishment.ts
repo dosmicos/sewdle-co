@@ -53,23 +53,10 @@ export const useReplenishment = () => {
   const fetchSuggestions = async () => {
     try {
       setLoading(true);
-      
-      // Get current organization
-      const { data: orgData } = await supabase
-        .from('organization_users')
-        .select('organization_id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .eq('status', 'active')
-        .single();
 
-      if (!orgData?.organization_id) {
-        throw new Error('No se pudo obtener la organización actual');
-      }
-
+      console.log('🔍 Obteniendo sugerencias de reposición...');
       const { data, error } = await supabase
-        .rpc('get_replenishment_suggestions_with_details', {
-          org_id: orgData.organization_id
-        });
+        .rpc('get_replenishment_suggestions_with_details');
 
       if (error) {
         console.error('Error fetching suggestions:', error);
