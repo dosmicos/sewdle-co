@@ -2743,17 +2743,13 @@ export type Database = {
         Returns: {
           current_stock: number
           days_of_stock: number
-          open_orders: number
-          product_name: string
+          open_orders_quantity: number
+          product_variant_id: string
           projected_demand: number
           reason: string
           sales_velocity: number
-          sku_variant: string
           suggested_quantity: number
           urgency_level: string
-          variant_color: string
-          variant_id: string
-          variant_size: string
         }[]
       }
       check_delivery_sync_lock: {
