@@ -1709,6 +1709,7 @@ export type Database = {
           calculation_date: string
           created_at: string
           current_stock: number
+          data_quality: string | null
           days_of_stock: number
           days_with_stock_data: number | null
           executed_at: string | null
@@ -1731,6 +1732,7 @@ export type Database = {
           calculation_date?: string
           created_at?: string
           current_stock?: number
+          data_quality?: string | null
           days_of_stock?: number
           days_with_stock_data?: number | null
           executed_at?: string | null
@@ -1753,6 +1755,7 @@ export type Database = {
           calculation_date?: string
           created_at?: string
           current_stock?: number
+          data_quality?: string | null
           days_of_stock?: number
           days_with_stock_data?: number | null
           executed_at?: string | null
