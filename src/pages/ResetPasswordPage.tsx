@@ -29,35 +29,41 @@ const ResetPasswordPage = () => {
       
       console.log('URL params:', { accessToken: !!accessToken, type });
 
-      // Para recuperación de contraseña, solo necesitamos access_token y type=recovery
+      // Para recuperación de contraseña, verificar parámetros y sesión activa
       if (accessToken && type === 'recovery') {
         try {
           console.log('Processing password recovery token...');
           
-          // Verificar el token de recuperación usando verifyOtp
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: accessToken,
-            type: 'recovery'
-          });
+          // Supabase ya estableció la sesión al hacer clic en el enlace
+          // Solo verificamos que hay una sesión activa
+          const { data: { session }, error } = await supabase.auth.getSession();
 
           if (error) {
-            console.error('Error verifying recovery token:', error);
+            console.error('Error getting session:', error);
             toast({
               title: "Error",
               description: "El enlace de recuperación es inválido o ha expirado",
               variant: "destructive",
             });
             setHasValidToken(false);
-          } else {
-            console.log('Recovery token verified successfully:', data);
+          } else if (session) {
+            console.log('Recovery session confirmed:', session.user?.email);
             setHasValidToken(true);
             toast({
               title: "Enlace válido",
               description: "Ahora puedes establecer tu nueva contraseña",
             });
+          } else {
+            console.log('No active session found');
+            toast({
+              title: "Error",
+              description: "El enlace de recuperación es inválido o ha expirado",
+              variant: "destructive",
+            });
+            setHasValidToken(false);
           }
         } catch (error) {
-          console.error('Exception verifying recovery token:', error);
+          console.error('Exception checking session:', error);
           toast({
             title: "Error",
             description: "Error al procesar el enlace de recuperación",
