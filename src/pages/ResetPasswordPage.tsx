@@ -23,16 +23,20 @@ const ResetPasswordPage = () => {
 
   useEffect(() => {
     console.log('Setting up password recovery handler...');
+    
+    // Detectar qué formato de enlace tenemos
     const code = searchParams.get('code');
+    const accessToken = searchParams.get('access_token');
     const type = searchParams.get('type');
     
     console.log('URL params:', { 
       code: !!code,
+      accessToken: !!accessToken,
       type 
     });
 
-    // Verificar que tenemos los parámetros necesarios
-    if (!code || type !== 'recovery') {
+    // Verificar que tenemos al menos uno de los formatos necesarios
+    if ((!code && !accessToken) || type !== 'recovery') {
       console.log('Missing required parameters for recovery');
       toast({
         title: "Error",
@@ -68,36 +72,43 @@ const ResetPasswordPage = () => {
       }
     );
 
-    // Intercambiar el código por una sesión
+    // Establecer la sesión según el formato del enlace
     const setupSession = async () => {
       try {
-        console.log('Exchanging code for session...');
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (code) {
+          // Formato nuevo: usar exchangeCodeForSession
+          console.log('Using new format: exchanging code for session...');
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-        if (error) {
-          console.error('Error exchanging code:', error);
-          if (!handled) {
-            handled = true;
-            clearTimeout(timeoutId);
-            toast({
-              title: "Error",
-              description: "El enlace de recuperación es inválido o ha expirado",
-              variant: "destructive",
-            });
-            setHasValidToken(false);
-            setIsCheckingToken(false);
+          if (error) {
+            console.error('Error exchanging code:', error);
+            throw error;
           }
-        } else {
-          console.log('Session established successfully:', data.session?.user?.email);
+          console.log('Session established successfully (code):', data.session?.user?.email);
+          
+        } else if (accessToken) {
+          // Formato antiguo: usar verifyOtp
+          console.log('Using legacy format: verifying OTP token...');
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: accessToken,
+            type: 'recovery'
+          });
+
+          if (error) {
+            console.error('Error verifying OTP:', error);
+            throw error;
+          }
+          console.log('Session established successfully (token):', data.session?.user?.email);
         }
+        
       } catch (error) {
-        console.error('Exception exchanging code:', error);
+        console.error('Exception setting up session:', error);
         if (!handled) {
           handled = true;
           clearTimeout(timeoutId);
           toast({
             title: "Error",
-            description: "Error al procesar el enlace de recuperación",
+            description: "El enlace de recuperación es inválido o ha expirado",
             variant: "destructive",
           });
           setHasValidToken(false);
