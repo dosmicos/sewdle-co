@@ -24,9 +24,14 @@ const ResetPasswordPage = () => {
   useEffect(() => {
     console.log('Setting up password recovery handler...');
     const accessToken = searchParams.get('access_token');
+    const refreshToken = searchParams.get('refresh_token');
     const type = searchParams.get('type');
     
-    console.log('URL params:', { accessToken: !!accessToken, type });
+    console.log('URL params:', { 
+      accessToken: !!accessToken, 
+      refreshToken: !!refreshToken,
+      type 
+    });
 
     // Verificar que tenemos los parámetros necesarios
     if (!accessToken || type !== 'recovery') {
@@ -64,6 +69,49 @@ const ResetPasswordPage = () => {
         }
       }
     );
+
+    // Establecer la sesión manualmente con el token de la URL
+    const setupSession = async () => {
+      try {
+        console.log('Setting session with access token...');
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || '',
+        });
+
+        if (error) {
+          console.error('Error setting session:', error);
+          if (!handled) {
+            handled = true;
+            clearTimeout(timeoutId);
+            toast({
+              title: "Error",
+              description: "El enlace de recuperación es inválido o ha expirado",
+              variant: "destructive",
+            });
+            setHasValidToken(false);
+            setIsCheckingToken(false);
+          }
+        } else {
+          console.log('Session set successfully:', data.session?.user?.email);
+        }
+      } catch (error) {
+        console.error('Exception setting session:', error);
+        if (!handled) {
+          handled = true;
+          clearTimeout(timeoutId);
+          toast({
+            title: "Error",
+            description: "Error al procesar el enlace de recuperación",
+            variant: "destructive",
+          });
+          setHasValidToken(false);
+          setIsCheckingToken(false);
+        }
+      }
+    };
+
+    setupSession();
 
     // Timeout de seguridad: si después de 5 segundos no hay respuesta
     timeoutId = setTimeout(() => {
