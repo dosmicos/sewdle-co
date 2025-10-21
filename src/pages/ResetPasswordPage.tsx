@@ -23,18 +23,16 @@ const ResetPasswordPage = () => {
 
   useEffect(() => {
     console.log('Setting up password recovery handler...');
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
+    const code = searchParams.get('code');
     const type = searchParams.get('type');
     
     console.log('URL params:', { 
-      accessToken: !!accessToken, 
-      refreshToken: !!refreshToken,
+      code: !!code,
       type 
     });
 
     // Verificar que tenemos los parámetros necesarios
-    if (!accessToken || type !== 'recovery') {
+    if (!code || type !== 'recovery') {
       console.log('Missing required parameters for recovery');
       toast({
         title: "Error",
@@ -70,17 +68,14 @@ const ResetPasswordPage = () => {
       }
     );
 
-    // Establecer la sesión manualmente con el token de la URL
+    // Intercambiar el código por una sesión
     const setupSession = async () => {
       try {
-        console.log('Setting session with access token...');
-        const { data, error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
+        console.log('Exchanging code for session...');
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (error) {
-          console.error('Error setting session:', error);
+          console.error('Error exchanging code:', error);
           if (!handled) {
             handled = true;
             clearTimeout(timeoutId);
@@ -93,10 +88,10 @@ const ResetPasswordPage = () => {
             setIsCheckingToken(false);
           }
         } else {
-          console.log('Session set successfully:', data.session?.user?.email);
+          console.log('Session established successfully:', data.session?.user?.email);
         }
       } catch (error) {
-        console.error('Exception setting session:', error);
+        console.error('Exception exchanging code:', error);
         if (!handled) {
           handled = true;
           clearTimeout(timeoutId);
