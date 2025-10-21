@@ -22,69 +22,68 @@ const ResetPasswordPage = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkRecoveryToken = async () => {
-      console.log('Checking URL parameters for recovery...');
-      const accessToken = searchParams.get('access_token');
-      const type = searchParams.get('type');
-      
-      console.log('URL params:', { accessToken: !!accessToken, type });
+    console.log('Setting up password recovery handler...');
+    const accessToken = searchParams.get('access_token');
+    const type = searchParams.get('type');
+    
+    console.log('URL params:', { accessToken: !!accessToken, type });
 
-      // Para recuperación de contraseña, verificar parámetros y sesión activa
-      if (accessToken && type === 'recovery') {
-        try {
-          console.log('Processing password recovery token...');
+    // Verificar que tenemos los parámetros necesarios
+    if (!accessToken || type !== 'recovery') {
+      console.log('Missing required parameters for recovery');
+      toast({
+        title: "Error",
+        description: "Enlace de recuperación inválido. Por favor solicita un nuevo enlace.",
+        variant: "destructive",
+      });
+      setHasValidToken(false);
+      setIsCheckingToken(false);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
+    let handled = false;
+
+    // Escuchar los eventos de autenticación de Supabase
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth event:', event, 'Session:', !!session);
+
+        // Supabase dispara el evento PASSWORD_RECOVERY cuando procesa el token
+        if (event === 'PASSWORD_RECOVERY' && session && !handled) {
+          handled = true;
+          clearTimeout(timeoutId);
+          console.log('Password recovery session established:', session.user?.email);
           
-          // Supabase ya estableció la sesión al hacer clic en el enlace
-          // Solo verificamos que hay una sesión activa
-          const { data: { session }, error } = await supabase.auth.getSession();
-
-          if (error) {
-            console.error('Error getting session:', error);
-            toast({
-              title: "Error",
-              description: "El enlace de recuperación es inválido o ha expirado",
-              variant: "destructive",
-            });
-            setHasValidToken(false);
-          } else if (session) {
-            console.log('Recovery session confirmed:', session.user?.email);
-            setHasValidToken(true);
-            toast({
-              title: "Enlace válido",
-              description: "Ahora puedes establecer tu nueva contraseña",
-            });
-          } else {
-            console.log('No active session found');
-            toast({
-              title: "Error",
-              description: "El enlace de recuperación es inválido o ha expirado",
-              variant: "destructive",
-            });
-            setHasValidToken(false);
-          }
-        } catch (error) {
-          console.error('Exception checking session:', error);
+          setHasValidToken(true);
+          setIsCheckingToken(false);
           toast({
-            title: "Error",
-            description: "Error al procesar el enlace de recuperación",
-            variant: "destructive",
+            title: "Enlace válido",
+            description: "Ahora puedes establecer tu nueva contraseña",
           });
-          setHasValidToken(false);
         }
-      } else {
-        console.log('Missing required parameters for recovery');
+      }
+    );
+
+    // Timeout de seguridad: si después de 5 segundos no hay respuesta
+    timeoutId = setTimeout(() => {
+      if (!handled) {
+        console.error('Timeout waiting for password recovery session');
         toast({
           title: "Error",
-          description: "Enlace de recuperación inválido. Por favor solicita un nuevo enlace.",
+          description: "El enlace de recuperación es inválido o ha expirado",
           variant: "destructive",
         });
         setHasValidToken(false);
+        setIsCheckingToken(false);
       }
-      
-      setIsCheckingToken(false);
-    };
+    }, 5000);
 
-    checkRecoveryToken();
+    // Cleanup
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, [searchParams, toast]);
 
   const validatePassword = (password: string) => {
