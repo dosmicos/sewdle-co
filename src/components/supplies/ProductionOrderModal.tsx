@@ -117,10 +117,10 @@ export const ProductionOrderModal: React.FC<ProductionOrderModalProps> = ({
                   <div className="flex-1">
                     <p className="font-medium text-sm">{suggestion.product_name}</p>
                      <p className="text-xs text-muted-foreground">
-                       {suggestion.variant_name}
+                       {[suggestion.variant_size, suggestion.variant_color].filter(Boolean).join(' / ') || 'Sin variante'}
                      </p>
                      <p className="text-xs text-muted-foreground font-mono">
-                       SKU: {suggestion.sku}
+                       SKU: {suggestion.sku_variant || suggestion.sku}
                      </p>
                   </div>
                   <div className="text-right">
@@ -128,8 +128,8 @@ export const ProductionOrderModal: React.FC<ProductionOrderModalProps> = ({
                       {suggestion.suggested_quantity} unidades
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {suggestion.urgency_level === 'critical' ? '🔴 CRÍTICA' :
-                       suggestion.urgency_level === 'high' ? '🟠 ALTA' : '🟢 NORMAL'}
+                      {suggestion.urgency === 'critical' ? '🔴 CRÍTICA' :
+                       suggestion.urgency === 'high' ? '🟠 ALTA' : '🟢 NORMAL'}
                     </p>
                   </div>
                 </div>

@@ -44,13 +44,11 @@ export const useReplenishment = () => {
         .from('v_replenishment_details')
         .select('*')
         .eq('organization_id', currentOrganization.id)
-        .gte('calculation_date', new Date().toISOString().split('T')[0])
-        .order('urgency', { ascending: false })
-        .order('suggested_quantity', { ascending: false });
+        .gte('calculation_date', new Date().toISOString().split('T')[0]);
       
       if (error) throw error;
       
-      setSuggestions(data || []);
+      setSuggestions((data || []) as ReplenishmentSuggestion[]);
     } catch (error) {
       console.error('Error fetching replenishment suggestions:', error);
       toast.error('Error al cargar sugerencias de reposición');
@@ -83,8 +81,10 @@ export const useReplenishment = () => {
       
       console.log('✅ Respuesta RPC:', data);
       
-      if (data?.success) {
-        toast.success(`Cálculo completado: ${data.inserted} sugerencias generadas`);
+      const result = data as { success?: boolean; inserted?: number } | null;
+      
+      if (result?.success) {
+        toast.success(`Cálculo completado: ${result.inserted} sugerencias generadas`);
         await fetchSuggestions();
       } else {
         toast.warning('No se generaron nuevas sugerencias');
