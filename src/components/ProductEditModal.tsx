@@ -247,70 +247,25 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         console.log(`📋 Variante referenciada en ${orderItems.length} order_items:`, orderNumbers);
       }
 
-      // Verificar en replenishment_suggestions (solo activas)
-      const { data: replenishmentSuggestions, error: replenishmentError } = await supabase
-        .from('replenishment_suggestions')
-        .select('id, status, calculation_date')
-        .eq('product_variant_id', variantId)
-        .eq('status', 'pending'); // Solo verificar sugerencias activas
+      // Verificar en inventory_replenishment (solo activas)
+      const { data: inventoryReplenishment, error: replenishmentError } = await supabase
+        .from('inventory_replenishment')
+        .select('id, status, calculated_at')
+        .eq('variant_id', variantId)
+        .eq('status', 'pending'); // Solo verificar registros activos
 
       if (replenishmentError) {
-        console.error('❌ Error verificando referencias en replenishment_suggestions:', replenishmentError);
+        console.error('❌ Error verificando referencias en inventory_replenishment:', replenishmentError);
         return { 
           hasReferences: true, 
-          reason: 'Error de conectividad al verificar sugerencias',
+          reason: 'Error de conectividad al verificar reposición',
           details: [`Error: ${replenishmentError.message}`]
         };
       }
 
-      if (replenishmentSuggestions && replenishmentSuggestions.length > 0) {
-        referencesFound.push(`${replenishmentSuggestions.length} sugerencias de reposición activas`);
-        console.log(`📊 Variante tiene ${replenishmentSuggestions.length} sugerencias de reposición activas`);
-      }
-
-      // Verificar en replenishment_config (solo configuraciones activas)
-      const { data: replenishmentConfig, error: configError } = await supabase
-        .from('replenishment_config')
-        .select('id, is_active')
-        .eq('product_variant_id', variantId)
-        .eq('is_active', true);
-
-      if (configError) {
-        console.error('❌ Error verificando referencias en replenishment_config:', configError);
-        return { 
-          hasReferences: true, 
-          reason: 'Error de conectividad al verificar configuración',
-          details: [`Error: ${configError.message}`]
-        };
-      }
-
-      if (replenishmentConfig && replenishmentConfig.length > 0) {
-        referencesFound.push(`${replenishmentConfig.length} configuraciones de reposición activas`);
-        console.log(`⚙️ Variante tiene ${replenishmentConfig.length} configuraciones de reposición activas`);
-      }
-
-      // Verificar en sales_metrics (solo datos recientes - últimos 90 días)
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-      const { data: salesMetrics, error: salesError } = await supabase
-        .from('sales_metrics')
-        .select('id, metric_date')
-        .eq('product_variant_id', variantId)
-        .gte('metric_date', ninetyDaysAgo.toISOString().split('T')[0]);
-
-      if (salesError) {
-        console.error('❌ Error verificando referencias en sales_metrics:', salesError);
-        return { 
-          hasReferences: true, 
-          reason: 'Error de conectividad al verificar métricas',
-          details: [`Error: ${salesError.message}`]
-        };
-      }
-
-      if (salesMetrics && salesMetrics.length > 0) {
-        referencesFound.push(`${salesMetrics.length} métricas de ventas recientes`);
-        console.log(`📈 Variante tiene ${salesMetrics.length} métricas de ventas de los últimos 90 días`);
+      if (inventoryReplenishment && inventoryReplenishment.length > 0) {
+        referencesFound.push(`${inventoryReplenishment.length} registros de reposición activos`);
+        console.log(`📊 Variante tiene ${inventoryReplenishment.length} registros de reposición activos`);
       }
 
       if (referencesFound.length > 0) {

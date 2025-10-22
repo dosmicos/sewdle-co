@@ -1720,157 +1720,6 @@ export type Database = {
           },
         ]
       }
-      replenishment_config: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          is_active: boolean
-          lead_time_days: number
-          max_stock_level: number
-          min_stock_level: number
-          organization_id: string
-          product_variant_id: string
-          safety_days: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          is_active?: boolean
-          lead_time_days?: number
-          max_stock_level?: number
-          min_stock_level?: number
-          organization_id: string
-          product_variant_id: string
-          safety_days?: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          is_active?: boolean
-          lead_time_days?: number
-          max_stock_level?: number
-          min_stock_level?: number
-          organization_id?: string
-          product_variant_id?: string
-          safety_days?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "replenishment_config_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "replenishment_config_product_variant_id_fkey"
-            columns: ["product_variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      replenishment_suggestions: {
-        Row: {
-          approved_at: string | null
-          approved_by: string | null
-          calculation_date: string
-          created_at: string
-          current_stock: number
-          data_quality: string | null
-          days_of_stock: number
-          days_with_stock_data: number | null
-          executed_at: string | null
-          id: string
-          open_orders_quantity: number
-          order_id: string | null
-          organization_id: string
-          product_variant_id: string
-          projected_demand: number
-          reason: string | null
-          sales_velocity: number
-          status: string
-          suggested_quantity: number
-          updated_at: string
-          urgency_level: string
-        }
-        Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          calculation_date?: string
-          created_at?: string
-          current_stock?: number
-          data_quality?: string | null
-          days_of_stock?: number
-          days_with_stock_data?: number | null
-          executed_at?: string | null
-          id?: string
-          open_orders_quantity?: number
-          order_id?: string | null
-          organization_id: string
-          product_variant_id: string
-          projected_demand?: number
-          reason?: string | null
-          sales_velocity?: number
-          status?: string
-          suggested_quantity: number
-          updated_at?: string
-          urgency_level?: string
-        }
-        Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          calculation_date?: string
-          created_at?: string
-          current_stock?: number
-          data_quality?: string | null
-          days_of_stock?: number
-          days_with_stock_data?: number | null
-          executed_at?: string | null
-          id?: string
-          open_orders_quantity?: number
-          order_id?: string | null
-          organization_id?: string
-          product_variant_id?: string
-          projected_demand?: number
-          reason?: string | null
-          sales_velocity?: number
-          status?: string
-          suggested_quantity?: number
-          updated_at?: string
-          urgency_level?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "replenishment_suggestions_approved_by_fkey"
-            columns: ["approved_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "replenishment_suggestions_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "replenishment_suggestions_product_variant_id_fkey"
-            columns: ["product_variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       role_change_audit: {
         Row: {
           action: string
@@ -1941,47 +1790,6 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sales_metrics: {
-        Row: {
-          avg_order_size: number
-          created_at: string
-          id: string
-          metric_date: string
-          orders_count: number
-          organization_id: string
-          product_variant_id: string
-          sales_quantity: number
-        }
-        Insert: {
-          avg_order_size?: number
-          created_at?: string
-          id?: string
-          metric_date?: string
-          orders_count?: number
-          organization_id: string
-          product_variant_id: string
-          sales_quantity?: number
-        }
-        Update: {
-          avg_order_size?: number
-          created_at?: string
-          id?: string
-          metric_date?: string
-          orders_count?: number
-          organization_id?: string
-          product_variant_id?: string
-          sales_quantity?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sales_metrics_product_variant_id_fkey"
-            columns: ["product_variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
             referencedColumns: ["id"]
           },
         ]
@@ -2851,13 +2659,6 @@ export type Database = {
         }[]
       }
       calculate_okr_score: { Args: { kr_id_param: string }; Returns: number }
-      calculate_replenishment_suggestions: {
-        Args: { p_organization_id: string }
-        Returns: {
-          calculation_date: string
-          records_inserted: number
-        }[]
-      }
       check_delivery_sync_lock: {
         Args: { delivery_uuid: string }
         Returns: boolean
@@ -3222,34 +3023,6 @@ export type Database = {
           variant_title: string
         }[]
       }
-      get_replenishment_suggestions_with_details: {
-        Args: never
-        Returns: {
-          created_at: string
-          current_stock: number
-          id: string
-          maximum_stock: number
-          minimum_stock: number
-          open_orders_quantity: number
-          order_id: string
-          product_name: string
-          product_variant_id: string
-          reason: string
-          reorder_point: number
-          sales_last_30_days: number
-          sales_velocity: number
-          sku: string
-          sku_variant: string
-          status: string
-          stock_days_remaining: number
-          suggested_quantity: number
-          updated_at: string
-          urgency_level: string
-          variant_color: string
-          variant_name: string
-          variant_size: string
-        }[]
-      }
       get_shopify_orders_sanitized: {
         Args: never
         Returns: {
@@ -3405,7 +3178,7 @@ export type Database = {
       recalculate_material_stock: { Args: never; Returns: undefined }
       refresh_inventory_replenishment: {
         Args: { org_id: string }
-        Returns: undefined
+        Returns: Json
       }
       release_delivery_sync_lock: {
         Args: { delivery_uuid: string }

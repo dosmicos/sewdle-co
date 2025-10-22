@@ -108,18 +108,14 @@ export const useProductionOrders = () => {
 
       if (assignmentError) throw assignmentError;
 
-      // Update replenishment suggestions to executed status
-      const suggestionIds = orderData.suggestions.map(s => s.id);
+      // Update replenishment records to executed status
+      const variantIds = orderData.suggestions.map(s => s.variant_id);
       const { error: updateError } = await supabase
-        .from('replenishment_suggestions')
-        .update({
-          status: 'executed',
-          executed_at: new Date().toISOString(),
-          order_id: order.id
-        })
-        .in('id', suggestionIds);
+        .from('inventory_replenishment')
+        .update({ status: 'executed' })
+        .in('variant_id', variantIds);
 
-      if (updateError) throw updateError;
+      if (updateError) console.warn('Warning updating replenishment status:', updateError);
 
       toast({
         title: "Orden de producción creada",

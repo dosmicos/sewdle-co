@@ -76,37 +76,13 @@ const SkuUpdateConfirmationDialog = ({
                   </div>
                 )}
                 
-                {safetyInfo.references.replenishment_suggestions > 0 && (
+                {safetyInfo.references.inventory_replenishment > 0 && (
                   <div className="flex items-center gap-2 p-3 border rounded-lg">
                     <TrendingUp className="w-4 h-4 text-green-500" />
                     <div>
-                      <p className="text-sm font-medium">Sugerencias de Reposición</p>
+                      <p className="text-sm font-medium">Registros de Reposición</p>
                       <p className="text-xs text-muted-foreground">
-                        {safetyInfo.references.replenishment_suggestions} registros
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {safetyInfo.references.replenishment_config > 0 && (
-                  <div className="flex items-center gap-2 p-3 border rounded-lg">
-                    <Package className="w-4 h-4 text-orange-500" />
-                    <div>
-                      <p className="text-sm font-medium">Configuración de Reposición</p>
-                      <p className="text-xs text-muted-foreground">
-                        {safetyInfo.references.replenishment_config} registros
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {safetyInfo.references.sales_metrics > 0 && (
-                  <div className="flex items-center gap-2 p-3 border rounded-lg">
-                    <TrendingUp className="w-4 h-4 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium">Métricas de Ventas</p>
-                      <p className="text-xs text-muted-foreground">
-                        {safetyInfo.references.sales_metrics} registros
+                        {safetyInfo.references.inventory_replenishment} registros
                       </p>
                     </div>
                   </div>

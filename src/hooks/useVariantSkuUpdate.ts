@@ -8,9 +8,7 @@ export interface SkuUpdateSafety {
   new_sku: string;
   references: {
     order_items: number;
-    replenishment_suggestions: number;
-    replenishment_config: number;
-    sales_metrics: number;
+    inventory_replenishment: number;
   };
   pending_deliveries: number;
   warnings: string[];
@@ -28,9 +26,7 @@ export interface SkuUpdateResult {
   affected_tables: {
     delivery_items: number;
     order_items: number;
-    replenishment_suggestions: number;
-    replenishment_config: number;
-    sales_metrics: number;
+    inventory_replenishment: number;
   };
   message: string;
   error?: string;

@@ -1,20 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 
-interface ReplenishmentCalculation {
+interface ReplenishmentRecord {
   variant_id: string;
   product_name: string;
-  variant_size: string;
-  variant_color: string;
+  variant_size: string | null;
+  variant_color: string | null;
   sku_variant: string;
   current_stock: number;
-  sales_velocity: number;
-  days_of_stock: number;
-  open_orders: number;
-  projected_demand: number;
+  pending_production: number;
+  sales_30d: number;
+  orders_count_30d: number;
+  avg_daily_sales: number;
+  days_of_supply: number;
+  projected_30d_demand: number;
   suggested_quantity: number;
-  urgency_level: string;
+  urgency: 'critical' | 'high' | 'medium' | 'low';
   reason: string;
+  data_confidence: 'high' | 'medium' | 'low';
 }
 
 Deno.serve(async (req) => {
@@ -46,55 +49,51 @@ Deno.serve(async (req) => {
     
     console.log('🏢 Organización:', organization_id);
 
-    // Ejecutar función de cálculo de reposición con organization_id
-    console.log('📊 Ejecutando cálculo de sugerencias...');
-    const { data: calculations, error: calcError } = await supabase
-      .rpc('calculate_replenishment_suggestions', { p_organization_id: organization_id });
+    // Ejecutar función de cálculo de reposición
+    console.log('🔄 Ejecutando refresh_inventory_replenishment...');
+    const { data: rpcResult, error: calcError } = await supabase
+      .rpc('refresh_inventory_replenishment', { org_id: organization_id });
 
     if (calcError) {
       console.error('❌ Error en cálculo de reposición:', calcError);
       throw new Error(`Error en función RPC: ${calcError.message || JSON.stringify(calcError)}`);
     }
 
-    const results = calculations as ReplenishmentCalculation[];
-    console.log(`✅ Procesadas ${results.length} variantes de productos`);
+    const insertedCount = (rpcResult as any)?.inserted || 0;
+    console.log(`✅ Procesadas ${insertedCount} variantes de productos`);
 
-    // Contar sugerencias por nivel de urgencia
-    const urgencyStats = results.reduce((acc: Record<string, number>, calc) => {
-      acc[calc.urgency_level] = (acc[calc.urgency_level] || 0) + 1;
-      return acc;
-    }, {});
-
-    // Obtener sugerencias generadas (que se insertaron en la función)
-    const { data: suggestions, error: suggestionsError } = await supabase
-      .from('replenishment_suggestions')
+    // Obtener registros generados desde la vista
+    const { data: records, error: recordsError } = await supabase
+      .from('v_replenishment_details')
       .select('*')
-      .eq('calculation_date', new Date().toISOString().split('T')[0]);
+      .eq('organization_id', organization_id)
+      .gte('calculation_date', new Date().toISOString().split('T')[0]);
 
-    if (suggestionsError) {
-      console.error('❌ Error obteniendo sugerencias:', suggestionsError);
-      throw suggestionsError;
+    if (recordsError) {
+      console.error('❌ Error obteniendo registros:', recordsError);
+      throw recordsError;
     }
 
-    console.log(`📝 Generadas ${suggestions.length} sugerencias de reposición`);
+    console.log(`📝 Obtenidos ${records?.length || 0} registros de reposición`);
 
     // Log detallado de resultados
-    const criticalCount = suggestions.filter(s => s.urgency_level === 'critical').length;
-    const highCount = suggestions.filter(s => s.urgency_level === 'high').length;
-    const normalCount = suggestions.filter(s => s.urgency_level === 'normal').length;
+    const criticalCount = records?.filter(s => s.urgency === 'critical').length || 0;
+    const highCount = records?.filter(s => s.urgency === 'high').length || 0;
+    const mediumCount = records?.filter(s => s.urgency === 'medium').length || 0;
+    const lowCount = records?.filter(s => s.urgency === 'low').length || 0;
 
-    console.log(`🚨 Críticas: ${criticalCount}, ⚠️ Altas: ${highCount}, 📋 Normales: ${normalCount}`);
+    console.log(`🚨 Críticas: ${criticalCount}, ⚠️ Altas: ${highCount}, 📊 Medias: ${mediumCount}, ✅ Bajas: ${lowCount}`);
 
     // Crear resumen para respuesta
     const summary = {
       calculation_date: new Date().toISOString().split('T')[0],
-      total_variants_processed: results.length,
-      suggestions_generated: suggestions.length,
+      total_variants_processed: insertedCount,
+      records_generated: records?.length || 0,
       urgency_breakdown: {
         critical: criticalCount,
         high: highCount,
-        normal: normalCount,
-        low: suggestions.filter(s => s.urgency_level === 'low').length
+        medium: mediumCount,
+        low: lowCount
       },
       execution_time: new Date().toISOString(),
       status: 'completed'
