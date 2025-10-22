@@ -334,12 +334,12 @@ export type Database = {
           data_confidence: string
           days_of_supply: number | null
           id: string
-          orders_count_60d: number
+          orders_count_30d: number
           organization_id: string
           pending_production: number
           projected_30d_demand: number
           reason: string | null
-          sales_60d: number
+          sales_30d: number
           status: string
           suggested_quantity: number
           urgency: string
@@ -353,12 +353,12 @@ export type Database = {
           data_confidence?: string
           days_of_supply?: number | null
           id?: string
-          orders_count_60d?: number
+          orders_count_30d?: number
           organization_id: string
           pending_production?: number
           projected_30d_demand?: number
           reason?: string | null
-          sales_60d?: number
+          sales_30d?: number
           status?: string
           suggested_quantity?: number
           urgency?: string
@@ -372,12 +372,12 @@ export type Database = {
           data_confidence?: string
           days_of_supply?: number | null
           id?: string
-          orders_count_60d?: number
+          orders_count_30d?: number
           organization_id?: string
           pending_production?: number
           projected_30d_demand?: number
           reason?: string | null
-          sales_60d?: number
+          sales_30d?: number
           status?: string
           suggested_quantity?: number
           urgency?: string
@@ -2787,13 +2787,13 @@ export type Database = {
           data_confidence: string | null
           days_of_supply: number | null
           id: string | null
-          orders_count_60d: number | null
+          orders_count_30d: number | null
           organization_id: string | null
           pending_production: number | null
           product_name: string | null
           projected_30d_demand: number | null
           reason: string | null
-          sales_60d: number | null
+          sales_30d: number | null
           sku: string | null
           sku_variant: string | null
           status: string | null

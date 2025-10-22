@@ -110,7 +110,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
       'Variante',
       'SKU',
       'Stock Actual',
-      'Ventas 60d',
+      'Ventas 30d',
       'Velocidad (diario)',
       'Días de Stock',
       'Pendiente Producción',
@@ -128,7 +128,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
         `"${getVariantName(suggestion)}"`,
         `"${suggestion.sku_variant || suggestion.sku || '-'}"`,
         suggestion.current_stock || 0,
-        suggestion.sales_60d || 0,
+        suggestion.sales_30d || 0,
         Number(suggestion.avg_daily_sales || 0).toFixed(2),
         Math.round(suggestion.days_of_supply || 0),
         suggestion.pending_production || 0,
@@ -241,7 +241,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
             <div>
               <CardTitle>Análisis con Datos en Tiempo Real de Shopify</CardTitle>
               <CardDescription>
-                Stock actual, ventas últimos 60 días y demanda proyectada
+                Stock actual, ventas últimos 30 días y demanda proyectada
               </CardDescription>
             </div>
             <Button 
@@ -340,7 +340,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableHead>SKU</TableHead>
                   <TableHead>Calidad</TableHead>
                   <TableHead className="text-right">Stock</TableHead>
-                  <TableHead className="text-right">Ventas 60d</TableHead>
+                  <TableHead className="text-right">Ventas 30d</TableHead>
                   <TableHead className="text-right">Vel. diaria</TableHead>
                   <TableHead className="text-right">Días Stock</TableHead>
                   <TableHead className="text-right">Pendiente</TableHead>
@@ -371,7 +371,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       <DataQualityBadge quality={suggestion.data_confidence} />
                     </TableCell>
                     <TableCell className="text-right">{suggestion.current_stock}</TableCell>
-                    <TableCell className="text-right">{suggestion.sales_60d}</TableCell>
+                    <TableCell className="text-right">{suggestion.sales_30d}</TableCell>
                     <TableCell className="text-right">
                       {suggestion.avg_daily_sales.toFixed(2)}
                     </TableCell>
