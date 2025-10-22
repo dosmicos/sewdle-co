@@ -2782,6 +2782,7 @@ export type Database = {
         Row: {
           avg_daily_sales: number | null
           calculated_at: string | null
+          calculation_date: string | null
           current_stock: number | null
           data_confidence: string | null
           days_of_supply: number | null
