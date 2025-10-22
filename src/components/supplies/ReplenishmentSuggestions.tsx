@@ -343,7 +343,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableHead className="text-right">Ventas 30d</TableHead>
                   <TableHead className="text-right">Vel. diaria</TableHead>
                   <TableHead className="text-right">Días Stock</TableHead>
-                  <TableHead className="text-right">Pendiente</TableHead>
+                  <TableHead className="text-right">Pendientes</TableHead>
                   <TableHead className="text-right">Sugerida</TableHead>
                   <TableHead>Urgencia</TableHead>
                   <TableHead>Motivo</TableHead>
