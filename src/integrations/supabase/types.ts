@@ -1917,7 +1917,7 @@ export type Database = {
           event_details: Json | null
           event_type: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           organization_id: string | null
           user_agent: string | null
           user_id: string | null
@@ -1927,7 +1927,7 @@ export type Database = {
           event_details?: Json | null
           event_type: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           organization_id?: string | null
           user_agent?: string | null
           user_id?: string | null
@@ -1937,7 +1937,7 @@ export type Database = {
           event_details?: Json | null
           event_type?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           organization_id?: string | null
           user_agent?: string | null
           user_id?: string | null
@@ -2711,7 +2711,7 @@ export type Database = {
         Returns: boolean
       }
       assign_admin_role_to_users_without_role: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           assigned: boolean
           error_message: string
@@ -2734,10 +2734,7 @@ export type Database = {
           workshop_payment_method: string
         }[]
       }
-      calculate_okr_score: {
-        Args: { kr_id_param: string }
-        Returns: number
-      }
+      calculate_okr_score: { Args: { kr_id_param: string }; Returns: number }
       calculate_replenishment_suggestions: {
         Args: { p_organization_id: string }
         Returns: {
@@ -2753,18 +2750,12 @@ export type Database = {
         Args: { new_sku_param: string; variant_id_param: string }
         Returns: Json
       }
-      cleanup_old_sku_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      cleanup_old_sku_logs: { Args: never; Returns: undefined }
       clear_delivery_sync_lock: {
         Args: { delivery_id_param: string }
         Returns: Json
       }
-      clear_stale_sync_locks: {
-        Args: Record<PropertyKey, never>
-        Returns: Json[]
-      }
+      clear_stale_sync_locks: { Args: never; Returns: Json[] }
       complete_user_setup: {
         Args: {
           p_organization_name?: string
@@ -2774,16 +2765,13 @@ export type Database = {
         }
         Returns: Json
       }
-      consolidate_duplicate_variants: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      consolidate_duplicate_variants: { Args: never; Returns: Json }
       consume_order_materials: {
         Args: { p_consumptions: Json; p_order_id: string }
         Returns: boolean
       }
       debug_role_update_permissions: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           can_update_system_roles: boolean
           org_role: string
@@ -2803,24 +2791,15 @@ export type Database = {
         }
         Returns: string
       }
-      fix_delivery_sync_status_inconsistencies: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      generate_delivery_number: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      fix_delivery_sync_status_inconsistencies: { Args: never; Returns: Json }
+      generate_delivery_number: { Args: never; Returns: string }
       generate_material_sku: {
         Args: { category_name: string }
         Returns: string
       }
-      generate_order_number: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      generate_order_number: { Args: never; Returns: string }
       get_available_orders: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           due_date: string
@@ -2830,26 +2809,11 @@ export type Database = {
           total_amount: number
         }[]
       }
-      get_current_organization: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_current_organization_for_views: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_current_organization_safe: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_current_user_role: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      get_current_user_role_safe: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_current_organization: { Args: never; Returns: string }
+      get_current_organization_for_views: { Args: never; Returns: string }
+      get_current_organization_safe: { Args: never; Returns: string }
+      get_current_user_role: { Args: never; Returns: string }
+      get_current_user_role_safe: { Args: never; Returns: string }
       get_customer_analytics: {
         Args: { end_date?: string; start_date?: string }
         Returns: {
@@ -2864,7 +2828,7 @@ export type Database = {
         }[]
       }
       get_deliveries_with_details: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           delivered_by: string
@@ -2886,7 +2850,7 @@ export type Database = {
         }[]
       }
       get_deliveries_with_details_v2: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           delivered_by: string
@@ -2910,7 +2874,7 @@ export type Database = {
         }[]
       }
       get_deliveries_with_sync_status: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           delivered_by: string
@@ -2938,7 +2902,7 @@ export type Database = {
         }[]
       }
       get_delivery_statistics: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           approved_deliveries: number
           in_quality_deliveries: number
@@ -2948,7 +2912,7 @@ export type Database = {
         }[]
       }
       get_delivery_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           approved_deliveries: number
           in_quality_deliveries: number
@@ -2958,7 +2922,7 @@ export type Database = {
         }[]
       }
       get_delivery_stats_admin: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           approved_deliveries: number
           in_quality_deliveries: number
@@ -2982,10 +2946,7 @@ export type Database = {
           tracking_number: string
         }[]
       }
-      get_dosmicos_org_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_dosmicos_org_id: { Args: never; Returns: string }
       get_financial_report: {
         Args: {
           end_date?: string
@@ -3009,7 +2970,7 @@ export type Database = {
         }[]
       }
       get_material_consumptions_by_order: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           delivery_date: string
@@ -3028,7 +2989,7 @@ export type Database = {
         }[]
       }
       get_material_deliveries_with_real_balance: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           delivered_by: string
@@ -3060,7 +3021,7 @@ export type Database = {
         Returns: number
       }
       get_materials_with_stock_status: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           category: string
           color: string
@@ -3117,7 +3078,7 @@ export type Database = {
         }[]
       }
       get_organization_users_detailed: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           created_by: string
@@ -3146,7 +3107,7 @@ export type Database = {
         }[]
       }
       get_replenishment_suggestions_with_details: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           current_stock: number
@@ -3174,7 +3135,7 @@ export type Database = {
         }[]
       }
       get_shopify_orders_sanitized: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at_shopify: string
           currency: string
@@ -3190,18 +3151,9 @@ export type Database = {
           updated_at_shopify: string
         }[]
       }
-      get_user_email_admin: {
-        Args: { user_id_param: string }
-        Returns: string
-      }
-      get_user_organizations: {
-        Args: Record<PropertyKey, never>
-        Returns: string[]
-      }
-      get_user_role: {
-        Args: { user_uuid: string }
-        Returns: string
-      }
+      get_user_email_admin: { Args: { user_id_param: string }; Returns: string }
+      get_user_organizations: { Args: never; Returns: string[] }
+      get_user_role: { Args: { user_uuid: string }; Returns: string }
       get_user_role_info: {
         Args: { user_uuid: string }
         Returns: {
@@ -3211,7 +3163,7 @@ export type Database = {
         }[]
       }
       get_workshop_capacity_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           available_capacity: number
           completion_rate: number
@@ -3260,7 +3212,7 @@ export type Database = {
         }[]
       }
       get_workshop_pricing_gaps: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           avg_sale_price: number
           base_price: number
@@ -3291,18 +3243,9 @@ export type Database = {
         Args: { delivery_id_param: string; minutes_threshold?: number }
         Returns: boolean
       }
-      is_admin: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
-      is_current_user_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_dosmicos_user: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_admin: { Args: { user_uuid: string }; Returns: boolean }
+      is_current_user_admin: { Args: never; Returns: boolean }
+      is_dosmicos_user: { Args: never; Returns: boolean }
       is_okr_manager: {
         Args: { area_name?: string; user_uuid: string }
         Returns: boolean
@@ -3311,60 +3254,39 @@ export type Database = {
         Args: { sync_mode_param: string; sync_type_param: string }
         Returns: boolean
       }
-      is_system_or_service_role: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_user_admin_in_org: {
-        Args: { org_id: string }
-        Returns: boolean
-      }
-      log_security_event: {
-        Args:
-          | { event_details_param?: Json; event_type_param: string }
-          | {
+      is_system_or_service_role: { Args: never; Returns: boolean }
+      is_user_admin_in_org: { Args: { org_id: string }; Returns: boolean }
+      log_security_event:
+        | {
+            Args: {
               event_details_param?: Json
               event_type_param: string
               ip_address_param?: unknown
             }
-        Returns: string
-      }
-      log_stats_access: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      make_user_admin: {
-        Args: { user_email: string }
-        Returns: undefined
-      }
-      mark_password_changed: {
-        Args: { user_uuid: string }
-        Returns: undefined
-      }
-      migrate_ruana_mapache_variants: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+            Returns: string
+          }
+        | {
+            Args: { event_details_param?: Json; event_type_param: string }
+            Returns: undefined
+          }
+      log_stats_access: { Args: never; Returns: undefined }
+      make_user_admin: { Args: { user_email: string }; Returns: undefined }
+      mark_password_changed: { Args: { user_uuid: string }; Returns: undefined }
+      migrate_ruana_mapache_variants: { Args: never; Returns: Json }
       migrate_sleeping_walker_dinosaurios_variants: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Json
       }
-      migrate_sleeping_walker_tigres_variants: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      migrate_sleeping_walker_tigres_variants: { Args: never; Returns: Json }
       process_material_transfer: {
         Args: { p_transfer_id: string }
         Returns: boolean
       }
       recalculate_material_deliveries_remaining: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: undefined
       }
-      recalculate_material_stock: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      recalculate_material_stock: { Args: never; Returns: undefined }
       release_delivery_sync_lock: {
         Args: { delivery_uuid: string }
         Returns: boolean
@@ -3373,18 +3295,9 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
-      sync_sales_metrics_from_shopify: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      sync_shopify_inventory: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      trigger_replenishment_calculation: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      sync_sales_metrics_from_shopify: { Args: never; Returns: undefined }
+      sync_shopify_inventory: { Args: never; Returns: Json }
+      trigger_replenishment_calculation: { Args: never; Returns: Json }
       update_sales_metrics_secure: {
         Args: {
           p_avg_order_size: number
@@ -3408,18 +3321,12 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
-      user_has_org_admin_role: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      user_has_org_admin_role: { Args: never; Returns: boolean }
       user_has_role: {
         Args: { check_user_id: string; role_name: string }
         Returns: boolean
       }
-      user_has_workshop_permissions: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      user_has_workshop_permissions: { Args: never; Returns: boolean }
       users_share_organization: {
         Args: { user1_id: string; user2_id: string }
         Returns: boolean
