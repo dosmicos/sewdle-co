@@ -325,6 +325,81 @@ export type Database = {
           },
         ]
       }
+      inventory_replenishment: {
+        Row: {
+          avg_daily_sales: number
+          calculated_at: string
+          calculation_date: string
+          current_stock: number
+          data_confidence: string
+          days_of_supply: number | null
+          id: string
+          orders_count_60d: number
+          organization_id: string
+          pending_production: number
+          projected_30d_demand: number
+          reason: string | null
+          sales_60d: number
+          status: string
+          suggested_quantity: number
+          urgency: string
+          variant_id: string
+        }
+        Insert: {
+          avg_daily_sales?: number
+          calculated_at?: string
+          calculation_date?: string
+          current_stock?: number
+          data_confidence?: string
+          days_of_supply?: number | null
+          id?: string
+          orders_count_60d?: number
+          organization_id: string
+          pending_production?: number
+          projected_30d_demand?: number
+          reason?: string | null
+          sales_60d?: number
+          status?: string
+          suggested_quantity?: number
+          urgency?: string
+          variant_id: string
+        }
+        Update: {
+          avg_daily_sales?: number
+          calculated_at?: string
+          calculation_date?: string
+          current_stock?: number
+          data_confidence?: string
+          days_of_supply?: number | null
+          id?: string
+          orders_count_60d?: number
+          organization_id?: string
+          pending_production?: number
+          projected_30d_demand?: number
+          reason?: string | null
+          sales_60d?: number
+          status?: string
+          suggested_quantity?: number
+          urgency?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_replenishment_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_replenishment_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_sync_logs: {
         Row: {
           created_at: string
@@ -2703,7 +2778,47 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_replenishment_details: {
+        Row: {
+          avg_daily_sales: number | null
+          calculated_at: string | null
+          current_stock: number | null
+          data_confidence: string | null
+          days_of_supply: number | null
+          id: string | null
+          orders_count_60d: number | null
+          organization_id: string | null
+          pending_production: number | null
+          product_name: string | null
+          projected_30d_demand: number | null
+          reason: string | null
+          sales_60d: number | null
+          sku: string | null
+          sku_variant: string | null
+          status: string | null
+          suggested_quantity: number | null
+          urgency: string | null
+          variant_color: string | null
+          variant_id: string | null
+          variant_size: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_replenishment_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_replenishment_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       acquire_delivery_sync_lock: {
@@ -3287,6 +3402,10 @@ export type Database = {
         Returns: undefined
       }
       recalculate_material_stock: { Args: never; Returns: undefined }
+      refresh_inventory_replenishment: {
+        Args: { org_id: string }
+        Returns: Json
+      }
       release_delivery_sync_lock: {
         Args: { delivery_uuid: string }
         Returns: boolean
