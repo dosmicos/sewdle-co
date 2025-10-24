@@ -6,6 +6,28 @@ import { logger } from '@/lib/logger';
 
 export type OperationalStatus = 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'shipped';
 
+// Helper function to map Shopify tags to operational status
+const getOperationalStatusFromTags = (
+  tags: string | undefined, 
+  currentStatus: OperationalStatus
+): OperationalStatus => {
+  if (!tags) return currentStatus;
+  
+  const tagsLower = tags.toLowerCase().trim();
+  
+  // Priority 1: EMPACADO (overrides all statuses except shipped)
+  if (tagsLower.includes('empacado') && currentStatus !== 'shipped') {
+    return 'packing';
+  }
+  
+  // Priority 2: Confirmado (shows in pending filter)
+  if (tagsLower.includes('confirmado') && currentStatus === 'pending') {
+    return 'pending';
+  }
+  
+  return currentStatus;
+};
+
 export interface PickingOrder {
   id: string;
   shopify_order_id: number;
@@ -189,12 +211,19 @@ export const usePickingOrders = () => {
         return;
       }
 
-      // Simply set orders without line items for now to avoid type errors
-      // Line items will be fetched in the modal when needed
-      const ordersData = data.map((order: any) => ({
-        ...order,
-        line_items: []
-      }));
+      // Map orders and apply tag-based status mapping
+      const ordersData = data.map((order: any) => {
+        const mappedStatus = getOperationalStatusFromTags(
+          order.shopify_order?.tags,
+          order.operational_status
+        );
+        
+        return {
+          ...order,
+          operational_status: mappedStatus,
+          line_items: []
+        };
+      });
 
       logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {
         count: ordersData.length,
