@@ -383,13 +383,18 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
   }
 
   // Update line items - delete old ones and insert updated ones
-  const { error: deleteError } = await supabase
+  console.log(`🗑️ Eliminando line items antiguos de orden ${order.order_number}...`);
+  const { data: deletedItems, error: deleteError } = await supabase
     .from('shopify_order_line_items')
     .delete()
-    .eq('shopify_order_id', order.id);
+    .eq('shopify_order_id', order.id)
+    .eq('organization_id', organizationId)
+    .select();
 
   if (deleteError) {
     console.error('⚠️ Error eliminando line items antiguos:', deleteError);
+  } else {
+    console.log(`✅ ${deletedItems?.length || 0} line items eliminados correctamente`);
   }
 
   // Build SKU to image_url map from product_variants
