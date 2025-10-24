@@ -30,6 +30,8 @@ import UsersRolesPage from "@/pages/UsersRolesPage";
 import OrderDetailsPage from "@/pages/OrderDetailsPage";
 import ProspectsPage from "@/pages/ProspectsPage";
 import NotFound from "@/pages/NotFound";
+import PickingPackingPage from "@/pages/PickingPackingPage";
+import PrintableOrderView from "@/pages/PrintableOrderView";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -132,6 +134,18 @@ const AppContent = () => {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
+      
+      {/* Picking & Packing - Independent Routes */}
+      <Route path="/picking-packing" element={
+        <ProtectedRoute>
+          <PickingPackingPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/picking-packing/print/:orderId" element={
+        <ProtectedRoute>
+          <PrintableOrderView />
+        </ProtectedRoute>
+      } />
       
       <Route path="/" element={
         <ProtectedRoute>

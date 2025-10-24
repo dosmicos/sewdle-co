@@ -12,7 +12,9 @@ import {
   TrendingUp,
   RefreshCw,
   Award,
-  Target
+  Target,
+  Package,
+  ExternalLink
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell, Tooltip } from 'recharts';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
@@ -83,15 +85,27 @@ const AdminDashboard = () => {
             Vista general del sistema TextilFlow
           </p>
         </div>
-        <Button
-          onClick={refreshData}
-          variant="outline"
-          size="sm"
-          className="flex items-center space-x-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Actualizar</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => window.open('/picking-packing', '_blank')}
+            variant="default"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Package className="w-4 h-4" />
+            Picking & Packing
+            <ExternalLink className="w-3 h-3" />
+          </Button>
+          <Button
+            onClick={refreshData}
+            variant="outline"
+            size="sm"
+            className="flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Actualizar</span>
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

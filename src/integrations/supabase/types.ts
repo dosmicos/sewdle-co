@@ -1429,6 +1429,107 @@ export type Database = {
           },
         ]
       }
+      picking_packing_orders: {
+        Row: {
+          created_at: string
+          id: string
+          internal_notes: string | null
+          operational_status: string
+          organization_id: string
+          packed_at: string | null
+          packed_by: string | null
+          picked_at: string | null
+          picked_by: string | null
+          shipped_at: string | null
+          shipped_by: string | null
+          shopify_order_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          internal_notes?: string | null
+          operational_status?: string
+          organization_id: string
+          packed_at?: string | null
+          packed_by?: string | null
+          picked_at?: string | null
+          picked_by?: string | null
+          shipped_at?: string | null
+          shipped_by?: string | null
+          shopify_order_id: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          internal_notes?: string | null
+          operational_status?: string
+          organization_id?: string
+          packed_at?: string | null
+          packed_by?: string | null
+          picked_at?: string | null
+          picked_by?: string | null
+          shipped_at?: string | null
+          shipped_by?: string | null
+          shopify_order_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "picking_packing_orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picking_packing_orders_shopify_order_id_fkey"
+            columns: ["shopify_order_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_orders"
+            referencedColumns: ["shopify_order_id"]
+          },
+        ]
+      }
+      picking_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_status: string
+          notes: string | null
+          picking_order_id: string
+          previous_status: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_status: string
+          notes?: string | null
+          picking_order_id: string
+          previous_status: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_status?: string
+          notes?: string | null
+          picking_order_id?: string
+          previous_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "picking_status_history_picking_order_id_fkey"
+            columns: ["picking_order_id"]
+            isOneToOne: false
+            referencedRelation: "picking_packing_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_stock_history: {
         Row: {
           created_at: string
@@ -1485,6 +1586,7 @@ export type Database = {
           sku_variant: string
           stock_quantity: number | null
           updated_at: string
+          warehouse_location: string | null
         }
         Insert: {
           additional_price?: number | null
@@ -1496,6 +1598,7 @@ export type Database = {
           sku_variant: string
           stock_quantity?: number | null
           updated_at?: string
+          warehouse_location?: string | null
         }
         Update: {
           additional_price?: number | null
@@ -1507,6 +1610,7 @@ export type Database = {
           sku_variant?: string
           stock_quantity?: number | null
           updated_at?: string
+          warehouse_location?: string | null
         }
         Relationships: [
           {
