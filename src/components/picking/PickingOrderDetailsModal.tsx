@@ -9,6 +9,17 @@ import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 
+interface ShopifyLineItem {
+  id: string;
+  title: string;
+  variant_title: string | null;
+  sku: string | null;
+  price: number;
+  quantity: number;
+  product_id: number | null;
+  variant_id: number | null;
+}
+
 interface PickingOrderDetailsModalProps {
   orderId: string;
   onClose: () => void;
@@ -37,7 +48,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const { orders, updateOrderStatus, updateOrderNotes } = usePickingOrders();
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [lineItems, setLineItems] = useState<any[]>([]);
+  const [lineItems, setLineItems] = useState<ShopifyLineItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
 
   const order = orders.find(o => o.id === orderId);
@@ -55,21 +66,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       
       setLoadingItems(true);
       try {
-        const response = await supabase
+        const { data, error } = await supabase
           .from('shopify_order_line_items')
-          .select('*')
-          .eq('order_id', order.shopify_order.id);
+          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id')
+          .eq('shopify_order_id', order.shopify_order.shopify_order_id);
         
-        const items: any[] = response.data || [];
-        setLineItems(items);
+        if (error) throw error;
+        
+        setLineItems((data as ShopifyLineItem[]) || []);
       } catch (error) {
         console.error('Error fetching line items:', error);
+        setLineItems([]);
       }
       setLoadingItems(false);
     };
 
     fetchLineItems();
-  }, [order?.shopify_order?.id]);
+  }, [order?.shopify_order?.shopify_order_id]);
 
   if (!order) return null;
 
@@ -135,32 +148,24 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {lineItems.map((item: any, index: number) => (
+                {lineItems.map((item, index: number) => (
                   <div key={index} className="flex gap-4 p-4 border rounded-lg">
-                    {/* Product Image */}
+                    {/* Product Image Placeholder */}
                     <div className="flex-shrink-0">
-                      {item.raw_data?.image?.src ? (
-                        <img 
-                          src={item.raw_data.image.src} 
-                          alt={item.raw_data?.title || item.title}
-                          className="w-32 h-32 object-cover rounded-lg border"
-                        />
-                      ) : (
-                        <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
-                          <Package className="w-12 h-12 text-muted-foreground" />
-                        </div>
-                      )}
+                      <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
+                        <Package className="w-12 h-12 text-muted-foreground" />
+                      </div>
                     </div>
 
                     {/* Product Details */}
                     <div className="flex-1 space-y-2">
                       <div>
                         <h4 className="font-semibold text-lg">
-                          {item.raw_data?.title || item.title}
+                          {item.title}
                         </h4>
-                        {item.raw_data?.variant_title && (
+                        {item.variant_title && (
                           <p className="text-sm text-muted-foreground">
-                            {item.raw_data.variant_title}
+                            {item.variant_title}
                           </p>
                         )}
                       </div>
