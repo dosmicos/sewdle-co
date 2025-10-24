@@ -236,6 +236,169 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   return { success: true, order_number: order.order_number };
 }
 
+// Function to update an existing Shopify order (for orders/update webhook)
+async function updateExistingOrder(order: any, supabase: any, shopDomain: string) {
+  console.log(`🔄 Actualizando orden existente: ${order.id} - ${order.order_number}`);
+  console.log(`🏪 Shop domain recibido: ${shopDomain}`);
+
+  // Get organization_id using exact matching with shop domain from header
+  let organizationId = null;
+  if (shopDomain) {
+    const { data: orgData, error: orgError } = await supabase
+      .from('organizations')
+      .select('id, name, shopify_store_url')
+      .eq('shopify_store_url', `https://${shopDomain}`)
+      .single();
+    
+    if (orgError) {
+      console.error(`❌ Error buscando organización para ${shopDomain}:`, orgError);
+      throw new Error(`No se pudo encontrar organización para la tienda: ${shopDomain}`);
+    }
+    
+    organizationId = orgData?.id;
+    console.log(`✅ Organización encontrada: ${orgData?.name} (${orgData?.id})`);
+  } else {
+    throw new Error('No se pudo determinar el dominio de la tienda Shopify');
+  }
+
+  // Update shopify_orders with latest data
+  const orderToUpdate = {
+    order_number: order.order_number || `#${order.id}`,
+    email: order.email,
+    updated_at_shopify: order.updated_at,
+    cancelled_at: order.cancelled_at || null,
+    closed_at: order.closed_at || null,
+    processed_at: order.processed_at || null,
+    
+    // Estados actualizados
+    financial_status: order.financial_status,
+    fulfillment_status: order.fulfillment_status,
+    order_status_url: order.order_status_url || null,
+    
+    // Información del cliente actualizada
+    customer_id: order.customer?.id || null,
+    customer_email: order.customer?.email || order.email,
+    customer_first_name: order.customer?.first_name || null,
+    customer_last_name: order.customer?.last_name || null,
+    customer_phone: order.customer?.phone || null,
+    customer_accepts_marketing: order.customer?.accepts_marketing || false,
+    customer_orders_count: order.customer?.orders_count || 0,
+    customer_total_spent: parseFloat(order.customer?.total_spent || '0'),
+    
+    // Direcciones actualizadas
+    billing_address: order.billing_address || null,
+    shipping_address: order.shipping_address || null,
+    
+    // Información financiera actualizada
+    currency: order.currency || 'USD',
+    total_price: parseFloat(order.total_price || '0'),
+    subtotal_price: parseFloat(order.subtotal_price || '0'),
+    total_tax: parseFloat(order.total_tax || '0'),
+    total_discounts: parseFloat(order.total_discounts || '0'),
+    total_shipping: parseFloat(order.total_shipping || '0'),
+    total_line_items_price: parseFloat(order.total_line_items_price || '0'),
+    
+    // Información adicional
+    tags: order.tags || null,
+    note: order.note || null,
+    
+    // Metadatos actualizados
+    raw_data: order
+  };
+
+  const { error: updateError } = await supabase
+    .from('shopify_orders')
+    .update(orderToUpdate)
+    .eq('shopify_order_id', order.id)
+    .eq('organization_id', organizationId);
+
+  if (updateError) {
+    console.error('❌ Error actualizando orden:', updateError);
+    throw new Error(`Error al actualizar orden: ${updateError.message}`);
+  }
+
+  console.log(`✅ Orden ${order.order_number} actualizada correctamente`);
+
+  // Update line items - delete old ones and insert updated ones
+  const { error: deleteError } = await supabase
+    .from('shopify_order_line_items')
+    .delete()
+    .eq('shopify_order_id', order.id);
+
+  if (deleteError) {
+    console.error('⚠️ Error eliminando line items antiguos:', deleteError);
+  }
+
+  // Build SKU to image_url map from product_variants
+  console.log('🖼️ Building SKU to image map for updated line items...');
+  const skusInOrder = order.line_items.map((item: any) => item.sku).filter(Boolean);
+  const skuToImageMap = new Map();
+  
+  if (skusInOrder.length > 0) {
+    const { data: variantData, error: variantError } = await supabase
+      .from('product_variants')
+      .select('sku, products(image_url)')
+      .in('sku', skusInOrder)
+      .eq('organization_id', organizationId);
+    
+    if (variantError) {
+      console.error('⚠️ Error fetching variant images:', variantError);
+    } else if (variantData) {
+      variantData.forEach((v: any) => {
+        if (v.sku && v.products?.image_url) {
+          skuToImageMap.set(v.sku, v.products.image_url);
+        }
+      });
+      console.log(`✅ Mapped ${skuToImageMap.size} SKUs to images`);
+    }
+  }
+
+  // Insert updated line items
+  const lineItemsToInsert = [];
+  
+  for (const item of order.line_items) {
+    const imageUrl = item.image?.src || item.featured_image || (item.sku ? skuToImageMap.get(item.sku) : null) || null;
+    
+    lineItemsToInsert.push({
+      shopify_order_id: order.id,
+      shopify_line_item_id: item.id,
+      product_id: item.product_id,
+      variant_id: item.variant_id,
+      title: item.title,
+      variant_title: item.variant_title || null,
+      vendor: item.vendor || null,
+      product_type: item.product_type || null,
+      sku: item.sku,
+      image_url: imageUrl,
+      quantity: item.quantity,
+      price: parseFloat(item.price),
+      total_discount: parseFloat(item.total_discount || '0'),
+      properties: item.properties || null,
+      gift_card: item.gift_card || false,
+      taxable: item.taxable !== false,
+      fulfillment_status: item.fulfillment_status || null,
+      fulfillment_service: item.fulfillment_service || null,
+      requires_shipping: item.requires_shipping !== false,
+      organization_id: organizationId
+    });
+  }
+
+  if (lineItemsToInsert.length > 0) {
+    const { error: lineItemsError } = await supabase
+      .from('shopify_order_line_items')
+      .insert(lineItemsToInsert);
+
+    if (lineItemsError) {
+      console.error('❌ Error insertando line items actualizados:', lineItemsError);
+      throw new Error(`Error al insertar line items: ${lineItemsError.message}`);
+    }
+    
+    console.log(`✅ ${lineItemsToInsert.length} line items actualizados correctamente`);
+  }
+
+  return { success: true, order_number: order.order_number, action: 'UPDATE' };
+}
+
 // Function to process sales metrics for real-time order
 async function processSalesMetrics(order: any, supabase: any) {
   console.log(`📊 Procesando métricas de ventas para orden: ${order.order_number}`);
@@ -383,8 +546,8 @@ Deno.serve(async (req) => {
     // Parse order data
     const order = JSON.parse(body);
     
-    // Only process order creation webhooks
-    if (topic !== 'orders/create') {
+    // Process both order creation and update webhooks
+    if (topic !== 'orders/create' && topic !== 'orders/update') {
       console.log(`ℹ️ Webhook ignorado - topic: ${topic}`);
       return new Response(
         JSON.stringify({ message: 'Webhook received but not processed', topic }),
@@ -395,25 +558,33 @@ Deno.serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Log webhook event
+    // Log webhook event with action type
+    const action = topic === 'orders/create' ? 'CREATE' : 'UPDATE';
     await supabase
       .from('sync_control_logs')
       .insert({
-        sync_type: 'webhook',
+        sync_type: `webhook_${topic.replace('/', '_')}`,
         sync_mode: 'real_time',
         status: 'running',
         execution_details: {
           webhook_topic: topic,
+          action: action,
           order_id: order.id,
           order_number: order.order_number,
           financial_status: order.financial_status,
+          fulfillment_status: order.fulfillment_status,
           total_price: order.total_price,
           timestamp: new Date().toISOString()
         }
       });
 
-    // Process the order
-    const result = await processSingleOrder(order, supabase, shopDomain);
+    // Process the order based on webhook type
+    let result;
+    if (topic === 'orders/create') {
+      result = await processSingleOrder(order, supabase, shopDomain);
+    } else if (topic === 'orders/update') {
+      result = await updateExistingOrder(order, supabase, shopDomain);
+    }
 
     // Update log with success
     await supabase
@@ -424,25 +595,30 @@ Deno.serve(async (req) => {
         metrics_created: order.line_items.length,
         execution_details: {
           webhook_topic: topic,
+          action: result?.action || action,
           order_id: order.id,
           order_number: order.order_number,
           financial_status: order.financial_status,
+          fulfillment_status: order.fulfillment_status,
           total_price: order.total_price,
           processed_at: new Date().toISOString(),
           result
         }
       })
-      .eq('sync_type', 'webhook')
+      .eq('sync_type', `webhook_${topic.replace('/', '_')}`)
       .eq('status', 'running')
       .order('created_at', { ascending: false })
       .limit(1);
 
-    console.log(`🎉 Orden ${order.order_number} procesada exitosamente en tiempo real`);
+    const actionText = action === 'CREATE' ? 'creada' : 'actualizada';
+    console.log(`🎉 Orden ${order.order_number} ${actionText} exitosamente en tiempo real`);
 
+    const actionText = action === 'CREATE' ? 'creada' : 'actualizada';
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Orden ${order.order_number} procesada exitosamente`,
+        action: action,
+        message: `Orden ${order.order_number} ${actionText} exitosamente`,
         order_id: order.id,
         order_number: order.order_number,
         processed_at: new Date().toISOString()
