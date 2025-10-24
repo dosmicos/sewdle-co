@@ -1938,6 +1938,7 @@ export type Database = {
           fulfillment_status: string | null
           gift_card: boolean | null
           id: string
+          image_url: string | null
           organization_id: string
           price: number
           product_id: number | null
@@ -1962,6 +1963,7 @@ export type Database = {
           fulfillment_status?: string | null
           gift_card?: boolean | null
           id?: string
+          image_url?: string | null
           organization_id: string
           price: number
           product_id?: number | null
@@ -1986,6 +1988,7 @@ export type Database = {
           fulfillment_status?: string | null
           gift_card?: boolean | null
           id?: string
+          image_url?: string | null
           organization_id?: string
           price?: number
           product_id?: number | null

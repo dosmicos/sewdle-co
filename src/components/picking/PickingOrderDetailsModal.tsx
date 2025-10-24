@@ -18,6 +18,7 @@ interface ShopifyLineItem {
   quantity: number;
   product_id: number | null;
   variant_id: number | null;
+  image_url: string | null;
 }
 
 interface PickingOrderDetailsModalProps {
@@ -120,12 +121,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       try {
         const { data, error } = await supabase
           .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id')
+          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url')
           .eq('shopify_order_id', effectiveOrder.shopify_order.shopify_order_id);
         
         if (error) throw error;
         
-        setLineItems((data as ShopifyLineItem[]) || []);
+        // Enrich line items with images from raw_data if not in database
+        const rawLineItems = effectiveOrder.shopify_order.raw_data?.line_items || [];
+        const enrichedItems = (data as ShopifyLineItem[]).map(item => {
+          const rawItem = rawLineItems.find((ri: any) => ri.id?.toString() === item.id);
+          return {
+            ...item,
+            image_url: item.image_url || rawItem?.image || rawItem?.featured_image || null
+          };
+        });
+        
+        setLineItems(enrichedItems);
       } catch (error) {
         console.error('Error fetching line items:', error);
         setLineItems([]);
@@ -134,7 +145,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     };
 
     fetchLineItems();
-  }, [effectiveOrder?.shopify_order?.shopify_order_id]);
+  }, [effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.raw_data]);
 
   const handleStatusChange = async (newStatus: OperationalStatus) => {
     await updateOrderStatus(orderId, newStatus);
@@ -226,11 +237,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               <CardContent className="space-y-4">
                 {lineItems.map((item, index: number) => (
                   <div key={index} className="flex gap-4 p-4 border rounded-lg">
-                    {/* Product Image Placeholder */}
+                    {/* Product Image */}
                     <div className="flex-shrink-0">
-                      <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
-                        <Package className="w-12 h-12 text-muted-foreground" />
-                      </div>
+                      {item.image_url ? (
+                        <img 
+                          src={item.image_url} 
+                          alt={item.title}
+                          className="w-32 h-32 object-cover rounded-lg border"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement!.innerHTML = '<div class="w-32 h-32 bg-muted rounded-lg flex items-center justify-center"><svg class="w-12 h-12 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center border">
+                          <Package className="w-12 h-12 text-muted-foreground" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Product Details */}

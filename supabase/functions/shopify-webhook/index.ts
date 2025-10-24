@@ -144,6 +144,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
       vendor: item.vendor || null,
       product_type: item.product_type || null,
       sku: item.sku,
+      image_url: null, // Will be populated from products sync
       
       // Cantidades y precios
       quantity: item.quantity,
