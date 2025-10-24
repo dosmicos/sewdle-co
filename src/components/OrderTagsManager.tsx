@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { X, Plus, Search, Loader2 } from 'lucide-react';
@@ -117,33 +117,35 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
                 value={searchValue}
                 onValueChange={setSearchValue}
               />
-              <CommandEmpty>
-                {searchValue ? (
-                  <div className="p-4 text-sm text-center">
-                    <p className="text-muted-foreground">No se encontró "{searchValue}"</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Solo puedes agregar etiquetas existentes en Shopify
+              <CommandList>
+                <CommandEmpty>
+                  {searchValue ? (
+                    <div className="p-4 text-sm text-center">
+                      <p className="text-muted-foreground">No se encontró "{searchValue}"</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Solo puedes agregar etiquetas existentes en Shopify
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="p-4 text-sm text-muted-foreground text-center">
+                      Escribe para buscar etiquetas
                     </p>
-                  </div>
-                ) : (
-                  <p className="p-4 text-sm text-muted-foreground text-center">
-                    Escribe para buscar etiquetas
-                  </p>
-                )}
-              </CommandEmpty>
-              <CommandGroup className="max-h-64 overflow-auto">
-                {filteredTags.map((tag) => (
-                  <CommandItem
-                    key={tag}
-                    value={tag}
-                    onSelect={() => handleAddTag(tag)}
-                    className="cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    {tag}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+                  )}
+                </CommandEmpty>
+                <CommandGroup className="max-h-64 overflow-auto">
+                  {filteredTags?.map((tag) => (
+                    <CommandItem
+                      key={tag}
+                      value={tag}
+                      onSelect={() => handleAddTag(tag)}
+                      className="cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      {tag}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
             </Command>
           </PopoverContent>
         </Popover>

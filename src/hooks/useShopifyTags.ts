@@ -4,10 +4,11 @@ import { toast } from 'sonner';
 
 export const useShopifyTags = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Fetch all unique tags from Shopify orders
   const fetchAvailableTags = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('shopify_orders')
@@ -26,13 +27,16 @@ export const useShopifyTags = () => {
         }
       });
 
-      const sortedTags = Array.from(tagsSet).sort((a, b) => a.localeCompare(b));
+      const sortedTags = Array.from(tagsSet).sort((a, b) => a.localeCompare(b)).filter(Boolean);
       setAvailableTags(sortedTags);
       
       console.log(`✅ Loaded ${sortedTags.length} unique tags from Shopify`);
     } catch (error) {
       console.error('❌ Error fetching available tags:', error);
+      setAvailableTags([]);
       toast.error('Error al cargar etiquetas disponibles');
+    } finally {
+      setLoading(false);
     }
   };
 
