@@ -47,41 +47,61 @@ export const usePickingOrders = () => {
 
   const autoInitializePickingOrders = async () => {
     try {
-      // Find Shopify orders without a picking_packing_order
-      const { data: shopifyOrders, error: fetchError } = await supabase
-        .from('shopify_orders')
-        .select(`
-          id,
-          shopify_order_id,
-          picking_packing_orders!left(id)
-        `)
-        .eq('organization_id', currentOrganization?.id)
-        .is('picking_packing_orders.id', null);
+      if (!currentOrganization?.id) return;
 
-      if (fetchError) throw fetchError;
+      console.log('🔄 Auto-inicializando órdenes faltantes...');
 
-      if (!shopifyOrders || shopifyOrders.length === 0) {
-        return; // All orders already initialized
-      }
-
-      // Create picking_packing_orders for new Shopify orders
-      const ordersToInitialize = shopifyOrders.map(order => ({
-        shopify_order_id: order.shopify_order_id,
-        organization_id: currentOrganization?.id,
-        operational_status: 'pending' as OperationalStatus
-      }));
-
-      const { error: insertError } = await supabase
+      // 1. Obtener IDs ya existentes en picking_packing_orders
+      const { data: existingPicking, error: existingError } = await supabase
         .from('picking_packing_orders')
-        .insert(ordersToInitialize);
+        .select('shopify_order_id')
+        .eq('organization_id', currentOrganization.id);
 
-      if (insertError) {
-        console.error('Error auto-inicializando órdenes:', insertError);
+      if (existingError) throw existingError;
+
+      const existingSet = new Set(existingPicking?.map(p => p.shopify_order_id) || []);
+      console.log(`📊 Órdenes existentes en picking: ${existingSet.size}`);
+
+      // 2. Obtener todos los IDs de shopify_orders
+      const { data: shopifyOrders, error: shopifyError } = await supabase
+        .from('shopify_orders')
+        .select('shopify_order_id')
+        .eq('organization_id', currentOrganization.id);
+
+      if (shopifyError) throw shopifyError;
+
+      console.log(`📊 Órdenes totales en Shopify: ${shopifyOrders?.length || 0}`);
+
+      // 3. Calcular los faltantes (órdenes no inicializadas)
+      const toInsert = (shopifyOrders || [])
+        .filter(s => !existingSet.has(s.shopify_order_id))
+        .map(s => ({
+          shopify_order_id: s.shopify_order_id,
+          organization_id: currentOrganization.id,
+          operational_status: 'pending' as OperationalStatus
+        }));
+
+      console.log(`📦 Órdenes faltantes a inicializar: ${toInsert.length}`);
+
+      // 4. Insertar solo los faltantes con protección contra duplicados
+      if (toInsert.length > 0) {
+        const { error: upsertError } = await supabase
+          .from('picking_packing_orders')
+          .upsert(toInsert, { 
+            onConflict: 'organization_id,shopify_order_id',
+            ignoreDuplicates: true 
+          });
+
+        if (upsertError) {
+          console.error('❌ Error auto-inicializando órdenes:', upsertError);
+        } else {
+          console.log(`✅ ${toInsert.length} órdenes auto-inicializadas correctamente`);
+        }
       } else {
-        console.log(`✅ ${ordersToInitialize.length} órdenes auto-inicializadas`);
+        console.log('✅ Todas las órdenes ya están inicializadas');
       }
     } catch (error: any) {
-      console.error('Error en auto-inicialización:', error);
+      console.error('❌ Error en auto-inicialización:', error);
     }
   };
 
@@ -119,14 +139,18 @@ export const usePickingOrders = () => {
           )
         `)
         .eq('organization_id', currentOrganization?.id)
-        .order('created_at', { ascending: false });
+        .order('created_at_shopify', { 
+          ascending: false, 
+          foreignTable: 'shopify_orders' 
+        })
+        .range(0, 1999);
 
       if (filters?.status) {
         query = query.eq('operational_status', filters.status);
       }
 
       if (filters?.searchTerm) {
-        query = query.or(`order_number.ilike.%${filters.searchTerm}%`);
+        query = query.ilike('shopify_order.order_number', `%${filters.searchTerm}%`);
       }
 
       const { data, error } = await query;
@@ -270,23 +294,20 @@ export const usePickingOrders = () => {
 
   const initializePickingOrder = async (shopifyOrderId: number) => {
     try {
-      const { data: existingOrder } = await supabase
-        .from('picking_packing_orders')
-        .select('id')
-        .eq('shopify_order_id', shopifyOrderId)
-        .single();
-
-      if (existingOrder) return;
-
       const { error } = await supabase
         .from('picking_packing_orders')
-        .insert({
+        .upsert({
           shopify_order_id: shopifyOrderId,
           organization_id: currentOrganization?.id,
           operational_status: 'pending'
+        }, { 
+          onConflict: 'organization_id,shopify_order_id',
+          ignoreDuplicates: true 
         });
 
       if (error) throw error;
+      
+      console.log(`✅ Orden ${shopifyOrderId} inicializada correctamente`);
     } catch (error: any) {
       console.error('Error initializing picking order:', error);
     }

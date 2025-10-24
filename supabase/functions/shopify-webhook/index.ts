@@ -128,6 +128,26 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
 
   console.log(`✅ Orden ${order.order_number} almacenada correctamente`);
 
+  // Inicializar orden en picking_packing_orders para tiempo real
+  console.log(`📦 Inicializando orden en picking & packing...`);
+  const { error: pickingError } = await supabase
+    .from('picking_packing_orders')
+    .upsert({
+      shopify_order_id: order.id,
+      organization_id: organizationId,
+      operational_status: 'pending'
+    }, { 
+      onConflict: 'organization_id,shopify_order_id',
+      ignoreDuplicates: true 
+    });
+
+  if (pickingError) {
+    console.error('⚠️ Error inicializando picking order:', pickingError);
+    // No lanzamos error - es suplementario
+  } else {
+    console.log(`✅ Orden inicializada en picking & packing`);
+  }
+
   // Build SKU to image_url map from product_variants
   console.log('🖼️ Building SKU to image map for line items...');
   const skusInOrder = order.line_items.map((item: any) => item.sku).filter(Boolean);
