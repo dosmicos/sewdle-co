@@ -51,74 +51,63 @@ export const usePickingOrders = () => {
   const pageSize = 100;
 
   const autoInitializePickingOrders = async () => {
+    if (!currentOrganization?.id) return;
+
     try {
-      if (!currentOrganization?.id) {
-        logger.info('[PickingOrders] No organization ID, skipping auto-init');
-        return;
-      }
+      logger.info('[PickingOrders] Verificando órdenes recientes para inicializar');
 
-      logger.info('[PickingOrders] Auto-inicializando órdenes faltantes', {
-        organizationId: currentOrganization.id,
-        organizationName: currentOrganization.name
-      });
-
-      // 1. Obtener IDs ya existentes en picking_packing_orders
-      const { data: existingPicking, error: existingError } = await supabase
-        .from('picking_packing_orders')
-        .select('shopify_order_id')
-        .eq('organization_id', currentOrganization.id);
-
-      if (existingError) {
-        logger.error('[PickingOrders] Error fetching existing picking orders', existingError);
-        throw existingError;
-      }
-
-      const existingSet = new Set(existingPicking?.map(p => p.shopify_order_id) || []);
-      logger.info(`[PickingOrders] Órdenes existentes en picking: ${existingSet.size}`);
-
-      // 2. Obtener todos los IDs de shopify_orders
-      const { data: shopifyOrders, error: shopifyError } = await supabase
+      // Solo verificar las últimas 500 órdenes de Shopify (las más recientes)
+      const { data: recentShopify, error: shopifyError } = await supabase
         .from('shopify_orders')
         .select('shopify_order_id')
-        .eq('organization_id', currentOrganization.id);
+        .eq('organization_id', currentOrganization.id)
+        .order('created_at_shopify', { ascending: false })
+        .limit(500);
 
       if (shopifyError) {
         logger.error('[PickingOrders] Error fetching Shopify orders', shopifyError);
-        throw shopifyError;
+        return;
       }
 
-      logger.info(`[PickingOrders] Órdenes totales en Shopify: ${shopifyOrders?.length || 0}`);
+      // Obtener picking orders existentes (últimas 500)
+      const { data: existingPicking, error: pickingError } = await supabase
+        .from('picking_packing_orders')
+        .select('shopify_order_id')
+        .eq('organization_id', currentOrganization.id)
+        .order('created_at', { ascending: false })
+        .limit(500);
 
-      // 3. Calcular los faltantes (órdenes no inicializadas)
-      const toInsert = (shopifyOrders || [])
-        .filter(s => !existingSet.has(s.shopify_order_id))
+      if (pickingError) {
+        logger.error('[PickingOrders] Error fetching picking orders', pickingError);
+        return;
+      }
+
+      // Encontrar órdenes que necesitan inicialización
+      const existingSet = new Set(existingPicking?.map(p => p.shopify_order_id) || []);
+      const toInitialize = recentShopify
+        ?.filter(s => !existingSet.has(s.shopify_order_id))
         .map(s => ({
           shopify_order_id: s.shopify_order_id,
           organization_id: currentOrganization.id,
           operational_status: 'pending' as OperationalStatus
-        }));
+        })) || [];
 
-      logger.info(`[PickingOrders] Órdenes faltantes a inicializar: ${toInsert.length}`);
-
-      // 4. Insertar solo los faltantes con protección contra duplicados
-      if (toInsert.length > 0) {
-        const { error: upsertError } = await supabase
+      if (toInitialize.length > 0) {
+        logger.info(`[PickingOrders] Inicializando ${toInitialize.length} órdenes recientes`);
+        
+        const { error: insertError } = await supabase
           .from('picking_packing_orders')
-          .upsert(toInsert, { 
+          .upsert(toInitialize, {
             onConflict: 'organization_id,shopify_order_id',
-            ignoreDuplicates: true 
+            ignoreDuplicates: true
           });
 
-        if (upsertError) {
-          logger.error('[PickingOrders] Error auto-inicializando órdenes', upsertError);
-        } else {
-          logger.info(`[PickingOrders] ${toInsert.length} órdenes auto-inicializadas correctamente`);
+        if (insertError) {
+          logger.error('[PickingOrders] Error inicializando órdenes', insertError);
         }
-      } else {
-        logger.info('[PickingOrders] Todas las órdenes ya están inicializadas');
       }
-    } catch (error: any) {
-      logger.error('[PickingOrders] Error en auto-inicialización', error);
+    } catch (error) {
+      logger.error('[PickingOrders] Error inesperado en auto-init', error);
     }
   };
 
@@ -147,7 +136,7 @@ export const usePickingOrders = () => {
         .from('picking_packing_orders')
         .select(`
           *,
-          shopify_order:shopify_orders!inner(
+          shopify_order:shopify_orders(
             id,
             shopify_order_id,
             order_number,
@@ -167,10 +156,7 @@ export const usePickingOrders = () => {
           )
         `, { count: 'exact' })
         .eq('organization_id', currentOrganization?.id)
-        .order('created_at_shopify', { 
-          ascending: false, 
-          foreignTable: 'shopify_orders' 
-        });
+        .order('created_at', { ascending: false });
 
       if (filters?.status) {
         query = query.eq('operational_status', filters.status);
