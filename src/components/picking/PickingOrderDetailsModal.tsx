@@ -19,6 +19,7 @@ interface ShopifyLineItem {
   product_id: number | null;
   variant_id: number | null;
   image_url: string | null;
+  shopify_line_item_id: number;
 }
 
 interface PickingOrderDetailsModalProps {
@@ -121,20 +122,46 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       try {
         const { data, error } = await supabase
           .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url')
+          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id')
           .eq('shopify_order_id', effectiveOrder.shopify_order.shopify_order_id);
         
         if (error) throw error;
         
         // Enrich line items with images from raw_data if not in database
         const rawLineItems = effectiveOrder.shopify_order.raw_data?.line_items || [];
-        const enrichedItems = (data as ShopifyLineItem[]).map(item => {
-          const rawItem = rawLineItems.find((ri: any) => ri.id?.toString() === item.id);
+        let enrichedItems = (data as ShopifyLineItem[]).map(item => {
+          const rawItem = rawLineItems.find((ri: any) => ri.id === item.shopify_line_item_id);
           return {
             ...item,
-            image_url: item.image_url || rawItem?.image || rawItem?.featured_image || null
+            image_url: item.image_url || rawItem?.image?.src || rawItem?.featured_image || null
           };
         });
+        
+        // Final fallback: query product_variants for items still missing images
+        const itemsWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
+        if (itemsWithoutImages.length > 0) {
+          const skus = itemsWithoutImages.map(item => item.sku).filter((sku): sku is string => Boolean(sku));
+          const variantResult = await supabase
+            .from('product_variants')
+            .select('sku_variant, products(image_url)')
+            .in('sku_variant', skus);
+          
+          const variantData = variantResult.data as Array<{ sku_variant: string; products: { image_url: string | null } | null }> | null;
+          
+          if (variantData) {
+            const skuToImageMap = new Map<string, string | null>();
+            variantData.forEach((v) => {
+              if (v.sku_variant) {
+                skuToImageMap.set(v.sku_variant, v.products?.image_url || null);
+              }
+            });
+            
+            enrichedItems = enrichedItems.map(item => ({
+              ...item,
+              image_url: item.image_url || (item.sku ? skuToImageMap.get(item.sku) || null : null)
+            }));
+          }
+        }
         
         setLineItems(enrichedItems);
       } catch (error) {

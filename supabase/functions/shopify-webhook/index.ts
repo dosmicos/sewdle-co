@@ -128,10 +128,41 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
 
   console.log(`✅ Orden ${order.order_number} almacenada correctamente`);
 
+  // Build SKU to image_url map from product_variants
+  console.log('🖼️ Building SKU to image map for line items...');
+  const skusInOrder = order.line_items.map((item: any) => item.sku).filter(Boolean);
+  const skuToImageMap = new Map();
+  
+  if (skusInOrder.length > 0) {
+    const { data: variantData, error: variantError } = await supabase
+      .from('product_variants')
+      .select('sku, products(image_url)')
+      .in('sku', skusInOrder)
+      .eq('organization_id', organizationId);
+    
+    if (variantError) {
+      console.error('⚠️ Error fetching variant images:', variantError);
+    } else if (variantData) {
+      variantData.forEach((v: any) => {
+        if (v.sku && v.products?.image_url) {
+          skuToImageMap.set(v.sku, v.products.image_url);
+        }
+      });
+      console.log(`✅ Mapped ${skuToImageMap.size} SKUs to images`);
+    }
+  }
+
   // Insert line items
   const lineItemsToInsert = [];
   
   for (const item of order.line_items) {
+    // Try to get image from: 1) webhook data, 2) SKU map, 3) null
+    const imageUrl = item.image?.src || item.featured_image || (item.sku ? skuToImageMap.get(item.sku) : null) || null;
+    
+    if (!imageUrl && item.sku) {
+      console.log(`⚠️ No image found for SKU: ${item.sku} (${item.title})`);
+    }
+    
     lineItemsToInsert.push({
       shopify_order_id: order.id,
       shopify_line_item_id: item.id,
@@ -144,7 +175,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
       vendor: item.vendor || null,
       product_type: item.product_type || null,
       sku: item.sku,
-      image_url: item.image?.src || item.featured_image || null,
+      image_url: imageUrl,
       
       // Cantidades y precios
       quantity: item.quantity,
