@@ -53,11 +53,24 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   const order = orders.find(o => o.id === orderId);
 
+  // Debug logs
+  console.log('🔍 Modal Debug:', {
+    orderId,
+    orderFound: !!order,
+    totalOrders: orders.length,
+    orderData: order
+  });
+
   useEffect(() => {
     if (order?.internal_notes) {
       setNotes(order.internal_notes);
     }
   }, [order]);
+
+  if (!order) {
+    console.error('❌ Orden no encontrada:', orderId);
+    return null;
+  }
 
   // Fetch line items separately
   useEffect(() => {
@@ -83,8 +96,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
     fetchLineItems();
   }, [order?.shopify_order?.shopify_order_id]);
-
-  if (!order) return null;
 
   const handleStatusChange = async (newStatus: OperationalStatus) => {
     await updateOrderStatus(orderId, newStatus);
@@ -113,7 +124,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const financialSummary = order.shopify_order?.raw_data || {};
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
+    <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">

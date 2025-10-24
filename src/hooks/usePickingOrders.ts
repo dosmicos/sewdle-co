@@ -145,6 +145,13 @@ export const usePickingOrders = () => {
         line_items: []
       }));
 
+      // Debug: Verify shopify_order is populated
+      console.log('📦 Órdenes cargadas:', {
+        count: ordersData.length,
+        sample: ordersData[0],
+        hasShopifyOrder: ordersData[0]?.shopify_order ? 'SÍ' : 'NO'
+      });
+
       setOrders(ordersData as PickingOrder[]);
     } catch (error: any) {
       console.error('Error fetching picking orders:', error);

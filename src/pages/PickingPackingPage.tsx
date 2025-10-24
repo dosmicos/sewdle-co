@@ -299,6 +299,13 @@ const PickingPackingPage = () => {
           onClose={() => setSelectedOrderId(null)}
         />
       )}
+
+      {/* Debug indicator */}
+      {selectedOrderId && (
+        <div className="fixed bottom-4 right-4 bg-black text-white p-2 rounded z-[9999] text-xs">
+          Modal abierto: {selectedOrderId}
+        </div>
+      )}
     </PickingPackingLayout>
   );
 };
