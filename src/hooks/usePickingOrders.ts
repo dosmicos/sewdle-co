@@ -45,12 +45,55 @@ export const usePickingOrders = () => {
   const [loading, setLoading] = useState(true);
   const { currentOrganization } = useOrganization();
 
+  const autoInitializePickingOrders = async () => {
+    try {
+      // Find Shopify orders without a picking_packing_order
+      const { data: shopifyOrders, error: fetchError } = await supabase
+        .from('shopify_orders')
+        .select(`
+          id,
+          shopify_order_id,
+          picking_packing_orders!left(id)
+        `)
+        .eq('organization_id', currentOrganization?.id)
+        .is('picking_packing_orders.id', null);
+
+      if (fetchError) throw fetchError;
+
+      if (!shopifyOrders || shopifyOrders.length === 0) {
+        return; // All orders already initialized
+      }
+
+      // Create picking_packing_orders for new Shopify orders
+      const ordersToInitialize = shopifyOrders.map(order => ({
+        shopify_order_id: order.shopify_order_id,
+        organization_id: currentOrganization?.id,
+        operational_status: 'pending' as OperationalStatus
+      }));
+
+      const { error: insertError } = await supabase
+        .from('picking_packing_orders')
+        .insert(ordersToInitialize);
+
+      if (insertError) {
+        console.error('Error auto-inicializando órdenes:', insertError);
+      } else {
+        console.log(`✅ ${ordersToInitialize.length} órdenes auto-inicializadas`);
+      }
+    } catch (error: any) {
+      console.error('Error en auto-inicialización:', error);
+    }
+  };
+
   const fetchOrders = async (filters?: {
     status?: OperationalStatus;
     searchTerm?: string;
   }) => {
     try {
       setLoading(true);
+      
+      // First, auto-initialize any new Shopify orders
+      await autoInitializePickingOrders();
       
       let query = supabase
         .from('picking_packing_orders')
