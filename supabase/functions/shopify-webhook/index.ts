@@ -425,6 +425,16 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
   const lineItemsToInsert = [];
   
   for (const item of order.line_items) {
+    // Skip items that have been removed from the order
+    // current_quantity reflects actual quantity after refunds/cancellations
+    // If not present, fall back to quantity field
+    const effectiveQuantity = item.current_quantity ?? item.quantity;
+    
+    if (effectiveQuantity === 0) {
+      console.log(`⏭️ Skipping removed line item: ${item.title} (ID: ${item.id})`);
+      continue;
+    }
+    
     const imageUrl = item.image?.src || item.featured_image || (item.sku ? skuToImageMap.get(item.sku) : null) || null;
     
     lineItemsToInsert.push({
@@ -438,7 +448,7 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
       product_type: item.product_type || null,
       sku: item.sku,
       image_url: imageUrl,
-      quantity: item.quantity,
+      quantity: effectiveQuantity,
       price: parseFloat(item.price),
       total_discount: parseFloat(item.total_discount || '0'),
       properties: item.properties || null,
