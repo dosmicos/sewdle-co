@@ -319,6 +319,69 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
 
   console.log(`✅ Orden ${order.order_number} actualizada correctamente`);
 
+  // Sincronizar picking_packing_orders
+  console.log('📦 Sincronizando estado de picking & packing...');
+  
+  // Determinar operational_status basado en estados de Shopify
+  let operationalStatus: 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'shipped' = 'pending';
+
+  if (order.cancelled_at) {
+    operationalStatus = 'pending'; // Mantener en pending para que no aparezca en flujo activo
+  } else if (order.fulfillment_status === 'fulfilled') {
+    operationalStatus = 'shipped';
+  } else if (order.fulfillment_status === 'partial') {
+    operationalStatus = 'packing';
+  } else if (order.financial_status === 'paid') {
+    operationalStatus = 'pending'; // El equipo la moverá manualmente a picking
+  } else {
+    operationalStatus = 'pending';
+  }
+
+  console.log(`📦 Actualizando estado operacional a: ${operationalStatus}`);
+
+  // Actualizar o crear picking_packing_order
+  const { data: existingPickingOrder, error: findPickingError } = await supabase
+    .from('picking_packing_orders')
+    .select('id')
+    .eq('shopify_order_id', order.id)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  if (findPickingError) {
+    console.error('⚠️ Error buscando picking order:', findPickingError);
+  } else if (existingPickingOrder) {
+    // Actualizar orden existente
+    const { error: pickingUpdateError } = await supabase
+      .from('picking_packing_orders')
+      .update({
+        operational_status: operationalStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingPickingOrder.id);
+
+    if (pickingUpdateError) {
+      console.error('⚠️ Error actualizando picking order:', pickingUpdateError);
+    } else {
+      console.log(`✅ Picking order actualizada a estado: ${operationalStatus}`);
+    }
+  } else {
+    // Crear nueva picking order si no existe
+    console.log('📝 Creando nueva picking order...');
+    const { error: createPickingError } = await supabase
+      .from('picking_packing_orders')
+      .insert({
+        shopify_order_id: order.id,
+        organization_id: organizationId,
+        operational_status: operationalStatus
+      });
+
+    if (createPickingError) {
+      console.error('⚠️ Error creando picking order:', createPickingError);
+    } else {
+      console.log('✅ Nueva picking order creada');
+    }
+  }
+
   // Update line items - delete old ones and insert updated ones
   const { error: deleteError } = await supabase
     .from('shopify_order_line_items')
@@ -394,6 +457,70 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     }
     
     console.log(`✅ ${lineItemsToInsert.length} line items actualizados correctamente`);
+  }
+
+  // Sincronizar picking_packing_order_items
+  console.log('🔄 Sincronizando picking items...');
+
+  // Obtener el picking_packing_order_id
+  const { data: pickingOrder, error: pickingOrderError } = await supabase
+    .from('picking_packing_orders')
+    .select('id')
+    .eq('shopify_order_id', order.id)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  if (pickingOrderError) {
+    console.error('⚠️ Error obteniendo picking order para items:', pickingOrderError);
+  } else if (!pickingOrder) {
+    console.log('ℹ️ No existe picking order, se creará en el próximo fetch del frontend');
+  } else {
+    // Eliminar items antiguos
+    const { error: deletePickingItemsError } = await supabase
+      .from('picking_packing_order_items')
+      .delete()
+      .eq('picking_packing_order_id', pickingOrder.id);
+
+    if (deletePickingItemsError) {
+      console.error('⚠️ Error eliminando picking items antiguos:', deletePickingItemsError);
+    } else {
+      console.log('✅ Picking items antiguos eliminados');
+    }
+
+    // Insertar items actualizados
+    const pickingItemsToInsert = order.line_items.map((item: any) => {
+      // Usar la misma lógica de imagen que para shopify_order_line_items
+      const imageUrl = item.image?.src || 
+                       item.featured_image || 
+                       (item.sku ? skuToImageMap.get(item.sku) : null) || 
+                       null;
+      
+      return {
+        picking_packing_order_id: pickingOrder.id,
+        shopify_line_item_id: item.id,
+        sku: item.sku || null,
+        product_name: item.title,
+        variant_name: item.variant_title || null,
+        image_url: imageUrl,
+        quantity_ordered: item.quantity,
+        quantity_picked: 0, // Reset al actualizar
+        quantity_packed: 0, // Reset al actualizar
+        location: null,
+        organization_id: organizationId
+      };
+    });
+
+    if (pickingItemsToInsert.length > 0) {
+      const { error: pickingItemsError } = await supabase
+        .from('picking_packing_order_items')
+        .insert(pickingItemsToInsert);
+
+      if (pickingItemsError) {
+        console.error('⚠️ Error insertando picking items actualizados:', pickingItemsError);
+      } else {
+        console.log(`✅ ${pickingItemsToInsert.length} picking items sincronizados correctamente`);
+      }
+    }
   }
 
   return { success: true, order_number: order.order_number, action: 'UPDATE' };
