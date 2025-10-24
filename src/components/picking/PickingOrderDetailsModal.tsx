@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2 } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags } from 'lucide-react';
+import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
@@ -457,6 +458,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 >
                   {isSaving ? 'Guardando...' : 'Guardar Notas'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Shopify Tags */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Tags className="w-4 h-4" />
+                  Etiquetas de Shopify
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <OrderTagsManager
+                  orderId={effectiveOrder.id}
+                  shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
+                  currentTags={effectiveOrder.shopify_order.tags || ''}
+                  onTagsUpdate={(newTags) => {
+                    setLocalOrder(prev => prev ? {
+                      ...prev,
+                      shopify_order: {
+                        ...prev.shopify_order,
+                        tags: newTags
+                      }
+                    } : prev);
+                  }}
+                />
               </CardContent>
             </Card>
           </div>

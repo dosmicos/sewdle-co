@@ -33,7 +33,9 @@ serve(async (req) => {
 
     switch (action) {
       case 'update_tags':
-        console.log(`🏷️ Updating tags: ${data.tags?.join(', ')}`)
+        console.log(`🏷️ Updating tags for order ${orderId}`)
+        console.log(`   Previous tags: ${data.previousTags || 'none'}`)
+        console.log(`   New tags: ${data.tags?.join(', ') || 'none'}`)
         updatePayload = {
           order: {
             tags: data.tags?.join(', ') || ''
