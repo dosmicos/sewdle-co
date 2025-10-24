@@ -129,7 +129,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   console.log(`✅ Orden ${order.order_number} almacenada correctamente`);
 
   // Inicializar orden en picking_packing_orders para tiempo real
-  console.log(`📦 Inicializando orden en picking & packing...`);
+  console.log(`📦 Inicializando orden ${order.order_number} (${order.id}) en picking & packing para org ${organizationId}...`);
   const { error: pickingError } = await supabase
     .from('picking_packing_orders')
     .upsert({
@@ -145,7 +145,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     console.error('⚠️ Error inicializando picking order:', pickingError);
     // No lanzamos error - es suplementario
   } else {
-    console.log(`✅ Orden inicializada en picking & packing`);
+    console.log(`✅ Orden ${order.order_number} inicializada exitosamente en picking & packing`);
   }
 
   // Build SKU to image_url map from product_variants

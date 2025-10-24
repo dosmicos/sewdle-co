@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { logger } from '@/lib/logger';
 
 export type OperationalStatus = 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'shipped';
 
@@ -47,9 +48,15 @@ export const usePickingOrders = () => {
 
   const autoInitializePickingOrders = async () => {
     try {
-      if (!currentOrganization?.id) return;
+      if (!currentOrganization?.id) {
+        logger.info('[PickingOrders] No organization ID, skipping auto-init');
+        return;
+      }
 
-      console.log('🔄 Auto-inicializando órdenes faltantes...');
+      logger.info('[PickingOrders] Auto-inicializando órdenes faltantes', {
+        organizationId: currentOrganization.id,
+        organizationName: currentOrganization.name
+      });
 
       // 1. Obtener IDs ya existentes en picking_packing_orders
       const { data: existingPicking, error: existingError } = await supabase
@@ -57,10 +64,13 @@ export const usePickingOrders = () => {
         .select('shopify_order_id')
         .eq('organization_id', currentOrganization.id);
 
-      if (existingError) throw existingError;
+      if (existingError) {
+        logger.error('[PickingOrders] Error fetching existing picking orders', existingError);
+        throw existingError;
+      }
 
       const existingSet = new Set(existingPicking?.map(p => p.shopify_order_id) || []);
-      console.log(`📊 Órdenes existentes en picking: ${existingSet.size}`);
+      logger.info(`[PickingOrders] Órdenes existentes en picking: ${existingSet.size}`);
 
       // 2. Obtener todos los IDs de shopify_orders
       const { data: shopifyOrders, error: shopifyError } = await supabase
@@ -68,9 +78,12 @@ export const usePickingOrders = () => {
         .select('shopify_order_id')
         .eq('organization_id', currentOrganization.id);
 
-      if (shopifyError) throw shopifyError;
+      if (shopifyError) {
+        logger.error('[PickingOrders] Error fetching Shopify orders', shopifyError);
+        throw shopifyError;
+      }
 
-      console.log(`📊 Órdenes totales en Shopify: ${shopifyOrders?.length || 0}`);
+      logger.info(`[PickingOrders] Órdenes totales en Shopify: ${shopifyOrders?.length || 0}`);
 
       // 3. Calcular los faltantes (órdenes no inicializadas)
       const toInsert = (shopifyOrders || [])
@@ -81,7 +94,7 @@ export const usePickingOrders = () => {
           operational_status: 'pending' as OperationalStatus
         }));
 
-      console.log(`📦 Órdenes faltantes a inicializar: ${toInsert.length}`);
+      logger.info(`[PickingOrders] Órdenes faltantes a inicializar: ${toInsert.length}`);
 
       // 4. Insertar solo los faltantes con protección contra duplicados
       if (toInsert.length > 0) {
@@ -93,15 +106,15 @@ export const usePickingOrders = () => {
           });
 
         if (upsertError) {
-          console.error('❌ Error auto-inicializando órdenes:', upsertError);
+          logger.error('[PickingOrders] Error auto-inicializando órdenes', upsertError);
         } else {
-          console.log(`✅ ${toInsert.length} órdenes auto-inicializadas correctamente`);
+          logger.info(`[PickingOrders] ${toInsert.length} órdenes auto-inicializadas correctamente`);
         }
       } else {
-        console.log('✅ Todas las órdenes ya están inicializadas');
+        logger.info('[PickingOrders] Todas las órdenes ya están inicializadas');
       }
     } catch (error: any) {
-      console.error('❌ Error en auto-inicialización:', error);
+      logger.error('[PickingOrders] Error en auto-inicialización', error);
     }
   };
 
@@ -111,6 +124,11 @@ export const usePickingOrders = () => {
   }) => {
     try {
       setLoading(true);
+      
+      logger.info('[PickingOrders] Fetching orders', { 
+        organizationId: currentOrganization?.id,
+        filters 
+      });
       
       // First, auto-initialize any new Shopify orders
       await autoInitializePickingOrders();
@@ -143,7 +161,7 @@ export const usePickingOrders = () => {
           ascending: false, 
           foreignTable: 'shopify_orders' 
         })
-        .range(0, 1999);
+        .range(0, 4999);
 
       if (filters?.status) {
         query = query.eq('operational_status', filters.status);
@@ -157,9 +175,13 @@ export const usePickingOrders = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        logger.error('[PickingOrders] Error fetching orders', error);
+        throw error;
+      }
 
       if (!data || data.length === 0) {
+        logger.info('[PickingOrders] No orders found');
         setOrders([]);
         return;
       }
@@ -171,16 +193,15 @@ export const usePickingOrders = () => {
         line_items: []
       }));
 
-      // Debug: Verify shopify_order is populated
-      console.log('📦 Órdenes cargadas:', {
+      logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {
         count: ordersData.length,
-        sample: ordersData[0],
-        hasShopifyOrder: ordersData[0]?.shopify_order ? 'SÍ' : 'NO'
+        firstOrder: ordersData[0]?.shopify_order?.order_number,
+        hasShopifyOrder: !!ordersData[0]?.shopify_order
       });
 
       setOrders(ordersData as PickingOrder[]);
     } catch (error: any) {
-      console.error('Error fetching picking orders:', error);
+      logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
     } finally {
       setLoading(false);
@@ -309,7 +330,7 @@ export const usePickingOrders = () => {
 
       if (error) throw error;
       
-      console.log(`✅ Orden ${shopifyOrderId} inicializada correctamente`);
+      logger.info(`[PickingOrders] Orden ${shopifyOrderId} inicializada correctamente`);
     } catch (error: any) {
       console.error('Error initializing picking order:', error);
     }
