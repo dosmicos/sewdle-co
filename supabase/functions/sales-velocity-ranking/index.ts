@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           `)
           .eq('sku', variant.sku_variant)
           .eq('shopify_orders.organization_id', organizationId)
-          .in('shopify_orders.financial_status', ['paid', 'partially_paid', 'pending'])
+          .in('shopify_orders.financial_status', ['paid', 'partially_paid'])
           .gte('shopify_orders.created_at_shopify', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString());
 
         const sales60Days = salesMetrics?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
@@ -198,19 +198,35 @@ Deno.serve(async (req) => {
         }
 
         // Determine effective days for velocity calculation
-        let effectiveDays = 60; // Default fallback
-        if (daysWithStock > 0) {
+        let effectiveDays = 60; // Default: full 60-day period
+        
+        // Only use stock history if we have reliable data (at least 7 days)
+        if (daysWithStock >= 7) {
           effectiveDays = daysWithStock;
+          console.log(`📊 ${product.product_name}: Usando ${daysWithStock} días con stock del historial`);
+        } else if (daysWithStock > 0) {
+          // Insufficient stock history, use full period as conservative estimate
+          console.log(`⚠️ ${product.product_name}: Historial insuficiente (${daysWithStock} días), usando 60 días por defecto`);
+          effectiveDays = 60;
         } else if (product.sales_60_days > 0) {
-          // If we have sales but no history, infer minimum days with stock
-          effectiveDays = Math.min(60, product.sales_60_days);
-        } else if (product.current_stock > 0) {
-          // If we have current stock but no sales/history, assume full period
+          // No stock history but has sales - use full period
+          console.log(`⚠️ ${product.product_name}: Sin historial pero con ventas, usando 60 días por defecto`);
           effectiveDays = 60;
         }
 
         // Calculate sales velocity with effective days
-        const salesVelocity = effectiveDays > 0 ? product.sales_60_days / effectiveDays : 0;
+        let salesVelocity = effectiveDays > 0 ? product.sales_60_days / effectiveDays : 0;
+        
+        // Validation: velocity cannot exceed theoretical maximum
+        // Max reasonable velocity = all sales happened in shortest possible time (7 days)
+        const maxReasonableVelocity = product.sales_60_days / 7;
+        if (salesVelocity > maxReasonableVelocity) {
+          console.warn(`⚠️ Velocidad sospechosa para ${product.product_name}:`);
+          console.warn(`   Velocidad calculada: ${salesVelocity.toFixed(3)} unidades/día`);
+          console.warn(`   Ventas totales: ${product.sales_60_days}, Días efectivos: ${effectiveDays}`);
+          console.warn(`   Usando velocidad máxima razonable: ${maxReasonableVelocity.toFixed(3)} unidades/día`);
+          salesVelocity = maxReasonableVelocity;
+        }
         const stockDaysRemaining = salesVelocity > 0 ? product.current_stock / salesVelocity : 9999;
         
         // Calculate velocity/stock ratio (replace 0 with 1 for stock days)
