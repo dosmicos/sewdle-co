@@ -69,6 +69,17 @@ const PickingPackingPage = () => {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
+  // Reset to page 1 when filters change - DEBE estar ANTES del early return
+  useEffect(() => {
+    if (currentOrganization?.id) {
+      fetchOrders({ 
+        status: selectedStatus === 'all' ? undefined : selectedStatus,
+        searchTerm: searchTerm || undefined,
+        page: 1 
+      });
+    }
+  }, [selectedStatus, searchTerm, currentOrganization?.id]);
+
   // Mostrar loading mientras se carga la organización
   if (!currentOrganization) {
     return (
@@ -82,15 +93,6 @@ const PickingPackingPage = () => {
       </PickingPackingLayout>
     );
   }
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    fetchOrders({ 
-      status: selectedStatus === 'all' ? undefined : selectedStatus,
-      searchTerm: searchTerm || undefined,
-      page: 1 
-    });
-  }, [selectedStatus, searchTerm]);
 
   const handlePageChange = (page: number) => {
     fetchOrders({ 
