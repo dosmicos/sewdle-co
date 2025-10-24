@@ -161,7 +161,7 @@ export const usePickingOrders = () => {
           ascending: false, 
           foreignTable: 'shopify_orders' 
         })
-        .range(0, 4999);
+        .limit(10000);
 
       if (filters?.status) {
         query = query.eq('operational_status', filters.status);
