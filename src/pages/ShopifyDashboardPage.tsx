@@ -21,6 +21,7 @@ export const ShopifyDashboardPage: React.FC = () => {
     totalOrders,
     totalCustomers,
     fetchOrders,
+    fetchAllOrders,
     fetchCustomerAnalytics,
     refetch
   } = useShopifyOrders();
@@ -79,11 +80,17 @@ export const ShopifyDashboardPage: React.FC = () => {
 
         <TabsContent value="orders" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Órdenes de Shopify</CardTitle>
-              <CardDescription>
-                Listado completo de órdenes sincronizadas desde Shopify con información detallada de clientes y estados
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Órdenes de Shopify</CardTitle>
+                <CardDescription>
+                  Listado completo de órdenes sincronizadas desde Shopify con información detallada de clientes y estados
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => refetch()}>Refrescar</Button>
+                <Button onClick={() => fetchAllOrders()}>Mostrar todas</Button>
+              </div>
             </CardHeader>
             <CardContent>
               <ShopifyOrdersTable 

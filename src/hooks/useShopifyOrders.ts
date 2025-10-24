@@ -137,6 +137,65 @@ export const useShopifyOrders = () => {
     }
   };
 
+  // Fetch all orders at once in chunks (use with caution for very large datasets)
+  const fetchAllOrders = async () => {
+    setOrdersLoading(true);
+    try {
+      if (!currentOrganization?.id) return [] as ShopifyOrder[];
+
+      const { count, error: countError } = await supabase
+        .from('shopify_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', currentOrganization.id);
+
+      if (countError) throw countError;
+      const total = count || 0;
+      setTotalOrders(total);
+
+      const pageSize = 1000;
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+
+      const queries = Array.from({ length: pages }, (_, i) => {
+        const start = i * pageSize;
+        const end = start + pageSize - 1;
+        return supabase
+          .from('shopify_orders')
+          .select(`
+            id,
+            shopify_order_id,
+            order_number,
+            customer_email,
+            customer_first_name,
+            customer_last_name,
+            customer_phone,
+            created_at_shopify,
+            financial_status,
+            fulfillment_status,
+            total_price,
+            currency
+          `)
+          .eq('organization_id', currentOrganization.id)
+          .order('created_at_shopify', { ascending: false })
+          .range(start, end);
+      });
+
+      const results = await Promise.all(queries);
+      const combined: ShopifyOrder[] = results.flatMap(r => r.data || []);
+      setOrders(combined);
+      return combined;
+    } catch (error) {
+      console.error('Error fetching ALL Shopify orders:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudieron cargar todas las órdenes',
+        variant: 'destructive',
+      });
+      return [] as ShopifyOrder[];
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
   const fetchCustomerAnalytics = async (limit = 50, offset = 0, startDate?: string, endDate?: string) => {
     setCustomersLoading(true);
     try {
@@ -232,6 +291,7 @@ export const useShopifyOrders = () => {
     totalOrders,
     totalCustomers,
     fetchOrders,
+    fetchAllOrders,
     fetchCustomerAnalytics,
     fetchProductAnalytics,
     refetch: () => {
