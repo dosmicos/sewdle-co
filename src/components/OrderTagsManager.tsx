@@ -62,7 +62,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     setSearchValue('');
     
     // Make API call
-    const newTags = await addTagToOrder(orderId, shopifyOrderId, tag, currentTags);
+    const newTags = await addTagToOrder(orderId, shopifyOrderId, tag, localTags);
     if (newTags !== null) {
       setLocalTags(newTags);
       onTagsUpdate(newTags);
@@ -82,7 +82,7 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
     setTagToDelete(null);
     
     // Make API call
-    const newTags = await removeTagFromOrder(orderId, shopifyOrderId, tag, currentTags);
+    const newTags = await removeTagFromOrder(orderId, shopifyOrderId, tag, localTags);
     if (newTags !== null) {
       setLocalTags(newTags);
       onTagsUpdate(newTags);
