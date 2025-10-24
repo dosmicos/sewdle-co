@@ -613,7 +613,6 @@ Deno.serve(async (req) => {
     const actionText = action === 'CREATE' ? 'creada' : 'actualizada';
     console.log(`🎉 Orden ${order.order_number} ${actionText} exitosamente en tiempo real`);
 
-    const actionText = action === 'CREATE' ? 'creada' : 'actualizada';
     return new Response(
       JSON.stringify({
         success: true,
