@@ -150,7 +150,9 @@ export const usePickingOrders = () => {
       }
 
       if (filters?.searchTerm) {
-        query = query.ilike('shopify_order.order_number', `%${filters.searchTerm}%`);
+        query = query.or(
+          `shopify_order.order_number.ilike.%${filters.searchTerm}%`
+        );
       }
 
       const { data, error } = await query;
