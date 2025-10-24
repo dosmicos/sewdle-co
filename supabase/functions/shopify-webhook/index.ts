@@ -674,7 +674,7 @@ Deno.serve(async (req) => {
     const order = JSON.parse(body);
     
     // Process both order creation and update webhooks
-    if (topic !== 'orders/create' && topic !== 'orders/update') {
+    if (topic !== 'orders/create' && topic !== 'orders/update' && topic !== 'orders/updated') {
       console.log(`ℹ️ Webhook ignorado - topic: ${topic}`);
       return new Response(
         JSON.stringify({ message: 'Webhook received but not processed', topic }),
@@ -709,7 +709,7 @@ Deno.serve(async (req) => {
     let result;
     if (topic === 'orders/create') {
       result = await processSingleOrder(order, supabase, shopDomain);
-    } else if (topic === 'orders/update') {
+    } else if (topic === 'orders/update' || topic === 'orders/updated') {
       result = await updateExistingOrder(order, supabase, shopDomain);
     }
 
