@@ -116,6 +116,12 @@ export const usePickingOrders = () => {
     searchTerm?: string;
     page?: number;
   }) => {
+    if (!currentOrganization?.id) {
+      logger.warn('[PickingOrders] Organización no cargada aún, esperando...');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       
@@ -339,7 +345,11 @@ export const usePickingOrders = () => {
 
   useEffect(() => {
     if (currentOrganization?.id) {
+      logger.info('[PickingOrders] Organización cargada, iniciando fetch');
       fetchOrders();
+    } else {
+      logger.info('[PickingOrders] Esperando carga de organización...');
+      setLoading(true);
     }
   }, [currentOrganization?.id]);
 

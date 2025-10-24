@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, RefreshCw, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import {
   Table,
   TableBody,
@@ -53,6 +54,7 @@ const paymentStatusLabels = {
 };
 
 const PickingPackingPage = () => {
+  const { currentOrganization } = useOrganization();
   const { 
     orders, 
     loading, 
@@ -66,6 +68,20 @@ const PickingPackingPage = () => {
   const [selectedStatus, setSelectedStatus] = useState<OperationalStatus | 'all'>('all');
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Mostrar loading mientras se carga la organización
+  if (!currentOrganization) {
+    return (
+      <PickingPackingLayout>
+        <div className="flex items-center justify-center h-96">
+          <div className="space-y-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-muted-foreground">Cargando organización...</p>
+          </div>
+        </div>
+      </PickingPackingLayout>
+    );
+  }
 
   // Reset to page 1 when filters change
   useEffect(() => {

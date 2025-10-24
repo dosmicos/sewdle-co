@@ -56,7 +56,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (profileError) {
-        if (profileError.code !== 'PGRST116') {
+        // Solo loguear errores inesperados (42501 es permiso denegado durante setup inicial)
+        if (profileError.code === '42501') {
+          console.info('Profile access denied - using metadata fallback');
+        } else if (profileError.code !== 'PGRST116') {
           console.warn('Error fetching profile from DB:', profileError);
         }
         // Fallback: leer desde user_metadata
@@ -80,7 +83,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
         if (insertError) {
-          console.error('Error creating profile:', insertError);
+          // Solo loguear si no es error de permisos durante setup
+          if (insertError.code !== '42501') {
+            console.error('Error creating profile:', insertError);
+          }
         }
       }
 
