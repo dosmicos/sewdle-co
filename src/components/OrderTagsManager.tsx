@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -25,12 +25,18 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [tagToDelete, setTagToDelete] = useState<string | null>(null);
+  const [localTags, setLocalTags] = useState<string>(currentTags);
+
+  // Update local tags when currentTags prop changes
+  useEffect(() => {
+    setLocalTags(currentTags);
+  }, [currentTags]);
 
   // Parse current tags into array
   const currentTagsArray = useMemo(() => {
-    if (!currentTags) return [];
-    return currentTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-  }, [currentTags]);
+    if (!localTags) return [];
+    return localTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+  }, [localTags]);
 
   // Filter available tags that aren't already added
   const availableTagsToAdd = useMemo(() => {
@@ -46,19 +52,43 @@ export const OrderTagsManager: React.FC<OrderTagsManagerProps> = ({
   }, [availableTagsToAdd, searchValue]);
 
   const handleAddTag = async (tag: string) => {
+    // Optimistic update - update UI immediately
+    const currentTagsArray = localTags 
+      ? localTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+      : [];
+    const optimisticTags = [...currentTagsArray, tag].join(', ');
+    setLocalTags(optimisticTags);
+    setOpen(false);
+    setSearchValue('');
+    
+    // Make API call
     const newTags = await addTagToOrder(orderId, shopifyOrderId, tag, currentTags);
     if (newTags !== null) {
+      setLocalTags(newTags);
       onTagsUpdate(newTags);
-      setOpen(false);
-      setSearchValue('');
+    } else {
+      // Revert on error
+      setLocalTags(currentTags);
     }
   };
 
   const handleRemoveTag = async (tag: string) => {
+    // Optimistic update - update UI immediately
+    const currentTagsArray = localTags 
+      ? localTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+      : [];
+    const optimisticTags = currentTagsArray.filter(t => t !== tag).join(', ');
+    setLocalTags(optimisticTags);
+    setTagToDelete(null);
+    
+    // Make API call
     const newTags = await removeTagFromOrder(orderId, shopifyOrderId, tag, currentTags);
     if (newTags !== null) {
+      setLocalTags(newTags);
       onTagsUpdate(newTags);
-      setTagToDelete(null);
+    } else {
+      // Revert on error
+      setLocalTags(currentTags);
     }
   };
 
