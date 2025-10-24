@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText } from 'lucide-react';
-import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
+import { Printer, Package, User, MapPin, FileText, Loader2 } from 'lucide-react';
+import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -50,39 +50,78 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [isSaving, setIsSaving] = useState(false);
   const [lineItems, setLineItems] = useState<ShopifyLineItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
+  const [localOrder, setLocalOrder] = useState<PickingOrder | null>(null);
+  const [loadingOrder, setLoadingOrder] = useState(false);
 
   const order = orders.find(o => o.id === orderId);
+  const effectiveOrder = order || localOrder;
 
-  // Debug logs
-  console.log('🔍 Modal Debug:', {
-    orderId,
-    orderFound: !!order,
-    totalOrders: orders.length,
-    orderData: order
-  });
+  // Fetch order if not found in the orders array
+  useEffect(() => {
+    const fetchOrder = async () => {
+      if (order || !orderId) return;
+      
+      setLoadingOrder(true);
+      try {
+        const { data, error } = await supabase
+          .from('picking_packing_orders')
+          .select(`
+            *,
+            shopify_order:shopify_orders(
+              id,
+              shopify_order_id,
+              order_number,
+              email,
+              created_at_shopify,
+              financial_status,
+              fulfillment_status,
+              customer_first_name,
+              customer_last_name,
+              customer_phone,
+              customer_email,
+              total_price,
+              currency,
+              note,
+              tags,
+              raw_data
+            )
+          `)
+          .eq('id', orderId)
+          .single();
+
+        if (error) throw error;
+        
+        setLocalOrder({
+          ...data,
+          line_items: []
+        } as PickingOrder);
+      } catch (error) {
+        console.error('❌ Error fetching order:', error);
+      } finally {
+        setLoadingOrder(false);
+      }
+    };
+
+    fetchOrder();
+  }, [orderId, order]);
 
   useEffect(() => {
-    if (order?.internal_notes) {
-      setNotes(order.internal_notes);
+    if (effectiveOrder?.internal_notes) {
+      setNotes(effectiveOrder.internal_notes);
     }
-  }, [order]);
-
-  if (!order) {
-    console.error('❌ Orden no encontrada:', orderId);
-    return null;
-  }
+  }, [effectiveOrder]);
 
   // Fetch line items separately
   useEffect(() => {
     const fetchLineItems = async () => {
-      if (!order?.shopify_order?.id) return;
+      if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
       
       setLoadingItems(true);
       try {
         const { data, error } = await supabase
           .from('shopify_order_line_items')
           .select('id, title, variant_title, sku, price, quantity, product_id, variant_id')
-          .eq('shopify_order_id', order.shopify_order.shopify_order_id);
+          .eq('shopify_order_id', effectiveOrder.shopify_order.shopify_order_id);
         
         if (error) throw error;
         
@@ -95,7 +134,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     };
 
     fetchLineItems();
-  }, [order?.shopify_order?.shopify_order_id]);
+  }, [effectiveOrder?.shopify_order?.shopify_order_id]);
 
   const handleStatusChange = async (newStatus: OperationalStatus) => {
     await updateOrderStatus(orderId, newStatus);
@@ -108,7 +147,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   };
 
   const handlePrint = () => {
-    window.open(`/picking-packing/print/${order.shopify_order_id}`, '_blank');
+    window.open(`/picking-packing/print/${effectiveOrder?.shopify_order_id}`, '_blank');
   };
 
   const formatCurrency = (amount?: number, currency?: string) => {
@@ -120,8 +159,34 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }).format(amount);
   };
 
-  const shippingAddress = order.shopify_order?.raw_data?.shipping_address;
-  const financialSummary = order.shopify_order?.raw_data || {};
+  // Show loading state
+  if (loadingOrder) {
+    return (
+      <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-6xl max-h-[90vh]">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-3">Cargando orden...</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (!effectiveOrder) {
+    return (
+      <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-6xl max-h-[90vh]">
+          <div className="flex items-center justify-center py-12">
+            <p className="text-muted-foreground">No se encontró la orden</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  const shippingAddress = effectiveOrder.shopify_order?.raw_data?.shipping_address;
+  const financialSummary = effectiveOrder.shopify_order?.raw_data || {};
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
@@ -130,12 +195,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <DialogTitle className="text-2xl">
-                Orden #{order.shopify_order?.order_number}
+                Orden #{effectiveOrder.shopify_order?.order_number}
               </DialogTitle>
-              <Badge className={statusColors[order.operational_status]}>
-                {statusLabels[order.operational_status]}
+              <Badge className={statusColors[effectiveOrder.operational_status]}>
+                {statusLabels[effectiveOrder.operational_status]}
               </Badge>
-              {order.shopify_order?.financial_status === 'pending' && (
+              {effectiveOrder.shopify_order?.financial_status === 'pending' && (
                 <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
                   Pago Pendiente
                 </Badge>
@@ -189,7 +254,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                         <div>
                           <span className="text-muted-foreground">Precio: </span>
                           <span className="font-medium">
-                            {formatCurrency(item.price, order.shopify_order?.currency)}
+                            {formatCurrency(item.price, effectiveOrder.shopify_order?.currency)}
                           </span>
                         </div>
                       </div>
@@ -205,7 +270,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       <div className="text-right">
                         <span className="text-sm text-muted-foreground">Total: </span>
                         <span className="font-semibold">
-                          {formatCurrency(item.price * item.quantity, order.shopify_order?.currency)}
+                          {formatCurrency(item.price * item.quantity, effectiveOrder.shopify_order?.currency)}
                         </span>
                       </div>
                     </div>
@@ -223,22 +288,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     onClick={() => handleStatusChange('picking')}
-                    disabled={order.operational_status !== 'pending'}
-                    variant={order.operational_status === 'picking' ? 'default' : 'outline'}
+                    disabled={effectiveOrder.operational_status !== 'pending'}
+                    variant={effectiveOrder.operational_status === 'picking' ? 'default' : 'outline'}
                   >
                     Iniciar Picking
                   </Button>
                   <Button
                     onClick={() => handleStatusChange('packing')}
-                    disabled={order.operational_status !== 'picking'}
-                    variant={order.operational_status === 'packing' ? 'default' : 'outline'}
+                    disabled={effectiveOrder.operational_status !== 'picking'}
+                    variant={effectiveOrder.operational_status === 'packing' ? 'default' : 'outline'}
                   >
                     Empacar
                   </Button>
                   <Button
                     onClick={() => handleStatusChange('ready_to_ship')}
-                    disabled={order.operational_status !== 'packing'}
-                    variant={order.operational_status === 'ready_to_ship' ? 'default' : 'outline'}
+                    disabled={effectiveOrder.operational_status !== 'packing'}
+                    variant={effectiveOrder.operational_status === 'ready_to_ship' ? 'default' : 'outline'}
                     className="col-span-2"
                   >
                     Marcar Listo para Envío
@@ -258,20 +323,20 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               <CardContent className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(financialSummary.subtotal_price, order.shopify_order?.currency)}</span>
+                  <span>{formatCurrency(financialSummary.subtotal_price, effectiveOrder.shopify_order?.currency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Envío</span>
-                  <span>{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, order.shopify_order?.currency)}</span>
+                  <span>{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, effectiveOrder.shopify_order?.currency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Impuestos</span>
-                  <span>{formatCurrency(financialSummary.total_tax, order.shopify_order?.currency)}</span>
+                  <span>{formatCurrency(financialSummary.total_tax, effectiveOrder.shopify_order?.currency)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between font-semibold">
                   <span>Total</span>
-                  <span>{formatCurrency(financialSummary.total_price, order.shopify_order?.currency)}</span>
+                  <span>{formatCurrency(financialSummary.total_price, effectiveOrder.shopify_order?.currency)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -286,11 +351,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
                 <p className="font-medium">
-                  {order.shopify_order?.customer_first_name} {order.shopify_order?.customer_last_name}
+                  {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
                 </p>
-                <p className="text-muted-foreground">{order.shopify_order?.customer_email}</p>
-                {order.shopify_order?.customer_phone && (
-                  <p className="text-muted-foreground">{order.shopify_order.customer_phone}</p>
+                <p className="text-muted-foreground">{effectiveOrder.shopify_order?.customer_email}</p>
+                {effectiveOrder.shopify_order?.customer_phone && (
+                  <p className="text-muted-foreground">{effectiveOrder.shopify_order.customer_phone}</p>
                 )}
               </CardContent>
             </Card>
