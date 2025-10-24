@@ -156,16 +156,16 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   if (skusInOrder.length > 0) {
     const { data: variantData, error: variantError } = await supabase
       .from('product_variants')
-      .select('sku, products(image_url)')
-      .in('sku', skusInOrder)
+      .select('sku_variant, products(image_url)')
+      .in('sku_variant', skusInOrder)
       .eq('organization_id', organizationId);
     
     if (variantError) {
       console.error('⚠️ Error fetching variant images:', variantError);
     } else if (variantData) {
       variantData.forEach((v: any) => {
-        if (v.sku && v.products?.image_url) {
-          skuToImageMap.set(v.sku, v.products.image_url);
+        if (v.sku_variant && v.products?.image_url) {
+          skuToImageMap.set(v.sku_variant, v.products.image_url);
         }
       });
       console.log(`✅ Mapped ${skuToImageMap.size} SKUs to images`);
@@ -337,16 +337,16 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
   if (skusInOrder.length > 0) {
     const { data: variantData, error: variantError } = await supabase
       .from('product_variants')
-      .select('sku, products(image_url)')
-      .in('sku', skusInOrder)
+      .select('sku_variant, products(image_url)')
+      .in('sku_variant', skusInOrder)
       .eq('organization_id', organizationId);
     
     if (variantError) {
       console.error('⚠️ Error fetching variant images:', variantError);
     } else if (variantData) {
       variantData.forEach((v: any) => {
-        if (v.sku && v.products?.image_url) {
-          skuToImageMap.set(v.sku, v.products.image_url);
+        if (v.sku_variant && v.products?.image_url) {
+          skuToImageMap.set(v.sku_variant, v.products.image_url);
         }
       });
       console.log(`✅ Mapped ${skuToImageMap.size} SKUs to images`);
