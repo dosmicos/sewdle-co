@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import {
@@ -15,6 +15,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
@@ -45,22 +53,45 @@ const paymentStatusLabels = {
 };
 
 const PickingPackingPage = () => {
-  const { orders, loading, fetchOrders } = usePickingOrders();
+  const { 
+    orders, 
+    loading, 
+    currentPage, 
+    totalCount, 
+    totalPages, 
+    pageSize,
+    fetchOrders 
+  } = usePickingOrders();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<OperationalStatus | 'all'>('all');
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.shopify_order?.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.shopify_order?.customer_first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.shopify_order?.customer_last_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus === 'all' || order.operational_status === selectedStatus;
-    return matchesSearch && matchesStatus;
-  });
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    fetchOrders({ 
+      status: selectedStatus === 'all' ? undefined : selectedStatus,
+      searchTerm: searchTerm || undefined,
+      page: 1 
+    });
+  }, [selectedStatus, searchTerm]);
 
+  const handlePageChange = (page: number) => {
+    fetchOrders({ 
+      status: selectedStatus === 'all' ? undefined : selectedStatus,
+      searchTerm: searchTerm || undefined,
+      page 
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const startIndex = (currentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(currentPage * pageSize, totalCount);
+
+  // For stats, we'll show totals from the current page
+  // In a production app, you'd want separate queries for global stats
   const stats = {
-    total: orders.length,
+    total: totalCount,
     pending: orders.filter(o => o.operational_status === 'pending').length,
     picking: orders.filter(o => o.operational_status === 'picking').length,
     packing: orders.filter(o => o.operational_status === 'packing').length,
@@ -69,7 +100,7 @@ const PickingPackingPage = () => {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedOrders(filteredOrders.map(o => o.id));
+      setSelectedOrders(orders.map(o => o.id));
     } else {
       setSelectedOrders([]);
     }
@@ -208,7 +239,7 @@ const PickingPackingPage = () => {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
+                    checked={selectedOrders.length === orders.length && orders.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
@@ -222,14 +253,14 @@ const PickingPackingPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.length === 0 ? (
+              {orders.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     No se encontraron órdenes
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOrders.map((order) => (
+                orders.map((order) => (
                   <TableRow 
                     key={order.id}
                     className="cursor-pointer hover:bg-muted/50"
@@ -290,6 +321,69 @@ const PickingPackingPage = () => {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Mostrando {startIndex}-{endIndex} de {totalCount} órdenes
+            </div>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                </PaginationItem>
+                
+                {/* Page numbers */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        onClick={() => handlePageChange(pageNum)}
+                        isActive={currentPage === pageNum}
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+                <PaginationItem>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="gap-1"
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
 
       {/* Order Details Modal */}

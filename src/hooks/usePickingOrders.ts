@@ -44,7 +44,11 @@ export interface PickingOrder {
 export const usePickingOrders = () => {
   const [orders, setOrders] = useState<PickingOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const { currentOrganization } = useOrganization();
+  
+  const pageSize = 100;
 
   const autoInitializePickingOrders = async () => {
     try {
@@ -121,13 +125,19 @@ export const usePickingOrders = () => {
   const fetchOrders = async (filters?: {
     status?: OperationalStatus;
     searchTerm?: string;
+    page?: number;
   }) => {
     try {
       setLoading(true);
       
+      const page = filters?.page || currentPage;
+      const offset = (page - 1) * pageSize;
+      
       logger.info('[PickingOrders] Fetching orders', { 
         organizationId: currentOrganization?.id,
-        filters 
+        filters,
+        page,
+        offset
       });
       
       // First, auto-initialize any new Shopify orders
@@ -155,13 +165,12 @@ export const usePickingOrders = () => {
             tags,
             raw_data
           )
-        `)
+        `, { count: 'exact' })
         .eq('organization_id', currentOrganization?.id)
         .order('created_at_shopify', { 
           ascending: false, 
           foreignTable: 'shopify_orders' 
-        })
-        .limit(10000);
+        });
 
       if (filters?.status) {
         query = query.eq('operational_status', filters.status);
@@ -173,7 +182,9 @@ export const usePickingOrders = () => {
         );
       }
 
-      const { data, error } = await query;
+      query = query.range(offset, offset + pageSize - 1);
+
+      const { data, error, count } = await query;
 
       if (error) {
         logger.error('[PickingOrders] Error fetching orders', error);
@@ -195,11 +206,15 @@ export const usePickingOrders = () => {
 
       logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {
         count: ordersData.length,
+        totalCount: count,
+        page,
         firstOrder: ordersData[0]?.shopify_order?.order_number,
         hasShopifyOrder: !!ordersData[0]?.shopify_order
       });
 
       setOrders(ordersData as PickingOrder[]);
+      setTotalCount(count || 0);
+      setCurrentPage(page);
     } catch (error: any) {
       logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
@@ -345,6 +360,10 @@ export const usePickingOrders = () => {
   return {
     orders,
     loading,
+    currentPage,
+    totalCount,
+    pageSize,
+    totalPages: Math.ceil(totalCount / pageSize),
     fetchOrders,
     updateOrderStatus,
     updateOrderNotes,
