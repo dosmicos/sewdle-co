@@ -40,7 +40,7 @@ const statusLabels = {
   pending: 'Por Procesar',
   picking: 'Picking en Proceso',
   packing: 'Empacando',
-  ready_to_ship: 'Listo para Envío',
+  ready_to_ship: 'Empacado',
   shipped: 'Enviado',
 };
 
