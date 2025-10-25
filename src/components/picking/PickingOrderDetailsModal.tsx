@@ -57,7 +57,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [loadingOrder, setLoadingOrder] = useState(false);
 
   const order = orders.find(o => o.id === orderId);
-  const effectiveOrder = order || localOrder;
+  const effectiveOrder = (localOrder && localOrder.shopify_order?.raw_data) 
+    ? localOrder 
+    : order || localOrder;
 
   // Fetch order if not found in the orders array
   useEffect(() => {
@@ -228,16 +230,29 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const shippingAddress = effectiveOrder.shopify_order?.raw_data?.shipping_address;
   const financialSummary = effectiveOrder.shopify_order?.raw_data || {};
   
-  const paymentGateways = effectiveOrder.shopify_order?.raw_data?.payment_gateway_names || [];
+  const rawPaymentGateways = effectiveOrder.shopify_order?.raw_data?.payment_gateway_names;
+  const paymentGateways = Array.isArray(rawPaymentGateways) 
+    ? rawPaymentGateways 
+    : (typeof rawPaymentGateways === 'string' ? [rawPaymentGateways] : []);
+  
   const formatPaymentMethod = (gateway: string): string => {
     if (gateway.toLowerCase().includes('cash on delivery')) {
       return 'Contraentrega';
     }
     return gateway;
   };
+  
   const paymentMethod = paymentGateways.length > 0 
     ? formatPaymentMethod(paymentGateways[0]) 
     : null;
+
+  console.log('🔍 DEBUG Payment Method:', {
+    rawPaymentGateways,
+    paymentGateways,
+    paymentMethod,
+    order_number: effectiveOrder.shopify_order?.order_number,
+    has_raw_data: !!effectiveOrder.shopify_order?.raw_data
+  });
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
