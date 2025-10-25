@@ -37,7 +37,7 @@ const statusColors = {
 };
 
 const statusLabels = {
-  pending: 'Pendiente',
+  pending: 'Por Procesar',
   picking: 'Picking en Proceso',
   packing: 'Empacando',
   ready_to_ship: 'Listo para Envío',
