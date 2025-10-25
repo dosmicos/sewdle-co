@@ -356,13 +356,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                           {item.quantity}
                         </span>
                       </div>
-
-                      <div className="text-right">
-                        <span className="text-sm text-muted-foreground">Total: </span>
-                        <span className="font-semibold">
-                          {formatCurrency(item.price * item.quantity, effectiveOrder.shopify_order?.currency)}
-                        </span>
-                      </div>
                     </div>
                   </div>
                 ))}
