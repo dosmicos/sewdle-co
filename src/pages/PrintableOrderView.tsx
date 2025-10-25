@@ -186,6 +186,19 @@ const PrintableOrderView = () => {
             size: A4;
             margin: 15mm;
           }
+          
+          /* Hide browser default headers and footers */
+          @page {
+            margin: 15mm;
+          }
+          
+          html {
+            margin: 0;
+          }
+          
+          body {
+            margin: 0;
+          }
         }
 
         @media screen {
