@@ -136,7 +136,7 @@ const PrintableOrderView = () => {
       )}
 
       {/* Footer */}
-      <div className="mt-12 pt-6 border-t text-center">
+      <div className="mt-6 pt-6 border-t text-center">
         <p className="text-lg font-semibold mb-1">GRACIAS POR SU COMPRA</p>
         <p className="text-sm text-muted-foreground">www.dosmicos.co</p>
       </div>
