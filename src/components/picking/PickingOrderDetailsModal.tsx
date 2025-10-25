@@ -369,6 +369,29 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </CardContent>
             </Card>
 
+            {/* Financial Summary - Compact */}
+            <div className="px-4 py-3 bg-muted/30 rounded-lg border border-muted">
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">{formatCurrency(financialSummary.subtotal_price, effectiveOrder.shopify_order?.currency)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Envío</span>
+                  <span className="font-medium">{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, effectiveOrder.shopify_order?.currency)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Impuestos</span>
+                  <span className="font-medium">{formatCurrency(financialSummary.total_tax, effectiveOrder.shopify_order?.currency)}</span>
+                </div>
+                <Separator className="my-1.5" />
+                <div className="flex justify-between text-sm font-semibold pt-1">
+                  <span>Total</span>
+                  <span>{formatCurrency(financialSummary.total_price, effectiveOrder.shopify_order?.currency)}</span>
+                </div>
+              </div>
+            </div>
+
             {/* Status Actions */}
             <Card>
               <CardHeader>
@@ -422,32 +445,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
           {/* Right Column - Details */}
           <div className="space-y-4">
-            {/* Financial Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Resumen Financiero</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(financialSummary.subtotal_price, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Envío</span>
-                  <span>{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Impuestos</span>
-                  <span>{formatCurrency(financialSummary.total_tax, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>{formatCurrency(financialSummary.total_price, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Customer Info */}
             <Card>
               <CardHeader>
