@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle } from 'lucide-react';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
@@ -436,41 +436,25 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      onClick={() => handleStatusChange('picking')}
-                      disabled={effectiveOrder.operational_status !== 'pending' || updatingStatus}
-                      variant={effectiveOrder.operational_status === 'picking' ? 'default' : 'outline'}
-                      className="gap-2"
-                    >
-                      {updatingStatus && effectiveOrder.operational_status === 'pending' ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : null}
-                      Iniciar Picking
-                    </Button>
-                    <Button
-                      onClick={() => handleStatusChange('packing')}
-                      disabled={effectiveOrder.operational_status !== 'picking' || updatingStatus}
-                      variant={effectiveOrder.operational_status === 'packing' ? 'default' : 'outline'}
-                      className="gap-2"
-                    >
-                      {updatingStatus && effectiveOrder.operational_status === 'picking' ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : null}
-                      Empacar
-                    </Button>
-                    <Button
-                      onClick={() => handleStatusChange('ready_to_ship')}
-                      disabled={effectiveOrder.operational_status !== 'packing' || updatingStatus}
-                      variant={effectiveOrder.operational_status === 'ready_to_ship' ? 'default' : 'outline'}
-                      className="col-span-2 gap-2"
-                    >
-                      {updatingStatus && effectiveOrder.operational_status === 'packing' ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : null}
-                      Marcar Listo para Envío
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => handleStatusChange('ready_to_ship')}
+                    disabled={effectiveOrder.operational_status === 'ready_to_ship' || updatingStatus}
+                    className="w-full h-12 text-base gap-2 font-semibold bg-[#F4A582] hover:bg-[#E89470] text-white disabled:bg-green-500 disabled:hover:bg-green-500"
+                  >
+                    {updatingStatus ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : effectiveOrder.operational_status === 'ready_to_ship' ? (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        ✓ Empacado
+                      </>
+                    ) : (
+                      <>
+                        <Package className="w-5 h-5" />
+                        Marcar como Empacado
+                      </>
+                    )}
+                  </Button>
                 )}
               </CardContent>
             </Card>
