@@ -55,57 +55,62 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [loadingItems, setLoadingItems] = useState(true);
   const [localOrder, setLocalOrder] = useState<PickingOrder | null>(null);
   const [loadingOrder, setLoadingOrder] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const order = orders.find(o => o.id === orderId);
   const effectiveOrder = (localOrder && localOrder.shopify_order?.raw_data) 
     ? localOrder 
     : order || localOrder;
 
+  // Refetch order function (reusable)
+  const refetchOrder = async () => {
+    setLoadingOrder(true);
+    try {
+      const { data, error } = await supabase
+        .from('picking_packing_orders')
+        .select(`
+          *,
+          shopify_order:shopify_orders(
+            id,
+            shopify_order_id,
+            order_number,
+            email,
+            created_at_shopify,
+            financial_status,
+            fulfillment_status,
+            customer_first_name,
+            customer_last_name,
+            customer_phone,
+            customer_email,
+            total_price,
+            currency,
+            note,
+            tags,
+            cancelled_at,
+            raw_data
+          )
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (error) throw error;
+      
+      setLocalOrder({
+        ...data,
+        line_items: []
+      } as PickingOrder);
+    } catch (error) {
+      console.error('❌ Error fetching order:', error);
+    } finally {
+      setLoadingOrder(false);
+    }
+  };
+
   // Fetch order if not found in the orders array
   useEffect(() => {
     const fetchOrder = async () => {
       if (order || !orderId) return;
-      
-      setLoadingOrder(true);
-      try {
-        const { data, error } = await supabase
-          .from('picking_packing_orders')
-          .select(`
-            *,
-            shopify_order:shopify_orders(
-              id,
-              shopify_order_id,
-              order_number,
-              email,
-              created_at_shopify,
-              financial_status,
-              fulfillment_status,
-              customer_first_name,
-              customer_last_name,
-              customer_phone,
-              customer_email,
-              total_price,
-              currency,
-              note,
-              tags,
-              cancelled_at,
-              raw_data
-            )
-          `)
-          .eq('id', orderId)
-          .single();
-
-        if (error) throw error;
-        
-        setLocalOrder({
-          ...data,
-          line_items: []
-        } as PickingOrder);
-      } catch (error) {
-        console.error('❌ Error fetching order:', error);
-      } finally {
-        setLoadingOrder(false);
-      }
+      await refetchOrder();
     };
 
     fetchOrder();
@@ -179,7 +184,31 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.raw_data]);
 
   const handleStatusChange = async (newStatus: OperationalStatus) => {
-    await updateOrderStatus(orderId, newStatus);
+    setUpdatingStatus(true);
+    
+    // Optimistic update - instant UI feedback
+    if (effectiveOrder) {
+      setLocalOrder({
+        ...effectiveOrder,
+        operational_status: newStatus
+      });
+    }
+    
+    try {
+      // Update in database
+      await updateOrderStatus(orderId, newStatus);
+      
+      // Re-fetch to confirm and sync with server
+      await refetchOrder();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      // Rollback optimistic update on error
+      if (effectiveOrder) {
+        setLocalOrder(effectiveOrder);
+      }
+    } finally {
+      setUpdatingStatus(false);
+    }
   };
 
   const handleSaveNotes = async () => {
@@ -410,24 +439,35 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       onClick={() => handleStatusChange('picking')}
-                      disabled={effectiveOrder.operational_status !== 'pending'}
+                      disabled={effectiveOrder.operational_status !== 'pending' || updatingStatus}
                       variant={effectiveOrder.operational_status === 'picking' ? 'default' : 'outline'}
+                      className="gap-2"
                     >
+                      {updatingStatus && effectiveOrder.operational_status === 'pending' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : null}
                       Iniciar Picking
                     </Button>
                     <Button
                       onClick={() => handleStatusChange('packing')}
-                      disabled={effectiveOrder.operational_status !== 'picking'}
+                      disabled={effectiveOrder.operational_status !== 'picking' || updatingStatus}
                       variant={effectiveOrder.operational_status === 'packing' ? 'default' : 'outline'}
+                      className="gap-2"
                     >
+                      {updatingStatus && effectiveOrder.operational_status === 'picking' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : null}
                       Empacar
                     </Button>
                     <Button
                       onClick={() => handleStatusChange('ready_to_ship')}
-                      disabled={effectiveOrder.operational_status !== 'packing'}
+                      disabled={effectiveOrder.operational_status !== 'packing' || updatingStatus}
                       variant={effectiveOrder.operational_status === 'ready_to_ship' ? 'default' : 'outline'}
-                      className="col-span-2"
+                      className="col-span-2 gap-2"
                     >
+                      {updatingStatus && effectiveOrder.operational_status === 'packing' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : null}
                       Marcar Listo para Envío
                     </Button>
                   </div>
