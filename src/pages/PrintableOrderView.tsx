@@ -89,7 +89,7 @@ const PrintableOrderView = () => {
       {/* Order Number */}
       <div className="mb-6">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-3xl font-bold">ORDEN #{order.order_number}</h1>
+          <h1 className="text-base font-bold">ORDEN #{order.order_number}</h1>
           {paymentMethod && (
             <span className="payment-badge px-4 py-2 bg-yellow-100 text-yellow-800 border-2 border-yellow-300 font-semibold text-base rounded">
               {paymentMethod}
