@@ -84,7 +84,6 @@ const PrintableOrderView = () => {
           className="logo-image mx-auto mb-2"
           style={{ maxWidth: '300px', height: 'auto' }}
         />
-        <div className="text-sm text-muted-foreground">www.dosmicos.co</div>
       </div>
 
       {/* Order Number */}
