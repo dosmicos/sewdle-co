@@ -57,7 +57,10 @@ const PrintableOrderView = () => {
   }
 
   const shippingAddress = order.raw_data?.shipping_address;
-  const isCOD = order.financial_status === 'pending';
+  const paymentGateways = order.raw_data?.payment_gateway_names || [];
+  const isCOD = paymentGateways.some((gateway: string) => 
+    gateway && gateway.toLowerCase().includes('cash on delivery')
+  );
 
   return (
     <div className="printable-order max-w-3xl mx-auto p-8 bg-white">
