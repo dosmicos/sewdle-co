@@ -227,6 +227,17 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   const shippingAddress = effectiveOrder.shopify_order?.raw_data?.shipping_address;
   const financialSummary = effectiveOrder.shopify_order?.raw_data || {};
+  
+  const paymentGateways = effectiveOrder.shopify_order?.raw_data?.payment_gateway_names || [];
+  const formatPaymentMethod = (gateway: string): string => {
+    if (gateway.toLowerCase().includes('cash on delivery')) {
+      return 'Contraentrega';
+    }
+    return gateway;
+  };
+  const paymentMethod = paymentGateways.length > 0 
+    ? formatPaymentMethod(paymentGateways[0]) 
+    : null;
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
@@ -250,6 +261,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               {effectiveOrder.shopify_order?.financial_status === 'pending' && (
                 <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
                   Pago Pendiente
+                </Badge>
+              )}
+              {paymentMethod && (
+                <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+                  💳 {paymentMethod}
                 </Badge>
               )}
             </div>
