@@ -160,6 +160,37 @@ export const usePickingOrders = () => {
       // First, auto-initialize any new Shopify orders
       await autoInitializePickingOrders();
       
+      // Step 1: If searchTerm exists, find matching shopify_order_ids
+      let matchingShopifyOrderIds: number[] | null = null;
+      
+      if (filters?.searchTerm) {
+        logger.info('[PickingOrders] Buscando órdenes con término:', filters.searchTerm);
+        
+        const { data: matchingOrders, error: searchError } = await supabase
+          .from('shopify_orders')
+          .select('shopify_order_id')
+          .eq('organization_id', currentOrganization.id)
+          .or(`order_number.ilike.%${filters.searchTerm}%,customer_email.ilike.%${filters.searchTerm}%,customer_first_name.ilike.%${filters.searchTerm}%,customer_last_name.ilike.%${filters.searchTerm}%`);
+        
+        if (searchError) {
+          logger.error('[PickingOrders] Error en búsqueda de Shopify orders', searchError);
+          throw searchError;
+        }
+        
+        matchingShopifyOrderIds = matchingOrders?.map(o => o.shopify_order_id) || [];
+        
+        logger.info(`[PickingOrders] Encontradas ${matchingShopifyOrderIds.length} órdenes coincidentes`);
+        
+        // Si no hay coincidencias, devolver vacío
+        if (matchingShopifyOrderIds.length === 0) {
+          setOrders([]);
+          setTotalCount(0);
+          setCurrentPage(page);
+          return;
+        }
+      }
+      
+      // Step 2: Query picking_packing_orders
       let query = supabase
         .from('picking_packing_orders')
         .select(`
@@ -186,14 +217,14 @@ export const usePickingOrders = () => {
         .eq('organization_id', currentOrganization?.id)
         .order('created_at', { ascending: false });
 
+      // Apply status filter
       if (filters?.status) {
         query = query.eq('operational_status', filters.status);
       }
 
-      if (filters?.searchTerm) {
-        query = query.or(
-          `shopify_order.order_number.ilike.%${filters.searchTerm}%`
-        );
+      // Apply search filter using the matching IDs
+      if (matchingShopifyOrderIds !== null) {
+        query = query.in('shopify_order_id', matchingShopifyOrderIds);
       }
 
       query = query.range(offset, offset + pageSize - 1);
@@ -208,6 +239,8 @@ export const usePickingOrders = () => {
       if (!data || data.length === 0) {
         logger.info('[PickingOrders] No orders found');
         setOrders([]);
+        setTotalCount(0);
+        setCurrentPage(page);
         return;
       }
 
@@ -239,6 +272,8 @@ export const usePickingOrders = () => {
     } catch (error: any) {
       logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
+      setOrders([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
