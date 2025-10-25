@@ -258,7 +258,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               <Badge className={statusColors[effectiveOrder.operational_status]}>
                 {statusLabels[effectiveOrder.operational_status]}
               </Badge>
-              {effectiveOrder.shopify_order?.financial_status === 'pending' && (
+              {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
                 <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
                   Pago Pendiente
                 </Badge>
