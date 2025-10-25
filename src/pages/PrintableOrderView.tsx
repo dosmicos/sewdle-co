@@ -62,6 +62,17 @@ const PrintableOrderView = () => {
     gateway && gateway.toLowerCase().includes('cash on delivery')
   );
 
+  const formatPaymentMethod = (gateway: string): string => {
+    if (gateway.toLowerCase().includes('cash on delivery')) {
+      return 'Contraentrega';
+    }
+    return gateway;
+  };
+
+  const paymentMethod = paymentGateways.length > 0 
+    ? formatPaymentMethod(paymentGateways[0]) 
+    : null;
+
   return (
     <div className="printable-order max-w-3xl mx-auto p-8 bg-white">
       {/* Logo */}
@@ -72,7 +83,14 @@ const PrintableOrderView = () => {
 
       {/* Order Number */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">ORDEN #{order.order_number}</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-3xl font-bold">ORDEN #{order.order_number}</h1>
+          {paymentMethod && (
+            <span className="payment-badge px-4 py-2 bg-yellow-100 text-yellow-800 border-2 border-yellow-300 font-semibold text-base rounded">
+              {paymentMethod}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Shipping Address */}
@@ -137,6 +155,16 @@ const PrintableOrderView = () => {
             padding: 12mm !important;
             margin: 8mm 0 !important;
             border-radius: 0 !important;
+            page-break-inside: avoid;
+          }
+
+          .payment-badge {
+            background-color: #fef3c7 !important;
+            color: #92400e !important;
+            border: 2px solid #fcd34d !important;
+            padding: 4mm 8mm !important;
+            font-weight: 600 !important;
+            border-radius: 4px !important;
             page-break-inside: avoid;
           }
 
