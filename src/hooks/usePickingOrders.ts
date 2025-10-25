@@ -56,6 +56,7 @@ export interface PickingOrder {
     currency?: string;
     note?: string;
     tags?: string;
+    cancelled_at?: string;
     raw_data?: any;
   };
   
@@ -206,14 +207,15 @@ export const usePickingOrders = () => {
             customer_first_name,
             customer_last_name,
             customer_phone,
-            customer_email,
-            total_price,
-            currency,
-            note,
-            tags,
-            raw_data
-          )
-        `, { count: 'exact' })
+          customer_email,
+          total_price,
+          currency,
+          note,
+          tags,
+          cancelled_at,
+          raw_data
+        )
+      `, { count: 'exact' })
         .eq('organization_id', currentOrganization?.id)
         .order('created_at', { ascending: false });
 

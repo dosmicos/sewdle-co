@@ -86,6 +86,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               currency,
               note,
               tags,
+              cancelled_at,
               raw_data
             )
           `)
@@ -236,6 +237,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               <DialogTitle className="text-2xl">
                 Orden #{effectiveOrder.shopify_order?.order_number}
               </DialogTitle>
+              
+              {effectiveOrder.shopify_order?.cancelled_at && (
+                <Badge variant="destructive" className="bg-red-600">
+                  ⚠️ ORDEN CANCELADA
+                </Badge>
+              )}
+              
               <Badge className={statusColors[effectiveOrder.operational_status]}>
                 {statusLabels[effectiveOrder.operational_status]}
               </Badge>
@@ -336,30 +344,47 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <CardTitle>Acciones</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    onClick={() => handleStatusChange('picking')}
-                    disabled={effectiveOrder.operational_status !== 'pending'}
-                    variant={effectiveOrder.operational_status === 'picking' ? 'default' : 'outline'}
-                  >
-                    Iniciar Picking
-                  </Button>
-                  <Button
-                    onClick={() => handleStatusChange('packing')}
-                    disabled={effectiveOrder.operational_status !== 'picking'}
-                    variant={effectiveOrder.operational_status === 'packing' ? 'default' : 'outline'}
-                  >
-                    Empacar
-                  </Button>
-                  <Button
-                    onClick={() => handleStatusChange('ready_to_ship')}
-                    disabled={effectiveOrder.operational_status !== 'packing'}
-                    variant={effectiveOrder.operational_status === 'ready_to_ship' ? 'default' : 'outline'}
-                    className="col-span-2"
-                  >
-                    Marcar Listo para Envío
-                  </Button>
-                </div>
+                {effectiveOrder.shopify_order?.cancelled_at ? (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-800 font-medium">
+                      ⚠️ Esta orden fue cancelada en Shopify el {new Date(effectiveOrder.shopify_order.cancelled_at).toLocaleDateString('es-CO', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                    <p className="text-xs text-red-600 mt-2">
+                      No se pueden realizar acciones de picking/packing en órdenes canceladas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      onClick={() => handleStatusChange('picking')}
+                      disabled={effectiveOrder.operational_status !== 'pending'}
+                      variant={effectiveOrder.operational_status === 'picking' ? 'default' : 'outline'}
+                    >
+                      Iniciar Picking
+                    </Button>
+                    <Button
+                      onClick={() => handleStatusChange('packing')}
+                      disabled={effectiveOrder.operational_status !== 'picking'}
+                      variant={effectiveOrder.operational_status === 'packing' ? 'default' : 'outline'}
+                    >
+                      Empacar
+                    </Button>
+                    <Button
+                      onClick={() => handleStatusChange('ready_to_ship')}
+                      disabled={effectiveOrder.operational_status !== 'packing'}
+                      variant={effectiveOrder.operational_status === 'ready_to_ship' ? 'default' : 'outline'}
+                      className="col-span-2"
+                    >
+                      Marcar Listo para Envío
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
