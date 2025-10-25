@@ -3267,6 +3267,10 @@ export type Database = {
           }
       log_stats_access: { Args: never; Returns: undefined }
       make_user_admin: { Args: { user_email: string }; Returns: undefined }
+      map_shopify_tags_to_operational_status: {
+        Args: { tags: string }
+        Returns: string
+      }
       mark_password_changed: { Args: { user_uuid: string }; Returns: undefined }
       migrate_ruana_mapache_variants: { Args: never; Returns: Json }
       migrate_sleeping_walker_dinosaurios_variants: {
