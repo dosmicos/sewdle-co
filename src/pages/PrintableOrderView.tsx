@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import dosmicosLogo from '@/assets/dosmicos-logo.png';
 
 const PrintableOrderView = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -77,7 +78,12 @@ const PrintableOrderView = () => {
     <div className="printable-order max-w-3xl mx-auto p-8 bg-white">
       {/* Logo */}
       <div className="text-center mb-8">
-        <div className="text-4xl font-bold text-primary mb-2">DOSMICOS</div>
+        <img 
+          src={dosmicosLogo} 
+          alt="Dosmicos" 
+          className="logo-image mx-auto mb-2"
+          style={{ maxWidth: '300px', height: 'auto' }}
+        />
         <div className="text-sm text-muted-foreground">www.dosmicos.co</div>
       </div>
 
@@ -147,6 +153,11 @@ const PrintableOrderView = () => {
           .printable-order {
             padding: 20mm;
             max-width: 100%;
+          }
+
+          .logo-image {
+            max-width: 60mm !important;
+            height: auto !important;
           }
 
           .cod-banner {
