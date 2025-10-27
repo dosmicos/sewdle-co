@@ -658,6 +658,43 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </Card>
             )}
 
+            {/* Notas de Shopify - Bidirectional Sync */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Notas de Shopify
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Textarea
+                  value={shopifyNote}
+                  onChange={(e) => setShopifyNote(e.target.value)}
+                  placeholder="Agregar notas visibles en Shopify..."
+                  className="min-h-[100px] text-sm"
+                  disabled={!!effectiveOrder?.shopify_order?.cancelled_at}
+                />
+                <Button
+                  onClick={handleSaveShopifyNote}
+                  disabled={isSavingShopifyNote || !!effectiveOrder?.shopify_order?.cancelled_at}
+                  size="sm"
+                  className="w-full"
+                >
+                  {isSavingShopifyNote ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    'Guardar Nota en Shopify'
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  ℹ️ Los cambios se sincronizan automáticamente con Shopify
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Shopify Tags */}
             <Card>
               <CardHeader>
