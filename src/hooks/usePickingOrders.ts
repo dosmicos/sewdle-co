@@ -467,6 +467,59 @@ export const usePickingOrders = () => {
     }
   };
 
+  const bulkUpdateOrderStatus = async (
+    pickingOrderIds: string[],
+    newStatus: OperationalStatus
+  ) => {
+    const results = {
+      successful: [] as string[],
+      failed: [] as string[],
+    };
+
+    console.log(`🔄 Iniciando actualización masiva de ${pickingOrderIds.length} órdenes a estado: ${newStatus}`);
+
+    // Process in batches of 5 to avoid overwhelming Shopify API
+    const batchSize = 5;
+    for (let i = 0; i < pickingOrderIds.length; i += batchSize) {
+      const batch = pickingOrderIds.slice(i, i + batchSize);
+      
+      const batchPromises = batch.map(async (orderId) => {
+        try {
+          await updateOrderStatus(orderId, newStatus);
+          results.successful.push(orderId);
+          console.log(`✅ Orden ${orderId} actualizada correctamente`);
+        } catch (error) {
+          console.error(`❌ Error actualizando orden ${orderId}:`, error);
+          results.failed.push(orderId);
+        }
+      });
+
+      await Promise.all(batchPromises);
+      
+      // Show progress
+      const processed = Math.min(i + batchSize, pickingOrderIds.length);
+      console.log(`📊 Progreso: ${processed}/${pickingOrderIds.length}`);
+    }
+
+    // Show final results
+    if (results.successful.length === pickingOrderIds.length) {
+      toast.success(`✅ ${results.successful.length} órdenes actualizadas correctamente`);
+    } else if (results.successful.length > 0) {
+      toast.warning(
+        `⚠️ ${results.successful.length} órdenes actualizadas, ${results.failed.length} fallaron`
+      );
+    } else {
+      toast.error(`❌ Error al actualizar las órdenes`);
+    }
+
+    console.log('📊 Resultados finales:', results);
+    
+    // Refresh orders list
+    await fetchOrders();
+    
+    return results;
+  };
+
   const initializePickingOrder = async (shopifyOrderId: number) => {
     try {
       const { error } = await supabase
@@ -507,6 +560,7 @@ export const usePickingOrders = () => {
     totalPages: Math.ceil(totalCount / pageSize),
     fetchOrders,
     updateOrderStatus,
+    bulkUpdateOrderStatus,
     updateOrderNotes,
     updateShopifyNote,
     syncOrderToShopify,

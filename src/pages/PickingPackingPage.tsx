@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, RefreshCw, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
+import { PickingBulkActionsBar } from '@/components/picking/PickingBulkActionsBar';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import {
   Table,
@@ -62,7 +63,8 @@ const PickingPackingPage = () => {
     totalCount, 
     totalPages, 
     pageSize,
-    fetchOrders 
+    fetchOrders,
+    bulkUpdateOrderStatus
   } = usePickingOrders();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<OperationalStatus | 'all'>('all');
@@ -135,6 +137,10 @@ const PickingPackingPage = () => {
     } else {
       setSelectedOrders(selectedOrders.filter(id => id !== orderId));
     }
+  };
+
+  const handleBulkMarkAsPacked = async (orderIds: string[]) => {
+    await bulkUpdateOrderStatus(orderIds, 'ready_to_ship');
   };
 
   const formatCurrency = (amount?: number, currency?: string) => {
@@ -416,6 +422,16 @@ const PickingPackingPage = () => {
           onClose={() => setSelectedOrderId(null)}
           allOrderIds={orders.map(o => o.id)}
           onNavigate={(newOrderId) => setSelectedOrderId(newOrderId)}
+        />
+      )}
+
+      {/* Bulk Actions Bar */}
+      {selectedOrders.length > 0 && (
+        <PickingBulkActionsBar
+          selectedCount={selectedOrders.length}
+          selectedIds={selectedOrders}
+          onMarkAsPacked={handleBulkMarkAsPacked}
+          onClear={() => setSelectedOrders([])}
         />
       )}
 
