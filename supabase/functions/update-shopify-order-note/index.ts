@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     // Get organization's Shopify credentials
     const { data: orderData, error: orderError } = await supabaseClient
       .from('shopify_orders')
-      .select('organization_id, organizations(shopify_store_url, shopify_access_token)')
+      .select('organization_id, organizations(shopify_store_url, shopify_credentials)')
       .eq('shopify_order_id', shopifyOrderId)
       .single()
 
@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
 
     const { organizations } = orderData as any
     const shopifyDomain = organizations.shopify_store_url?.replace('https://', '')
-    const accessToken = organizations.shopify_access_token
+    const accessToken = organizations.shopify_credentials?.access_token
 
     if (!shopifyDomain || !accessToken) {
       console.error('❌ Missing Shopify credentials')
