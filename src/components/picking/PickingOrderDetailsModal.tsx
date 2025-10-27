@@ -658,33 +658,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </Card>
             )}
 
-            {/* Shopify Notes (Editable) */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Notas del Cliente (Shopify)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={shopifyNote}
-                  onChange={(e) => setShopifyNote(e.target.value)}
-                  placeholder="Agregar notas del cliente..."
-                  rows={6}
-                  className="text-sm"
-                />
-                <Button
-                  onClick={handleSaveShopifyNote}
-                  disabled={isSavingShopifyNote}
-                  size="sm"
-                  className="w-full"
-                >
-                  {isSavingShopifyNote ? 'Guardando en Shopify...' : 'Guardar y Sincronizar con Shopify'}
-                </Button>
-              </CardContent>
-            </Card>
-
             {/* Shopify Tags */}
             <Card>
               <CardHeader>
