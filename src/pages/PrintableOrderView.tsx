@@ -75,23 +75,23 @@ const PrintableOrderView = () => {
     : null;
 
   return (
-    <div className="printable-order max-w-3xl mx-auto p-8 bg-white">
+    <div className="printable-order max-w-3xl mx-auto p-4 bg-white">
       {/* Logo */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-3">
         <img 
           src={dosmicosLogo} 
           alt="Dosmicos" 
-          className="logo-image mx-auto mb-2"
-          style={{ maxWidth: '165px', height: 'auto' }}
+          className="logo-image mx-auto mb-1"
+          style={{ maxWidth: '80px', height: 'auto' }}
         />
       </div>
 
       {/* Order Number */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-base font-bold">ORDEN #{order.order_number}</h1>
+      <div className="mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-sm font-bold">ORDEN #{order.order_number}</h1>
           {paymentMethod && (
-            <span className="payment-badge px-4 py-2 bg-yellow-100 text-yellow-800 border-2 border-yellow-300 font-semibold text-base rounded">
+            <span className="payment-badge px-2 py-1 bg-yellow-100 text-yellow-800 border-2 border-yellow-300 font-semibold text-xs rounded">
               {paymentMethod}
             </span>
           )}
@@ -99,9 +99,9 @@ const PrintableOrderView = () => {
       </div>
 
       {/* Shipping Address */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-2">ENVÍE A:</h2>
-        <div className="text-base space-y-1">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold mb-1">ENVÍE A:</h2>
+        <div className="text-xs space-y-0.5">
           <p className="font-medium">{shippingAddress?.name || `${order.customer_first_name} ${order.customer_last_name}`}</p>
           {shippingAddress?.company && <p>{shippingAddress.company}</p>}
           {shippingAddress?.address1 && <p>{shippingAddress.address1}</p>}
@@ -120,25 +120,25 @@ const PrintableOrderView = () => {
 
       {/* COD Banner */}
       {isCOD && (
-        <div className="cod-banner my-6 p-4 bg-black text-white text-center font-bold text-xl rounded">
+        <div className="cod-banner my-3 p-2 bg-black text-white text-center font-bold text-sm rounded">
           PAGO CONTRA ENTREGA
         </div>
       )}
 
       {/* Notes */}
       {order.note && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-2">NOTES</h2>
-          <div className="whitespace-pre-wrap text-base border-l-4 border-primary pl-4">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold mb-1">NOTES</h2>
+          <div className="whitespace-pre-wrap text-xs border-l-2 border-primary pl-2">
             {order.note}
           </div>
         </div>
       )}
 
       {/* Footer */}
-      <div className="mt-6 pt-6 border-t text-center">
-        <p className="text-lg font-semibold mb-1">GRACIAS POR SU COMPRA</p>
-        <p className="text-sm text-muted-foreground">www.dosmicos.co</p>
+      <div className="mt-3 pt-3 border-t text-center">
+        <p className="text-sm font-semibold mb-0.5">GRACIAS POR SU COMPRA</p>
+        <p className="text-xs text-muted-foreground">www.dosmicos.co</p>
       </div>
 
       {/* Print Styles */}
@@ -150,20 +150,20 @@ const PrintableOrderView = () => {
           }
 
           .printable-order {
-            padding: 20mm;
+            padding: 10mm;
             max-width: 100%;
           }
 
           .logo-image {
-            max-width: 33mm !important;
+            max-width: 16.5mm !important;
             height: auto !important;
           }
 
           .cod-banner {
             background-color: #000 !important;
             color: #fff !important;
-            padding: 12mm !important;
-            margin: 8mm 0 !important;
+            padding: 6mm !important;
+            margin: 4mm 0 !important;
             border-radius: 0 !important;
             page-break-inside: avoid;
           }
@@ -172,7 +172,7 @@ const PrintableOrderView = () => {
             background-color: #fef3c7 !important;
             color: #92400e !important;
             border: 2px solid #fcd34d !important;
-            padding: 4mm 8mm !important;
+            padding: 2mm 4mm !important;
             font-weight: 600 !important;
             border-radius: 4px !important;
             page-break-inside: avoid;
@@ -183,13 +183,8 @@ const PrintableOrderView = () => {
           }
 
           @page {
-            size: A4;
-            margin: 15mm;
-          }
-          
-          /* Hide browser default headers and footers */
-          @page {
-            margin: 15mm;
+            size: 100mm 100mm;
+            margin: 7.5mm;
           }
           
           html {
@@ -205,6 +200,7 @@ const PrintableOrderView = () => {
           .printable-order {
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin: 2rem auto;
+            max-width: 100mm;
           }
         }
       `}</style>
