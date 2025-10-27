@@ -300,6 +300,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       // Update in database
       await updateOrderStatus(orderId, newStatus);
       
+      // Wait 500ms for DB propagation and Shopify sync
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Re-fetch to confirm and sync with server
       await refetchOrder();
     } catch (error) {
