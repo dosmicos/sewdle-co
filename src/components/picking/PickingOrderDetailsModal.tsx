@@ -297,20 +297,15 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
     
     try {
-      // Update in database
+      // Update in database and Shopify
       await updateOrderStatus(orderId, newStatus);
       
-      // Wait 500ms for DB propagation and Shopify sync
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // SUCCESS: Keep the optimistic update (don't refetch)
       
-      // Re-fetch to confirm and sync with server
-      await refetchOrder();
     } catch (error) {
       console.error('Error updating status:', error);
-      // Rollback optimistic update on error
-      if (effectiveOrder) {
-        setLocalOrder(effectiveOrder);
-      }
+      // ONLY on error: Refetch to get actual state and rollback
+      await refetchOrder();
     } finally {
       setUpdatingStatus(false);
     }

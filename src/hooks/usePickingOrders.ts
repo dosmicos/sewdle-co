@@ -346,9 +346,9 @@ export const usePickingOrders = () => {
         try {
           await updateShopifyTags(order.shopify_order_id, [statusTags[newStatus]]);
         } catch (tagError) {
-          console.error('⚠️ Warning: Status updated but tags failed:', tagError);
-          toast.error('Estado actualizado, pero etiquetas no sincronizadas con Shopify');
-          // Don't throw - status update succeeded
+          console.error('❌ CRITICAL: Tag update failed:', tagError);
+          toast.error('Error al actualizar etiquetas en Shopify');
+          throw tagError; // Re-throw para que handleStatusChange sepa que falló
         }
       }
 
