@@ -94,10 +94,10 @@ const PermissionRoute = ({
   module: string;
   action: string;
 }) => {
-  const { user, loading } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { user, loading: authLoading } = useAuth();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   
-  if (loading) {
+  if (authLoading || permissionsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
