@@ -75,19 +75,19 @@ const PrintableOrderView = () => {
     : null;
 
   return (
-    <div className="printable-order mx-auto p-4 bg-white">
+    <div className="printable-order mx-auto p-2 bg-white">
       {/* Logo */}
-      <div className="text-center mb-3">
+      <div className="text-center mb-1.5">
         <img 
           src={dosmicosLogo} 
           alt="Dosmicos" 
-          className="logo-image mx-auto mb-1"
+          className="logo-image mx-auto mb-0.5"
           style={{ maxWidth: '80px', height: 'auto' }}
         />
       </div>
 
       {/* Order Number */}
-      <div className="mb-3">
+      <div className="mb-1.5">
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-sm font-bold">ORDEN #{order.order_number}</h1>
           {paymentMethod && (
@@ -99,8 +99,8 @@ const PrintableOrderView = () => {
       </div>
 
       {/* Shipping Address */}
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold mb-1">ENVÍE A:</h2>
+      <div className="mb-1.5">
+        <h2 className="text-sm font-semibold mb-0.5">ENVÍE A:</h2>
         <div className="text-xs space-y-0.5">
           <p className="font-medium">{shippingAddress?.name || `${order.customer_first_name} ${order.customer_last_name}`}</p>
           {shippingAddress?.company && <p>{shippingAddress.company}</p>}
@@ -120,15 +120,15 @@ const PrintableOrderView = () => {
 
       {/* COD Banner */}
       {isCOD && (
-        <div className="cod-banner my-3 p-2 bg-black text-white text-center font-bold text-sm rounded">
+        <div className="cod-banner my-1.5 p-1.5 bg-black text-white text-center font-bold text-sm rounded">
           PAGO CONTRA ENTREGA
         </div>
       )}
 
       {/* Notes */}
       {order.note && (
-        <div className="mb-3">
-          <h2 className="text-sm font-semibold mb-1">NOTES</h2>
+        <div className="mb-1.5">
+          <h2 className="text-sm font-semibold mb-0.5">NOTES</h2>
           <div className="whitespace-pre-wrap text-xs border-l-2 border-primary pl-2">
             {order.note}
           </div>
@@ -136,7 +136,7 @@ const PrintableOrderView = () => {
       )}
 
       {/* Footer */}
-      <div className="mt-3 pt-3 border-t text-center">
+      <div className="mt-1.5 pt-1.5 border-t text-center">
         <p className="text-sm font-semibold mb-0.5">GRACIAS POR SU COMPRA</p>
         <p className="text-xs text-muted-foreground">www.dosmicos.co</p>
       </div>
@@ -150,7 +150,7 @@ const PrintableOrderView = () => {
           }
 
           .printable-order {
-            padding: 10mm;
+            padding: 5mm;
             max-width: 100%;
           }
 
@@ -162,8 +162,8 @@ const PrintableOrderView = () => {
           .cod-banner {
             background-color: #000 !important;
             color: #fff !important;
-            padding: 6mm !important;
-            margin: 4mm 0 !important;
+            padding: 3mm !important;
+            margin: 2mm 0 !important;
             border-radius: 0 !important;
             page-break-inside: avoid;
           }
@@ -172,7 +172,7 @@ const PrintableOrderView = () => {
             background-color: #fef3c7 !important;
             color: #92400e !important;
             border: 2px solid #fcd34d !important;
-            padding: 2mm 4mm !important;
+            padding: 1mm 2mm !important;
             font-weight: 600 !important;
             border-radius: 4px !important;
             page-break-inside: avoid;
@@ -184,7 +184,7 @@ const PrintableOrderView = () => {
 
           @page {
             size: 100mm 100mm;
-            margin: 7.5mm;
+            margin: 3.75mm;
           }
           
           html {
