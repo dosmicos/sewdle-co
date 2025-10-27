@@ -409,6 +409,8 @@ const PickingPackingPage = () => {
         <PickingOrderDetailsModal
           orderId={selectedOrderId}
           onClose={() => setSelectedOrderId(null)}
+          allOrderIds={orders.map(o => o.id)}
+          onNavigate={(newOrderId) => setSelectedOrderId(newOrderId)}
         />
       )}
 

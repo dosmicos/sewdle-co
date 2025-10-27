@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
@@ -26,6 +26,8 @@ interface ShopifyLineItem {
 interface PickingOrderDetailsModalProps {
   orderId: string;
   onClose: () => void;
+  allOrderIds: string[];
+  onNavigate: (orderId: string) => void;
 }
 
 const statusColors = {
@@ -46,7 +48,9 @@ const statusLabels = {
 
 export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> = ({ 
   orderId, 
-  onClose 
+  onClose,
+  allOrderIds,
+  onNavigate
 }) => {
   const { orders, updateOrderStatus, updateOrderNotes } = usePickingOrders();
   const [notes, setNotes] = useState('');
@@ -59,6 +63,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   const order = orders.find(o => o.id === orderId);
   const effectiveOrder = localOrder || order;
+
+  // Navigation logic
+  const currentIndex = allOrderIds.indexOf(orderId);
+  const hasPrevious = currentIndex > 0;
+  const hasNext = currentIndex < allOrderIds.length - 1;
+
+  const handlePrevious = () => {
+    if (hasPrevious) {
+      onNavigate(allOrderIds[currentIndex - 1]);
+    }
+  };
+
+  const handleNext = () => {
+    if (hasNext) {
+      onNavigate(allOrderIds[currentIndex + 1]);
+    }
+  };
 
   // Refetch order function (reusable)
   const refetchOrder = async () => {
@@ -119,6 +140,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       setNotes(effectiveOrder.internal_notes);
     }
   }, [effectiveOrder]);
+
+  // Reset local state when orderId changes
+  useEffect(() => {
+    setLocalOrder(null);
+    setNotes('');
+    setLineItems([]);
+    setLoadingItems(true);
+  }, [orderId]);
 
   // Fetch line items separately
   useEffect(() => {
@@ -387,10 +416,36 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </Badge>
               )}
             </div>
-            <Button onClick={handlePrint} variant="outline" className="gap-2">
-              <Printer className="w-4 h-4" />
-              Imprimir
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={handlePrint} variant="outline" className="gap-2">
+                <Printer className="w-4 h-4" />
+                Imprimir
+              </Button>
+              
+              {/* Navigation buttons */}
+              <div className="flex items-center gap-1 ml-2 border-l pl-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handlePrevious}
+                  disabled={!hasPrevious}
+                  className="h-9 w-9"
+                  title="Pedido anterior (más nuevo)"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleNext}
+                  disabled={!hasNext}
+                  className="h-9 w-9"
+                  title="Siguiente pedido (más antiguo)"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </DialogHeader>
 
