@@ -33,6 +33,7 @@ const MODULE_MAPPING = {
   'products': 'Productos',
   'insumos': 'Insumos',
   'deliveries': 'Entregas',
+  'picking y packing': 'Picking y Packing',
   'users': 'Usuarios',
   'finances': 'Finanzas',
   'replenishment': 'Reposición IA',
