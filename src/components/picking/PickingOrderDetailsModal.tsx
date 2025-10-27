@@ -122,6 +122,34 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   // Fetch line items separately
   useEffect(() => {
+    // Helper function to fetch images from Shopify API
+    const fetchImageFromShopify = async (productId: number, variantId: number): Promise<string | null> => {
+      try {
+        const { data, error } = await supabase.functions.invoke('shopify-products', {
+          body: { searchTerm: '' }
+        });
+        
+        if (error || !data?.products) return null;
+        
+        // Find the specific product and variant
+        const product = data.products.find((p: any) => p.id === productId);
+        if (!product) return null;
+        
+        // Try to get variant-specific image
+        const variant = product.variants?.find((v: any) => v.id === variantId);
+        if (variant?.image_id) {
+          const variantImage = product.images?.find((img: any) => img.id === variant.image_id);
+          if (variantImage?.src) return variantImage.src;
+        }
+        
+        // Fallback to product main image
+        return product.image?.src || product.images?.[0]?.src || null;
+      } catch (error) {
+        console.error('Error fetching image from Shopify:', error);
+        return null;
+      }
+    };
+
     const fetchLineItems = async () => {
       if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
       
@@ -134,7 +162,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         
         if (error) throw error;
         
-        // Enrich line items with images from raw_data if not in database
+        // Enrich line items - Priority: raw_data > Shopify API > local products
         const rawLineItems = effectiveOrder.shopify_order.raw_data?.line_items || [];
         let enrichedItems = (data as ShopifyLineItem[]).map(item => {
           const rawItem = rawLineItems.find((ri: any) => ri.id === item.shopify_line_item_id);
@@ -144,10 +172,37 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           };
         });
         
-        // Final fallback: query product_variants for items still missing images
-        const itemsWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
+        // Fetch images from Shopify API for items without images
+        const itemsWithoutImages = enrichedItems.filter(item => !item.image_url);
         if (itemsWithoutImages.length > 0) {
-          const skus = itemsWithoutImages.map(item => item.sku).filter((sku): sku is string => Boolean(sku));
+          console.log(`🖼️ Fetching ${itemsWithoutImages.length} images from Shopify API...`);
+          
+          // Get images from Shopify in parallel
+          const imagePromises = itemsWithoutImages.map(async (item) => {
+            if (!item.product_id || !item.variant_id) return { sku: item.sku, image_url: null };
+            
+            const shopifyImage = await fetchImageFromShopify(item.product_id, item.variant_id);
+            return { sku: item.sku, image_url: shopifyImage };
+          });
+          
+          const shopifyImages = await Promise.all(imagePromises);
+          const skuToShopifyImageMap = new Map(
+            shopifyImages.map(img => [img.sku, img.image_url])
+          );
+          
+          // Apply Shopify images
+          enrichedItems = enrichedItems.map(item => ({
+            ...item,
+            image_url: item.image_url || skuToShopifyImageMap.get(item.sku) || null
+          }));
+        }
+        
+        // Final fallback: query product_variants (only if still no image)
+        const itemsStillWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
+        if (itemsStillWithoutImages.length > 0) {
+          console.log(`⚠️ ${itemsStillWithoutImages.length} items still without images, using local fallback...`);
+          const skus = itemsStillWithoutImages.map(item => item.sku).filter((sku): sku is string => Boolean(sku));
+          
           const variantResult = await supabase
             .from('product_variants')
             .select('sku_variant, products(image_url)')
