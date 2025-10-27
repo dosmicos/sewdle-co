@@ -261,16 +261,21 @@ export const usePickingOrders = () => {
       });
 
       // Special filter for "No preparados" (pending)
-      // Must have "Confirmado" tag AND NOT have "EMPACADO" tag
+      // Must have "Confirmado" tag AND NOT have "EMPACADO" or "Empacado" tag
       if (filters?.status === 'pending') {
         ordersData = ordersData.filter((order: any) => {
-          const tags = (order.shopify_order?.tags || '').toLowerCase();
+          const tags = (order.shopify_order?.tags || '').toLowerCase().trim();
           
+          // Must have "confirmado"
           const hasConfirmado = tags.includes('confirmado');
+          
+          // Must NOT have "empacado" (catches both "EMPACADO" and "Empacado")
           const hasEmpacado = tags.includes('empacado');
           
           return hasConfirmado && !hasEmpacado;
         });
+        
+        logger.info(`[PickingOrders] Filtered "No preparados": ${ordersData.length} orders with "Confirmado" but without "EMPACADO"`);
       }
 
       logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {

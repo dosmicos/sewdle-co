@@ -112,7 +112,8 @@ const PickingPackingPage = () => {
     total: totalCount,
     pending: orders.filter(o => {
       if (o.operational_status !== 'pending') return false;
-      const tags = (o.shopify_order?.tags || '').toLowerCase();
+      const tags = (o.shopify_order?.tags || '').toLowerCase().trim();
+      // Must have "confirmado" AND NOT have "empacado"
       return tags.includes('confirmado') && !tags.includes('empacado');
     }).length,
     picking: orders.filter(o => o.operational_status === 'picking').length,
