@@ -58,9 +58,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const order = orders.find(o => o.id === orderId);
-  const effectiveOrder = (localOrder && localOrder.shopify_order?.raw_data) 
-    ? localOrder 
-    : order || localOrder;
+  const effectiveOrder = localOrder || order;
 
   // Refetch order function (reusable)
   const refetchOrder = async () => {
