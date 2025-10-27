@@ -316,7 +316,7 @@ export const usePickingOrders = () => {
           pending: 'PENDIENTE',
           picking: 'PICKING_EN_PROCESO',
           packing: 'EMPACANDO',
-          ready_to_ship: 'LISTO_PARA_ENVIO',
+          ready_to_ship: 'EMPACADO',
           shipped: 'ENVIADO'
         };
 
@@ -331,17 +331,34 @@ export const usePickingOrders = () => {
     }
   };
 
-  const updateShopifyTags = async (shopifyOrderId: number, tags: string[]) => {
+  const updateShopifyTags = async (shopifyOrderId: number, newTags: string[]) => {
     try {
+      // 1. Obtener etiquetas existentes del pedido
+      const order = orders.find(o => o.shopify_order_id === shopifyOrderId);
+      const existingTags = order?.shopify_order?.tags 
+        ? order.shopify_order.tags.split(',').map(t => t.trim()).filter(Boolean)
+        : [];
+      
+      // 2. Combinar con nuevas etiquetas (sin duplicados)
+      const allTags = [...new Set([...existingTags, ...newTags])];
+      
+      // 3. Actualizar en Shopify
       const { error } = await supabase.functions.invoke('update-shopify-order', {
         body: {
           orderId: shopifyOrderId,
           action: 'update_tags',
-          data: { tags }
+          data: { tags: allTags }
         }
       });
 
       if (error) throw error;
+      
+      // 4. Actualizar localmente la orden de Shopify en nuestra DB
+      await supabase
+        .from('shopify_orders')
+        .update({ tags: allTags.join(', ') })
+        .eq('shopify_order_id', shopifyOrderId);
+        
     } catch (error: any) {
       console.error('Error updating Shopify tags:', error);
       // Don't throw - tags are supplementary

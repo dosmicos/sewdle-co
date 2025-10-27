@@ -186,11 +186,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const handleStatusChange = async (newStatus: OperationalStatus) => {
     setUpdatingStatus(true);
     
-    // Optimistic update - instant UI feedback
+    // Optimistic update - instant UI feedback with new tag
     if (effectiveOrder) {
+      const statusTagMap = {
+        pending: 'PENDIENTE',
+        picking: 'PICKING_EN_PROCESO',
+        packing: 'EMPACANDO',
+        ready_to_ship: 'EMPACADO',
+        shipped: 'ENVIADO'
+      };
+      
+      const existingTags = effectiveOrder.shopify_order?.tags || '';
+      const existingTagsArray = existingTags.split(',').map(t => t.trim()).filter(Boolean);
+      const newTag = statusTagMap[newStatus];
+      
+      // Add new tag if not already present
+      const updatedTags = existingTagsArray.includes(newTag)
+        ? existingTags
+        : [...existingTagsArray, newTag].join(', ');
+      
       setLocalOrder({
         ...effectiveOrder,
-        operational_status: newStatus
+        operational_status: newStatus,
+        shopify_order: effectiveOrder.shopify_order ? {
+          ...effectiveOrder.shopify_order,
+          tags: updatedTags
+        } : undefined
       });
     }
     
