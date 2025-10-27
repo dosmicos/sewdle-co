@@ -685,32 +685,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </CardContent>
             </Card>
 
-            {/* Internal Notes (Editable) */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Notas Internas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Agregar notas internas..."
-                  rows={4}
-                />
-                <Button
-                  onClick={handleSaveNotes}
-                  disabled={isSaving}
-                  size="sm"
-                  className="w-full"
-                >
-                  {isSaving ? 'Guardando...' : 'Guardar Notas'}
-                </Button>
-              </CardContent>
-            </Card>
-
             {/* Shopify Tags */}
             <Card>
               <CardHeader>
