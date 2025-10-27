@@ -150,7 +150,7 @@ const PrintableOrderView = () => {
           }
 
           .printable-order {
-            padding: 5mm 5.5mm;
+            padding: 5mm 6.6mm;
             max-width: 100%;
           }
 
