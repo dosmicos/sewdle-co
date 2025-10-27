@@ -22,24 +22,66 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get organization's Shopify credentials
-    const { data: orderData, error: orderError } = await supabaseClient
-      .from('shopify_orders')
-      .select('organization_id, organizations(shopify_store_url, shopify_credentials)')
-      .eq('shopify_order_id', shopifyOrderId)
-      .single()
+    // Primero intentar obtener de variables de entorno
+    let rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+    let shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
 
-    if (orderError || !orderData) {
-      console.error('❌ Error fetching order:', orderError)
-      return new Response(
-        JSON.stringify({ error: 'Order not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // Variables para obtener organización si es necesario
+    let organizationId = null
+
+    // Si no hay credenciales en env, obtenerlas de la base de datos
+    if (!rawShopifyDomain || !shopifyToken) {
+      console.log('🔍 Obteniendo credenciales desde la base de datos...')
+      
+      const { data: orderData, error: orderError } = await supabaseClient
+        .from('shopify_orders')
+        .select('organization_id, organizations(shopify_store_url, shopify_credentials)')
+        .eq('shopify_order_id', shopifyOrderId)
+        .single()
+
+      if (orderError || !orderData) {
+        console.error('❌ Error fetching order:', orderError)
+        return new Response(
+          JSON.stringify({ error: 'Order not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const { organizations } = orderData as any
+      organizationId = orderData.organization_id
+      
+      if (organizations.shopify_store_url && organizations.shopify_credentials?.access_token) {
+        const url = new URL(organizations.shopify_store_url)
+        rawShopifyDomain = url.hostname.replace('.myshopify.com', '')
+        shopifyToken = organizations.shopify_credentials.access_token
+        console.log('✅ Credenciales obtenidas de la organización')
+      }
+    } else {
+      console.log('✅ Usando credenciales de variables de entorno')
+      
+      // Aún necesitamos obtener el organization_id para verificar la orden
+      const { data: orderData, error: orderError } = await supabaseClient
+        .from('shopify_orders')
+        .select('organization_id')
+        .eq('shopify_order_id', shopifyOrderId)
+        .single()
+
+      if (orderError || !orderData) {
+        console.error('❌ Error fetching order:', orderError)
+        return new Response(
+          JSON.stringify({ error: 'Order not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      organizationId = orderData.organization_id
     }
 
-    const { organizations } = orderData as any
-    const shopifyDomain = organizations.shopify_store_url?.replace('https://', '')
-    const accessToken = organizations.shopify_credentials?.access_token
+    // Normalizar el dominio de Shopify
+    const shopifyDomain = rawShopifyDomain?.includes('.myshopify.com') 
+      ? rawShopifyDomain
+      : rawShopifyDomain + '.myshopify.com'
+    const accessToken = shopifyToken
 
     if (!shopifyDomain || !accessToken) {
       console.error('❌ Missing Shopify credentials')
@@ -48,6 +90,10 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log(`📝 Updating note for order ${shopifyOrderId}`)
+    console.log('Domain:', shopifyDomain)
+    console.log('Token present:', accessToken ? 'Yes' : 'No')
 
     console.log(`📝 Updating note for order ${shopifyOrderId} in Shopify...`)
 
