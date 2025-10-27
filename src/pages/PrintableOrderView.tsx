@@ -82,7 +82,7 @@ const PrintableOrderView = () => {
           src={dosmicosLogo} 
           alt="Dosmicos" 
           className="logo-image mx-auto mb-0.5"
-          style={{ maxWidth: '120px', height: 'auto' }}
+          style={{ maxWidth: '144px', height: 'auto' }}
         />
       </div>
 
@@ -101,7 +101,7 @@ const PrintableOrderView = () => {
       {/* Shipping Address */}
       <div className="mb-1.5">
         <h2 className="text-sm font-semibold mb-0.5">ENVÍE A:</h2>
-        <div className="text-xs space-y-0.5">
+        <div className="space-y-0.5" style={{ fontSize: '0.7875rem' }}>
           <p className="font-medium">{shippingAddress?.name || `${order.customer_first_name} ${order.customer_last_name}`}</p>
           {shippingAddress?.company && <p>{shippingAddress.company}</p>}
           {shippingAddress?.address1 && <p>{shippingAddress.address1}</p>}
@@ -150,12 +150,12 @@ const PrintableOrderView = () => {
           }
 
           .printable-order {
-            padding: 5mm;
+            padding: 5mm 5.5mm;
             max-width: 100%;
           }
 
           .logo-image {
-            max-width: 24.75mm !important;
+            max-width: 29.7mm !important;
             height: auto !important;
           }
 
