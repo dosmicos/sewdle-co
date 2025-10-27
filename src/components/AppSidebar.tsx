@@ -62,7 +62,8 @@ const AppSidebar = () => {
     { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
     { title: 'Órdenes', url: '/orders', icon: FileText },
     { title: 'Talleres', url: '/workshops', icon: Building2 },
-    { title: 'Entregas', url: '/deliveries', icon: Truck }
+    { title: 'Entregas', url: '/deliveries', icon: Truck },
+    { title: 'Picking & Packing', url: '/picking-packing', icon: PackageSearch }
   ];
   
   // Determinar qué menú mostrar según el rol

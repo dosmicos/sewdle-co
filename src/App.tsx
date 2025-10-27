@@ -135,17 +135,6 @@ const AppContent = () => {
       <Route path="/login" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
       
-      {/* Picking & Packing - Independent Routes */}
-      <Route path="/picking-packing" element={
-        <ProtectedRoute>
-          <PickingPackingPage />
-        </ProtectedRoute>
-      } />
-      <Route path="/picking-packing/print/:orderId" element={
-        <ProtectedRoute>
-          <PrintableOrderView />
-        </ProtectedRoute>
-      } />
       
       <Route path="/" element={
         <ProtectedRoute>
@@ -230,6 +219,18 @@ const AppContent = () => {
         } />
         
         <Route path="okrs/*" element={<OKRsPage />} />
+        
+        <Route path="picking-packing" element={
+          <PermissionRoute module="picking y packing" action="view">
+            <PickingPackingPage />
+          </PermissionRoute>
+        } />
+        
+        <Route path="picking-packing/print/:orderId" element={
+          <PermissionRoute module="picking y packing" action="view">
+            <PrintableOrderView />
+          </PermissionRoute>
+        } />
       </Route>
       
       <Route path="*" element={<NotFound />} />
