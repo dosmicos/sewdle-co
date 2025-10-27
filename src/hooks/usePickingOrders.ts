@@ -261,10 +261,12 @@ export const usePickingOrders = () => {
       });
 
       // Special filter for "No preparados" (pending)
-      // Must have "Confirmado" tag AND NOT have "EMPACADO" or "Empacado" tag
+      // Must have "Confirmado" tag AND NOT have "EMPACADO" tag
+      // AND NOT be fulfilled in Shopify
       if (filters?.status === 'pending') {
         ordersData = ordersData.filter((order: any) => {
           const tags = (order.shopify_order?.tags || '').toLowerCase().trim();
+          const fulfillmentStatus = order.shopify_order?.fulfillment_status;
           
           // Must have "confirmado"
           const hasConfirmado = tags.includes('confirmado');
@@ -272,10 +274,13 @@ export const usePickingOrders = () => {
           // Must NOT have "empacado" (catches both "EMPACADO" and "Empacado")
           const hasEmpacado = tags.includes('empacado');
           
-          return hasConfirmado && !hasEmpacado;
+          // Must NOT be fulfilled in Shopify (already prepared/shipped)
+          const isFulfilled = fulfillmentStatus === 'fulfilled';
+          
+          return hasConfirmado && !hasEmpacado && !isFulfilled;
         });
         
-        logger.info(`[PickingOrders] Filtered "No preparados": ${ordersData.length} orders with "Confirmado" but without "EMPACADO"`);
+        logger.info(`[PickingOrders] Filtered "No preparados": ${ordersData.length} orders with "Confirmado" but without "EMPACADO" and not fulfilled`);
       }
 
       logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {
