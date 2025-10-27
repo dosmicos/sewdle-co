@@ -625,12 +625,31 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </Card>
             )}
 
-            {/* Notes */}
+            {/* Shopify Notes (Read-only) */}
+            {effectiveOrder.shopify_order?.note && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Notas del Cliente (Shopify)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-3 bg-muted/50 rounded-lg border border-muted">
+                    <p className="text-sm whitespace-pre-wrap text-foreground/90">
+                      {effectiveOrder.shopify_order.note}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Internal Notes (Editable) */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Notas
+                  Notas Internas
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
