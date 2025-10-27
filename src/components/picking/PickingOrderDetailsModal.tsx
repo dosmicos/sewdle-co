@@ -52,9 +52,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   allOrderIds,
   onNavigate
 }) => {
-  const { orders, updateOrderStatus, updateOrderNotes } = usePickingOrders();
+  const { orders, updateOrderStatus, updateOrderNotes, updateShopifyNote } = usePickingOrders();
   const [notes, setNotes] = useState('');
+  const [shopifyNote, setShopifyNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingShopifyNote, setIsSavingShopifyNote] = useState(false);
   const [lineItems, setLineItems] = useState<ShopifyLineItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [localOrder, setLocalOrder] = useState<PickingOrder | null>(null);
@@ -139,12 +141,18 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     if (effectiveOrder?.internal_notes) {
       setNotes(effectiveOrder.internal_notes);
     }
+    if (effectiveOrder?.shopify_order?.note) {
+      setShopifyNote(effectiveOrder.shopify_order.note);
+    } else {
+      setShopifyNote('');
+    }
   }, [effectiveOrder]);
 
   // Reset local state when orderId changes
   useEffect(() => {
     setLocalOrder(null);
     setNotes('');
+    setShopifyNote('');
     setLineItems([]);
     setLoadingItems(true);
   }, [orderId]);
@@ -309,6 +317,31 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setIsSaving(true);
     await updateOrderNotes(orderId, notes);
     setIsSaving(false);
+  };
+
+  const handleSaveShopifyNote = async () => {
+    if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
+    
+    setIsSavingShopifyNote(true);
+    try {
+      await updateShopifyNote(effectiveOrder.shopify_order.shopify_order_id.toString(), shopifyNote);
+      
+      // Update local state optimistically
+      setLocalOrder(prev => prev ? {
+        ...prev,
+        shopify_order: {
+          ...prev.shopify_order,
+          note: shopifyNote
+        }
+      } : prev);
+      
+      // Re-fetch to confirm
+      await refetchOrder();
+    } catch (error) {
+      console.error('Error saving Shopify note:', error);
+    } finally {
+      setIsSavingShopifyNote(false);
+    }
   };
 
   const handlePrint = () => {
@@ -625,24 +658,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </Card>
             )}
 
-            {/* Shopify Notes (Read-only) */}
-            {effectiveOrder.shopify_order?.note && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Notas del Cliente (Shopify)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-3 bg-muted/50 rounded-lg border border-muted">
-                    <p className="text-sm whitespace-pre-wrap text-foreground/90">
-                      {effectiveOrder.shopify_order.note}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Shopify Notes (Editable) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Notas del Cliente (Shopify)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Textarea
+                  value={shopifyNote}
+                  onChange={(e) => setShopifyNote(e.target.value)}
+                  placeholder="Agregar notas del cliente..."
+                  rows={6}
+                  className="text-sm"
+                />
+                <Button
+                  onClick={handleSaveShopifyNote}
+                  disabled={isSavingShopifyNote}
+                  size="sm"
+                  className="w-full"
+                >
+                  {isSavingShopifyNote ? 'Guardando en Shopify...' : 'Guardar y Sincronizar con Shopify'}
+                </Button>
+              </CardContent>
+            </Card>
 
             {/* Internal Notes (Editable) */}
             <Card>

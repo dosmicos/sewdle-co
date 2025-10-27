@@ -400,6 +400,25 @@ export const usePickingOrders = () => {
     }
   };
 
+  const updateShopifyNote = async (shopifyOrderId: string, note: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('update-shopify-order-note', {
+        body: { shopifyOrderId, note }
+      });
+
+      if (error) throw error;
+
+      logger.info('Shopify note updated', { shopifyOrderId });
+      
+      toast.success('Nota sincronizada con Shopify');
+      await fetchOrders();
+    } catch (error: any) {
+      console.error('Error updating Shopify note:', error);
+      toast.error('Error al actualizar nota en Shopify');
+      throw error;
+    }
+  };
+
   const syncOrderToShopify = async (pickingOrderId: string) => {
     try {
       const order = orders.find(o => o.id === pickingOrderId);
@@ -464,6 +483,7 @@ export const usePickingOrders = () => {
     fetchOrders,
     updateOrderStatus,
     updateOrderNotes,
+    updateShopifyNote,
     syncOrderToShopify,
     initializePickingOrder,
   };
