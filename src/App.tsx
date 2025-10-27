@@ -219,19 +219,24 @@ const AppContent = () => {
         } />
         
         <Route path="okrs/*" element={<OKRsPage />} />
-        
-        <Route path="picking-packing" element={
+      </Route>
+      
+      {/* Picking & Packing - Layout independiente sin sidebar */}
+      <Route path="picking-packing" element={
+        <ProtectedRoute>
           <PermissionRoute module="picking y packing" action="view">
             <PickingPackingPage />
           </PermissionRoute>
-        } />
-        
-        <Route path="picking-packing/print/:orderId" element={
+        </ProtectedRoute>
+      } />
+      
+      <Route path="picking-packing/print/:orderId" element={
+        <ProtectedRoute>
           <PermissionRoute module="picking y packing" action="view">
             <PrintableOrderView />
           </PermissionRoute>
-        } />
-      </Route>
+        </ProtectedRoute>
+      } />
       
       <Route path="*" element={<NotFound />} />
     </Routes>
