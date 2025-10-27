@@ -82,7 +82,7 @@ const PrintableOrderView = () => {
           src={dosmicosLogo} 
           alt="Dosmicos" 
           className="logo-image mx-auto mb-0.5"
-          style={{ maxWidth: '80px', height: 'auto' }}
+          style={{ maxWidth: '120px', height: 'auto' }}
         />
       </div>
 
@@ -155,7 +155,7 @@ const PrintableOrderView = () => {
           }
 
           .logo-image {
-            max-width: 16.5mm !important;
+            max-width: 24.75mm !important;
             height: auto !important;
           }
 
