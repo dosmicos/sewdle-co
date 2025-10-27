@@ -110,7 +110,11 @@ const PickingPackingPage = () => {
   // In a production app, you'd want separate queries for global stats
   const stats = {
     total: totalCount,
-    pending: orders.filter(o => o.operational_status === 'pending').length,
+    pending: orders.filter(o => {
+      if (o.operational_status !== 'pending') return false;
+      const tags = (o.shopify_order?.tags || '').toLowerCase();
+      return tags.includes('confirmado') && !tags.includes('empacado');
+    }).length,
     picking: orders.filter(o => o.operational_status === 'picking').length,
     packing: orders.filter(o => o.operational_status === 'packing').length,
     ready: orders.filter(o => o.operational_status === 'ready_to_ship').length,

@@ -247,7 +247,7 @@ export const usePickingOrders = () => {
       }
 
       // Map orders and apply tag-based status mapping
-      const ordersData = data.map((order: any) => {
+      let ordersData = data.map((order: any) => {
         const mappedStatus = getOperationalStatusFromTags(
           order.shopify_order?.tags,
           order.operational_status
@@ -259,6 +259,19 @@ export const usePickingOrders = () => {
           line_items: []
         };
       });
+
+      // Special filter for "No preparados" (pending)
+      // Must have "Confirmado" tag AND NOT have "EMPACADO" tag
+      if (filters?.status === 'pending') {
+        ordersData = ordersData.filter((order: any) => {
+          const tags = (order.shopify_order?.tags || '').toLowerCase();
+          
+          const hasConfirmado = tags.includes('confirmado');
+          const hasEmpacado = tags.includes('empacado');
+          
+          return hasConfirmado && !hasEmpacado;
+        });
+      }
 
       logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {
         count: ordersData.length,
