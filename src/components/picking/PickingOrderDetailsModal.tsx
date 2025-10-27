@@ -151,28 +151,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   // Fetch line items separately
   useEffect(() => {
-    // Helper function to fetch images from Shopify API
+    // Helper function to fetch images from Shopify API (optimized)
     const fetchImageFromShopify = async (productId: number, variantId: number): Promise<string | null> => {
       try {
-        const { data, error } = await supabase.functions.invoke('shopify-products', {
-          body: { searchTerm: '' }
+        const { data, error } = await supabase.functions.invoke('get-shopify-variant-image', {
+          body: { product_id: productId, variant_id: variantId }
         });
         
-        if (error || !data?.products) return null;
-        
-        // Find the specific product and variant
-        const product = data.products.find((p: any) => p.id === productId);
-        if (!product) return null;
-        
-        // Try to get variant-specific image
-        const variant = product.variants?.find((v: any) => v.id === variantId);
-        if (variant?.image_id) {
-          const variantImage = product.images?.find((img: any) => img.id === variant.image_id);
-          if (variantImage?.src) return variantImage.src;
+        if (error) {
+          console.error('Error fetching image:', error);
+          return null;
         }
         
-        // Fallback to product main image
-        return product.image?.src || product.images?.[0]?.src || null;
+        return data?.image_url || null;
       } catch (error) {
         console.error('Error fetching image from Shopify:', error);
         return null;
