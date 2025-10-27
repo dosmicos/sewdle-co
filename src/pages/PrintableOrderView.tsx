@@ -75,7 +75,7 @@ const PrintableOrderView = () => {
     : null;
 
   return (
-    <div className="printable-order max-w-3xl mx-auto p-4 bg-white">
+    <div className="printable-order mx-auto p-4 bg-white">
       {/* Logo */}
       <div className="text-center mb-3">
         <img 
@@ -197,10 +197,18 @@ const PrintableOrderView = () => {
         }
 
         @media screen {
+          body {
+            background-color: #f3f4f6;
+            min-height: 100vh;
+          }
+          
           .printable-order {
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin: 2rem auto;
             max-width: 100mm;
+            width: 100mm;
+            min-height: 100mm;
+            background: white;
           }
         }
       `}</style>
