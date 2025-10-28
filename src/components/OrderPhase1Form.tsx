@@ -80,7 +80,6 @@ const OrderPhase1Form: React.FC<OrderPhase1FormProps> = ({
   };
   
   // Check if special fields should be visible (using includes for partial match)
-  const shouldShowRuanaFields = formData.mainProduct.toLowerCase().includes('ruana');
   const shouldShowChaquetaFields = formData.mainProduct.toLowerCase().includes('chaqueta');
   const shouldShowSleepingFields = formData.mainProduct.toLowerCase().includes('sleeping');
 
@@ -251,51 +250,6 @@ const OrderPhase1Form: React.FC<OrderPhase1FormProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Conditional Materials - Ruana */}
-          {shouldShowRuanaFields && (
-            <div className="space-y-4 border-b border-border pb-6">
-              <h3 className="text-lg font-semibold">Insumos Especiales - Ruana</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="toeCapQuantity">Cantidad de Punteras</Label>
-                  <Input
-                    id="toeCapQuantity"
-                    type="number"
-                    min="0"
-                    value={formData.toeCapQuantity || ''}
-                    onChange={(e) => updateField('toeCapQuantity', parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="waddingMeters">Metraje de Guata (m)</Label>
-                  <Input
-                    id="waddingMeters"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.waddingMeters || ''}
-                    onChange={(e) => updateField('waddingMeters', parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2 pt-8">
-                  <Checkbox
-                    id="embroideryCloth"
-                    checked={formData.embroideryCloth}
-                    onCheckedChange={(checked) => updateField('embroideryCloth', checked as boolean)}
-                  />
-                  <Label htmlFor="embroideryCloth" className="cursor-pointer">
-                    Pañolense para Bordados
-                  </Label>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Conditional Materials - Chaqueta */}
           {shouldShowChaquetaFields && (
