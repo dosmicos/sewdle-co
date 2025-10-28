@@ -57,7 +57,8 @@ export const useOrderTimeline = (orderId: string) => {
   const updatePhase = async (
     phaseType: PhaseType,
     completed: boolean,
-    notes?: string
+    notes?: string,
+    formData?: any
   ) => {
     if (!orderId || !currentOrganization) return;
 
@@ -70,28 +71,40 @@ export const useOrderTimeline = (orderId: string) => {
 
       if (existingPhase) {
         // Update existing phase
+        const updateData: any = {
+          completed_at: completed ? new Date().toISOString() : null,
+          completed_by: completed ? user.user.id : null,
+          notes: notes || null,
+        };
+        
+        if (formData) {
+          updateData.form_data = formData;
+        }
+        
         const { error } = await supabase
           .from('order_timeline_phases')
-          .update({
-            completed_at: completed ? new Date().toISOString() : null,
-            completed_by: completed ? user.user.id : null,
-            notes: notes || null,
-          })
+          .update(updateData)
           .eq('id', existingPhase.id);
 
         if (error) throw error;
       } else {
         // Create new phase
+        const insertData: any = {
+          order_id: orderId,
+          phase_type: phaseType,
+          completed_at: completed ? new Date().toISOString() : null,
+          completed_by: completed ? user.user.id : null,
+          notes: notes || null,
+          organization_id: currentOrganization.id,
+        };
+        
+        if (formData) {
+          insertData.form_data = formData;
+        }
+        
         const { error } = await supabase
           .from('order_timeline_phases')
-          .insert({
-            order_id: orderId,
-            phase_type: phaseType,
-            completed_at: completed ? new Date().toISOString() : null,
-            completed_by: completed ? user.user.id : null,
-            notes: notes || null,
-            organization_id: currentOrganization.id,
-          });
+          .insert(insertData);
 
         if (error) throw error;
       }

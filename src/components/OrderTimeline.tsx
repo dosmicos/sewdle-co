@@ -90,8 +90,8 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) =>
     }
   };
 
-  const handlePhase1Complete = async () => {
-    await updatePhase('order_received', true, 'Fase 1 completada con registro de materiales');
+  const handlePhase1Complete = async (formData: any) => {
+    await updatePhase('order_received', true, undefined, formData);
     setShowPhase1Form(false);
     refetch();
   };

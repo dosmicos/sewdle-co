@@ -1242,6 +1242,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          form_data: Json | null
           id: string
           notes: string | null
           order_id: string
@@ -1253,6 +1254,7 @@ export type Database = {
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
+          form_data?: Json | null
           id?: string
           notes?: string | null
           order_id: string
@@ -1264,6 +1266,7 @@ export type Database = {
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
+          form_data?: Json | null
           id?: string
           notes?: string | null
           order_id?: string
