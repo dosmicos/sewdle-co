@@ -79,10 +79,10 @@ const OrderPhase1Form: React.FC<OrderPhase1FormProps> = ({
     }
   };
   
-  // Check if special fields should be visible
-  const shouldShowRuanaFields = formData.mainProduct === 'Ruana';
-  const shouldShowChaquetaFields = formData.mainProduct === 'Chaqueta';
-  const shouldShowSleepingFields = formData.mainProduct === 'Sleeping';
+  // Check if special fields should be visible (using includes for partial match)
+  const shouldShowRuanaFields = formData.mainProduct.toLowerCase().includes('ruana');
+  const shouldShowChaquetaFields = formData.mainProduct.toLowerCase().includes('chaqueta');
+  const shouldShowSleepingFields = formData.mainProduct.toLowerCase().includes('sleeping');
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
