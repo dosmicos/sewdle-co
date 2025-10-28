@@ -11,12 +11,14 @@ import {
   Truck, 
   Send, 
   ArrowLeft,
-  CheckCheck
+  CheckCheck,
+  Scissors
 } from 'lucide-react';
 import { useOrderTimeline, PhaseType } from '@/hooks/useOrderTimeline';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { usePermissions } from '@/hooks/usePermissions';
 import OrderPhase1Form from '@/components/OrderPhase1Form';
+import OrderPhase2Form from '@/components/OrderPhase2Form';
 
 interface OrderTimelineProps {
   orderId: string;
@@ -29,6 +31,12 @@ const phaseConfig = [
     label: 'Fase 1: Recepción de OP, Optimización y Registro de Insumos',
     icon: Package,
     description: 'Especificación del producto y registro de cantidades de insumos despachados al taller de Corte y Confección',
+  },
+  {
+    type: 'cutting_sewing' as PhaseType,
+    label: 'Fase 2: Corte y Confección (Taller Interno)',
+    icon: Scissors,
+    description: 'Manufactura física del producto en taller de corte y costura',
   },
   {
     type: 'supplies_packed' as PhaseType,
@@ -62,6 +70,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) =>
   const [editingPhase, setEditingPhase] = useState<PhaseType | null>(null);
   const [notes, setNotes] = useState('');
   const [showPhase1Form, setShowPhase1Form] = useState(false);
+  const [showPhase2Form, setShowPhase2Form] = useState(false);
 
   const canEdit = hasPermission('orders', 'edit');
 
@@ -79,6 +88,12 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) =>
       return;
     }
     
+    // Para la fase 2, mostrar el formulario en lugar de toggle directo
+    if (phaseType === 'cutting_sewing' && !isCompleted) {
+      setShowPhase2Form(!showPhase2Form);
+      return;
+    }
+    
     if (editingPhase === phaseType) {
       // Save with notes
       await updatePhase(phaseType, !isCompleted, notes);
@@ -93,6 +108,12 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) =>
   const handlePhase1Complete = async (formData: any) => {
     await updatePhase('order_received', true, undefined, formData);
     setShowPhase1Form(false);
+    refetch();
+  };
+
+  const handlePhase2Complete = async (formData: any) => {
+    await updatePhase('cutting_sewing', true, undefined, formData);
+    setShowPhase2Form(false);
     refetch();
   };
 
@@ -223,12 +244,14 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) =>
                             variant={isCompleted ? 'outline' : 'default'}
                             onClick={() => handleTogglePhase(phase.type)}
                           >
-                            {phase.type === 'order_received' && !isCompleted 
-                              ? (showPhase1Form ? 'Ocultar Formulario' : 'Iniciar Fase 1')
+                            {(phase.type === 'order_received' || phase.type === 'cutting_sewing') && !isCompleted 
+                              ? ((phase.type === 'order_received' && showPhase1Form) || (phase.type === 'cutting_sewing' && showPhase2Form) 
+                                  ? 'Ocultar Formulario' 
+                                  : `Iniciar ${phase.type === 'order_received' ? 'Fase 1' : 'Fase 2'}`)
                               : (isCompleted ? 'Marcar Incompleta' : 'Marcar Completa')
                             }
                           </Button>
-                          {!isCompleted && phase.type !== 'order_received' && (
+                          {!isCompleted && phase.type !== 'order_received' && phase.type !== 'cutting_sewing' && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -254,6 +277,14 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) =>
                           orderId={orderId}
                           workshopId={workshopId}
                           onPhaseComplete={handlePhase1Complete}
+                        />
+                      )}
+
+                      {/* Formulario expandido para Fase 2 */}
+                      {phase.type === 'cutting_sewing' && showPhase2Form && !isCompleted && (
+                        <OrderPhase2Form
+                          orderId={orderId}
+                          onPhaseComplete={handlePhase2Complete}
                         />
                       )}
                     </div>

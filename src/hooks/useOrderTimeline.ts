@@ -5,6 +5,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 
 export type PhaseType = 
   | 'order_received'
+  | 'cutting_sewing'
   | 'supplies_packed'
   | 'caps_sent_embroidery'
   | 'embroidered_caps_received'
