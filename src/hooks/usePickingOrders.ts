@@ -534,11 +534,17 @@ export const usePickingOrders = () => {
     // 1. Obtener todas las órdenes que cumplen el criterio
     const { data: ordersToUpdate, error: fetchError } = await supabase
       .from('picking_packing_orders')
-      .select('id, shopify_order_id, operational_status, created_at')
+      .select(`
+        id, 
+        shopify_order_id, 
+        operational_status, 
+        created_at,
+        shopify_order:shopify_orders!inner(created_at_shopify)
+      `)
       .eq('organization_id', currentOrganization.id)
-      .lt('created_at', beforeDate)
+      .lt('shopify_order.created_at_shopify', beforeDate)
       .in('operational_status', ['pending', 'picking'])
-      .order('created_at', { ascending: true });
+      .order('shopify_order.created_at_shopify', { ascending: true });
 
     if (fetchError) {
       console.error('❌ Error fetching orders:', fetchError);
