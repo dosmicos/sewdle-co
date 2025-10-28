@@ -16,6 +16,7 @@ import { useOrderMaterialConsumptions } from '@/hooks/useOrderMaterialConsumptio
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import MaterialConsumptionEditForm from '@/components/supplies/MaterialConsumptionEditForm';
+import OrderTimeline from '@/components/OrderTimeline';
 
 const OrderDetailsPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -257,9 +258,10 @@ const OrderDetailsPage = () => {
 
       {/* Content */}
       <Tabs defaultValue="deliveries" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="deliveries">Seguimiento de Entregas</TabsTrigger>
           <TabsTrigger value="details">Detalles de la Orden</TabsTrigger>
+          <TabsTrigger value="timeline">Historial de la Orden</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-6">
@@ -509,6 +511,10 @@ const OrderDetailsPage = () => {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <OrderTimeline orderId={order.id} />
         </TabsContent>
 
         <TabsContent value="deliveries">
