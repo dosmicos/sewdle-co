@@ -123,11 +123,13 @@ const OrderPhase2Form: React.FC<OrderPhase2FormProps> = ({
               </h4>
             </div>
             <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
-              Esta fase comienza la manufactura física del producto. Aquí medimos el tiempo que toma procesar la orden dentro de nuestro taller de corte y costura.
+              Esta fase comienza la manufactura física del producto. Aquí medimos el tiempo que toma procesar la orden dentro de nuestro taller de corte y costura. Por favor, asigne el taller responsable.
             </p>
             <div className="space-y-2 text-sm text-purple-700 dark:text-purple-300">
-              <p><strong>⏱️ Medición de Eficiencia:</strong> El tiempo transcurrido hasta completar esta fase será registrado como el <strong>Tiempo de Corte y Confección</strong>, un KPI vital para la evaluación de la eficiencia operativa interna.</p>
-              <p><strong>📦 Siguiente Paso:</strong> Una vez que las piezas estén listas para ser bordadas externamente, complete esta fase para pasar al despacho (Fase 3).</p>
+              <p><strong>🕐 Inicio:</strong> Al iniciar esta fase, se registrará la hora de comienzo del procesamiento por parte del taller asignado.</p>
+              <p><strong>👥 Responsabilidad:</strong> Asigne el Taller de Corte/Confección responsable de ejecutar el trabajo.</p>
+              <p><strong>⏱️ Medición de Eficiencia:</strong> El tiempo transcurrido hasta el botón 'Completar Fase 2' será registrado como el <strong>Tiempo de Corte y Confección</strong>, un KPI vital para la evaluación de la eficiencia operativa interna.</p>
+              <p><strong>➡️ Siguiente Paso:</strong> Una vez que las capotas estén listas para ser bordadas externamente, haga clic en 'Completar Fase 2' para pasar al despacho (Fase 3).</p>
             </div>
           </div>
 
