@@ -34,11 +34,18 @@ serve(async (req) => {
     switch (action) {
       case 'update_tags':
         console.log(`🏷️ Updating tags for order ${orderId}`)
-        console.log(`   Previous tags: ${data.previousTags || 'none'}`)
-        console.log(`   New tags: ${data.tags?.join(', ') || 'none'}`)
+        console.log(`   Tags received (type: ${typeof data.tags}):`, data.tags)
+        
+        // Asegurar que tags sea siempre un string
+        const tagsString = Array.isArray(data.tags) 
+          ? data.tags.join(', ')  // Si viene como array (legacy)
+          : (data.tags || '');    // Si viene como string (nuevo formato)
+        
+        console.log(`   Tags to send to Shopify:`, tagsString)
+        
         updatePayload = {
           order: {
-            tags: data.tags?.join(', ') || ''
+            tags: tagsString
           }
         }
         response = await fetch(`${shopifyApiUrl}.json`, {

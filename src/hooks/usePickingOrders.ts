@@ -379,11 +379,12 @@ export const usePickingOrders = () => {
       const allTags = [...new Set([...existingTags, ...newTags])];
       
       // 3. Actualizar en Shopify primero
+      // IMPORTANTE: Convertir array a string antes de enviar
       const { error: shopifyError } = await supabase.functions.invoke('update-shopify-order', {
         body: {
           orderId: shopifyOrderId,
           action: 'update_tags',
-          data: { tags: allTags }
+          data: { tags: allTags.join(', ') }
         }
       });
 
