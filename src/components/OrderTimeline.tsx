@@ -16,17 +16,19 @@ import {
 import { useOrderTimeline, PhaseType } from '@/hooks/useOrderTimeline';
 import { formatDateSafe } from '@/lib/dateUtils';
 import { usePermissions } from '@/hooks/usePermissions';
+import OrderPhase1Form from '@/components/OrderPhase1Form';
 
 interface OrderTimelineProps {
   orderId: string;
+  workshopId?: string;
 }
 
 const phaseConfig = [
   {
     type: 'order_received' as PhaseType,
-    label: 'Recepción de Orden de Producción',
+    label: 'Fase 1: Recepción de OP, Optimización y Registro de Insumos',
     icon: Package,
-    description: 'Orden recibida y registrada en el sistema',
+    description: 'Especificación del producto y registro de cantidades de insumos despachados al taller de Corte y Confección',
   },
   {
     type: 'supplies_packed' as PhaseType,
@@ -54,11 +56,12 @@ const phaseConfig = [
   },
 ];
 
-const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId }) => {
-  const { phases, loading, updatePhase } = useOrderTimeline(orderId);
+const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId, workshopId }) => {
+  const { phases, loading, updatePhase, refetch } = useOrderTimeline(orderId);
   const { hasPermission } = usePermissions();
   const [editingPhase, setEditingPhase] = useState<PhaseType | null>(null);
   const [notes, setNotes] = useState('');
+  const [showPhase1Form, setShowPhase1Form] = useState(false);
 
   const canEdit = hasPermission('orders', 'edit');
 
@@ -70,6 +73,12 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId }) => {
     const phaseData = getPhaseData(phaseType);
     const isCompleted = !!phaseData?.completed_at;
     
+    // Para la fase 1, mostrar el formulario en lugar de toggle directo
+    if (phaseType === 'order_received' && !isCompleted) {
+      setShowPhase1Form(!showPhase1Form);
+      return;
+    }
+    
     if (editingPhase === phaseType) {
       // Save with notes
       await updatePhase(phaseType, !isCompleted, notes);
@@ -79,6 +88,12 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId }) => {
       // Quick toggle without notes
       await updatePhase(phaseType, !isCompleted);
     }
+  };
+
+  const handlePhase1Complete = async () => {
+    await updatePhase('order_received', true, 'Fase 1 completada con registro de materiales');
+    setShowPhase1Form(false);
+    refetch();
   };
 
   const calculateDuration = (index: number): string | null => {
@@ -208,9 +223,12 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId }) => {
                             variant={isCompleted ? 'outline' : 'default'}
                             onClick={() => handleTogglePhase(phase.type)}
                           >
-                            {isCompleted ? 'Marcar Incompleta' : 'Marcar Completa'}
+                            {phase.type === 'order_received' && !isCompleted 
+                              ? (showPhase1Form ? 'Ocultar Formulario' : 'Iniciar Fase 1')
+                              : (isCompleted ? 'Marcar Incompleta' : 'Marcar Completa')
+                            }
                           </Button>
-                          {!isCompleted && (
+                          {!isCompleted && phase.type !== 'order_received' && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -228,6 +246,15 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orderId }) => {
                             </Button>
                           )}
                         </div>
+                      )}
+
+                      {/* Formulario expandido para Fase 1 */}
+                      {phase.type === 'order_received' && showPhase1Form && !isCompleted && (
+                        <OrderPhase1Form
+                          orderId={orderId}
+                          workshopId={workshopId}
+                          onPhaseComplete={handlePhase1Complete}
+                        />
                       )}
                     </div>
                   </div>

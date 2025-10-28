@@ -514,7 +514,7 @@ const OrderDetailsPage = () => {
         </TabsContent>
 
         <TabsContent value="timeline">
-          <OrderTimeline orderId={order.id} />
+          <OrderTimeline orderId={order.id} workshopId={order.workshop_id} />
         </TabsContent>
 
         <TabsContent value="deliveries">
