@@ -521,6 +521,92 @@ export const usePickingOrders = () => {
     return results;
   };
 
+  const bulkUpdateOrdersByDate = async (
+    beforeDate: string,
+    newStatus: OperationalStatus
+  ) => {
+    if (!currentOrganization?.id) {
+      throw new Error('No organization selected');
+    }
+
+    console.log(`🗓️ Actualizando órdenes antes de ${beforeDate} a estado: ${newStatus}`);
+
+    // 1. Obtener todas las órdenes que cumplen el criterio
+    const { data: ordersToUpdate, error: fetchError } = await supabase
+      .from('picking_packing_orders')
+      .select('id, shopify_order_id, operational_status, created_at')
+      .eq('organization_id', currentOrganization.id)
+      .lt('created_at', beforeDate)
+      .in('operational_status', ['pending', 'picking'])
+      .order('created_at', { ascending: true });
+
+    if (fetchError) {
+      console.error('❌ Error fetching orders:', fetchError);
+      throw fetchError;
+    }
+
+    if (!ordersToUpdate || ordersToUpdate.length === 0) {
+      console.log('ℹ️ No hay órdenes para actualizar con ese criterio');
+      toast.info('No hay órdenes para actualizar con ese criterio');
+      return { successful: [], failed: [], total: 0 };
+    }
+
+    console.log(`📦 Total de órdenes a procesar: ${ordersToUpdate.length}`);
+    toast.info(`Iniciando actualización de ${ordersToUpdate.length} órdenes...`);
+
+    const results = {
+      successful: [] as string[],
+      failed: [] as string[],
+      total: ordersToUpdate.length
+    };
+
+    // 2. Procesar en lotes de 5 para no saturar Shopify API
+    const batchSize = 5;
+    for (let i = 0; i < ordersToUpdate.length; i += batchSize) {
+      const batch = ordersToUpdate.slice(i, i + batchSize);
+      
+      const batchPromises = batch.map(async (order) => {
+        try {
+          await updateOrderStatus(order.id, newStatus);
+          results.successful.push(order.id);
+          console.log(`✅ Orden ${order.id} actualizada (${results.successful.length}/${ordersToUpdate.length})`);
+        } catch (error) {
+          console.error(`❌ Error actualizando orden ${order.id}:`, error);
+          results.failed.push(order.id);
+        }
+      });
+
+      await Promise.all(batchPromises);
+      
+      // Mostrar progreso
+      const processed = Math.min(i + batchSize, ordersToUpdate.length);
+      console.log(`📊 Progreso: ${processed}/${ordersToUpdate.length}`);
+      
+      // Toast de progreso cada 20 órdenes
+      if (processed % 20 === 0 || processed === ordersToUpdate.length) {
+        toast.info(`Procesando: ${processed}/${ordersToUpdate.length} órdenes`);
+      }
+    }
+
+    // Mostrar resultados finales
+    if (results.successful.length === results.total) {
+      toast.success(`✅ ${results.successful.length} órdenes actualizadas correctamente`);
+    } else if (results.successful.length > 0) {
+      toast.warning(
+        `⚠️ ${results.successful.length} órdenes actualizadas, ${results.failed.length} fallaron`
+      );
+    } else {
+      toast.error(`❌ Error al actualizar las órdenes`);
+    }
+
+    console.log('📊 Resultados finales:', results);
+    
+    // Refrescar lista
+    await fetchOrders();
+    
+    return results;
+  };
+
   const initializePickingOrder = async (shopifyOrderId: number) => {
     try {
       const { error } = await supabase
@@ -562,6 +648,7 @@ export const usePickingOrders = () => {
     fetchOrders,
     updateOrderStatus,
     bulkUpdateOrderStatus,
+    bulkUpdateOrdersByDate,
     updateOrderNotes,
     updateShopifyNote,
     syncOrderToShopify,
