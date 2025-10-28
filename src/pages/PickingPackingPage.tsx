@@ -64,7 +64,8 @@ const PickingPackingPage = () => {
     totalPages, 
     pageSize,
     fetchOrders,
-    bulkUpdateOrderStatus
+    bulkUpdateOrderStatus,
+    bulkUpdateOrdersByDate
   } = usePickingOrders();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<OperationalStatus | 'all'>('all');
@@ -143,6 +144,21 @@ const PickingPackingPage = () => {
     await bulkUpdateOrderStatus(orderIds, 'ready_to_ship');
   };
 
+  const handleBulkUpdateByDate = async () => {
+    const confirmed = window.confirm(
+      '⚠️ Esto actualizará TODAS las órdenes antes del 20 de Agosto 2025 a estado "EMPACADO".\n\n¿Deseas continuar?'
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      const results = await bulkUpdateOrdersByDate('2025-08-20', 'ready_to_ship');
+      console.log('✅ Actualización completada:', results);
+    } catch (error) {
+      console.error('❌ Error en actualización masiva:', error);
+    }
+  };
+
   const formatCurrency = (amount?: number, currency?: string) => {
     if (!amount) return '$0';
     return new Intl.NumberFormat('es-CO', {
@@ -200,6 +216,13 @@ const PickingPackingPage = () => {
               onClick={() => fetchOrders()}
             >
               <RefreshCw className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleBulkUpdateByDate}
+            >
+              📦 Marcar Históricas (Agosto 20)
             </Button>
           </div>
 
