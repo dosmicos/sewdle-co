@@ -531,31 +531,46 @@ export const usePickingOrders = () => {
 
     console.log(`🗓️ Actualizando órdenes antes de ${beforeDate} a estado: ${newStatus}`);
 
-    // 1. Obtener todas las órdenes que cumplen el criterio
-    const { data: ordersToUpdate, error: fetchError } = await supabase
+    // 1. Obtener todas las órdenes en estado pending/picking
+    const { data: allOrders, error: fetchError } = await supabase
       .from('picking_packing_orders')
       .select(`
         id, 
         shopify_order_id, 
-        operational_status, 
-        created_at,
-        shopify_order:shopify_orders!inner(created_at_shopify)
+        operational_status,
+        shopify_orders!inner(
+          id,
+          order_number,
+          created_at_shopify
+        )
       `)
       .eq('organization_id', currentOrganization.id)
-      .lt('shopify_order.created_at_shopify', beforeDate)
-      .in('operational_status', ['pending', 'picking'])
-      .order('shopify_order.created_at_shopify', { ascending: true });
+      .in('operational_status', ['pending', 'picking']);
 
     if (fetchError) {
       console.error('❌ Error fetching orders:', fetchError);
       throw fetchError;
     }
 
-    if (!ordersToUpdate || ordersToUpdate.length === 0) {
+    // 2. Filtrar en JavaScript las órdenes antiguas
+    const ordersToUpdate = allOrders?.filter(order => {
+      const shopifyDate = order.shopify_orders?.created_at_shopify;
+      if (!shopifyDate) return false;
+      return new Date(shopifyDate) < new Date(beforeDate);
+    }) || [];
+
+    if (ordersToUpdate.length === 0) {
       console.log('ℹ️ No hay órdenes para actualizar con ese criterio');
       toast.info('No hay órdenes para actualizar con ese criterio');
       return { successful: [], failed: [], total: 0 };
     }
+
+    // 3. Ordenar por fecha de Shopify
+    ordersToUpdate.sort((a, b) => {
+      const dateA = new Date(a.shopify_orders.created_at_shopify);
+      const dateB = new Date(b.shopify_orders.created_at_shopify);
+      return dateA.getTime() - dateB.getTime();
+    });
 
     console.log(`📦 Total de órdenes a procesar: ${ordersToUpdate.length}`);
     toast.info(`Iniciando actualización de ${ordersToUpdate.length} órdenes...`);
