@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useProducts } from '@/hooks/useProducts';
 
 interface OrderPhase1FormProps {
   orderId: string;
@@ -14,20 +15,7 @@ interface OrderPhase1FormProps {
   onPhaseComplete: (formData: Phase1FormData) => void;
 }
 
-// Product types
-const PRODUCT_OPTIONS = [
-  'Ruana',
-  'Chaqueta',
-  'Sleeping',
-  'Mamelucos',
-  'Pantalonetas',
-  'Zapaticos de Bebé',
-  'Camisetas',
-  'Chaqueta Teddy',
-  'Chaqueta Parca'
-] as const;
-
-type ProductType = typeof PRODUCT_OPTIONS[number];
+type ProductType = string;
 
 // Phase 1 Form Data Structure
 interface Phase1FormData {
@@ -55,6 +43,7 @@ const OrderPhase1Form: React.FC<OrderPhase1FormProps> = ({
   onPhaseComplete 
 }) => {
   const { toast } = useToast();
+  const { products, loading: productsLoading } = useProducts();
   const [loading, setLoading] = useState(false);
   
   // Form State
@@ -179,9 +168,17 @@ const OrderPhase1Form: React.FC<OrderPhase1FormProps> = ({
                     <SelectValue placeholder="Seleccionar producto..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {PRODUCT_OPTIONS.map(product => (
-                      <SelectItem key={product} value={product}>{product}</SelectItem>
-                    ))}
+                    {productsLoading ? (
+                      <SelectItem value="loading" disabled>Cargando productos...</SelectItem>
+                    ) : products.length === 0 ? (
+                      <SelectItem value="empty" disabled>No hay productos disponibles</SelectItem>
+                    ) : (
+                      products.map(product => (
+                        <SelectItem key={product.id} value={product.name}>
+                          {product.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 {errors.mainProduct && (
