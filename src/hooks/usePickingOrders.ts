@@ -557,7 +557,7 @@ export const usePickingOrders = () => {
 
     console.log(`🗓️ Actualizando órdenes antes de ${beforeDate} a estado: ${newStatus}`);
 
-    // 1. Obtener todas las órdenes en estado pending/picking
+    // 1. Obtener todas las órdenes (excepto las ya enviadas)
     const { data: allOrders, error: fetchError } = await supabase
       .from('picking_packing_orders')
       .select(`
@@ -571,7 +571,7 @@ export const usePickingOrders = () => {
         )
       `)
       .eq('organization_id', currentOrganization.id)
-      .in('operational_status', ['pending', 'picking']);
+      .neq('operational_status', 'shipped');
 
     if (fetchError) {
       console.error('❌ Error fetching orders:', fetchError);
