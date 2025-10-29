@@ -395,30 +395,74 @@ const PickingPackingPage = () => {
                   </Button>
                 </PaginationItem>
                 
-                {/* Page numbers */}
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
+                {/* Smart pagination */}
+                {(() => {
+                  const pages = [];
+                  const delta = 2; // Páginas a mostrar alrededor de la actual
                   
-                  return (
-                    <PaginationItem key={pageNum}>
+                  // Siempre mostrar primera página
+                  pages.push(
+                    <PaginationItem key={1}>
                       <PaginationLink
-                        onClick={() => handlePageChange(pageNum)}
-                        isActive={currentPage === pageNum}
+                        onClick={() => handlePageChange(1)}
+                        isActive={currentPage === 1}
                       >
-                        {pageNum}
+                        1
                       </PaginationLink>
                     </PaginationItem>
                   );
-                })}
+                  
+                  // Agregar ellipsis si hay gap después de la primera página
+                  if (currentPage > delta + 2) {
+                    pages.push(
+                      <PaginationItem key="ellipsis-start">
+                        <span className="px-4 text-muted-foreground">...</span>
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  // Páginas alrededor de la actual
+                  const start = Math.max(2, currentPage - delta);
+                  const end = Math.min(totalPages - 1, currentPage + delta);
+                  
+                  for (let i = start; i <= end; i++) {
+                    pages.push(
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          onClick={() => handlePageChange(i)}
+                          isActive={currentPage === i}
+                        >
+                          {i}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  // Agregar ellipsis si hay gap antes de la última página
+                  if (currentPage < totalPages - delta - 1) {
+                    pages.push(
+                      <PaginationItem key="ellipsis-end">
+                        <span className="px-4 text-muted-foreground">...</span>
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  // Siempre mostrar última página (si hay más de 1)
+                  if (totalPages > 1) {
+                    pages.push(
+                      <PaginationItem key={totalPages}>
+                        <PaginationLink
+                          onClick={() => handlePageChange(totalPages)}
+                          isActive={currentPage === totalPages}
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  return pages;
+                })()}
 
                 <PaginationItem>
                   <Button

@@ -218,7 +218,7 @@ export const usePickingOrders = () => {
       `, { count: 'exact' })
       .eq('organization_id', currentOrganization?.id)
       .neq('operational_status', 'shipped')
-      .order('created_at', { ascending: false });
+      .order('created_at_shopify', { ascending: false, foreignTable: 'shopify_orders' });
 
       // Apply status filter
       if (filters?.status) {
