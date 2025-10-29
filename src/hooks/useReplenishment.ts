@@ -18,7 +18,7 @@ export interface ReplenishmentSuggestion {
   orders_count_30d: number;
   avg_daily_sales: number;
   days_of_supply: number | null;
-  projected_30d_demand: number;
+  projected_demand_40d: number;
   suggested_quantity: number;
   urgency: 'critical' | 'high' | 'medium' | 'low';
   reason: string | null;

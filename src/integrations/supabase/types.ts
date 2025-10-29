@@ -337,7 +337,7 @@ export type Database = {
           orders_count_30d: number
           organization_id: string
           pending_production: number
-          projected_30d_demand: number
+          projected_demand_40d: number
           reason: string | null
           sales_30d: number
           status: string
@@ -356,7 +356,7 @@ export type Database = {
           orders_count_30d?: number
           organization_id: string
           pending_production?: number
-          projected_30d_demand?: number
+          projected_demand_40d?: number
           reason?: string | null
           sales_30d?: number
           status?: string
@@ -375,7 +375,7 @@ export type Database = {
           orders_count_30d?: number
           organization_id?: string
           pending_production?: number
-          projected_30d_demand?: number
+          projected_demand_40d?: number
           reason?: string | null
           sales_30d?: number
           status?: string
@@ -2756,7 +2756,7 @@ export type Database = {
           organization_id: string | null
           pending_production: number | null
           product_name: string | null
-          projected_30d_demand: number | null
+          projected_demand_40d: number | null
           reason: string | null
           sales_30d: number | null
           sku: string | null
