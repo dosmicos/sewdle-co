@@ -3339,7 +3339,9 @@ export type Database = {
       recalculate_material_stock: { Args: never; Returns: undefined }
       refresh_inventory_replenishment: {
         Args: { org_id: string }
-        Returns: Json
+        Returns: {
+          inserted: number
+        }[]
       }
       release_delivery_sync_lock: {
         Args: { delivery_uuid: string }
