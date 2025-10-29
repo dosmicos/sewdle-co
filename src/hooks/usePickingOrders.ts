@@ -82,7 +82,7 @@ export const usePickingOrders = () => {
       // Solo verificar las últimas 500 órdenes de Shopify (las más recientes)
       const { data: recentShopify, error: shopifyError } = await supabase
         .from('shopify_orders')
-        .select('shopify_order_id')
+        .select('shopify_order_id, order_number')
         .eq('organization_id', currentOrganization.id)
         .order('created_at_shopify', { ascending: false })
         .limit(500);
@@ -112,7 +112,8 @@ export const usePickingOrders = () => {
         .map(s => ({
           shopify_order_id: s.shopify_order_id,
           organization_id: currentOrganization.id,
-          operational_status: 'pending' as OperationalStatus
+          operational_status: 'pending' as OperationalStatus,
+          order_number: s.order_number
         })) || [];
 
       if (toInitialize.length > 0) {
@@ -231,7 +232,7 @@ export const usePickingOrders = () => {
 
       query = query
         .range(offset, offset + pageSize - 1)
-        .order('order_number', { ascending: false, foreignTable: 'shopify_orders' });
+        .order('order_number', { ascending: false });
 
       const { data, error, count } = await query;
 
@@ -669,12 +670,21 @@ export const usePickingOrders = () => {
 
   const initializePickingOrder = async (shopifyOrderId: number) => {
     try {
+      // Get order_number from shopify_orders
+      const { data: shopifyOrder } = await supabase
+        .from('shopify_orders')
+        .select('order_number')
+        .eq('shopify_order_id', shopifyOrderId)
+        .eq('organization_id', currentOrganization?.id)
+        .single();
+
       const { error } = await supabase
         .from('picking_packing_orders')
         .upsert({
           shopify_order_id: shopifyOrderId,
           organization_id: currentOrganization?.id,
-          operational_status: 'pending'
+          operational_status: 'pending',
+          order_number: shopifyOrder?.order_number || ''
         }, { 
           onConflict: 'organization_id,shopify_order_id',
           ignoreDuplicates: true 

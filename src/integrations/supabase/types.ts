@@ -1482,6 +1482,7 @@ export type Database = {
           id: string
           internal_notes: string | null
           operational_status: string
+          order_number: string
           organization_id: string
           packed_at: string | null
           packed_by: string | null
@@ -1497,6 +1498,7 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           operational_status?: string
+          order_number: string
           organization_id: string
           packed_at?: string | null
           packed_by?: string | null
@@ -1512,6 +1514,7 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           operational_status?: string
+          order_number?: string
           organization_id?: string
           packed_at?: string | null
           packed_by?: string | null
