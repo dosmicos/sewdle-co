@@ -398,7 +398,35 @@ const PickingPackingPage = () => {
                 {/* Smart pagination */}
                 {(() => {
                   const pages = [];
-                  const delta = 2; // Páginas a mostrar alrededor de la actual
+                  
+                  // Caso 1: Solo una página
+                  if (totalPages === 1) {
+                    return (
+                      <PaginationItem key={1}>
+                        <PaginationLink isActive={true}>1</PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  // Caso 2: Pocas páginas (7 o menos) - mostrar todas
+                  if (totalPages <= 7) {
+                    for (let i = 1; i <= totalPages; i++) {
+                      pages.push(
+                        <PaginationItem key={i}>
+                          <PaginationLink
+                            onClick={() => handlePageChange(i)}
+                            isActive={currentPage === i}
+                          >
+                            {i}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+                    return pages;
+                  }
+                  
+                  // Caso 3: Muchas páginas - smart pagination
+                  const delta = 2;
                   
                   // Siempre mostrar primera página
                   pages.push(
@@ -412,8 +440,23 @@ const PickingPackingPage = () => {
                     </PaginationItem>
                   );
                   
-                  // Agregar ellipsis si hay gap después de la primera página
-                  if (currentPage > delta + 2) {
+                  // Determinar el rango de páginas a mostrar alrededor de la actual
+                  let rangeStart = Math.max(2, currentPage - delta);
+                  let rangeEnd = Math.min(totalPages - 1, currentPage + delta);
+                  
+                  // Ajustar rangos para evitar ellipsis innecesarios
+                  if (currentPage <= delta + 2) {
+                    // Cerca del inicio: mostrar más páginas al inicio
+                    rangeStart = 2;
+                    rangeEnd = Math.min(5, totalPages - 1);
+                  } else if (currentPage >= totalPages - delta - 1) {
+                    // Cerca del final: mostrar más páginas al final
+                    rangeStart = Math.max(totalPages - 4, 2);
+                    rangeEnd = totalPages - 1;
+                  }
+                  
+                  // Agregar ellipsis inicial si hay gap
+                  if (rangeStart > 2) {
                     pages.push(
                       <PaginationItem key="ellipsis-start">
                         <span className="px-4 text-muted-foreground">...</span>
@@ -421,11 +464,8 @@ const PickingPackingPage = () => {
                     );
                   }
                   
-                  // Páginas alrededor de la actual
-                  const start = Math.max(2, currentPage - delta);
-                  const end = Math.min(totalPages - 1, currentPage + delta);
-                  
-                  for (let i = start; i <= end; i++) {
+                  // Agregar páginas del rango
+                  for (let i = rangeStart; i <= rangeEnd; i++) {
                     pages.push(
                       <PaginationItem key={i}>
                         <PaginationLink
@@ -438,8 +478,8 @@ const PickingPackingPage = () => {
                     );
                   }
                   
-                  // Agregar ellipsis si hay gap antes de la última página
-                  if (currentPage < totalPages - delta - 1) {
+                  // Agregar ellipsis final si hay gap
+                  if (rangeEnd < totalPages - 1) {
                     pages.push(
                       <PaginationItem key="ellipsis-end">
                         <span className="px-4 text-muted-foreground">...</span>
@@ -447,19 +487,17 @@ const PickingPackingPage = () => {
                     );
                   }
                   
-                  // Siempre mostrar última página (si hay más de 1)
-                  if (totalPages > 1) {
-                    pages.push(
-                      <PaginationItem key={totalPages}>
-                        <PaginationLink
-                          onClick={() => handlePageChange(totalPages)}
-                          isActive={currentPage === totalPages}
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  }
+                  // Siempre mostrar última página
+                  pages.push(
+                    <PaginationItem key={totalPages}>
+                      <PaginationLink
+                        onClick={() => handlePageChange(totalPages)}
+                        isActive={currentPage === totalPages}
+                      >
+                        {totalPages}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
                   
                   return pages;
                 })()}
