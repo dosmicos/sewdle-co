@@ -42,6 +42,8 @@ serve(async (req) => {
           : (data.tags || '');    // Si viene como string (nuevo formato)
         
         console.log(`   Tags to send to Shopify:`, tagsString)
+        console.log(`   Tags string length: ${tagsString.length}`)
+        console.log(`   Tags string value: "${tagsString}"`)
         
         updatePayload = {
           order: {
@@ -100,7 +102,12 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`❌ Shopify API Error: ${errorText}`)
+      console.error(`❌ Shopify API Error for order ${orderId}:`)
+      console.error(`   Status: ${response.status}`)
+      console.error(`   Response: ${errorText}`)
+      if (action === 'update_tags') {
+        console.error(`   Sent tags: "${updatePayload.order.tags}"`)
+      }
       throw new Error(`Shopify API error: ${errorText}`)
     }
 

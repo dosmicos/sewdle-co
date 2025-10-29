@@ -362,50 +362,75 @@ export const usePickingOrders = () => {
 
   const updateShopifyTags = async (shopifyOrderId: number, newTags: string[]) => {
     try {
-      // 1. Obtener etiquetas existentes DESDE LA BASE DE DATOS (no del array en memoria)
+      // 1. Obtener etiquetas existentes DESDE LA BASE DE DATOS
       const { data: orderData, error: fetchError } = await supabase
         .from('shopify_orders')
         .select('tags')
         .eq('shopify_order_id', shopifyOrderId)
         .single();
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error(`❌ Error fetching tags for order ${shopifyOrderId}:`, fetchError);
+        throw fetchError;
+      }
       
       const existingTags = orderData?.tags 
         ? orderData.tags.split(',').map(t => t.trim()).filter(Boolean)
         : [];
       
+      console.log(`📋 Tags existentes para orden ${shopifyOrderId}:`, existingTags);
+      
       // 2. Combinar con nuevas etiquetas (sin duplicados)
       const allTags = [...new Set([...existingTags, ...newTags])];
       
-      // 3. Actualizar en Shopify primero
-      // IMPORTANTE: Convertir array a string antes de enviar
-      const { error: shopifyError } = await supabase.functions.invoke('update-shopify-order', {
+      console.log(`📋 Tags combinados para orden ${shopifyOrderId}:`, allTags);
+      
+      // 3. Validar que los tags no estén vacíos ni tengan caracteres inválidos
+      const validTags = allTags.filter(tag => tag && tag.length > 0);
+      
+      if (validTags.length === 0) {
+        console.log(`⚠️ No hay tags válidos para actualizar orden ${shopifyOrderId}`);
+        return;
+      }
+      
+      // 4. Actualizar en Shopify primero
+      const tagsString = validTags.join(', ');
+      console.log(`🏷️ Enviando a Shopify orden ${shopifyOrderId}:`, tagsString);
+      
+      const { data: shopifyResponse, error: shopifyError } = await supabase.functions.invoke('update-shopify-order', {
         body: {
           orderId: shopifyOrderId,
           action: 'update_tags',
-          data: { tags: allTags.join(', ') }
+          data: { tags: tagsString }
         }
       });
 
-      if (shopifyError) throw shopifyError;
+      if (shopifyError) {
+        console.error(`❌ Error Shopify para orden ${shopifyOrderId}:`, shopifyError);
+        throw shopifyError;
+      }
       
-      // 4. Actualizar localmente solo después de confirmar Shopify
+      console.log(`✅ Shopify actualizado para orden ${shopifyOrderId}`);
+      
+      // 5. Actualizar localmente solo después de confirmar Shopify
       const { error: dbError } = await supabase
         .from('shopify_orders')
         .update({ 
-          tags: allTags.join(', '),
+          tags: tagsString,
           updated_at: new Date().toISOString()
         })
         .eq('shopify_order_id', shopifyOrderId);
         
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error(`❌ Error DB para orden ${shopifyOrderId}:`, dbError);
+        throw dbError;
+      }
       
-      console.log('✅ Tags actualizados en Shopify y DB:', allTags);
+      console.log(`✅ Tags actualizados en Shopify y DB para orden ${shopifyOrderId}:`, validTags);
         
     } catch (error: any) {
-      console.error('❌ Error updating Shopify tags:', error);
-      throw error; // Propagate error so caller can handle
+      console.error(`❌ Error updating Shopify tags para orden ${shopifyOrderId}:`, error);
+      throw error;
     }
   };
 
@@ -590,14 +615,21 @@ export const usePickingOrders = () => {
         try {
           await updateOrderStatus(order.id, newStatus);
           results.successful.push(order.id);
-          console.log(`✅ Orden ${order.id} actualizada (${results.successful.length}/${ordersToUpdate.length})`);
-        } catch (error) {
-          console.error(`❌ Error actualizando orden ${order.id}:`, error);
+          console.log(`✅ Orden ${order.shopify_order_id} actualizada (${results.successful.length}/${ordersToUpdate.length})`);
+        } catch (error: any) {
+          console.error(`❌ Error actualizando orden ${order.shopify_order_id}:`, error);
+          console.error(`   Detalles del error:`, JSON.stringify(error, null, 2));
           results.failed.push(order.id);
         }
       });
 
       await Promise.all(batchPromises);
+      
+      // Esperar 2 segundos entre lotes para evitar rate limiting de Shopify
+      if (i + batchSize < ordersToUpdate.length) {
+        console.log('⏱️ Esperando 2 segundos antes del siguiente lote...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       
       // Mostrar progreso
       const processed = Math.min(i + batchSize, ordersToUpdate.length);
