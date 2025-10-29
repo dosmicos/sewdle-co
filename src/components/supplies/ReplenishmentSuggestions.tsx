@@ -143,7 +143,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
       'Pendiente Producción',
       'Cantidad Sugerida',
       'Nivel de Urgencia',
-      'Motivo',
       'Calidad de Datos'
     ];
 
@@ -161,7 +160,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
         suggestion.pending_production || 0,
         suggestion.suggested_quantity || 0,
         `"${suggestion.urgency?.toUpperCase() || 'MEDIUM'}"`,
-        `"${suggestion.reason || 'Reposición automática'}"`,
         `"${suggestion.data_confidence?.toUpperCase() || 'MEDIUM'}"`,
       ];
       csvRows.push(row.join(','));
@@ -381,7 +379,6 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     </div>
                   </TableHead>
                   <TableHead>Urgencia</TableHead>
-                  <TableHead>Motivo</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -416,16 +413,11 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     <TableCell className="text-right">{suggestion.pending_production}</TableCell>
                     <TableCell className="text-right font-medium">{suggestion.suggested_quantity}</TableCell>
                     <TableCell>{getUrgencyBadge(suggestion.urgency)}</TableCell>
-                    <TableCell className="max-w-md">
-                      <p className="text-sm text-muted-foreground truncate" title={suggestion.reason || ''}>
-                        {suggestion.reason}
-                      </p>
-                    </TableCell>
                   </TableRow>
                 ))}
                 {filteredSuggestions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       No se encontraron sugerencias de reposición
                     </TableCell>
                   </TableRow>
