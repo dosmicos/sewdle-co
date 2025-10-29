@@ -217,8 +217,7 @@ export const usePickingOrders = () => {
         )
       `, { count: 'exact' })
       .eq('organization_id', currentOrganization?.id)
-      .neq('operational_status', 'shipped')
-      .order('created_at_shopify', { ascending: false, foreignTable: 'shopify_orders' });
+      .neq('operational_status', 'shipped');
 
       // Apply status filter
       if (filters?.status) {
@@ -230,7 +229,9 @@ export const usePickingOrders = () => {
         query = query.in('shopify_order_id', matchingShopifyOrderIds);
       }
 
-      query = query.range(offset, offset + pageSize - 1);
+      query = query
+        .range(offset, offset + pageSize - 1)
+        .order('created_at_shopify', { ascending: false, foreignTable: 'shopify_orders' });
 
       const { data, error, count } = await query;
 
