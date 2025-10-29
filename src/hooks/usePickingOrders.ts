@@ -231,7 +231,7 @@ export const usePickingOrders = () => {
 
       query = query
         .range(offset, offset + pageSize - 1)
-        .order('created_at_shopify', { ascending: false, foreignTable: 'shopify_orders' });
+        .order('order_number', { ascending: false, foreignTable: 'shopify_orders' });
 
       const { data, error, count } = await query;
 
