@@ -216,8 +216,9 @@ export const usePickingOrders = () => {
           raw_data
         )
       `, { count: 'exact' })
-        .eq('organization_id', currentOrganization?.id)
-        .order('created_at', { ascending: false });
+      .eq('organization_id', currentOrganization?.id)
+      .neq('operational_status', 'shipped')
+      .order('created_at', { ascending: false });
 
       // Apply status filter
       if (filters?.status) {

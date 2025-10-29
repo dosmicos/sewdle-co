@@ -146,13 +146,13 @@ const PickingPackingPage = () => {
 
   const handleBulkUpdateByDate = async () => {
     const confirmed = window.confirm(
-      '⚠️ Esto actualizará TODAS las órdenes antes del 20 de Agosto 2025 a estado "EMPACADO".\n\n¿Deseas continuar?'
+      '⚠️ Esto marcará como ENVIADAS todas las órdenes antes del 1 de Agosto 2025.\n\nEstas órdenes desaparecerán de Sewdle.\n\n¿Deseas continuar?'
     );
     
     if (!confirmed) return;
 
     try {
-      const results = await bulkUpdateOrdersByDate('2025-08-20', 'ready_to_ship');
+      const results = await bulkUpdateOrdersByDate('2025-08-01', 'shipped');
       console.log('✅ Actualización completada:', results);
     } catch (error) {
       console.error('❌ Error en actualización masiva:', error);
@@ -222,7 +222,7 @@ const PickingPackingPage = () => {
               size="sm"
               onClick={handleBulkUpdateByDate}
             >
-              📦 Marcar Históricas (Agosto 20)
+              🗄️ Archivar Históricas (Antes Agosto 1)
             </Button>
           </div>
 
