@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
 import { ProductionOrderModal } from './ProductionOrderModal';
 import { DataQualityBadge } from './DataQualityBadge';
-import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, Download } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
@@ -24,6 +24,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [showProductionModal, setShowProductionModal] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>('desc'); // Default: mayor a menor
 
   useEffect(() => {
     fetchSuggestions();
@@ -42,7 +43,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
   };
 
   const filteredSuggestions = useMemo(() => {
-    return suggestions.filter(suggestion => {
+    let filtered = suggestions.filter(suggestion => {
       const lowerSearch = searchTerm.toLowerCase();
       const nameText = (suggestion.product_name || '').toLowerCase();
       const skuText = (suggestion.sku_variant || '').toLowerCase();
@@ -52,7 +53,17 @@ export const ReplenishmentSuggestions: React.FC = () => {
       
       return matchesSearch && matchesUrgency;
     });
-  }, [suggestions, searchTerm, urgencyFilter]);
+
+    // Aplicar ordenamiento si está activo
+    if (sortOrder) {
+      filtered = [...filtered].sort((a, b) => {
+        const diff = a.suggested_quantity - b.suggested_quantity;
+        return sortOrder === 'asc' ? diff : -diff;
+      });
+    }
+
+    return filtered;
+  }, [suggestions, searchTerm, urgencyFilter, sortOrder]);
 
   const getUrgencyBadge = (urgency: string) => {
     const variants = {
@@ -99,6 +110,22 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   const getSelectedSuggestions = (): ReplenishmentSuggestion[] => {
     return suggestions.filter(s => selectedSuggestions.includes(s.variant_id));
+  };
+
+  const toggleSortOrder = () => {
+    if (sortOrder === null) {
+      setSortOrder('desc'); // Mayor a menor
+    } else if (sortOrder === 'desc') {
+      setSortOrder('asc'); // Menor a mayor
+    } else {
+      setSortOrder('desc'); // Volver a mayor a menor
+    }
+  };
+
+  const getSortIcon = () => {
+    if (sortOrder === null) return <ArrowUpDown className="h-4 w-4 ml-1" />;
+    if (sortOrder === 'desc') return <ArrowDown className="h-4 w-4 ml-1" />;
+    return <ArrowUp className="h-4 w-4 ml-1" />;
   };
 
   const handleDownloadCSV = () => {
@@ -344,7 +371,15 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableHead className="text-right">Vel. diaria</TableHead>
                   <TableHead className="text-right">Días Stock</TableHead>
                   <TableHead className="text-right">Pendientes</TableHead>
-                  <TableHead className="text-right">Sugerida</TableHead>
+                  <TableHead 
+                    className="text-right cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={toggleSortOrder}
+                  >
+                    <div className="flex items-center justify-end">
+                      Sugerida
+                      {getSortIcon()}
+                    </div>
+                  </TableHead>
                   <TableHead>Urgencia</TableHead>
                   <TableHead>Motivo</TableHead>
                 </TableRow>
