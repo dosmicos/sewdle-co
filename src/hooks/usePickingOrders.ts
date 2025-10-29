@@ -606,30 +606,35 @@ export const usePickingOrders = () => {
       total: ordersToUpdate.length
     };
 
-    // 2. Procesar en lotes de 5 para no saturar Shopify API
-    const batchSize = 5;
+    // 2. Procesar en lotes de 20 (solo actualización local)
+    const batchSize = 20;
     for (let i = 0; i < ordersToUpdate.length; i += batchSize) {
       const batch = ordersToUpdate.slice(i, i + batchSize);
       
       const batchPromises = batch.map(async (order) => {
         try {
-          await updateOrderStatus(order.id, newStatus);
+          // Solo actualizar estado local, SIN llamar a Shopify
+          const { data: userData } = await supabase.auth.getUser();
+          const { error } = await supabase
+            .from('picking_packing_orders')
+            .update({
+              operational_status: newStatus,
+              shipped_at: new Date().toISOString(),
+              shipped_by: userData.user?.id
+            })
+            .eq('id', order.id);
+          
+          if (error) throw error;
+          
           results.successful.push(order.id);
-          console.log(`✅ Orden ${order.shopify_order_id} actualizada (${results.successful.length}/${ordersToUpdate.length})`);
+          console.log(`✅ Orden ${order.shopify_order_id} actualizada localmente (${results.successful.length}/${ordersToUpdate.length})`);
         } catch (error: any) {
           console.error(`❌ Error actualizando orden ${order.shopify_order_id}:`, error);
-          console.error(`   Detalles del error:`, JSON.stringify(error, null, 2));
           results.failed.push(order.id);
         }
       });
 
       await Promise.all(batchPromises);
-      
-      // Esperar 2 segundos entre lotes para evitar rate limiting de Shopify
-      if (i + batchSize < ordersToUpdate.length) {
-        console.log('⏱️ Esperando 2 segundos antes del siguiente lote...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
       
       // Mostrar progreso
       const processed = Math.min(i + batchSize, ordersToUpdate.length);
