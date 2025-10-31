@@ -131,8 +131,18 @@ const OrdersPage = () => {
 
   // Filter orders
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) || '';
+    const matchesSearch = 
+      order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.order_items?.some((item: any) => 
+        item.product_variants?.sku_variant?.toLowerCase().includes(searchTerm.toLowerCase())
+      ) ||
+      order.order_items?.some((item: any) => 
+        item.product_variants?.products?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      ) ||
+      order.order_items?.some((item: any) => 
+        item.product_variants?.variant_title?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     const matchesWorkshop = selectedWorkshop === 'all' || 
                            (selectedWorkshop === 'unassigned' && !order.workshop_assignments?.length) ||
                            order.workshop_assignments?.some((assignment: any) => assignment.workshop_id === selectedWorkshop);
