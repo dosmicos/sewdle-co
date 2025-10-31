@@ -168,7 +168,7 @@ const OrderFilters = ({
         ) : (
           // Vista desktop original
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-4">
               {/* Búsqueda */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -216,7 +216,7 @@ const OrderFilters = ({
               <Button 
                 variant="outline" 
                 onClick={onClearFilters} 
-                className="h-12 px-4 border-gray-200 hover:bg-gray-50 rounded-xl"
+                className="h-12 px-2 border-gray-200 hover:bg-gray-50 rounded-xl"
               >
                 <Filter className="w-4 h-4" />
                 Limpiar
@@ -227,7 +227,7 @@ const OrderFilters = ({
               <Button 
                 variant="outline" 
                 onClick={onRefetch} 
-                className="flex items-center gap-2 px-6 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
+                className="flex items-center gap-2 px-3 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
               >
                 <RefreshCw className="w-4 h-4" />
                 Actualizar
