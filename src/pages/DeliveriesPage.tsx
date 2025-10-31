@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useDeliveries } from '@/hooks/useDeliveries';
@@ -46,13 +46,59 @@ const DeliveriesPage = () => {
   const navigate = useNavigate();
   
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deliveryToDelete, setDeliveryToDelete] = useState<any>(null);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [workshopFilter, setWorkshopFilter] = useState('all');
+  
+  // Query params for filters
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const activeTab = searchParams.get('tab') || 'all';
+  const statusFilter = searchParams.get('status') || 'all';
+  const workshopFilter = searchParams.get('workshop') || 'all';
+
+  const updateFilters = (updates: { 
+    search?: string; 
+    tab?: string; 
+    status?: string; 
+    workshop?: string 
+  }) => {
+    const newParams = new URLSearchParams(searchParams);
+    
+    if (updates.search !== undefined) {
+      if (updates.search) {
+        newParams.set('search', updates.search);
+      } else {
+        newParams.delete('search');
+      }
+    }
+    
+    if (updates.tab !== undefined) {
+      if (updates.tab && updates.tab !== 'all') {
+        newParams.set('tab', updates.tab);
+      } else {
+        newParams.delete('tab');
+      }
+    }
+    
+    if (updates.status !== undefined) {
+      if (updates.status && updates.status !== 'all') {
+        newParams.set('status', updates.status);
+      } else {
+        newParams.delete('status');
+      }
+    }
+    
+    if (updates.workshop !== undefined) {
+      if (updates.workshop && updates.workshop !== 'all') {
+        newParams.set('workshop', updates.workshop);
+      } else {
+        newParams.delete('workshop');
+      }
+    }
+    
+    setSearchParams(newParams);
+  };
 
   // Permission checks - using correct English module names
   const canCreateDeliveries = hasPermission('deliveries', 'create');
@@ -66,9 +112,7 @@ const DeliveriesPage = () => {
   const activeFiltersCount = [statusFilter, workshopFilter].filter(f => f !== 'all').length;
 
   const clearFilters = () => {
-    setStatusFilter('all');
-    setWorkshopFilter('all');
-    setSearchTerm('');
+    setSearchParams(new URLSearchParams());
   };
 
   const getStatusColor = (status: string) => {
@@ -163,7 +207,9 @@ const DeliveriesPage = () => {
   };
 
   const handleViewDelivery = (delivery: any) => {
-    navigate(`/deliveries/${delivery.tracking_number}`);
+    navigate(`/deliveries/${delivery.tracking_number}`, {
+      state: { from: 'deliveries' }
+    });
   };
 
   const handleDeleteDelivery = (delivery: any) => {
@@ -235,7 +281,7 @@ const DeliveriesPage = () => {
     <div className="space-y-4">
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Estado</label>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(value) => updateFilters({ status: value })}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Todos los estados" />
           </SelectTrigger>
@@ -252,7 +298,7 @@ const DeliveriesPage = () => {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Taller</label>
-        <Select value={workshopFilter} onValueChange={setWorkshopFilter}>
+        <Select value={workshopFilter} onValueChange={(value) => updateFilters({ workshop: value })}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Todos los talleres" />
           </SelectTrigger>
@@ -464,7 +510,7 @@ const DeliveriesPage = () => {
               <Input
                 placeholder="Buscar por número de seguimiento, orden o taller..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => updateFilters({ search: e.target.value })}
                 className="pl-10"
               />
             </div>
@@ -492,7 +538,7 @@ const DeliveriesPage = () => {
               </Sheet>
             ) : (
               <div className="flex items-center space-x-2">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={(value) => updateFilters({ status: value })}>
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
@@ -505,7 +551,7 @@ const DeliveriesPage = () => {
                     <SelectItem value="rejected">Rechazada</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={workshopFilter} onValueChange={setWorkshopFilter}>
+                <Select value={workshopFilter} onValueChange={(value) => updateFilters({ workshop: value })}>
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="Taller" />
                   </SelectTrigger>
@@ -531,7 +577,7 @@ const DeliveriesPage = () => {
       </Card>
 
       {/* Tabs - Optimized for mobile */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => updateFilters({ tab: value })} className="w-full">
         <div className="overflow-x-auto pb-2">
           <TabsList className={`${isMobile ? 'grid grid-cols-5 w-max min-w-full' : 'grid grid-cols-6 w-full'} gap-1`}>
             <TabsTrigger value="all" className="whitespace-nowrap text-xs px-2">
