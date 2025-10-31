@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Plus, Search, RefreshCw, Filter, X } from 'lucide-react';
-
 interface OrderFiltersProps {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
@@ -24,7 +22,6 @@ interface OrderFiltersProps {
   canCreateOrders: boolean;
   onCreateOrder: () => void;
 }
-
 const OrderFilters = ({
   searchTerm,
   setSearchTerm,
@@ -44,8 +41,7 @@ const OrderFilters = ({
   const isMobile = useIsMobile();
 
   // Componente para el contenido de filtros
-  const FiltersContent = () => (
-    <div className="space-y-4">
+  const FiltersContent = () => <div className="space-y-4">
       {/* Filtro por taller */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Taller</label>
@@ -55,11 +51,9 @@ const OrderFilters = ({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los talleres</SelectItem>
-            {workshops.map(workshop => (
-              <SelectItem key={workshop.id} value={workshop.id}>
+            {workshops.map(workshop => <SelectItem key={workshop.id} value={workshop.id}>
                 {workshop.name}
-              </SelectItem>
-            ))}
+              </SelectItem>)}
             <SelectItem value="unassigned">Sin asignar</SelectItem>
           </SelectContent>
         </Select>
@@ -85,37 +79,24 @@ const OrderFilters = ({
 
       {/* Botón limpiar filtros */}
       <div className="pt-4 border-t">
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            onClearFilters();
-            setShowFiltersSheet(false);
-          }} 
-          className="w-full flex items-center gap-2"
-        >
+        <Button variant="outline" onClick={() => {
+        onClearFilters();
+        setShowFiltersSheet(false);
+      }} className="w-full flex items-center gap-2">
           <X className="w-4 h-4" />
           Limpiar filtros
         </Button>
       </div>
-    </div>
-  );
-
-  return (
-    <Card className="bg-white border-0 shadow-sm rounded-2xl">
+    </div>;
+  return <Card className="bg-white border-0 shadow-sm rounded-2xl">
       <CardContent className="p-4 md:p-6">
-        {isMobile ? (
-          // Vista móvil con drawer
-          <div className="space-y-4">
+        {isMobile ?
+      // Vista móvil con drawer
+      <div className="space-y-4">
             {/* Búsqueda principal siempre visible */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input 
-                type="text" 
-                placeholder="Buscar por orden, SKU o producto..." 
-                value={searchTerm} 
-                onChange={e => setSearchTerm(e.target.value)} 
-                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-              />
+              <input type="text" placeholder="Buscar por orden, SKU o producto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
 
             {/* Botones de acción móvil */}
@@ -127,11 +108,9 @@ const OrderFilters = ({
                     <Button variant="outline" className="flex items-center gap-2 px-4 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl relative">
                       <Filter className="w-4 h-4" />
                       Filtros
-                      {getActiveFiltersCount() > 0 && (
-                        <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-blue-600 text-white text-xs p-0 flex items-center justify-center">
+                      {getActiveFiltersCount() > 0 && <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-blue-600 text-white text-xs p-0 flex items-center justify-center">
                           {getActiveFiltersCount()}
-                        </Badge>
-                      )}
+                        </Badge>}
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="bottom" className="h-auto max-h-[80vh]">
@@ -145,40 +124,24 @@ const OrderFilters = ({
                   </SheetContent>
                 </Sheet>
 
-                <Button 
-                  variant="outline" 
-                  onClick={onRefetch} 
-                  className="flex items-center gap-2 px-4 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
-                >
+                <Button variant="outline" onClick={onRefetch} className="flex items-center gap-2 px-4 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl">
                   <RefreshCw className="w-4 h-4" />
                 </Button>
               </div>
               
-              {canCreateOrders && (
-                <Button 
-                  onClick={onCreateOrder} 
-                  className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg"
-                >
+              {canCreateOrders && <Button onClick={onCreateOrder} className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg">
                   <Plus className="w-4 h-4" />
                   Nueva
-                </Button>
-              )}
+                </Button>}
             </div>
-          </div>
-        ) : (
-          // Vista desktop original
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          </div> :
+      // Vista desktop original
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
             <div className="flex-1 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-4">
               {/* Búsqueda */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input 
-                  type="text" 
-                  placeholder="Buscar por orden, SKU o producto..." 
-                  value={searchTerm} 
-                  onChange={e => setSearchTerm(e.target.value)} 
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-                />
+                <input type="text" placeholder="Buscar por orden, SKU o producto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
 
               {/* Filtro por taller */}
@@ -188,11 +151,9 @@ const OrderFilters = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los talleres</SelectItem>
-                  {workshops.map(workshop => (
-                    <SelectItem key={workshop.id} value={workshop.id}>
+                  {workshops.map(workshop => <SelectItem key={workshop.id} value={workshop.id}>
                       {workshop.name}
-                    </SelectItem>
-                  ))}
+                    </SelectItem>)}
                   <SelectItem value="unassigned">Sin asignar</SelectItem>
                 </SelectContent>
               </Select>
@@ -213,41 +174,25 @@ const OrderFilters = ({
               </Select>
 
               {/* Limpiar filtros */}
-              <Button 
-                variant="outline" 
-                onClick={onClearFilters} 
-                className="h-12 px-2 border-gray-200 hover:bg-gray-50 rounded-xl"
-              >
+              <Button variant="outline" onClick={onClearFilters} className="h-12 border-gray-200 hover:bg-gray-50 rounded-xl px-[4px]">
                 <Filter className="w-4 h-4" />
                 Limpiar
               </Button>
             </div>
             
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                onClick={onRefetch} 
-                className="flex items-center gap-2 px-3 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl"
-              >
+              <Button variant="outline" onClick={onRefetch} className="flex items-center gap-2 py-3 bg-white border-gray-200 hover:bg-gray-50 rounded-xl px-[4px]">
                 <RefreshCw className="w-4 h-4" />
                 Actualizar
               </Button>
               
-              {canCreateOrders && (
-                <Button 
-                  onClick={onCreateOrder} 
-                  className="flex items-center gap-2 px-6 py-3 text-white rounded-xl shadow-lg bg-[#ff5c02]"
-                >
+              {canCreateOrders && <Button onClick={onCreateOrder} className="flex items-center gap-2 px-6 py-3 text-white rounded-xl shadow-lg bg-[#ff5c02]">
                   <Plus className="w-4 h-4" />
                   Nueva Orden
-                </Button>
-              )}
+                </Button>}
             </div>
-          </div>
-        )}
+          </div>}
       </CardContent>
-    </Card>
-  );
+    </Card>;
 };
-
 export default OrderFilters;
