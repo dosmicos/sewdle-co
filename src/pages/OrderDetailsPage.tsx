@@ -178,7 +178,7 @@ const OrderDetailsPage = () => {
         <div className="flex items-center space-x-4">
           <Button 
             variant="ghost" 
-            onClick={() => navigate('/orders')}
+            onClick={() => navigate(-1)}
             className="flex items-center space-x-2"
           >
             <ArrowLeft className="w-4 h-4" />

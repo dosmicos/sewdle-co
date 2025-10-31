@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFilteredOrders } from '@/hooks/useFilteredOrders';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useWorkshops } from '@/hooks/useWorkshops';
@@ -24,12 +24,45 @@ const OrdersPage = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedWorkshop, setSelectedWorkshop] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
+  
+  // Query params for filters
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const selectedWorkshop = searchParams.get('workshop') || 'all';
+  const selectedStatus = searchParams.get('status') || 'all';
+
+  const updateFilters = (updates: { search?: string; workshop?: string; status?: string }) => {
+    const newParams = new URLSearchParams(searchParams);
+    
+    if (updates.search !== undefined) {
+      if (updates.search) {
+        newParams.set('search', updates.search);
+      } else {
+        newParams.delete('search');
+      }
+    }
+    
+    if (updates.workshop !== undefined) {
+      if (updates.workshop && updates.workshop !== 'all') {
+        newParams.set('workshop', updates.workshop);
+      } else {
+        newParams.delete('workshop');
+      }
+    }
+    
+    if (updates.status !== undefined) {
+      if (updates.status && updates.status !== 'all') {
+        newParams.set('status', updates.status);
+      } else {
+        newParams.delete('status');
+      }
+    }
+    
+    setSearchParams(newParams);
+  };
 
   // Permission checks
   const canCreateOrders = hasPermission('orders', 'create');
@@ -86,7 +119,9 @@ const OrdersPage = () => {
   };
 
   const handleViewDetails = (order: any) => {
-    navigate(`/orders/${order.id}`);
+    navigate(`/orders/${order.id}`, {
+      state: { from: 'orders' }
+    });
   };
 
   const handleFormClose = () => {
@@ -117,9 +152,7 @@ const OrdersPage = () => {
   };
 
   const clearFilters = () => {
-    setSearchTerm('');
-    setSelectedWorkshop('all');
-    setSelectedStatus('all');
+    setSearchParams(new URLSearchParams());
   };
 
   const getActiveFiltersCount = () => {
@@ -184,11 +217,11 @@ const OrdersPage = () => {
       {/* Filtros */}
       <OrderFilters
         searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
+        setSearchTerm={(value) => updateFilters({ search: value })}
         selectedWorkshop={selectedWorkshop}
-        setSelectedWorkshop={setSelectedWorkshop}
+        setSelectedWorkshop={(value) => updateFilters({ workshop: value })}
         selectedStatus={selectedStatus}
-        setSelectedStatus={setSelectedStatus}
+        setSelectedStatus={(value) => updateFilters({ status: value })}
         workshops={workshops}
         showFiltersSheet={showFiltersSheet}
         setShowFiltersSheet={setShowFiltersSheet}
