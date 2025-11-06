@@ -21,7 +21,7 @@ export const FILTER_OPTIONS: FilterOption[] = [
       { value: 'pending', label: 'No preparado' },
       { value: 'picking', label: 'Picking' },
       { value: 'packing', label: 'Empacando' },
-      { value: 'ready_to_ship', label: 'Listo para envío' },
+      { value: 'ready_to_ship', label: 'Empacado' },
     ]
   },
   {

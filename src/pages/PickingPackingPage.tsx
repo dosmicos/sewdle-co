@@ -55,7 +55,7 @@ const statusLabels = {
   pending: 'Por Procesar',
   picking: 'Picking',
   packing: 'Empacando',
-  ready_to_ship: 'Listo para envío',
+  ready_to_ship: 'Empacado',
   shipped: 'Enviado',
 };
 
