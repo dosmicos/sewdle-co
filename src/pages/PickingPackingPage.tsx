@@ -88,6 +88,7 @@ const PickingPackingPage = () => {
   const [filterSelectorOpen, setFilterSelectorOpen] = useState(false);
   const [selectedFilterOption, setSelectedFilterOption] = useState<FilterOption | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [commandValue, setCommandValue] = useState('');
 
   // Read filters from URL
   const searchTerm = searchParams.get('search') || '';
@@ -205,6 +206,7 @@ const PickingPackingPage = () => {
   const handleFilterCancel = () => {
     setFilterSelectorOpen(false);
     setSelectedFilterOption(null);
+    setCommandValue('');
   };
 
   // Fetch orders when filters change
@@ -400,7 +402,7 @@ const PickingPackingPage = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-0" align="start">
-                <Command>
+                <Command value={commandValue} onValueChange={setCommandValue}>
                   <CommandInput placeholder="Buscar filtro..." />
                   <CommandEmpty>No se encontraron filtros</CommandEmpty>
                   <CommandGroup>
@@ -412,6 +414,7 @@ const PickingPackingPage = () => {
                           const selected = FILTER_OPTIONS.find(opt => opt.id === value);
                           if (selected) {
                             handleFilterSelect(selected);
+                            setCommandValue('');
                           }
                         }}
                         className="cursor-pointer"
