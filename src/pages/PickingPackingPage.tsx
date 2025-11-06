@@ -242,27 +242,6 @@ const PickingPackingPage = () => {
             >
               No preparados ({stats.pending})
             </Button>
-            <Button
-              variant={selectedStatus === 'picking' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedStatus('picking')}
-            >
-              Picking ({stats.picking})
-            </Button>
-            <Button
-              variant={selectedStatus === 'packing' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedStatus('packing')}
-            >
-              Empacando ({stats.packing})
-            </Button>
-            <Button
-              variant={selectedStatus === 'ready_to_ship' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedStatus('ready_to_ship')}
-            >
-              Listo ({stats.ready})
-            </Button>
           </div>
         </div>
 
