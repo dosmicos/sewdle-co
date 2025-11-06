@@ -10,6 +10,7 @@ import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetai
 import { PickingBulkActionsBar } from '@/components/picking/PickingBulkActionsBar';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
+import { SavedFiltersManager } from '@/components/picking/SavedFiltersManager';
 import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
 import {
   Popover,
@@ -117,6 +118,34 @@ const PickingPackingPage = () => {
 
   const clearAllFilters = () => {
     setSearchParams(new URLSearchParams());
+  };
+
+  // Get current filters for saving
+  const getCurrentFilters = () => ({
+    search: searchTerm || undefined,
+    operational_status: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+    financial_status: financialStatuses.length > 0 ? financialStatuses : undefined,
+    fulfillment_status: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+    tags: tags.length > 0 ? tags : undefined,
+    price_range: priceRange || undefined,
+    date_range: dateRange || undefined,
+  });
+
+  // Load saved filter
+  const loadSavedFilter = (filters: Record<string, any>) => {
+    const newParams = new URLSearchParams();
+    
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        if (Array.isArray(value) && value.length > 0) {
+          newParams.set(key, value.join(','));
+        } else if (!Array.isArray(value)) {
+          newParams.set(key, value.toString());
+        }
+      }
+    });
+    
+    setSearchParams(newParams);
   };
 
   // Build active filters for display
@@ -374,6 +403,12 @@ const PickingPackingPage = () => {
               🗄️ Archivar Históricas (Antes Agosto 1)
             </Button>
           </div>
+
+          {/* Saved Filters Manager */}
+          <SavedFiltersManager
+            currentFilters={getCurrentFilters()}
+            onLoadFilter={loadSavedFilter}
+          />
 
           {/* Advanced Filters UI */}
           <div className="flex items-center gap-2 flex-wrap">
