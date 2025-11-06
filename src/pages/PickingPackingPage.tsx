@@ -407,7 +407,13 @@ const PickingPackingPage = () => {
                     {FILTER_OPTIONS.map((option) => (
                       <CommandItem
                         key={option.id}
-                        onSelect={() => handleFilterSelect(option)}
+                        value={option.id}
+                        onSelect={(value) => {
+                          const selected = FILTER_OPTIONS.find(opt => opt.id === value);
+                          if (selected) {
+                            handleFilterSelect(selected);
+                          }
+                        }}
                         className="cursor-pointer"
                       >
                         {option.label}
