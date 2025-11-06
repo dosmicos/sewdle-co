@@ -230,11 +230,6 @@ export const usePickingOrders = () => {
         query = query.in('shopify_order_id', matchingShopifyOrderIds);
       }
 
-      // Apply operational status filter if provided
-      if (filters?.operationalStatuses && filters.operationalStatuses.length > 0) {
-        query = query.in('operational_status', filters.operationalStatuses);
-      }
-
       query = query
         .range(offset, offset + pageSize - 1)
         .order('order_number', { ascending: false });
@@ -269,6 +264,13 @@ export const usePickingOrders = () => {
       });
 
       // Apply post-fetch filters for complex queries
+      
+      // Filter by operational_status AFTER tag mapping
+      if (filters?.operationalStatuses && filters.operationalStatuses.length > 0) {
+        ordersData = ordersData.filter((order: any) => 
+          filters.operationalStatuses?.includes(order.operational_status)
+        );
+      }
       
       // Filter by financial_status
       if (filters?.financialStatuses && filters.financialStatuses.length > 0) {
