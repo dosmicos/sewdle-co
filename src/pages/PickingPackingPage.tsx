@@ -187,12 +187,14 @@ const PickingPackingPage = () => {
   }
 
   const handleFilterSelect = (option: FilterOption) => {
+    console.log('🔍 Filter selected:', option);
     setSelectedFilterOption(option);
     setPopoverOpen(false);
     setFilterSelectorOpen(true);
   };
 
   const handleFilterApply = (value: string | string[]) => {
+    console.log('✅ Filter applied:', { filterId: selectedFilterOption?.id, value });
     if (selectedFilterOption) {
       updateFilter(selectedFilterOption.id, value);
     }

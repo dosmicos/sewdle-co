@@ -23,6 +23,8 @@ export const FilterValueSelector = ({
   onApply, 
   onCancel 
 }: FilterValueSelectorProps) => {
+  console.log('🎯 FilterValueSelector rendered:', { filter, currentValue });
+  
   const [selectedValues, setSelectedValues] = useState<string[]>(() => {
     if (Array.isArray(currentValue)) {
       return currentValue;
@@ -34,7 +36,13 @@ export const FilterValueSelector = ({
   });
 
   // Validación temprana
-  if (!filter || !filter.options || filter.options.length === 0) {
+  if (!filter) {
+    console.error('❌ Filter is null or undefined');
+    return null;
+  }
+  
+  if (!filter.options || filter.options.length === 0) {
+    console.error('❌ Filter has no options:', filter);
     return (
       <Dialog open onOpenChange={onCancel}>
         <DialogContent className="max-w-md">
