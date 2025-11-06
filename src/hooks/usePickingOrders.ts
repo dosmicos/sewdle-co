@@ -136,8 +136,13 @@ export const usePickingOrders = () => {
   };
 
   const fetchOrders = async (filters?: {
-    status?: OperationalStatus;
     searchTerm?: string;
+    operationalStatuses?: string[];
+    financialStatuses?: string[];
+    fulfillmentStatuses?: string[];
+    tags?: string[];
+    priceRange?: string;
+    dateRange?: string;
     page?: number;
   }) => {
     if (!currentOrganization?.id) {
@@ -220,14 +225,14 @@ export const usePickingOrders = () => {
       .eq('organization_id', currentOrganization?.id)
       .neq('operational_status', 'shipped');
 
-      // Apply status filter
-      if (filters?.status) {
-        query = query.eq('operational_status', filters.status);
-      }
-
       // Apply search filter using the matching IDs
       if (matchingShopifyOrderIds !== null) {
         query = query.in('shopify_order_id', matchingShopifyOrderIds);
+      }
+
+      // Apply operational status filter if provided
+      if (filters?.operationalStatuses && filters.operationalStatuses.length > 0) {
+        query = query.in('operational_status', filters.operationalStatuses);
       }
 
       query = query
@@ -263,27 +268,70 @@ export const usePickingOrders = () => {
         };
       });
 
-      // Special filter for "No preparados" (pending)
-      // Must have "Confirmado" tag AND NOT have "EMPACADO" tag
-      // AND NOT be fulfilled in Shopify
-      if (filters?.status === 'pending') {
+      // Apply post-fetch filters for complex queries
+      
+      // Filter by financial_status
+      if (filters?.financialStatuses && filters.financialStatuses.length > 0) {
+        ordersData = ordersData.filter((order: any) => 
+          filters.financialStatuses?.includes(order.shopify_order?.financial_status)
+        );
+      }
+
+      // Filter by fulfillment_status
+      if (filters?.fulfillmentStatuses && filters.fulfillmentStatuses.length > 0) {
+        ordersData = ordersData.filter((order: any) => 
+          filters.fulfillmentStatuses?.includes(order.shopify_order?.fulfillment_status)
+        );
+      }
+
+      // Filter by tags
+      if (filters?.tags && filters.tags.length > 0) {
         ordersData = ordersData.filter((order: any) => {
-          const tags = (order.shopify_order?.tags || '').toLowerCase().trim();
-          const fulfillmentStatus = order.shopify_order?.fulfillment_status;
-          
-          // Must have "confirmado"
-          const hasConfirmado = tags.includes('confirmado');
-          
-          // Must NOT have "empacado" (catches both "EMPACADO" and "Empacado")
-          const hasEmpacado = tags.includes('empacado');
-          
-          // Must NOT be fulfilled in Shopify (already prepared/shipped)
-          const isFulfilled = fulfillmentStatus === 'fulfilled';
-          
-          return hasConfirmado && !hasEmpacado && !isFulfilled;
+          const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map(t => t.trim());
+          return filters.tags?.some(tag => orderTags.includes(tag.toLowerCase()));
         });
+      }
+
+      // Filter by price range
+      if (filters?.priceRange) {
+        const [minStr, maxStr] = filters.priceRange.split('-');
+        const min = parseFloat(minStr);
+        const max = parseFloat(maxStr);
         
-        logger.info(`[PickingOrders] Filtered "No preparados": ${ordersData.length} orders with "Confirmado" but without "EMPACADO" and not fulfilled`);
+        ordersData = ordersData.filter((order: any) => {
+          const price = order.shopify_order?.raw_data?.total_price || order.shopify_order?.total_price || 0;
+          return price >= min && price <= max;
+        });
+      }
+
+      // Filter by date range
+      if (filters?.dateRange) {
+        const now = new Date();
+        let startDate: Date;
+        
+        switch (filters.dateRange) {
+          case 'today':
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            break;
+          case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = new Date(yesterday.setHours(0, 0, 0, 0));
+            break;
+          case 'last_7_days':
+            startDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+          case 'last_30_days':
+            startDate = new Date(now.setDate(now.getDate() - 30));
+            break;
+          default:
+            startDate = new Date(0);
+        }
+        
+        ordersData = ordersData.filter((order: any) => {
+          const orderDate = new Date(order.shopify_order?.created_at_shopify || order.created_at);
+          return orderDate >= startDate;
+        });
       }
 
       logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {

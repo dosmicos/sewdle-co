@@ -1,13 +1,28 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { PickingBulkActionsBar } from '@/components/picking/PickingBulkActionsBar';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
+import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command';
 import {
   Table,
   TableBody,
@@ -67,21 +82,145 @@ const PickingPackingPage = () => {
     bulkUpdateOrderStatus,
     bulkUpdateOrdersByDate
   } = usePickingOrders();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<OperationalStatus | 'all'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [filterSelectorOpen, setFilterSelectorOpen] = useState(false);
+  const [selectedFilterOption, setSelectedFilterOption] = useState<FilterOption | null>(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
-  // Reset to page 1 when filters change - DEBE estar ANTES del early return
+  // Read filters from URL
+  const searchTerm = searchParams.get('search') || '';
+  const operationalStatuses = searchParams.get('operational_status')?.split(',').filter(Boolean) || [];
+  const financialStatuses = searchParams.get('financial_status')?.split(',').filter(Boolean) || [];
+  const fulfillmentStatuses = searchParams.get('fulfillment_status')?.split(',').filter(Boolean) || [];
+  const tags = searchParams.get('tags')?.split(',').filter(Boolean) || [];
+  const priceRange = searchParams.get('price_range') || '';
+  const dateRange = searchParams.get('date_range') || '';
+
+  // Update filter function
+  const updateFilter = (key: string, value: string | string[] | null) => {
+    const newParams = new URLSearchParams(searchParams);
+    
+    if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+      newParams.delete(key);
+    } else if (Array.isArray(value)) {
+      newParams.set(key, value.join(','));
+    } else {
+      newParams.set(key, value);
+    }
+    
+    setSearchParams(newParams);
+  };
+
+  const clearAllFilters = () => {
+    setSearchParams(new URLSearchParams());
+  };
+
+  // Build active filters for display
+  const activeFilters: ActiveFilter[] = [];
+
+  if (operationalStatuses.length > 0) {
+    const labels = operationalStatuses.map(s => statusLabels[s as OperationalStatus] || s);
+    activeFilters.push({
+      id: 'operational_status',
+      label: 'Preparación',
+      value: operationalStatuses,
+      displayText: `Preparación: ${labels.join(', ')}`
+    });
+  }
+
+  if (financialStatuses.length > 0) {
+    const labels = financialStatuses.map(s => paymentStatusLabels[s as keyof typeof paymentStatusLabels] || s);
+    activeFilters.push({
+      id: 'financial_status',
+      label: 'Pago',
+      value: financialStatuses,
+      displayText: `Pago: ${labels.join(', ')}`
+    });
+  }
+
+  if (fulfillmentStatuses.length > 0) {
+    const fulfillmentLabels: Record<string, string> = {
+      fulfilled: 'Confirmado',
+      partial: 'Parcial',
+      unfulfilled: 'Sin confirmar',
+    };
+    const labels = fulfillmentStatuses.map(s => fulfillmentLabels[s] || s);
+    activeFilters.push({
+      id: 'fulfillment_status',
+      label: 'Entrega',
+      value: fulfillmentStatuses,
+      displayText: `Entrega: ${labels.join(', ')}`
+    });
+  }
+
+  if (tags.length > 0) {
+    activeFilters.push({
+      id: 'tags',
+      label: 'Etiquetas',
+      value: tags,
+      displayText: `Etiquetas: ${tags.join(', ')}`
+    });
+  }
+
+  if (priceRange) {
+    const priceLabel = FILTER_OPTIONS.find(f => f.id === 'price_range')
+      ?.options?.find(o => o.value === priceRange)?.label || priceRange;
+    activeFilters.push({
+      id: 'price_range',
+      label: 'Precio',
+      value: priceRange,
+      displayText: `Precio: ${priceLabel}`
+    });
+  }
+
+  if (dateRange) {
+    const dateLabel = FILTER_OPTIONS.find(f => f.id === 'date_range')
+      ?.options?.find(o => o.value === dateRange)?.label || dateRange;
+    activeFilters.push({
+      id: 'date_range',
+      label: 'Fecha',
+      value: dateRange,
+      displayText: `Fecha: ${dateLabel}`
+    });
+  }
+
+  const handleFilterSelect = (option: FilterOption) => {
+    setSelectedFilterOption(option);
+    setPopoverOpen(false);
+    setFilterSelectorOpen(true);
+  };
+
+  const handleFilterApply = (value: string | string[]) => {
+    if (selectedFilterOption) {
+      updateFilter(selectedFilterOption.id, value);
+    }
+    setFilterSelectorOpen(false);
+    setSelectedFilterOption(null);
+  };
+
+  const handleFilterCancel = () => {
+    setFilterSelectorOpen(false);
+    setSelectedFilterOption(null);
+  };
+
+  // Fetch orders when filters change
   useEffect(() => {
     if (currentOrganization?.id) {
       fetchOrders({ 
-        status: selectedStatus === 'all' ? undefined : selectedStatus,
         searchTerm: searchTerm || undefined,
+        operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+        financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+        fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        priceRange: priceRange || undefined,
+        dateRange: dateRange || undefined,
         page: 1 
       });
     }
-  }, [selectedStatus, searchTerm, currentOrganization?.id]);
+  }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
+      fulfillmentStatuses.join(','), tags.join(','), priceRange, dateRange, currentOrganization?.id]);
 
   // Mostrar loading mientras se carga la organización
   if (!currentOrganization) {
@@ -99,8 +238,13 @@ const PickingPackingPage = () => {
 
   const handlePageChange = (page: number) => {
     fetchOrders({ 
-      status: selectedStatus === 'all' ? undefined : selectedStatus,
       searchTerm: searchTerm || undefined,
+      operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+      financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+      fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      priceRange: priceRange || undefined,
+      dateRange: dateRange || undefined,
       page 
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -206,7 +350,7 @@ const PickingPackingPage = () => {
               <Input
                 placeholder="Buscar por número de orden o cliente..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => updateFilter('search', e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -226,22 +370,63 @@ const PickingPackingPage = () => {
             </Button>
           </div>
 
-          {/* Status Filters */}
+          {/* Advanced Filters UI */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant={selectedStatus === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedStatus('all')}
-            >
-              Todos ({stats.total})
-            </Button>
-            <Button
-              variant={selectedStatus === 'pending' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedStatus('pending')}
-            >
-              No preparados ({stats.pending})
-            </Button>
+            {/* Active filter chips */}
+            {activeFilters.map((filter) => (
+              <Badge
+                key={filter.id}
+                variant="secondary"
+                className="px-3 py-1.5 text-sm flex items-center gap-2"
+              >
+                {filter.displayText}
+                <button
+                  onClick={() => updateFilter(filter.id, null)}
+                  className="hover:bg-muted rounded-full p-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
+            
+            {/* Add filter button */}
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Agregar filtro
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar filtro..." />
+                  <CommandEmpty>No se encontraron filtros</CommandEmpty>
+                  <CommandGroup>
+                    {FILTER_OPTIONS.map((option) => (
+                      <CommandItem
+                        key={option.id}
+                        onSelect={() => handleFilterSelect(option)}
+                        className="cursor-pointer"
+                      >
+                        {option.label}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            
+            {/* Clear all button */}
+            {activeFilters.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAllFilters}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Borrar todo
+              </Button>
+            )}
           </div>
         </div>
 
@@ -516,6 +701,16 @@ const PickingPackingPage = () => {
           selectedIds={selectedOrders}
           onMarkAsPacked={handleBulkMarkAsPacked}
           onClear={() => setSelectedOrders([])}
+        />
+      )}
+
+      {/* Filter Value Selector Dialog */}
+      {filterSelectorOpen && selectedFilterOption && (
+        <FilterValueSelector
+          filter={selectedFilterOption}
+          currentValue={searchParams.get(selectedFilterOption.id)?.split(',').filter(Boolean) || []}
+          onApply={handleFilterApply}
+          onCancel={handleFilterCancel}
         />
       )}
 
