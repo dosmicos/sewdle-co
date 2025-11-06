@@ -17,7 +17,7 @@ const getOperationalStatusFromTags = (
   
   // Priority 1: EMPACADO (overrides all statuses except shipped)
   if (tagsLower.includes('empacado') && currentStatus !== 'shipped') {
-    return 'packing';
+    return 'ready_to_ship';
   }
   
   // Priority 2: Confirmado (shows in pending filter)

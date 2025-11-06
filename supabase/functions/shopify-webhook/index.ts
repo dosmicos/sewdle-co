@@ -321,20 +321,27 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
 
   // Sincronizar picking_packing_orders
   console.log('📦 Sincronizando estado de picking & packing...');
+  console.log('📊 Información del pedido:');
+  console.log('  - fulfillment_status:', order.fulfillment_status);
+  console.log('  - financial_status:', order.financial_status);
+  console.log('  - cancelled_at:', order.cancelled_at);
+  console.log('  - tags:', order.tags);
   
-  // Determinar operational_status basado en estados de Shopify
+  // Determinar operational_status basado en estados y tags de Shopify
   let operationalStatus: 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'shipped' = 'pending';
+
+  const orderTags = (order.tags || '').toLowerCase();
 
   if (order.cancelled_at) {
     operationalStatus = 'pending'; // Mantener en pending para que no aparezca en flujo activo
   } else if (order.fulfillment_status === 'fulfilled') {
-    operationalStatus = 'shipped';
-  } else if (order.fulfillment_status === 'partial') {
-    operationalStatus = 'packing';
-  } else if (order.financial_status === 'paid') {
-    operationalStatus = 'pending'; // El equipo la moverá manualmente a picking
+    operationalStatus = 'shipped'; // Pedido completamente enviado
+  } else if (orderTags.includes('empacado')) {
+    operationalStatus = 'ready_to_ship'; // Tag EMPACADO = listo para enviar
+  } else if (order.fulfillment_status === null || order.fulfillment_status === 'unfulfilled' || order.fulfillment_status === '') {
+    operationalStatus = 'pending'; // Sin fulfillment = por procesar
   } else {
-    operationalStatus = 'pending';
+    operationalStatus = 'pending'; // Fallback
   }
 
   console.log(`📦 Actualizando estado operacional a: ${operationalStatus}`);
