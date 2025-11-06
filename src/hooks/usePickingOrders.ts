@@ -220,8 +220,7 @@ export const usePickingOrders = () => {
           raw_data
         )
       `, { count: 'exact' })
-      .eq('organization_id', currentOrganization?.id)
-      .neq('operational_status', 'shipped');
+      .eq('organization_id', currentOrganization?.id);
 
       // Apply search filter using the matching IDs
       if (matchingShopifyOrderIds !== null) {
