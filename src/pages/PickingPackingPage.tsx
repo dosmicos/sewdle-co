@@ -708,7 +708,11 @@ const PickingPackingPage = () => {
       {filterSelectorOpen && selectedFilterOption && (
         <FilterValueSelector
           filter={selectedFilterOption}
-          currentValue={searchParams.get(selectedFilterOption.id)?.split(',').filter(Boolean) || []}
+          currentValue={
+            selectedFilterOption.type === 'multiselect'
+              ? searchParams.get(selectedFilterOption.id)?.split(',').filter(Boolean) || []
+              : searchParams.get(selectedFilterOption.id) || ''
+          }
           onApply={handleFilterApply}
           onCancel={handleFilterCancel}
         />

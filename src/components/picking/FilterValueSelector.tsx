@@ -23,9 +23,36 @@ export const FilterValueSelector = ({
   onApply, 
   onCancel 
 }: FilterValueSelectorProps) => {
-  const [selectedValues, setSelectedValues] = useState<string[]>(
-    Array.isArray(currentValue) ? currentValue : currentValue ? [currentValue] : []
-  );
+  const [selectedValues, setSelectedValues] = useState<string[]>(() => {
+    if (Array.isArray(currentValue)) {
+      return currentValue;
+    }
+    if (typeof currentValue === 'string' && currentValue) {
+      return [currentValue];
+    }
+    return [];
+  });
+
+  // Validación temprana
+  if (!filter || !filter.options || filter.options.length === 0) {
+    return (
+      <Dialog open onOpenChange={onCancel}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Error</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <p className="text-sm text-muted-foreground">
+              No se pudieron cargar las opciones del filtro.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={onCancel}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const handleApply = () => {
     if (filter.type === 'multiselect') {
@@ -81,7 +108,10 @@ export const FilterValueSelector = ({
           <Button variant="ghost" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button onClick={handleApply} disabled={selectedValues.length === 0}>
+          <Button 
+            onClick={handleApply} 
+            disabled={filter.type === 'multiselect' && selectedValues.length === 0}
+          >
             Aplicar filtro
           </Button>
         </DialogFooter>
