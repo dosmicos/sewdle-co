@@ -22,6 +22,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from '@/components/ui/command';
 import {
   Table,
@@ -404,25 +405,27 @@ const PickingPackingPage = () => {
               <PopoverContent className="w-80 p-0" align="start">
                 <Command value={commandValue} onValueChange={setCommandValue}>
                   <CommandInput placeholder="Buscar filtro..." />
-                  <CommandEmpty>No se encontraron filtros</CommandEmpty>
-                  <CommandGroup>
-                    {FILTER_OPTIONS.map((option) => (
-                      <CommandItem
-                        key={option.id}
-                        value={option.id}
-                        onSelect={(value) => {
-                          const selected = FILTER_OPTIONS.find(opt => opt.id === value);
-                          if (selected) {
-                            handleFilterSelect(selected);
-                            setCommandValue('');
-                          }
-                        }}
-                        className="cursor-pointer"
-                      >
-                        {option.label}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                  <CommandList>
+                    <CommandEmpty>No se encontraron filtros</CommandEmpty>
+                    <CommandGroup>
+                      {FILTER_OPTIONS.map((option) => (
+                        <CommandItem
+                          key={option.id}
+                          value={option.id}
+                          onSelect={(value) => {
+                            const selected = FILTER_OPTIONS.find(opt => opt.id === value);
+                            if (selected) {
+                              handleFilterSelect(selected);
+                              setCommandValue('');
+                            }
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {option.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>
