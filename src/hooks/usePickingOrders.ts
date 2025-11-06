@@ -155,13 +155,11 @@ export const usePickingOrders = () => {
       setLoading(true);
       
       const page = filters?.page || currentPage;
-      const offset = (page - 1) * pageSize;
       
       logger.info('[PickingOrders] Fetching orders', { 
         organizationId: currentOrganization?.id,
         filters,
-        page,
-        offset
+        page
       });
       
       // First, auto-initialize any new Shopify orders
@@ -231,8 +229,8 @@ export const usePickingOrders = () => {
       }
 
       query = query
-        .range(offset, offset + pageSize - 1)
-        .order('order_number', { ascending: false });
+        .order('order_number', { ascending: false })
+        .limit(5000); // Límite de seguridad para evitar cargar demasiadas órdenes
 
       const { data, error, count } = await query;
 
@@ -336,16 +334,24 @@ export const usePickingOrders = () => {
         });
       }
 
-      logger.info(`[PickingOrders] Órdenes cargadas exitosamente: ${ordersData.length}`, {
-        count: ordersData.length,
-        totalCount: count,
+      // Calcular el total DESPUÉS de todos los filtros
+      const filteredTotalCount = ordersData.length;
+
+      // Aplicar paginación en memoria
+      const offset = (page - 1) * pageSize;
+      const paginatedOrders = ordersData.slice(offset, offset + pageSize);
+
+      logger.info(`[PickingOrders] Paginación aplicada: ${paginatedOrders.length} de ${filteredTotalCount} órdenes`, {
         page,
-        firstOrder: ordersData[0]?.shopify_order?.order_number,
-        hasShopifyOrder: !!ordersData[0]?.shopify_order
+        offset,
+        pageSize,
+        totalPages: Math.ceil(filteredTotalCount / pageSize),
+        firstOrder: paginatedOrders[0]?.shopify_order?.order_number,
+        hasShopifyOrder: !!paginatedOrders[0]?.shopify_order
       });
 
-      setOrders(ordersData as PickingOrder[]);
-      setTotalCount(count || 0);
+      setOrders(paginatedOrders as PickingOrder[]);
+      setTotalCount(filteredTotalCount);
       setCurrentPage(page);
     } catch (error: any) {
       logger.error('[PickingOrders] Error fetching picking orders', error);
