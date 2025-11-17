@@ -39,12 +39,12 @@ export const useReplenishment = () => {
     try {
       setLoading(true);
       
-      // Usar la nueva vista v_replenishment_details
+      // Usar la nueva vista v_replenishment_details - solo datos de hoy
       const { data, error } = await supabase
         .from('v_replenishment_details')
         .select('*')
         .eq('organization_id', currentOrganization.id)
-        .gte('calculation_date', new Date().toISOString().split('T')[0]);
+        .eq('calculation_date', new Date().toISOString().split('T')[0]);
       
       if (error) throw error;
       
