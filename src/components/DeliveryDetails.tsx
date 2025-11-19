@@ -199,13 +199,24 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
 
     try {
       // Actualizar datos de calidad de la variante
+      // Si estamos en modo de re-edición, resetear el estado de sincronización
+      const updateData: any = {
+        quantity_approved: variantData.approved,
+        quantity_defective: variantData.defective,
+        quality_notes: variantData.reason || null
+      };
+      
+      // Si estamos en modo re-edición, resetear la sincronización para permitir nueva sincronización
+      if (isReEditingQuality) {
+        updateData.synced_to_shopify = false;
+        updateData.sync_attempt_count = 0;
+        updateData.sync_error_message = null;
+        updateData.last_sync_attempt = null;
+      }
+
       const { error } = await supabase
         .from('delivery_items')
-        .update({
-          quantity_approved: variantData.approved,
-          quantity_defective: variantData.defective,
-          quality_notes: variantData.reason || null
-        })
+        .update(updateData)
         .eq('id', itemId);
 
       if (error) {
@@ -960,6 +971,17 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
               </Button>
             )}
           </div>
+          
+          {/* Banner de modo re-edición */}
+          {isReEditingQuality && (
+            <Alert className="mt-4 border-blue-500 bg-blue-50">
+              <Edit2 className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Modo de re-edición activo:</strong> Puedes modificar las cantidades aprobadas y defectuosas. 
+                Los cambios no se sincronizarán hasta que guardes y vuelvas a sincronizar cada variante.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border">
@@ -1102,7 +1124,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
                             
                             {/* Botones de acciones por variante */}
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {canSaveVariant && !item.synced_to_shopify && (
+                              {canSaveVariant && (!item.synced_to_shopify || isReEditingQuality) && (
                                 (() => {
                                   const isLast = isLastUnsavedVariant(item.id);
                                   const pendingSync = getPendingSyncVariants().length;
