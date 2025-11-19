@@ -81,9 +81,9 @@ export const useReplenishment = () => {
       
       console.log('✅ Respuesta RPC:', data);
       
-      const result = data as { success?: boolean; inserted?: number } | null;
+      const result = data as { inserted?: number } | null;
       
-      if (result?.success) {
+      if (result?.inserted !== undefined && result.inserted >= 0) {
         toast.success(`Cálculo completado: ${result.inserted} sugerencias generadas`);
         await fetchSuggestions();
       } else {
