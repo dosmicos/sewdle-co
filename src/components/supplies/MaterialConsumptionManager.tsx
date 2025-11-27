@@ -225,7 +225,7 @@ const MaterialConsumptionManager = () => {
               </TableHeader>
               <TableBody>
                 {filteredConsumptions.map((consumption) => (
-                  <TableRow key={`${consumption.materialId}-${consumption.workshopId}`}>
+                  <TableRow key={consumption.id}>
                     <TableCell className="font-medium">{consumption.orderNumber}</TableCell>
                     <TableCell>{consumption.materialName}</TableCell>
                     <TableCell>
