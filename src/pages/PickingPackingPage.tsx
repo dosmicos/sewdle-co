@@ -4,7 +4,9 @@ import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout'
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, CloudDownload } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { PickingBulkActionsBar } from '@/components/picking/PickingBulkActionsBar';
@@ -73,6 +75,7 @@ const paymentStatusLabels = {
 
 const PickingPackingPage = () => {
   const { currentOrganization } = useOrganization();
+  const { toast } = useToast();
   const { 
     orders, 
     loading, 
@@ -91,6 +94,62 @@ const PickingPackingPage = () => {
   const [selectedFilterOption, setSelectedFilterOption] = useState<FilterOption | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [commandValue, setCommandValue] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  // Sync fulfillment status from Shopify
+  const handleSyncWithShopify = async () => {
+    if (!currentOrganization?.id) {
+      toast({
+        title: 'Error',
+        description: 'No hay organización seleccionada',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-fulfillment', {
+        body: {
+          organization_id: currentOrganization.id,
+          days_back: 60
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: 'Sincronización completada',
+          description: `${data.stats.updatedInDb} pedidos actualizados. Fulfilled: ${data.stats.fulfilled}, Unfulfilled: ${data.stats.unfulfilled}`,
+        });
+        
+        // Refresh orders after sync
+        fetchOrders({
+          searchTerm: searchTerm || undefined,
+          operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+          financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+          fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+          tags: tags.length > 0 ? tags : undefined,
+          excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
+          priceRange: priceRange || undefined,
+          dateRange: dateRange || undefined,
+          page: currentPage
+        });
+      } else {
+        throw new Error(data?.error || 'Error desconocido');
+      }
+    } catch (error: any) {
+      console.error('Error syncing with Shopify:', error);
+      toast({
+        title: 'Error de sincronización',
+        description: error.message || 'No se pudo sincronizar con Shopify',
+        variant: 'destructive'
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Read filters from URL
   const searchTerm = searchParams.get('search') || '';
@@ -445,6 +504,17 @@ const PickingPackingPage = () => {
               title="Refrescar lista de pedidos"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncWithShopify}
+              disabled={syncing || loading}
+              title="Sincronizar estado de fulfillment desde Shopify"
+              className="gap-2"
+            >
+              <CloudDownload className={`w-4 h-4 ${syncing ? 'animate-pulse' : ''}`} />
+              {syncing ? 'Sincronizando...' : 'Sync Shopify'}
             </Button>
             <Button
               variant="default"
