@@ -80,6 +80,7 @@ const PickingPackingPage = () => {
     totalCount, 
     totalPages, 
     pageSize,
+    isRealtimeConnected,
     fetchOrders,
     bulkUpdateOrderStatus,
     bulkUpdateOrdersByDate
@@ -434,6 +435,11 @@ const PickingPackingPage = () => {
             >
               <RefreshCw className="w-4 h-4" />
             </Button>
+            {isRealtimeConnected && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                <span className="animate-pulse mr-1">●</span> En vivo
+              </Badge>
+            )}
             <Button
               variant="default"
               size="sm"
