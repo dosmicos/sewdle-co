@@ -102,18 +102,31 @@ const PickingPackingPage = () => {
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
 
-  // Auto-remove operational_status when using tags-based filtering (Para Preparar)
-  // This ensures the app view matches Shopify exactly
+  // Auto-ajustar filtros cuando se usa tags=confirmado (Para Preparar)
+  // Esto asegura que la vista coincida exactamente con Shopify
   useEffect(() => {
-    const hasTagFilter = tags.some(t => t.toLowerCase() === 'confirmado');
-    const hasOperationalStatus = searchParams.has('operational_status');
+    const hasConfirmadoTag = tags.some(t => t.toLowerCase() === 'confirmado');
     
-    if (hasTagFilter && hasOperationalStatus) {
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('operational_status');
-      setSearchParams(newParams, { replace: true });
+    if (hasConfirmadoTag) {
+      const hasOperationalStatus = searchParams.has('operational_status');
+      const hasExcludeEmpacado = excludeTags.some(t => t.toLowerCase() === 'empacado');
+      
+      // Auto-remover operational_status y auto-agregar exclude_tags=empacado
+      if (hasOperationalStatus || !hasExcludeEmpacado) {
+        const newParams = new URLSearchParams(searchParams);
+        
+        if (hasOperationalStatus) {
+          newParams.delete('operational_status');
+        }
+        
+        if (!hasExcludeEmpacado) {
+          newParams.set('exclude_tags', 'empacado');
+        }
+        
+        setSearchParams(newParams, { replace: true });
+      }
     }
-  }, [tags, searchParams, setSearchParams]);
+  }, [tags, excludeTags, searchParams, setSearchParams]);
 
   // Update filter function
   const updateFilter = (key: string, value: string | string[] | null) => {
