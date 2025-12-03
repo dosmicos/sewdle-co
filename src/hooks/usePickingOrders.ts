@@ -301,6 +301,24 @@ export const usePickingOrders = () => {
         });
       }
 
+      // AUTO-FILTER: Cuando se filtra por tag "confirmado", excluir pedidos cancelados y ya enviados
+      // Esto replica exactamente el comportamiento del filtro "No pagado" de Shopify
+      if (filters?.tags && filters.tags.some(tag => tag.toLowerCase() === 'confirmado')) {
+        // Excluir pedidos cancelados
+        ordersData = ordersData.filter((order: any) => {
+          const cancelledAt = order.shopify_order?.cancelled_at;
+          return !cancelledAt; // Solo incluir si NO está cancelado
+        });
+        
+        // Excluir pedidos ya enviados (fulfillment_status NOT NULL)
+        ordersData = ordersData.filter((order: any) => {
+          const fulfillmentStatus = order.shopify_order?.fulfillment_status;
+          return !fulfillmentStatus || fulfillmentStatus === null; // Solo incluir si NO tiene fulfillment
+        });
+        
+        logger.info('[PickingOrders] Auto-filtro "Para Preparar" aplicado: excluyendo cancelados y ya enviados');
+      }
+
       // Filter by price range
       if (filters?.priceRange) {
         const [minStr, maxStr] = filters.priceRange.split('-');
