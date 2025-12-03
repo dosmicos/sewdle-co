@@ -43,61 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isProcessingAuth = useRef(false);
 
   const createUserProfile = useCallback(async (session: Session): Promise<UserProfile> => {
-    console.log('Creating user profile for:', session.user.id);
-    
-    let requiresPasswordChange = false;
-    let profile = null;
+    let requiresPasswordChange = session.user.user_metadata?.requires_password_change || false;
+    let profileName = session.user.user_metadata?.name || session.user.email;
     
     try {
-      // Intentar obtener perfil de la BD
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
-      if (profileError) {
-        // Solo loguear errores inesperados (42501 es permiso denegado durante setup inicial)
-        if (profileError.code === '42501') {
-          console.info('Profile access denied - using metadata fallback');
-        } else if (profileError.code !== 'PGRST116') {
-          console.warn('Error fetching profile from DB:', profileError);
-        }
-        // Fallback: leer desde user_metadata
-        requiresPasswordChange = session.user.user_metadata?.requires_password_change || false;
-        console.log('Using user_metadata for requiresPasswordChange:', requiresPasswordChange);
-      } else {
-        profile = profileData;
-        requiresPasswordChange = profile?.requires_password_change || false;
-        console.log('Using profile DB for requiresPasswordChange:', requiresPasswordChange);
-      }
-
-      // Si no existe perfil, crearlo
-      if (!profile) {
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: session.user.id,
-            email: session.user.email,
-            name: session.user.user_metadata?.name || session.user.email,
-            requires_password_change: session.user.user_metadata?.requires_password_change || false
-          });
-
-        if (insertError) {
-          // Solo loguear si no es error de permisos durante setup
-          if (insertError.code !== '42501') {
-            console.error('Error creating profile:', insertError);
-          }
-        }
-      }
-
-      // Obtener información del rol usando la nueva función
-      const { data: roleInfo, error: roleError } = await supabase
+      // Obtener información del rol usando RPC (esto funciona con RLS)
+      const { data: roleInfo } = await supabase
         .rpc('get_user_role_info', { user_uuid: session.user.id });
-
-      if (roleError) {
-        console.error('Error fetching user role:', roleError);
-      }
 
       let role = 'Administrador';
       let workshopId = undefined;
@@ -105,57 +57,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (roleInfo && roleInfo.length > 0) {
         role = roleInfo[0].role_name;
         workshopId = roleInfo[0].workshop_id;
-        
-        console.log('🔍 DEBUG AuthContext - Rol cargado:', { role, workshopId });
-      } else {
-        // Si no tiene rol, asignar admin por defecto
-        console.log('Assigning admin role to user:', session.user.id);
-        const { data: adminRole } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('name', 'Administrador')
-          .single();
-
-        if (adminRole) {
-          // Get current organization
-          const { data: orgData } = await supabase
-            .from('organization_users')
-            .select('organization_id')
-            .eq('user_id', session.user.id)
-            .eq('status', 'active')
-            .single();
-
-          const { error: roleInsertError } = await supabase
-            .from('user_roles')
-            .insert({
-              user_id: session.user.id,
-              role_id: adminRole.id,
-              organization_id: orgData?.organization_id
-            });
-
-          if (!roleInsertError) {
-            role = 'Administrador';
-          }
-        }
       }
 
       return {
         id: session.user.id,
         email: session.user.email || '',
         role,
-        name: profile?.name || session.user.user_metadata?.name || session.user.email,
+        name: profileName,
         workshopId,
         requiresPasswordChange
       };
     } catch (error) {
       console.error('Error in createUserProfile:', error);
-      // Fallback profile con user_metadata
       return {
         id: session.user.id,
         email: session.user.email || '',
         role: 'Administrador',
-        name: session.user.user_metadata?.name || session.user.email,
-        requiresPasswordChange: session.user.user_metadata?.requires_password_change || false
+        name: profileName,
+        requiresPasswordChange
       };
     }
   }, []);
@@ -228,58 +147,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user?.role === 'Líder QC';
   }, [user]);
 
-  const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
-    console.log('Auth state changed:', event, session?.user?.id);
-    
-    // Siempre actualizar la sesión
-    setSession(session);
-    
+  const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {
     // TOKEN_REFRESHED: Solo actualizar sesión, NO re-crear perfil
-    // Esto evita múltiples queries y rate limiting
     if (event === 'TOKEN_REFRESHED') {
-      console.debug('Token refreshed - session updated, skipping profile recreation');
+      setSession(newSession);
       return;
     }
     
     // SIGNED_OUT: Limpiar todo
-    if (event === 'SIGNED_OUT' || !session?.user) {
+    if (event === 'SIGNED_OUT' || !newSession?.user) {
+      setSession(null);
       setUser(null);
       isProcessingAuth.current = false;
       setLoading(false);
       return;
     }
     
-    // CRÍTICO: Verificar que el access_token esté presente antes de hacer queries
-    // Sin esto, las políticas RLS fallarán con 401/403
-    if (!session.access_token) {
-      console.debug('Session exists but access_token not ready yet, waiting...');
+    // CRÍTICO: Verificar que el access_token esté presente
+    if (!newSession.access_token) {
       return;
     }
     
-    // Evitar procesamiento duplicado para SIGNED_IN e INITIAL_SESSION
+    // Actualizar sesión siempre
+    setSession(newSession);
+    
+    // Si ya estamos procesando o ya tenemos usuario para este session ID, skip
     if (isProcessingAuth.current) {
-      console.debug('Auth already processing, skipping:', event);
       return;
     }
     
-    // Procesar login/inicial
+    // Procesar solo si es INITIAL_SESSION o SIGNED_IN sin usuario actual
     isProcessingAuth.current = true;
     try {
-      const userProfile = await createUserProfile(session);
+      const userProfile = await createUserProfile(newSession);
       setUser(userProfile);
-      console.log('User profile set:', userProfile);
     } catch (error) {
       console.error('Error creating user profile:', error);
       setUser({
-        id: session.user.id,
-        email: session.user.email || '',
+        id: newSession.user.id,
+        email: newSession.user.email || '',
         role: 'Administrador',
-        name: session.user.email,
+        name: newSession.user.email,
         requiresPasswordChange: false
       });
     } finally {
-      isProcessingAuth.current = false;
       setLoading(false);
+      // Mantener isProcessingAuth true para evitar re-procesamiento
+      // Solo resetear en SIGNED_OUT
     }
   }, [createUserProfile]);
 
