@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -69,9 +69,14 @@ export const usePickingOrders = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const { currentOrganization } = useOrganization();
   
   const pageSize = 100;
+  
+  // Refs para realtime
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastFiltersRef = useRef<any>(null);
 
   const autoInitializePickingOrders = async () => {
     if (!currentOrganization?.id) return;
@@ -151,6 +156,9 @@ export const usePickingOrders = () => {
       setLoading(false);
       return;
     }
+
+    // Guardar filtros para uso en realtime refresh
+    lastFiltersRef.current = filters;
 
     try {
       setLoading(true);
@@ -781,15 +789,108 @@ export const usePickingOrders = () => {
     }
   };
 
+  // Configurar suscripción a Realtime
+  const setupRealtimeSubscription = useCallback(() => {
+    if (!currentOrganization?.id) return;
+    
+    // Limpiar suscripción anterior
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    logger.info('[PickingOrders] Configurando suscripción Realtime');
+
+    channelRef.current = supabase
+      .channel('picking-orders-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'shopify_orders',
+          filter: `organization_id=eq.${currentOrganization.id}`
+        },
+        (payload: any) => {
+          logger.info('🔔 Nuevo pedido detectado:', payload);
+          toast.info('¡Nuevo pedido recibido!', {
+            description: `Orden: ${payload.new?.order_number || 'Nueva'}`,
+          });
+          // Auto-refetch después de 1.5 segundos para dar tiempo al webhook
+          setTimeout(() => {
+            if (lastFiltersRef.current) {
+              fetchOrders(lastFiltersRef.current);
+            } else {
+              fetchOrders();
+            }
+          }, 1500);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'shopify_orders',
+          filter: `organization_id=eq.${currentOrganization.id}`
+        },
+        (payload: any) => {
+          // Verificar si cambió algo relevante (tags, financial_status)
+          const oldTags = payload.old?.tags || '';
+          const newTags = payload.new?.tags || '';
+          const oldFinancial = payload.old?.financial_status;
+          const newFinancial = payload.new?.financial_status;
+          
+          if (oldTags !== newTags || oldFinancial !== newFinancial) {
+            logger.info('🔄 Pedido actualizado:', { 
+              orderNumber: payload.new?.order_number,
+              oldTags, 
+              newTags,
+              oldFinancial,
+              newFinancial 
+            });
+            
+            toast.info('Pedido actualizado', {
+              description: `Orden: ${payload.new?.order_number || 'Actualizada'}`,
+            });
+            
+            // Refetch con los últimos filtros
+            setTimeout(() => {
+              if (lastFiltersRef.current) {
+                fetchOrders(lastFiltersRef.current);
+              } else {
+                fetchOrders();
+              }
+            }, 500);
+          }
+        }
+      )
+      .subscribe((status) => {
+        logger.info('[PickingOrders] Realtime subscription status:', status);
+        setIsRealtimeConnected(status === 'SUBSCRIBED');
+      });
+  }, [currentOrganization?.id]);
+
+  // Efecto para cargar órdenes y configurar realtime
   useEffect(() => {
     if (currentOrganization?.id) {
-      logger.info('[PickingOrders] Organización cargada, iniciando fetch');
+      logger.info('[PickingOrders] Organización cargada, iniciando fetch y realtime');
       fetchOrders();
+      setupRealtimeSubscription();
     } else {
       logger.info('[PickingOrders] Esperando carga de organización...');
       setLoading(true);
     }
-  }, [currentOrganization?.id]);
+    
+    // Cleanup
+    return () => {
+      if (channelRef.current) {
+        logger.info('[PickingOrders] Limpiando suscripción Realtime');
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [currentOrganization?.id, setupRealtimeSubscription]);
 
   return {
     orders,
@@ -798,6 +899,7 @@ export const usePickingOrders = () => {
     totalCount,
     pageSize,
     totalPages: Math.ceil(totalCount / pageSize),
+    isRealtimeConnected,
     fetchOrders,
     updateOrderStatus,
     bulkUpdateOrderStatus,
