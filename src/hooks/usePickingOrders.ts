@@ -342,6 +342,17 @@ export const usePickingOrders = () => {
         logger.info('[PickingOrders] Auto-filtro "Para Preparar" aplicado: excluyendo cancelados y ya enviados');
       }
 
+      // FILTRO PERMANENTE: Solo mostrar órdenes desde #62303 en adelante
+      const MIN_ORDER_NUMBER = 62303;
+      ordersData = ordersData.filter((order: any) => {
+        const orderNumber = parseInt(order.shopify_order?.order_number || '0', 10);
+        return orderNumber >= MIN_ORDER_NUMBER;
+      });
+      
+      if (ordersData.length > 0) {
+        logger.info(`[PickingOrders] Filtro de orden mínima aplicado: >= #${MIN_ORDER_NUMBER}, ${ordersData.length} órdenes restantes`);
+      }
+
       // Filter by price range
       if (filters?.priceRange) {
         const [minStr, maxStr] = filters.priceRange.split('-');
