@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,13 +14,13 @@ import {
   RefreshCw,
   Award,
   Target,
-  Package,
-  ExternalLink
+  Package
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell, Tooltip } from 'recharts';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const { 
     stats, 
     productionData, 
@@ -87,14 +88,13 @@ const AdminDashboard = () => {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={() => window.open('/picking-packing', '_blank')}
+            onClick={() => navigate('/picking-packing')}
             variant="default"
             size="sm"
             className="flex items-center gap-2"
           >
             <Package className="w-4 h-4" />
             Picking & Packing
-            <ExternalLink className="w-3 h-3" />
           </Button>
           <Button
             onClick={refreshData}
