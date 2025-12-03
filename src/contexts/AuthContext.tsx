@@ -249,6 +249,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     
+    // CRÍTICO: Verificar que el access_token esté presente antes de hacer queries
+    // Sin esto, las políticas RLS fallarán con 401/403
+    if (!session.access_token) {
+      console.debug('Session exists but access_token not ready yet, waiting...');
+      return;
+    }
+    
     // Evitar procesamiento duplicado para SIGNED_IN e INITIAL_SESSION
     if (isProcessingAuth.current) {
       console.debug('Auth already processing, skipping:', event);
