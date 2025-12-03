@@ -102,6 +102,19 @@ const PickingPackingPage = () => {
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
 
+  // Auto-remove operational_status when using tags-based filtering (Para Preparar)
+  // This ensures the app view matches Shopify exactly
+  useEffect(() => {
+    const hasTagFilter = tags.some(t => t.toLowerCase() === 'confirmado');
+    const hasOperationalStatus = searchParams.has('operational_status');
+    
+    if (hasTagFilter && hasOperationalStatus) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('operational_status');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [tags, searchParams, setSearchParams]);
+
   // Update filter function
   const updateFilter = (key: string, value: string | string[] | null) => {
     const newParams = new URLSearchParams(searchParams);
