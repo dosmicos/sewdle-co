@@ -80,7 +80,6 @@ const PickingPackingPage = () => {
     totalCount, 
     totalPages, 
     pageSize,
-    isRealtimeConnected,
     fetchOrders,
     bulkUpdateOrderStatus,
     bulkUpdateOrdersByDate
@@ -431,15 +430,22 @@ const PickingPackingPage = () => {
             <Button 
               variant="outline" 
               size="icon"
-              onClick={() => fetchOrders()}
+              onClick={() => fetchOrders({
+                searchTerm: searchTerm || undefined,
+                operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+                financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+                fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+                tags: tags.length > 0 ? tags : undefined,
+                excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
+                priceRange: priceRange || undefined,
+                dateRange: dateRange || undefined,
+                page: currentPage
+              })}
+              disabled={loading}
+              title="Refrescar lista de pedidos"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-            {isRealtimeConnected && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
-                <span className="animate-pulse mr-1">●</span> En vivo
-              </Badge>
-            )}
             <Button
               variant="default"
               size="sm"
