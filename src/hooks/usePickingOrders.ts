@@ -212,16 +212,15 @@ export const usePickingOrders = () => {
             customer_first_name,
             customer_last_name,
             customer_phone,
-          customer_email,
-          total_price,
-          currency,
-          note,
-          tags,
-          cancelled_at,
-          raw_data
-        )
-      `, { count: 'exact' })
-      .eq('organization_id', currentOrganization?.id);
+            customer_email,
+            total_price,
+            currency,
+            note,
+            tags,
+            cancelled_at
+          )
+        `, { count: 'exact' })
+        .eq('organization_id', currentOrganization?.id);
 
       // Apply search filter using the matching IDs
       if (matchingShopifyOrderIds !== null) {
