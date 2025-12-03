@@ -141,6 +141,7 @@ export const usePickingOrders = () => {
     financialStatuses?: string[];
     fulfillmentStatuses?: string[];
     tags?: string[];
+    excludeTags?: string[];
     priceRange?: string;
     dateRange?: string;
     page?: number;
@@ -283,11 +284,20 @@ export const usePickingOrders = () => {
         );
       }
 
-      // Filter by tags
+      // Filter by tags (INCLUIR)
       if (filters?.tags && filters.tags.length > 0) {
         ordersData = ordersData.filter((order: any) => {
-          const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map(t => t.trim());
+          const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
           return filters.tags?.some(tag => orderTags.includes(tag.toLowerCase()));
+        });
+      }
+
+      // Filter by exclude_tags (EXCLUIR)
+      if (filters?.excludeTags && filters.excludeTags.length > 0) {
+        ordersData = ordersData.filter((order: any) => {
+          const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
+          // Excluir si tiene ALGUNA de las etiquetas a excluir
+          return !filters.excludeTags?.some(tag => orderTags.includes(tag.toLowerCase()));
         });
       }
 

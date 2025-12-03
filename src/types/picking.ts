@@ -46,12 +46,22 @@ export const FILTER_OPTIONS: FilterOption[] = [
   },
   {
     id: 'tags',
-    label: 'Etiquetado',
+    label: 'Incluir etiquetas',
     type: 'multiselect',
     options: [
       { value: 'confirmado', label: 'Confirmado' },
       { value: 'empacado', label: 'Empacado' },
       { value: 'urgente', label: 'Urgente' },
+    ]
+  },
+  {
+    id: 'exclude_tags',
+    label: 'Excluir etiquetas',
+    type: 'multiselect',
+    options: [
+      { value: 'empacado', label: 'Empacado' },
+      { value: 'enviado', label: 'Enviado' },
+      { value: 'cancelado', label: 'Cancelado' },
     ]
   },
   {
