@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -40,6 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const isProcessingAuth = useRef(false);
 
   const createUserProfile = useCallback(async (session: Session): Promise<UserProfile> => {
     console.log('Creating user profile for:', session.user.id);
@@ -228,10 +229,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
+    // Evitar procesamiento duplicado durante transiciones rápidas
+    if (isProcessingAuth.current && event !== 'SIGNED_OUT') {
+      console.debug('Auth already processing, skipping:', event);
+      return;
+    }
+    
     console.log('Auth state changed:', event, session?.user?.id);
     setSession(session);
     
     if (session?.user) {
+      isProcessingAuth.current = true;
       try {
         const userProfile = await createUserProfile(session);
         setUser(userProfile);
@@ -245,6 +253,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: session.user.email,
           requiresPasswordChange: false
         });
+      } finally {
+        isProcessingAuth.current = false;
       }
     } else {
       setUser(null);

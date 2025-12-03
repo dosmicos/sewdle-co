@@ -67,7 +67,8 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Cargar organizaciones del usuario
   const loadUserOrganizations = useCallback(async () => {
-    if (!user) {
+    // Verificar que exista user Y session con token válido
+    if (!user || !session?.access_token) {
       setUserOrganizations([]);
       setCurrentOrganization(null);
       setIsLoading(false);
@@ -128,7 +129,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, session]);
 
   // Cambiar organización activa
   const switchOrganization = useCallback(async (organizationId: string) => {
@@ -398,10 +399,27 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [currentOrganization]);
 
-  // Cargar organizaciones cuando cambie el usuario
+  // Cargar organizaciones cuando cambie el usuario y la sesión esté lista
   useEffect(() => {
-    loadUserOrganizations();
-  }, [loadUserOrganizations]);
+    let isMounted = true;
+    
+    const loadOrgs = async () => {
+      // Solo cargar si hay user Y session con token válido
+      if (isMounted && user && session?.access_token) {
+        await loadUserOrganizations();
+      } else if (isMounted && !user) {
+        setUserOrganizations([]);
+        setCurrentOrganization(null);
+        setIsLoading(false);
+      }
+    };
+    
+    loadOrgs();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, session?.access_token, loadUserOrganizations]);
 
   const value: OrganizationContextType = {
     currentOrganization,
