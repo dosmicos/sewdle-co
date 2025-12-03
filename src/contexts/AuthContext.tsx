@@ -229,68 +229,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const handleAuthStateChange = useCallback(async (event: string, session: Session | null) => {
-    // Evitar procesamiento duplicado durante transiciones rápidas
-    if (isProcessingAuth.current && event !== 'SIGNED_OUT') {
+    console.log('Auth state changed:', event, session?.user?.id);
+    
+    // Siempre actualizar la sesión
+    setSession(session);
+    
+    // TOKEN_REFRESHED: Solo actualizar sesión, NO re-crear perfil
+    // Esto evita múltiples queries y rate limiting
+    if (event === 'TOKEN_REFRESHED') {
+      console.debug('Token refreshed - session updated, skipping profile recreation');
+      return;
+    }
+    
+    // SIGNED_OUT: Limpiar todo
+    if (event === 'SIGNED_OUT' || !session?.user) {
+      setUser(null);
+      isProcessingAuth.current = false;
+      setLoading(false);
+      return;
+    }
+    
+    // Evitar procesamiento duplicado para SIGNED_IN e INITIAL_SESSION
+    if (isProcessingAuth.current) {
       console.debug('Auth already processing, skipping:', event);
       return;
     }
     
-    console.log('Auth state changed:', event, session?.user?.id);
-    setSession(session);
-    
-    if (session?.user) {
-      isProcessingAuth.current = true;
-      try {
-        const userProfile = await createUserProfile(session);
-        setUser(userProfile);
-        console.log('User profile set:', userProfile);
-      } catch (error) {
-        console.error('Error creating user profile:', error);
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          role: 'Administrador',
-          name: session.user.email,
-          requiresPasswordChange: false
-        });
-      } finally {
-        isProcessingAuth.current = false;
-      }
-    } else {
-      setUser(null);
+    // Procesar login/inicial
+    isProcessingAuth.current = true;
+    try {
+      const userProfile = await createUserProfile(session);
+      setUser(userProfile);
+      console.log('User profile set:', userProfile);
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      setUser({
+        id: session.user.id,
+        email: session.user.email || '',
+        role: 'Administrador',
+        name: session.user.email,
+        requiresPasswordChange: false
+      });
+    } finally {
+      isProcessingAuth.current = false;
+      setLoading(false);
     }
-    
-    setLoading(false);
   }, [createUserProfile]);
 
   useEffect(() => {
     let mounted = true;
 
+    // onAuthStateChange ya dispara INITIAL_SESSION con la sesión almacenada
+    // NO necesitamos llamar getSession() manualmente - eso causa duplicados
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted) {
-        setTimeout(() => {
-          if (mounted) {
-            handleAuthStateChange(event, session);
-          }
-        }, 0);
-      }
+      if (!mounted) return;
+      
+      // setTimeout(0) evita deadlocks con Supabase según docs
+      setTimeout(() => {
+        if (mounted) {
+          handleAuthStateChange(event, session);
+        }
+      }, 0);
     });
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session) {
-        setTimeout(() => {
-          if (mounted) {
-            handleAuthStateChange('SIGNED_IN', session);
-          }
-        }, 0);
-      } else if (mounted) {
+    // Timeout de seguridad: si no hay sesión después de 2s, marcar como no-loading
+    const timeoutId = setTimeout(() => {
+      if (mounted && !session) {
         setLoading(false);
       }
-    });
+    }, 2000);
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, [handleAuthStateChange]);
