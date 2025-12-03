@@ -83,6 +83,37 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
+  // Keyboard navigation - J for previous, K for next
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      if (e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        if (hasPrevious) {
+          onNavigate(allOrderIds[currentIndex - 1]);
+        }
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        if (hasNext) {
+          onNavigate(allOrderIds[currentIndex + 1]);
+        }
+      }
+    };
+
+    if (orderId) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate]);
+
   // Refetch order function (reusable)
   const refetchOrder = async () => {
     setLoadingOrder(true);
@@ -452,7 +483,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   onClick={handlePrevious}
                   disabled={!hasPrevious}
                   className="h-9 w-9"
-                  title="Pedido anterior (más nuevo)"
+                  title="Pedido anterior (J)"
                 >
                   <ChevronUp className="h-4 w-4" />
                 </Button>
@@ -462,7 +493,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   onClick={handleNext}
                   disabled={!hasNext}
                   className="h-9 w-9"
-                  title="Siguiente pedido (más antiguo)"
+                  title="Siguiente pedido (K)"
                 >
                   <ChevronDown className="h-4 w-4" />
                 </Button>
