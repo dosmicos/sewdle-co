@@ -98,6 +98,7 @@ const PickingPackingPage = () => {
   const financialStatuses = searchParams.get('financial_status')?.split(',').filter(Boolean) || [];
   const fulfillmentStatuses = searchParams.get('fulfillment_status')?.split(',').filter(Boolean) || [];
   const tags = searchParams.get('tags')?.split(',').filter(Boolean) || [];
+  const excludeTags = searchParams.get('exclude_tags')?.split(',').filter(Boolean) || [];
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
 
@@ -127,6 +128,7 @@ const PickingPackingPage = () => {
     financial_status: financialStatuses.length > 0 ? financialStatuses : undefined,
     fulfillment_status: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
     tags: tags.length > 0 ? tags : undefined,
+    exclude_tags: excludeTags.length > 0 ? excludeTags : undefined,
     price_range: priceRange || undefined,
     date_range: dateRange || undefined,
   });
@@ -189,9 +191,18 @@ const PickingPackingPage = () => {
   if (tags.length > 0) {
     activeFilters.push({
       id: 'tags',
-      label: 'Etiquetas',
+      label: 'Incluir',
       value: tags,
-      displayText: `Etiquetas: ${tags.join(', ')}`
+      displayText: `Incluir: ${tags.join(', ')}`
+    });
+  }
+
+  if (excludeTags.length > 0) {
+    activeFilters.push({
+      id: 'exclude_tags',
+      label: 'Excluir',
+      value: excludeTags,
+      displayText: `Excluir: ${excludeTags.join(', ')}`
     });
   }
 
@@ -248,13 +259,14 @@ const PickingPackingPage = () => {
         financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
         fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
         tags: tags.length > 0 ? tags : undefined,
+        excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
         priceRange: priceRange || undefined,
         dateRange: dateRange || undefined,
         page: 1 
       });
     }
   }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), priceRange, dateRange, currentOrganization?.id]);
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentOrganization?.id]);
 
   // Mostrar loading mientras se carga la organización
   if (!currentOrganization) {
@@ -277,6 +289,7 @@ const PickingPackingPage = () => {
       financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
       fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
       tags: tags.length > 0 ? tags : undefined,
+      excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
       priceRange: priceRange || undefined,
       dateRange: dateRange || undefined,
       page 
