@@ -88,13 +88,13 @@ const AdminDashboard = () => {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={() => navigate('/picking-packing')}
+            onClick={() => navigate('/picking-packing?tags=confirmado&exclude_tags=empacado')}
             variant="default"
             size="sm"
             className="flex items-center gap-2"
           >
             <Package className="w-4 h-4" />
-            Picking & Packing
+            Para Preparar
           </Button>
           <Button
             onClick={refreshData}
