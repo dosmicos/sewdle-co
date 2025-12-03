@@ -88,7 +88,7 @@ const AdminDashboard = () => {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={() => navigate('/picking-packing?tags=confirmado&exclude_tags=empacado')}
+            onClick={() => navigate('/picking-packing?tags=confirmado&exclude_tags=empacado&financial_status=paid,pending,partially_paid')}
             variant="default"
             size="sm"
             className="flex items-center gap-2"
