@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     // Parse request body
     const body = await req.json().catch(() => ({}));
     const organizationId = body.organization_id;
-    const daysBack = body.days_back || 30;
+    const daysBack = body.days_back || 365;
 
     if (!organizationId) {
       throw new Error('organization_id es requerido');
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     let hasNextPage = true;
     let pageInfo = '';
     let pageCount = 0;
-    const maxPages = 20;
+    const maxPages = 50;
 
     while (hasNextPage && pageCount < maxPages) {
       pageCount++;
