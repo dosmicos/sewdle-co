@@ -486,35 +486,16 @@ const PickingPackingPage = () => {
                 className="pl-10"
               />
             </div>
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => fetchOrders({
-                searchTerm: searchTerm || undefined,
-                operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
-                financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
-                fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
-                tags: tags.length > 0 ? tags : undefined,
-                excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
-                priceRange: priceRange || undefined,
-                dateRange: dateRange || undefined,
-                page: currentPage
-              })}
-              disabled={loading}
-              title="Refrescar lista de pedidos"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleSyncWithShopify}
               disabled={syncing || loading}
-              title="Sincronizar estado de fulfillment desde Shopify"
+              title="Sincronizar con Shopify y actualizar lista"
               className="gap-2"
             >
-              <CloudDownload className={`w-4 h-4 ${syncing ? 'animate-pulse' : ''}`} />
-              {syncing ? 'Sincronizando...' : 'Sync Shopify'}
+              <RefreshCw className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} />
+              {syncing ? 'Sincronizando...' : 'Actualizar'}
             </Button>
             <Button
               variant="default"
