@@ -230,7 +230,7 @@ export const usePickingOrders = () => {
 
       query = query
         .order('order_number', { ascending: false })
-        .limit(5000); // Límite de seguridad para evitar cargar demasiadas órdenes
+        .limit(10000); // Límite de seguridad aumentado para incluir órdenes más antiguas
 
       const { data, error, count } = await query;
 
