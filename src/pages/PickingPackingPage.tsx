@@ -613,8 +613,6 @@ const PickingPackingPage = () => {
                 <TableHead>Pedido</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
-                <TableHead>Canal</TableHead>
-                <TableHead className="text-right">Total</TableHead>
                 <TableHead>Estado del pago</TableHead>
                 <TableHead>Estado de preparación</TableHead>
               </TableRow>
@@ -622,7 +620,7 @@ const PickingPackingPage = () => {
             <TableBody>
               {orders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     No se encontraron órdenes
                   </TableCell>
                 </TableRow>
@@ -654,17 +652,6 @@ const PickingPackingPage = () => {
                           {order.shopify_order.customer_email}
                         </div>
                       )}
-                    </TableCell>
-                    <TableCell onClick={() => setSelectedOrderId(order.id)}>
-                      Online Store
-                    </TableCell>
-                    <TableCell className="text-right" onClick={() => setSelectedOrderId(order.id)}>
-                      <span className="font-medium">
-                        {formatCurrency(
-                          order.shopify_order?.raw_data?.total_price,
-                          order.shopify_order?.currency
-                        )}
-                      </span>
                     </TableCell>
                     <TableCell onClick={() => setSelectedOrderId(order.id)}>
                       <Badge 
