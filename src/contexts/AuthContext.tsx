@@ -294,9 +294,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Timeout de seguridad: si no hay sesión después de 2s, marcar como no-loading
     const timeoutId = setTimeout(() => {
-      if (mounted && !session) {
-        setLoading(false);
-      }
+      setLoading(prev => {
+        // Solo cambiar si aún está loading (no hubo sesión)
+        return prev ? false : prev;
+      });
     }, 2000);
 
     return () => {
