@@ -497,13 +497,6 @@ const PickingPackingPage = () => {
               <RefreshCw className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} />
               {syncing ? 'Sincronizando...' : 'Actualizar'}
             </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleBulkUpdateByDate}
-            >
-              🗄️ Archivar Históricas (Antes Agosto 1)
-            </Button>
           </div>
 
           {/* Saved Filters Manager */}
