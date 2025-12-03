@@ -21,6 +21,19 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
+    // Use environment variables for Shopify credentials (same as other working functions)
+    const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+    const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+    
+    if (!rawShopifyDomain || !shopifyToken) {
+      throw new Error('SHOPIFY_STORE_DOMAIN y SHOPIFY_ACCESS_TOKEN son requeridos en las variables de entorno');
+    }
+    
+    // Normalize domain
+    const shopifyDomain = rawShopifyDomain.includes('.myshopify.com') 
+      ? rawShopifyDomain 
+      : `${rawShopifyDomain}.myshopify.com`;
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request body
@@ -33,28 +46,6 @@ Deno.serve(async (req) => {
     }
 
     console.log(`📋 Organización: ${organizationId}, Días atrás: ${daysBack}`);
-
-    // Get organization's Shopify credentials
-    const { data: orgData, error: orgError } = await supabase
-      .from('organizations')
-      .select('shopify_store_url, shopify_credentials')
-      .eq('id', organizationId)
-      .single();
-
-    if (orgError || !orgData) {
-      throw new Error(`No se encontró la organización: ${orgError?.message}`);
-    }
-
-    const credentials = orgData.shopify_credentials as { access_token?: string } | null;
-    const storeUrl = orgData.shopify_store_url;
-
-    if (!credentials?.access_token || !storeUrl) {
-      throw new Error('Credenciales de Shopify no configuradas para esta organización');
-    }
-
-    // Extract domain from store URL
-    const shopifyDomain = storeUrl.replace('https://', '').replace('http://', '').replace('/', '');
-    const shopifyToken = credentials.access_token;
 
     console.log(`🏪 Tienda Shopify: ${shopifyDomain}`);
 
