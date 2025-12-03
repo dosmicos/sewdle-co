@@ -202,6 +202,24 @@ const PickingPackingPage = () => {
     setSearchParams(newParams);
   };
 
+  // Search input state and handlers
+  const [searchInput, setSearchInput] = useState(searchTerm);
+
+  // Sync searchInput when searchTerm changes externally (e.g., filter cleared)
+  useEffect(() => {
+    setSearchInput(searchTerm);
+  }, [searchTerm]);
+
+  const handleSearch = () => {
+    updateFilter('search', searchInput);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
   const clearAllFilters = () => {
     setSearchParams(new URLSearchParams());
   };
@@ -477,14 +495,26 @@ const PickingPackingPage = () => {
         {/* Search and Filters */}
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por número de orden o cliente..."
-                value={searchTerm}
-                onChange={(e) => updateFilter('search', e.target.value)}
-                className="pl-10"
-              />
+            <div className="relative flex-1 flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por número de orden o cliente..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  className="pl-10"
+                />
+              </div>
+              <Button
+                variant="default"
+                size="default"
+                onClick={handleSearch}
+                className="gap-2"
+              >
+                <Search className="w-4 h-4" />
+                Buscar
+              </Button>
             </div>
             <Button
               variant="outline"
