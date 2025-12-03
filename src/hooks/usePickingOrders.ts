@@ -227,11 +227,35 @@ export const usePickingOrders = () => {
         query = query.in('shopify_order_id', matchingShopifyOrderIds);
       }
 
-      query = query
-        .order('order_number', { ascending: false })
-        .limit(10000); // Límite de seguridad aumentado para incluir órdenes más antiguas
+      query = query.order('order_number', { ascending: false });
 
-      const { data, error, count } = await query;
+      // Fetch orders in batches to overcome PostgREST 1000 row limit
+      const BATCH_SIZE = 1000;
+      const MAX_RECORDS = 5000;
+      let allData: any[] = [];
+      let batchOffset = 0;
+      let hasMore = true;
+      let fetchError: any = null;
+
+      while (hasMore && allData.length < MAX_RECORDS) {
+        const { data: batchData, error: batchError } = await query.range(batchOffset, batchOffset + BATCH_SIZE - 1);
+        
+        if (batchError) {
+          fetchError = batchError;
+          break;
+        }
+        
+        if (batchData && batchData.length > 0) {
+          allData = [...allData, ...batchData];
+          batchOffset += BATCH_SIZE;
+          hasMore = batchData.length === BATCH_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const data = allData;
+      const error = fetchError;
 
       if (error) {
         logger.error('[PickingOrders] Error fetching orders', error);
