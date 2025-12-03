@@ -445,9 +445,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <DialogTitle className="text-2xl">
-                Orden #{effectiveOrder.shopify_order?.order_number}
-              </DialogTitle>
+              <div>
+                <DialogTitle className="text-2xl">
+                  Orden #{effectiveOrder.shopify_order?.order_number}
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {effectiveOrder.shopify_order?.created_at_shopify 
+                    ? new Date(effectiveOrder.shopify_order.created_at_shopify).toLocaleDateString('es-ES', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : ''
+                  }
+                </p>
+              </div>
               
               {effectiveOrder.shopify_order?.cancelled_at && (
                 <Badge variant="destructive" className="bg-red-600">
