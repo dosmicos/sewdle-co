@@ -35,8 +35,11 @@ export interface PickingOrder {
   created_at: string;
   updated_at: string;
   picked_at?: string;
+  picked_by?: string;
   packed_at?: string;
+  packed_by?: string;
   shipped_at?: string;
+  shipped_by?: string;
   internal_notes?: string;
   
   // Shopify order data
@@ -366,7 +369,10 @@ export const usePickingOrders = () => {
       } else if (newStatus === 'packing' && !orders.find(o => o.id === pickingOrderId)?.packed_at) {
         updates.packed_at = new Date().toISOString();
         updates.packed_by = (await supabase.auth.getUser()).data.user?.id;
-      } else if (newStatus === 'ready_to_ship' || newStatus === 'shipped') {
+      } else if (newStatus === 'ready_to_ship') {
+        updates.packed_at = new Date().toISOString();
+        updates.packed_by = (await supabase.auth.getUser()).data.user?.id;
+      } else if (newStatus === 'shipped') {
         updates.shipped_at = new Date().toISOString();
         updates.shipped_by = (await supabase.auth.getUser()).data.user?.id;
       }

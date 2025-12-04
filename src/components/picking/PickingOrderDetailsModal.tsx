@@ -62,6 +62,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [localOrder, setLocalOrder] = useState<PickingOrder | null>(null);
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [packedByName, setPackedByName] = useState<string | null>(null);
 
   const order = orders.find(o => o.id === orderId);
   const effectiveOrder = localOrder || order;
@@ -114,7 +115,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     };
   }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate]);
 
-  // Refetch order function (reusable)
+  // Fetch packed_by user name
+  useEffect(() => {
+    const fetchPackedByName = async () => {
+      const packedById = effectiveOrder?.packed_by;
+      if (!packedById) {
+        setPackedByName(null);
+        return;
+      }
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', packedById)
+        .single();
+      
+      setPackedByName(data?.name || null);
+    };
+    
+    fetchPackedByName();
+  }, [effectiveOrder?.packed_by]);
+
   const refetchOrder = async () => {
     setLoadingOrder(true);
     try {
@@ -298,7 +319,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const handleStatusChange = async (newStatus: OperationalStatus) => {
     setUpdatingStatus(true);
     
-    // Optimistic update - instant UI feedback with new tag
+    // Optimistic update - instant UI feedback with new tag and packed info
     if (effectiveOrder) {
       const statusTagMap = {
         pending: 'PENDIENTE',
@@ -317,14 +338,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         ? existingTags
         : [...existingTagsArray, newTag].join(', ');
       
+      // Get current user for optimistic update
+      const { data: { user } } = await supabase.auth.getUser();
+      
       setLocalOrder({
         ...effectiveOrder,
         operational_status: newStatus,
+        // Set packed_at and packed_by for ready_to_ship
+        ...(newStatus === 'ready_to_ship' ? {
+          packed_at: new Date().toISOString(),
+          packed_by: user?.id
+        } : {}),
         shopify_order: effectiveOrder.shopify_order ? {
           ...effectiveOrder.shopify_order,
           tags: updatedTags
         } : undefined
       });
+      
+      // Also set current user name optimistically
+      if (newStatus === 'ready_to_ship' && user?.id) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        setPackedByName(profileData?.name || null);
+      }
     }
     
     try {
@@ -632,25 +671,51 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     </p>
                   </div>
                 ) : (
-                  <Button
-                    onClick={() => handleStatusChange('ready_to_ship')}
-                    disabled={effectiveOrder.operational_status === 'ready_to_ship' || updatingStatus}
-                    className="w-full h-12 text-base gap-2 font-semibold bg-[#F4A582] hover:bg-[#E89470] text-white disabled:bg-green-500 disabled:hover:bg-green-500"
-                  >
-                    {updatingStatus ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : effectiveOrder.operational_status === 'ready_to_ship' ? (
-                      <>
-                        <CheckCircle className="w-5 h-5" />
-                        ✓ Empacado
-                      </>
-                    ) : (
-                      <>
-                        <Package className="w-5 h-5" />
-                        Marcar como Empacado
-                      </>
+                  <>
+                    <Button
+                      onClick={() => handleStatusChange('ready_to_ship')}
+                      disabled={effectiveOrder.operational_status === 'ready_to_ship' || updatingStatus}
+                      className="w-full h-12 text-base gap-2 font-semibold bg-[#F4A582] hover:bg-[#E89470] text-white disabled:bg-green-500 disabled:hover:bg-green-500"
+                    >
+                      {updatingStatus ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : effectiveOrder.operational_status === 'ready_to_ship' ? (
+                        <>
+                          <CheckCircle className="w-5 h-5" />
+                          ✓ Empacado
+                        </>
+                      ) : (
+                        <>
+                          <Package className="w-5 h-5" />
+                          Marcar como Empacado
+                        </>
+                      )}
+                    </Button>
+                    
+                    {/* Packed info display */}
+                    {effectiveOrder.operational_status === 'ready_to_ship' && effectiveOrder.packed_at && (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                        <div className="space-y-1 text-green-700">
+                          <p className="flex items-center gap-2">
+                            <span>📅</span>
+                            <span>{new Date(effectiveOrder.packed_at).toLocaleDateString('es-CO', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}</span>
+                          </p>
+                          {packedByName && (
+                            <p className="flex items-center gap-2">
+                              <span>👤</span>
+                              <span>Por: {packedByName}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
-                  </Button>
+                  </>
                 )}
               </CardContent>
             </Card>
