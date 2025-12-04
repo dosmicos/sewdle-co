@@ -485,341 +485,344 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <DialogTitle className="text-2xl">
-                  Orden #{effectiveOrder.shopify_order?.order_number}
-                </DialogTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {effectiveOrder.shopify_order?.created_at_shopify 
-                    ? new Date(effectiveOrder.shopify_order.created_at_shopify).toLocaleDateString('es-ES', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
-                    : ''
-                  }
-                </p>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div>
+                  <DialogTitle className="text-2xl">
+                    Orden #{effectiveOrder.shopify_order?.order_number}
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {effectiveOrder.shopify_order?.created_at_shopify 
+                      ? new Date(effectiveOrder.shopify_order.created_at_shopify).toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : ''
+                    }
+                  </p>
+                </div>
+                
+                {effectiveOrder.shopify_order?.cancelled_at && (
+                  <Badge variant="destructive" className="bg-red-600">
+                    ⚠️ ORDEN CANCELADA
+                  </Badge>
+                )}
+                
+                <Badge className={statusColors[effectiveOrder.operational_status]}>
+                  {statusLabels[effectiveOrder.operational_status]}
+                </Badge>
+                {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
+                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                    Pago Pendiente
+                  </Badge>
+                )}
+                {paymentMethod && (
+                  <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+                    💳 {paymentMethod}
+                  </Badge>
+                )}
               </div>
-              
-              {effectiveOrder.shopify_order?.cancelled_at && (
-                <Badge variant="destructive" className="bg-red-600">
-                  ⚠️ ORDEN CANCELADA
-                </Badge>
-              )}
-              
-              <Badge className={statusColors[effectiveOrder.operational_status]}>
-                {statusLabels[effectiveOrder.operational_status]}
-              </Badge>
-              {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
-                <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                  Pago Pendiente
-                </Badge>
-              )}
-              {paymentMethod && (
-                <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
-                  💳 {paymentMethod}
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={handlePrint} variant="outline" className="gap-2">
-                <Printer className="w-4 h-4" />
-                Imprimir
-              </Button>
-              
-              {/* Navigation buttons */}
-              <div className="flex items-center gap-1 ml-2 border-l pl-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handlePrevious}
-                  disabled={!hasPrevious}
-                  className="h-9 w-9"
-                  title="Pedido anterior (J)"
-                >
-                  <ChevronUp className="h-4 w-4" />
+              <div className="flex items-center gap-2">
+                <Button onClick={handlePrint} variant="outline" className="gap-2">
+                  <Printer className="w-4 h-4" />
+                  Imprimir
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleNext}
-                  disabled={!hasNext}
-                  className="h-9 w-9"
-                  title="Siguiente pedido (K)"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
+                
+                {/* Navigation buttons */}
+                <div className="flex items-center gap-1 ml-2 border-l pl-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handlePrevious}
+                    disabled={!hasPrevious}
+                    className="h-9 w-9"
+                    title="Pedido anterior (J)"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleNext}
+                    disabled={!hasNext}
+                    className="h-9 w-9"
+                    title="Siguiente pedido (K)"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </DialogHeader>
+          </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          {/* Left Column - Products */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  Productos ({lineItems.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {lineItems.map((item, index: number) => (
-                  <div key={index} className="flex gap-4 p-4 border rounded-lg">
-                    {/* Product Image */}
-                    <div className="flex-shrink-0">
-                      {item.image_url ? (
-                        <img 
-                          src={item.image_url} 
-                          alt={item.title}
-                          className="w-32 h-32 object-cover rounded-lg border"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement!.innerHTML = '<div class="w-32 h-32 bg-muted rounded-lg flex items-center justify-center"><svg class="w-12 h-12 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center border">
-                          <Package className="w-12 h-12 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Product Details */}
-                    <div className="flex-1 space-y-2">
-                      <div>
-                        <h4 className="font-semibold text-lg">
-                          {item.title}
-                        </h4>
-                        {item.variant_title && (
-                          <p className="text-sm text-muted-foreground">
-                            {item.variant_title}
-                          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+            {/* Left Column - Products */}
+            <div className="lg:col-span-2 space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    Productos ({lineItems.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {lineItems.map((item, index: number) => (
+                    <div key={index} className="flex gap-4 p-4 border rounded-lg">
+                      {/* Product Image */}
+                      <div className="flex-shrink-0">
+                        {item.image_url ? (
+                          <img 
+                            src={item.image_url} 
+                            alt={item.title}
+                            className="w-32 h-32 object-cover rounded-lg border"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.parentElement!.innerHTML = '<div class="w-32 h-32 bg-muted rounded-lg flex items-center justify-center"><svg class="w-12 h-12 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center border">
+                            <Package className="w-12 h-12 text-muted-foreground" />
+                          </div>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4 text-sm">
+                      {/* Product Details */}
+                      <div className="flex-1 space-y-2">
                         <div>
-                          <span className="text-muted-foreground">SKU: </span>
-                          <span className="font-medium">{item.sku || 'N/A'}</span>
+                          <h4 className="font-semibold text-lg">
+                            {item.title}
+                          </h4>
+                          {item.variant_title && (
+                            <p className="text-sm text-muted-foreground">
+                              {item.variant_title}
+                            </p>
+                          )}
                         </div>
-                        <div>
-                          <span className="text-muted-foreground">Precio: </span>
-                          <span className="font-medium">
-                            {formatCurrency(item.price, effectiveOrder.shopify_order?.currency)}
+
+                        <div className="flex items-center gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">SKU: </span>
+                            <span className="font-medium">{item.sku || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Precio: </span>
+                            <span className="font-medium">
+                              {formatCurrency(item.price, effectiveOrder.shopify_order?.currency)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quantity Highlighted */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Cantidad:</span>
+                          <span className="text-3xl font-bold text-primary">
+                            {item.quantity}
                           </span>
                         </div>
                       </div>
-
-                      {/* Quantity Highlighted */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Cantidad:</span>
-                        <span className="text-3xl font-bold text-primary">
-                          {item.quantity}
-                        </span>
-                      </div>
                     </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Financial Summary - Compact */}
-            <div className="px-4 py-3 bg-muted/30 rounded-lg border border-muted">
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(financialSummary.subtotal_price, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Envío</span>
-                  <span className="font-medium">{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Impuestos</span>
-                  <span className="font-medium">{formatCurrency(financialSummary.total_tax, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-                <Separator className="my-1.5" />
-                <div className="flex justify-between text-sm font-semibold pt-1">
-                  <span>Total</span>
-                  <span>{formatCurrency(financialSummary.total_price, effectiveOrder.shopify_order?.currency)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Status Actions - Only show when cancelled or already packed */}
-            {(effectiveOrder.shopify_order?.cancelled_at || effectiveOrder.operational_status === 'ready_to_ship') && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Estado</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {effectiveOrder.shopify_order?.cancelled_at ? (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-sm text-red-800 font-medium">
-                        ⚠️ Esta orden fue cancelada en Shopify el {new Date(effectiveOrder.shopify_order.cancelled_at).toLocaleDateString('es-CO', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                      <p className="text-xs text-red-600 mt-2">
-                        No se pueden realizar acciones de picking/packing en órdenes canceladas.
-                      </p>
-                    </div>
-                  ) : effectiveOrder.operational_status === 'ready_to_ship' && effectiveOrder.packed_at && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-                      <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Empacado</span>
-                      </div>
-                      <div className="space-y-1 text-green-700">
-                        <p className="flex items-center gap-2">
-                          <span>📅</span>
-                          <span>{new Date(effectiveOrder.packed_at).toLocaleDateString('es-CO', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}</span>
-                        </p>
-                        {packedByName && (
-                          <p className="flex items-center gap-2">
-                            <span>👤</span>
-                            <span>Por: {packedByName}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </CardContent>
               </Card>
-            )}
-          </div>
 
-          {/* Right Column - Details */}
-          <div className="space-y-4">
-            {/* Customer Info */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Cliente
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <p className="font-medium">
-                  {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
-                </p>
-                <p className="text-muted-foreground">{effectiveOrder.shopify_order?.customer_email}</p>
-                {effectiveOrder.shopify_order?.customer_phone && (
-                  <p className="text-muted-foreground">{effectiveOrder.shopify_order.customer_phone}</p>
-                )}
-              </CardContent>
-            </Card>
+              {/* Financial Summary - Compact */}
+              <div className="px-4 py-3 bg-muted/30 rounded-lg border border-muted">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-medium">{formatCurrency(financialSummary.subtotal_price, effectiveOrder.shopify_order?.currency)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Envío</span>
+                    <span className="font-medium">{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, effectiveOrder.shopify_order?.currency)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Impuestos</span>
+                    <span className="font-medium">{formatCurrency(financialSummary.total_tax, effectiveOrder.shopify_order?.currency)}</span>
+                  </div>
+                  <Separator className="my-1.5" />
+                  <div className="flex justify-between text-sm font-semibold pt-1">
+                    <span>Total</span>
+                    <span>{formatCurrency(financialSummary.total_price, effectiveOrder.shopify_order?.currency)}</span>
+                  </div>
+                </div>
+              </div>
 
-            {/* Shipping Address */}
-            {shippingAddress && (
+              {/* Status Actions - Only show when cancelled or already packed */}
+              {(effectiveOrder.shopify_order?.cancelled_at || effectiveOrder.operational_status === 'ready_to_ship') && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Estado</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {effectiveOrder.shopify_order?.cancelled_at ? (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-800 font-medium">
+                          ⚠️ Esta orden fue cancelada en Shopify el {new Date(effectiveOrder.shopify_order.cancelled_at).toLocaleDateString('es-CO', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                        <p className="text-xs text-red-600 mt-2">
+                          No se pueden realizar acciones de picking/packing en órdenes canceladas.
+                        </p>
+                      </div>
+                    ) : effectiveOrder.operational_status === 'ready_to_ship' && effectiveOrder.packed_at && (
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                        <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Empacado</span>
+                        </div>
+                        <div className="space-y-1 text-green-700">
+                          <p className="flex items-center gap-2">
+                            <span>📅</span>
+                            <span>{new Date(effectiveOrder.packed_at).toLocaleDateString('es-CO', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}</span>
+                          </p>
+                          {packedByName && (
+                            <p className="flex items-center gap-2">
+                              <span>👤</span>
+                              <span>Por: {packedByName}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column - Details */}
+            <div className="space-y-4">
+              {/* Customer Info */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    Dirección de Envío
+                    <User className="w-4 h-4" />
+                    Cliente
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1 text-sm">
-                  <p className="font-medium">{shippingAddress.name}</p>
-                  <p>{shippingAddress.address1}</p>
-                  {shippingAddress.address2 && <p>{shippingAddress.address2}</p>}
-                  <p>
-                    {shippingAddress.city}, {shippingAddress.province} {shippingAddress.zip}
+                  <p className="font-medium">
+                    {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
                   </p>
-                  <p>{shippingAddress.country}</p>
-                  {shippingAddress.phone && (
-                    <p className="text-muted-foreground">{shippingAddress.phone}</p>
+                  <p className="text-muted-foreground">{effectiveOrder.shopify_order?.customer_email}</p>
+                  {effectiveOrder.shopify_order?.customer_phone && (
+                    <p className="text-muted-foreground">{effectiveOrder.shopify_order.customer_phone}</p>
                   )}
                 </CardContent>
               </Card>
-            )}
 
-            {/* Notas de Shopify - Bidirectional Sync */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Notas de Shopify
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea
-                  value={shopifyNote}
-                  onChange={(e) => setShopifyNote(e.target.value)}
-                  placeholder="Agregar notas visibles en Shopify..."
-                  className="min-h-[100px] text-sm"
-                  disabled={!!effectiveOrder?.shopify_order?.cancelled_at}
-                />
-                <Button
-                  onClick={handleSaveShopifyNote}
-                  disabled={isSavingShopifyNote || !!effectiveOrder?.shopify_order?.cancelled_at}
-                  size="sm"
-                  className="w-full"
-                >
-                  {isSavingShopifyNote ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    'Guardar Nota en Shopify'
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  ℹ️ Los cambios se sincronizan automáticamente con Shopify
-                </p>
-              </CardContent>
-            </Card>
+              {/* Shipping Address */}
+              {shippingAddress && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Dirección de Envío
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    <p className="font-medium">{shippingAddress.name}</p>
+                    <p>{shippingAddress.address1}</p>
+                    {shippingAddress.address2 && <p>{shippingAddress.address2}</p>}
+                    <p>
+                      {shippingAddress.city}, {shippingAddress.province} {shippingAddress.zip}
+                    </p>
+                    <p>{shippingAddress.country}</p>
+                    {shippingAddress.phone && (
+                      <p className="text-muted-foreground">{shippingAddress.phone}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
-            {/* Shopify Tags */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Tags className="w-4 h-4" />
-                  Etiquetas de Shopify
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <OrderTagsManager
-                  orderId={effectiveOrder.id}
-                  shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
-                  currentTags={effectiveOrder.shopify_order.tags || ''}
-                  onTagsUpdate={(newTags) => {
-                    setLocalOrder(prev => prev ? {
-                      ...prev,
-                      shopify_order: {
-                        ...prev.shopify_order,
-                        tags: newTags
-                      }
-                    } : prev);
-                  }}
-                />
-              </CardContent>
-            </Card>
+              {/* Notas de Shopify - Bidirectional Sync */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Notas de Shopify
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Textarea
+                    value={shopifyNote}
+                    onChange={(e) => setShopifyNote(e.target.value)}
+                    placeholder="Agregar notas visibles en Shopify..."
+                    className="min-h-[100px] text-sm"
+                    disabled={!!effectiveOrder?.shopify_order?.cancelled_at}
+                  />
+                  <Button
+                    onClick={handleSaveShopifyNote}
+                    disabled={isSavingShopifyNote || !!effectiveOrder?.shopify_order?.cancelled_at}
+                    size="sm"
+                    className="w-full"
+                  >
+                    {isSavingShopifyNote ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Guardar Nota en Shopify'
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    ℹ️ Los cambios se sincronizan automáticamente con Shopify
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Shopify Tags */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Tags className="w-4 h-4" />
+                    Etiquetas de Shopify
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OrderTagsManager
+                    orderId={effectiveOrder.id}
+                    shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
+                    currentTags={effectiveOrder.shopify_order.tags || ''}
+                    onTagsUpdate={(newTags) => {
+                      setLocalOrder(prev => prev ? {
+                        ...prev,
+                        shopify_order: {
+                          ...prev.shopify_order,
+                          tags: newTags
+                        }
+                      } : prev);
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
 
-        {/* Sticky Floating Action Button - Marcar como Empacado */}
+        {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
-          <div className="fixed bottom-6 right-6 z-50">
+          <div className="absolute bottom-4 right-4 z-10">
             <Button
               onClick={handleMarkAsPackedAndPrint}
               disabled={updatingStatus}
