@@ -94,64 +94,9 @@ const PickingPackingPage = () => {
   const [selectedFilterOption, setSelectedFilterOption] = useState<FilterOption | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [commandValue, setCommandValue] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const [lastWebhookUpdate, setLastWebhookUpdate] = useState<Date | null>(null);
 
-  // Sync fulfillment status from Shopify
-  const handleSyncWithShopify = async () => {
-    if (!currentOrganization?.id) {
-      toast({
-        title: 'Error',
-        description: 'No hay organización seleccionada',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('sync-shopify-fulfillment', {
-        body: {
-          organization_id: currentOrganization.id,
-          days_back: 4 // Reduced from 60 - webhook handles real-time updates
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        toast({
-          title: 'Sincronización completada',
-          description: `${data.stats.updatedInDb} pedidos actualizados. Fulfilled: ${data.stats.fulfilled}, Unfulfilled: ${data.stats.unfulfilled}`,
-        });
-        
-        // Refresh orders after sync
-        fetchOrders({
-          searchTerm: searchTerm || undefined,
-          operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
-          financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
-          fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
-          tags: tags.length > 0 ? tags : undefined,
-          excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
-          priceRange: priceRange || undefined,
-          dateRange: dateRange || undefined,
-          page: currentPage
-        });
-      } else {
-        throw new Error(data?.error || 'Error desconocido');
-      }
-    } catch (error: any) {
-      console.error('Error syncing with Shopify:', error);
-      toast({
-        title: 'Error de sincronización',
-        description: error.message || 'No se pudo sincronizar con Shopify',
-        variant: 'destructive'
-      });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Read filters from URL
+  // Read filters from URL - must be declared before handleRefreshList
   const searchTerm = searchParams.get('search') || '';
   const operationalStatuses = searchParams.get('operational_status')?.split(',').filter(Boolean) || [];
   const financialStatuses = searchParams.get('financial_status')?.split(',').filter(Boolean) || [];
@@ -160,6 +105,50 @@ const PickingPackingPage = () => {
   const excludeTags = searchParams.get('exclude_tags')?.split(',').filter(Boolean) || [];
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
+
+  // Simple refresh - only fetches from local DB (webhook handles real-time updates from Shopify)
+  const handleRefreshList = () => {
+    fetchOrders({
+      searchTerm: searchTerm || undefined,
+      operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+      financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+      fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
+      priceRange: priceRange || undefined,
+      dateRange: dateRange || undefined,
+      page: currentPage
+    });
+  };
+
+  // Supabase Realtime - Auto refresh when shopify_orders table changes
+  useEffect(() => {
+    if (!currentOrganization?.id) return;
+
+    const channel = supabase
+      .channel('shopify-orders-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shopify_orders',
+          filter: `organization_id=eq.${currentOrganization.id}`
+        },
+        (payload) => {
+          console.log('🔔 Webhook update received:', payload.eventType);
+          setLastWebhookUpdate(new Date());
+          // Auto-refresh list when new orders arrive or orders are updated
+          handleRefreshList();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOrganization?.id, searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentPage]);
 
   // Auto-ajustar filtros cuando se usa tags=confirmado (Para Preparar)
   // Esto asegura que la vista coincida exactamente con Shopify
@@ -516,17 +505,24 @@ const PickingPackingPage = () => {
                 Buscar
               </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSyncWithShopify}
-              disabled={syncing || loading}
-              title="Sincronizar con Shopify y actualizar lista"
-              className="gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} />
-              {syncing ? 'Sincronizando...' : 'Actualizar'}
-            </Button>
+            <div className="flex items-center gap-2">
+              {lastWebhookUpdate && (
+                <span className="text-xs text-muted-foreground">
+                  Última actualización: {lastWebhookUpdate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshList}
+                disabled={loading}
+                title="Refrescar lista de pedidos"
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </Button>
+            </div>
           </div>
 
           {/* Saved Filters Manager */}
