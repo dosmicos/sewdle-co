@@ -1,18 +1,111 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { CheckCircle, AlertCircle, Zap, Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
+
+interface WebhookLog {
+  id: string;
+  sync_type: string;
+  start_time: string;
+  end_time: string | null;
+  status: string;
+  orders_processed: number;
+  error_message: string | null;
+}
 
 export const WebhookStatusIndicator: React.FC = () => {
-  const [webhookStatus] = useState<'active' | 'inactive' | 'error'>('inactive'); // This would be fetched from your backend
+  const { currentOrganization } = useOrganization();
+  const [lastWebhook, setLastWebhook] = useState<WebhookLog | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!currentOrganization?.id) return;
+
+    const fetchLastWebhook = async () => {
+      try {
+        // Cast supabase to any to avoid TypeScript deep type instantiation error
+        const client = supabase as any;
+        const { data, error } = await client
+          .from('sync_control_logs')
+          .select('*')
+          .eq('organization_id', currentOrganization.id)
+          .order('start_time', { ascending: false })
+          .limit(5);
+
+        if (error) {
+          console.error('Error fetching webhook status:', error);
+        } else if (data && data.length > 0) {
+          // Find the most recent webhook-related log
+          const webhookLog = data.find((log: any) => 
+            log.sync_type?.includes('webhook') || log.sync_type === 'shopify_orders'
+          );
+          if (webhookLog) {
+            setLastWebhook({
+              id: webhookLog.id,
+              sync_type: webhookLog.sync_type,
+              start_time: webhookLog.start_time,
+              end_time: webhookLog.end_time,
+              status: webhookLog.status,
+              orders_processed: webhookLog.orders_processed,
+              error_message: webhookLog.error_message
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLastWebhook();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('webhook-status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sync_control_logs',
+          filter: `organization_id=eq.${currentOrganization.id}`
+        },
+        (payload) => {
+          const newLog = payload.new as WebhookLog;
+          if (newLog.sync_type?.includes('webhook') || newLog.sync_type === 'shopify_orders') {
+            setLastWebhook(newLog);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOrganization?.id]);
+
+  const getWebhookStatus = (): 'active' | 'inactive' | 'error' => {
+    if (!lastWebhook) return 'inactive';
+    
+    const lastTime = new Date(lastWebhook.start_time);
+    const now = new Date();
+    const hoursSinceLastWebhook = (now.getTime() - lastTime.getTime()) / (1000 * 60 * 60);
+    
+    if (lastWebhook.status === 'error') return 'error';
+    if (hoursSinceLastWebhook > 24) return 'inactive';
+    return 'active';
+  };
+
+  const webhookStatus = getWebhookStatus();
 
   const getStatusColor = () => {
     switch (webhookStatus) {
       case 'active': return 'text-green-600';
       case 'error': return 'text-red-600';
-      default: return 'text-gray-600';
+      default: return 'text-muted-foreground';
     }
   };
 
@@ -42,46 +135,60 @@ export const WebhookStatusIndicator: React.FC = () => {
     }
   };
 
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'hace unos segundos';
+    if (diffMins < 60) return `hace ${diffMins} minuto${diffMins !== 1 ? 's' : ''}`;
+    if (diffHours < 24) return `hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`;
+    return `hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`;
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            Webhook
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse h-4 bg-muted rounded w-24"></div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
-            <Zap className={`h-5 w-5 ${getStatusColor()}`} />
-            Estado del Webhook
+            <Zap className={`h-4 w-4 ${getStatusColor()}`} />
+            Webhook
           </span>
           {getStatusBadge()}
         </CardTitle>
-        <CardDescription>
-          Estado actual de la sincronización en tiempo real
+        <CardDescription className="text-xs">
+          Sincronización en tiempo real con Shopify
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        {webhookStatus === 'inactive' && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              El webhook no está configurado. Ve a la pestaña "Configuración" para activar la sincronización automática.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {webhookStatus === 'active' && (
-          <Alert className="border-green-200 bg-green-50">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              ¡Webhook activo! Las nuevas órdenes se sincronizarán automáticamente.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {webhookStatus === 'error' && (
-          <Alert className="border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
-              Error en el webhook. Verifica la configuración en Shopify.
-            </AlertDescription>
-          </Alert>
+      <CardContent className="pt-0">
+        {lastWebhook ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>Última actualización: {formatRelativeTime(lastWebhook.start_time)}</span>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Sin actividad reciente. Los pedidos nuevos se sincronizarán automáticamente.
+          </p>
         )}
       </CardContent>
     </Card>

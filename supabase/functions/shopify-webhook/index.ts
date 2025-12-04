@@ -154,11 +154,12 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   const skuToImageMap = new Map();
   
   if (skusInOrder.length > 0) {
+    // Query through products table to get organization_id filter
     const { data: variantData, error: variantError } = await supabase
       .from('product_variants')
-      .select('sku_variant, products(image_url)')
+      .select('sku_variant, products!inner(image_url, organization_id)')
       .in('sku_variant', skusInOrder)
-      .eq('organization_id', organizationId);
+      .eq('products.organization_id', organizationId);
     
     if (variantError) {
       console.error('⚠️ Error fetching variant images:', variantError);
@@ -410,11 +411,12 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
   const skuToImageMap = new Map();
   
   if (skusInOrder.length > 0) {
+    // Query through products table to get organization_id filter
     const { data: variantData, error: variantError } = await supabase
       .from('product_variants')
-      .select('sku_variant, products(image_url)')
+      .select('sku_variant, products!inner(image_url, organization_id)')
       .in('sku_variant', skusInOrder)
-      .eq('organization_id', organizationId);
+      .eq('products.organization_id', organizationId);
     
     if (variantError) {
       console.error('⚠️ Error fetching variant images:', variantError);
