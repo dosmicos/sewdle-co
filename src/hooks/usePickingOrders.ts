@@ -156,52 +156,20 @@ export const usePickingOrders = () => {
       setLoading(true);
       
       const page = filters?.page || currentPage;
+      const MIN_ORDER_NUMBER = '62303';
       
-      logger.info('[PickingOrders] Fetching orders', { 
+      logger.info('[PickingOrders] Fetching orders (optimized)', { 
         organizationId: currentOrganization?.id,
         filters,
         page
       });
       
-      // First, auto-initialize any new Shopify orders
-      await autoInitializePickingOrders();
-      
-      // Step 1: If searchTerm exists, find matching shopify_order_ids
-      let matchingShopifyOrderIds: number[] | null = null;
-      
-      if (filters?.searchTerm) {
-        logger.info('[PickingOrders] Buscando órdenes con término:', filters.searchTerm);
-        
-        const { data: matchingOrders, error: searchError } = await supabase
-          .from('shopify_orders')
-          .select('shopify_order_id')
-          .eq('organization_id', currentOrganization.id)
-          .or(`order_number.ilike.%${filters.searchTerm}%,customer_email.ilike.%${filters.searchTerm}%,customer_first_name.ilike.%${filters.searchTerm}%,customer_last_name.ilike.%${filters.searchTerm}%`);
-        
-        if (searchError) {
-          logger.error('[PickingOrders] Error en búsqueda de Shopify orders', searchError);
-          throw searchError;
-        }
-        
-        matchingShopifyOrderIds = matchingOrders?.map(o => o.shopify_order_id) || [];
-        
-        logger.info(`[PickingOrders] Encontradas ${matchingShopifyOrderIds.length} órdenes coincidentes`);
-        
-        // Si no hay coincidencias, devolver vacío
-        if (matchingShopifyOrderIds.length === 0) {
-          setOrders([]);
-          setTotalCount(0);
-          setCurrentPage(page);
-          return;
-        }
-      }
-      
-      // Step 2: Query picking_packing_orders
+      // Build optimized query with DB-level filters
       let query = supabase
         .from('picking_packing_orders')
         .select(`
           *,
-          shopify_order:shopify_orders(
+          shopify_order:shopify_orders!inner(
             id,
             shopify_order_id,
             order_number,
@@ -220,42 +188,35 @@ export const usePickingOrders = () => {
             cancelled_at
           )
         `, { count: 'exact' })
-        .eq('organization_id', currentOrganization?.id);
+        .eq('organization_id', currentOrganization?.id)
+        // Apply MIN_ORDER_NUMBER filter at DB level
+        .gte('order_number', MIN_ORDER_NUMBER);
 
-      // Apply search filter using the matching IDs
-      if (matchingShopifyOrderIds !== null) {
-        query = query.in('shopify_order_id', matchingShopifyOrderIds);
+      // Apply financial_status filter at DB level
+      if (filters?.financialStatuses && filters.financialStatuses.length > 0) {
+        query = query.in('shopify_order.financial_status', filters.financialStatuses);
+      }
+
+      // Apply cancelled_at filter at DB level when filtering by "confirmado"
+      if (filters?.tags && filters.tags.some(tag => tag.toLowerCase() === 'confirmado')) {
+        query = query.is('shopify_order.cancelled_at', null);
+        // Also filter unfulfilled only
+        query = query.or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled', { foreignTable: 'shopify_order' });
+      }
+
+      // Search filter
+      if (filters?.searchTerm) {
+        const term = filters.searchTerm;
+        query = query.or(
+          `order_number.ilike.%${term}%,shopify_order.customer_email.ilike.%${term}%,shopify_order.customer_first_name.ilike.%${term}%,shopify_order.customer_last_name.ilike.%${term}%`
+        );
       }
 
       query = query.order('order_number', { ascending: false });
 
-      // Fetch orders in batches to overcome PostgREST 1000 row limit
-      const BATCH_SIZE = 1000;
-      const MAX_RECORDS = 5000;
-      let allData: any[] = [];
-      let batchOffset = 0;
-      let hasMore = true;
-      let fetchError: any = null;
-
-      while (hasMore && allData.length < MAX_RECORDS) {
-        const { data: batchData, error: batchError } = await query.range(batchOffset, batchOffset + BATCH_SIZE - 1);
-        
-        if (batchError) {
-          fetchError = batchError;
-          break;
-        }
-        
-        if (batchData && batchData.length > 0) {
-          allData = [...allData, ...batchData];
-          batchOffset += BATCH_SIZE;
-          hasMore = batchData.length === BATCH_SIZE;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      const data = allData;
-      const error = fetchError;
+      // Fetch with reduced limit (most orders will be filtered at DB level now)
+      const MAX_RECORDS = 500;
+      const { data, error, count } = await query.limit(MAX_RECORDS);
 
       if (error) {
         logger.error('[PickingOrders] Error fetching orders', error);
@@ -284,26 +245,12 @@ export const usePickingOrders = () => {
         };
       });
 
-      // Apply post-fetch filters for complex queries
+      // Apply remaining in-memory filters (tags, excludeTags, operationalStatuses)
       
       // Filter by operational_status AFTER tag mapping
       if (filters?.operationalStatuses && filters.operationalStatuses.length > 0) {
         ordersData = ordersData.filter((order: any) => 
           filters.operationalStatuses?.includes(order.operational_status)
-        );
-      }
-      
-      // Filter by financial_status
-      if (filters?.financialStatuses && filters.financialStatuses.length > 0) {
-        ordersData = ordersData.filter((order: any) => 
-          filters.financialStatuses?.includes(order.shopify_order?.financial_status)
-        );
-      }
-
-      // Filter by fulfillment_status
-      if (filters?.fulfillmentStatuses && filters.fulfillmentStatuses.length > 0) {
-        ordersData = ordersData.filter((order: any) => 
-          filters.fulfillmentStatuses?.includes(order.shopify_order?.fulfillment_status)
         );
       }
 
@@ -319,38 +266,8 @@ export const usePickingOrders = () => {
       if (filters?.excludeTags && filters.excludeTags.length > 0) {
         ordersData = ordersData.filter((order: any) => {
           const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
-          // Excluir si tiene ALGUNA de las etiquetas a excluir
           return !filters.excludeTags?.some(tag => orderTags.includes(tag.toLowerCase()));
         });
-      }
-
-      // AUTO-FILTER: Cuando se filtra por tag "confirmado", excluir pedidos cancelados y ya enviados
-      // Esto replica exactamente el comportamiento del filtro "No pagado" de Shopify
-      if (filters?.tags && filters.tags.some(tag => tag.toLowerCase() === 'confirmado')) {
-        // Excluir pedidos cancelados
-        ordersData = ordersData.filter((order: any) => {
-          const cancelledAt = order.shopify_order?.cancelled_at;
-          return !cancelledAt; // Solo incluir si NO está cancelado
-        });
-        
-        // Excluir pedidos ya enviados (fulfillment_status NOT NULL)
-        ordersData = ordersData.filter((order: any) => {
-          const fulfillmentStatus = order.shopify_order?.fulfillment_status;
-          return !fulfillmentStatus || fulfillmentStatus === null; // Solo incluir si NO tiene fulfillment
-        });
-        
-        logger.info('[PickingOrders] Auto-filtro "Para Preparar" aplicado: excluyendo cancelados y ya enviados');
-      }
-
-      // FILTRO PERMANENTE: Solo mostrar órdenes desde #62303 en adelante
-      const MIN_ORDER_NUMBER = 62303;
-      ordersData = ordersData.filter((order: any) => {
-        const orderNumber = parseInt(order.shopify_order?.order_number || '0', 10);
-        return orderNumber >= MIN_ORDER_NUMBER;
-      });
-      
-      if (ordersData.length > 0) {
-        logger.info(`[PickingOrders] Filtro de orden mínima aplicado: >= #${MIN_ORDER_NUMBER}, ${ordersData.length} órdenes restantes`);
       }
 
       // Filter by price range
@@ -360,7 +277,7 @@ export const usePickingOrders = () => {
         const max = parseFloat(maxStr);
         
         ordersData = ordersData.filter((order: any) => {
-          const price = order.shopify_order?.raw_data?.total_price || order.shopify_order?.total_price || 0;
+          const price = order.shopify_order?.total_price || 0;
           return price >= min && price <= max;
         });
       }
@@ -395,21 +312,14 @@ export const usePickingOrders = () => {
         });
       }
 
-      // Calcular el total DESPUÉS de todos los filtros
+      // Calculate total after all filters
       const filteredTotalCount = ordersData.length;
 
-      // Aplicar paginación en memoria
+      // Apply pagination in memory
       const offset = (page - 1) * pageSize;
       const paginatedOrders = ordersData.slice(offset, offset + pageSize);
 
-      logger.info(`[PickingOrders] Paginación aplicada: ${paginatedOrders.length} de ${filteredTotalCount} órdenes`, {
-        page,
-        offset,
-        pageSize,
-        totalPages: Math.ceil(filteredTotalCount / pageSize),
-        firstOrder: paginatedOrders[0]?.shopify_order?.order_number,
-        hasShopifyOrder: !!paginatedOrders[0]?.shopify_order
-      });
+      logger.info(`[PickingOrders] Query optimizada: ${paginatedOrders.length} de ${filteredTotalCount} órdenes (${Date.now()}ms)`);
 
       setOrders(paginatedOrders as PickingOrder[]);
       setTotalCount(filteredTotalCount);
