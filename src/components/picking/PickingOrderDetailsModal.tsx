@@ -179,15 +179,15 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
-  // Fetch order if not found in the orders array
+  // Always fetch order to get raw_data with financial details
   useEffect(() => {
     const fetchOrder = async () => {
-      if (order || !orderId) return;
+      if (!orderId) return;
       await refetchOrder();
     };
 
     fetchOrder();
-  }, [orderId, order]);
+  }, [orderId]);
 
   useEffect(() => {
     if (effectiveOrder?.internal_notes) {
