@@ -328,8 +328,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
     
     try {
-      // Update in database and Shopify
-      await updateOrderStatus(orderId, newStatus);
+      // Update in database and Shopify - pass shopify_order_id directly
+      await updateOrderStatus(orderId, newStatus, effectiveOrder?.shopify_order?.shopify_order_id);
       
       // SUCCESS: Keep the optimistic update (don't refetch)
       
