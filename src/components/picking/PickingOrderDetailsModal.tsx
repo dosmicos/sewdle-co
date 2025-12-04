@@ -822,11 +822,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
         {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
-          <div className="absolute bottom-4 right-4 z-10">
+          <div className="absolute bottom-4 right-4 z-10 pointer-events-none">
             <Button
               onClick={handleMarkAsPackedAndPrint}
               disabled={updatingStatus}
-              className="h-14 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base gap-2"
+              className="h-14 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base gap-2 pointer-events-auto"
             >
               {updatingStatus ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
