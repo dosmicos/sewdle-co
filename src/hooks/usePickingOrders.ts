@@ -351,7 +351,8 @@ export const usePickingOrders = () => {
 
   const updateOrderStatus = async (
     pickingOrderId: string,
-    newStatus: OperationalStatus
+    newStatus: OperationalStatus,
+    shopifyOrderId?: number
   ) => {
     try {
       const updates: any = {
@@ -377,24 +378,37 @@ export const usePickingOrders = () => {
 
       if (error) throw error;
 
-      // Update tags in Shopify (non-blocking)
+      // Update tags in Shopify
+      // Use provided shopifyOrderId or fallback to searching in orders array
       const order = orders.find(o => o.id === pickingOrderId);
-      if (order) {
-        const statusTags = {
-          pending: 'PENDIENTE',
-          picking: 'PICKING_EN_PROCESO',
-          packing: 'EMPACANDO',
-          ready_to_ship: 'EMPACADO',
-          shipped: 'ENVIADO'
-        };
+      const effectiveShopifyOrderId = shopifyOrderId || order?.shopify_order_id;
+      
+      if (!effectiveShopifyOrderId) {
+        console.error('❌ MISSING SHOPIFY_ORDER_ID:', {
+          pickingOrderId,
+          providedShopifyOrderId: shopifyOrderId,
+          ordersCount: orders.length,
+          foundInOrders: !!order
+        });
+        toast.error('Error: No se pudo actualizar etiquetas en Shopify (ID no encontrado)');
+        return;
+      }
+      
+      const statusTags = {
+        pending: 'PENDIENTE',
+        picking: 'PICKING_EN_PROCESO',
+        packing: 'EMPACANDO',
+        ready_to_ship: 'EMPACADO',
+        shipped: 'ENVIADO'
+      };
 
-        try {
-          await updateShopifyTags(order.shopify_order_id, [statusTags[newStatus]]);
-        } catch (tagError) {
-          console.error('❌ CRITICAL: Tag update failed:', tagError);
-          toast.error('Error al actualizar etiquetas en Shopify');
-          throw tagError; // Re-throw para que handleStatusChange sepa que falló
-        }
+      try {
+        console.log('🏷️ Updating Shopify tags for order:', effectiveShopifyOrderId, 'with tag:', statusTags[newStatus]);
+        await updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]);
+      } catch (tagError) {
+        console.error('❌ CRITICAL: Tag update failed:', tagError);
+        toast.error('Error al actualizar etiquetas en Shopify');
+        throw tagError;
       }
 
       toast.success('Estado actualizado correctamente');
