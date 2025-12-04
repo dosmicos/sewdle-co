@@ -416,6 +416,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     window.open(`/picking-packing/print/${effectiveOrder?.shopify_order_id}`, '_blank');
   };
 
+  const handleMarkAsPackedAndPrint = async () => {
+    await handleStatusChange('ready_to_ship');
+    handlePrint();
+  };
+
   const formatCurrency = (amount?: number, currency?: string) => {
     if (!amount) return '$0';
     return new Intl.NumberFormat('es-CO', {
@@ -673,7 +678,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 ) : (
                   <>
                     <Button
-                      onClick={() => handleStatusChange('ready_to_ship')}
+                      onClick={handleMarkAsPackedAndPrint}
                       disabled={effectiveOrder.operational_status === 'ready_to_ship' || updatingStatus}
                       className="w-full h-12 text-base gap-2 font-semibold bg-[#F4A582] hover:bg-[#E89470] text-white disabled:bg-green-500 disabled:hover:bg-green-500"
                     >
