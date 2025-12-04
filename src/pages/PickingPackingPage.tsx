@@ -112,7 +112,7 @@ const PickingPackingPage = () => {
       const { data, error } = await supabase.functions.invoke('sync-shopify-fulfillment', {
         body: {
           organization_id: currentOrganization.id,
-          days_back: 60
+          days_back: 4 // Reduced from 60 - webhook handles real-time updates
         }
       });
 
