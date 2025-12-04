@@ -654,76 +654,57 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </div>
             </div>
 
-            {/* Status Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Acciones</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {effectiveOrder.shopify_order?.cancelled_at ? (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-800 font-medium">
-                      ⚠️ Esta orden fue cancelada en Shopify el {new Date(effectiveOrder.shopify_order.cancelled_at).toLocaleDateString('es-CO', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                    <p className="text-xs text-red-600 mt-2">
-                      No se pueden realizar acciones de picking/packing en órdenes canceladas.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <Button
-                      onClick={handleMarkAsPackedAndPrint}
-                      disabled={effectiveOrder.operational_status === 'ready_to_ship' || updatingStatus}
-                      className="w-full h-12 text-base gap-2 font-semibold bg-[#F4A582] hover:bg-[#E89470] text-white disabled:bg-green-500 disabled:hover:bg-green-500"
-                    >
-                      {updatingStatus ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : effectiveOrder.operational_status === 'ready_to_ship' ? (
-                        <>
-                          <CheckCircle className="w-5 h-5" />
-                          ✓ Empacado
-                        </>
-                      ) : (
-                        <>
-                          <Package className="w-5 h-5" />
-                          Marcar como Empacado
-                        </>
-                      )}
-                    </Button>
-                    
-                    {/* Packed info display */}
-                    {effectiveOrder.operational_status === 'ready_to_ship' && effectiveOrder.packed_at && (
-                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-                        <div className="space-y-1 text-green-700">
-                          <p className="flex items-center gap-2">
-                            <span>📅</span>
-                            <span>{new Date(effectiveOrder.packed_at).toLocaleDateString('es-CO', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}</span>
-                          </p>
-                          {packedByName && (
-                            <p className="flex items-center gap-2">
-                              <span>👤</span>
-                              <span>Por: {packedByName}</span>
-                            </p>
-                          )}
-                        </div>
+            {/* Status Actions - Only show when cancelled or already packed */}
+            {(effectiveOrder.shopify_order?.cancelled_at || effectiveOrder.operational_status === 'ready_to_ship') && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Estado</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {effectiveOrder.shopify_order?.cancelled_at ? (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-800 font-medium">
+                        ⚠️ Esta orden fue cancelada en Shopify el {new Date(effectiveOrder.shopify_order.cancelled_at).toLocaleDateString('es-CO', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                      <p className="text-xs text-red-600 mt-2">
+                        No se pueden realizar acciones de picking/packing en órdenes canceladas.
+                      </p>
+                    </div>
+                  ) : effectiveOrder.operational_status === 'ready_to_ship' && effectiveOrder.packed_at && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                      <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Empacado</span>
                       </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                      <div className="space-y-1 text-green-700">
+                        <p className="flex items-center gap-2">
+                          <span>📅</span>
+                          <span>{new Date(effectiveOrder.packed_at).toLocaleDateString('es-CO', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
+                        </p>
+                        {packedByName && (
+                          <p className="flex items-center gap-2">
+                            <span>👤</span>
+                            <span>Por: {packedByName}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right Column - Details */}
@@ -835,6 +816,26 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             </Card>
           </div>
         </div>
+
+        {/* Sticky Floating Action Button - Marcar como Empacado */}
+        {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <Button
+              onClick={handleMarkAsPackedAndPrint}
+              disabled={updatingStatus}
+              className="h-14 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base gap-2"
+            >
+              {updatingStatus ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Package className="w-5 h-5" />
+                  Marcar como Empacado
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
