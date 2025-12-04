@@ -204,12 +204,11 @@ export const usePickingOrders = () => {
         query = query.or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled', { foreignTable: 'shopify_order' });
       }
 
-      // Search filter
+      // Search filter - only filter by order_number at DB level
+      // Customer name/email search will be done in-memory after fetch
       if (filters?.searchTerm) {
         const term = filters.searchTerm;
-        query = query.or(
-          `order_number.ilike.%${term}%,shopify_order.customer_email.ilike.%${term}%,shopify_order.customer_first_name.ilike.%${term}%,shopify_order.customer_last_name.ilike.%${term}%`
-        );
+        query = query.ilike('order_number', `%${term}%`);
       }
 
       query = query.order('order_number', { ascending: false });
@@ -267,6 +266,22 @@ export const usePickingOrders = () => {
         ordersData = ordersData.filter((order: any) => {
           const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
           return !filters.excludeTags?.some(tag => orderTags.includes(tag.toLowerCase()));
+        });
+      }
+
+      // In-memory search filter for customer name/email (DB filter only catches order_number)
+      if (filters?.searchTerm && filters.searchTerm.length > 0) {
+        const searchLower = filters.searchTerm.toLowerCase();
+        ordersData = ordersData.filter((order: any) => {
+          const orderNumber = order.order_number?.toLowerCase() || '';
+          const customerEmail = order.shopify_order?.customer_email?.toLowerCase() || '';
+          const firstName = order.shopify_order?.customer_first_name?.toLowerCase() || '';
+          const lastName = order.shopify_order?.customer_last_name?.toLowerCase() || '';
+          
+          return orderNumber.includes(searchLower) ||
+                 customerEmail.includes(searchLower) ||
+                 firstName.includes(searchLower) ||
+                 lastName.includes(searchLower);
         });
       }
 
