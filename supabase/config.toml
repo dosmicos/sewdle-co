@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.sync-shopify-fulfillment]
 verify_jwt = false
+
+[functions.sync-recent-shopify-tags]
+verify_jwt = false
