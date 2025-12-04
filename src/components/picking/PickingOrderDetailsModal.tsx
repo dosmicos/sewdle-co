@@ -416,9 +416,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     window.open(`/picking-packing/print/${effectiveOrder?.shopify_order_id}`, '_blank');
   };
 
-  const handleMarkAsPackedAndPrint = async () => {
-    await handleStatusChange('ready_to_ship');
+  const handleMarkAsPackedAndPrint = () => {
     handlePrint();
+    handleStatusChange('ready_to_ship');
   };
 
   const formatCurrency = (amount?: number, currency?: string) => {
