@@ -766,49 +766,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
             {/* Right Column - Details */}
             <div className="space-y-4">
-              {/* Customer Info */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Cliente
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-sm">
-                  <p className="font-medium">
-                    {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
-                  </p>
-                  <p className="text-muted-foreground">{effectiveOrder.shopify_order?.customer_email}</p>
-                  {effectiveOrder.shopify_order?.customer_phone && (
-                    <p className="text-muted-foreground">{effectiveOrder.shopify_order.customer_phone}</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Shipping Address */}
-              {shippingAddress && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      Dirección de Envío
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-1 text-sm">
-                    <p className="font-medium">{shippingAddress.name}</p>
-                    <p>{shippingAddress.address1}</p>
-                    {shippingAddress.address2 && <p>{shippingAddress.address2}</p>}
-                    <p>
-                      {shippingAddress.city}, {shippingAddress.province} {shippingAddress.zip}
-                    </p>
-                    <p>{shippingAddress.country}</p>
-                    {shippingAddress.phone && (
-                      <p className="text-muted-foreground">{shippingAddress.phone}</p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
               {/* Notas de Shopify - Bidirectional Sync */}
               <Card>
                 <CardHeader>
@@ -871,6 +828,49 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   />
                 </CardContent>
               </Card>
+
+              {/* Customer Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Cliente
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1 text-sm">
+                  <p className="font-medium">
+                    {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
+                  </p>
+                  <p className="text-muted-foreground">{effectiveOrder.shopify_order?.customer_email}</p>
+                  {effectiveOrder.shopify_order?.customer_phone && (
+                    <p className="text-muted-foreground">{effectiveOrder.shopify_order.customer_phone}</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Shipping Address */}
+              {shippingAddress && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Dirección de Envío
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    <p className="font-medium">{shippingAddress.name}</p>
+                    <p>{shippingAddress.address1}</p>
+                    {shippingAddress.address2 && <p>{shippingAddress.address2}</p>}
+                    <p>
+                      {shippingAddress.city}, {shippingAddress.province} {shippingAddress.zip}
+                    </p>
+                    <p>{shippingAddress.country}</p>
+                    {shippingAddress.phone && (
+                      <p className="text-muted-foreground">{shippingAddress.phone}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>
