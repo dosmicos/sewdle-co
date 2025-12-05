@@ -477,7 +477,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     if (title.includes('express')) {
       return { label: 'Express', className: 'bg-red-500 text-white border-red-600', icon: '🚀' };
     }
-    if (title.includes('recog') || title.includes('pickup') || title.includes('tienda') || title.includes('local')) {
+    if (title.includes('recog') || title.includes('pickup') || title.includes('tienda') || title.includes('local') || title.includes('dosmicos')) {
       return { label: 'Recoger', className: 'bg-yellow-400 text-black border-yellow-500', icon: '🏪' };
     }
     return { label: 'Standard', className: 'bg-green-500 text-white border-green-600', icon: '📦' };
