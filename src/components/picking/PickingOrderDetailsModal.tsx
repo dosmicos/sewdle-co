@@ -84,12 +84,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
-  // Keyboard navigation - J for previous, K for next
+  // Keyboard navigation - J for previous, K for next, Ctrl+. for mark as packed
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if user is typing in an input/textarea
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      // Ctrl + . → Marcar como Empacado
+      if (e.ctrlKey && e.key === '.') {
+        e.preventDefault();
+        // Only trigger if order is not already packed and not currently updating
+        if (effectiveOrder?.operational_status !== 'ready_to_ship' && !updatingStatus && !effectiveOrder?.shopify_order?.cancelled_at) {
+          handleMarkAsPackedAndPrint();
+        }
         return;
       }
       
@@ -113,7 +123,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate]);
+  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus]);
 
   // Fetch packed_by user name
   useEffect(() => {
@@ -859,6 +869,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             <Button
               onClick={handleMarkAsPackedAndPrint}
               disabled={updatingStatus}
+              title="Ctrl + . para marcar rápidamente"
               className="h-14 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base gap-2 pointer-events-auto"
             >
               {updatingStatus ? (
