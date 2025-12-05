@@ -466,6 +466,25 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const shippingAddress = effectiveOrder.shopify_order?.raw_data?.shipping_address;
   const financialSummary = effectiveOrder.shopify_order?.raw_data || {};
   
+  // Shipping type detection
+  const shippingLines = effectiveOrder.shopify_order?.raw_data?.shipping_lines || [];
+  const shippingMethod = shippingLines[0]?.title || null;
+  
+  const getShippingType = (shippingTitle: string | null) => {
+    if (!shippingTitle) return null;
+    const title = shippingTitle.toLowerCase();
+    
+    if (title.includes('express')) {
+      return { label: 'Express', className: 'bg-red-500 text-white border-red-600', icon: '🚀' };
+    }
+    if (title.includes('recog') || title.includes('pickup') || title.includes('tienda') || title.includes('local')) {
+      return { label: 'Recoger', className: 'bg-yellow-400 text-black border-yellow-500', icon: '🏪' };
+    }
+    return { label: 'Standard', className: 'bg-green-500 text-white border-green-600', icon: '📦' };
+  };
+  
+  const shippingType = getShippingType(shippingMethod);
+  
   const rawPaymentGateways = effectiveOrder.shopify_order?.raw_data?.payment_gateway_names;
   const paymentGateways = Array.isArray(rawPaymentGateways) 
     ? rawPaymentGateways 
@@ -537,6 +556,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {/* Shipping Type Badge */}
+                {shippingType && (
+                  <Badge className={`${shippingType.className} font-bold text-sm px-3 py-1 shadow-sm`}>
+                    {shippingType.icon} {shippingType.label}
+                  </Badge>
+                )}
+                
                 <Button onClick={handlePrint} variant="outline" className="gap-2">
                   <Printer className="w-4 h-4" />
                   Imprimir
