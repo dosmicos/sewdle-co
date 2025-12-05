@@ -901,7 +901,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             <div className="space-y-4">
               {/* Notas de Shopify - Bidirectional Sync */}
               <Card>
-                <CardHeader>
+                <CardHeader className="pb-3">
+                  {effectiveOrder?.shopify_order?.customer_first_name && (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 font-medium text-xs px-2 py-0.5 w-fit mb-1">
+                      <User className="w-3 h-3 mr-1" />
+                      {effectiveOrder.shopify_order.customer_first_name} {effectiveOrder.shopify_order.customer_last_name}
+                    </Badge>
+                  )}
                   <CardTitle className="text-base flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     Notas de Shopify
