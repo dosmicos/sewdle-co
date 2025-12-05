@@ -903,8 +903,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               <Card>
                 <CardHeader className="pb-3">
                   {effectiveOrder?.shopify_order?.customer_first_name && (
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 font-medium text-xs px-2 py-0.5 w-fit mb-1">
-                      <User className="w-3 h-3 mr-1" />
+                    <Badge className="bg-blue-500 text-white hover:bg-blue-500 font-semibold text-sm px-3 py-1 w-fit mb-2">
+                      <User className="w-4 h-4 mr-1.5" />
                       {effectiveOrder.shopify_order.customer_first_name} {effectiveOrder.shopify_order.customer_last_name}
                     </Badge>
                   )}
