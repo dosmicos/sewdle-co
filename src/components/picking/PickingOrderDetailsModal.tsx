@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -97,8 +97,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       // Ctrl + . → Marcar como Empacado
       if (e.ctrlKey && e.key === '.') {
         e.preventDefault();
+        // Block if loading or data not synced with current orderId
+        if (loadingOrder || localOrder?.id !== orderId) {
+          console.log('⏳ Esperando carga de orden antes de marcar como empacado...');
+          return;
+        }
         // Only trigger if order is not already packed and not currently updating
-        if (effectiveOrder?.operational_status !== 'ready_to_ship' && !updatingStatus && !effectiveOrder?.shopify_order?.cancelled_at) {
+        if (localOrder?.operational_status !== 'ready_to_ship' && !updatingStatus && !localOrder?.shopify_order?.cancelled_at) {
           handleMarkAsPackedAndPrint();
         }
         return;
@@ -124,7 +129,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus]);
+  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate, localOrder, loadingOrder, updatingStatus]);
 
   // Fetch packed_by user name
   useEffect(() => {
@@ -334,59 +339,71 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     fetchLineItems();
   }, [effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.raw_data]);
 
-  const handleStatusChange = async (newStatus: OperationalStatus) => {
+  // Use useCallback with explicit dependencies to prevent stale closures
+  const handleStatusChange = useCallback(async (newStatus: OperationalStatus) => {
+    // Verify we have the correct order loaded
+    if (!localOrder || localOrder.id !== orderId) {
+      console.error(`❌ handleStatusChange: Orden no sincronizada (localOrder.id=${localOrder?.id}, orderId=${orderId})`);
+      return;
+    }
+    
+    const currentShopifyOrderId = localOrder.shopify_order?.shopify_order_id;
+    if (!currentShopifyOrderId) {
+      console.error('❌ handleStatusChange: shopify_order_id no disponible');
+      return;
+    }
+    
+    console.log(`🔄 Actualizando estado de orden #${localOrder.shopify_order?.order_number} a ${newStatus}`);
     setUpdatingStatus(true);
     
     // Optimistic update - instant UI feedback with new tag and packed info
-    if (effectiveOrder) {
-      const statusTagMap = {
-        pending: 'PENDIENTE',
-        picking: 'PICKING_EN_PROCESO',
-        packing: 'EMPACANDO',
-        ready_to_ship: 'EMPACADO',
-        shipped: 'ENVIADO'
-      };
-      
-      const existingTags = effectiveOrder.shopify_order?.tags || '';
-      const existingTagsArray = existingTags.split(',').map(t => t.trim()).filter(Boolean);
-      const newTag = statusTagMap[newStatus];
-      
-      // Add new tag if not already present
-      const updatedTags = existingTagsArray.includes(newTag)
-        ? existingTags
-        : [...existingTagsArray, newTag].join(', ');
-      
-      // Get current user for optimistic update
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      setLocalOrder({
-        ...effectiveOrder,
-        operational_status: newStatus,
-        // Set packed_at and packed_by for ready_to_ship
-        ...(newStatus === 'ready_to_ship' ? {
-          packed_at: new Date().toISOString(),
-          packed_by: user?.id
-        } : {}),
-        shopify_order: effectiveOrder.shopify_order ? {
-          ...effectiveOrder.shopify_order,
-          tags: updatedTags
-        } : undefined
-      });
-      
-      // Also set current user name optimistically
-      if (newStatus === 'ready_to_ship' && user?.id) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
-          .single();
-        setPackedByName(profileData?.name || null);
-      }
+    const statusTagMap = {
+      pending: 'PENDIENTE',
+      picking: 'PICKING_EN_PROCESO',
+      packing: 'EMPACANDO',
+      ready_to_ship: 'EMPACADO',
+      shipped: 'ENVIADO'
+    };
+    
+    const existingTags = localOrder.shopify_order?.tags || '';
+    const existingTagsArray = existingTags.split(',').map(t => t.trim()).filter(Boolean);
+    const newTag = statusTagMap[newStatus];
+    
+    // Add new tag if not already present
+    const updatedTags = existingTagsArray.includes(newTag)
+      ? existingTags
+      : [...existingTagsArray, newTag].join(', ');
+    
+    // Get current user for optimistic update
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    setLocalOrder({
+      ...localOrder,
+      operational_status: newStatus,
+      // Set packed_at and packed_by for ready_to_ship
+      ...(newStatus === 'ready_to_ship' ? {
+        packed_at: new Date().toISOString(),
+        packed_by: user?.id
+      } : {}),
+      shopify_order: localOrder.shopify_order ? {
+        ...localOrder.shopify_order,
+        tags: updatedTags
+      } : undefined
+    });
+    
+    // Also set current user name optimistically
+    if (newStatus === 'ready_to_ship' && user?.id) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+      setPackedByName(profileData?.name || null);
     }
     
     try {
-      // Update in database and Shopify - pass shopify_order_id directly
-      await updateOrderStatus(orderId, newStatus, effectiveOrder?.shopify_order?.shopify_order_id);
+      // Update in database and Shopify - pass shopify_order_id directly from localOrder
+      await updateOrderStatus(orderId, newStatus, currentShopifyOrderId);
       
       // SUCCESS: Keep the optimistic update (don't refetch)
       
@@ -397,7 +414,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     } finally {
       setUpdatingStatus(false);
     }
-  };
+  }, [orderId, localOrder, updateOrderStatus, refetchOrder]);
 
   const handleSaveNotes = async () => {
     setIsSaving(true);
@@ -430,14 +447,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
-  const handlePrint = () => {
-    window.open(`/picking-packing/print/${effectiveOrder?.shopify_order_id}`, '_blank');
-  };
+  // Use useCallback with localOrder to prevent stale closures
+  const handlePrint = useCallback(() => {
+    // Use localOrder directly to ensure we print the correct order
+    if (!localOrder?.shopify_order_id) {
+      console.warn('⚠️ handlePrint: Orden no cargada completamente, shopify_order_id no disponible');
+      return;
+    }
+    console.log(`🖨️ Imprimiendo orden ${localOrder.shopify_order?.order_number} (shopify_order_id: ${localOrder.shopify_order_id})`);
+    window.open(`/picking-packing/print/${localOrder.shopify_order_id}`, '_blank');
+  }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
-  const handleMarkAsPackedAndPrint = () => {
+  const handleMarkAsPackedAndPrint = useCallback(() => {
+    // Verify consistency: localOrder must match current orderId
+    if (localOrder?.id !== orderId) {
+      console.warn(`⚠️ handleMarkAsPackedAndPrint: Orden no sincronizada (localOrder.id=${localOrder?.id}, orderId=${orderId})`);
+      return;
+    }
+    if (!localOrder?.shopify_order?.shopify_order_id) {
+      console.warn('⚠️ handleMarkAsPackedAndPrint: shopify_order_id no disponible');
+      return;
+    }
+    
+    console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
     handlePrint();
     handleStatusChange('ready_to_ship');
-  };
+  }, [orderId, localOrder, handlePrint, handleStatusChange]);
 
   const formatCurrency = (amount?: number, currency?: string) => {
     if (!amount) return '$0';
