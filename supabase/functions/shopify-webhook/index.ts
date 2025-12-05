@@ -29,6 +29,117 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
   return expectedSignature === receivedSignature;
 }
 
+// Function to determine automatic tags based on payment gateway and line items
+function determineAutoTags(order: any): string[] {
+  const tags: string[] = [];
+  
+  // Payment gateway names comes as array
+  const paymentGateways = order.payment_gateway_names || [];
+  
+  console.log('💳 Payment gateways detectados:', paymentGateways);
+  
+  // Payment gateway rules for "Confirmado" tag
+  if (paymentGateways.some((gw: string) => gw === 'Addi Payment')) {
+    tags.push('Confirmado');
+    console.log('  → Addi Payment detectado → Tag "Confirmado"');
+  }
+  if (paymentGateways.some((gw: string) => gw.toLowerCase().includes('bold'))) {
+    tags.push('Confirmado');
+    console.log('  → Bold detectado → Tag "Confirmado"');
+  }
+  if (paymentGateways.some((gw: string) => gw.toLowerCase().includes('mercado pago'))) {
+    tags.push('Confirmado');
+    console.log('  → Mercado Pago detectado → Tag "Confirmado"');
+  }
+  
+  // Payment gateway rule for "Contraentrega" tag
+  if (paymentGateways.some((gw: string) => gw === 'Cash on Delivery (COD)')) {
+    tags.push('Contraentrega');
+    console.log('  → Cash on Delivery detectado → Tag "Contraentrega"');
+  }
+  
+  // Line items rule for "BORDADO" tag
+  const lineItems = order.line_items || [];
+  const hasBordado = lineItems.some((item: any) => 
+    item.title?.toLowerCase().includes('bordado') || 
+    item.name?.toLowerCase().includes('bordado')
+  );
+  
+  if (hasBordado) {
+    tags.push('BORDADO');
+    console.log('  → Producto con "Bordado" detectado → Tag "BORDADO"');
+  }
+  
+  // Remove duplicates
+  return [...new Set(tags)];
+}
+
+// Function to apply automatic tags to Shopify order via API
+async function applyAutoTagsToShopify(
+  orderId: number, 
+  tagsToAdd: string[], 
+  existingTags: string | null,
+  shopDomain: string
+): Promise<void> {
+  if (tagsToAdd.length === 0) {
+    console.log('🏷️ No hay tags automáticos que aplicar');
+    return;
+  }
+  
+  const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+  if (!shopifyAccessToken) {
+    console.error('❌ SHOPIFY_ACCESS_TOKEN no configurado - no se pueden aplicar tags automáticos');
+    return;
+  }
+  
+  // Combine existing tags with new tags
+  const currentTags = existingTags ? existingTags.split(',').map(t => t.trim()).filter(Boolean) : [];
+  
+  // Check if tags already exist to avoid unnecessary API call
+  const newTagsToAdd = tagsToAdd.filter(tag => 
+    !currentTags.some(existing => existing.toLowerCase() === tag.toLowerCase())
+  );
+  
+  if (newTagsToAdd.length === 0) {
+    console.log('🏷️ Todos los tags automáticos ya existen, no es necesario actualizar');
+    return;
+  }
+  
+  const allTags = [...new Set([...currentTags, ...newTagsToAdd])];
+  const tagsString = allTags.join(', ');
+  
+  console.log('🏷️ Aplicando tags automáticos a Shopify:');
+  console.log('  - Tags actuales:', existingTags || 'ninguno');
+  console.log('  - Tags a agregar:', newTagsToAdd);
+  console.log('  - Tags finales:', tagsString);
+  
+  try {
+    const response = await fetch(
+      `https://${shopDomain}/admin/api/2024-01/orders/${orderId}.json`,
+      {
+        method: 'PUT',
+        headers: {
+          'X-Shopify-Access-Token': shopifyAccessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order: { tags: tagsString }
+        })
+      }
+    );
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Error aplicando tags automáticos:', response.status, errorText);
+    } else {
+      console.log('✅ Tags automáticos aplicados exitosamente a Shopify');
+      console.log('📡 Shopify enviará orders/update webhook con todos los tags sincronizados');
+    }
+  } catch (error) {
+    console.error('❌ Error llamando Shopify API para tags:', error);
+  }
+}
+
 // Function to process and store a single Shopify order
 async function processSingleOrder(order: any, supabase: any, shopDomain: string) {
   console.log(`📦 Procesando orden en tiempo real: ${order.id} - ${order.order_number}`);
@@ -232,6 +343,17 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   // Process sales metrics if order is paid
   if (['paid', 'partially_paid'].includes(order.financial_status)) {
     await processSalesMetrics(order, supabase);
+  }
+
+  // Auto-apply tags based on payment gateway and line items (replicates Shopify Flow logic)
+  console.log('🤖 Analizando pedido para auto-aplicación de tags...');
+  const autoTags = determineAutoTags(order);
+  
+  if (autoTags.length > 0) {
+    console.log('🏷️ Tags automáticos detectados:', autoTags);
+    await applyAutoTagsToShopify(order.id, autoTags, order.tags, shopDomain);
+  } else {
+    console.log('ℹ️ No se detectaron tags automáticos para este pedido');
   }
 
   return { success: true, order_number: order.order_number };
