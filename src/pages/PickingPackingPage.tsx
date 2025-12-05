@@ -95,6 +95,7 @@ const PickingPackingPage = () => {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [commandValue, setCommandValue] = useState('');
   const [lastWebhookUpdate, setLastWebhookUpdate] = useState<Date | null>(null);
+  const [hasPendingUpdates, setHasPendingUpdates] = useState(false);
 
   // Read filters from URL - must be declared before handleRefreshList
   const searchTerm = searchParams.get('search') || '';
@@ -138,8 +139,13 @@ const PickingPackingPage = () => {
         (payload) => {
           console.log('🔔 Webhook update received:', payload.eventType);
           setLastWebhookUpdate(new Date());
-          // Auto-refresh list when new orders arrive or orders are updated
-          handleRefreshList();
+          // Solo auto-refresh si NO hay modal abierto
+          if (!selectedOrderId) {
+            handleRefreshList();
+          } else {
+            // Marcar que hay updates pendientes para cuando se cierre el modal
+            setHasPendingUpdates(true);
+          }
         }
       )
       .subscribe();
@@ -148,7 +154,15 @@ const PickingPackingPage = () => {
       supabase.removeChannel(channel);
     };
   }, [currentOrganization?.id, searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentPage]);
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentPage, selectedOrderId]);
+
+  // Auto-refresh list when modal closes if there were pending updates
+  useEffect(() => {
+    if (!selectedOrderId && hasPendingUpdates) {
+      handleRefreshList();
+      setHasPendingUpdates(false);
+    }
+  }, [selectedOrderId, hasPendingUpdates]);
 
   // Auto-ajustar filtros cuando se usa tags=confirmado (Para Preparar)
   // Esto asegura que la vista coincida exactamente con Shopify
