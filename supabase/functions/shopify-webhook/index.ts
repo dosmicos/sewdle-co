@@ -669,6 +669,17 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     }
   }
 
+  // Auto-apply tags based on payment gateway and line items (also on updates)
+  console.log('🤖 Analizando pedido actualizado para auto-aplicación de tags...');
+  const autoTags = determineAutoTags(order);
+  
+  if (autoTags.length > 0) {
+    console.log('🏷️ Tags automáticos detectados en update:', autoTags);
+    await applyAutoTagsToShopify(order.id, autoTags, order.tags, shopDomain);
+  } else {
+    console.log('ℹ️ No se detectaron tags automáticos para este pedido actualizado');
+  }
+
   return { success: true, order_number: order.order_number, action: 'UPDATE' };
 }
 
