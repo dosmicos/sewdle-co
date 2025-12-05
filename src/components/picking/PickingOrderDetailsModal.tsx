@@ -242,26 +242,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         
         if (error) throw error;
         
-        // Enrich line items - Priority: raw_data > Shopify API > local products
+        // Enrich line items - Priority: Shopify API > raw_data > local products
         const rawLineItems = effectiveOrder.shopify_order.raw_data?.line_items || [];
         let enrichedItems = (data as ShopifyLineItem[]).map(item => {
           const rawItem = rawLineItems.find((ri: any) => ri.id === item.shopify_line_item_id);
           return {
             ...item,
-            image_url: item.image_url || rawItem?.image?.src || rawItem?.featured_image || null
+            // Keep fallback image for now, will be replaced by Shopify API image if available
+            fallback_image_url: item.image_url || rawItem?.image?.src || rawItem?.featured_image || null,
+            image_url: null // Reset to fetch from Shopify API
           };
         });
         
-        // Fetch images from Shopify API for items without images
-        const itemsWithoutImages = enrichedItems.filter(item => !item.image_url);
-        if (itemsWithoutImages.length > 0) {
-          console.log(`🖼️ Fetching ${itemsWithoutImages.length} images from Shopify API...`);
+        // ALWAYS fetch images from Shopify API for items with product_id and variant_id
+        // This ensures we get the correct variant-specific image
+        const itemsWithShopifyIds = enrichedItems.filter(item => item.product_id && item.variant_id);
+        if (itemsWithShopifyIds.length > 0) {
+          console.log(`🖼️ Fetching ${itemsWithShopifyIds.length} variant images from Shopify API...`);
           
           // Get images from Shopify in parallel
-          const imagePromises = itemsWithoutImages.map(async (item) => {
-            if (!item.product_id || !item.variant_id) return { sku: item.sku, image_url: null };
-            
-            const shopifyImage = await fetchImageFromShopify(item.product_id, item.variant_id);
+          const imagePromises = itemsWithShopifyIds.map(async (item) => {
+            const shopifyImage = await fetchImageFromShopify(item.product_id!, item.variant_id!);
             return { sku: item.sku, image_url: shopifyImage };
           });
           
@@ -270,10 +271,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             shopifyImages.map(img => [img.sku, img.image_url])
           );
           
-          // Apply Shopify images
+          // Apply Shopify API images (priority) or fallback to saved image
           enrichedItems = enrichedItems.map(item => ({
             ...item,
-            image_url: item.image_url || skuToShopifyImageMap.get(item.sku) || null
+            image_url: skuToShopifyImageMap.get(item.sku) || (item as any).fallback_image_url || null
+          }));
+        } else {
+          // No Shopify IDs available, use fallback images
+          enrichedItems = enrichedItems.map(item => ({
+            ...item,
+            image_url: (item as any).fallback_image_url || null
           }));
         }
         
