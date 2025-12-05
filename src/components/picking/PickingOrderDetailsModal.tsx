@@ -21,6 +21,7 @@ interface ShopifyLineItem {
   variant_id: number | null;
   image_url: string | null;
   shopify_line_item_id: number;
+  properties: { name: string; value: string }[] | null;
 }
 
 interface PickingOrderDetailsModalProps {
@@ -247,7 +248,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       try {
         const { data, error } = await supabase
           .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id')
+          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id, properties')
           .eq('shopify_order_id', effectiveOrder.shopify_order.shopify_order_id);
         
         if (error) throw error;
@@ -647,6 +648,17 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                             <p className="text-sm text-muted-foreground">
                               {item.variant_title}
                             </p>
+                          )}
+                          {/* Custom Properties - Para bordados y personalizaciones */}
+                          {item.properties && item.properties.length > 0 && (
+                            <div className="mt-2 space-y-1 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                              {item.properties.map((prop, propIndex) => (
+                                <div key={propIndex} className="flex items-start gap-2 text-sm">
+                                  <span className="text-amber-700 font-medium">{prop.name}:</span>
+                                  <span className="text-amber-900">{prop.value}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
 
