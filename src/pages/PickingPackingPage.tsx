@@ -359,17 +359,25 @@ const PickingPackingPage = () => {
   // Fetch orders when filters change
   useEffect(() => {
     if (currentOrganization?.id) {
-      fetchOrders({ 
-        searchTerm: searchTerm || undefined,
-        operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
-        financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
-        fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
-        tags: tags.length > 0 ? tags : undefined,
-        excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
-        priceRange: priceRange || undefined,
-        dateRange: dateRange || undefined,
-        page: 1 
-      });
+      // Si hay búsqueda activa, ignorar los demás filtros para buscar globalmente
+      if (searchTerm) {
+        fetchOrders({ 
+          searchTerm,
+          page: 1 
+        });
+      } else {
+        // Sin búsqueda, aplicar todos los filtros normalmente
+        fetchOrders({ 
+          operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+          financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+          fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+          tags: tags.length > 0 ? tags : undefined,
+          excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
+          priceRange: priceRange || undefined,
+          dateRange: dateRange || undefined,
+          page: 1 
+        });
+      }
     }
   }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
       fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentOrganization?.id]);
@@ -389,17 +397,24 @@ const PickingPackingPage = () => {
   }
 
   const handlePageChange = (page: number) => {
-    fetchOrders({ 
-      searchTerm: searchTerm || undefined,
-      operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
-      financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
-      fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
-      tags: tags.length > 0 ? tags : undefined,
-      excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
-      priceRange: priceRange || undefined,
-      dateRange: dateRange || undefined,
-      page 
-    });
+    // Si hay búsqueda activa, ignorar los demás filtros
+    if (searchTerm) {
+      fetchOrders({ 
+        searchTerm,
+        page 
+      });
+    } else {
+      fetchOrders({ 
+        operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+        financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+        fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
+        priceRange: priceRange || undefined,
+        dateRange: dateRange || undefined,
+        page 
+      });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
