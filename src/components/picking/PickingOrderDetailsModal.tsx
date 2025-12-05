@@ -152,7 +152,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     fetchPackedByName();
   }, [effectiveOrder?.packed_by]);
 
-  const refetchOrder = async () => {
+  const refetchOrder = useCallback(async (targetOrderId: string) => {
     setLoadingOrder(true);
     try {
       const { data, error } = await supabase
@@ -179,7 +179,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             raw_data
           )
         `)
-        .eq('id', orderId)
+        .eq('id', targetOrderId)
         .single();
 
       if (error) throw error;
@@ -193,16 +193,79 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     } finally {
       setLoadingOrder(false);
     }
-  };
+  }, []);
 
-  // Always fetch order to get raw_data with financial details
+  // Always fetch order to get raw_data with financial details - with AbortController
   useEffect(() => {
+    if (!orderId) return;
+    
+    const abortController = new AbortController();
+    let isCancelled = false;
+
     const fetchOrder = async () => {
-      if (!orderId) return;
-      await refetchOrder();
+      setLoadingOrder(true);
+      try {
+        const { data, error } = await supabase
+          .from('picking_packing_orders')
+          .select(`
+            *,
+            shopify_order:shopify_orders(
+              id,
+              shopify_order_id,
+              order_number,
+              email,
+              created_at_shopify,
+              financial_status,
+              fulfillment_status,
+              customer_first_name,
+              customer_last_name,
+              customer_phone,
+              customer_email,
+              total_price,
+              currency,
+              note,
+              tags,
+              cancelled_at,
+              raw_data
+            )
+          `)
+          .eq('id', orderId)
+          .abortSignal(abortController.signal)
+          .single();
+
+        // Ignore if cancelled while waiting
+        if (isCancelled) {
+          console.log(`🚫 Ignorando respuesta obsoleta para orden ${orderId}`);
+          return;
+        }
+
+        if (error) throw error;
+        
+        setLocalOrder({
+          ...data,
+          line_items: []
+        } as PickingOrder);
+      } catch (error: any) {
+        // Ignore abort errors (expected)
+        if (error.name === 'AbortError' || isCancelled) {
+          console.log(`🚫 Solicitud cancelada para orden ${orderId}`);
+          return;
+        }
+        console.error('❌ Error fetching order:', error);
+      } finally {
+        if (!isCancelled) {
+          setLoadingOrder(false);
+        }
+      }
     };
 
     fetchOrder();
+
+    // Cleanup: cancel request if orderId changes
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+    };
   }, [orderId]);
 
   useEffect(() => {
@@ -225,8 +288,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setLoadingItems(true);
   }, [orderId]);
 
-  // Fetch line items separately
+  // Fetch line items separately - with isCancelled check
   useEffect(() => {
+    let isCancelled = false;
+    
     // Helper function to fetch images from Shopify API (optimized)
     const fetchImageFromShopify = async (productId: number, variantId: number): Promise<string | null> => {
       try {
@@ -247,19 +312,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     };
 
     const fetchLineItems = async () => {
-      if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
+      // Capture current shopify_order_id at start
+      const currentShopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id;
+      if (!currentShopifyOrderId) return;
       
       setLoadingItems(true);
       try {
         const { data, error } = await supabase
           .from('shopify_order_line_items')
           .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id, properties')
-          .eq('shopify_order_id', effectiveOrder.shopify_order.shopify_order_id);
+          .eq('shopify_order_id', currentShopifyOrderId);
+        
+        // Check if cancelled or shopify_order_id changed while waiting
+        if (isCancelled || effectiveOrder?.shopify_order?.shopify_order_id !== currentShopifyOrderId) {
+          console.log('🚫 Ignorando line items de orden anterior');
+          return;
+        }
         
         if (error) throw error;
         
         // Enrich line items - Priority: Shopify API > raw_data > local products
-        const rawLineItems = effectiveOrder.shopify_order.raw_data?.line_items || [];
+        const rawLineItems = effectiveOrder.shopify_order?.raw_data?.line_items || [];
         let enrichedItems = (data as ShopifyLineItem[]).map(item => {
           const rawItem = rawLineItems.find((ri: any) => ri.id === item.shopify_line_item_id);
           return {
@@ -269,6 +342,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             image_url: null // Reset to fetch from Shopify API
           };
         });
+        
+        // Check again before making more async calls
+        if (isCancelled) return;
         
         // ALWAYS fetch images from Shopify API for items with product_id and variant_id
         // This ensures we get the correct variant-specific image
@@ -283,6 +359,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           });
           
           const shopifyImages = await Promise.all(imagePromises);
+          
+          // Check again after parallel fetch
+          if (isCancelled) return;
+          
           const skuToShopifyImageMap = new Map(
             shopifyImages.map(img => [img.sku, img.image_url])
           );
@@ -300,6 +380,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           }));
         }
         
+        // Check before final async operation
+        if (isCancelled) return;
+        
         // Final fallback: query product_variants (only if still no image)
         const itemsStillWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
         if (itemsStillWithoutImages.length > 0) {
@@ -310,6 +393,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             .from('product_variants')
             .select('sku_variant, products(image_url)')
             .in('sku_variant', skus);
+          
+          // Final check before setting state
+          if (isCancelled) return;
           
           const variantData = variantResult.data as Array<{ sku_variant: string; products: { image_url: string | null } | null }> | null;
           
@@ -328,15 +414,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           }
         }
         
-        setLineItems(enrichedItems);
+        // Only set state if not cancelled
+        if (!isCancelled) {
+          setLineItems(enrichedItems);
+        }
       } catch (error) {
-        console.error('Error fetching line items:', error);
-        setLineItems([]);
+        if (!isCancelled) {
+          console.error('Error fetching line items:', error);
+          setLineItems([]);
+        }
       }
-      setLoadingItems(false);
+      if (!isCancelled) {
+        setLoadingItems(false);
+      }
     };
 
     fetchLineItems();
+    
+    // Cleanup: mark as cancelled if effect re-runs
+    return () => {
+      isCancelled = true;
+    };
   }, [effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.raw_data]);
 
   // Use useCallback with explicit dependencies to prevent stale closures
@@ -410,7 +508,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     } catch (error) {
       console.error('Error updating status:', error);
       // ONLY on error: Refetch to get actual state and rollback
-      await refetchOrder();
+      await refetchOrder(orderId);
     } finally {
       setUpdatingStatus(false);
     }
@@ -439,7 +537,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       } : prev);
       
       // Re-fetch to confirm
-      await refetchOrder();
+      await refetchOrder(orderId);
     } catch (error) {
       console.error('Error saving Shopify note:', error);
     } finally {
