@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, CloudDownload } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
@@ -106,6 +106,10 @@ const PickingPackingPage = () => {
   const excludeTags = searchParams.get('exclude_tags')?.split(',').filter(Boolean) || [];
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
+  
+  // Team division params
+  const teamNumber = parseInt(searchParams.get('team') || '0'); // 0 = all, 1-4 = specific team
+  const totalTeams = parseInt(searchParams.get('total_teams') || '1'); // 1-4 teams
 
   // Simple refresh - only fetches from local DB (webhook handles real-time updates from Shopify)
   const handleRefreshList = () => {
@@ -418,27 +422,74 @@ const PickingPackingPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Filter orders by team using modulo
+  const filteredOrdersByTeam = useMemo(() => {
+    if (teamNumber === 0 || totalTeams === 1) {
+      return orders; // Show all
+    }
+    
+    return orders.filter(order => {
+      const orderNum = parseInt(order.shopify_order?.order_number?.replace(/\D/g, '') || '0');
+      // Modulo to assign to team (0-indexed internally)
+      return (orderNum % totalTeams) === (teamNumber - 1);
+    });
+  }, [orders, teamNumber, totalTeams]);
+
+  // Team management functions
+  const updateTeamParams = (team: number, total: number) => {
+    const newParams = new URLSearchParams(searchParams);
+    
+    if (total === 1) {
+      newParams.delete('team');
+      newParams.delete('total_teams');
+    } else {
+      newParams.set('total_teams', total.toString());
+      if (team > total) {
+        newParams.delete('team');
+      } else if (team > 0) {
+        newParams.set('team', team.toString());
+      } else {
+        newParams.delete('team');
+      }
+    }
+    
+    setSearchParams(newParams);
+  };
+
+  // Team colors
+  const teamColors: Record<number, string> = {
+    1: 'bg-blue-500 hover:bg-blue-600 text-white',
+    2: 'bg-green-500 hover:bg-green-600 text-white',
+    3: 'bg-orange-500 hover:bg-orange-600 text-white',
+    4: 'bg-purple-500 hover:bg-purple-600 text-white',
+  };
+
+  const teamBgColors: Record<number, string> = {
+    1: 'bg-blue-100 text-blue-800 border border-blue-300',
+    2: 'bg-green-100 text-green-800 border border-green-300',
+    3: 'bg-orange-100 text-orange-800 border border-orange-300',
+    4: 'bg-purple-100 text-purple-800 border border-purple-300',
+  };
+
   const startIndex = (currentPage - 1) * pageSize + 1;
   const endIndex = Math.min(currentPage * pageSize, totalCount);
 
-  // For stats, we'll show totals from the current page
-  // In a production app, you'd want separate queries for global stats
+  // For stats, we'll show totals from filtered orders
   const stats = {
-    total: totalCount,
-    pending: orders.filter(o => {
+    total: filteredOrdersByTeam.length,
+    pending: filteredOrdersByTeam.filter(o => {
       if (o.operational_status !== 'pending') return false;
       const tags = (o.shopify_order?.tags || '').toLowerCase().trim();
-      // Must have "confirmado" AND NOT have "empacado"
       return tags.includes('confirmado') && !tags.includes('empacado');
     }).length,
-    picking: orders.filter(o => o.operational_status === 'picking').length,
-    packing: orders.filter(o => o.operational_status === 'packing').length,
-    ready: orders.filter(o => o.operational_status === 'ready_to_ship').length,
+    picking: filteredOrdersByTeam.filter(o => o.operational_status === 'picking').length,
+    packing: filteredOrdersByTeam.filter(o => o.operational_status === 'packing').length,
+    ready: filteredOrdersByTeam.filter(o => o.operational_status === 'ready_to_ship').length,
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedOrders(orders.map(o => o.id));
+      setSelectedOrders(filteredOrdersByTeam.map(o => o.id));
     } else {
       setSelectedOrders([]);
     }
@@ -629,12 +680,74 @@ const PickingPackingPage = () => {
           </div>
         </div>
 
+        {/* Team Division Selector */}
+        <div className="bg-muted/30 border rounded-lg p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Dividir en:</span>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map(n => (
+                  <Button
+                    key={n}
+                    variant={totalTeams === n ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => updateTeamParams(0, n)}
+                    className="min-w-[40px]"
+                  >
+                    {n}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            {totalTeams > 1 && (
+              <div className="flex items-center gap-2 border-l pl-4">
+                <span className="text-sm font-medium">Ver equipo:</span>
+                <div className="flex gap-1">
+                  <Button
+                    variant={teamNumber === 0 ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => updateTeamParams(0, totalTeams)}
+                  >
+                    Todos
+                  </Button>
+                  {Array.from({length: totalTeams}, (_, i) => i + 1).map(n => (
+                    <Button
+                      key={n}
+                      variant={teamNumber === n ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => updateTeamParams(n, totalTeams)}
+                      className={teamNumber === n ? teamColors[n] : ''}
+                    >
+                      {n}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Team indicator */}
+            {teamNumber > 0 && totalTeams > 1 && (
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${teamBgColors[teamNumber]}`}>
+                <Users className="w-4 h-4" />
+                <span className="font-semibold text-sm">
+                  Equipo {teamNumber} de {totalTeams}
+                </span>
+                <Badge variant="secondary" className="bg-white/50">
+                  {filteredOrdersByTeam.length} pedidos
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Stats Summary */}
         <div className="bg-muted/50 rounded-lg p-4">
           <div className="flex items-center gap-2 text-sm">
             <Package className="w-4 h-4 text-muted-foreground" />
             <span className="font-medium">
-              Hoy: {stats.total} órdenes
+              {teamNumber > 0 ? `Equipo ${teamNumber}:` : 'Total:'} {stats.total} órdenes
             </span>
             <span className="text-muted-foreground">|</span>
             <span className="text-muted-foreground">
@@ -654,7 +767,7 @@ const PickingPackingPage = () => {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedOrders.length === orders.length && orders.length > 0}
+                    checked={selectedOrders.length === filteredOrdersByTeam.length && filteredOrdersByTeam.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
@@ -666,14 +779,14 @@ const PickingPackingPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.length === 0 ? (
+              {filteredOrdersByTeam.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    No se encontraron órdenes
+                    {teamNumber > 0 ? `No hay órdenes para el equipo ${teamNumber}` : 'No se encontraron órdenes'}
                   </TableCell>
                 </TableRow>
               ) : (
-                orders.map((order) => (
+                filteredOrdersByTeam.map((order) => (
                   <TableRow 
                     key={order.id}
                     className="cursor-pointer hover:bg-muted/50"
@@ -875,7 +988,7 @@ const PickingPackingPage = () => {
         <PickingOrderDetailsModal
           orderId={selectedOrderId}
           onClose={() => setSelectedOrderId(null)}
-          allOrderIds={orders.map(o => o.id)}
+          allOrderIds={filteredOrdersByTeam.map(o => o.id)}
           onNavigate={(newOrderId) => setSelectedOrderId(newOrderId)}
         />
       )}
