@@ -5,7 +5,6 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 const MIN_ORDER_NUMBER = 62303;
 
 export interface PickingOrderStats {
-  sinEtiquetas: number;
   paraEmpacar: number;
   noConfirmados: number;
   empacados: number;
@@ -14,7 +13,6 @@ export interface PickingOrderStats {
 export const usePickingOrderStats = () => {
   const { currentOrganization } = useOrganization();
   const [stats, setStats] = useState<PickingOrderStats>({
-    sinEtiquetas: 0,
     paraEmpacar: 0,
     noConfirmados: 0,
     empacados: 0,
@@ -28,16 +26,7 @@ export const usePickingOrderStats = () => {
       const orgId = currentOrganization.id;
 
       // Execute all queries in parallel
-      const [sinEtiquetasRes, paraEmpacarRes, noConfirmadosRes, empacadosRes] = await Promise.all([
-        // Sin etiquetas: tags IS NULL OR tags = ''
-        supabase
-          .from('shopify_orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', orgId)
-          .gte('order_number', MIN_ORDER_NUMBER)
-          .is('cancelled_at', null)
-          .or('tags.is.null,tags.eq.'),
-
+      const [paraEmpacarRes, noConfirmadosRes, empacadosRes] = await Promise.all([
         // Para empacar: tags contains 'confirmado', NOT contains 'empacado', specific payment statuses
         supabase
           .from('shopify_orders')
@@ -69,7 +58,6 @@ export const usePickingOrderStats = () => {
       ]);
 
       setStats({
-        sinEtiquetas: sinEtiquetasRes.count || 0,
         paraEmpacar: paraEmpacarRes.count || 0,
         noConfirmados: noConfirmadosRes.count || 0,
         empacados: empacadosRes.count || 0,

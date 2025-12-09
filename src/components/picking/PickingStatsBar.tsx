@@ -1,9 +1,9 @@
 import React from 'react';
 import { usePickingOrderStats } from '@/hooks/usePickingOrderStats';
-import { Tag, Package, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, Package, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface PickingStatsBarProps {
-  onFilterClick: (filterType: 'sin_etiquetas' | 'para_empacar' | 'no_confirmados' | 'empacados') => void;
+  onFilterClick: (filterType: 'pedidos' | 'para_empacar' | 'no_confirmados' | 'empacados') => void;
 }
 
 export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick }) => {
@@ -17,15 +17,17 @@ export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick 
     );
   }
 
+  const totalPedidos = stats.paraEmpacar + stats.noConfirmados;
+
   return (
     <div className="flex items-center gap-4 text-xs text-muted-foreground py-2 border-b border-border/50">
       <button
-        onClick={() => onFilterClick('sin_etiquetas')}
+        onClick={() => onFilterClick('pedidos')}
         className="flex items-center gap-1.5 hover:text-foreground transition-colors"
       >
-        <Tag className="w-3 h-3 text-muted-foreground/70" />
-        <span className="text-muted-foreground/70">Sin etiquetas:</span>
-        <span className="font-medium text-foreground">{stats.sinEtiquetas}</span>
+        <ShoppingBag className="w-3 h-3 text-muted-foreground/70" />
+        <span className="text-muted-foreground/70">Pedidos:</span>
+        <span className="font-medium text-foreground">{totalPedidos}</span>
       </button>
 
       <span className="text-border">|</span>
