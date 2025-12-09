@@ -258,14 +258,27 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
 
   console.log(`✅ Orden ${order.order_number} almacenada correctamente`);
 
-  // Inicializar orden en picking_packing_orders para tiempo real
+  // Determinar operational_status basado en estados de Shopify
+  let operationalStatus: 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'shipped' = 'pending';
+  const orderTags = (order.tags || '').toLowerCase();
+
+  if (order.cancelled_at) {
+    operationalStatus = 'pending';
+  } else if (order.fulfillment_status === 'fulfilled') {
+    operationalStatus = 'shipped'; // Ya viene preparado desde Shopify
+  } else if (orderTags.includes('empacado')) {
+    operationalStatus = 'ready_to_ship';
+  }
+
   console.log(`📦 Inicializando orden ${order.order_number} (${order.id}) en picking & packing para org ${organizationId}...`);
+  console.log(`📦 Estado operacional inicial: ${operationalStatus} (fulfillment: ${order.fulfillment_status}, tags: ${order.tags})`);
+  
   const { error: pickingError } = await supabase
     .from('picking_packing_orders')
     .upsert({
       shopify_order_id: order.id,
       organization_id: organizationId,
-      operational_status: 'pending'
+      operational_status: operationalStatus
     }, { 
       onConflict: 'organization_id,shopify_order_id',
       ignoreDuplicates: true 
