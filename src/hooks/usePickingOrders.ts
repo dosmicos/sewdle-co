@@ -760,16 +760,8 @@ export const usePickingOrders = () => {
     }
   };
 
-  // Efecto para cargar órdenes iniciales
-  useEffect(() => {
-    if (currentOrganization?.id) {
-      logger.info('[PickingOrders] Organización cargada, iniciando fetch');
-      fetchOrders();
-    } else {
-      logger.info('[PickingOrders] Esperando carga de organización...');
-      setLoading(true);
-    }
-  }, [currentOrganization?.id]);
+  // Nota: No hacemos fetch automático aquí - la página controla la carga con filtros de URL
+  // Esto evita la condición de carrera donde un fetch sin filtros sobrescribía los datos filtrados
 
   return {
     orders,
