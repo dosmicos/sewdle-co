@@ -14,6 +14,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
 import { SavedFiltersManager } from '@/components/picking/SavedFiltersManager';
 import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
+import { useShopifyTags } from '@/hooks/useShopifyTags';
 import {
   Popover,
   PopoverContent,
@@ -76,6 +77,23 @@ const paymentStatusLabels = {
 const PickingPackingPage = () => {
   const { currentOrganization } = useOrganization();
   const { toast } = useToast();
+  const { availableTags } = useShopifyTags();
+
+  // Enrich FILTER_OPTIONS with dynamic Shopify tags
+  const enrichedFilterOptions = useMemo(() => {
+    return FILTER_OPTIONS.map(option => {
+      if (option.id === 'tags' || option.id === 'exclude_tags') {
+        return {
+          ...option,
+          options: availableTags.map(tag => ({
+            value: tag.toLowerCase(),
+            label: tag
+          }))
+        };
+      }
+      return option;
+    });
+  }, [availableTags]);
   const { 
     orders, 
     loading, 
@@ -638,12 +656,12 @@ const PickingPackingPage = () => {
                   <CommandList>
                     <CommandEmpty>No se encontraron filtros</CommandEmpty>
                     <CommandGroup>
-                      {FILTER_OPTIONS.map((option) => (
+                      {enrichedFilterOptions.map((option) => (
                         <CommandItem
                           key={option.id}
                           value={option.id}
                           onSelect={(value) => {
-                            const selected = FILTER_OPTIONS.find(opt => opt.id === value);
+                            const selected = enrichedFilterOptions.find(opt => opt.id === value);
                             if (selected) {
                               handleFilterSelect(selected);
                               setCommandValue('');
