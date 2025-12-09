@@ -5,6 +5,32 @@ import { sortVariants } from '@/lib/variantSorting';
 
 const MIN_ORDER_NUMBER = 62303;
 
+// Extrae solo la talla del variantTitle, ignorando colores
+const extractSize = (variantTitle: string | null): string | null => {
+  if (!variantTitle) return null;
+  
+  const sizePatterns = [
+    /\d+\s*\([^)]+\)/i,              // "4 (1-2 años)", "2 (3-12 meses)"
+    /\d+-\d+\s*(meses|años)/i,       // "3-12 meses", "1-2 años"
+    /talla\s+\w+/i,                  // "Talla M", "Talla 4"
+    /^(XXS|XS|S|M|L|XL|XXL|XXXL)$/i, // Tallas estándar solas
+    /^\d{1,2}$/,                     // Solo número: "4", "6", "12"
+  ];
+  
+  // Si tiene "/" puede ser "Color / Talla" o "Talla / Color"
+  const parts = variantTitle.split('/').map(p => p.trim());
+  
+  for (const part of parts) {
+    for (const pattern of sizePatterns) {
+      if (pattern.test(part)) {
+        return part;
+      }
+    }
+  }
+  
+  return null;
+};
+
 export interface ParaEmpacarItem {
   id: string;
   orderNumbers: number[];
@@ -135,10 +161,10 @@ export const useParaEmpacarItems = () => {
             price: Number(item.price) || 0,
             productId: item.product_id,
             variantId: item.variant_id,
-            imageUrl: item.image_url, // Solo usar imagen directa, lazy load hará el resto
+            imageUrl: item.image_url,
             properties: isCustomized ? properties : null,
             hasCustomization: isCustomized,
-            size: item.variant_title || '',
+            size: extractSize(item.variant_title) || '',
           });
         }
       });
@@ -178,9 +204,13 @@ export const useParaEmpacarItems = () => {
     }
   }, [currentOrganization?.id]);
 
-  // Tallas disponibles extraídas de los items
+  // Tallas disponibles extraídas de los items (solo tallas, no colores)
   const availableSizes = useMemo(() => {
-    const sizes = [...new Set(items.map(i => i.variantTitle).filter(Boolean))] as string[];
+    const sizes = [...new Set(
+      items
+        .map(i => i.size)
+        .filter(Boolean)
+    )] as string[];
     return sortVariants(sizes.map(s => ({ size: s }))).map(s => s.size);
   }, [items]);
 
@@ -188,7 +218,7 @@ export const useParaEmpacarItems = () => {
   const filteredItems = useMemo(() => {
     return items.filter(item => {
       if (showOnlyEmbroidery && !item.hasCustomization) return false;
-      if (selectedSizes.length > 0 && !selectedSizes.includes(item.variantTitle || '')) return false;
+      if (selectedSizes.length > 0 && !selectedSizes.includes(item.size)) return false;
       return true;
     });
   }, [items, selectedSizes, showOnlyEmbroidery]);
