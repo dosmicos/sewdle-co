@@ -28,10 +28,10 @@ const ItemImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
     const fetchImage = async () => {
       try {
         const { data } = await supabase.functions.invoke('get-shopify-variant-image', {
-          body: { productId: item.productId, variantId: item.variantId }
+          body: { product_id: item.productId, variant_id: item.variantId }
         });
-        if (data?.imageUrl) {
-          setImageUrl(data.imageUrl);
+        if (data?.image_url) {
+          setImageUrl(data.image_url);
         }
       } catch (err) {
         console.error('Error fetching image:', err);
