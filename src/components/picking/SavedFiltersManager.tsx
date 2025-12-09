@@ -5,9 +5,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Bookmark, Trash2, Users } from 'lucide-react';
+import { Bookmark, Trash2, Users, Package } from 'lucide-react';
 import { useSavedFilters } from '@/hooks/useSavedFilters';
 import { cn } from '@/lib/utils';
+
+// Filtros predeterminados fijos (no se pueden eliminar)
+const PRESET_FILTERS = [
+  {
+    id: 'para-empacar',
+    name: 'Para Empacar',
+    filters: {
+      financial_status: ['paid', 'pending', 'partially_paid'],
+      tags: ['confirmado'],
+      exclude_tags: ['empacado'],
+    }
+  }
+];
 
 interface SavedFiltersManagerProps {
   currentFilters: Record<string, any>;
@@ -58,17 +71,33 @@ export const SavedFiltersManager: React.FC<SavedFiltersManagerProps> = ({
           </Button>
         </div>
 
-        {/* Fila de botones de filtros guardados */}
-        {loading ? (
-          <div className="text-sm text-muted-foreground">Cargando filtros...</div>
-        ) : savedFilters.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-2">
-            No hay filtros guardados. Aplica algunos filtros y guárdalos para reutilizarlos.
-          </div>
-        ) : (
-          <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex gap-2 pb-2">
-              {savedFilters.map((filter) => (
+        {/* Fila de botones de filtros */}
+        <ScrollArea className="w-full whitespace-nowrap">
+          <div className="flex gap-2 pb-2">
+            {/* Filtros fijos (preset) - siempre visibles */}
+            {PRESET_FILTERS.map((preset) => (
+              <Button
+                key={preset.id}
+                variant="outline"
+                size="sm"
+                onClick={() => onLoadFilter(preset.filters)}
+                className="gap-2 bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700 shrink-0"
+              >
+                <Package className="w-3 h-3" />
+                <span>{preset.name}</span>
+              </Button>
+            ))}
+
+            {/* Separador visual si hay filtros guardados */}
+            {savedFilters.length > 0 && (
+              <div className="w-px bg-border shrink-0" />
+            )}
+
+            {/* Filtros guardados por el usuario */}
+            {loading ? (
+              <div className="text-sm text-muted-foreground flex items-center">Cargando...</div>
+            ) : (
+              savedFilters.map((filter) => (
                 <div
                   key={filter.id}
                   className="relative inline-block"
@@ -108,11 +137,11 @@ export const SavedFiltersManager: React.FC<SavedFiltersManagerProps> = ({
                     <Trash2 className="w-3 h-3 text-destructive" />
                   </Button>
                 </div>
-              ))}
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-        )}
+              ))
+            )}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </div>
 
       {/* Dialog para guardar filtro */}
