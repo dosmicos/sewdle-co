@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,9 +8,13 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Package, Hash, ImageOff, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX } from 'lucide-react';
 import { useParaEmpacarItems, ParaEmpacarItem } from '@/hooks/useParaEmpacarItems';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -29,9 +33,7 @@ const LazyImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
   const imgRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Si ya tenemos imagen o ya intentamos cargar, no hacer nada
     if (imageUrl || hasAttempted) return;
-    // Si no tenemos IDs necesarios, no podemos cargar
     if (!item.productId || !item.variantId) {
       setHasAttempted(true);
       return;
@@ -61,14 +63,10 @@ const LazyImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
       { rootMargin: '200px', threshold: 0.1 }
     );
 
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
-    }
-
+    if (imgRef.current) observer.observe(imgRef.current);
     return () => observer.disconnect();
   }, [item.productId, item.variantId, imageUrl, hasAttempted]);
 
-  // Reset cuando cambia el item
   useEffect(() => {
     setImageUrl(item.imageUrl);
     setHasAttempted(!!item.imageUrl);
@@ -101,50 +99,6 @@ const LazyImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
   );
 };
 
-// Componente para selector de tallas
-const SizeFilter: React.FC<{
-  availableSizes: string[];
-  selectedSizes: string[];
-  onSizeChange: (sizes: string[]) => void;
-}> = ({ availableSizes, selectedSizes, onSizeChange }) => {
-  const toggleSize = (size: string) => {
-    if (selectedSizes.includes(size)) {
-      onSizeChange(selectedSizes.filter(s => s !== size));
-    } else {
-      onSizeChange([...selectedSizes, size]);
-    }
-  };
-
-  if (availableSizes.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {availableSizes.map(size => (
-        <button
-          key={size}
-          onClick={() => toggleSize(size)}
-          className={cn(
-            "px-2 py-0.5 text-xs rounded-md border transition-colors",
-            selectedSizes.includes(size)
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-background text-muted-foreground border-border hover:bg-muted"
-          )}
-        >
-          {size}
-        </button>
-      ))}
-      {selectedSizes.length > 0 && (
-        <button
-          onClick={() => onSizeChange([])}
-          className="px-2 py-0.5 text-xs rounded-md text-destructive hover:underline"
-        >
-          Limpiar
-        </button>
-      )}
-    </div>
-  );
-};
-
 export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
   open,
   onOpenChange,
@@ -152,6 +106,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
 }) => {
   const { 
     items, 
+    allItems,
     loading, 
     error, 
     fetchItems, 
@@ -162,7 +117,11 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     setSelectedSizes,
     showOnlyEmbroidery,
     setShowOnlyEmbroidery,
+    clearAllFilters,
+    hasActiveFilters,
   } = useParaEmpacarItems();
+
+  const [sizePopoverOpen, setSizePopoverOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -170,16 +129,28 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     }
   }, [open, fetchItems]);
 
+  const removeSize = (size: string) => {
+    setSelectedSizes(selectedSizes.filter(s => s !== size));
+  };
+
+  const toggleSize = (size: string) => {
+    if (selectedSizes.includes(size)) {
+      removeSize(size);
+    } else {
+      setSelectedSizes([...selectedSizes, size]);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[85vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
+        <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
             Artículos Para Empacar
           </DialogTitle>
           {!loading && !error && (
-            <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
               <span>
                 <strong className="text-foreground">{totalQuantity}</strong> unidades
               </span>
@@ -193,31 +164,106 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
           )}
         </DialogHeader>
 
-        {/* Filtros */}
-        {!loading && !error && items.length > 0 && (
-          <div className="px-6 py-3 border-b space-y-3 flex-shrink-0">
-            {/* Filtro de tallas */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Filtrar por talla</Label>
-              <SizeFilter 
-                availableSizes={availableSizes}
-                selectedSizes={selectedSizes}
-                onSizeChange={setSelectedSizes}
-              />
+        {/* Filtros compactos - siempre visibles si hay datos */}
+        {!loading && !error && allItems.length > 0 && (
+          <div className="px-6 py-2 border-y bg-muted/30 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Dropdown de tallas */}
+              <Popover open={sizePopoverOpen} onOpenChange={setSizePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn(
+                      "h-7 text-xs gap-1",
+                      selectedSizes.length > 0 && "border-primary text-primary"
+                    )}
+                  >
+                    Talla
+                    {selectedSizes.length > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                        {selectedSizes.length}
+                      </Badge>
+                    )}
+                    <ChevronDown className="w-3 h-3 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start">
+                  <div className="flex flex-wrap gap-1 max-w-[280px]">
+                    {availableSizes.map(size => (
+                      <button
+                        key={size}
+                        onClick={() => toggleSize(size)}
+                        className={cn(
+                          "px-2 py-1 text-xs rounded border transition-colors",
+                          selectedSizes.includes(size)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-foreground border-border hover:bg-muted"
+                        )}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Toggle bordados como chip */}
+              <button
+                onClick={() => setShowOnlyEmbroidery(!showOnlyEmbroidery)}
+                className={cn(
+                  "h-7 px-2.5 text-xs rounded-md border transition-colors flex items-center gap-1.5",
+                  showOnlyEmbroidery
+                    ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700"
+                    : "bg-background text-muted-foreground border-border hover:bg-muted"
+                )}
+              >
+                <Sparkles className="w-3 h-3" />
+                Bordados
+              </button>
+
+              {/* Separador + limpiar */}
+              {hasActiveFilters && (
+                <>
+                  <div className="h-4 w-px bg-border mx-1" />
+                  <button
+                    onClick={clearAllFilters}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    <FilterX className="w-3 h-3" />
+                    Limpiar
+                  </button>
+                </>
+              )}
             </div>
-            
-            {/* Switch solo bordados */}
-            <div className="flex items-center gap-2">
-              <Switch
-                id="embroidery-filter"
-                checked={showOnlyEmbroidery}
-                onCheckedChange={setShowOnlyEmbroidery}
-              />
-              <Label htmlFor="embroidery-filter" className="text-sm flex items-center gap-1.5 cursor-pointer">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                Solo bordados
-              </Label>
-            </div>
+
+            {/* Chips de filtros activos */}
+            {hasActiveFilters && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {selectedSizes.map(size => (
+                  <Badge 
+                    key={size} 
+                    variant="secondary" 
+                    className="h-5 text-[10px] gap-1 pr-1 cursor-pointer hover:bg-muted"
+                    onClick={() => removeSize(size)}
+                  >
+                    {size}
+                    <X className="w-3 h-3" />
+                  </Badge>
+                ))}
+                {showOnlyEmbroidery && (
+                  <Badge 
+                    variant="secondary" 
+                    className="h-5 text-[10px] gap-1 pr-1 cursor-pointer hover:bg-muted bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+                    onClick={() => setShowOnlyEmbroidery(false)}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Bordados
+                    <X className="w-3 h-3" />
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -237,8 +283,18 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
           ) : error ? (
             <div className="py-8 text-center text-destructive">{error}</div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              No hay artículos para empacar
+            <div className="py-8 text-center">
+              {hasActiveFilters ? (
+                <div className="space-y-2">
+                  <p className="text-muted-foreground">No hay artículos con estos filtros</p>
+                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                    <FilterX className="w-4 h-4 mr-1" />
+                    Quitar filtros
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No hay artículos para empacar</p>
+              )}
             </div>
           ) : (
             <div className="space-y-2 py-4">

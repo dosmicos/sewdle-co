@@ -196,6 +196,13 @@ export const useParaEmpacarItems = () => {
   const totalQuantity = filteredItems.reduce((sum, item) => sum + item.quantity, 0);
   const uniqueOrders = new Set(filteredItems.flatMap(item => item.orderNumbers)).size;
 
+  const clearAllFilters = useCallback(() => {
+    setSelectedSizes([]);
+    setShowOnlyEmbroidery(false);
+  }, []);
+
+  const hasActiveFilters = selectedSizes.length > 0 || showOnlyEmbroidery;
+
   return { 
     items: filteredItems, 
     allItems: items,
@@ -210,5 +217,7 @@ export const useParaEmpacarItems = () => {
     setSelectedSizes,
     showOnlyEmbroidery,
     setShowOnlyEmbroidery,
+    clearAllFilters,
+    hasActiveFilters,
   };
 };
