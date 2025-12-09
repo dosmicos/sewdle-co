@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,31 +18,12 @@ interface ParaEmpacarItemsModalProps {
   onOrderClick?: (shopifyOrderId: number) => void;
 }
 
-const ItemImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
-  const [imageUrl, setImageUrl] = useState<string | null>(item.imageUrl);
-  const [loading, setLoading] = useState(!item.imageUrl && !!item.productId);
-
-  useEffect(() => {
-    if (item.imageUrl || !item.productId) return;
-
-    const fetchImage = async () => {
-      try {
-        const { data } = await supabase.functions.invoke('get-shopify-variant-image', {
-          body: { product_id: item.productId, variant_id: item.variantId }
-        });
-        if (data?.image_url) {
-          setImageUrl(data.image_url);
-        }
-      } catch (err) {
-        console.error('Error fetching image:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchImage();
-  }, [item.productId, item.variantId, item.imageUrl]);
-
+// Image component that receives URL from parent's throttled fetcher
+const ItemImage: React.FC<{ item: ParaEmpacarItem; imageUrl: string | null; loading: boolean }> = ({ 
+  item, 
+  imageUrl,
+  loading 
+}) => {
   if (loading) {
     return <Skeleton className="w-14 h-14 rounded-md" />;
   }
@@ -70,12 +51,89 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
   onOrderClick,
 }) => {
   const { items, loading, error, fetchItems, totalQuantity, uniqueOrders } = useParaEmpacarItems();
+  const [imageUrls, setImageUrls] = useState<Record<string, string | null>>({});
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const fetchQueueRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (open) {
       fetchItems();
+      setImageUrls({});
+      setLoadingImages(new Set());
+    } else {
+      // Cancel any pending image fetches when modal closes
+      if (fetchQueueRef.current) {
+        fetchQueueRef.current.abort();
+        fetchQueueRef.current = null;
+      }
     }
   }, [open, fetchItems]);
+
+  // Throttled image fetching - process one at a time with 600ms delay (max ~1.6 calls/sec, under 2/sec limit)
+  const fetchImagesThrottled = useCallback(async (itemsToFetch: ParaEmpacarItem[]) => {
+    const controller = new AbortController();
+    fetchQueueRef.current = controller;
+
+    const itemsNeedingFetch = itemsToFetch.filter(
+      item => !item.imageUrl && item.productId && !imageUrls[item.id]
+    );
+
+    // Mark all as loading
+    setLoadingImages(new Set(itemsNeedingFetch.map(i => i.id)));
+
+    for (const item of itemsNeedingFetch) {
+      if (controller.signal.aborted) break;
+
+      try {
+        const { data } = await supabase.functions.invoke('get-shopify-variant-image', {
+          body: { product_id: item.productId, variant_id: item.variantId }
+        });
+
+        if (!controller.signal.aborted) {
+          setImageUrls(prev => ({
+            ...prev,
+            [item.id]: data?.image_url || null
+          }));
+          setLoadingImages(prev => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.error('Error fetching image:', err);
+          setLoadingImages(prev => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+        }
+      }
+
+      // Wait 600ms before next request to stay under rate limit
+      if (!controller.signal.aborted) {
+        await new Promise(resolve => setTimeout(resolve, 600));
+      }
+    }
+  }, [imageUrls]);
+
+  // Start fetching images when items are loaded
+  useEffect(() => {
+    if (items.length > 0 && open) {
+      fetchImagesThrottled(items);
+    }
+  }, [items, open, fetchImagesThrottled]);
+
+  const getImageUrl = (item: ParaEmpacarItem) => {
+    if (item.imageUrl) return item.imageUrl;
+    return imageUrls[item.id] || null;
+  };
+
+  const isImageLoading = (item: ParaEmpacarItem) => {
+    if (item.imageUrl) return false;
+    return loadingImages.has(item.id);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,7 +182,11 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                   key={item.id}
                   className="flex gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
-                  <ItemImage item={item} />
+                  <ItemImage 
+                    item={item} 
+                    imageUrl={getImageUrl(item)} 
+                    loading={isImageLoading(item)} 
+                  />
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
