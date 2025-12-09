@@ -78,6 +78,16 @@ const PickingPackingPage = () => {
   const { currentOrganization } = useOrganization();
   const { toast } = useToast();
   const { availableTags } = useShopifyTags();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Clear URL filters on initial mount - user starts with clean slate
+  useEffect(() => {
+    const hasFilters = searchParams.toString().length > 0;
+    if (hasFilters) {
+      setSearchParams(new URLSearchParams(), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Enrich FILTER_OPTIONS with dynamic Shopify tags
   const enrichedFilterOptions = useMemo(() => {
@@ -105,7 +115,6 @@ const PickingPackingPage = () => {
     bulkUpdateOrderStatus,
     bulkUpdateOrdersByDate
   } = usePickingOrders();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [filterSelectorOpen, setFilterSelectorOpen] = useState(false);
