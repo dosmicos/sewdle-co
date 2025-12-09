@@ -17,11 +17,10 @@ interface ParaEmpacarItemsModalProps {
   onOrderClick?: (shopifyOrderId: number) => void;
 }
 
-// Image component - uses only pre-existing image URLs to avoid rate limits
 const ItemImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
   if (!item.imageUrl) {
     return (
-      <div className="w-14 h-14 rounded-md bg-muted flex items-center justify-center">
+      <div className="w-14 h-14 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
         <ImageOff className="w-5 h-5 text-muted-foreground" />
       </div>
     );
@@ -31,7 +30,7 @@ const ItemImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
     <img
       src={item.imageUrl}
       alt={item.title}
-      className="w-14 h-14 rounded-md object-cover"
+      className="w-14 h-14 rounded-md object-cover flex-shrink-0"
     />
   );
 };
@@ -51,26 +50,28 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl h-[85vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
             Artículos Para Empacar
           </DialogTitle>
+          {!loading && !error && items.length > 0 && (
+            <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2">
+              <span>
+                <strong className="text-foreground">{totalQuantity}</strong> unidades
+              </span>
+              <span>
+                <strong className="text-foreground">{items.length}</strong> artículos únicos
+              </span>
+              <span>
+                <strong className="text-foreground">{uniqueOrders}</strong> pedidos
+              </span>
+            </div>
+          )}
         </DialogHeader>
 
-        {!loading && !error && items.length > 0 && (
-          <div className="flex items-center gap-4 text-sm text-muted-foreground pb-2 border-b">
-            <span>
-              <strong className="text-foreground">{totalQuantity}</strong> artículos
-            </span>
-            <span>
-              <strong className="text-foreground">{uniqueOrders}</strong> pedidos
-            </span>
-          </div>
-        )}
-
-        <ScrollArea className="flex-1 -mx-6 px-6">
+        <ScrollArea className="flex-1 px-6">
           {loading ? (
             <div className="space-y-3 py-4">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -108,7 +109,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                           </p>
                         )}
                       </div>
-                      <Badge variant="secondary" className="shrink-0">
+                      <Badge variant="secondary" className="shrink-0 text-base font-bold">
                         x{item.quantity}
                       </Badge>
                     </div>
@@ -119,16 +120,29 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                           SKU: {item.sku}
                         </span>
                       )}
-                      <button
-                        onClick={() => onOrderClick?.(item.shopifyOrderId)}
-                        className="flex items-center gap-1 text-xs text-primary hover:underline"
-                      >
-                        <Hash className="w-3 h-3" />
-                        {item.orderNumber}
-                      </button>
                     </div>
 
-                    {item.properties && item.properties.length > 0 && (
+                    {/* Números de pedido */}
+                    <div className="flex items-center gap-1 mt-2 flex-wrap">
+                      {item.orderNumbers.slice(0, 8).map((orderNum, idx) => (
+                        <button
+                          key={`${orderNum}-${idx}`}
+                          onClick={() => onOrderClick?.(item.shopifyOrderIds[idx])}
+                          className="flex items-center gap-0.5 text-xs text-primary hover:underline bg-primary/10 px-1.5 py-0.5 rounded"
+                        >
+                          <Hash className="w-3 h-3" />
+                          {orderNum}
+                        </button>
+                      ))}
+                      {item.orderNumbers.length > 8 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{item.orderNumbers.length - 8} más
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Propiedades de personalización (bordado) */}
+                    {item.hasCustomization && item.properties && item.properties.length > 0 && (
                       <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-0.5">
                         {item.properties.map((prop, idx) => (
                           <p key={idx} className="text-amber-800">
