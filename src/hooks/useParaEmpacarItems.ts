@@ -88,6 +88,29 @@ export const useParaEmpacarItems = () => {
 
       if (lineItemsError) throw lineItemsError;
 
+      // Obtener imágenes fallback de productos para items sin imagen
+      const skusWithoutImage = [...new Set(
+        (lineItems || [])
+          .filter(item => !item.image_url && item.sku)
+          .map(item => item.sku)
+      )];
+
+      let skuImageMap = new Map<string, string>();
+      if (skusWithoutImage.length > 0) {
+        const { data: variantsWithImages } = await supabase
+          .from('product_variants')
+          .select('sku_variant, products!inner(image_url)')
+          .in('sku_variant', skusWithoutImage);
+
+        if (variantsWithImages) {
+          variantsWithImages.forEach((v: any) => {
+            if (v.products?.image_url) {
+              skuImageMap.set(v.sku_variant, v.products.image_url);
+            }
+          });
+        }
+      }
+
       // Agrupar artículos por SKU+variante (excepto los personalizados)
       const groupedItems = new Map<string, ParaEmpacarItem>();
 
@@ -113,6 +136,7 @@ export const useParaEmpacarItems = () => {
             existing.shopifyOrderIds.push(item.shopify_order_id);
           }
         } else {
+          const fallbackImage = item.sku ? skuImageMap.get(item.sku) : null;
           groupedItems.set(groupKey, {
             id: item.id,
             orderNumbers: [orderNumber],
@@ -124,7 +148,7 @@ export const useParaEmpacarItems = () => {
             price: Number(item.price) || 0,
             productId: item.product_id,
             variantId: item.variant_id,
-            imageUrl: item.image_url,
+            imageUrl: item.image_url || fallbackImage || null,
             properties: isCustomized ? properties : null,
             hasCustomization: isCustomized,
           });
