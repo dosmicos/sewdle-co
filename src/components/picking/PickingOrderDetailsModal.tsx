@@ -9,6 +9,7 @@ import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ShopifyLineItem {
   id: string;
@@ -509,6 +510,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       console.error('Error updating status:', error);
       // ONLY on error: Refetch to get actual state and rollback
       await refetchOrder(orderId);
+      throw error; // Propagar error para que handleMarkAsPackedAndPrint lo capture
     } finally {
       setUpdatingStatus(false);
     }
@@ -556,7 +558,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     window.open(`/picking-packing/print/${localOrder.shopify_order_id}`, '_blank');
   }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
-  const handleMarkAsPackedAndPrint = useCallback(() => {
+  const handleMarkAsPackedAndPrint = useCallback(async () => {
     // Verify consistency: localOrder must match current orderId
     if (localOrder?.id !== orderId) {
       console.warn(`⚠️ handleMarkAsPackedAndPrint: Orden no sincronizada (localOrder.id=${localOrder?.id}, orderId=${orderId})`);
@@ -568,8 +570,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
     
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
-    handlePrint();
-    handleStatusChange('ready_to_ship');
+    
+    try {
+      await handleStatusChange('ready_to_ship');
+      handlePrint(); // Solo imprime si la etiqueta se aplicó exitosamente
+    } catch (error) {
+      console.error('❌ Error al marcar como empacado:', error);
+      toast.error('Error al aplicar etiqueta EMPACADO. Intenta de nuevo.', {
+        duration: 5000,
+      });
+    }
   }, [orderId, localOrder, handlePrint, handleStatusChange]);
 
   const formatCurrency = (amount?: number, currency?: string) => {
