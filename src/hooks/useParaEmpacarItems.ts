@@ -11,7 +11,7 @@ const extractSize = (variantTitle: string | null): string | null => {
   
   const sizePatterns = [
     /\d+\s*\([^)]+\)/i,                  // "4 (1-2 años)", "2 (3-12 meses)"
-    /\d+\s*a\s*\d+\s*(meses?|años?)/i,   // "0 a 1 mes", "3 a 6 meses", "1 a 2 años"
+    /\d+\s*a\s*\d+\s*(mes|meses|año|años)/i,   // "0 a 1 mes", "3 a 6 meses", "1 a 2 años"
     /\d+-\d+\s*(meses?|años?)/i,         // "3-12 meses", "1-2 años"
     /talla\s+\w+/i,                      // "Talla M", "Talla 4"
     /^(XXS|XS|S|M|L|XL|XXL|XXXL)$/i,     // Tallas estándar solas
