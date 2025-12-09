@@ -3345,16 +3345,16 @@ export type Database = {
       is_user_admin_in_org: { Args: { org_id: string }; Returns: boolean }
       log_security_event:
         | {
+            Args: { event_details_param?: Json; event_type_param: string }
+            Returns: undefined
+          }
+        | {
             Args: {
               event_details_param?: Json
               event_type_param: string
               ip_address_param?: unknown
             }
             Returns: string
-          }
-        | {
-            Args: { event_details_param?: Json; event_type_param: string }
-            Returns: undefined
           }
       log_stats_access: { Args: never; Returns: undefined }
       make_user_admin: { Args: { user_email: string }; Returns: undefined }
