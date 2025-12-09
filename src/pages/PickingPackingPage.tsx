@@ -13,6 +13,7 @@ import { PickingBulkActionsBar } from '@/components/picking/PickingBulkActionsBa
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
 import { SavedFiltersManager } from '@/components/picking/SavedFiltersManager';
+import { PickingStatsBar } from '@/components/picking/PickingStatsBar';
 import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
 import { useShopifyTags } from '@/hooks/useShopifyTags';
 import {
@@ -625,6 +626,30 @@ const PickingPackingPage = () => {
               </Button>
             </div>
           </div>
+
+          {/* Stats Bar */}
+          <PickingStatsBar
+            onFilterClick={(filterType) => {
+              const newParams = new URLSearchParams();
+              switch (filterType) {
+                case 'sin_etiquetas':
+                  newParams.set('tags', '');
+                  break;
+                case 'para_empacar':
+                  newParams.set('financial_status', 'paid,pending,partially_paid');
+                  newParams.set('tags', 'confirmado');
+                  newParams.set('exclude_tags', 'empacado');
+                  break;
+                case 'no_confirmados':
+                  newParams.set('exclude_tags', 'confirmado');
+                  break;
+                case 'empacados':
+                  newParams.set('tags', 'empacado');
+                  break;
+              }
+              setSearchParams(newParams);
+            }}
+          />
 
           {/* Saved Filters Manager */}
           <SavedFiltersManager
