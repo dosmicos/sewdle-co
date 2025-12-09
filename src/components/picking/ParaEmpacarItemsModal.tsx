@@ -14,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX } from 'lucide-react';
+import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX, Printer } from 'lucide-react';
 import { useParaEmpacarItems, ParaEmpacarItem } from '@/hooks/useParaEmpacarItems';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -129,6 +129,71 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     }
   }, [open, fetchItems]);
 
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const today = new Date().toLocaleDateString('es-CO', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const itemsHtml = items.map(item => {
+      const propsHtml = item.hasCustomization && item.properties?.length 
+        ? `<div class="props">${item.properties.map(p => `<span>🧵 ${p.name}: ${p.value}</span>`).join('')}</div>`
+        : '';
+      const ordersText = item.orderNumbers.slice(0, 10).map(n => `#${n}`).join(', ');
+      
+      return `
+        <div class="item">
+          <div class="row">
+            <span class="title">${item.title}</span>
+            <span class="qty">x${item.quantity}</span>
+          </div>
+          ${item.variantTitle ? `<div class="variant">${item.variantTitle}</div>` : ''}
+          ${item.sku ? `<div class="sku">SKU: ${item.sku}</div>` : ''}
+          <div class="orders">Pedidos: ${ordersText}${item.orderNumbers.length > 10 ? ` (+${item.orderNumbers.length - 10})` : ''}</div>
+          ${propsHtml}
+        </div>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Artículos Para Empacar</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 16px; font-size: 12px; }
+            h1 { font-size: 16px; margin-bottom: 4px; }
+            .summary { color: #666; margin-bottom: 12px; font-size: 11px; }
+            .item { border-bottom: 1px solid #ddd; padding: 8px 0; }
+            .row { display: flex; justify-content: space-between; align-items: flex-start; }
+            .title { font-weight: bold; font-size: 13px; flex: 1; }
+            .qty { font-weight: bold; font-size: 14px; margin-left: 8px; }
+            .variant { color: #555; margin-top: 2px; }
+            .sku { color: #888; font-size: 10px; margin-top: 2px; }
+            .orders { color: #666; font-size: 10px; margin-top: 4px; }
+            .props { background: #fef3c7; border: 1px solid #fcd34d; padding: 4px 6px; margin-top: 4px; border-radius: 4px; }
+            .props span { display: block; color: #92400e; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <h1>📦 Artículos Para Empacar</h1>
+          <p class="summary">${totalQuantity} unidades • ${items.length} artículos • ${uniqueOrders} pedidos • ${today}</p>
+          ${itemsHtml}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   const removeSize = (size: string) => {
     setSelectedSizes(selectedSizes.filter(s => s !== size));
   };
@@ -145,10 +210,22 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[85vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Artículos Para Empacar
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Artículos Para Empacar
+            </DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+              disabled={loading || items.length === 0}
+              className="h-7 text-xs gap-1.5"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Imprimir
+            </Button>
+          </div>
           {!loading && !error && (
             <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
               <span>
