@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -53,77 +53,86 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
   const { items, loading, error, fetchItems, totalQuantity, uniqueOrders } = useParaEmpacarItems();
   const [imageUrls, setImageUrls] = useState<Record<string, string | null>>({});
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
-  const fetchQueueRef = useRef<AbortController | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const isFetchingRef = useRef(false);
+  const fetchedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
       fetchItems();
       setImageUrls({});
       setLoadingImages(new Set());
+      fetchedIdsRef.current = new Set();
+      isFetchingRef.current = false;
     } else {
       // Cancel any pending image fetches when modal closes
-      if (fetchQueueRef.current) {
-        fetchQueueRef.current.abort();
-        fetchQueueRef.current = null;
+      if (fetchControllerRef.current) {
+        fetchControllerRef.current.abort();
+        fetchControllerRef.current = null;
       }
+      isFetchingRef.current = false;
     }
   }, [open, fetchItems]);
 
-  // Throttled image fetching - process one at a time with 600ms delay (max ~1.6 calls/sec, under 2/sec limit)
-  const fetchImagesThrottled = useCallback(async (itemsToFetch: ParaEmpacarItem[]) => {
-    const controller = new AbortController();
-    fetchQueueRef.current = controller;
+  // Start fetching images when items are loaded - only runs once per item set
+  useEffect(() => {
+    if (items.length === 0 || !open || isFetchingRef.current) return;
 
-    const itemsNeedingFetch = itemsToFetch.filter(
-      item => !item.imageUrl && item.productId && !imageUrls[item.id]
+    const itemsNeedingFetch = items.filter(
+      item => !item.imageUrl && item.productId && !fetchedIdsRef.current.has(item.id)
     );
 
-    // Mark all as loading
+    if (itemsNeedingFetch.length === 0) return;
+
+    isFetchingRef.current = true;
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
+
+    // Mark items as being fetched
+    itemsNeedingFetch.forEach(item => fetchedIdsRef.current.add(item.id));
     setLoadingImages(new Set(itemsNeedingFetch.map(i => i.id)));
 
-    for (const item of itemsNeedingFetch) {
-      if (controller.signal.aborted) break;
+    const fetchSequentially = async () => {
+      for (const item of itemsNeedingFetch) {
+        if (controller.signal.aborted) break;
 
-      try {
-        const { data } = await supabase.functions.invoke('get-shopify-variant-image', {
-          body: { product_id: item.productId, variant_id: item.variantId }
-        });
-
-        if (!controller.signal.aborted) {
-          setImageUrls(prev => ({
-            ...prev,
-            [item.id]: data?.image_url || null
-          }));
-          setLoadingImages(prev => {
-            const next = new Set(prev);
-            next.delete(item.id);
-            return next;
+        try {
+          const { data } = await supabase.functions.invoke('get-shopify-variant-image', {
+            body: { product_id: item.productId, variant_id: item.variantId }
           });
+
+          if (!controller.signal.aborted) {
+            setImageUrls(prev => ({
+              ...prev,
+              [item.id]: data?.image_url || null
+            }));
+            setLoadingImages(prev => {
+              const next = new Set(prev);
+              next.delete(item.id);
+              return next;
+            });
+          }
+        } catch (err) {
+          if (!controller.signal.aborted) {
+            console.error('Error fetching image:', err);
+            setLoadingImages(prev => {
+              const next = new Set(prev);
+              next.delete(item.id);
+              return next;
+            });
+          }
         }
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          console.error('Error fetching image:', err);
-          setLoadingImages(prev => {
-            const next = new Set(prev);
-            next.delete(item.id);
-            return next;
-          });
+
+        // Wait 700ms before next request to stay well under 2/sec rate limit
+        if (!controller.signal.aborted && itemsNeedingFetch.indexOf(item) < itemsNeedingFetch.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 700));
         }
       }
+      isFetchingRef.current = false;
+    };
 
-      // Wait 600ms before next request to stay under rate limit
-      if (!controller.signal.aborted) {
-        await new Promise(resolve => setTimeout(resolve, 600));
-      }
-    }
-  }, [imageUrls]);
-
-  // Start fetching images when items are loaded
-  useEffect(() => {
-    if (items.length > 0 && open) {
-      fetchImagesThrottled(items);
-    }
-  }, [items, open, fetchImagesThrottled]);
+    fetchSequentially();
+  }, [items, open]);
 
   const getImageUrl = (item: ParaEmpacarItem) => {
     if (item.imageUrl) return item.imageUrl;
