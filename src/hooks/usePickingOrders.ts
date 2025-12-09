@@ -762,6 +762,12 @@ export const usePickingOrders = () => {
 
   // Nota: No hacemos fetch automático aquí - la página controla la carga con filtros de URL
   // Esto evita la condición de carrera donde un fetch sin filtros sobrescribía los datos filtrados
+  // Mantenemos el useEffect para preservar el número de hooks (reglas de React)
+  useEffect(() => {
+    if (!currentOrganization?.id) {
+      setLoading(true);
+    }
+  }, [currentOrganization?.id]);
 
   return {
     orders,
