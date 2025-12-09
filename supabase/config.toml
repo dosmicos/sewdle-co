@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.sync-recent-shopify-tags]
 verify_jwt = false
+
+[functions.resync-missing-tags]
+verify_jwt = false

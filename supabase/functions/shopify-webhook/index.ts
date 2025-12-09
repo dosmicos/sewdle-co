@@ -75,27 +75,23 @@ function determineAutoTags(order: any): string[] {
 }
 
 // Function to apply automatic tags to Shopify order via API
+// IMPORTANTE: Guarda PRIMERO en la base de datos local, DESPUÉS envía a Shopify
 async function applyAutoTagsToShopify(
   orderId: number, 
   tagsToAdd: string[], 
   existingTags: string | null,
-  shopDomain: string
+  shopDomain: string,
+  supabase: any
 ): Promise<void> {
   if (tagsToAdd.length === 0) {
     console.log('🏷️ No hay tags automáticos que aplicar');
     return;
   }
   
-  const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
-  if (!shopifyAccessToken) {
-    console.error('❌ SHOPIFY_ACCESS_TOKEN no configurado - no se pueden aplicar tags automáticos');
-    return;
-  }
-  
   // Combine existing tags with new tags
   const currentTags = existingTags ? existingTags.split(',').map(t => t.trim()).filter(Boolean) : [];
   
-  // Check if tags already exist to avoid unnecessary API call
+  // Check if tags already exist to avoid unnecessary operations
   const newTagsToAdd = tagsToAdd.filter(tag => 
     !currentTags.some(existing => existing.toLowerCase() === tag.toLowerCase())
   );
@@ -108,11 +104,33 @@ async function applyAutoTagsToShopify(
   const allTags = [...new Set([...currentTags, ...newTagsToAdd])];
   const tagsString = allTags.join(', ');
   
-  console.log('🏷️ Aplicando tags automáticos a Shopify:');
+  console.log('🏷️ Aplicando tags automáticos:');
   console.log('  - Tags actuales:', existingTags || 'ninguno');
   console.log('  - Tags a agregar:', newTagsToAdd);
   console.log('  - Tags finales:', tagsString);
   
+  // ✅ PRIMERO: Guardar en base de datos local (independiente de Shopify)
+  console.log('💾 Guardando tags en base de datos local PRIMERO...');
+  const { error: dbError } = await supabase
+    .from('shopify_orders')
+    .update({ tags: tagsString })
+    .eq('shopify_order_id', orderId);
+
+  if (dbError) {
+    console.error('❌ Error guardando tags en DB local:', dbError);
+    // Continuamos para intentar Shopify de todas formas
+  } else {
+    console.log('✅ Tags guardados en base de datos local exitosamente');
+  }
+  
+  // ✅ DESPUÉS: Enviar a Shopify (opcional, si falla los tags ya están en DB local)
+  const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+  if (!shopifyAccessToken) {
+    console.warn('⚠️ SHOPIFY_ACCESS_TOKEN no configurado - tags guardados solo en DB local');
+    return;
+  }
+  
+  console.log('📡 Enviando tags a Shopify...');
   try {
     const response = await fetch(
       `https://${shopDomain}/admin/api/2024-01/orders/${orderId}.json`,
@@ -130,13 +148,14 @@ async function applyAutoTagsToShopify(
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Error aplicando tags automáticos:', response.status, errorText);
+      console.error('❌ Error aplicando tags en Shopify:', response.status, errorText);
+      console.log('ℹ️ Los tags ya están guardados en la DB local');
     } else {
-      console.log('✅ Tags automáticos aplicados exitosamente a Shopify');
-      console.log('📡 Shopify enviará orders/update webhook con todos los tags sincronizados');
+      console.log('✅ Tags también aplicados exitosamente en Shopify');
     }
   } catch (error) {
     console.error('❌ Error llamando Shopify API para tags:', error);
+    console.log('ℹ️ Los tags ya están guardados en la DB local');
   }
 }
 
@@ -351,7 +370,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   
   if (autoTags.length > 0) {
     console.log('🏷️ Tags automáticos detectados:', autoTags);
-    await applyAutoTagsToShopify(order.id, autoTags, order.tags, shopDomain);
+    await applyAutoTagsToShopify(order.id, autoTags, order.tags, shopDomain, supabase);
   } else {
     console.log('ℹ️ No se detectaron tags automáticos para este pedido');
   }
@@ -421,8 +440,9 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     total_shipping: parseFloat(order.total_shipping || '0'),
     total_line_items_price: parseFloat(order.total_line_items_price || '0'),
     
-    // Información adicional
-    tags: order.tags || null,
+    // Información adicional - PROTEGER contra sobrescritura de tags
+    // Solo actualizar tags si el webhook trae tags válidos (no sobrescribir con null)
+    ...(order.tags ? { tags: order.tags } : {}),
     note: order.note || null,
     
     // Metadatos actualizados
@@ -675,7 +695,7 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
   
   if (autoTags.length > 0) {
     console.log('🏷️ Tags automáticos detectados en update:', autoTags);
-    await applyAutoTagsToShopify(order.id, autoTags, order.tags, shopDomain);
+    await applyAutoTagsToShopify(order.id, autoTags, order.tags, shopDomain, supabase);
   } else {
     console.log('ℹ️ No se detectaron tags automáticos para este pedido actualizado');
   }
