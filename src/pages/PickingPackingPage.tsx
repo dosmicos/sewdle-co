@@ -4,7 +4,7 @@ import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout'
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
@@ -14,6 +14,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
 import { SavedFiltersManager } from '@/components/picking/SavedFiltersManager';
 import { PickingStatsBar } from '@/components/picking/PickingStatsBar';
+import { ParaEmpacarItemsModal } from '@/components/picking/ParaEmpacarItemsModal';
 import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
 import { useShopifyTags } from '@/hooks/useShopifyTags';
 import {
@@ -124,6 +125,7 @@ const PickingPackingPage = () => {
   const [commandValue, setCommandValue] = useState('');
   const [lastWebhookUpdate, setLastWebhookUpdate] = useState<Date | null>(null);
   const [hasPendingUpdates, setHasPendingUpdates] = useState(false);
+  const [showItemsModal, setShowItemsModal] = useState(false);
 
   // Read filters from URL - must be declared before handleRefreshList
   const searchTerm = searchParams.get('search') || '';
@@ -616,6 +618,16 @@ const PickingPackingPage = () => {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowItemsModal(true)}
+                className="gap-2"
+                title="Ver lista de artículos para empacar"
+              >
+                <ListChecks className="w-4 h-4" />
+                Ver Artículos
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleRefreshList}
                 disabled={loading}
                 title="Refrescar lista de pedidos"
@@ -1062,6 +1074,20 @@ const PickingPackingPage = () => {
           onCancel={handleFilterCancel}
         />
       )}
+
+      {/* Para Empacar Items Modal */}
+      <ParaEmpacarItemsModal
+        open={showItemsModal}
+        onOpenChange={setShowItemsModal}
+        onOrderClick={(shopifyOrderId) => {
+          // Find the order in our list and select it
+          const order = orders.find(o => o.shopify_order_id === shopifyOrderId);
+          if (order) {
+            setSelectedOrderId(order.id);
+          }
+          setShowItemsModal(false);
+        }}
+      />
 
     </PickingPackingLayout>
   );
