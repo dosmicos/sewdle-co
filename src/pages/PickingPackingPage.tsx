@@ -386,19 +386,7 @@ const PickingPackingPage = () => {
   }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
       fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentOrganization?.id]);
 
-  // Mostrar loading mientras se carga la organización
-  if (!currentOrganization) {
-    return (
-      <PickingPackingLayout>
-        <div className="flex items-center justify-center h-96">
-          <div className="space-y-4 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground">Cargando organización...</p>
-          </div>
-        </div>
-      </PickingPackingLayout>
-    );
-  }
+  
 
   const handlePageChange = (page: number) => {
     // Si hay búsqueda activa, ignorar los demás filtros
@@ -548,11 +536,17 @@ const PickingPackingPage = () => {
     });
   };
 
-  if (loading) {
+  // Mostrar loading mientras se carga la organización o los datos
+  if (!currentOrganization || loading) {
     return (
       <PickingPackingLayout>
         <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="space-y-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-muted-foreground">
+              {!currentOrganization ? 'Cargando organización...' : 'Cargando órdenes...'}
+            </p>
+          </div>
         </div>
       </PickingPackingLayout>
     );
