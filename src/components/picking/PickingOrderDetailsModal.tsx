@@ -844,8 +844,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </div>
               </div>
 
-              {/* Status Actions - Only show when cancelled or already packed */}
-              {(effectiveOrder.shopify_order?.cancelled_at || effectiveOrder.operational_status === 'ready_to_ship') && (
+              {/* Status Actions - Only show when cancelled, packed, or shipped */}
+              {(effectiveOrder.shopify_order?.cancelled_at || effectiveOrder.operational_status === 'ready_to_ship' || effectiveOrder.operational_status === 'shipped') && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Estado</CardTitle>
@@ -866,7 +866,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                           No se pueden realizar acciones de picking/packing en órdenes canceladas.
                         </p>
                       </div>
-                    ) : effectiveOrder.operational_status === 'ready_to_ship' && effectiveOrder.packed_at && (
+                    ) : (effectiveOrder.operational_status === 'ready_to_ship' || effectiveOrder.operational_status === 'shipped') && effectiveOrder.packed_at && (
                       <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
                         <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
                           <CheckCircle className="w-4 h-4" />
