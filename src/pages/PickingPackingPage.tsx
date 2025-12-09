@@ -632,8 +632,8 @@ const PickingPackingPage = () => {
             onFilterClick={(filterType) => {
               const newParams = new URLSearchParams();
               switch (filterType) {
-                case 'sin_etiquetas':
-                  newParams.set('tags', '');
+                case 'pedidos':
+                  // Show both para_empacar and no_confirmados - clear filters to show all open orders
                   break;
                 case 'para_empacar':
                   newParams.set('financial_status', 'paid,pending,partially_paid');
