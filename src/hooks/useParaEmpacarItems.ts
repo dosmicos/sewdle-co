@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { sortVariants } from '@/lib/variantSorting';
@@ -19,7 +19,7 @@ export interface ParaEmpacarItem {
   imageUrl: string | null;
   properties: Array<{ name: string; value: string }> | null;
   hasCustomization: boolean;
-  size?: string; // Para ordenamiento por tallas
+  size?: string;
 }
 
 // Detecta si un artículo tiene personalización (bordado)
@@ -54,6 +54,10 @@ export const useParaEmpacarItems = () => {
   const [items, setItems] = useState<ParaEmpacarItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Filtros
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [showOnlyEmbroidery, setShowOnlyEmbroidery] = useState(false);
 
   const fetchItems = useCallback(async () => {
     if (!currentOrganization?.id) return;
@@ -95,49 +99,6 @@ export const useParaEmpacarItems = () => {
         item.title.toLowerCase() !== 'bordado personalizado'
       );
 
-      // Obtener SKUs sin imagen para buscar fallbacks
-      const skusWithoutImage = [...new Set(
-        filteredLineItems
-          .filter(item => !item.image_url && item.sku)
-          .map(item => item.sku)
-      )] as string[];
-
-      // Fallback 1: Imágenes desde tabla products via product_variants
-      let skuProductImageMap = new Map<string, string>();
-      if (skusWithoutImage.length > 0) {
-        const { data: variantsWithImages } = await supabase
-          .from('product_variants')
-          .select('sku_variant, products!inner(image_url)')
-          .in('sku_variant', skusWithoutImage);
-
-        if (variantsWithImages) {
-          variantsWithImages.forEach((v: any) => {
-            if (v.products?.image_url) {
-              skuProductImageMap.set(v.sku_variant, v.products.image_url);
-            }
-          });
-        }
-      }
-
-      // Fallback 2: Imágenes desde otros line items con el mismo SKU
-      const skusStillWithoutImage = skusWithoutImage.filter(sku => !skuProductImageMap.has(sku));
-      let skuLineItemImageMap = new Map<string, string>();
-      if (skusStillWithoutImage.length > 0) {
-        const { data: skuImages } = await supabase
-          .from('shopify_order_line_items')
-          .select('sku, image_url')
-          .eq('organization_id', currentOrganization.id)
-          .in('sku', skusStillWithoutImage)
-          .not('image_url', 'is', null)
-          .limit(500);
-
-        skuImages?.forEach(item => {
-          if (item.sku && item.image_url && !skuLineItemImageMap.has(item.sku)) {
-            skuLineItemImageMap.set(item.sku, item.image_url);
-          }
-        });
-      }
-
       // Agrupar artículos por SKU+variante (excepto los personalizados)
       const groupedItems = new Map<string, ParaEmpacarItem>();
 
@@ -163,12 +124,6 @@ export const useParaEmpacarItems = () => {
             existing.shopifyOrderIds.push(item.shopify_order_id);
           }
         } else {
-          // Buscar imagen con prioridad: line_item > products > otros line_items
-          let finalImage = item.image_url;
-          if (!finalImage && item.sku) {
-            finalImage = skuProductImageMap.get(item.sku) || skuLineItemImageMap.get(item.sku) || null;
-          }
-
           groupedItems.set(groupKey, {
             id: item.id,
             orderNumbers: [orderNumber],
@@ -180,20 +135,20 @@ export const useParaEmpacarItems = () => {
             price: Number(item.price) || 0,
             productId: item.product_id,
             variantId: item.variant_id,
-            imageUrl: finalImage,
+            imageUrl: item.image_url, // Solo usar imagen directa, lazy load hará el resto
             properties: isCustomized ? properties : null,
             hasCustomization: isCustomized,
-            size: item.variant_title || '', // Para sortVariants
+            size: item.variant_title || '',
           });
         }
       });
 
       const consolidatedItems = Array.from(groupedItems.values());
       
-      // Ordenar por talla usando sortVariants, luego por título
+      // Ordenar por talla usando sortVariants
       const sortedBySize = sortVariants(consolidatedItems);
       
-      // Agrupar por título para mantener productos juntos, ordenados por talla dentro de cada grupo
+      // Agrupar por título para mantener productos juntos
       const groupedByTitle = new Map<string, ParaEmpacarItem[]>();
       sortedBySize.forEach(item => {
         const titleKey = item.title.toLowerCase();
@@ -203,7 +158,7 @@ export const useParaEmpacarItems = () => {
         groupedByTitle.get(titleKey)!.push(item);
       });
 
-      // Ordenar grupos por cantidad total descendente, mantener orden de tallas dentro
+      // Ordenar grupos por cantidad total descendente
       const groupsWithTotals = Array.from(groupedByTitle.entries()).map(([title, items]) => ({
         title,
         items,
@@ -223,8 +178,37 @@ export const useParaEmpacarItems = () => {
     }
   }, [currentOrganization?.id]);
 
-  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-  const uniqueOrders = new Set(items.flatMap(item => item.orderNumbers)).size;
+  // Tallas disponibles extraídas de los items
+  const availableSizes = useMemo(() => {
+    const sizes = [...new Set(items.map(i => i.variantTitle).filter(Boolean))] as string[];
+    return sortVariants(sizes.map(s => ({ size: s }))).map(s => s.size);
+  }, [items]);
 
-  return { items, loading, error, fetchItems, totalQuantity, uniqueOrders };
+  // Items filtrados por tallas y bordado
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      if (showOnlyEmbroidery && !item.hasCustomization) return false;
+      if (selectedSizes.length > 0 && !selectedSizes.includes(item.variantTitle || '')) return false;
+      return true;
+    });
+  }, [items, selectedSizes, showOnlyEmbroidery]);
+
+  const totalQuantity = filteredItems.reduce((sum, item) => sum + item.quantity, 0);
+  const uniqueOrders = new Set(filteredItems.flatMap(item => item.orderNumbers)).size;
+
+  return { 
+    items: filteredItems, 
+    allItems: items,
+    loading, 
+    error, 
+    fetchItems, 
+    totalQuantity, 
+    uniqueOrders,
+    // Filtros
+    availableSizes,
+    selectedSizes,
+    setSelectedSizes,
+    showOnlyEmbroidery,
+    setShowOnlyEmbroidery,
+  };
 };
