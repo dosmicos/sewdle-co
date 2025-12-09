@@ -241,8 +241,8 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
           )}
         </DialogHeader>
 
-        {/* Filtros compactos - siempre visibles si hay datos */}
-        {!loading && !error && allItems.length > 0 && (
+        {/* Filtros compactos - siempre visibles si hay datos o filtros activos */}
+        {!loading && (allItems.length > 0 || hasActiveFilters) && (
           <div className="px-6 py-2 border-y bg-muted/30 flex-shrink-0">
             <div className="flex items-center gap-2 flex-wrap">
               {/* Dropdown de tallas */}
@@ -255,6 +255,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                       "h-7 text-xs gap-1",
                       selectedSizes.length > 0 && "border-primary text-primary"
                     )}
+                    disabled={availableSizes.length === 0}
                   >
                     Talla
                     {selectedSizes.length > 0 && (
