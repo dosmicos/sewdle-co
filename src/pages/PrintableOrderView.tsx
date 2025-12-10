@@ -91,9 +91,9 @@ const PrintableOrderView = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-sm font-bold">ORDEN #{order.order_number}</h1>
           {paymentMethod && (
-            <span className="payment-badge px-2 py-1 bg-yellow-100 text-yellow-800 border-2 border-yellow-300 font-semibold text-xs rounded">
-              {paymentMethod}
-            </span>
+          <span className="payment-badge px-2 py-1 bg-transparent text-black border-2 border-black font-semibold text-xs rounded">
+            {paymentMethod}
+          </span>
           )}
         </div>
       </div>
@@ -135,11 +135,6 @@ const PrintableOrderView = () => {
         </div>
       )}
 
-      {/* Footer */}
-      <div className="mt-1.5 pt-1.5 border-t text-center">
-        <p className="text-sm font-semibold mb-0.5">GRACIAS POR SU COMPRA</p>
-        <p className="text-xs text-muted-foreground">www.dosmicos.co</p>
-      </div>
 
       {/* Print Styles */}
       <style>{`
@@ -169,9 +164,9 @@ const PrintableOrderView = () => {
           }
 
           .payment-badge {
-            background-color: #fef3c7 !important;
-            color: #92400e !important;
-            border: 2px solid #fcd34d !important;
+            background-color: transparent !important;
+            color: #000 !important;
+            border: 2px solid #000 !important;
             padding: 1mm 2mm !important;
             font-weight: 600 !important;
             border-radius: 4px !important;
