@@ -7,60 +7,63 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-// Colombia department to state code mapping (ISO 3166-2:CO)
+// Colombia department to state code mapping (ISO 3166-2:CO - 2 character codes)
+// Important: Envia.com requires 2-character state codes
 const COLOMBIA_STATE_CODES: Record<string, string> = {
-  'amazonas': 'AMA', 'antioquia': 'ANT', 'arauca': 'ARA',
-  'atlantico': 'ATL', 'atlántico': 'ATL',
+  'amazonas': 'AM', 'antioquia': 'AN', 'arauca': 'AR',
+  'atlantico': 'AT', 'atlántico': 'AT',
   'bogota': 'DC', 'bogotá': 'DC', 'bogota dc': 'DC', 'bogotá dc': 'DC', 
-  'bogota d.c.': 'DC', 'bogotá d.c.': 'DC', 'cundinamarca': 'CUN',
-  'bolivar': 'BOL', 'bolívar': 'BOL',
-  'boyaca': 'BOY', 'boyacá': 'BOY',
-  'caldas': 'CAL',
-  'caqueta': 'CAQ', 'caquetá': 'CAQ',
-  'casanare': 'CAS',
-  'cauca': 'CAU',
-  'cesar': 'CES',
-  'choco': 'CHO', 'chocó': 'CHO',
-  'cordoba': 'COR', 'córdoba': 'COR',
-  'guainia': 'GUA', 'guainía': 'GUA',
-  'guaviare': 'GUV',
-  'huila': 'HUI',
-  'la guajira': 'LAG', 'guajira': 'LAG',
-  'magdalena': 'MAG',
-  'meta': 'MET',
-  'narino': 'NAR', 'nariño': 'NAR',
-  'norte de santander': 'NSA',
-  'putumayo': 'PUT',
-  'quindio': 'QUI', 'quindío': 'QUI',
-  'risaralda': 'RIS',
-  'san andres': 'SAP', 'san andres y providencia': 'SAP', 'san andrés': 'SAP', 'san andrés y providencia': 'SAP',
-  'santander': 'SAN',
-  'sucre': 'SUC',
-  'tolima': 'TOL',
-  'valle del cauca': 'VAC', 'valle': 'VAC',
-  'vaupes': 'VAU', 'vaupés': 'VAU',
-  'vichada': 'VID'
+  'bogota d.c.': 'DC', 'bogotá d.c.': 'DC', 'bogota, d.c.': 'DC', 'bogotá, d.c.': 'DC',
+  'bolivar': 'BL', 'bolívar': 'BL',
+  'boyaca': 'BY', 'boyacá': 'BY',
+  'caldas': 'CL',
+  'caqueta': 'CQ', 'caquetá': 'CQ',
+  'casanare': 'CS',
+  'cauca': 'CA',
+  'cesar': 'CE',
+  'choco': 'CH', 'chocó': 'CH',
+  'cordoba': 'CO', 'córdoba': 'CO',
+  'cundinamarca': 'CU',
+  'guainia': 'GN', 'guainía': 'GN',
+  'guaviare': 'GV',
+  'huila': 'HU',
+  'la guajira': 'LG', 'guajira': 'LG',
+  'magdalena': 'MG',
+  'meta': 'MT',
+  'narino': 'NA', 'nariño': 'NA',
+  'norte de santander': 'NS',
+  'putumayo': 'PU',
+  'quindio': 'QD', 'quindío': 'QD',
+  'risaralda': 'RI',
+  'san andres': 'SA', 'san andres y providencia': 'SA', 'san andrés': 'SA', 'san andrés y providencia': 'SA',
+  'santander': 'ST',
+  'sucre': 'SU',
+  'tolima': 'TO',
+  'valle del cauca': 'VC', 'valle': 'VC',
+  'vaupes': 'VP', 'vaupés': 'VP',
+  'vichada': 'VI'
 };
 
 // Get state code from department name
 function getStateCode(department: string): string {
   const normalized = department.toLowerCase().trim();
-  return COLOMBIA_STATE_CODES[normalized] || department;
+  return COLOMBIA_STATE_CODES[normalized] || 'DC'; // Default to Bogota if unknown
 }
 
-// Dosmicos origin address (fixed)
+// Dosmicos origin address (fixed) - Updated with correct data
 const DOSMICOS_ORIGIN = {
-  name: "Dosmicos",
+  name: "Julian Castro",
   company: "Dosmicos SAS",
-  email: "envios@dosmicos.com",
-  phone: "3001234567",
-  street: "Calle 85",
-  number: "11-53",
-  district: "Chicó Norte",
-  city: "Bogotá",
-  state: "CUN",
+  email: "dosmicoscol@gmail.com",
+  phone: "3125456340",
+  street: "Cra 27",
+  number: "63b-61",
+  district: "Quinta de Mutis",
+  city: "Bogota",
+  state: "DC",
   country: "CO",
-  postalCode: "110221"
+  postalCode: "111321",
+  reference: "CASA 1er piso de rejas negras"
 };
 
 // Default package dimensions
@@ -71,13 +74,23 @@ const DEFAULT_PACKAGE = {
   weight: 1,
   insurance: 0,
   declaredValue: 100000,
-  weightUnit: "kg",
-  lengthUnit: "cm",
+  weightUnit: "KG",
+  lengthUnit: "CM",
   dimensions: {
     length: 30,
     width: 25,
     height: 10
   }
+};
+
+// Available carriers for Colombia
+const COLOMBIA_CARRIERS: Record<string, { carrier: string; service: string }> = {
+  'coordinadora': { carrier: 'coordinadora', service: 'ground' },
+  'interrapidisimo': { carrier: 'interrapidisimo', service: 'ground' },
+  'servientrega': { carrier: 'servientrega', service: 'ground' },
+  'deprisa': { carrier: 'deprisa', service: 'ground' },
+  'envia': { carrier: 'envia', service: 'ground' },
+  'tcc': { carrier: 'tcc', service: 'ground' }
 };
 
 interface CreateLabelRequest {
@@ -120,6 +133,16 @@ serve(async (req) => {
     const body: CreateLabelRequest = await req.json();
 
     console.log('📦 Creating label for order:', body.order_number);
+    console.log('📍 Destination:', body.destination_city, body.destination_department);
+
+    // Validate required fields
+    if (!body.destination_address || !body.destination_city) {
+      console.error('❌ Missing required address fields');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Dirección incompleta: se requiere dirección y ciudad' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
 
     // Check if label already exists
     const { data: existingLabel } = await supabase
@@ -150,7 +173,7 @@ serve(async (req) => {
 
     console.log(`🔍 Checking coverage for: ${normalizedCity}, ${normalizedDept}`);
 
-    const { data: coverage, error: coverageError } = await supabase
+    const { data: coverage } = await supabase
       .from('shipping_coverage')
       .select('*')
       .eq('organization_id', body.organization_id)
@@ -158,7 +181,7 @@ serve(async (req) => {
       .maybeSingle();
 
     // Determine carrier
-    let selectedCarrier = body.preferred_carrier;
+    let selectedCarrier = body.preferred_carrier?.toLowerCase();
     let postalCode = body.destination_postal_code || '';
 
     if (coverage) {
@@ -168,65 +191,84 @@ serve(async (req) => {
       // Select carrier based on coverage and priority
       if (!selectedCarrier) {
         if (coverage.priority_carrier) {
-          selectedCarrier = coverage.priority_carrier;
+          selectedCarrier = coverage.priority_carrier.toLowerCase();
         } else if (coverage.coordinadora) {
           selectedCarrier = 'coordinadora';
         } else if (coverage.interrapidisimo) {
           selectedCarrier = 'interrapidisimo';
+        } else if (coverage.servientrega) {
+          selectedCarrier = 'servientrega';
         } else if (coverage.deprisa) {
           selectedCarrier = 'deprisa';
         }
       }
     } else {
-      console.log('⚠️ No coverage found, using default carrier');
+      console.log('⚠️ No coverage found, using default carrier (coordinadora)');
     }
 
     // Default to coordinadora if no carrier selected
     selectedCarrier = selectedCarrier || 'coordinadora';
-    console.log(`🚚 Selected carrier: ${selectedCarrier}`);
+    const carrierConfig = COLOMBIA_CARRIERS[selectedCarrier] || COLOMBIA_CARRIERS['coordinadora'];
+    
+    console.log(`🚚 Selected carrier: ${carrierConfig.carrier}, service: ${carrierConfig.service}`);
 
     // Get state code for the destination department
     const stateCode = getStateCode(body.destination_department);
     console.log(`📍 Department "${body.destination_department}" -> State code "${stateCode}"`);
 
-    // Build Envia.com request
+    // Parse address to separate street and number if possible
+    const addressParts = body.destination_address.split(/[,#]/);
+    const street = addressParts[0]?.trim() || body.destination_address;
+    const number = addressParts[1]?.trim() || "S/N";
+
+    // Clean phone number (remove non-numeric characters except +)
+    const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
+
+    // Build Envia.com request following their exact format
     const enviaRequest = {
       origin: DOSMICOS_ORIGIN,
       destination: {
-        name: body.recipient_name,
+        name: body.recipient_name || "Cliente",
         company: "",
         email: body.recipient_email || "cliente@dosmicos.com",
-        phone: body.recipient_phone || "3000000000",
-        street: body.destination_address,
-        number: "N/A",
+        phone: cleanPhone,
+        street: street,
+        number: number,
         district: body.destination_city,
         city: body.destination_city,
         state: stateCode,
         country: "CO",
         postalCode: postalCode || "000000",
-        reference: `Pedido ${body.order_number}`
+        reference: `Pedido #${body.order_number}`
       },
       packages: [{
-        ...DEFAULT_PACKAGE,
-        content: body.package_content || `Pedido ${body.order_number}`,
+        content: body.package_content || `Ropa - Pedido ${body.order_number}`,
+        amount: 1,
+        type: "box",
         weight: body.package_weight || DEFAULT_PACKAGE.weight,
-        declaredValue: body.declared_value || DEFAULT_PACKAGE.declaredValue
+        insurance: 0,
+        declaredValue: body.declared_value || DEFAULT_PACKAGE.declaredValue,
+        weightUnit: "KG",
+        lengthUnit: "CM",
+        dimensions: DEFAULT_PACKAGE.dimensions
       }],
       shipment: {
-        carrier: selectedCarrier,
-        service: "express",
-        type: 1 // 1 = normal shipment
+        carrier: carrierConfig.carrier,
+        service: carrierConfig.service,
+        type: 1
       },
       settings: {
         printFormat: "PDF",
         printSize: "STOCK_4X6",
-        currency: "COP"
+        currency: "COP",
+        comments: `Pedido Dosmicos #${body.order_number}`
       }
     };
 
     console.log('📤 Sending request to Envia.com API...');
+    console.log('📤 Request payload:', JSON.stringify(enviaRequest, null, 2));
 
-    // Call Envia.com API
+    // Call Envia.com API - Production URL
     const enviaResponse = await fetch('https://api.envia.com/ship/generate/', {
       method: 'POST',
       headers: {
@@ -237,10 +279,29 @@ serve(async (req) => {
     });
 
     const enviaData = await enviaResponse.json();
+    console.log('📥 Envia.com response status:', enviaResponse.status);
     console.log('📥 Envia.com response:', JSON.stringify(enviaData, null, 2));
 
-    if (!enviaResponse.ok || enviaData.meta === 'error') {
-      const errorMsg = enviaData.error?.message || enviaData.message || 'Error en API de Envia.com';
+    // Handle different error scenarios
+    if (!enviaResponse.ok) {
+      let errorMsg = 'Error en API de Envia.com';
+      
+      if (enviaResponse.status === 401) {
+        errorMsg = 'Token de API inválido o expirado';
+      } else if (enviaResponse.status === 400) {
+        errorMsg = enviaData?.error?.message || enviaData?.message || 'Datos de envío inválidos';
+        
+        // Extract more specific error info if available
+        if (enviaData?.errors) {
+          const errorDetails = Object.entries(enviaData.errors)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+            .join('; ');
+          errorMsg = `Error de validación: ${errorDetails}`;
+        }
+      } else if (enviaResponse.status === 500) {
+        errorMsg = 'Error interno en servidor de Envia.com - intente más tarde';
+      }
+      
       console.error('❌ Envia.com API error:', errorMsg);
       
       // Save failed attempt
@@ -250,7 +311,34 @@ serve(async (req) => {
           organization_id: body.organization_id,
           shopify_order_id: body.shopify_order_id,
           order_number: body.order_number,
-          carrier: selectedCarrier,
+          carrier: carrierConfig.carrier,
+          status: 'error',
+          destination_city: body.destination_city,
+          destination_department: body.destination_department,
+          destination_address: body.destination_address,
+          recipient_name: body.recipient_name,
+          recipient_phone: body.recipient_phone,
+          raw_response: enviaData
+        });
+
+      return new Response(
+        JSON.stringify({ success: false, error: errorMsg, details: enviaData }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Check for API-level errors in successful HTTP response
+    if (enviaData.meta === 'error' || enviaData.error) {
+      const errorMsg = enviaData.error?.message || enviaData.message || 'Error al generar guía';
+      console.error('❌ Envia.com returned error:', errorMsg);
+      
+      await supabase
+        .from('shipping_labels')
+        .insert({
+          organization_id: body.organization_id,
+          shopify_order_id: body.shopify_order_id,
+          order_number: body.order_number,
+          carrier: carrierConfig.carrier,
           status: 'error',
           destination_city: body.destination_city,
           destination_department: body.destination_department,
@@ -281,7 +369,7 @@ serve(async (req) => {
       organization_id: body.organization_id,
       shopify_order_id: body.shopify_order_id,
       order_number: body.order_number,
-      carrier: shipmentData.carrier || selectedCarrier,
+      carrier: shipmentData.carrier || carrierConfig.carrier,
       tracking_number: shipmentData.trackingNumber,
       label_url: shipmentData.label,
       shipment_id: shipmentData.shipmentId?.toString(),
@@ -314,7 +402,7 @@ serve(async (req) => {
         label: savedLabel || labelRecord,
         tracking_number: shipmentData.trackingNumber,
         label_url: shipmentData.label,
-        carrier: shipmentData.carrier || selectedCarrier
+        carrier: shipmentData.carrier || carrierConfig.carrier
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
