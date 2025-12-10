@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Bookmark, Trash2, Users, Package } from 'lucide-react';
+import { Bookmark, Trash2, Users, Package, Plus } from 'lucide-react';
 import { useSavedFilters } from '@/hooks/useSavedFilters';
 import { cn } from '@/lib/utils';
 
@@ -25,11 +25,13 @@ const PRESET_FILTERS = [
 interface SavedFiltersManagerProps {
   currentFilters: Record<string, any>;
   onLoadFilter: (filters: Record<string, any>) => void;
+  onAddFilter?: () => void;
 }
 
 export const SavedFiltersManager: React.FC<SavedFiltersManagerProps> = ({
   currentFilters,
   onLoadFilter,
+  onAddFilter,
 }) => {
   const { savedFilters, loading, saveFilter, deleteFilter } = useSavedFilters();
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -64,10 +66,10 @@ export const SavedFiltersManager: React.FC<SavedFiltersManagerProps> = ({
             size="sm"
             onClick={() => setSaveDialogOpen(true)}
             disabled={!hasActiveFilters}
-            className="gap-2"
+            className="gap-1.5 text-xs md:text-sm px-2 md:px-3 h-7 md:h-9"
           >
-            <Bookmark className="w-4 h-4" />
-            Guardar filtro actual
+            <Bookmark className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Guardar filtro actual</span>
           </Button>
         </div>
 
@@ -81,12 +83,24 @@ export const SavedFiltersManager: React.FC<SavedFiltersManagerProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => onLoadFilter(preset.filters)}
-                className="gap-2 bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700 shrink-0"
+                className="gap-1.5 text-xs md:text-sm px-2 md:px-3 h-7 md:h-9 bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700 shrink-0"
               >
                 <Package className="w-3 h-3" />
                 <span>{preset.name}</span>
               </Button>
             ))}
+
+            {/* Botón agregar filtro inline - visible en móvil */}
+            {onAddFilter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddFilter}
+                className="gap-1 text-xs md:text-sm px-2 md:px-3 h-7 md:h-9 shrink-0 md:hidden"
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+            )}
 
             {/* Separador visual si hay filtros guardados */}
             {savedFilters.length > 0 && (
