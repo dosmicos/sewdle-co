@@ -125,16 +125,24 @@ export interface CreateLabelResponse {
 }
 
 // Carriers available in Colombia
-export type CarrierCode = 'coordinadora' | 'interrapidisimo' | 'deprisa';
+export type CarrierCode = 'coordinadora' | 'interrapidisimo' | 'deprisa' | 'servientrega' | 'tcc' | 'envia' | 'otro';
 
 export const CARRIER_NAMES: Record<CarrierCode, string> = {
   coordinadora: 'Coordinadora',
   interrapidisimo: 'Interrapidísimo',
-  deprisa: 'Deprisa'
+  deprisa: 'Deprisa',
+  servientrega: 'Servientrega',
+  tcc: 'TCC',
+  envia: 'Envía',
+  otro: 'Otro'
 };
 
 export const CARRIER_ENVIA_CODES: Record<CarrierCode, string> = {
   coordinadora: 'coordinadora',
   interrapidisimo: 'interrapidisimo',
-  deprisa: 'deprisa'
+  deprisa: 'deprisa',
+  servientrega: 'servientrega',
+  tcc: 'tcc',
+  envia: 'envia',
+  otro: 'otro'
 };
