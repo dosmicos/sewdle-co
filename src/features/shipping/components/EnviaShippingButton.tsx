@@ -57,7 +57,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     existingLabel, 
     getExistingLabel, 
     createLabel,
-    clearLabel
+    clearLabel,
+    checkCoverage
   } = useEnviaShipping();
   
   const [hasChecked, setHasChecked] = useState(false);
@@ -66,6 +67,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [manualCarrier, setManualCarrier] = useState('coordinadora');
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [selectedCarrier, setSelectedCarrier] = useState<string>('auto');
+  const [recommendedCarrier, setRecommendedCarrier] = useState<string>('coordinadora');
 
   // Check for existing label when component mounts or order changes
   useEffect(() => {
@@ -74,13 +76,52 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setHasChecked(false);
       setShowManualEntry(false);
       setManualTracking('');
-      setSelectedCarrier('auto'); // Reset carrier selection on order change
+      setSelectedCarrier('auto');
       getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
         onLabelChange?.(label);
       });
     }
   }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, onLabelChange]);
+
+  // Fetch recommended carrier based on shipping coverage
+  useEffect(() => {
+    const fetchRecommendedCarrier = async () => {
+      if (!currentOrganization?.id || !shippingAddress?.city || !shippingAddress?.province) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
+      try {
+        const coverage = await checkCoverage(
+          shippingAddress.city,
+          shippingAddress.province,
+          currentOrganization.id
+        );
+
+        if (coverage) {
+          if (coverage.priority_carrier) {
+            setRecommendedCarrier(coverage.priority_carrier.toLowerCase());
+          } else if (coverage.coordinadora) {
+            setRecommendedCarrier('coordinadora');
+          } else if (coverage.interrapidisimo) {
+            setRecommendedCarrier('interrapidisimo');
+          } else if (coverage.deprisa) {
+            setRecommendedCarrier('deprisa');
+          } else {
+            setRecommendedCarrier('coordinadora');
+          }
+        } else {
+          setRecommendedCarrier('coordinadora');
+        }
+      } catch (error) {
+        console.error('Error fetching coverage:', error);
+        setRecommendedCarrier('coordinadora');
+      }
+    };
+
+    fetchRecommendedCarrier();
+  }, [shippingAddress?.city, shippingAddress?.province, currentOrganization?.id, checkCoverage]);
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
@@ -339,7 +380,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             <SelectValue placeholder="Seleccionar transportadora" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Automático (recomendado)</SelectItem>
+            <SelectItem value="auto">Automático ({CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora'})</SelectItem>
             <SelectItem value="coordinadora">Coordinadora</SelectItem>
             <SelectItem value="interrapidisimo">Inter Rapidísimo</SelectItem>
             <SelectItem value="servientrega">Servientrega</SelectItem>
