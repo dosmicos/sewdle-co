@@ -14,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX, Printer } from 'lucide-react';
+import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX, Printer, MapPin } from 'lucide-react';
 import { useParaEmpacarItems, ParaEmpacarItem } from '@/hooks/useParaEmpacarItems';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -99,6 +99,13 @@ const LazyImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
   );
 };
 
+// Descripciones de pasillos
+const AISLE_DESCRIPTIONS: Record<number, string> = {
+  1: 'Ruanas 2, 4, 6, 8',
+  2: 'Ruanas 10, 12 + Sleeping',
+  3: 'Adulto + Chaquetas + Otros',
+};
+
 export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
   open,
   onOpenChange,
@@ -115,6 +122,9 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     availableSizes,
     selectedSizes,
     setSelectedSizes,
+    availableAisles,
+    selectedAisles,
+    setSelectedAisles,
     showOnlyEmbroidery,
     setShowOnlyEmbroidery,
     clearAllFilters,
@@ -122,6 +132,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
   } = useParaEmpacarItems();
 
   const [sizePopoverOpen, setSizePopoverOpen] = useState(false);
+  const [aislePopoverOpen, setAislePopoverOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -206,6 +217,18 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     }
   };
 
+  const removeAisle = (aisle: number) => {
+    setSelectedAisles(selectedAisles.filter(a => a !== aisle));
+  };
+
+  const toggleAisle = (aisle: number) => {
+    if (selectedAisles.includes(aisle)) {
+      removeAisle(aisle);
+    } else {
+      setSelectedAisles([...selectedAisles, aisle]);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[85vh] flex flex-col p-0">
@@ -286,6 +309,51 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                 </PopoverContent>
               </Popover>
 
+              {/* Dropdown de pasillos */}
+              <Popover open={aislePopoverOpen} onOpenChange={setAislePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className={cn(
+                      "h-7 text-xs gap-1",
+                      selectedAisles.length > 0 && "border-primary text-primary"
+                    )}
+                    disabled={availableAisles.length === 0}
+                  >
+                    <MapPin className="w-3 h-3" />
+                    Pasillo
+                    {selectedAisles.length > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                        {selectedAisles.length}
+                      </Badge>
+                    )}
+                    <ChevronDown className="w-3 h-3 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start">
+                  <div className="flex flex-col gap-1.5">
+                    {availableAisles.map(aisle => (
+                      <button
+                        key={aisle}
+                        onClick={() => toggleAisle(aisle)}
+                        className={cn(
+                          "px-3 py-1.5 text-xs rounded border transition-colors text-left",
+                          selectedAisles.includes(aisle)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-foreground border-border hover:bg-muted"
+                        )}
+                      >
+                        <span className="font-medium">Pasillo {aisle}</span>
+                        <span className="text-[10px] block opacity-75">
+                          {AISLE_DESCRIPTIONS[aisle]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               {/* Toggle bordados como chip */}
               <button
                 onClick={() => setShowOnlyEmbroidery(!showOnlyEmbroidery)}
@@ -318,6 +386,18 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
             {/* Chips de filtros activos */}
             {hasActiveFilters && (
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {selectedAisles.map(aisle => (
+                  <Badge 
+                    key={`aisle-${aisle}`} 
+                    variant="secondary" 
+                    className="h-5 text-[10px] gap-1 pr-1 cursor-pointer hover:bg-muted bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200"
+                    onClick={() => removeAisle(aisle)}
+                  >
+                    <MapPin className="w-3 h-3" />
+                    Pasillo {aisle}
+                    <X className="w-3 h-3" />
+                  </Badge>
+                ))}
                 {selectedSizes.map(size => (
                   <Badge 
                     key={size} 
