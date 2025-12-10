@@ -822,8 +822,82 @@ const PickingPackingPage = () => {
           </div>
         </div>
 
-        {/* Orders Table */}
-        <div className="border rounded-lg">
+        {/* Mobile Cards View */}
+        <div className="md:hidden space-y-2">
+          {filteredOrdersByTeam.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground border rounded-lg">
+              {teamNumber > 0 ? `No hay órdenes para el equipo ${teamNumber}` : 'No se encontraron órdenes'}
+            </div>
+          ) : (
+            filteredOrdersByTeam.map((order) => {
+              const rawData = order.shopify_order?.raw_data as any;
+              const shippingMethod = rawData?.shipping_lines?.[0]?.title || '';
+              const itemCount = rawData?.line_items?.length || 0;
+              const orderTime = order.shopify_order?.created_at_shopify 
+                ? new Date(order.shopify_order.created_at_shopify).toLocaleTimeString('es-CO', { 
+                    hour: '2-digit', minute: '2-digit', hour12: true 
+                  })
+                : '';
+              const totalPrice = order.shopify_order?.total_price 
+                ? formatCurrency(Number(order.shopify_order.total_price))
+                : '$0';
+
+              return (
+                <div
+                  key={order.id}
+                  className="border rounded-lg p-3 bg-card cursor-pointer hover:bg-muted/50 active:bg-muted"
+                  onClick={() => setSelectedOrderId(order.id)}
+                >
+                  {/* Row 1: Checkbox + Order Number + Price */}
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedOrders.includes(order.id)}
+                        onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="font-bold text-sm">#{order.shopify_order?.order_number}</span>
+                    </div>
+                    <span className="font-semibold text-sm">{totalPrice}</span>
+                  </div>
+                  
+                  {/* Row 2: Customer • Items • Time */}
+                  <div className="text-xs text-muted-foreground mb-1.5 pl-6">
+                    {order.shopify_order?.customer_first_name} {order.shopify_order?.customer_last_name}
+                    {itemCount > 0 && <span> • {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}
+                    {orderTime && <span> • {orderTime}</span>}
+                  </div>
+                  
+                  {/* Row 3: Status Badges */}
+                  <div className="flex items-center gap-1.5 mb-1.5 pl-6">
+                    <Badge 
+                      variant="secondary"
+                      className={`text-[10px] px-1.5 py-0.5 ${statusColors[order.operational_status]}`}
+                    >
+                      {statusLabels[order.operational_status]}
+                    </Badge>
+                    <Badge 
+                      variant="secondary"
+                      className={`text-[10px] px-1.5 py-0.5 ${paymentStatusColors[order.shopify_order?.financial_status as keyof typeof paymentStatusColors] || ''}`}
+                    >
+                      {paymentStatusLabels[order.shopify_order?.financial_status as keyof typeof paymentStatusLabels] || order.shopify_order?.financial_status}
+                    </Badge>
+                  </div>
+                  
+                  {/* Row 4: Shipping Method */}
+                  {shippingMethod && (
+                    <div className="text-xs text-muted-foreground pl-6 truncate">
+                      🚚 {shippingMethod}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block border rounded-lg">
           <Table>
             <TableHeader>
               <TableRow>
