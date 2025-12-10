@@ -4,7 +4,7 @@ import { Truck, FileText, Loader2, ExternalLink, AlertCircle } from 'lucide-reac
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
-import { CARRIER_NAMES, CarrierCode } from '../types/envia';
+import { CARRIER_NAMES, CarrierCode, ShippingLabel } from '../types/envia';
 
 interface ShippingAddress {
   name?: string;
@@ -25,6 +25,7 @@ interface EnviaShippingButtonProps {
   customerPhone?: string;
   totalPrice?: number;
   disabled?: boolean;
+  onLabelChange?: (label: ShippingLabel | null) => void;
 }
 
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
@@ -34,7 +35,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   customerEmail,
   customerPhone,
   totalPrice,
-  disabled = false
+  disabled = false,
+  onLabelChange
 }) => {
   const { currentOrganization } = useOrganization();
   const { 
@@ -53,11 +55,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     if (currentOrganization?.id && shopifyOrderId) {
       clearLabel();
       setHasChecked(false);
-      getExistingLabel(shopifyOrderId, currentOrganization.id).then(() => {
+      getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
+        onLabelChange?.(label);
       });
     }
-  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel]);
+  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, onLabelChange]);
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
@@ -77,7 +80,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const department = shippingAddress.province || '';
     const postalCode = shippingAddress.zip || '';
 
-    await createLabel({
+    const result = await createLabel({
       shopify_order_id: shopifyOrderId,
       organization_id: currentOrganization.id,
       order_number: orderNumber,
@@ -91,6 +94,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       declared_value: totalPrice || 0,
       package_content: `Pedido ${orderNumber}`
     });
+
+    if (result.success && result.label) {
+      onLabelChange?.(result.label);
+    }
   };
 
   const handleOpenLabel = () => {
