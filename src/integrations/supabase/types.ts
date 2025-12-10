@@ -2022,6 +2022,133 @@ export type Database = {
         }
         Relationships: []
       }
+      shipping_coverage: {
+        Row: {
+          coordinadora: boolean | null
+          created_at: string
+          dane_code: string | null
+          department: string
+          deprisa: boolean | null
+          id: string
+          interrapidisimo: boolean | null
+          municipality: string
+          organization_id: string | null
+          postal_code: string | null
+          priority_carrier: string | null
+          updated_at: string
+        }
+        Insert: {
+          coordinadora?: boolean | null
+          created_at?: string
+          dane_code?: string | null
+          department: string
+          deprisa?: boolean | null
+          id?: string
+          interrapidisimo?: boolean | null
+          municipality: string
+          organization_id?: string | null
+          postal_code?: string | null
+          priority_carrier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          coordinadora?: boolean | null
+          created_at?: string
+          dane_code?: string | null
+          department?: string
+          deprisa?: boolean | null
+          id?: string
+          interrapidisimo?: boolean | null
+          municipality?: string
+          organization_id?: string | null
+          postal_code?: string | null
+          priority_carrier?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_coverage_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipping_labels: {
+        Row: {
+          carrier: string
+          created_at: string
+          created_by: string | null
+          destination_address: string | null
+          destination_city: string | null
+          destination_department: string | null
+          id: string
+          label_url: string | null
+          order_number: string
+          organization_id: string
+          raw_response: Json | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          shipment_id: string | null
+          shopify_order_id: number
+          status: string | null
+          total_price: number | null
+          tracking_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          carrier: string
+          created_at?: string
+          created_by?: string | null
+          destination_address?: string | null
+          destination_city?: string | null
+          destination_department?: string | null
+          id?: string
+          label_url?: string | null
+          order_number: string
+          organization_id: string
+          raw_response?: Json | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          shipment_id?: string | null
+          shopify_order_id: number
+          status?: string | null
+          total_price?: number | null
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          carrier?: string
+          created_at?: string
+          created_by?: string | null
+          destination_address?: string | null
+          destination_city?: string | null
+          destination_department?: string | null
+          id?: string
+          label_url?: string | null
+          order_number?: string
+          organization_id?: string
+          raw_response?: Json | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          shipment_id?: string | null
+          shopify_order_id?: number
+          status?: string | null
+          total_price?: number | null
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_labels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_order_line_items: {
         Row: {
           created_at: string
