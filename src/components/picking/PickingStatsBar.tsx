@@ -20,7 +20,7 @@ export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick 
   const totalPedidos = stats.paraEmpacar + stats.noConfirmados;
 
   return (
-    <div className="overflow-x-auto pb-1 -mb-1 scrollbar-thin">
+    <div className="overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       <div className="flex items-center gap-3 md:gap-4 text-xs text-muted-foreground py-2 border-b border-border/50 min-w-max">
         <button
           onClick={() => onFilterClick('pedidos')}

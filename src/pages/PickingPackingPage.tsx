@@ -670,6 +670,7 @@ const PickingPackingPage = () => {
           <SavedFiltersManager
             currentFilters={getCurrentFilters()}
             onLoadFilter={loadSavedFilter}
+            onAddFilter={() => setPopoverOpen(true)}
           />
 
           {/* Advanced Filters UI */}
@@ -691,10 +692,10 @@ const PickingPackingPage = () => {
               </Badge>
             ))}
             
-            {/* Add filter button */}
+            {/* Add filter button - hidden on mobile (shown inline in SavedFiltersManager) */}
             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2 hidden md:flex">
                   <Plus className="w-4 h-4" />
                   Agregar filtro
                 </Button>
@@ -754,7 +755,7 @@ const PickingPackingPage = () => {
                     variant={totalTeams === n ? "default" : "outline"}
                     size="sm"
                     onClick={() => updateTeamParams(0, n)}
-                    className="min-w-[40px]"
+                    className="min-w-[32px] md:min-w-[40px] h-7 md:h-9 text-xs md:text-sm px-2"
                   >
                     {n}
                   </Button>
