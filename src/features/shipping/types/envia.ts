@@ -182,6 +182,14 @@ export interface TrackingResponse {
   error?: string;
 }
 
+// Cancel types
+export interface CancelLabelResponse {
+  success: boolean;
+  message?: string;
+  balanceReturned?: boolean;
+  error?: string;
+}
+
 // Carriers available in Colombia
 export type CarrierCode = 'coordinadora' | 'interrapidisimo' | 'deprisa' | 'servientrega' | 'tcc' | 'envia' | 'otro';
 

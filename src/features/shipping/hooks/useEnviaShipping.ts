@@ -18,6 +18,7 @@ export const useEnviaShipping = () => {
   const [isLoadingLabel, setIsLoadingLabel] = useState(false);
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
   const [isLoadingTracking, setIsLoadingTracking] = useState(false);
+  const [isCancellingLabel, setIsCancellingLabel] = useState(false);
   const [existingLabel, setExistingLabel] = useState<ShippingLabel | null>(null);
   const [quotes, setQuotes] = useState<CarrierQuote[]>([]);
   const [trackingInfo, setTrackingInfo] = useState<TrackingResponse | null>(null);
@@ -208,6 +209,41 @@ export const useEnviaShipping = () => {
     setTrackingInfo(null);
   }, []);
 
+  // Cancel shipping label
+  const cancelLabel = useCallback(async (labelId: string): Promise<{ success: boolean; error?: string; balanceReturned?: boolean }> => {
+    setIsCancellingLabel(true);
+    try {
+      console.log('🚫 Cancelling shipping label:', labelId);
+
+      const { data, error } = await supabase.functions.invoke('envia-cancel', {
+        body: { label_id: labelId }
+      });
+
+      if (error) {
+        console.error('Error cancelling label:', error);
+        return { success: false, error: error.message };
+      }
+
+      if (!data.success) {
+        console.error('Label cancellation failed:', data.error);
+        return { success: false, error: data.error };
+      }
+
+      console.log('✅ Label cancelled successfully. Balance returned:', data.balanceReturned);
+      clearLabel();
+      
+      return { 
+        success: true, 
+        balanceReturned: data.balanceReturned 
+      };
+    } catch (error: any) {
+      console.error('Error in cancelLabel:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setIsCancellingLabel(false);
+    }
+  }, [clearLabel]);
+
   return {
     // Label operations
     isCreatingLabel,
@@ -230,6 +266,10 @@ export const useEnviaShipping = () => {
     isLoadingTracking,
     trackingInfo,
     trackShipment,
-    clearTracking
+    clearTracking,
+    
+    // Cancel operations
+    isCancellingLabel,
+    cancelLabel
   };
 };

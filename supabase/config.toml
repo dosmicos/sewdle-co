@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.envia-track]
 verify_jwt = false
+
+[functions.envia-cancel]
+verify_jwt = false

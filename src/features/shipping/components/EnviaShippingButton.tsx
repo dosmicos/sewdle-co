@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3 } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -58,7 +58,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     getExistingLabel, 
     createLabel,
     clearLabel,
-    checkCoverage
+    checkCoverage,
+    isCancellingLabel,
+    cancelLabel
   } = useEnviaShipping();
   
   const [hasChecked, setHasChecked] = useState(false);
@@ -213,6 +215,32 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   };
 
+  // Handle cancel label
+  const handleCancelLabel = async () => {
+    if (!existingLabel?.id || !currentOrganization?.id) return;
+
+    const confirmed = window.confirm(
+      '¿Estás seguro de cancelar esta guía? Esta acción no se puede deshacer.'
+    );
+
+    if (!confirmed) return;
+
+    const result = await cancelLabel(existingLabel.id);
+
+    if (result.success) {
+      toast.success(
+        result.balanceReturned 
+          ? 'Guía cancelada. El saldo fue devuelto.' 
+          : 'Guía cancelada exitosamente'
+      );
+      onLabelChange?.(null);
+      // Refresh to show no label
+      await getExistingLabel(shopifyOrderId, currentOrganization.id);
+    } else {
+      toast.error('Error al cancelar: ' + (result.error || 'Error desconocido'));
+    }
+  };
+
   // Show loading state while checking for existing label
   if (isLoadingLabel || !hasChecked) {
     return (
@@ -228,25 +256,38 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const carrierName = CARRIER_NAMES[existingLabel.carrier as CarrierCode] || existingLabel.carrier;
     const isManual = existingLabel.status === 'manual';
     const isError = existingLabel.status === 'error';
+    const isCancelled = existingLabel.status === 'cancelled';
+    const canCancel = !isManual && !isCancelled && existingLabel.tracking_number;
     
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
           <Badge 
             variant="secondary" 
-            className={isError ? "bg-red-100 text-red-800" : isManual ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}
+            className={
+              isCancelled ? "bg-gray-100 text-gray-800" :
+              isError ? "bg-red-100 text-red-800" : 
+              isManual ? "bg-blue-100 text-blue-800" : 
+              "bg-green-100 text-green-800"
+            }
           >
             <Truck className="h-3 w-3 mr-1" />
             {carrierName}
             {isManual && " (Manual)"}
             {isError && " (Error)"}
+            {isCancelled && " (Cancelada)"}
           </Badge>
           {existingLabel.tracking_number && (
             <span className="font-mono text-xs">{existingLabel.tracking_number}</span>
           )}
         </div>
         
-        {existingLabel.label_url ? (
+        {isCancelled ? (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <XCircle className="h-4 w-4" />
+            <span>Guía cancelada</span>
+          </div>
+        ) : existingLabel.label_url ? (
           <Button 
             variant="outline" 
             className="w-full"
@@ -271,6 +312,29 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             <AlertCircle className="h-4 w-4" />
             <span>Guía creada sin PDF disponible</span>
           </div>
+        )}
+
+        {/* Cancel button - only for non-manual, non-cancelled labels with tracking */}
+        {canCancel && (
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="w-full text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+            onClick={handleCancelLabel}
+            disabled={isCancellingLabel}
+          >
+            {isCancellingLabel ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                Cancelando guía...
+              </>
+            ) : (
+              <>
+                <XCircle className="h-3 w-3 mr-1" />
+                Cancelar Guía
+              </>
+            )}
+          </Button>
         )}
       </div>
     );
