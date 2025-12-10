@@ -669,12 +669,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4">
                 <div>
-                  <DialogTitle className="text-2xl">
+                  <DialogTitle className="text-lg md:text-2xl">
                     Orden #{effectiveOrder.shopify_order?.order_number}
                   </DialogTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -691,41 +691,51 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   </p>
                 </div>
                 
-                {effectiveOrder.shopify_order?.cancelled_at && (
-                  <Badge variant="destructive" className="bg-red-600">
-                    ⚠️ ORDEN CANCELADA
+                {/* Badges - Wrap on mobile */}
+                <div className="flex flex-wrap gap-1 md:gap-2">
+                  {effectiveOrder.shopify_order?.cancelled_at && (
+                    <Badge variant="destructive" className="bg-red-600 text-xs px-2 py-0.5">
+                      ⚠️ CANCELADA
+                    </Badge>
+                  )}
+                  
+                  <Badge className={`${statusColors[effectiveOrder.operational_status]} text-xs px-2 py-0.5`}>
+                    {statusLabels[effectiveOrder.operational_status]}
                   </Badge>
-                )}
-                
-                <Badge className={statusColors[effectiveOrder.operational_status]}>
-                  {statusLabels[effectiveOrder.operational_status]}
-                </Badge>
-                {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
-                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                    Pago Pendiente
-                  </Badge>
-                )}
-                {paymentMethod && (
-                  <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
-                    💳 {paymentMethod}
-                  </Badge>
-                )}
+                  {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5">
+                      Pendiente
+                    </Badge>
+                  )}
+                  {paymentMethod && (
+                    <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300 text-xs px-2 py-0.5">
+                      💳 {paymentMethod}
+                    </Badge>
+                  )}
+                  {/* Shipping Type Badge - inline on mobile */}
+                  {shippingType && (
+                    <Badge className={`${shippingType.className} text-xs px-2 py-0.5 md:hidden`}>
+                      {shippingType.icon} {shippingType.label}
+                    </Badge>
+                  )}
+                </div>
               </div>
+              
               <div className="flex items-center gap-2">
-                {/* Shipping Type Badge */}
+                {/* Shipping Type Badge - Desktop only (larger) */}
                 {shippingType && (
-                  <Badge className={`${shippingType.className} font-bold text-sm px-3 py-1 shadow-sm`}>
+                  <Badge className={`${shippingType.className} font-bold text-sm px-3 py-1 shadow-sm hidden md:flex`}>
                     {shippingType.icon} {shippingType.label}
                   </Badge>
                 )}
                 
-                <Button onClick={handlePrint} variant="outline" className="gap-2">
+                <Button onClick={handlePrint} variant="outline" size="sm" className="h-8 px-2 md:px-3 gap-1 md:gap-2">
                   <Printer className="w-4 h-4" />
-                  Imprimir
+                  <span className="hidden md:inline">Imprimir</span>
                 </Button>
                 
-                {/* Navigation buttons */}
-                <div className="flex items-center gap-1 ml-2 border-l pl-2">
+                {/* Navigation buttons - Desktop only */}
+                <div className="hidden md:flex items-center gap-1 ml-2 border-l pl-2">
                   <Button
                     variant="outline"
                     size="icon"
@@ -751,54 +761,54 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             </div>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mt-3 md:mt-6">
             {/* Left Column - Products */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className="lg:col-span-2 space-y-3 md:space-y-4">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Package className="w-5 h-5" />
+                <CardHeader className="p-3 md:p-6 pb-2 md:pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm md:text-base">
+                    <Package className="w-4 h-4 md:w-5 md:h-5" />
                     Productos ({lineItems.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="p-3 md:p-6 pt-0 space-y-2 md:space-y-4">
                   {lineItems.map((item, index: number) => (
-                    <div key={index} className="flex gap-4 p-4 border rounded-lg">
-                      {/* Product Image */}
+                    <div key={index} className="flex gap-2 md:gap-4 p-2 md:p-4 border rounded-lg">
+                      {/* Product Image - Smaller on mobile */}
                       <div className="flex-shrink-0">
                         {item.image_url ? (
                           <img 
                             src={item.image_url} 
                             alt={item.title}
-                            className="w-32 h-32 object-cover rounded-lg border"
+                            className="w-16 h-16 md:w-32 md:h-32 object-cover rounded-lg border"
                             onError={(e) => {
                               e.currentTarget.style.display = 'none';
-                              e.currentTarget.parentElement!.innerHTML = '<div class="w-32 h-32 bg-muted rounded-lg flex items-center justify-center"><svg class="w-12 h-12 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>';
+                              e.currentTarget.parentElement!.innerHTML = '<div class="w-16 h-16 md:w-32 md:h-32 bg-muted rounded-lg flex items-center justify-center"><svg class="w-6 h-6 md:w-12 md:h-12 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>';
                             }}
                           />
                         ) : (
-                          <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center border">
-                            <Package className="w-12 h-12 text-muted-foreground" />
+                          <div className="w-16 h-16 md:w-32 md:h-32 bg-muted rounded-lg flex items-center justify-center border">
+                            <Package className="w-6 h-6 md:w-12 md:h-12 text-muted-foreground" />
                           </div>
                         )}
                       </div>
 
-                      {/* Product Details */}
-                      <div className="flex-1 space-y-2">
+                      {/* Product Details - Compact on mobile */}
+                      <div className="flex-1 min-w-0 space-y-1 md:space-y-2">
                         <div>
-                          <h4 className="font-semibold text-lg">
+                          <h4 className="font-semibold text-sm md:text-lg line-clamp-2">
                             {item.title}
                           </h4>
                           {item.variant_title && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs md:text-sm text-muted-foreground">
                               {item.variant_title}
                             </p>
                           )}
-                          {/* Custom Properties - Para bordados y personalizaciones */}
+                          {/* Custom Properties - Compact on mobile */}
                           {item.properties && item.properties.length > 0 && (
-                            <div className="mt-2 space-y-1 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                            <div className="mt-1 md:mt-2 space-y-0.5 p-1.5 md:p-2 bg-amber-50 border border-amber-200 rounded-md">
                               {item.properties.map((prop, propIndex) => (
-                                <div key={propIndex} className="flex items-start gap-2 text-sm">
+                                <div key={propIndex} className="flex items-start gap-1 text-xs md:text-sm">
                                   <span className="text-amber-700 font-medium">{prop.name}:</span>
                                   <span className="text-amber-900">{prop.value}</span>
                                 </div>
@@ -807,23 +817,18 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                           )}
                         </div>
 
-                        <div className="flex items-center gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">SKU: </span>
-                            <span className="font-medium">{item.sku || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Precio: </span>
-                            <span className="font-medium">
-                              {formatCurrency(item.price, effectiveOrder.shopify_order?.currency)}
-                            </span>
-                          </div>
+                        {/* SKU and Price - Inline compact */}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs md:text-sm">
+                          <span className="text-muted-foreground">SKU:</span>
+                          <span className="font-medium truncate">{item.sku || 'N/A'}</span>
+                          <span className="text-muted-foreground hidden md:inline">•</span>
+                          <span className="font-medium">{formatCurrency(item.price, effectiveOrder.shopify_order?.currency)}</span>
                         </div>
 
-                        {/* Quantity Highlighted */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Cantidad:</span>
-                          <span className="text-3xl font-bold text-primary">
+                        {/* Quantity Highlighted - Smaller on mobile */}
+                        <div className="flex items-center gap-1 md:gap-2">
+                          <span className="text-muted-foreground text-xs md:text-sm">Cantidad:</span>
+                          <span className="text-xl md:text-3xl font-bold text-primary">
                             {item.quantity}
                           </span>
                         </div>
@@ -937,34 +942,59 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             </div>
 
             {/* Right Column - Details */}
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
+              {/* Mobile: Compact Customer + Address Info */}
+              <div className="md:hidden bg-muted/30 rounded-lg p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <User className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <div className="text-sm min-w-0">
+                    <p className="font-medium">
+                      {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{effectiveOrder.shopify_order?.customer_email}</p>
+                    {effectiveOrder.shopify_order?.customer_phone && (
+                      <p className="text-xs text-muted-foreground">{effectiveOrder.shopify_order.customer_phone}</p>
+                    )}
+                  </div>
+                </div>
+                {shippingAddress && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                    <div className="text-xs text-muted-foreground min-w-0">
+                      <p className="truncate">{shippingAddress.address1}</p>
+                      <p>{shippingAddress.city}, {shippingAddress.province}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Notas de Shopify - Bidirectional Sync */}
               <Card>
-                <CardHeader className="pb-3">
+                <CardHeader className="p-3 md:p-6 pb-2 md:pb-3">
                   {effectiveOrder?.shopify_order?.customer_first_name && (
-                    <Badge className="bg-blue-500 text-white hover:bg-blue-500 font-semibold text-sm px-3 py-1 w-fit mb-2">
-                      <User className="w-4 h-4 mr-1.5" />
+                    <Badge className="bg-blue-500 text-white hover:bg-blue-500 font-semibold text-xs md:text-sm px-2 md:px-3 py-0.5 md:py-1 w-fit mb-2 hidden md:flex">
+                      <User className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-1.5" />
                       {effectiveOrder.shopify_order.customer_first_name} {effectiveOrder.shopify_order.customer_last_name}
                     </Badge>
                   )}
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="text-sm md:text-base flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     Notas de Shopify
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="p-3 md:p-6 pt-0 space-y-2">
                   <Textarea
                     value={shopifyNote}
                     onChange={(e) => setShopifyNote(e.target.value)}
                     placeholder="Agregar notas visibles en Shopify..."
-                    className="min-h-[100px] text-sm"
+                    className="min-h-[60px] md:min-h-[100px] text-sm"
                     disabled={!!effectiveOrder?.shopify_order?.cancelled_at}
                   />
                   <Button
                     onClick={handleSaveShopifyNote}
                     disabled={isSavingShopifyNote || !!effectiveOrder?.shopify_order?.cancelled_at}
                     size="sm"
-                    className="w-full"
+                    className="w-full text-xs md:text-sm"
                   >
                     {isSavingShopifyNote ? (
                       <>
@@ -972,10 +1002,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                         Guardando...
                       </>
                     ) : (
-                      'Guardar Nota en Shopify'
+                      'Guardar Nota'
                     )}
                   </Button>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground hidden md:block">
                     ℹ️ Los cambios se sincronizan automáticamente con Shopify
                   </p>
                 </CardContent>
@@ -983,13 +1013,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
               {/* Shopify Tags */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+                <CardHeader className="p-3 md:p-6 pb-2 md:pb-3">
+                  <CardTitle className="text-sm md:text-base flex items-center gap-2">
                     <Tags className="w-4 h-4" />
-                    Etiquetas de Shopify
+                    Etiquetas
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-3 md:p-6 pt-0">
                   <OrderTagsManager
                     orderId={effectiveOrder.id}
                     shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
@@ -1007,8 +1037,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </CardContent>
               </Card>
 
-              {/* Customer Info */}
-              <Card>
+              {/* Customer Info - Desktop only */}
+              <Card className="hidden md:block">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <User className="w-4 h-4" />
@@ -1026,9 +1056,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </CardContent>
               </Card>
 
-              {/* Shipping Address */}
+              {/* Shipping Address - Desktop only */}
               {shippingAddress && (
-                <Card>
+                <Card className="hidden md:block">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
@@ -1047,7 +1077,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       <p className="text-muted-foreground">{shippingAddress.phone}</p>
                     )}
                   </CardContent>
-                </Card>
+              </Card>
               )}
 
             </div>
@@ -1076,19 +1106,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
         {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
-          <div className="absolute bottom-4 right-4 z-10 pointer-events-none">
+          <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
               onClick={handleMarkAsPackedAndPrint}
               disabled={updatingStatus}
               title="Ctrl + . para marcar rápidamente"
-              className="h-14 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base gap-2 pointer-events-auto"
+              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
             >
               {updatingStatus ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
               ) : (
                 <>
-                  <Package className="w-5 h-5" />
-                  Marcar como Empacado
+                  <Package className="w-4 h-4 md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Marcar como</span> Empacado
                 </>
               )}
             </Button>
