@@ -7,40 +7,76 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-// Colombia department to state code mapping (ISO 3166-2:CO - 2 character codes)
-// Important: Envia.com requires 2-character state codes
+// Colombia department to state code mapping according to Envia.com API documentation
+// Reference: https://docs.envia.com/#004e17f0-dc66-48bc-918a-919daeec68f2
 const COLOMBIA_STATE_CODES: Record<string, string> = {
-  'amazonas': 'AM', 'antioquia': 'AN', 'arauca': 'AR',
+  // Amazonas
+  'amazonas': 'AM',
+  // Antioquia
+  'antioquia': 'AN',
+  // Arauca
+  'arauca': 'AR',
+  // Atlántico
   'atlantico': 'AT', 'atlántico': 'AT',
+  // Bogotá D.C.
   'bogota': 'DC', 'bogotá': 'DC', 'bogota dc': 'DC', 'bogotá dc': 'DC', 
   'bogota d.c.': 'DC', 'bogotá d.c.': 'DC', 'bogota, d.c.': 'DC', 'bogotá, d.c.': 'DC',
+  'distrito capital': 'DC', 'capital district': 'DC',
+  // Bolívar
   'bolivar': 'BL', 'bolívar': 'BL',
+  // Boyacá
   'boyaca': 'BY', 'boyacá': 'BY',
+  // Caldas
   'caldas': 'CL',
-  'caqueta': 'CQ', 'caquetá': 'CQ',
+  // Caquetá - CORREGIDO: CA (no CQ)
+  'caqueta': 'CA', 'caquetá': 'CA',
+  // Casanare
   'casanare': 'CS',
-  'cauca': 'CA',
+  // Cauca - CORREGIDO: CU (no CA)
+  'cauca': 'CU',
+  // Cesar
   'cesar': 'CE',
+  // Chocó
   'choco': 'CH', 'chocó': 'CH',
+  // Córdoba
   'cordoba': 'CO', 'córdoba': 'CO',
-  'cundinamarca': 'CU',
-  'guainia': 'GN', 'guainía': 'GN',
-  'guaviare': 'GV',
+  // Cundinamarca - CORREGIDO: CN (no CU)
+  'cundinamarca': 'CN',
+  // Guainía - CORREGIDO: GU (no GN)
+  'guainia': 'GU', 'guainía': 'GU',
+  // Guaviare - CORREGIDO: GA (no GV)
+  'guaviare': 'GA',
+  // Huila
   'huila': 'HU',
+  // La Guajira
   'la guajira': 'LG', 'guajira': 'LG',
-  'magdalena': 'MG',
-  'meta': 'MT',
+  // Magdalena - CORREGIDO: MA (no MG)
+  'magdalena': 'MA',
+  // Meta - CORREGIDO: ME (no MT)
+  'meta': 'ME',
+  // Nariño
   'narino': 'NA', 'nariño': 'NA',
+  // Norte de Santander
   'norte de santander': 'NS',
+  // Putumayo
   'putumayo': 'PU',
-  'quindio': 'QD', 'quindío': 'QD',
+  // Quindío - CORREGIDO: QU (no QD)
+  'quindio': 'QU', 'quindío': 'QU',
+  // Risaralda
   'risaralda': 'RI',
+  // San Andrés y Providencia
   'san andres': 'SA', 'san andres y providencia': 'SA', 'san andrés': 'SA', 'san andrés y providencia': 'SA',
-  'santander': 'ST',
+  // Santander - CORREGIDO: SN (no ST)
+  'santander': 'SN',
+  // Sucre
   'sucre': 'SU',
+  // Tolima
   'tolima': 'TO',
+  // Valle del Cauca
   'valle del cauca': 'VC', 'valle': 'VC',
-  'vaupes': 'VP', 'vaupés': 'VP',
+  // Vaupés - CORREGIDO: VA (no VP)
+  'vaupes': 'VA', 'vaupés': 'VA',
+  // Vichada
   'vichada': 'VI'
 };
 
