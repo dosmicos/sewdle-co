@@ -32,6 +32,40 @@ const extractSize = (variantTitle: string | null): string | null => {
   return null;
 };
 
+// Determina el pasillo basado en el tipo de producto y talla
+const determineAisle = (title: string, size: string | null): number => {
+  const titleLower = title.toLowerCase();
+  const sizeClean = (size || '').trim();
+  
+  // Detectar tipo de producto
+  const isRuana = titleLower.includes('ruana');
+  const isSleeping = titleLower.includes('sleeping'); // Incluye "Sleeping Walker" y variantes
+  const isChaqueta = titleLower.includes('chaqueta');
+  
+  // Detectar si es talla de adulto
+  const isAdultSize = /^(XXS|XS|S|M|L|XL|XXL|XXXL)$/i.test(sizeClean);
+  
+  // Extraer talla numérica del size (puede ser "4", "4 (1-2 años)", etc.)
+  const numericMatch = sizeClean.match(/^(\d+)/);
+  const numericSize = numericMatch ? parseInt(numericMatch[1]) : 0;
+  
+  // PASILLO 1: Ruanas tallas 2, 4, 6, 8
+  if (isRuana && !isAdultSize && [2, 4, 6, 8].includes(numericSize)) {
+    return 1;
+  }
+  
+  // PASILLO 2: Ruanas tallas 10, 12 + Todos los Sleeping
+  if (isSleeping) {
+    return 2;
+  }
+  if (isRuana && !isAdultSize && [10, 12].includes(numericSize)) {
+    return 2;
+  }
+  
+  // PASILLO 3: Ruanas adulto + Chaquetas + Todo lo demás
+  return 3;
+};
+
 export interface ParaEmpacarItem {
   id: string;
   orderNumbers: number[];
@@ -47,6 +81,7 @@ export interface ParaEmpacarItem {
   properties: Array<{ name: string; value: string }> | null;
   hasCustomization: boolean;
   size?: string;
+  aisle: number;
 }
 
 // Detecta si un artículo tiene personalización (bordado)
@@ -84,6 +119,7 @@ export const useParaEmpacarItems = () => {
   
   // Filtros
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedAisles, setSelectedAisles] = useState<number[]>([]);
   const [showOnlyEmbroidery, setShowOnlyEmbroidery] = useState(false);
 
   const fetchItems = useCallback(async () => {
@@ -141,6 +177,9 @@ export const useParaEmpacarItems = () => {
           id: item.id
         });
 
+        const itemSize = extractSize(item.variant_title) || '';
+        const itemAisle = determineAisle(item.title, itemSize);
+
         if (groupedItems.has(groupKey)) {
           const existing = groupedItems.get(groupKey)!;
           existing.quantity += item.quantity;
@@ -165,7 +204,8 @@ export const useParaEmpacarItems = () => {
             imageUrl: item.image_url,
             properties: isCustomized ? properties : null,
             hasCustomization: isCustomized,
-            size: extractSize(item.variant_title) || '',
+            size: itemSize,
+            aisle: itemAisle,
           });
         }
       });
@@ -215,24 +255,31 @@ export const useParaEmpacarItems = () => {
     return sortVariants(sizes.map(s => ({ size: s }))).map(s => s.size);
   }, [items]);
 
-  // Items filtrados por tallas y bordado
+  // Pasillos disponibles
+  const availableAisles = useMemo(() => {
+    return [...new Set(items.map(i => i.aisle))].sort((a, b) => a - b);
+  }, [items]);
+
+  // Items filtrados por tallas, pasillos y bordado
   const filteredItems = useMemo(() => {
     return items.filter(item => {
       if (showOnlyEmbroidery && !item.hasCustomization) return false;
       if (selectedSizes.length > 0 && !selectedSizes.includes(item.size)) return false;
+      if (selectedAisles.length > 0 && !selectedAisles.includes(item.aisle)) return false;
       return true;
     });
-  }, [items, selectedSizes, showOnlyEmbroidery]);
+  }, [items, selectedSizes, selectedAisles, showOnlyEmbroidery]);
 
   const totalQuantity = filteredItems.reduce((sum, item) => sum + item.quantity, 0);
   const uniqueOrders = new Set(filteredItems.flatMap(item => item.orderNumbers)).size;
 
   const clearAllFilters = useCallback(() => {
     setSelectedSizes([]);
+    setSelectedAisles([]);
     setShowOnlyEmbroidery(false);
   }, []);
 
-  const hasActiveFilters = selectedSizes.length > 0 || showOnlyEmbroidery;
+  const hasActiveFilters = selectedSizes.length > 0 || selectedAisles.length > 0 || showOnlyEmbroidery;
 
   return { 
     items: filteredItems, 
@@ -242,10 +289,15 @@ export const useParaEmpacarItems = () => {
     fetchItems, 
     totalQuantity, 
     uniqueOrders,
-    // Filtros
+    // Filtros de talla
     availableSizes,
     selectedSizes,
     setSelectedSizes,
+    // Filtros de pasillo
+    availableAisles,
+    selectedAisles,
+    setSelectedAisles,
+    // Filtro de bordados
     showOnlyEmbroidery,
     setShowOnlyEmbroidery,
     clearAllFilters,
