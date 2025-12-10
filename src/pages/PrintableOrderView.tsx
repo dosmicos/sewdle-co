@@ -77,21 +77,21 @@ const PrintableOrderView = () => {
   return (
     <div className="printable-order mx-auto p-2 bg-white">
       {/* Logo */}
-      <div className="text-center mb-2.5">
+      <div className="text-center mb-1.5">
         <img 
           src={dosmicosLogo} 
           alt="Dosmicos" 
           className="logo-image mx-auto mb-0.5"
-          style={{ maxWidth: '158px', height: 'auto' }}
+          style={{ maxWidth: '130px', height: 'auto' }}
         />
       </div>
 
       {/* Order Number */}
-      <div className="mb-1.5">
+      <div className="mb-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-sm font-bold">ORDEN #{order.order_number}</h1>
+          <h1 className="text-xs font-bold">ORDEN #{order.order_number}</h1>
           {paymentMethod && (
-          <span className="payment-badge px-2 py-1 bg-transparent text-black border-2 border-black font-semibold text-xs rounded">
+          <span className="payment-badge px-1.5 py-0.5 bg-transparent text-black border-2 border-black font-semibold text-xs rounded">
             {paymentMethod}
           </span>
           )}
@@ -99,9 +99,9 @@ const PrintableOrderView = () => {
       </div>
 
       {/* Shipping Address */}
-      <div className="mb-1.5">
-        <h2 className="text-sm font-semibold mb-0.5">ENVÍE A:</h2>
-        <div className="space-y-0.5" style={{ fontSize: '0.7875rem' }}>
+      <div className="mb-1">
+        <h2 className="text-xs font-semibold mb-0.5">ENVÍE A:</h2>
+        <div className="space-y-0.5" style={{ fontSize: '0.6875rem' }}>
           <p className="font-medium">{shippingAddress?.name || `${order.customer_first_name} ${order.customer_last_name}`}</p>
           {shippingAddress?.company && <p>{shippingAddress.company}</p>}
           {shippingAddress?.address1 && <p>{shippingAddress.address1}</p>}
@@ -120,16 +120,16 @@ const PrintableOrderView = () => {
 
       {/* COD Banner */}
       {isCOD && (
-        <div className="cod-banner my-1.5 p-1.5 bg-black text-white text-center font-bold text-sm rounded">
+        <div className="cod-banner my-1 p-1 bg-black text-white text-center font-semibold text-xs rounded">
           PAGO CONTRA ENTREGA
         </div>
       )}
 
       {/* Notes */}
       {order.note && (
-        <div className="mb-1.5">
-          <h2 className="text-sm font-semibold mb-0.5">NOTES</h2>
-          <div className="whitespace-pre-wrap text-xs border-l-2 border-primary pl-2">
+        <div className="mb-1">
+          <h2 className="text-xs font-semibold mb-0.5">NOTES</h2>
+          <div className="whitespace-pre-wrap border-l-2 border-primary pl-2" style={{ fontSize: '0.625rem' }}>
             {order.note}
           </div>
         </div>
@@ -145,31 +145,32 @@ const PrintableOrderView = () => {
           }
 
           .printable-order {
-            padding: 5mm 6.6mm;
+            padding: 4mm 5mm;
             max-width: 100%;
           }
 
           .logo-image {
-            max-width: 32.67mm !important;
+            max-width: 27mm !important;
             height: auto !important;
           }
 
           .cod-banner {
             background-color: #000 !important;
             color: #fff !important;
-            padding: 3mm !important;
-            margin: 2mm 0 !important;
+            padding: 1.5mm !important;
+            margin: 1.5mm 0 !important;
             border-radius: 0 !important;
             page-break-inside: avoid;
+            font-size: 9pt !important;
           }
 
           .payment-badge {
             background-color: transparent !important;
             color: #000 !important;
             border: 2px solid #000 !important;
-            padding: 1mm 2mm !important;
+            padding: 0.5mm 1.5mm !important;
             font-weight: 600 !important;
-            border-radius: 4px !important;
+            border-radius: 3px !important;
             page-break-inside: avoid;
           }
 
@@ -179,7 +180,7 @@ const PrintableOrderView = () => {
 
           @page {
             size: 100mm 100mm;
-            margin: 3.75mm;
+            margin: 2.5mm;
           }
           
           html {
