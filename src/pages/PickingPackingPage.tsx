@@ -680,14 +680,14 @@ const PickingPackingPage = () => {
               <Badge
                 key={filter.id}
                 variant="secondary"
-                className="px-3 py-1.5 text-sm flex items-center gap-2"
+                className="px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm flex items-center gap-1 md:gap-2"
               >
                 {filter.displayText}
                 <button
                   onClick={() => updateFilter(filter.id, null)}
                   className="hover:bg-muted rounded-full p-0.5"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-2.5 h-2.5 md:w-3 md:h-3" />
                 </button>
               </Badge>
             ))}
