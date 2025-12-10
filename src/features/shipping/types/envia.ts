@@ -83,6 +83,8 @@ export interface ShippingLabel {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  last_tracking_update?: string | null;
+  tracking_events?: TrackingEvent[] | null;
 }
 
 export interface ShippingCoverage {
@@ -124,6 +126,62 @@ export interface CreateLabelResponse {
   carrier?: string;
 }
 
+// Quote types
+export interface QuoteRequest {
+  destination_city: string;
+  destination_department: string;
+  destination_postal_code?: string;
+  package_weight?: number;
+  declared_value?: number;
+}
+
+export interface CarrierQuote {
+  carrier: string;
+  service: string;
+  price: number;
+  currency: string;
+  estimated_days: number;
+  deliveryEstimate?: string;
+}
+
+export interface QuoteResponse {
+  success: boolean;
+  quotes: CarrierQuote[];
+  destination: {
+    city: string;
+    department: string;
+    state_code: string;
+  };
+  error?: string;
+}
+
+// Tracking types
+export interface TrackingEvent {
+  date: string;
+  time: string;
+  description: string;
+  location: string;
+  status: string;
+}
+
+export interface TrackingRequest {
+  tracking_number: string;
+  carrier?: string;
+}
+
+export interface TrackingResponse {
+  success: boolean;
+  tracking_number: string;
+  carrier: string;
+  status: 'pending' | 'in_transit' | 'delivered' | 'returned' | 'exception';
+  origin?: string;
+  destination?: string;
+  last_update?: string;
+  estimated_delivery?: string;
+  events: TrackingEvent[];
+  error?: string;
+}
+
 // Carriers available in Colombia
 export type CarrierCode = 'coordinadora' | 'interrapidisimo' | 'deprisa' | 'servientrega' | 'tcc' | 'envia' | 'otro';
 
@@ -145,4 +203,22 @@ export const CARRIER_ENVIA_CODES: Record<CarrierCode, string> = {
   tcc: 'tcc',
   envia: 'envia',
   otro: 'otro'
+};
+
+// Tracking status labels in Spanish
+export const TRACKING_STATUS_LABELS: Record<string, string> = {
+  'pending': 'Pendiente',
+  'in_transit': 'En tránsito',
+  'delivered': 'Entregado',
+  'returned': 'Devuelto',
+  'exception': 'Con novedad'
+};
+
+// Tracking status colors
+export const TRACKING_STATUS_COLORS: Record<string, string> = {
+  'pending': 'bg-yellow-100 text-yellow-800',
+  'in_transit': 'bg-blue-100 text-blue-800',
+  'delivered': 'bg-green-100 text-green-800',
+  'returned': 'bg-red-100 text-red-800',
+  'exception': 'bg-orange-100 text-orange-800'
 };

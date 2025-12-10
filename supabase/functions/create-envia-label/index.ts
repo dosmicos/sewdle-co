@@ -28,11 +28,11 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'boyaca': 'BY', 'boyacá': 'BY',
   // Caldas
   'caldas': 'CL',
-  // Caquetá - CORREGIDO: CA (no CQ)
+  // Caquetá
   'caqueta': 'CA', 'caquetá': 'CA',
   // Casanare
   'casanare': 'CS',
-  // Cauca - CORREGIDO: CU (no CA)
+  // Cauca
   'cauca': 'CU',
   // Cesar
   'cesar': 'CE',
@@ -40,19 +40,19 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'choco': 'CH', 'chocó': 'CH',
   // Córdoba
   'cordoba': 'CO', 'córdoba': 'CO',
-  // Cundinamarca - CORREGIDO: CN (no CU)
+  // Cundinamarca
   'cundinamarca': 'CN',
-  // Guainía - CORREGIDO: GU (no GN)
+  // Guainía
   'guainia': 'GU', 'guainía': 'GU',
-  // Guaviare - CORREGIDO: GA (no GV)
+  // Guaviare
   'guaviare': 'GA',
   // Huila
   'huila': 'HU',
   // La Guajira
   'la guajira': 'LG', 'guajira': 'LG',
-  // Magdalena - CORREGIDO: MA (no MG)
+  // Magdalena
   'magdalena': 'MA',
-  // Meta - CORREGIDO: ME (no MT)
+  // Meta
   'meta': 'ME',
   // Nariño
   'narino': 'NA', 'nariño': 'NA',
@@ -60,13 +60,13 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'norte de santander': 'NS',
   // Putumayo
   'putumayo': 'PU',
-  // Quindío - CORREGIDO: QU (no QD)
+  // Quindío
   'quindio': 'QU', 'quindío': 'QU',
   // Risaralda
   'risaralda': 'RI',
   // San Andrés y Providencia
   'san andres': 'SA', 'san andres y providencia': 'SA', 'san andrés': 'SA', 'san andrés y providencia': 'SA',
-  // Santander - CORREGIDO: SN (no ST)
+  // Santander
   'santander': 'SN',
   // Sucre
   'sucre': 'SU',
@@ -74,19 +74,148 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'tolima': 'TO',
   // Valle del Cauca
   'valle del cauca': 'VC', 'valle': 'VC',
-  // Vaupés - CORREGIDO: VA (no VP)
+  // Vaupés
   'vaupes': 'VA', 'vaupés': 'VA',
   // Vichada
   'vichada': 'VI'
 };
 
-// Get state code from department name
+// Shopify province codes to Envia.com state codes mapping
+// Shopify uses 3-character codes for Colombian departments
+const SHOPIFY_TO_ENVIA_CODES: Record<string, string> = {
+  'AMA': 'AM', // Amazonas
+  'ANT': 'AN', // Antioquia
+  'ARA': 'AR', // Arauca
+  'ATL': 'AT', // Atlántico
+  'BOG': 'DC', // Bogotá D.C.
+  'DC': 'DC',  // Bogotá (alternative)
+  'BOL': 'BL', // Bolívar
+  'BOY': 'BY', // Boyacá
+  'CAL': 'CL', // Caldas
+  'CAQ': 'CA', // Caquetá
+  'CAS': 'CS', // Casanare
+  'CAU': 'CU', // Cauca
+  'CES': 'CE', // Cesar
+  'CHO': 'CH', // Chocó
+  'COR': 'CO', // Córdoba
+  'CUN': 'CN', // Cundinamarca
+  'GUA': 'GU', // Guainía
+  'GUV': 'GA', // Guaviare
+  'HUI': 'HU', // Huila
+  'LAG': 'LG', // La Guajira
+  'MAG': 'MA', // Magdalena
+  'MET': 'ME', // Meta
+  'NAR': 'NA', // Nariño
+  'NSA': 'NS', // Norte de Santander
+  'PUT': 'PU', // Putumayo
+  'QUI': 'QU', // Quindío
+  'RIS': 'RI', // Risaralda
+  'SAP': 'SA', // San Andrés y Providencia
+  'SAN': 'SN', // Santander
+  'SUC': 'SU', // Sucre
+  'TOL': 'TO', // Tolima
+  'VAC': 'VC', // Valle del Cauca
+  'VAU': 'VA', // Vaupés
+  'VID': 'VI'  // Vichada
+};
+
+// Get state code from department name or Shopify code
 function getStateCode(department: string): string {
-  const normalized = department.toLowerCase().trim();
-  return COLOMBIA_STATE_CODES[normalized] || 'DC'; // Default to Bogota if unknown
+  const normalized = department.trim();
+  const upper = normalized.toUpperCase();
+  const lower = normalized.toLowerCase();
+  
+  // First check if it's a Shopify 3-character code
+  if (SHOPIFY_TO_ENVIA_CODES[upper]) {
+    console.log(`🔄 Shopify code "${upper}" -> Envia code "${SHOPIFY_TO_ENVIA_CODES[upper]}"`);
+    return SHOPIFY_TO_ENVIA_CODES[upper];
+  }
+  
+  // Then check if it's already a valid 2-character Envia code
+  const validEnviaCodes = Object.values(COLOMBIA_STATE_CODES);
+  if (upper.length === 2 && validEnviaCodes.includes(upper)) {
+    return upper;
+  }
+  
+  // Finally, look up by department name
+  return COLOMBIA_STATE_CODES[lower] || 'DC'; // Default to Bogota if unknown
 }
 
-// Dosmicos origin address (fixed) - Updated with correct data
+// Extract district/neighborhood from address
+function extractDistrict(address: string, city: string): string {
+  // Common patterns for Colombian addresses with neighborhood info
+  const patterns = [
+    /barrio\s+([^,\n]+)/i,
+    /br\.\s*([^,\n]+)/i,
+    /b\/\s*([^,\n]+)/i,
+    /sector\s+([^,\n]+)/i,
+    /urbanizaci[oó]n\s+([^,\n]+)/i,
+    /urb\.\s*([^,\n]+)/i,
+    /conjunto\s+([^,\n]+)/i,
+    /conj\.\s*([^,\n]+)/i,
+    /edificio\s+([^,\n]+)/i,
+    /ed\.\s*([^,\n]+)/i,
+    /manzana\s+([^,\n]+)/i,
+    /mz\.\s*([^,\n]+)/i,
+    /localidad\s+([^,\n]+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = address.match(pattern);
+    if (match && match[1]) {
+      const district = match[1].trim().replace(/[,\n].*$/, '');
+      console.log(`📍 Extracted district "${district}" from address`);
+      return district;
+    }
+  }
+  
+  // If no pattern matched, try to extract from address parts
+  const parts = address.split(/[,\-]/);
+  if (parts.length >= 3) {
+    // Usually the neighborhood is in the 2nd or 3rd part
+    const possibleDistrict = parts[1]?.trim() || parts[2]?.trim();
+    if (possibleDistrict && possibleDistrict.length > 2 && !/^\d+/.test(possibleDistrict)) {
+      console.log(`📍 Using address part as district: "${possibleDistrict}"`);
+      return possibleDistrict;
+    }
+  }
+  
+  // Fallback to city
+  console.log(`📍 No district found, using city: "${city}"`);
+  return city;
+}
+
+// Parse address into street and number
+function parseAddress(address: string): { street: string; number: string } {
+  // Colombian address patterns
+  const patterns = [
+    // Cra 27 # 63B-61
+    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*[#]\s*(\d+[a-z]?\s*-?\s*\d*)/i,
+    // Cra 27 No. 63B-61
+    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*(?:no\.?|n°|num\.?)\s*(\d+[a-z]?\s*-?\s*\d*)/i,
+    // Cra 27 63B-61 (without separator)
+    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s+(\d+[a-z]?\s*-?\s*\d+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = address.match(pattern);
+    if (match) {
+      return {
+        street: match[1].trim(),
+        number: match[2].trim()
+      };
+    }
+  }
+  
+  // Fallback: split by common separators
+  const parts = address.split(/[,#]/);
+  return {
+    street: parts[0]?.trim() || address,
+    number: parts[1]?.trim() || "S/N"
+  };
+}
+
+// Dosmicos origin address (fixed)
 const DOSMICOS_ORIGIN = {
   name: "Julian Castro",
   company: "Dosmicos SAS",
@@ -170,6 +299,7 @@ serve(async (req) => {
 
     console.log('📦 Creating label for order:', body.order_number);
     console.log('📍 Destination:', body.destination_city, body.destination_department);
+    console.log('📍 Full address:', body.destination_address);
 
     // Validate required fields
     if (!body.destination_address || !body.destination_city) {
@@ -248,14 +378,17 @@ serve(async (req) => {
     
     console.log(`🚚 Selected carrier: ${carrierConfig.carrier}, service: ${carrierConfig.service}`);
 
-    // Get state code for the destination department
+    // Get state code for the destination department (supports both Shopify codes and names)
     const stateCode = getStateCode(body.destination_department);
     console.log(`📍 Department "${body.destination_department}" -> State code "${stateCode}"`);
 
-    // Parse address to separate street and number if possible
-    const addressParts = body.destination_address.split(/[,#]/);
-    const street = addressParts[0]?.trim() || body.destination_address;
-    const number = addressParts[1]?.trim() || "S/N";
+    // Parse address to extract street and number
+    const { street, number } = parseAddress(body.destination_address);
+    console.log(`📍 Parsed address - Street: "${street}", Number: "${number}"`);
+
+    // Extract district/neighborhood from address
+    const district = extractDistrict(body.destination_address, body.destination_city);
+    console.log(`📍 District: "${district}"`);
 
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
@@ -270,7 +403,7 @@ serve(async (req) => {
         phone: cleanPhone,
         street: street,
         number: number,
-        district: body.destination_city,
+        district: district,
         city: body.destination_city,
         state: stateCode,
         country: "CO",
