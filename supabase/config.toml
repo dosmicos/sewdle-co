@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.create-envia-label]
 verify_jwt = false
+
+[functions.envia-quote]
+verify_jwt = false
+
+[functions.envia-track]
+verify_jwt = false
