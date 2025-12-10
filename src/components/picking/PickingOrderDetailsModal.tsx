@@ -10,7 +10,7 @@ import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePi
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { EnviaShippingButton } from '@/features/shipping';
+import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '@/features/shipping';
 
 interface ShopifyLineItem {
   id: string;
@@ -66,6 +66,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [packedByName, setPackedByName] = useState<string | null>(null);
+  const [shippingLabel, setShippingLabel] = useState<ShippingLabel | null>(null);
 
   const order = orders.find(o => o.id === orderId);
   const effectiveOrder = localOrder || order;
@@ -901,6 +902,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                             </p>
                           )}
                         </div>
+                        
+                        {/* Shipping Label Info */}
+                        {shippingLabel && shippingLabel.status !== 'error' && (
+                          <div className="mt-3 pt-3 border-t border-green-200 space-y-1">
+                            <div className="flex items-center gap-2 text-green-700 font-medium">
+                              <Truck className="w-4 h-4" />
+                              <span>Guía de Envío</span>
+                            </div>
+                            <p className="flex items-center gap-2">
+                              <span>🚚</span>
+                              <span>{CARRIER_NAMES[shippingLabel.carrier as CarrierCode] || shippingLabel.carrier}</span>
+                            </p>
+                            {shippingLabel.tracking_number && (
+                              <p className="flex items-center gap-2">
+                                <span>📦</span>
+                                <span className="font-mono">{shippingLabel.tracking_number}</span>
+                              </p>
+                            )}
+                            {shippingLabel.total_price && (
+                              <p className="flex items-center gap-2">
+                                <span>💰</span>
+                                <span>${shippingLabel.total_price.toLocaleString('es-CO')} COP</span>
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
@@ -1041,6 +1068,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               customerPhone={effectiveOrder.shopify_order.customer_phone}
               totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
               disabled={!!effectiveOrder.shopify_order.cancelled_at}
+              onLabelChange={setShippingLabel}
             />
           </div>
         )}
