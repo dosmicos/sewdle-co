@@ -115,6 +115,8 @@ export interface CreateLabelRequest {
   package_weight?: number;
   declared_value?: number;
   preferred_carrier?: string;
+  is_cod?: boolean; // Cash on Delivery (Contraentrega)
+  cod_amount?: number; // Amount to collect on delivery
 }
 
 export interface CreateLabelResponse {

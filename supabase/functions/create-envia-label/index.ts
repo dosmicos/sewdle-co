@@ -273,6 +273,8 @@ interface CreateLabelRequest {
   package_weight?: number;
   declared_value?: number;
   preferred_carrier?: string;
+  is_cod?: boolean; // Cash on Delivery
+  cod_amount?: number; // Amount to collect on delivery
 }
 
 serve(async (req) => {
@@ -394,7 +396,7 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // Build Envia.com request following their exact format
-    const enviaRequest = {
+    const enviaRequest: Record<string, any> = {
       origin: DOSMICOS_ORIGIN,
       destination: {
         name: body.recipient_name || "Cliente",
@@ -430,9 +432,15 @@ serve(async (req) => {
         printFormat: "PDF",
         printSize: "STOCK_4X6",
         currency: "COP",
-        comments: `Pedido Dosmicos #${body.order_number}`
+        comments: `Pedido Dosmicos #${body.order_number}${body.is_cod ? ' - CONTRAENTREGA' : ''}`
       }
     };
+
+    // Add Cash on Delivery (COD) if specified
+    if (body.is_cod && body.cod_amount && body.cod_amount > 0) {
+      console.log(`💵 COD enabled: ${body.cod_amount} COP`);
+      enviaRequest.shipment.cashOnDelivery = body.cod_amount;
+    }
 
     console.log('📤 Sending request to Envia.com API...');
     console.log('📤 Request payload:', JSON.stringify(enviaRequest, null, 2));
