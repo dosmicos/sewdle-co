@@ -586,44 +586,47 @@ const PickingPackingPage = () => {
     <PickingPackingLayout>
       <div className="space-y-6">
         {/* Search and Filters */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
+        <div className="space-y-3 md:space-y-4">
+          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
+            {/* Búsqueda */}
             <div className="relative flex-1 flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por número de orden o cliente..."
+                  placeholder="Buscar orden o cliente..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  className="pl-10"
+                  className="pl-10 text-sm"
                 />
               </div>
               <Button
                 variant="default"
                 size="default"
                 onClick={handleSearch}
-                className="gap-2"
+                className="gap-2 px-3"
               >
                 <Search className="w-4 h-4" />
-                Buscar
+                <span className="hidden sm:inline">Buscar</span>
               </Button>
             </div>
-            <div className="flex items-center gap-2">
+            
+            {/* Botones de acción */}
+            <div className="flex items-center gap-2 justify-between md:justify-end">
               {lastWebhookUpdate && (
-                <span className="text-xs text-muted-foreground">
-                  Última actualización: {lastWebhookUpdate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                <span className="text-xs text-muted-foreground hidden lg:inline">
+                  Última: {lastWebhookUpdate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowItemsModal(true)}
-                className="gap-2"
+                className="gap-1.5 px-2 md:px-3"
                 title="Ver lista de artículos para empacar"
               >
                 <ListChecks className="w-4 h-4" />
-                Ver Artículos
+                <span className="hidden sm:inline">Artículos</span>
               </Button>
               <Button
                 variant="outline"
@@ -631,10 +634,10 @@ const PickingPackingPage = () => {
                 onClick={handleRefreshList}
                 disabled={loading}
                 title="Refrescar lista de pedidos"
-                className="gap-2"
+                className="gap-1.5 px-2 md:px-3"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Actualizar
+                <span className="hidden sm:inline">Actualizar</span>
               </Button>
             </div>
           </div>
