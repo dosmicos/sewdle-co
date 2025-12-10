@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.resync-missing-tags]
 verify_jwt = false
+
+[functions.create-envia-label]
+verify_jwt = false

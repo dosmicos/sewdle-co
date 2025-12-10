@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck } from 'lucide-react';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { EnviaShippingButton } from '@/features/shipping';
 
 interface ShopifyLineItem {
   id: string;
@@ -1017,6 +1018,29 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     {shippingAddress.phone && (
                       <p className="text-muted-foreground">{shippingAddress.phone}</p>
                     )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shipping Label - Envia.com Integration */}
+              {effectiveOrder.shopify_order?.shopify_order_id && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Truck className="w-4 h-4" />
+                      Guía de Envío
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <EnviaShippingButton
+                      shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
+                      orderNumber={effectiveOrder.shopify_order.order_number}
+                      shippingAddress={shippingAddress}
+                      customerEmail={effectiveOrder.shopify_order.customer_email}
+                      customerPhone={effectiveOrder.shopify_order.customer_phone}
+                      totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
+                      disabled={!!effectiveOrder.shopify_order.cancelled_at}
+                    />
                   </CardContent>
                 </Card>
               )}
