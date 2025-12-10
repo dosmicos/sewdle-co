@@ -7,6 +7,47 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
+// Colombia department to state code mapping (ISO 3166-2:CO)
+const COLOMBIA_STATE_CODES: Record<string, string> = {
+  'amazonas': 'AMA', 'antioquia': 'ANT', 'arauca': 'ARA',
+  'atlantico': 'ATL', 'atlántico': 'ATL',
+  'bogota': 'DC', 'bogotá': 'DC', 'bogota dc': 'DC', 'bogotá dc': 'DC', 
+  'bogota d.c.': 'DC', 'bogotá d.c.': 'DC', 'cundinamarca': 'CUN',
+  'bolivar': 'BOL', 'bolívar': 'BOL',
+  'boyaca': 'BOY', 'boyacá': 'BOY',
+  'caldas': 'CAL',
+  'caqueta': 'CAQ', 'caquetá': 'CAQ',
+  'casanare': 'CAS',
+  'cauca': 'CAU',
+  'cesar': 'CES',
+  'choco': 'CHO', 'chocó': 'CHO',
+  'cordoba': 'COR', 'córdoba': 'COR',
+  'guainia': 'GUA', 'guainía': 'GUA',
+  'guaviare': 'GUV',
+  'huila': 'HUI',
+  'la guajira': 'LAG', 'guajira': 'LAG',
+  'magdalena': 'MAG',
+  'meta': 'MET',
+  'narino': 'NAR', 'nariño': 'NAR',
+  'norte de santander': 'NSA',
+  'putumayo': 'PUT',
+  'quindio': 'QUI', 'quindío': 'QUI',
+  'risaralda': 'RIS',
+  'san andres': 'SAP', 'san andres y providencia': 'SAP', 'san andrés': 'SAP', 'san andrés y providencia': 'SAP',
+  'santander': 'SAN',
+  'sucre': 'SUC',
+  'tolima': 'TOL',
+  'valle del cauca': 'VAC', 'valle': 'VAC',
+  'vaupes': 'VAU', 'vaupés': 'VAU',
+  'vichada': 'VID'
+};
+
+// Get state code from department name
+function getStateCode(department: string): string {
+  const normalized = department.toLowerCase().trim();
+  return COLOMBIA_STATE_CODES[normalized] || department;
+}
+
 // Dosmicos origin address (fixed)
 const DOSMICOS_ORIGIN = {
   name: "Dosmicos",
@@ -17,7 +58,7 @@ const DOSMICOS_ORIGIN = {
   number: "11-53",
   district: "Chicó Norte",
   city: "Bogotá",
-  state: "Cundinamarca",
+  state: "CUN",
   country: "CO",
   postalCode: "110221"
 };
@@ -144,6 +185,10 @@ serve(async (req) => {
     selectedCarrier = selectedCarrier || 'coordinadora';
     console.log(`🚚 Selected carrier: ${selectedCarrier}`);
 
+    // Get state code for the destination department
+    const stateCode = getStateCode(body.destination_department);
+    console.log(`📍 Department "${body.destination_department}" -> State code "${stateCode}"`);
+
     // Build Envia.com request
     const enviaRequest = {
       origin: DOSMICOS_ORIGIN,
@@ -156,7 +201,7 @@ serve(async (req) => {
         number: "N/A",
         district: body.destination_city,
         city: body.destination_city,
-        state: body.destination_department,
+        state: stateCode,
         country: "CO",
         postalCode: postalCode || "000000",
         reference: `Pedido ${body.order_number}`
