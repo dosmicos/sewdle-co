@@ -1052,26 +1052,26 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
             </div>
           </div>
-        </div>
 
-        {/* Shipping Label Section - At the very bottom, requires scroll */}
-        {effectiveOrder.shopify_order?.shopify_order_id && !effectiveOrder.shopify_order?.cancelled_at && (
-          <div className="border-t pt-4 mt-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Truck className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium text-sm">Guía de Envío</span>
+          {/* Shipping Label Section - At the very bottom of scrollable content */}
+          {effectiveOrder.shopify_order?.shopify_order_id && !effectiveOrder.shopify_order?.cancelled_at && (
+            <div className="border-t pt-4 mt-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Truck className="w-4 h-4 text-muted-foreground" />
+                <span className="font-medium text-sm">Guía de Envío</span>
+              </div>
+              <EnviaShippingButton
+                shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
+                orderNumber={effectiveOrder.shopify_order.order_number}
+                shippingAddress={shippingAddress}
+                customerEmail={effectiveOrder.shopify_order.customer_email}
+                customerPhone={effectiveOrder.shopify_order.customer_phone}
+                totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
+                onLabelChange={setShippingLabel}
+              />
             </div>
-            <EnviaShippingButton
-              shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
-              orderNumber={effectiveOrder.shopify_order.order_number}
-              shippingAddress={shippingAddress}
-              customerEmail={effectiveOrder.shopify_order.customer_email}
-              customerPhone={effectiveOrder.shopify_order.customer_phone}
-              totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
-              onLabelChange={setShippingLabel}
-            />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
