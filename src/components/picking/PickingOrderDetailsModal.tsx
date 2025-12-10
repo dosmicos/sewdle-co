@@ -1022,31 +1022,28 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </Card>
               )}
 
-              {/* Shipping Label - Envia.com Integration */}
-              {effectiveOrder.shopify_order?.shopify_order_id && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Truck className="w-4 h-4" />
-                      Guía de Envío
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <EnviaShippingButton
-                      shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
-                      orderNumber={effectiveOrder.shopify_order.order_number}
-                      shippingAddress={shippingAddress}
-                      customerEmail={effectiveOrder.shopify_order.customer_email}
-                      customerPhone={effectiveOrder.shopify_order.customer_phone}
-                      totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
-                      disabled={!!effectiveOrder.shopify_order.cancelled_at}
-                    />
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
         </div>
+
+        {/* Shipping Label Section - At the very bottom */}
+        {effectiveOrder.shopify_order?.shopify_order_id && (
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Truck className="w-4 h-4 text-muted-foreground" />
+              <span className="font-medium text-sm">Guía de Envío</span>
+            </div>
+            <EnviaShippingButton
+              shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
+              orderNumber={effectiveOrder.shopify_order.order_number}
+              shippingAddress={shippingAddress}
+              customerEmail={effectiveOrder.shopify_order.customer_email}
+              customerPhone={effectiveOrder.shopify_order.customer_phone}
+              totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
+              disabled={!!effectiveOrder.shopify_order.cancelled_at}
+            />
+          </div>
+        )}
 
         {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
