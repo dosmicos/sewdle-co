@@ -8,6 +8,13 @@ import { CARRIER_NAMES, CarrierCode, ShippingLabel } from '../types/envia';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ShippingAddress {
   name?: string;
@@ -58,6 +65,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [manualTracking, setManualTracking] = useState('');
   const [manualCarrier, setManualCarrier] = useState('coordinadora');
   const [isSavingManual, setIsSavingManual] = useState(false);
+  const [selectedCarrier, setSelectedCarrier] = useState<string>('auto');
 
   // Check for existing label when component mounts or order changes
   useEffect(() => {
@@ -66,6 +74,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setHasChecked(false);
       setShowManualEntry(false);
       setManualTracking('');
+      setSelectedCarrier('auto'); // Reset carrier selection on order change
       getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
         onLabelChange?.(label);
@@ -103,7 +112,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       destination_department: department,
       destination_postal_code: postalCode,
       declared_value: totalPrice || 0,
-      package_content: `Pedido ${orderNumber}`
+      package_content: `Pedido ${orderNumber}`,
+      preferred_carrier: selectedCarrier !== 'auto' ? selectedCarrier : undefined
     });
 
     if (result.success && result.label) {
@@ -315,9 +325,31 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     );
   }
 
-  // Show create button with manual entry option
+  // Show create button with carrier selector and manual entry option
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Carrier selector */}
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Truck className="h-3 w-3" />
+          Transportadora
+        </label>
+        <Select value={selectedCarrier} onValueChange={setSelectedCarrier}>
+          <SelectTrigger className="w-full h-9 text-sm">
+            <SelectValue placeholder="Seleccionar transportadora" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Automático (recomendado)</SelectItem>
+            <SelectItem value="coordinadora">Coordinadora</SelectItem>
+            <SelectItem value="interrapidisimo">Inter Rapidísimo</SelectItem>
+            <SelectItem value="servientrega">Servientrega</SelectItem>
+            <SelectItem value="deprisa">Deprisa</SelectItem>
+            <SelectItem value="tcc">TCC</SelectItem>
+            <SelectItem value="envia">Envía</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <Button 
         variant="outline" 
         className="w-full"
