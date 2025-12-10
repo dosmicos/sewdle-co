@@ -36,6 +36,7 @@ interface EnviaShippingButtonProps {
   totalPrice?: number;
   disabled?: boolean;
   isFulfilled?: boolean;
+  isCOD?: boolean; // Is Cash on Delivery order
   onLabelChange?: (label: ShippingLabel | null) => void;
 }
 
@@ -48,6 +49,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   totalPrice,
   disabled = false,
   isFulfilled = false,
+  isCOD = false,
   onLabelChange
 }) => {
   const { currentOrganization } = useOrganization();
@@ -70,6 +72,15 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [selectedCarrier, setSelectedCarrier] = useState<string>('auto');
   const [recommendedCarrier, setRecommendedCarrier] = useState<string>('coordinadora');
+  const [codAmount, setCodAmount] = useState<number>(totalPrice || 0);
+  const [isEditingCod, setIsEditingCod] = useState(false);
+
+  // Update COD amount when totalPrice changes
+  useEffect(() => {
+    if (totalPrice !== undefined) {
+      setCodAmount(totalPrice);
+    }
+  }, [totalPrice]);
 
   // Check for existing label when component mounts or order changes
   useEffect(() => {
@@ -156,12 +167,24 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       destination_postal_code: postalCode,
       declared_value: totalPrice || 0,
       package_content: `Pedido ${orderNumber}`,
-      preferred_carrier: selectedCarrier !== 'auto' ? selectedCarrier : undefined
+      preferred_carrier: selectedCarrier !== 'auto' ? selectedCarrier : undefined,
+      is_cod: isCOD,
+      cod_amount: isCOD ? codAmount : undefined
     });
 
     if (result.success && result.label) {
       onLabelChange?.(result.label);
     }
+  };
+
+  // Format currency for display
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
   };
 
   const handleOpenLabel = () => {
@@ -433,6 +456,60 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   // Show create button with carrier selector and manual entry option
   return (
     <div className="space-y-3">
+      {/* COD Amount Editor - only show for COD orders */}
+      {isCOD && (
+        <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-amber-800 flex items-center gap-1.5">
+              💵 Valor a cobrar (Contraentrega)
+            </label>
+            {!isEditingCod && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                onClick={() => setIsEditingCod(true)}
+              >
+                <Edit3 className="h-3 w-3 mr-1" />
+                Editar
+              </Button>
+            )}
+          </div>
+          
+          {isEditingCod ? (
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <Input
+                  type="number"
+                  value={codAmount}
+                  onChange={(e) => setCodAmount(Number(e.target.value))}
+                  className="pl-7 h-9 text-sm bg-white"
+                  min={0}
+                />
+              </div>
+              <Button
+                size="sm"
+                className="h-9 px-3"
+                onClick={() => setIsEditingCod(false)}
+              >
+                Listo
+              </Button>
+            </div>
+          ) : (
+            <div className="text-lg font-bold text-amber-900">
+              {formatCurrency(codAmount)}
+            </div>
+          )}
+          
+          {codAmount !== totalPrice && (
+            <p className="text-xs text-amber-700">
+              ⚠️ El valor difiere del total del pedido ({formatCurrency(totalPrice || 0)})
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Carrier selector */}
       <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -469,7 +546,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         ) : (
           <>
             <Truck className="h-4 w-4 mr-2" />
-            Crear Guía de Envío
+            {isCOD ? `Crear Guía COD (${formatCurrency(codAmount)})` : 'Crear Guía de Envío'}
           </>
         )}
       </Button>
