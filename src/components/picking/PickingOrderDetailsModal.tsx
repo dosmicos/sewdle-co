@@ -72,10 +72,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
   const [verificationResult, setVerificationResult] = useState<{
-    status: 'correct' | 'incorrect';
+    status: 'correct' | 'incorrect' | 'already_verified';
     item?: ShopifyLineItem;
+    scannedCount?: number;
+    requiredCount?: number;
   } | null>(null);
-  const [verifiedSkus, setVerifiedSkus] = useState<Set<string>>(new Set());
+  const [verifiedCounts, setVerifiedCounts] = useState<Map<string, number>>(new Map());
+  
+  // Scroll hint state
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
@@ -310,10 +316,25 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     // Reset SKU verification states
     setSkuInput('');
     setVerificationResult(null);
-    setVerifiedSkus(new Set());
+    setVerifiedCounts(new Map());
+    setShowScrollHint(false);
   }, [orderId]);
 
-  // SKU verification function
+  // Show scroll hint when lineItems load and there are more than 3
+  useEffect(() => {
+    if (lineItems.length > 3) {
+      setShowScrollHint(true);
+    }
+  }, [lineItems.length]);
+
+  // Hide scroll hint on scroll
+  const handleContentScroll = useCallback(() => {
+    if (showScrollHint) {
+      setShowScrollHint(false);
+    }
+  }, [showScrollHint]);
+
+  // SKU verification function - now tracks quantity
   const handleSkuVerification = useCallback((inputSku: string) => {
     if (!inputSku.trim()) {
       setVerificationResult(null);
@@ -327,11 +348,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       item.sku?.toLowerCase() === normalizedInput
     );
     
-    if (matchingItem) {
-      setVerificationResult({ status: 'correct', item: matchingItem });
-      // Add to verified list
-      if (matchingItem.sku) {
-        setVerifiedSkus(prev => new Set([...prev, matchingItem.sku!]));
+    if (matchingItem && matchingItem.sku) {
+      const currentCount = verifiedCounts.get(matchingItem.sku) || 0;
+      const requiredCount = matchingItem.quantity;
+      
+      if (currentCount < requiredCount) {
+        // Increment verification counter
+        const newCount = currentCount + 1;
+        setVerifiedCounts(prev => new Map(prev).set(matchingItem.sku!, newCount));
+        
+        setVerificationResult({ 
+          status: 'correct', 
+          item: matchingItem,
+          scannedCount: newCount,
+          requiredCount: requiredCount
+        });
+      } else {
+        // Already verified all units
+        setVerificationResult({ 
+          status: 'already_verified', 
+          item: matchingItem 
+        });
       }
     } else {
       setVerificationResult({ status: 'incorrect' });
@@ -339,7 +376,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     // Clear input after 1.5s for continuous scanning
     setTimeout(() => setSkuInput(''), 1500);
-  }, [lineItems]);
+  }, [lineItems, verifiedCounts]);
+
+  // Calculate verification totals
+  const totalVerifiedUnits = Array.from(verifiedCounts.values()).reduce((sum, count) => sum + count, 0);
+  const totalRequiredUnits = lineItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // Fetch line items separately - with isCancelled check
   useEffect(() => {
@@ -736,7 +777,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-6">
+        <div ref={contentRef} onScroll={handleContentScroll} className="flex-1 overflow-y-auto p-3 md:p-6 relative">
           <DialogHeader>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
               <div className="flex flex-wrap items-center gap-2 md:gap-4">
@@ -831,11 +872,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mt-3 md:mt-6">
             {/* Left Column - Products */}
             <div className="lg:col-span-2 space-y-3 md:space-y-4">
-              <Card>
+              <Card className="relative">
                 <CardHeader className="p-3 md:p-6 pb-2 md:pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm md:text-base">
-                    <Package className="w-4 h-4 md:w-5 md:h-5" />
-                    Productos ({lineItems.length})
+                  <CardTitle className="flex items-center justify-between text-sm md:text-base">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4 md:w-5 md:h-5" />
+                      Productos
+                    </div>
+                    <Badge className="text-base md:text-xl font-bold bg-primary text-primary-foreground px-3 py-1">
+                      {totalRequiredUnits} {totalRequiredUnits === 1 ? 'unidad' : 'unidades'}
+                    </Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-3 md:p-6 pt-0 space-y-2 md:space-y-4">
@@ -928,6 +974,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </div>
               </div>
 
+              {/* Scroll hint indicator */}
+              {showScrollHint && (
+                <div className="flex justify-center py-2 animate-bounce">
+                  <div className="flex flex-col items-center text-muted-foreground">
+                    <ChevronDown className="w-6 h-6" />
+                    <span className="text-xs">Más contenido</span>
+                  </div>
+                </div>
+              )}
+
               {/* SKU Verification Section */}
               <Card className="border-2 border-dashed border-primary/30">
                 <CardHeader className="p-3 md:p-4 pb-2">
@@ -936,8 +992,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       <ScanLine className="w-4 h-4 md:w-5 md:h-5" />
                       Verificar Artículos
                     </div>
-                    <Badge variant="outline" className={verifiedSkus.size === lineItems.length && lineItems.length > 0 ? 'bg-green-50 text-green-700 border-green-300' : ''}>
-                      {verifiedSkus.size}/{lineItems.length} verificados
+                    <Badge 
+                      variant="outline" 
+                      className={`text-sm md:text-base font-bold px-3 py-1 ${totalVerifiedUnits === totalRequiredUnits && totalRequiredUnits > 0 ? 'bg-green-100 text-green-700 border-green-300' : ''}`}
+                    >
+                      {totalVerifiedUnits}/{totalRequiredUnits}
                     </Badge>
                   </CardTitle>
                 </CardHeader>
@@ -958,13 +1017,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                       <div className="flex items-center gap-2 text-green-700 font-semibold">
                         <CheckCircle className="w-5 h-5" />
-                        ¡Correcto!
+                        ¡Correcto! ({verificationResult.scannedCount}/{verificationResult.requiredCount})
                       </div>
                       <p className="text-sm text-green-600 mt-1">
                         {verificationResult.item?.title} - {verificationResult.item?.variant_title}
                       </p>
-                      <p className="text-xs text-green-500">
-                        Cantidad en pedido: {verificationResult.item?.quantity}
+                      {verificationResult.scannedCount! < verificationResult.requiredCount! && (
+                        <p className="text-xs text-amber-600 font-medium mt-1">
+                          ⚠️ Faltan {verificationResult.requiredCount! - verificationResult.scannedCount!} unidades por escanear
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {verificationResult?.status === 'already_verified' && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-700 font-semibold">
+                        <CheckCircle className="w-5 h-5" />
+                        Ya verificado completamente
+                      </div>
+                      <p className="text-sm text-blue-600 mt-1">
+                        {verificationResult.item?.title} - {verificationResult.item?.variant_title}
                       </p>
                     </div>
                   )}
@@ -981,14 +1054,20 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     </div>
                   )}
                   
-                  {/* Verified SKUs list */}
-                  {verifiedSkus.size > 0 && (
+                  {/* Verified items progress */}
+                  {verifiedCounts.size > 0 && (
                     <div className="flex flex-wrap gap-1 text-xs">
-                      {Array.from(verifiedSkus).map(sku => {
-                        const item = lineItems.find(i => i.sku === sku);
+                      {lineItems.map((item) => {
+                        if (!item.sku) return null;
+                        const scanned = verifiedCounts.get(item.sku) || 0;
+                        const isComplete = scanned >= item.quantity;
                         return (
-                          <Badge key={sku} variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            ✓ {item?.title?.slice(0, 15)}...
+                          <Badge 
+                            key={item.sku} 
+                            variant="outline" 
+                            className={isComplete ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}
+                          >
+                            {isComplete ? '✓' : '⏳'} {item.title?.slice(0, 12)}... ({scanned}/{item.quantity})
                           </Badge>
                         );
                       })}
