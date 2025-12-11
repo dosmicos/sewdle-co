@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Home } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,7 +23,16 @@ export const PickingPackingLayout: React.FC<PickingPackingLayoutProps> = ({ chil
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-12 md:h-16 items-center justify-between px-3 md:px-4">
           <div className="flex items-center gap-2 md:gap-4">
-            <h1 className="text-lg md:text-2xl font-bold text-primary">Sewdle</h1>
+            <Button 
+              variant="ghost" 
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-1 md:gap-2 p-0 h-auto hover:bg-transparent group"
+            >
+              <Home className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+              <span className="text-lg md:text-2xl font-bold text-primary group-hover:underline">
+                Sewdle
+              </span>
+            </Button>
             <span className="text-xs md:text-lg font-semibold text-muted-foreground">/ Picking & Packing</span>
           </div>
           
