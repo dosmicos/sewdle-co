@@ -1,11 +1,12 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CheckCircle, AlertTriangle, XCircle, Clock, Zap, RefreshCw, ArrowRight } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Clock, RefreshCw, ArrowRight, Barcode } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import DeliveryBarcodeModal from './delivery/DeliveryBarcodeModal';
 
 interface DeliveryReviewSummaryProps {
   delivery: any;
@@ -15,6 +16,7 @@ interface DeliveryReviewSummaryProps {
 }
 
 const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalDefective }: DeliveryReviewSummaryProps) => {
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const approvalRate = totalDelivered > 0 ? ((totalApproved / totalDelivered) * 100) : 0;
   
   const getSyncStatusInfo = () => {
@@ -119,8 +121,30 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
               <div className="text-sm font-medium text-purple-700">Tasa de Aprobación</div>
             </div>
           </div>
+
+          {/* Barcode Print Button */}
+          {totalApproved > 0 && (delivery.status === 'approved' || delivery.status === 'partial_approved') && (
+            <div className="mt-6 pt-4 border-t">
+              <Button 
+                onClick={() => setShowBarcodeModal(true)}
+                variant="outline"
+                className="w-full gap-2"
+              >
+                <Barcode className="w-4 h-4" />
+                Imprimir Códigos de Barras ({totalApproved})
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Barcode Modal */}
+      <DeliveryBarcodeModal
+        isOpen={showBarcodeModal}
+        onClose={() => setShowBarcodeModal(false)}
+        deliveryItems={delivery.delivery_items || []}
+        trackingNumber={delivery.tracking_number || ''}
+      />
 
       {/* Estado de Sincronización con Shopify */}
       <Card className={`${syncStatus.bgColor} ${syncStatus.borderColor} border-2`}>
