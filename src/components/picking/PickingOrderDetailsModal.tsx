@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { Separator } from '@/components/ui/separator';
@@ -67,6 +68,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [packedByName, setPackedByName] = useState<string | null>(null);
   const [shippingLabel, setShippingLabel] = useState<ShippingLabel | null>(null);
+  
+  // SKU Verification states
+  const [skuInput, setSkuInput] = useState('');
+  const [verificationResult, setVerificationResult] = useState<{
+    status: 'correct' | 'incorrect';
+    item?: ShopifyLineItem;
+  } | null>(null);
+  const [verifiedSkus, setVerifiedSkus] = useState<Set<string>>(new Set());
   
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
@@ -298,7 +307,39 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setShopifyNote('');
     setLineItems([]);
     setLoadingItems(true);
+    // Reset SKU verification states
+    setSkuInput('');
+    setVerificationResult(null);
+    setVerifiedSkus(new Set());
   }, [orderId]);
+
+  // SKU verification function
+  const handleSkuVerification = useCallback((inputSku: string) => {
+    if (!inputSku.trim()) {
+      setVerificationResult(null);
+      return;
+    }
+    
+    const normalizedInput = inputSku.trim().toLowerCase();
+    
+    // Search for SKU in order line items
+    const matchingItem = lineItems.find(item => 
+      item.sku?.toLowerCase() === normalizedInput
+    );
+    
+    if (matchingItem) {
+      setVerificationResult({ status: 'correct', item: matchingItem });
+      // Add to verified list
+      if (matchingItem.sku) {
+        setVerifiedSkus(prev => new Set([...prev, matchingItem.sku!]));
+      }
+    } else {
+      setVerificationResult({ status: 'incorrect' });
+    }
+    
+    // Clear input after 1.5s for continuous scanning
+    setTimeout(() => setSkuInput(''), 1500);
+  }, [lineItems]);
 
   // Fetch line items separately - with isCancelled check
   useEffect(() => {
@@ -886,6 +927,75 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   </div>
                 </div>
               </div>
+
+              {/* SKU Verification Section */}
+              <Card className="border-2 border-dashed border-primary/30">
+                <CardHeader className="p-3 md:p-4 pb-2">
+                  <CardTitle className="flex items-center justify-between text-sm md:text-base">
+                    <div className="flex items-center gap-2">
+                      <ScanLine className="w-4 h-4 md:w-5 md:h-5" />
+                      Verificar Artículos
+                    </div>
+                    <Badge variant="outline" className={verifiedSkus.size === lineItems.length && lineItems.length > 0 ? 'bg-green-50 text-green-700 border-green-300' : ''}>
+                      {verifiedSkus.size}/{lineItems.length} verificados
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 md:p-4 pt-0 space-y-3">
+                  <Input
+                    value={skuInput}
+                    onChange={(e) => {
+                      setSkuInput(e.target.value);
+                      handleSkuVerification(e.target.value);
+                    }}
+                    placeholder="🔍 Escanea o escribe el SKU..."
+                    className="text-center text-base md:text-lg"
+                    disabled={!!effectiveOrder?.shopify_order?.cancelled_at}
+                  />
+                  
+                  {/* Verification Result */}
+                  {verificationResult?.status === 'correct' && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-700 font-semibold">
+                        <CheckCircle className="w-5 h-5" />
+                        ¡Correcto!
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">
+                        {verificationResult.item?.title} - {verificationResult.item?.variant_title}
+                      </p>
+                      <p className="text-xs text-green-500">
+                        Cantidad en pedido: {verificationResult.item?.quantity}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {verificationResult?.status === 'incorrect' && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-red-700 font-semibold">
+                        <XCircle className="w-5 h-5" />
+                        ¡SKU no encontrado!
+                      </div>
+                      <p className="text-sm text-red-600">
+                        El artículo no pertenece a la orden #{effectiveOrder?.shopify_order?.order_number}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Verified SKUs list */}
+                  {verifiedSkus.size > 0 && (
+                    <div className="flex flex-wrap gap-1 text-xs">
+                      {Array.from(verifiedSkus).map(sku => {
+                        const item = lineItems.find(i => i.sku === sku);
+                        return (
+                          <Badge key={sku} variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            ✓ {item?.title?.slice(0, 15)}...
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Status Actions - Only show when cancelled, packed, or shipped */}
               {(effectiveOrder.shopify_order?.cancelled_at || effectiveOrder.operational_status === 'ready_to_ship' || effectiveOrder.operational_status === 'shipped') && (
