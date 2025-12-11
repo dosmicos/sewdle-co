@@ -328,9 +328,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [lineItems.length]);
 
-  // Hide scroll hint when financial summary section becomes visible
+  // Hide scroll hint when financial summary section becomes visible, show again when scrolling up
   const handleContentScroll = useCallback(() => {
-    if (contentRef.current && financialSummaryRef.current && showScrollHint) {
+    if (contentRef.current && financialSummaryRef.current && lineItems.length >= 3) {
       const containerRect = contentRef.current.getBoundingClientRect();
       const financialRect = financialSummaryRef.current.getBoundingClientRect();
       
@@ -339,9 +339,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       
       if (isTotalsVisible) {
         setShowScrollHint(false);
+      } else {
+        setShowScrollHint(true);
       }
     }
-  }, [showScrollHint]);
+  }, [lineItems.length]);
 
   // SKU verification function - now tracks quantity
   const handleSkuVerification = useCallback((inputSku: string) => {
