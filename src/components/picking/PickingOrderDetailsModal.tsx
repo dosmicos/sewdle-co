@@ -64,7 +64,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [lineItems, setLineItems] = useState<ShopifyLineItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [localOrder, setLocalOrder] = useState<PickingOrder | null>(null);
-  const [loadingOrder, setLoadingOrder] = useState(!!orderId);
+  const [loadingOrder, setLoadingOrder] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [packedByName, setPackedByName] = useState<string | null>(null);
   const [shippingLabel, setShippingLabel] = useState<ShippingLabel | null>(null);
@@ -775,19 +775,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden relative">
-        {/* Floating scroll hint indicator */}
-        {showScrollHint && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-            <div className="flex flex-col items-center text-primary bg-background/95 px-4 py-2 rounded-full shadow-lg border animate-bounce">
-              <ChevronDown className="w-6 h-6" />
-              <span className="text-xs font-medium">Más productos</span>
-            </div>
-          </div>
-        )}
-        
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         {/* Scrollable content area */}
-        <div ref={contentRef} onScroll={handleContentScroll} className="flex-1 overflow-y-auto p-3 md:p-6">
+        <div ref={contentRef} onScroll={handleContentScroll} className="flex-1 overflow-y-auto p-3 md:p-6 relative">
           <DialogHeader>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
               <div className="flex flex-wrap items-center gap-2 md:gap-4">
@@ -984,6 +974,15 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </div>
               </div>
 
+              {/* Scroll hint indicator */}
+              {showScrollHint && (
+                <div className="flex justify-center py-2 animate-bounce">
+                  <div className="flex flex-col items-center text-muted-foreground">
+                    <ChevronDown className="w-6 h-6" />
+                    <span className="text-xs">Más contenido</span>
+                  </div>
+                </div>
+              )}
 
               {/* SKU Verification Section */}
               <Card className="border-2 border-dashed border-primary/30">
