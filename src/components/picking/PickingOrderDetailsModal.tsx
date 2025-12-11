@@ -872,7 +872,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mt-3 md:mt-6">
             {/* Left Column - Products */}
             <div className="lg:col-span-2 space-y-3 md:space-y-4">
-              <Card className="relative">
+              <Card className="relative overflow-hidden">
                 <CardHeader className="p-3 md:p-6 pb-2 md:pb-3">
                   <CardTitle className="flex items-center justify-between text-sm md:text-base">
                     <div className="flex items-center gap-2">
@@ -884,7 +884,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-3 md:p-6 pt-0 space-y-2 md:space-y-4">
+                <CardContent 
+                  ref={contentRef}
+                  onScroll={handleContentScroll}
+                  className="p-3 md:p-6 pt-0 space-y-2 md:space-y-4 max-h-[350px] md:max-h-[400px] overflow-y-auto"
+                >
                   {lineItems.map((item, index: number) => (
                     <div key={index} className="flex gap-2 md:gap-4 p-2 md:p-4 border rounded-lg">
                       {/* Product Image - Smaller on mobile */}
@@ -949,6 +953,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     </div>
                   ))}
                 </CardContent>
+                
+                {/* Floating scroll hint arrow */}
+                {showScrollHint && lineItems.length > 3 && (
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                    <div className="flex items-center gap-1 text-primary animate-bounce bg-background/95 rounded-full px-3 py-1.5 shadow-lg border">
+                      <ChevronDown className="w-4 h-4" />
+                      <span className="text-xs font-medium">Más productos</span>
+                    </div>
+                  </div>
+                )}
               </Card>
 
               {/* Financial Summary - Compact */}
@@ -974,15 +988,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </div>
               </div>
 
-              {/* Scroll hint indicator */}
-              {showScrollHint && (
-                <div className="flex justify-center py-2 animate-bounce">
-                  <div className="flex flex-col items-center text-muted-foreground">
-                    <ChevronDown className="w-6 h-6" />
-                    <span className="text-xs">Más contenido</span>
-                  </div>
-                </div>
-              )}
 
               {/* SKU Verification Section */}
               <Card className="border-2 border-dashed border-primary/30">
