@@ -354,10 +354,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     const normalizedInput = inputSku.trim().toLowerCase();
     
-    // Search for SKU in order line items
-    const matchingItem = lineItems.find(item => 
-      item.sku?.toLowerCase() === normalizedInput
-    );
+    // Search for SKU in order line items (skip "Bordado Personalizado" - it's a service, not a physical product)
+    const matchingItem = lineItems.find(item => {
+      if (item.title?.toLowerCase() === 'bordado personalizado') return false;
+      return item.sku?.toLowerCase() === normalizedInput;
+    });
     
     if (matchingItem && matchingItem.sku) {
       const currentCount = verifiedCounts.get(matchingItem.sku) || 0;
@@ -389,9 +390,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setTimeout(() => setSkuInput(''), 1500);
   }, [lineItems, verifiedCounts]);
 
-  // Calculate verification totals
+  // Calculate verification totals (exclude "Bordado Personalizado" - it's a service, not a physical product)
   const totalVerifiedUnits = Array.from(verifiedCounts.values()).reduce((sum, count) => sum + count, 0);
-  const totalRequiredUnits = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalRequiredUnits = lineItems
+    .filter(item => item.title?.toLowerCase() !== 'bordado personalizado')
+    .reduce((sum, item) => sum + item.quantity, 0);
 
   // Fetch line items separately - with isCancelled check
   useEffect(() => {
