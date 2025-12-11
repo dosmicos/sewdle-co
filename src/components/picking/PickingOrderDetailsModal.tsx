@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +67,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [packedByName, setPackedByName] = useState<string | null>(null);
   const [shippingLabel, setShippingLabel] = useState<ShippingLabel | null>(null);
+  
+  // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
+  const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
 
   const order = orders.find(o => o.id === orderId);
   const effectiveOrder = localOrder || order;
@@ -102,12 +105,18 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         e.preventDefault();
         // Block if loading or data not synced with current orderId
         if (loadingOrder || localOrder?.id !== orderId) {
-          console.log('⏳ Esperando carga de orden antes de marcar como empacado...');
+          toast.info('Cargando orden, intenta de nuevo...', { duration: 2000 });
           return;
         }
-        // Only trigger if order is not already packed and not currently updating
-        if (localOrder?.operational_status !== 'ready_to_ship' && !updatingStatus && !localOrder?.shopify_order?.cancelled_at) {
-          handleMarkAsPackedAndPrint();
+        // Block if already updating
+        if (updatingStatus) {
+          toast.info('Procesando, espera un momento...', { duration: 2000 });
+          return;
+        }
+        // Only trigger if order is not already packed and not cancelled
+        if (localOrder?.operational_status !== 'ready_to_ship' && !localOrder?.shopify_order?.cancelled_at) {
+          // Use ref to get latest function without circular dependency
+          handleMarkAsPackedAndPrintRef.current();
         }
         return;
       }
@@ -561,21 +570,33 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
   const handleMarkAsPackedAndPrint = useCallback(async () => {
-    // Verify consistency: localOrder must match current orderId
-    if (localOrder?.id !== orderId) {
-      console.warn(`⚠️ handleMarkAsPackedAndPrint: Orden no sincronizada (localOrder.id=${localOrder?.id}, orderId=${orderId})`);
+    // Validación robusta con mensajes específicos
+    if (!localOrder) {
+      console.warn('⚠️ handleMarkAsPackedAndPrint: No hay orden cargada');
+      toast.error('Error: Orden no cargada. Intenta de nuevo.');
       return;
     }
-    if (!localOrder?.shopify_order?.shopify_order_id) {
+    
+    if (localOrder.id !== orderId) {
+      console.warn(`⚠️ handleMarkAsPackedAndPrint: Orden desincronizada (localOrder.id=${localOrder.id}, orderId=${orderId})`);
+      toast.error('Error: Orden desincronizada. Actualiza la página.');
+      return;
+    }
+    
+    if (!localOrder.shopify_order?.shopify_order_id) {
       console.warn('⚠️ handleMarkAsPackedAndPrint: shopify_order_id no disponible');
+      toast.error('Error: ID de Shopify no disponible. Intenta de nuevo.');
       return;
     }
     
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
     
+    // Imprimir PRIMERO para feedback instantáneo
+    handlePrint();
+    
+    // Luego actualizar estado asincrónicamente
     try {
       await handleStatusChange('ready_to_ship');
-      handlePrint(); // Solo imprime si la etiqueta se aplicó exitosamente
     } catch (error) {
       console.error('❌ Error al marcar como empacado:', error);
       toast.error('Error al aplicar etiqueta EMPACADO. Intenta de nuevo.', {
@@ -583,6 +604,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       });
     }
   }, [orderId, localOrder, handlePrint, handleStatusChange]);
+
+  // Keep ref updated with the latest function
+  useEffect(() => {
+    handleMarkAsPackedAndPrintRef.current = handleMarkAsPackedAndPrint;
+  }, [handleMarkAsPackedAndPrint]);
 
   const formatCurrency = (amount?: number, currency?: string) => {
     if (!amount) return '$0';
