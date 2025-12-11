@@ -14,7 +14,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX, Printer, MapPin } from 'lucide-react';
+import { Package, Hash, ImageOff, Sparkles, ChevronDown, X, FilterX, Printer, MapPin, RotateCcw } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useParaEmpacarItems, ParaEmpacarItem } from '@/hooks/useParaEmpacarItems';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
@@ -133,6 +134,23 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
 
   const [sizePopoverOpen, setSizePopoverOpen] = useState(false);
   const [aislePopoverOpen, setAislePopoverOpen] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+
+  const toggleItemChecked = (itemId: string) => {
+    setCheckedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const resetCheckedItems = () => {
+    setCheckedItems(new Set());
+  };
 
   useEffect(() => {
     if (open) {
@@ -260,6 +278,14 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
               <span>
                 <strong className="text-foreground">{uniqueOrders}</strong> pedidos
               </span>
+              {checkedItems.size > 0 && (
+                <>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="text-green-600 dark:text-green-400">
+                    <strong>{checkedItems.size}</strong>/{items.length} apartados
+                  </span>
+                </>
+              )}
             </div>
           )}
         </DialogHeader>
@@ -368,7 +394,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                 Bordados
               </button>
 
-              {/* Separador + limpiar */}
+              {/* Separador + limpiar filtros */}
               {hasActiveFilters && (
                 <>
                   <div className="h-4 w-px bg-border mx-1" />
@@ -378,6 +404,20 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
                   >
                     <FilterX className="w-3 h-3" />
                     Limpiar
+                  </button>
+                </>
+              )}
+
+              {/* Reiniciar checkboxes */}
+              {checkedItems.size > 0 && (
+                <>
+                  <div className="h-4 w-px bg-border mx-1" />
+                  <button
+                    onClick={resetCheckedItems}
+                    className="h-7 px-2 text-xs text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reiniciar ({checkedItems.size})
                   </button>
                 </>
               )}
@@ -459,8 +499,19 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  className={cn(
+                    "flex gap-3 p-3 border rounded-lg transition-colors",
+                    checkedItems.has(item.id)
+                      ? "bg-green-50 border-green-300 dark:bg-green-900/20 dark:border-green-700"
+                      : "hover:bg-muted/50"
+                  )}
                 >
+                  {/* Checkbox para marcar artículo como apartado */}
+                  <Checkbox
+                    checked={checkedItems.has(item.id)}
+                    onCheckedChange={() => toggleItemChecked(item.id)}
+                    className="mt-4 h-5 w-5 shrink-0"
+                  />
                   <LazyImage item={item} />
                   
                   <div className="flex-1 min-w-0">
