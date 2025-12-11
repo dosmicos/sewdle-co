@@ -75,72 +75,94 @@ const DeliveryBarcodeModal = ({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    // Combinar nombre y variante para texto compacto
+    const labelsWithCompactText = labels.map(label => ({
+      ...label,
+      compactText: label.variant ? `${label.productName} - ${label.variant}` : label.productName
+    }));
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>Códigos de Barras - ${trackingNumber}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; }
+          body { 
+            font-family: Arial, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           .page { 
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            padding: 10px;
+            grid-template-columns: repeat(3, 32mm);
+            gap: 1mm;
+            padding: 0;
           }
           .barcode-label {
-            border: 1px dashed #ccc;
-            padding: 8px;
+            width: 32mm;
+            height: 20mm;
+            padding: 1mm;
             text-align: center;
             page-break-inside: avoid;
             background: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
           }
           .barcode-label svg {
-            max-width: 100%;
+            max-width: 30mm;
             height: auto;
           }
-          .product-name {
-            font-size: 10px;
-            font-weight: 600;
-            margin-top: 4px;
+          .product-info {
+            font-size: 5px;
+            font-weight: 500;
+            margin-top: 1px;
+            line-height: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-          }
-          .variant {
-            font-size: 9px;
-            color: #666;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            max-width: 30mm;
+            color: #333;
           }
           @media print {
-            @page { margin: 5mm; }
-            .barcode-label { border: 1px dashed #999; }
+            @page { 
+              size: 100mm auto;
+              margin: 0;
+            }
+            body { margin: 0; padding: 0; }
+            .page {
+              gap: 0;
+            }
+            .barcode-label { 
+              border: none;
+            }
           }
         </style>
       </head>
       <body>
         <div class="page">
-          ${labels.map(label => `
+          ${labelsWithCompactText.map(label => `
             <div class="barcode-label">
               <svg id="barcode-${label.sku}-${label.unitIndex}"></svg>
-              <div class="product-name">${label.productName}</div>
-              <div class="variant">${label.variant}</div>
+              <div class="product-info">${label.compactText}</div>
             </div>
           `).join('')}
         </div>
         <script>
-          ${labels.map(label => `
+          ${labelsWithCompactText.map(label => `
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
-              width: 1.2,
-              height: 40,
-              fontSize: 10,
-              margin: 2,
-              displayValue: true
+              width: 1.5,
+              height: 35,
+              fontSize: 6,
+              margin: 1,
+              displayValue: true,
+              textMargin: 0
             });
           `).join('')}
           setTimeout(() => { window.print(); window.close(); }, 500);
