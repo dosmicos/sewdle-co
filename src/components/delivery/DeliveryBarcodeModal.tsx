@@ -90,21 +90,26 @@ const DeliveryBarcodeModal = ({
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { 
+          html, body { 
+            width: 102mm;
+            margin: 0;
+            padding: 0;
             font-family: Arial, sans-serif;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
           .page { 
             display: grid;
-            grid-template-columns: repeat(2, 50mm);
-            gap: 2mm;
+            grid-template-columns: repeat(2, 51mm);
+            gap: 0;
             padding: 0;
+            margin: 0;
           }
           .barcode-label {
-            width: 50mm;
+            width: 51mm;
             height: 25mm;
-            padding: 1mm;
+            padding: 2mm;
+            box-sizing: border-box;
             text-align: center;
             page-break-inside: avoid;
             background: white;
@@ -115,26 +120,30 @@ const DeliveryBarcodeModal = ({
             overflow: hidden;
           }
           .barcode-label svg {
-            max-width: 48mm;
+            max-width: 47mm;
             height: auto;
           }
           .product-info {
-            font-size: 5px;
+            font-size: 6px;
             font-weight: 500;
             margin-top: 1px;
             line-height: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 48mm;
+            max-width: 47mm;
             color: #333;
           }
           @media print {
             @page { 
-              size: 100mm auto;
+              size: 102mm 25mm;
               margin: 0;
             }
-            body { margin: 0; padding: 0; }
+            html, body { 
+              width: 102mm;
+              margin: 0; 
+              padding: 0; 
+            }
             .page {
               gap: 0;
             }
@@ -157,12 +166,12 @@ const DeliveryBarcodeModal = ({
           ${labelsWithCompactText.map(label => `
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
-              width: 2,
-              height: 45,
-              fontSize: 7,
-              margin: 1,
+              width: 1.8,
+              height: 40,
+              fontSize: 8,
+              margin: 0,
               displayValue: true,
-              textMargin: 0
+              textMargin: 1
             });
           `).join('')}
           setTimeout(() => { window.print(); window.close(); }, 500);
