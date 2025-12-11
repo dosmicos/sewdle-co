@@ -72,7 +72,7 @@ const DeliveryBarcodeModal = ({
     const printContent = printRef.current;
     if (!printContent) return;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'width=600,height=400');
     if (!printWindow) return;
 
     // Combinar nombre y variante para texto compacto
@@ -85,7 +85,7 @@ const DeliveryBarcodeModal = ({
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Códigos de Barras - ${trackingNumber}</title>
+        <title></title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
         <style>
@@ -137,12 +137,13 @@ const DeliveryBarcodeModal = ({
           @media print {
             @page { 
               size: 102mm 25mm;
-              margin: 0;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             html, body { 
               width: 102mm;
-              margin: 0; 
-              padding: 0; 
+              margin: 0 !important; 
+              padding: 0 !important; 
             }
             .page {
               gap: 0;
