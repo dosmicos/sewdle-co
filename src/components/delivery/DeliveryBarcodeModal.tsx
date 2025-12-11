@@ -97,13 +97,13 @@ const DeliveryBarcodeModal = ({
           }
           .page { 
             display: grid;
-            grid-template-columns: repeat(3, 32mm);
-            gap: 1mm;
+            grid-template-columns: repeat(2, 50mm);
+            gap: 2mm;
             padding: 0;
           }
           .barcode-label {
-            width: 32mm;
-            height: 20mm;
+            width: 50mm;
+            height: 25mm;
             padding: 1mm;
             text-align: center;
             page-break-inside: avoid;
@@ -115,7 +115,7 @@ const DeliveryBarcodeModal = ({
             overflow: hidden;
           }
           .barcode-label svg {
-            max-width: 30mm;
+            max-width: 48mm;
             height: auto;
           }
           .product-info {
@@ -126,7 +126,7 @@ const DeliveryBarcodeModal = ({
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 30mm;
+            max-width: 48mm;
             color: #333;
           }
           @media print {
@@ -157,9 +157,9 @@ const DeliveryBarcodeModal = ({
           ${labelsWithCompactText.map(label => `
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
-              width: 1.5,
-              height: 35,
-              fontSize: 6,
+              width: 2,
+              height: 45,
+              fontSize: 7,
               margin: 1,
               displayValue: true,
               textMargin: 0
