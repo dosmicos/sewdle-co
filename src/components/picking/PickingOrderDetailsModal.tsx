@@ -68,6 +68,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [packedByName, setPackedByName] = useState<string | null>(null);
   const [shippingLabel, setShippingLabel] = useState<ShippingLabel | null>(null);
+  const financialSummaryRef = useRef<HTMLDivElement>(null);
   
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
@@ -327,12 +328,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [lineItems.length]);
 
-  // Hide scroll hint only when user scrolls near the bottom
+  // Hide scroll hint when financial summary section becomes visible
   const handleContentScroll = useCallback(() => {
-    if (contentRef.current && showScrollHint) {
-      const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
-      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 150;
-      if (isNearBottom) {
+    if (contentRef.current && financialSummaryRef.current && showScrollHint) {
+      const containerRect = contentRef.current.getBoundingClientRect();
+      const financialRect = financialSummaryRef.current.getBoundingClientRect();
+      
+      // If the financial summary section is visible within the container
+      const isTotalsVisible = financialRect.top < containerRect.bottom;
+      
+      if (isTotalsVisible) {
         setShowScrollHint(false);
       }
     }
@@ -956,7 +961,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               </Card>
 
               {/* Financial Summary - Compact */}
-              <div className="px-4 py-3 bg-muted/30 rounded-lg border border-muted">
+              <div ref={financialSummaryRef} className="px-4 py-3 bg-muted/30 rounded-lg border border-muted">
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Subtotal</span>
