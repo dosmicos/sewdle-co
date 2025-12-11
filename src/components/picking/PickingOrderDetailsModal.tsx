@@ -320,17 +320,21 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setShowScrollHint(false);
   }, [orderId]);
 
-  // Show scroll hint when lineItems load and there are more than 3
+  // Show scroll hint when lineItems load and there are 3 or more
   useEffect(() => {
-    if (lineItems.length > 3) {
+    if (lineItems.length >= 3) {
       setShowScrollHint(true);
     }
   }, [lineItems.length]);
 
-  // Hide scroll hint on scroll
+  // Hide scroll hint only when user scrolls near the bottom
   const handleContentScroll = useCallback(() => {
-    if (showScrollHint) {
-      setShowScrollHint(false);
+    if (contentRef.current && showScrollHint) {
+      const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 150;
+      if (isNearBottom) {
+        setShowScrollHint(false);
+      }
     }
   }, [showScrollHint]);
 
@@ -1311,6 +1315,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           )}
         </div>
 
+        {/* Centered scroll hint arrow - independent sticky element */}
+        {showScrollHint && lineItems.length >= 3 && (
+          <div className="sticky bottom-20 inset-x-0 flex justify-center pointer-events-none z-10 -mt-10">
+            <div className="flex items-center gap-1.5 text-primary animate-bounce bg-background/95 rounded-full px-4 py-2 shadow-lg border">
+              <ChevronDown className="w-5 h-5" />
+              <span className="text-sm font-medium">Más productos abajo</span>
+            </div>
+          </div>
+        )}
+
         {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
@@ -1329,16 +1343,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </>
               )}
             </Button>
-          {/* Sticky scroll hint arrow - floats in main modal */}
-          {showScrollHint && lineItems.length >= 3 && (
-            <div className="sticky bottom-20 flex justify-center pointer-events-none z-20 -mt-8">
-              <div className="flex items-center gap-1.5 text-primary animate-bounce bg-background/95 rounded-full px-4 py-2 shadow-lg border">
-                <ChevronDown className="w-5 h-5" />
-                <span className="text-sm font-medium">Más productos abajo</span>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>
