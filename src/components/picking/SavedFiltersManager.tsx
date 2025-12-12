@@ -19,6 +19,15 @@ const PRESET_FILTERS = [
       tags: ['confirmado'],
       exclude_tags: ['empacado'],
     }
+  },
+  {
+    id: 'bordados-para-empacar',
+    name: 'Bordados',
+    filters: {
+      financial_status: ['paid', 'pending', 'partially_paid'],
+      tags: ['confirmado', 'BORDADO'],
+      exclude_tags: ['empacado'],
+    }
   }
 ];
 
