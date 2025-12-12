@@ -6,31 +6,46 @@ export const useShopifyTags = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all unique tags from Shopify orders
+  // Fetch all unique tags from Shopify orders with pagination
   const fetchAvailableTags = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('shopify_orders')
-        .select('tags')
-        .not('tags', 'is', null)
-        .not('tags', 'eq', '');
-
-      if (error) throw error;
-
-      // Parse and create unique list of tags
       const tagsSet = new Set<string>();
-      data?.forEach(order => {
-        if (order.tags) {
-          const tags = order.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-          tags.forEach(tag => tagsSet.add(tag));
-        }
-      });
+      const BATCH_SIZE = 1000;
+      let page = 0;
+      let hasMore = true;
+
+      // Paginate through ALL records to get all tags
+      while (hasMore) {
+        const from = page * BATCH_SIZE;
+        const to = from + BATCH_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from('shopify_orders')
+          .select('tags')
+          .not('tags', 'is', null)
+          .not('tags', 'eq', '')
+          .range(from, to);
+
+        if (error) throw error;
+
+        // Process tags from this batch
+        data?.forEach(order => {
+          if (order.tags) {
+            const tags = order.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+            tags.forEach(tag => tagsSet.add(tag));
+          }
+        });
+
+        // Check if there are more records
+        hasMore = data?.length === BATCH_SIZE;
+        page++;
+      }
 
       const sortedTags = Array.from(tagsSet).sort((a, b) => a.localeCompare(b)).filter(Boolean);
       setAvailableTags(sortedTags);
       
-      console.log(`✅ Loaded ${sortedTags.length} unique tags from Shopify`);
+      console.log(`✅ Loaded ${sortedTags.length} unique tags from Shopify (processed ${page} batches)`);
     } catch (error) {
       console.error('❌ Error fetching available tags:', error);
       setAvailableTags([]);
