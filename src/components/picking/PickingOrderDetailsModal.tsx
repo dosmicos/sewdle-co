@@ -1328,9 +1328,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         {/* Centered scroll hint arrow - independent sticky element */}
         {showScrollHint && lineItems.length >= 3 && (
           <div className="sticky bottom-20 inset-x-0 flex justify-center pointer-events-none z-10 -mt-10">
-            <div className="flex items-center gap-1.5 text-primary animate-bounce bg-background/95 rounded-full px-4 py-2 shadow-lg border">
-              <ChevronDown className="w-5 h-5" />
-              <span className="text-sm font-medium">Más productos abajo</span>
+            <div className="flex items-center gap-2 animate-bounce bg-orange-500 text-white rounded-full px-5 py-2.5 shadow-xl border-2 border-orange-400">
+              <ChevronDown className="w-6 h-6" />
+              <span className="text-sm font-bold">Más productos abajo</span>
             </div>
           </div>
         )}
