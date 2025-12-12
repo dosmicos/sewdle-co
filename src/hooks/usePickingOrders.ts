@@ -256,11 +256,11 @@ export const usePickingOrders = () => {
         );
       }
 
-      // Filter by tags (INCLUIR)
+      // Filter by tags (INCLUIR) - requires ALL tags to be present (AND logic)
       if (filters?.tags && filters.tags.length > 0) {
         ordersData = ordersData.filter((order: any) => {
           const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
-          return filters.tags?.some(tag => orderTags.includes(tag.toLowerCase()));
+          return filters.tags?.every(tag => orderTags.includes(tag.toLowerCase()));
         });
       }
 
