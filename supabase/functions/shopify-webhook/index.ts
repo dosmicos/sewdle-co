@@ -53,9 +53,15 @@ function determineAutoTags(order: any): string[] {
   }
   
   // Payment gateway rule for "Contraentrega" tag
+  // ONLY apply if order is NOT already paid (prevents re-adding after manual removal when marked as paid)
+  const financialStatus = order.financial_status || '';
   if (paymentGateways.some((gw: string) => gw === 'Cash on Delivery (COD)')) {
-    tags.push('Contraentrega');
-    console.log('  → Cash on Delivery detectado → Tag "Contraentrega"');
+    if (financialStatus !== 'paid') {
+      tags.push('Contraentrega');
+      console.log('  → Cash on Delivery detectado (no pagado) → Tag "Contraentrega"');
+    } else {
+      console.log('  → Cash on Delivery detectado pero pedido ya pagado → NO aplicar "Contraentrega"');
+    }
   }
   
   // Line items rule for "BORDADO" tag
