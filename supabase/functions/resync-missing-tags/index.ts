@@ -22,8 +22,12 @@ function determineAutoTags(rawData: any): string[] {
   }
   
   // Payment gateway rule for "Contraentrega" tag
+  // ONLY apply if order is NOT already paid (prevents re-adding after manual removal)
+  const financialStatus = rawData?.financial_status || '';
   if (paymentGateways.some((gw: string) => gw === 'Cash on Delivery (COD)')) {
-    tags.push('Contraentrega');
+    if (financialStatus !== 'paid') {
+      tags.push('Contraentrega');
+    }
   }
   
   // Line items rule for "BORDADO" tag
