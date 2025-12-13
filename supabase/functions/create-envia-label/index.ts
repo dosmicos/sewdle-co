@@ -663,28 +663,26 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= USE ENVIA.COM QUERIES API =============
-    // Look up origin (Bogotá) and destination cities to get exact codes
-    console.log(`🔍 Looking up cities via Envia.com Queries API...`);
+    // ============= USE DANE CODES FOR POSTAL CODES =============
+    // Get DANE codes for origin (Bogotá) and destination cities
+    const originDaneCode = getDaneCode("Bogota", "Bogota");
+    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
     
-    const [originCityInfo, destCityInfo] = await Promise.all([
-      lookupEnviaCity("CO", "Bogota"),
-      lookupEnviaCity("CO", body.destination_city)
-    ]);
+    console.log(`📍 Origin DANE code: ${originDaneCode}`);
+    console.log(`📍 Destination DANE code: ${destDaneCode}`);
 
-    console.log(`📍 Origin lookup result:`, originCityInfo);
-    console.log(`📍 Destination lookup result:`, destCityInfo);
-
-    // Build origin with Queries API data (or fallback to defaults)
+    // Build origin with DANE code as postal code
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: originCityInfo?.city || "Bogota",
-      state: originCityInfo?.state || "DC",
+      city: "Bogota",
+      state: "DC",
       country: "CO",
-      postalCode: originCityInfo?.zipCode || ""
+      postalCode: originDaneCode || "11001"
     };
 
-    // Build destination with Queries API data (or fallback to provided values)
+    console.log(`📤 Origin address:`, originData);
+
+    // Build destination with DANE code as postal code
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -693,10 +691,10 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: destCityInfo?.city || body.destination_city,
-      state: destCityInfo?.state || stateCode,
+      city: body.destination_city,
+      state: stateCode,
       country: "CO",
-      postalCode: destCityInfo?.zipCode || "",
+      postalCode: destDaneCode || body.destination_postal_code || "",
       reference: `Pedido #${body.order_number}`
     };
 
