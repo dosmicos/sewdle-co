@@ -100,7 +100,9 @@ export const useEnviaShipping = () => {
       }
 
       console.log('✅ Label created successfully:', data);
-      toast.success(`Guía creada: ${data.tracking_number}`);
+      if (data.tracking_number) {
+        toast.success(`Guía creada: ${data.tracking_number}`);
+      }
       
       // Update local state
       if (data.label) {
