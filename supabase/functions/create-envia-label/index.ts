@@ -293,56 +293,7 @@ function getStateCode(department: string): string {
   return COLOMBIA_STATE_CODES[lower] || 'DC'; // Default to Bogota if unknown
 }
 
-// Query Envia.com API to get correct city/zipCode format
-async function lookupEnviaCity(city: string, country: string = "CO"): Promise<{ city: string; state: string; zipCode: string } | null> {
-  try {
-    const normalizedCity = encodeURIComponent(city.trim());
-    const url = `https://queries.envia.com/locate/${country}/${normalizedCity}`;
-    
-    console.log(`🔍 Looking up city in Envia.com: ${url}`);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    console.log(`📥 Envia Queries API status: ${response.status}`);
-    
-    if (!response.ok) {
-      console.log(`⚠️ Envia Queries API returned ${response.status}`);
-      return null;
-    }
-    
-    const data = await response.json();
-    console.log(`📥 Envia Queries API response:`, JSON.stringify(data, null, 2));
-    
-    // The API returns an array of matching cities
-    if (data && Array.isArray(data) && data.length > 0) {
-      const firstMatch = data[0];
-      return {
-        city: firstMatch.city || firstMatch.zipCode || city,
-        state: firstMatch.state || "DC",
-        zipCode: firstMatch.zipCode || firstMatch.city || ""
-      };
-    }
-    
-    // If data is an object with the info directly
-    if (data && (data.zipCode || data.city)) {
-      return {
-        city: data.city || data.zipCode || city,
-        state: data.state || "DC",
-        zipCode: data.zipCode || data.city || ""
-      };
-    }
-    
-    return null;
-  } catch (error) {
-    console.error(`❌ Error looking up city "${city}":`, error);
-    return null;
-  }
-}
+// (lookupEnviaCity function defined below, after extractDistrict and parseAddress)
 
 // Extract district/neighborhood from address
 function extractDistrict(address: string, city: string): string {
@@ -719,11 +670,11 @@ serve(async (req) => {
     
     // Lookup origin (Bogota)
     console.log(`🔍 Looking up origin city: Bogota`);
-    const originLookup = await lookupEnviaCity("Bogota", "CO");
+    const originLookup = await lookupEnviaCity("CO", "Bogota");
     
     // Lookup destination
     console.log(`🔍 Looking up destination city: ${body.destination_city}`);
-    const destLookup = await lookupEnviaCity(body.destination_city, "CO");
+    const destLookup = await lookupEnviaCity("CO", body.destination_city);
     
     // Use lookup results or fallback to DANE codes
     const originCity = originLookup?.zipCode || getDaneCode("Bogota", "DC") || "11001";
