@@ -258,6 +258,64 @@ const COLOMBIA_CARRIERS: Record<string, { carrier: string; service: string }> = 
   'tcc': { carrier: 'tcc', service: 'ground' }
 };
 
+// Main cities for Deprisa (paid orders only)
+const MAIN_CITIES = [
+  'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'cucuta', 'cúcuta',
+  'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria', 'montería',
+  'armenia', 'popayan', 'popayán', 'sincelejo', 'valledupar',
+  'tunja', 'florencia', 'riohacha'
+];
+
+// Normalize text for comparison (removes accents and lowercases)
+function normalizeText(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+/**
+ * Automatic carrier selection based on business rules:
+ * 1. Cundinamarca (including Bogotá) → Coordinadora
+ * 2. Medellín, Antioquia → Coordinadora
+ * 3. Main cities + PAID orders → Deprisa
+ * 4. COD orders or non-main cities → Inter Rapidísimo
+ */
+function selectCarrierByRules(city: string, department: string, isCOD: boolean): string {
+  const normalizedCity = normalizeText(city);
+  const normalizedDept = normalizeText(department);
+
+  console.log(`🔄 Selecting carrier - City: "${normalizedCity}", Dept: "${normalizedDept}", COD: ${isCOD}`);
+
+  // Rule 1: Cundinamarca (includes Bogotá) → Coordinadora
+  if (normalizedDept.includes('cundinamarca') ||
+      normalizedDept.includes('bogota') ||
+      normalizedDept === 'dc' ||
+      normalizedCity.includes('bogota')) {
+    console.log('📍 Rule 1: Cundinamarca/Bogotá → Coordinadora');
+    return 'coordinadora';
+  }
+
+  // Rule 2: Medellín, Antioquia → Coordinadora
+  if (normalizedDept.includes('antioquia') && normalizedCity.includes('medellin')) {
+    console.log('📍 Rule 2: Medellín, Antioquia → Coordinadora');
+    return 'coordinadora';
+  }
+
+  // Check if it's a main city
+  const isMainCity = MAIN_CITIES.some(mainCity => {
+    const normalizedMainCity = normalizeText(mainCity);
+    return normalizedCity.includes(normalizedMainCity) || normalizedMainCity.includes(normalizedCity);
+  });
+
+  // Rule 3: Main cities + PAID orders → Deprisa
+  if (isMainCity && !isCOD) {
+    console.log(`📍 Rule 3: Main city "${city}" + Paid → Deprisa`);
+    return 'deprisa';
+  }
+
+  // Rule 4: COD orders or non-main cities → Inter Rapidísimo
+  console.log(`📍 Rule 4: ${isCOD ? 'COD order' : 'Non-main city'} → Inter Rapidísimo`);
+  return 'interrapidisimo';
+}
+
 interface CreateLabelRequest {
   shopify_order_id: number;
   organization_id: string;
@@ -348,34 +406,29 @@ serve(async (req) => {
       .ilike('municipality', `%${normalizedCity}%`)
       .maybeSingle();
 
-    // Determine carrier
+    // Determine carrier using business rules
     let selectedCarrier = body.preferred_carrier?.toLowerCase();
     let postalCode = body.destination_postal_code || '';
 
+    // Use coverage data for postal code if available
     if (coverage) {
       console.log('✅ Coverage found:', coverage);
       postalCode = postalCode || coverage.postal_code || '';
-      
-      // Select carrier based on coverage and priority
-      if (!selectedCarrier) {
-        if (coverage.priority_carrier) {
-          selectedCarrier = coverage.priority_carrier.toLowerCase();
-        } else if (coverage.coordinadora) {
-          selectedCarrier = 'coordinadora';
-        } else if (coverage.interrapidisimo) {
-          selectedCarrier = 'interrapidisimo';
-        } else if (coverage.servientrega) {
-          selectedCarrier = 'servientrega';
-        } else if (coverage.deprisa) {
-          selectedCarrier = 'deprisa';
-        }
-      }
-    } else {
-      console.log('⚠️ No coverage found, using default carrier (coordinadora)');
     }
 
-    // Default to coordinadora if no carrier selected
-    selectedCarrier = selectedCarrier || 'coordinadora';
+    // If user didn't select a carrier, use automatic selection based on rules
+    if (!selectedCarrier) {
+      const isCOD = body.is_cod === true;
+      selectedCarrier = selectCarrierByRules(
+        body.destination_city,
+        body.destination_department,
+        isCOD
+      );
+      console.log(`🚚 Auto-selected carrier: ${selectedCarrier}`);
+    } else {
+      console.log(`🚚 User-selected carrier: ${selectedCarrier}`);
+    }
+
     const carrierConfig = COLOMBIA_CARRIERS[selectedCarrier] || COLOMBIA_CARRIERS['coordinadora'];
     
     console.log(`🚚 Selected carrier: ${carrierConfig.carrier}, service: ${carrierConfig.service}`);
