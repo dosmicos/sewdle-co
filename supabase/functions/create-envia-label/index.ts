@@ -663,59 +663,26 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= POSTAL CODES FOR COLOMBIA =============
-    // postalCode is REQUIRED by Envia.com API
-    // Use standard Colombian postal codes
-    const COLOMBIA_POSTAL_CODES: Record<string, string> = {
-      "bogota": "110111",
-      "medellin": "050001",
-      "cali": "760001",
-      "barranquilla": "080001",
-      "cartagena": "130001",
-      "bucaramanga": "680001",
-      "cucuta": "540001",
-      "pereira": "660001",
-      "villavicencio": "500001",
-      "pasto": "520001",
-      "santa marta": "470001",
-      "monteria": "230001",
-      "armenia": "630001",
-      "popayan": "190001",
-      "sincelejo": "700001",
-      "valledupar": "200001",
-      "tunja": "150001",
-      "florencia": "180001",
-      "riohacha": "440001",
-      "ibague": "730001",
-      "neiva": "410001",
-      "manizales": "170001"
-    };
+    // ============= USE DANE CODES (5 digits) as postalCode =============
+    // Coordinadora through Envia.com requires DANE municipal codes
+    const originDaneCode = getDaneCode("Bogota", "DC");
+    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
 
-    const getPostalCode = (city: string): string => {
-      const normalized = city.toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .trim();
-      return COLOMBIA_POSTAL_CODES[normalized] || "110111"; // Default to Bogotá
-    };
+    console.log(`📍 Origin DANE: ${originDaneCode}`);
+    console.log(`📍 Destination DANE: ${destDaneCode}`);
 
-    const originPostalCode = "110111"; // Bogotá fixed
-    const destPostalCode = getPostalCode(body.destination_city);
-
-    console.log(`📍 Origin postal code: ${originPostalCode}`);
-    console.log(`📍 Destination postal code: ${destPostalCode}`);
-
-    // Build origin WITH postal code (REQUIRED)
+    // Build origin with DANE code as postalCode
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
       city: "Bogota",
       state: "DC",
       country: "CO",
-      postalCode: originPostalCode
+      postalCode: originDaneCode || "11001"
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination WITH postal code (REQUIRED)
+    // Build destination with DANE code as postalCode
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -727,7 +694,7 @@ serve(async (req) => {
       city: body.destination_city,
       state: stateCode,
       country: "CO",
-      postalCode: destPostalCode,
+      postalCode: destDaneCode || "11001",
       reference: `Pedido #${body.order_number}`
     };
 
