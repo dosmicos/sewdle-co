@@ -665,41 +665,34 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= USE ENVIA.COM QUERIES API TO GET CORRECT CODES =============
-    // Per Envia.com docs: use their Queries API to get valid city/zipCode values
+    // ============= COLOMBIA ADDRESS FORMAT FOR ENVIA.COM =============
+    // Per Envia.com docs: city = city name (not DANE code), postalCode = empty or DANE code
+    // The documentation says "City Destination: Destination city without abbreviations"
     
-    // Lookup origin (Bogota)
-    console.log(`🔍 Looking up origin city: Bogota`);
-    const originLookup = await lookupEnviaCity("CO", "Bogota");
+    // For Colombia, Envia.com uses city names in "city" field, not DANE codes
+    // According to help docs: city should be the full city name
+    const originCityName = "Bogota";
+    const destCityName = body.destination_city;
     
-    // Lookup destination
-    console.log(`🔍 Looking up destination city: ${body.destination_city}`);
-    const destLookup = await lookupEnviaCity("CO", body.destination_city);
+    // Get DANE code for postal code (leave empty if unknown)
+    const originDaneCode = getDaneCode("Bogota", "DC");
+    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
     
-    // Use lookup results or fallback to DANE codes
-    const originCity = originLookup?.zipCode || getDaneCode("Bogota", "DC") || "11001";
-    const originZip = originLookup?.zipCode || getDaneCode("Bogota", "DC") || "11001";
-    const originState = originLookup?.state || "DC";
-    
-    const destCity = destLookup?.zipCode || getDaneCode(body.destination_city, body.destination_department) || "11001";
-    const destZip = destLookup?.zipCode || getDaneCode(body.destination_city, body.destination_department) || "11001";
-    const destState = destLookup?.state || stateCode;
+    console.log(`📍 Origin: city="${originCityName}", state=DC, postalCode="${originDaneCode}"`);
+    console.log(`📍 Destination: city="${destCityName}", state=${stateCode}, postalCode="${destDaneCode}"`);
 
-    console.log(`📍 Origin: city=${originCity}, zip=${originZip}, state=${originState}`);
-    console.log(`📍 Destination: city=${destCity}, zip=${destZip}, state=${destState}`);
-
-    // Build origin using API-validated values
+    // Build origin with city NAME (not DANE code)
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: originCity,
-      state: originState,
+      city: originCityName,
+      state: "DC",
       country: "CO",
-      postalCode: originZip
+      postalCode: originDaneCode || ""
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination using API-validated values
+    // Build destination with city NAME (not DANE code)
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -708,10 +701,10 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: destCity,
-      state: destState,
+      city: destCityName,
+      state: stateCode,
       country: "CO",
-      postalCode: destZip,
+      postalCode: destDaneCode || "",
       reference: `Pedido #${body.order_number} - ${body.destination_city}`
     };
 
