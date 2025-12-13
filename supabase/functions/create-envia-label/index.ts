@@ -368,7 +368,8 @@ function parseAddress(address: string): { street: string; number: string } {
 }
 
 // Dosmicos origin address (fixed)
-// IMPORTANT: For Colombia, Envia.com requires DANE codes for both city AND postalCode
+// NOTE: For Colombia, Envia.com uses city NAME + state code to identify territory
+// postalCode should be empty - Envia.com resolves territory from city+state combination
 const DOSMICOS_ORIGIN = {
   name: "Julian Castro",
   company: "Dosmicos SAS",
@@ -377,10 +378,10 @@ const DOSMICOS_ORIGIN = {
   street: "Cra 27",
   number: "63b-61",
   district: "Quinta de Mutis",
-  city: "11001",        // DANE code for Bogotá (required by Envia.com Colombia)
+  city: "Bogota",       // City NAME (Envia.com resolves territory via city+state)
   state: "DC",
   country: "CO",
-  postalCode: "11001",  // DANE code for Bogotá
+  postalCode: "",       // Empty - Envia.com doesn't use postal codes for Colombia
   reference: "CASA 1er piso de rejas negras"
 };
 
@@ -620,14 +621,9 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // Build Envia.com request following their exact format
-    // IMPORTANT: For Colombia, Envia.com requires DANE codes for BOTH city AND postalCode fields
-    // The DANE code must be used in both fields, not the city name
-    const destinationCityCode = destinationDaneCode || getDaneCode(body.destination_city, body.destination_department);
-    console.log(`📍 Destination city code (DANE): "${destinationCityCode}" for city "${body.destination_city}"`);
-    
-    if (!destinationCityCode) {
-      console.warn(`⚠️ No DANE code found for city: ${body.destination_city}. Will try with city name as fallback.`);
-    }
+    // NOTE: For Colombia, Envia.com resolves territory using city NAME + state code
+    // postalCode should be empty - they don't use postal codes for Colombia carriers
+    console.log(`📍 Using city name: "${body.destination_city}" with state code: "${stateCode}"`);
     
     const enviaRequest: Record<string, any> = {
       origin: DOSMICOS_ORIGIN,
@@ -639,10 +635,10 @@ serve(async (req) => {
         street: street,
         number: number,
         district: district,
-        city: destinationCityCode || body.destination_city,  // DANE code preferred, city name as fallback
+        city: body.destination_city,  // City NAME (Medellin, Cali, etc.)
         state: stateCode,
         country: "CO",
-        postalCode: destinationCityCode || "",  // DANE code (e.g., "05001", "11001")
+        postalCode: "",  // Empty - Envia.com resolves territory via city+state
         reference: `Pedido #${body.order_number}`
       },
       packages: [{
