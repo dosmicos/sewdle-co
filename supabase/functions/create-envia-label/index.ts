@@ -293,6 +293,57 @@ function getStateCode(department: string): string {
   return COLOMBIA_STATE_CODES[lower] || 'DC'; // Default to Bogota if unknown
 }
 
+// Query Envia.com API to get correct city/zipCode format
+async function lookupEnviaCity(city: string, country: string = "CO"): Promise<{ city: string; state: string; zipCode: string } | null> {
+  try {
+    const normalizedCity = encodeURIComponent(city.trim());
+    const url = `https://queries.envia.com/locate/${country}/${normalizedCity}`;
+    
+    console.log(`🔍 Looking up city in Envia.com: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`📥 Envia Queries API status: ${response.status}`);
+    
+    if (!response.ok) {
+      console.log(`⚠️ Envia Queries API returned ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    console.log(`📥 Envia Queries API response:`, JSON.stringify(data, null, 2));
+    
+    // The API returns an array of matching cities
+    if (data && Array.isArray(data) && data.length > 0) {
+      const firstMatch = data[0];
+      return {
+        city: firstMatch.city || firstMatch.zipCode || city,
+        state: firstMatch.state || "DC",
+        zipCode: firstMatch.zipCode || firstMatch.city || ""
+      };
+    }
+    
+    // If data is an object with the info directly
+    if (data && (data.zipCode || data.city)) {
+      return {
+        city: data.city || data.zipCode || city,
+        state: data.state || "DC",
+        zipCode: data.zipCode || data.city || ""
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`❌ Error looking up city "${city}":`, error);
+    return null;
+  }
+}
+
 // Extract district/neighborhood from address
 function extractDistrict(address: string, city: string): string {
   // Common patterns for Colombian addresses with neighborhood info
@@ -663,27 +714,41 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= COLOMBIA: city AND postalCode must be DANE code =============
-    // Per Envia.com docs: "For Colombia, the city and postalCode should be the same, 
-    // and use the Código DANE" - https://docs.envia.com/reference/quote-shipments
-    const originDaneCode = getDaneCode("Bogota", "DC") || "11001";
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department) || "11001";
+    // ============= USE ENVIA.COM QUERIES API TO GET CORRECT CODES =============
+    // Per Envia.com docs: use their Queries API to get valid city/zipCode values
+    
+    // Lookup origin (Bogota)
+    console.log(`🔍 Looking up origin city: Bogota`);
+    const originLookup = await lookupEnviaCity("Bogota", "CO");
+    
+    // Lookup destination
+    console.log(`🔍 Looking up destination city: ${body.destination_city}`);
+    const destLookup = await lookupEnviaCity(body.destination_city, "CO");
+    
+    // Use lookup results or fallback to DANE codes
+    const originCity = originLookup?.zipCode || getDaneCode("Bogota", "DC") || "11001";
+    const originZip = originLookup?.zipCode || getDaneCode("Bogota", "DC") || "11001";
+    const originState = originLookup?.state || "DC";
+    
+    const destCity = destLookup?.zipCode || getDaneCode(body.destination_city, body.destination_department) || "11001";
+    const destZip = destLookup?.zipCode || getDaneCode(body.destination_city, body.destination_department) || "11001";
+    const destState = destLookup?.state || stateCode;
 
-    console.log(`📍 Origin DANE: ${originDaneCode}`);
-    console.log(`📍 Destination DANE: ${destDaneCode} (for city: ${body.destination_city})`);
+    console.log(`📍 Origin: city=${originCity}, zip=${originZip}, state=${originState}`);
+    console.log(`📍 Destination: city=${destCity}, zip=${destZip}, state=${destState}`);
 
-    // Build origin - BOTH city AND postalCode must be DANE code for Colombia
+    // Build origin using API-validated values
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: originDaneCode,        // DANE code, not city name
-      state: "DC",
+      city: originCity,
+      state: originState,
       country: "CO",
-      postalCode: originDaneCode   // DANE code, same as city
+      postalCode: originZip
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination - BOTH city AND postalCode must be DANE code for Colombia
+    // Build destination using API-validated values
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -692,11 +757,11 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: destDaneCode,          // DANE code, not city name
-      state: stateCode,
+      city: destCity,
+      state: destState,
       country: "CO",
-      postalCode: destDaneCode,    // DANE code, same as city
-      reference: `Pedido #${body.order_number} - ${body.destination_city}`  // Add city name in reference
+      postalCode: destZip,
+      reference: `Pedido #${body.order_number} - ${body.destination_city}`
     };
 
     console.log(`📤 Destination address:`, destinationData);
