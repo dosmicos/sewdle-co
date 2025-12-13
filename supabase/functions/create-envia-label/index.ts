@@ -663,26 +663,27 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= USE DANE CODES (5 digits) as postalCode =============
-    // Coordinadora through Envia.com requires DANE municipal codes
-    const originDaneCode = getDaneCode("Bogota", "DC");
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
+    // ============= COLOMBIA: city AND postalCode must be DANE code =============
+    // Per Envia.com docs: "For Colombia, the city and postalCode should be the same, 
+    // and use the Código DANE" - https://docs.envia.com/reference/quote-shipments
+    const originDaneCode = getDaneCode("Bogota", "DC") || "11001";
+    const destDaneCode = getDaneCode(body.destination_city, body.destination_department) || "11001";
 
     console.log(`📍 Origin DANE: ${originDaneCode}`);
-    console.log(`📍 Destination DANE: ${destDaneCode}`);
+    console.log(`📍 Destination DANE: ${destDaneCode} (for city: ${body.destination_city})`);
 
-    // Build origin with DANE code as postalCode
+    // Build origin - BOTH city AND postalCode must be DANE code for Colombia
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: "Bogota",
+      city: originDaneCode,        // DANE code, not city name
       state: "DC",
       country: "CO",
-      postalCode: originDaneCode || "11001"
+      postalCode: originDaneCode   // DANE code, same as city
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination with DANE code as postalCode
+    // Build destination - BOTH city AND postalCode must be DANE code for Colombia
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -691,11 +692,11 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: body.destination_city,
+      city: destDaneCode,          // DANE code, not city name
       state: stateCode,
       country: "CO",
-      postalCode: destDaneCode || "11001",
-      reference: `Pedido #${body.order_number}`
+      postalCode: destDaneCode,    // DANE code, same as city
+      reference: `Pedido #${body.order_number} - ${body.destination_city}`  // Add city name in reference
     };
 
     console.log(`📤 Destination address:`, destinationData);
