@@ -19,6 +19,7 @@ export const useEnviaShipping = () => {
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
   const [isLoadingTracking, setIsLoadingTracking] = useState(false);
   const [isCancellingLabel, setIsCancellingLabel] = useState(false);
+  const [isDeletingLabel, setIsDeletingLabel] = useState(false);
   const [existingLabel, setExistingLabel] = useState<ShippingLabel | null>(null);
   const [quotes, setQuotes] = useState<CarrierQuote[]>([]);
   const [trackingInfo, setTrackingInfo] = useState<TrackingResponse | null>(null);
@@ -244,6 +245,34 @@ export const useEnviaShipping = () => {
     }
   }, [clearLabel]);
 
+  // Delete failed label to allow retry
+  const deleteFailedLabel = useCallback(async (labelId: string): Promise<{ success: boolean; error?: string }> => {
+    setIsDeletingLabel(true);
+    try {
+      console.log('🗑️ Deleting failed shipping label:', labelId);
+
+      const { error } = await supabase
+        .from('shipping_labels')
+        .delete()
+        .eq('id', labelId);
+
+      if (error) {
+        console.error('Error deleting label:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Failed label deleted successfully');
+      clearLabel();
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in deleteFailedLabel:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setIsDeletingLabel(false);
+    }
+  }, [clearLabel]);
+
   return {
     // Label operations
     isCreatingLabel,
@@ -270,6 +299,10 @@ export const useEnviaShipping = () => {
     
     // Cancel operations
     isCancellingLabel,
-    cancelLabel
+    cancelLabel,
+    
+    // Delete failed label
+    isDeletingLabel,
+    deleteFailedLabel
   };
 };

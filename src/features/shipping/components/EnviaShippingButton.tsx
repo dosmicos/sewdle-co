@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +62,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     clearLabel,
     checkCoverage,
     isCancellingLabel,
-    cancelLabel
+    cancelLabel,
+    isDeletingLabel,
+    deleteFailedLabel
   } = useEnviaShipping();
   
   const [hasChecked, setHasChecked] = useState(false);
@@ -346,9 +348,39 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             </Button>
           </div>
         ) : isError ? (
-          <div className="flex items-center gap-2 text-sm text-red-600">
-            <AlertCircle className="h-4 w-4" />
-            <span>Error al crear guía - Intenta de nuevo</span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-red-600">
+              <AlertCircle className="h-4 w-4" />
+              <span>Error al crear guía</span>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="w-full"
+              onClick={async () => {
+                if (existingLabel?.id) {
+                  const result = await deleteFailedLabel(existingLabel.id);
+                  if (result.success) {
+                    toast.success('Guía con error eliminada. Puedes intentar de nuevo.');
+                  } else {
+                    toast.error('Error al eliminar: ' + result.error);
+                  }
+                }
+              }}
+              disabled={isDeletingLabel}
+            >
+              {isDeletingLabel ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reintentar
+                </>
+              )}
+            </Button>
           </div>
         ) : isManual ? (
           <div className="flex items-center gap-2 text-sm text-blue-600">
