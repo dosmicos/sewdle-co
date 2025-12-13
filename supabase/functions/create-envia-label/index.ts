@@ -663,52 +663,71 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= ENVIA.COM FORMAT =============
-    // Use city names directly WITHOUT postal codes - let Envia.com resolve territories
-    // The "00Bogota" error indicates Envia.com concatenates postalCode + city incorrectly
-    
-    // Normalize city names for Envia.com
-    const normalizeCity = (city: string): string => {
-      const normalized = city.trim()
-        .replace(/á/gi, 'a')
-        .replace(/é/gi, 'e')
-        .replace(/í/gi, 'i')
-        .replace(/ó/gi, 'o')
-        .replace(/ú/gi, 'u')
-        .replace(/ñ/gi, 'n');
-      return normalized;
+    // ============= POSTAL CODES FOR COLOMBIA =============
+    // postalCode is REQUIRED by Envia.com API
+    // Use standard Colombian postal codes
+    const COLOMBIA_POSTAL_CODES: Record<string, string> = {
+      "bogota": "110111",
+      "medellin": "050001",
+      "cali": "760001",
+      "barranquilla": "080001",
+      "cartagena": "130001",
+      "bucaramanga": "680001",
+      "cucuta": "540001",
+      "pereira": "660001",
+      "villavicencio": "500001",
+      "pasto": "520001",
+      "santa marta": "470001",
+      "monteria": "230001",
+      "armenia": "630001",
+      "popayan": "190001",
+      "sincelejo": "700001",
+      "valledupar": "200001",
+      "tunja": "150001",
+      "florencia": "180001",
+      "riohacha": "440001",
+      "ibague": "730001",
+      "neiva": "410001",
+      "manizales": "170001"
     };
 
-    const originCity = "Bogota";
-    const destCity = normalizeCity(body.destination_city);
+    const getPostalCode = (city: string): string => {
+      const normalized = city.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .trim();
+      return COLOMBIA_POSTAL_CODES[normalized] || "110111"; // Default to Bogotá
+    };
 
-    console.log(`📍 Origin city: ${originCity}`);
-    console.log(`📍 Destination city: ${destCity}`);
+    const originPostalCode = "110111"; // Bogotá fixed
+    const destPostalCode = getPostalCode(body.destination_city);
 
-    // Build origin WITHOUT postal code
+    console.log(`📍 Origin postal code: ${originPostalCode}`);
+    console.log(`📍 Destination postal code: ${destPostalCode}`);
+
+    // Build origin WITH postal code (REQUIRED)
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: originCity,
+      city: "Bogota",
       state: "DC",
-      country: "CO"
-      // No postalCode field - let Envia.com resolve by city name
+      country: "CO",
+      postalCode: originPostalCode
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination WITHOUT postal code  
+    // Build destination WITH postal code (REQUIRED)
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
-      email: body.recipient_email || "cliente@dosmicos.com",
+      email: body.recipient_email || "cliente@dosmicos.co",
       phone: cleanPhone,
       street: street,
       number: number,
       district: district,
-      city: destCity,
+      city: body.destination_city,
       state: stateCode,
       country: "CO",
-      // No postalCode field - let Envia.com resolve by city name
+      postalCode: destPostalCode,
       reference: `Pedido #${body.order_number}`
     };
 
