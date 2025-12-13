@@ -367,7 +367,8 @@ function parseAddress(address: string): { street: string; number: string } {
   };
 }
 
-// Dosmicos origin address (fixed) - Using DANE code for Bogotá
+// Dosmicos origin address (fixed)
+// IMPORTANT: city = text name, postalCode = DANE code
 const DOSMICOS_ORIGIN = {
   name: "Julian Castro",
   company: "Dosmicos SAS",
@@ -376,10 +377,10 @@ const DOSMICOS_ORIGIN = {
   street: "Cra 27",
   number: "63b-61",
   district: "Quinta de Mutis",
-  city: "11001",        // DANE code for Bogotá (required by Envia.com)
+  city: "Bogota",       // City NAME (not DANE code)
   state: "DC",
   country: "CO",
-  postalCode: "11001",  // DANE code for Bogotá (required by Envia.com)
+  postalCode: "11001",  // DANE code for Bogotá
   reference: "CASA 1er piso de rejas negras"
 };
 
@@ -619,7 +620,7 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // Build Envia.com request following their exact format
-    // IMPORTANT: For Colombia, city and postalCode MUST be DANE codes, not city names
+    // IMPORTANT: city = text name, postalCode = DANE code
     const enviaRequest: Record<string, any> = {
       origin: DOSMICOS_ORIGIN,
       destination: {
@@ -630,10 +631,10 @@ serve(async (req) => {
         street: street,
         number: number,
         district: district,
-        city: destinationDaneCode || body.destination_city,  // DANE code or city name as fallback
+        city: body.destination_city,  // City NAME (e.g., "Medellin", "Bogota")
         state: stateCode,
         country: "CO",
-        postalCode: destinationDaneCode || body.destination_postal_code || "",  // DANE code required
+        postalCode: destinationDaneCode || "",  // DANE code (e.g., "05001", "11001")
         reference: `Pedido #${body.order_number}`
       },
       packages: [{
