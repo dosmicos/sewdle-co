@@ -368,10 +368,8 @@ function parseAddress(address: string): { street: string; number: string } {
 }
 
 // Dosmicos origin address (fixed)
-// For Colombia, city AND postalCode must be the DANE code (as per Envia.com docs)
-// Testing with exact DANE format as documented
-const BOGOTA_DANE = "11001";  // Official DANE code for Bogotá
-
+// For Colombia, use city NAME + state code - Envia.com resolves territory from this combination
+// postalCode should be empty as Envia.com doesn't use postal codes for Colombia
 const DOSMICOS_ORIGIN = {
   name: "Julian Castro",
   company: "Dosmicos SAS",
@@ -380,10 +378,10 @@ const DOSMICOS_ORIGIN = {
   street: "Cra 27",
   number: "63b-61",
   district: "Quinta de Mutis",
-  city: BOGOTA_DANE,       // DANE code
+  city: "Bogota",          // City NAME (not DANE code)
   state: "DC",
   country: "CO",
-  postalCode: BOGOTA_DANE, // Same DANE code
+  postalCode: "",          // Empty - Envia.com resolves territory via city+state
   reference: "CASA 1er piso de rejas negras"
 };
 
@@ -623,19 +621,9 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // Build Envia.com request following their exact format
-    // For Colombia: city AND postalCode must be the DANE code (per official docs)
-    // Get DANE code for destination
-    const destDaneCode = destinationDaneCode || getDaneCode(body.destination_city, body.destination_department);
-    
-    if (!destDaneCode) {
-      console.error(`❌ No DANE code found for city: ${body.destination_city}`);
-      return new Response(
-        JSON.stringify({ success: false, error: `Ciudad no soportada: ${body.destination_city}. Por favor contactar soporte.` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-    
-    console.log(`📍 Using DANE code: "${destDaneCode}" for city "${body.destination_city}"`);
+    // For Colombia: use city NAME + state code - Envia.com resolves territory from this combination
+    // postalCode should be empty as Envia.com doesn't use postal codes for Colombia
+    console.log(`📍 Using city name: "${body.destination_city}" with state code: "${stateCode}"`);
     
     const enviaRequest: Record<string, any> = {
       origin: DOSMICOS_ORIGIN,
@@ -647,10 +635,10 @@ serve(async (req) => {
         street: street,
         number: number,
         district: district,
-        city: destDaneCode,      // DANE code (as per docs)
+        city: body.destination_city,  // City NAME (Medellin, Cali, etc.)
         state: stateCode,
         country: "CO",
-        postalCode: destDaneCode, // Same DANE code (as per docs)
+        postalCode: "",               // Empty - Envia.com resolves territory via city+state
         reference: `Pedido #${body.order_number}`
       },
       packages: [{
