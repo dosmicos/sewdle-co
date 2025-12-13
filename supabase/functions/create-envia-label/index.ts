@@ -80,6 +80,61 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vichada': 'VI'
 };
 
+// Colombia main city postal codes - used when postal code is missing or invalid
+const COLOMBIA_POSTAL_CODES: Record<string, string> = {
+  'bogota': '110111',
+  'medellin': '050001',
+  'cali': '760001',
+  'barranquilla': '080001',
+  'cartagena': '130001',
+  'bucaramanga': '680001',
+  'cucuta': '540001',
+  'pereira': '660001',
+  'manizales': '170001',
+  'ibague': '730001',
+  'santa marta': '470001',
+  'monteria': '230001',
+  'villavicencio': '500001',
+  'pasto': '520001',
+  'neiva': '410001',
+  'armenia': '630001',
+  'popayan': '190001',
+  'sincelejo': '700001',
+  'valledupar': '200001',
+  'tunja': '150001',
+  'florencia': '180001',
+  'riohacha': '440001',
+  'quibdo': '270001',
+  'yopal': '850001',
+  'mocoa': '860001',
+  'leticia': '910001',
+  'inirida': '940001',
+  'mitu': '970001',
+  'puerto carreno': '990001',
+  'san jose del guaviare': '950001',
+  'arauca': '810001'
+};
+
+// Clean and validate postal code - NEVER use "000000"
+function cleanPostalCode(code: string | undefined): string {
+  if (!code) return '';
+  const cleaned = code.replace(/[^0-9]/g, '');
+  // Invalid postal codes
+  if (cleaned === '000000' || cleaned === '0' || cleaned.length < 5) return '';
+  return cleaned;
+}
+
+// Get postal code for a city from the mapping
+function getPostalCodeForCity(city: string): string {
+  const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  for (const [cityKey, postalCode] of Object.entries(COLOMBIA_POSTAL_CODES)) {
+    if (normalizedCity.includes(cityKey) || cityKey.includes(normalizedCity)) {
+      return postalCode;
+    }
+  }
+  return '';
+}
+
 // Shopify province codes to Envia.com state codes mapping
 // Shopify uses 3-character codes for Colombian departments
 const SHOPIFY_TO_ENVIA_CODES: Record<string, string> = {
@@ -377,12 +432,21 @@ serve(async (req) => {
       );
     }
 
-    // Check if label already exists
+    // Delete any previous failed labels for this order (allows retry)
+    await supabase
+      .from('shipping_labels')
+      .delete()
+      .eq('shopify_order_id', body.shopify_order_id)
+      .eq('organization_id', body.organization_id)
+      .eq('status', 'error');
+
+    // Check if VALID label already exists (ignore error labels)
     const { data: existingLabel } = await supabase
       .from('shipping_labels')
       .select('*')
       .eq('shopify_order_id', body.shopify_order_id)
       .eq('organization_id', body.organization_id)
+      .neq('status', 'error')
       .maybeSingle();
 
     if (existingLabel) {
@@ -415,13 +479,29 @@ serve(async (req) => {
 
     // Determine carrier using business rules
     let selectedCarrier = body.preferred_carrier?.toLowerCase();
-    let postalCode = body.destination_postal_code || '';
-
+    
+    // Determine postal code with improved validation
+    let rawPostalCode = body.destination_postal_code || '';
+    
     // Use coverage data for postal code if available
     if (coverage) {
       console.log('✅ Coverage found:', coverage);
-      postalCode = postalCode || coverage.postal_code || '';
+      rawPostalCode = rawPostalCode || coverage.postal_code || '';
     }
+    
+    // Clean and validate postal code - NEVER use "000000"
+    let postalCode = cleanPostalCode(rawPostalCode);
+    
+    // If no valid postal code, try to get from city mapping
+    if (!postalCode) {
+      postalCode = getPostalCodeForCity(body.destination_city);
+      if (postalCode) {
+        console.log(`📮 Using postal code from city mapping: ${postalCode}`);
+      }
+    }
+    
+    console.log(`📮 Final postal code: "${postalCode}" (original: "${rawPostalCode}")`);
+    
 
     // If user didn't select a carrier, use automatic selection based on rules
     if (!selectedCarrier) {
@@ -469,7 +549,7 @@ serve(async (req) => {
         city: body.destination_city,
         state: stateCode,
         country: "CO",
-        postalCode: postalCode || "000000",
+        postalCode: postalCode || "",
         reference: `Pedido #${body.order_number}`
       },
       packages: [{
