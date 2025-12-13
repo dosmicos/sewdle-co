@@ -666,33 +666,28 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // ============= COLOMBIA ADDRESS FORMAT FOR ENVIA.COM =============
-    // Per Envia.com docs: city = city name (not DANE code), postalCode = empty or DANE code
-    // The documentation says "City Destination: Destination city without abbreviations"
+    // Per Envia.com docs for Colombia: city = city name, postalCode should be empty
+    // Colombia doesn't use postal codes in the traditional sense
+    // Envia.com appears to concatenate postalCode + city, causing errors when postalCode is set
     
-    // For Colombia, Envia.com uses city names in "city" field, not DANE codes
-    // According to help docs: city should be the full city name
     const originCityName = "Bogota";
     const destCityName = body.destination_city;
     
-    // Get DANE code for postal code (leave empty if unknown)
-    const originDaneCode = getDaneCode("Bogota", "DC");
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
-    
-    console.log(`📍 Origin: city="${originCityName}", state=DC, postalCode="${originDaneCode}"`);
-    console.log(`📍 Destination: city="${destCityName}", state=${stateCode}, postalCode="${destDaneCode}"`);
+    console.log(`📍 Origin: city="${originCityName}", state=DC`);
+    console.log(`📍 Destination: city="${destCityName}", state=${stateCode}`);
 
-    // Build origin with city NAME (not DANE code)
+    // Build origin - NO postalCode for Colombia to avoid API concatenation issues
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
       city: originCityName,
       state: "DC",
       country: "CO",
-      postalCode: originDaneCode || ""
+      postalCode: "" // Leave empty for Colombia
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination with city NAME (not DANE code)
+    // Build destination - NO postalCode for Colombia to avoid API concatenation issues
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -704,7 +699,7 @@ serve(async (req) => {
       city: destCityName,
       state: stateCode,
       country: "CO",
-      postalCode: destDaneCode || "",
+      postalCode: "", // Leave empty for Colombia
       reference: `Pedido #${body.order_number} - ${body.destination_city}`
     };
 
