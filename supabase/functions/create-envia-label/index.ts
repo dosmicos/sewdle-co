@@ -80,58 +80,155 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vichada': 'VI'
 };
 
-// Colombia main city postal codes - used when postal code is missing or invalid
-const COLOMBIA_POSTAL_CODES: Record<string, string> = {
-  'bogota': '110111',
-  'medellin': '050001',
-  'cali': '760001',
-  'barranquilla': '080001',
-  'cartagena': '130001',
-  'bucaramanga': '680001',
-  'cucuta': '540001',
-  'pereira': '660001',
-  'manizales': '170001',
-  'ibague': '730001',
-  'santa marta': '470001',
-  'monteria': '230001',
-  'villavicencio': '500001',
-  'pasto': '520001',
-  'neiva': '410001',
-  'armenia': '630001',
-  'popayan': '190001',
-  'sincelejo': '700001',
-  'valledupar': '200001',
-  'tunja': '150001',
-  'florencia': '180001',
-  'riohacha': '440001',
-  'quibdo': '270001',
-  'yopal': '850001',
-  'mocoa': '860001',
-  'leticia': '910001',
-  'inirida': '940001',
-  'mitu': '970001',
-  'puerto carreno': '990001',
-  'san jose del guaviare': '950001',
-  'arauca': '810001'
+// Colombia DANE codes - REQUIRED by Envia.com for city and postalCode fields
+// Envia.com uses DANE codes (official geographic codes) instead of city names or postal codes
+const COLOMBIA_DANE_CODES: Record<string, string> = {
+  // Bogotá D.C.
+  'bogota': '11001',
+  // Antioquia
+  'medellin': '05001',
+  'envigado': '05266',
+  'sabaneta': '05631',
+  'itagui': '05360',
+  'bello': '05088',
+  'rionegro': '05615',
+  'la estrella': '05380',
+  'caldas': '05129',
+  'copacabana': '05212',
+  'girardota': '05308',
+  'barbosa': '05079',
+  // Valle del Cauca
+  'cali': '76001',
+  'palmira': '76520',
+  'buenaventura': '76109',
+  'tulua': '76834',
+  'buga': '76111',
+  'cartago': '76147',
+  'yumbo': '76892',
+  // Atlántico
+  'barranquilla': '08001',
+  'soledad': '08758',
+  'malambo': '08433',
+  // Bolívar
+  'cartagena': '13001',
+  'turbaco': '13836',
+  'magangue': '13430',
+  // Santander
+  'bucaramanga': '68001',
+  'floridablanca': '68276',
+  'giron': '68307',
+  'piedecuesta': '68547',
+  'barrancabermeja': '68081',
+  // Norte de Santander
+  'cucuta': '54001',
+  'villa del rosario': '54874',
+  'los patios': '54405',
+  // Risaralda
+  'pereira': '66001',
+  'dosquebradas': '66170',
+  'santa rosa de cabal': '66682',
+  // Caldas
+  'manizales': '17001',
+  'villamaria': '17873',
+  // Tolima
+  'ibague': '73001',
+  'espinal': '73268',
+  // Magdalena
+  'santa marta': '47001',
+  'cienaga': '47189',
+  // Córdoba
+  'monteria': '23001',
+  'cerete': '23162',
+  // Meta
+  'villavicencio': '50001',
+  'acacias': '50006',
+  // Nariño
+  'pasto': '52001',
+  'tumaco': '52835',
+  'ipiales': '52356',
+  // Huila
+  'neiva': '41001',
+  'pitalito': '41551',
+  // Quindío
+  'armenia': '63001',
+  'calarca': '63130',
+  // Cauca
+  'popayan': '19001',
+  'santander de quilichao': '19698',
+  // Sucre
+  'sincelejo': '70001',
+  'corozal': '70215',
+  // Cesar
+  'valledupar': '20001',
+  'aguachica': '20011',
+  // Boyacá
+  'tunja': '15001',
+  'duitama': '15238',
+  'sogamoso': '15759',
+  // Caquetá
+  'florencia': '18001',
+  // La Guajira
+  'riohacha': '44001',
+  'maicao': '44430',
+  // Chocó
+  'quibdo': '27001',
+  // Casanare
+  'yopal': '85001',
+  'aguazul': '85010',
+  // Putumayo
+  'mocoa': '86001',
+  // Amazonas
+  'leticia': '91001',
+  // Guainía
+  'inirida': '94001',
+  // Vaupés
+  'mitu': '97001',
+  // Vichada
+  'puerto carreno': '99001',
+  // Guaviare
+  'san jose del guaviare': '95001',
+  // Arauca
+  'arauca': '81001',
+  // Cundinamarca (municipalities near Bogotá)
+  'soacha': '25754',
+  'chia': '25175',
+  'zipaquira': '25899',
+  'facatativa': '25269',
+  'madrid': '25430',
+  'funza': '25286',
+  'mosquera': '25473',
+  'cajica': '25126',
+  'cota': '25214',
+  'la calera': '25377',
+  'fusagasuga': '25290',
+  'girardot': '25307',
+  'tocancipa': '25817',
+  'sopo': '25758',
+  'tabio': '25785',
+  'tenjo': '25799',
+  'sibate': '25740',
+  'silvania': '25743',
+  'villeta': '25871'
 };
 
-// Clean and validate postal code - NEVER use "000000"
-function cleanPostalCode(code: string | undefined): string {
-  if (!code) return '';
-  const cleaned = code.replace(/[^0-9]/g, '');
-  // Invalid postal codes
-  if (cleaned === '000000' || cleaned === '0' || cleaned.length < 5) return '';
-  return cleaned;
-}
-
-// Get postal code for a city from the mapping
-function getPostalCodeForCity(city: string): string {
+// Get DANE code for a city
+function getDaneCode(city: string, department?: string): string {
   const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-  for (const [cityKey, postalCode] of Object.entries(COLOMBIA_POSTAL_CODES)) {
+  
+  // Direct match
+  if (COLOMBIA_DANE_CODES[normalizedCity]) {
+    return COLOMBIA_DANE_CODES[normalizedCity];
+  }
+  
+  // Partial match
+  for (const [cityKey, daneCode] of Object.entries(COLOMBIA_DANE_CODES)) {
     if (normalizedCity.includes(cityKey) || cityKey.includes(normalizedCity)) {
-      return postalCode;
+      console.log(`🏛️ DANE code match: "${city}" → "${daneCode}"`);
+      return daneCode;
     }
   }
+  
+  console.log(`⚠️ No DANE code found for city: "${city}"`);
   return '';
 }
 
@@ -270,7 +367,7 @@ function parseAddress(address: string): { street: string; number: string } {
   };
 }
 
-// Dosmicos origin address (fixed)
+// Dosmicos origin address (fixed) - Using DANE code for Bogotá
 const DOSMICOS_ORIGIN = {
   name: "Julian Castro",
   company: "Dosmicos SAS",
@@ -279,10 +376,10 @@ const DOSMICOS_ORIGIN = {
   street: "Cra 27",
   number: "63b-61",
   district: "Quinta de Mutis",
-  city: "Bogota",
+  city: "11001",        // DANE code for Bogotá (required by Envia.com)
   state: "DC",
   country: "CO",
-  postalCode: "111321",
+  postalCode: "11001",  // DANE code for Bogotá (required by Envia.com)
   reference: "CASA 1er piso de rejas negras"
 };
 
@@ -480,28 +577,14 @@ serve(async (req) => {
     // Determine carrier using business rules
     let selectedCarrier = body.preferred_carrier?.toLowerCase();
     
-    // Determine postal code with improved validation
-    let rawPostalCode = body.destination_postal_code || '';
+    // Get DANE code for the destination city (REQUIRED by Envia.com)
+    const destinationDaneCode = getDaneCode(body.destination_city, body.destination_department);
+    console.log(`🏛️ Destination DANE code: "${destinationDaneCode}" (city: "${body.destination_city}")`);
     
-    // Use coverage data for postal code if available
-    if (coverage) {
-      console.log('✅ Coverage found:', coverage);
-      rawPostalCode = rawPostalCode || coverage.postal_code || '';
+    // If no DANE code found, log warning but continue with the raw postal code as fallback
+    if (!destinationDaneCode) {
+      console.log(`⚠️ No DANE code for "${body.destination_city}" - will try with provided postal code`);
     }
-    
-    // Clean and validate postal code - NEVER use "000000"
-    let postalCode = cleanPostalCode(rawPostalCode);
-    
-    // If no valid postal code, try to get from city mapping
-    if (!postalCode) {
-      postalCode = getPostalCodeForCity(body.destination_city);
-      if (postalCode) {
-        console.log(`📮 Using postal code from city mapping: ${postalCode}`);
-      }
-    }
-    
-    console.log(`📮 Final postal code: "${postalCode}" (original: "${rawPostalCode}")`);
-    
 
     // If user didn't select a carrier, use automatic selection based on rules
     if (!selectedCarrier) {
@@ -536,6 +619,7 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // Build Envia.com request following their exact format
+    // IMPORTANT: For Colombia, city and postalCode MUST be DANE codes, not city names
     const enviaRequest: Record<string, any> = {
       origin: DOSMICOS_ORIGIN,
       destination: {
@@ -546,10 +630,10 @@ serve(async (req) => {
         street: street,
         number: number,
         district: district,
-        city: body.destination_city,
+        city: destinationDaneCode || body.destination_city,  // DANE code or city name as fallback
         state: stateCode,
         country: "CO",
-        postalCode: postalCode || "",
+        postalCode: destinationDaneCode || body.destination_postal_code || "",  // DANE code required
         reference: `Pedido #${body.order_number}`
       },
       packages: [{
