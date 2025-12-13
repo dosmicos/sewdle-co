@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -193,6 +193,21 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   };
 
+  const handlePrintLabel = () => {
+    if (!existingLabel?.label_url) return;
+    
+    // Abrir PDF en ventana popup y disparar impresión automáticamente
+    const printWindow = window.open(existingLabel.label_url, '_blank', 'width=800,height=600');
+    
+    if (printWindow) {
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+        }, 500); // Pequeño delay para asegurar que el PDF cargue
+      };
+    }
+  };
+
   const handleSaveManualLabel = async () => {
     if (!currentOrganization?.id || !manualTracking.trim()) {
       toast.error('Ingresa un número de tracking');
@@ -311,15 +326,25 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             <span>Guía cancelada</span>
           </div>
         ) : existingLabel.label_url ? (
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={handleOpenLabel}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Ver Guía PDF
-            <ExternalLink className="h-3 w-3 ml-2" />
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={handleOpenLabel}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Ver PDF
+              <ExternalLink className="h-3 w-3 ml-2" />
+            </Button>
+            <Button 
+              variant="default" 
+              className="flex-1"
+              onClick={handlePrintLabel}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
+            </Button>
+          </div>
         ) : isError ? (
           <div className="flex items-center gap-2 text-sm text-red-600">
             <AlertCircle className="h-4 w-4" />
