@@ -273,10 +273,11 @@ function normalizeText(text: string): string {
 
 /**
  * Automatic carrier selection based on business rules:
- * 1. Cundinamarca (including Bogotá) → Coordinadora
- * 2. Medellín, Antioquia → Coordinadora
- * 3. Main cities + PAID orders → Deprisa
- * 4. COD orders or non-main cities → Inter Rapidísimo
+ * 1. Cundinamarca (including Bogotá) → Coordinadora (COD y pagado)
+ * 2. Medellín, Antioquia → Coordinadora (COD y pagado)
+ * 3. Ciudades principales + pedido PAGADO → Deprisa (NO acepta COD)
+ * 4. Ciudades principales + COD → Inter Rapidísimo (porque Deprisa no acepta COD)
+ * 5. Ciudades remotas/no principales → Inter Rapidísimo (COD y pagado)
  */
 function selectCarrierByRules(city: string, department: string, isCOD: boolean): string {
   const normalizedCity = normalizeText(city);
@@ -284,18 +285,18 @@ function selectCarrierByRules(city: string, department: string, isCOD: boolean):
 
   console.log(`🔄 Selecting carrier - City: "${normalizedCity}", Dept: "${normalizedDept}", COD: ${isCOD}`);
 
-  // Rule 1: Cundinamarca (includes Bogotá) → Coordinadora
+  // Rule 1: Cundinamarca (includes Bogotá) → Coordinadora (accepts both COD and paid)
   if (normalizedDept.includes('cundinamarca') ||
       normalizedDept.includes('bogota') ||
       normalizedDept === 'dc' ||
       normalizedCity.includes('bogota')) {
-    console.log('📍 Rule 1: Cundinamarca/Bogotá → Coordinadora');
+    console.log('📍 Rule 1: Cundinamarca/Bogotá → Coordinadora (acepta COD y pagado)');
     return 'coordinadora';
   }
 
-  // Rule 2: Medellín, Antioquia → Coordinadora
+  // Rule 2: Medellín, Antioquia → Coordinadora (accepts both COD and paid)
   if (normalizedDept.includes('antioquia') && normalizedCity.includes('medellin')) {
-    console.log('📍 Rule 2: Medellín, Antioquia → Coordinadora');
+    console.log('📍 Rule 2: Medellín, Antioquia → Coordinadora (acepta COD y pagado)');
     return 'coordinadora';
   }
 
@@ -305,14 +306,20 @@ function selectCarrierByRules(city: string, department: string, isCOD: boolean):
     return normalizedCity.includes(normalizedMainCity) || normalizedMainCity.includes(normalizedCity);
   });
 
-  // Rule 3: Main cities + PAID orders → Deprisa
+  // Rule 3: Main cities + PAID orders → Deprisa (Deprisa does NOT accept COD)
   if (isMainCity && !isCOD) {
-    console.log(`📍 Rule 3: Main city "${city}" + Paid → Deprisa`);
+    console.log(`📍 Rule 3: Ciudad principal "${city}" + Pagado → Deprisa`);
     return 'deprisa';
   }
 
-  // Rule 4: COD orders or non-main cities → Inter Rapidísimo
-  console.log(`📍 Rule 4: ${isCOD ? 'COD order' : 'Non-main city'} → Inter Rapidísimo`);
+  // Rule 4: Main cities + COD → Inter Rapidísimo (because Deprisa doesn't accept COD)
+  if (isMainCity && isCOD) {
+    console.log(`📍 Rule 4: Ciudad principal "${city}" + COD → Inter Rapidísimo (Deprisa no acepta COD)`);
+    return 'interrapidisimo';
+  }
+
+  // Rule 5: Non-main cities (remote areas) → Inter Rapidísimo (COD or paid)
+  console.log(`📍 Rule 5: Ciudad remota "${city}" → Inter Rapidísimo`);
   return 'interrapidisimo';
 }
 
