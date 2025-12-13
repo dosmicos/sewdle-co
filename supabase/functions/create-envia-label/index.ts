@@ -367,10 +367,67 @@ function parseAddress(address: string): { street: string; number: string } {
   };
 }
 
-// Dosmicos origin address (fixed)
-// For Colombia, use city NAME + state code - Envia.com resolves territory from this combination
-// postalCode should be empty as Envia.com doesn't use postal codes for Colombia
-const DOSMICOS_ORIGIN = {
+// ============= ENVIA.COM QUERIES API LOOKUP =============
+// Use Envia.com's Queries API to get exact city/territory codes
+interface EnviaCityInfo {
+  city: string;
+  state: string;
+  zipCode: string;
+  country?: string;
+}
+
+async function lookupEnviaCity(country: string, cityName: string): Promise<EnviaCityInfo | null> {
+  try {
+    // Normalize city name for URL
+    const normalizedCity = cityName.trim().replace(/\s+/g, '%20');
+    const url = `https://queries.envia.com/locate/${country}/${normalizedCity}`;
+    
+    console.log(`🔍 Looking up city: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.log(`⚠️ City lookup failed with status ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    console.log(`📍 Lookup result for "${cityName}":`, JSON.stringify(data, null, 2));
+    
+    // The API returns an array of matches - take the first one
+    if (data && Array.isArray(data) && data.length > 0) {
+      const match = data[0];
+      return {
+        city: match.city || match.name || cityName,
+        state: match.state || match.stateCode || "",
+        zipCode: match.zipCode || match.postalCode || match.code || ""
+      };
+    }
+    
+    // If data is a single object (not array)
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      return {
+        city: data.city || data.name || cityName,
+        state: data.state || data.stateCode || "",
+        zipCode: data.zipCode || data.postalCode || data.code || ""
+      };
+    }
+    
+    console.log(`⚠️ No results found for city "${cityName}"`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error looking up city "${cityName}":`, error);
+    return null;
+  }
+}
+
+// Dosmicos origin address (fixed) - will be enriched with Queries API data
+const DOSMICOS_ORIGIN_BASE = {
   name: "Julian Castro",
   company: "Dosmicos SAS",
   email: "dosmicoscol@gmail.com",
@@ -378,10 +435,6 @@ const DOSMICOS_ORIGIN = {
   street: "Cra 27",
   number: "63b-61",
   district: "Quinta de Mutis",
-  city: "Bogota",          // City NAME (not DANE code)
-  state: "DC",
-  country: "CO",
-  postalCode: "",          // Empty - Envia.com resolves territory via city+state
   reference: "CASA 1er piso de rejas negras"
 };
 
@@ -578,15 +631,6 @@ serve(async (req) => {
 
     // Determine carrier using business rules
     let selectedCarrier = body.preferred_carrier?.toLowerCase();
-    
-    // Get DANE code for the destination city (REQUIRED by Envia.com)
-    const destinationDaneCode = getDaneCode(body.destination_city, body.destination_department);
-    console.log(`🏛️ Destination DANE code: "${destinationDaneCode}" (city: "${body.destination_city}")`);
-    
-    // If no DANE code found, log warning but continue with the raw postal code as fallback
-    if (!destinationDaneCode) {
-      console.log(`⚠️ No DANE code for "${body.destination_city}" - will try with provided postal code`);
-    }
 
     // If user didn't select a carrier, use automatic selection based on rules
     if (!selectedCarrier) {
@@ -602,7 +646,6 @@ serve(async (req) => {
     }
 
     const carrierConfig = COLOMBIA_CARRIERS[selectedCarrier] || COLOMBIA_CARRIERS['coordinadora'];
-    
     console.log(`🚚 Selected carrier: ${carrierConfig.carrier}, service: ${carrierConfig.service}`);
 
     // Get state code for the destination department (supports both Shopify codes and names)
@@ -620,27 +663,49 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // Build Envia.com request following their exact format
-    // For Colombia: use city NAME + state code - Envia.com resolves territory from this combination
-    // postalCode should be empty as Envia.com doesn't use postal codes for Colombia
-    console.log(`📍 Using city name: "${body.destination_city}" with state code: "${stateCode}"`);
+    // ============= USE ENVIA.COM QUERIES API =============
+    // Look up origin (Bogotá) and destination cities to get exact codes
+    console.log(`🔍 Looking up cities via Envia.com Queries API...`);
+    
+    const [originCityInfo, destCityInfo] = await Promise.all([
+      lookupEnviaCity("CO", "Bogota"),
+      lookupEnviaCity("CO", body.destination_city)
+    ]);
+
+    console.log(`📍 Origin lookup result:`, originCityInfo);
+    console.log(`📍 Destination lookup result:`, destCityInfo);
+
+    // Build origin with Queries API data (or fallback to defaults)
+    const originData = {
+      ...DOSMICOS_ORIGIN_BASE,
+      city: originCityInfo?.city || "Bogota",
+      state: originCityInfo?.state || "DC",
+      country: "CO",
+      postalCode: originCityInfo?.zipCode || ""
+    };
+
+    // Build destination with Queries API data (or fallback to provided values)
+    const destinationData = {
+      name: body.recipient_name || "Cliente",
+      company: "",
+      email: body.recipient_email || "cliente@dosmicos.com",
+      phone: cleanPhone,
+      street: street,
+      number: number,
+      district: district,
+      city: destCityInfo?.city || body.destination_city,
+      state: destCityInfo?.state || stateCode,
+      country: "CO",
+      postalCode: destCityInfo?.zipCode || "",
+      reference: `Pedido #${body.order_number}`
+    };
+
+    console.log(`📤 Origin address:`, originData);
+    console.log(`📤 Destination address:`, destinationData);
     
     const enviaRequest: Record<string, any> = {
-      origin: DOSMICOS_ORIGIN,
-      destination: {
-        name: body.recipient_name || "Cliente",
-        company: "",
-        email: body.recipient_email || "cliente@dosmicos.com",
-        phone: cleanPhone,
-        street: street,
-        number: number,
-        district: district,
-        city: body.destination_city,  // City NAME (Medellin, Cali, etc.)
-        state: stateCode,
-        country: "CO",
-        postalCode: "",               // Empty - Envia.com resolves territory via city+state
-        reference: `Pedido #${body.order_number}`
-      },
+      origin: originData,
+      destination: destinationData,
       packages: [{
         content: body.package_content || `Ropa - Pedido ${body.order_number}`,
         amount: 1,
