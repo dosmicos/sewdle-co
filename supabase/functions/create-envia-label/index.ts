@@ -663,26 +663,40 @@ serve(async (req) => {
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
-    // ============= USE DANE CODES FOR POSTAL CODES =============
-    // Get DANE codes for origin (Bogotá) and destination cities
-    const originDaneCode = getDaneCode("Bogota", "Bogota");
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
+    // ============= ENVIA.COM FORMAT =============
+    // Use city names directly WITHOUT postal codes - let Envia.com resolve territories
+    // The "00Bogota" error indicates Envia.com concatenates postalCode + city incorrectly
     
-    console.log(`📍 Origin DANE code: ${originDaneCode}`);
-    console.log(`📍 Destination DANE code: ${destDaneCode}`);
+    // Normalize city names for Envia.com
+    const normalizeCity = (city: string): string => {
+      const normalized = city.trim()
+        .replace(/á/gi, 'a')
+        .replace(/é/gi, 'e')
+        .replace(/í/gi, 'i')
+        .replace(/ó/gi, 'o')
+        .replace(/ú/gi, 'u')
+        .replace(/ñ/gi, 'n');
+      return normalized;
+    };
 
-    // Build origin with DANE code as postal code
+    const originCity = "Bogota";
+    const destCity = normalizeCity(body.destination_city);
+
+    console.log(`📍 Origin city: ${originCity}`);
+    console.log(`📍 Destination city: ${destCity}`);
+
+    // Build origin WITHOUT postal code
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: "Bogota",
+      city: originCity,
       state: "DC",
-      country: "CO",
-      postalCode: originDaneCode || "11001"
+      country: "CO"
+      // No postalCode field - let Envia.com resolve by city name
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination with DANE code as postal code
+    // Build destination WITHOUT postal code  
     const destinationData = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -691,14 +705,13 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: body.destination_city,
+      city: destCity,
       state: stateCode,
       country: "CO",
-      postalCode: destDaneCode || body.destination_postal_code || "",
+      // No postalCode field - let Envia.com resolve by city name
       reference: `Pedido #${body.order_number}`
     };
 
-    console.log(`📤 Origin address:`, originData);
     console.log(`📤 Destination address:`, destinationData);
     
     const enviaRequest: Record<string, any> = {
