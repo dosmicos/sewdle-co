@@ -666,32 +666,30 @@ serve(async (req) => {
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
 
     // ============= COLOMBIA ADDRESS FORMAT FOR ENVIA.COM =============
-    // Per Envia.com docs: city = DANE code, postalCode = DANE code, state = 2-digit dept code
-    // The first 2 digits of DANE code are the department code
+    // Envia.com concatenates state + city internally
+    // Use city NAMES (not codes) and alphabetic state codes
     
-    const originDaneCode = getDaneCode("Bogota", "DC") || "11001";
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department) || "05001";
+    const originCityName = "Bogota";
+    const destCityName = body.destination_city || "Medellin";
     
-    // Extract 2-digit department code from DANE (first 2 digits)
-    const originDeptCode = originDaneCode.substring(0, 2); // "11" for Bogotá
-    const destDeptCode = destDaneCode.substring(0, 2); // e.g., "05" for Medellín
-    
-    console.log(`📍 Origin: city="${originDaneCode}", state="${originDeptCode}", postalCode="${originDaneCode}"`);
-    console.log(`📍 Destination: city="${destDaneCode}", state="${destDeptCode}", postalCode="${destDaneCode}"`);
+    console.log(`📍 Origin: city="${originCityName}", state="DC"`);
+    console.log(`📍 Destination: city="${destCityName}", state="${stateCode}"`);
 
-    // Build origin with DANE codes
+    // Build origin - use city name, alphabetic state code, no postalCode
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: originDaneCode,
-      state: originDeptCode,
-      country: "CO",
-      postalCode: originDaneCode
+      city: originCityName,
+      state: "DC",
+      country: "CO"
     };
+    
+    // Remove postalCode entirely - don't send it at all
+    delete (originData as any).postalCode;
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination with DANE codes
-    const destinationData = {
+    // Build destination - use city name, alphabetic state code, no postalCode
+    const destinationData: Record<string, any> = {
       name: body.recipient_name || "Cliente",
       company: "",
       email: body.recipient_email || "cliente@dosmicos.co",
@@ -699,12 +697,12 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: destDaneCode,
-      state: destDeptCode,
+      city: destCityName,
+      state: stateCode,
       country: "CO",
-      postalCode: destDaneCode,
       reference: `Pedido #${body.order_number} - ${body.destination_city}`
     };
+    // Don't include postalCode at all for Colombia
 
     console.log(`📤 Destination address:`, destinationData);
     
