@@ -431,8 +431,23 @@ async function lookupEnviaCity(country: string, cityName: string, apiKey: string
   }
 }
 
-// Dosmicos origin address ID - pre-saved in Envia.com
-const DOSMICOS_ORIGIN_ADDRESS_ID = 6289477;
+// Dosmicos origin address - includes addressId + full address data
+const DOSMICOS_ORIGIN = {
+  addressId: 6289477,
+  name: "Julian Castro",
+  company: "dosmicos sas",
+  email: "dosmicoscol@gmail.com",
+  phone: "3125456340",
+  street: "Cra 27 # 63b -61 Barrio Quinta de Mutis",
+  number: "",
+  district: "Barrio Quinta de Mutis",
+  city: "11001000",        // Código DANE 8 dígitos para Bogotá
+  state: "DC",
+  country: "CO",
+  postalCode: "11001000",  // Código DANE 8 dígitos
+  reference: "CASA 1er piso de rejas negras",
+  taxIdentification: "901412407"
+};
 
 // Default package dimensions
 const DEFAULT_PACKAGE = {
@@ -668,15 +683,13 @@ serve(async (req) => {
     // Use DANE code for destination city and postalCode
     const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
 
-    console.log(`📍 Origin: Using pre-saved address ID ${DOSMICOS_ORIGIN_ADDRESS_ID}`);
+    console.log(`📍 Origin: Using addressId ${DOSMICOS_ORIGIN.addressId} + full address data`);
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
 
-    // Build origin - use pre-saved address ID from Envia.com
-    const originData = {
-      addressId: DOSMICOS_ORIGIN_ADDRESS_ID
-    };
+    // Build origin - use addressId + full address data
+    const originData = DOSMICOS_ORIGIN;
 
-    console.log(`📤 Origin address (by ID):`, originData);
+    console.log(`📤 Origin address:`, originData);
 
     // Build destination - use DANE code for both city and postalCode
     const destinationData: Record<string, any> = {
