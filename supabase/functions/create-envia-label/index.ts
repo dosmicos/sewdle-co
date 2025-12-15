@@ -389,18 +389,18 @@ interface EnviaCityInfo {
   country?: string;
 }
 
-async function lookupEnviaCity(country: string, cityName: string): Promise<EnviaCityInfo | null> {
+async function lookupEnviaCity(country: string, cityName: string, apiKey: string): Promise<EnviaCityInfo | null> {
   try {
-    // Normalize city name for URL
-    const normalizedCity = cityName.trim().replace(/\s+/g, '%20');
+    const normalizedCity = encodeURIComponent(cityName.trim());
     const url = `https://queries.envia.com/locate/${country}/${normalizedCity}`;
-    
-    console.log(`🔍 Looking up city: ${url}`);
-    
+
+    console.log(`🔍 Looking up city (Queries API): ${url}`);
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
       }
     });
     
@@ -684,17 +684,48 @@ serve(async (req) => {
     // - postalCode: Real postal code (e.g., "111321", "050001")
 
     // Get real postal codes (not DANE codes)
-    const originPostalCode = '111321'; // Bogota postal code
-    const destPostalCode = getPostalCode(body.destination_city, body.destination_department);
+    // Default/fallback values (local mapping)
+    let originCity = "Bogota";
+    let originState = "DC";
+    let originPostalCode = "111321";
 
-    console.log(`📍 Origin (CO): state="DC", city="Bogota", postalCode="${originPostalCode}"`);
-    console.log(`📍 Destination (CO): state="${stateCode}", city="${body.destination_city}", postalCode="${destPostalCode}"`);
+    let destCity = body.destination_city;
+    let destState = stateCode;
+    let destPostalCode = getPostalCode(body.destination_city, body.destination_department);
+
+    // Try to resolve the exact location codes using Envia Queries API (if available for your account)
+    try {
+      const originLookup = await lookupEnviaCity("CO", originCity, ENVIA_API_KEY);
+      if (originLookup) {
+        if (originLookup.city) originCity = originLookup.city;
+        if (originLookup.state) originState = originLookup.state;
+        if (originLookup.zipCode) originPostalCode = originLookup.zipCode;
+        console.log(`✅ Queries origin resolved: city="${originCity}", state="${originState}", postalCode="${originPostalCode}"`);
+      }
+    } catch (e) {
+      console.log('⚠️ Queries origin lookup failed, using local mapping');
+    }
+
+    try {
+      const destLookup = await lookupEnviaCity("CO", body.destination_city, ENVIA_API_KEY);
+      if (destLookup) {
+        if (destLookup.city) destCity = destLookup.city;
+        if (destLookup.state) destState = destLookup.state;
+        if (destLookup.zipCode) destPostalCode = destLookup.zipCode;
+        console.log(`✅ Queries destination resolved: city="${destCity}", state="${destState}", postalCode="${destPostalCode}"`);
+      }
+    } catch (e) {
+      console.log('⚠️ Queries destination lookup failed, using local mapping');
+    }
+
+    console.log(`📍 Origin (CO): state="${originState}", city="${originCity}", postalCode="${originPostalCode}"`);
+    console.log(`📍 Destination (CO): state="${destState}", city="${destCity}", postalCode="${destPostalCode}"`);
 
     // Build origin - use city NAME, not DANE code
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: "Bogota",
-      state: "DC",
+      city: originCity,
+      state: originState,
       country: "CO",
       postalCode: originPostalCode,
     };
@@ -710,10 +741,10 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: body.destination_city, // Use actual city name
-      state: stateCode,
+      city: destCity,
+      state: destState,
       country: "CO",
-      postalCode: destPostalCode, // Use real postal code
+      postalCode: destPostalCode,
       reference: `Pedido #${body.order_number}`,
       taxIdentification: "0000000000"
     };
