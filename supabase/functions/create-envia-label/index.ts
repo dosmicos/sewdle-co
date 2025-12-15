@@ -146,6 +146,7 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   'pasto': '52001',
   'tumaco': '52835',
   'ipiales': '52356',
+  'policarpa': '52540',
   // Huila
   'neiva': '41001',
   'pitalito': '41551',
