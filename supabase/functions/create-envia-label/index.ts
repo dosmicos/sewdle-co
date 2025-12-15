@@ -80,157 +80,167 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vichada': 'VI'
 };
 
-// Colombia DANE codes - REQUIRED by Envia.com for city and postalCode fields
-// Envia.com uses DANE codes (official geographic codes) instead of city names or postal codes
-const COLOMBIA_DANE_CODES: Record<string, string> = {
+// Colombia POSTAL CODES - Real postal codes for Envia.com API
+// Envia.com requires actual postal codes, not DANE codes
+const COLOMBIA_POSTAL_CODES: Record<string, string> = {
   // Bogotá D.C.
-  'bogota': '11001',
+  'bogota': '111321',
   // Antioquia
-  'medellin': '05001',
-  'envigado': '05266',
-  'sabaneta': '05631',
-  'itagui': '05360',
-  'bello': '05088',
-  'rionegro': '05615',
-  'la estrella': '05380',
-  'caldas': '05129',
-  'copacabana': '05212',
-  'girardota': '05308',
-  'barbosa': '05079',
+  'medellin': '050001',
+  'envigado': '055422',
+  'sabaneta': '055450',
+  'itagui': '055412',
+  'bello': '051050',
+  'rionegro': '054040',
+  'la estrella': '055460',
+  'caldas': '055440',
+  'copacabana': '051040',
+  'girardota': '051020',
+  'barbosa': '051030',
   // Valle del Cauca
-  'cali': '76001',
-  'palmira': '76520',
-  'buenaventura': '76109',
-  'tulua': '76834',
-  'buga': '76111',
-  'cartago': '76147',
-  'yumbo': '76892',
+  'cali': '760001',
+  'palmira': '763531',
+  'buenaventura': '764501',
+  'tulua': '763021',
+  'buga': '763041',
+  'cartago': '762021',
+  'yumbo': '760501',
   // Atlántico
-  'barranquilla': '08001',
-  'soledad': '08758',
-  'malambo': '08433',
+  'barranquilla': '080001',
+  'soledad': '083001',
+  'malambo': '083501',
   // Bolívar
-  'cartagena': '13001',
-  'turbaco': '13836',
-  'magangue': '13430',
+  'cartagena': '130001',
+  'turbaco': '131001',
+  'magangue': '132001',
   // Santander
-  'bucaramanga': '68001',
-  'floridablanca': '68276',
-  'giron': '68307',
-  'piedecuesta': '68547',
-  'barrancabermeja': '68081',
+  'bucaramanga': '680001',
+  'floridablanca': '681001',
+  'giron': '681501',
+  'piedecuesta': '682001',
+  'barrancabermeja': '687001',
   // Norte de Santander
-  'cucuta': '54001',
-  'villa del rosario': '54874',
-  'los patios': '54405',
+  'cucuta': '540001',
+  'villa del rosario': '541001',
+  'los patios': '541501',
   // Risaralda
-  'pereira': '66001',
-  'dosquebradas': '66170',
-  'santa rosa de cabal': '66682',
+  'pereira': '660001',
+  'dosquebradas': '661001',
+  'santa rosa de cabal': '661501',
   // Caldas
-  'manizales': '17001',
-  'villamaria': '17873',
+  'manizales': '170001',
+  'villamaria': '171001',
   // Tolima
-  'ibague': '73001',
-  'espinal': '73268',
+  'ibague': '730001',
+  'espinal': '733501',
   // Magdalena
-  'santa marta': '47001',
-  'cienaga': '47189',
+  'santa marta': '470001',
+  'cienaga': '472001',
   // Córdoba
-  'monteria': '23001',
-  'cerete': '23162',
+  'monteria': '230001',
+  'cerete': '231001',
   // Meta
-  'villavicencio': '50001',
-  'acacias': '50006',
+  'villavicencio': '500001',
+  'acacias': '507001',
   // Nariño
-  'pasto': '52001',
-  'tumaco': '52835',
-  'ipiales': '52356',
-  'policarpa': '52540',
+  'pasto': '520001',
+  'tumaco': '528501',
+  'ipiales': '524060',
   // Huila
-  'neiva': '41001',
-  'pitalito': '41551',
+  'neiva': '410001',
+  'pitalito': '417030',
   // Quindío
-  'armenia': '63001',
-  'calarca': '63130',
+  'armenia': '630001',
+  'calarca': '632001',
   // Cauca
-  'popayan': '19001',
-  'santander de quilichao': '19698',
+  'popayan': '190001',
+  'santander de quilichao': '191030',
   // Sucre
-  'sincelejo': '70001',
-  'corozal': '70215',
+  'sincelejo': '700001',
+  'corozal': '702001',
   // Cesar
-  'valledupar': '20001',
-  'aguachica': '20011',
+  'valledupar': '200001',
+  'aguachica': '205001',
   // Boyacá
-  'tunja': '15001',
-  'duitama': '15238',
-  'sogamoso': '15759',
+  'tunja': '150001',
+  'duitama': '152001',
+  'sogamoso': '153001',
   // Caquetá
-  'florencia': '18001',
+  'florencia': '180001',
   // La Guajira
-  'riohacha': '44001',
-  'maicao': '44430',
+  'riohacha': '440001',
+  'maicao': '442001',
   // Chocó
-  'quibdo': '27001',
+  'quibdo': '270001',
   // Casanare
-  'yopal': '85001',
-  'aguazul': '85010',
+  'yopal': '850001',
+  'aguazul': '851001',
   // Putumayo
-  'mocoa': '86001',
+  'mocoa': '860001',
   // Amazonas
-  'leticia': '91001',
+  'leticia': '910001',
   // Guainía
-  'inirida': '94001',
+  'inirida': '940001',
   // Vaupés
-  'mitu': '97001',
+  'mitu': '970001',
   // Vichada
-  'puerto carreno': '99001',
+  'puerto carreno': '990001',
   // Guaviare
-  'san jose del guaviare': '95001',
+  'san jose del guaviare': '950001',
   // Arauca
-  'arauca': '81001',
+  'arauca': '810001',
   // Cundinamarca (municipalities near Bogotá)
-  'soacha': '25754',
-  'chia': '25175',
-  'zipaquira': '25899',
-  'facatativa': '25269',
-  'madrid': '25430',
-  'funza': '25286',
-  'mosquera': '25473',
-  'cajica': '25126',
-  'cota': '25214',
-  'la calera': '25377',
-  'fusagasuga': '25290',
-  'girardot': '25307',
-  'tocancipa': '25817',
-  'sopo': '25758',
-  'tabio': '25785',
-  'tenjo': '25799',
-  'sibate': '25740',
-  'silvania': '25743',
-  'villeta': '25871'
+  'soacha': '250051',
+  'chia': '250001',
+  'zipaquira': '250251',
+  'facatativa': '253051',
+  'madrid': '250551',
+  'funza': '250021',
+  'mosquera': '250471',
+  'cajica': '250241',
+  'cota': '250801',
+  'la calera': '250051',
+  'fusagasuga': '252211',
+  'girardot': '252431',
+  'tocancipa': '251811',
+  'sopo': '251801',
+  'tabio': '250871',
+  'tenjo': '250881',
+  'sibate': '250741',
+  'silvania': '250751',
+  'villeta': '253461'
 };
 
-// Get DANE code for a city
-function getDaneCode(city: string, department?: string): string {
+// Get postal code for a city
+function getPostalCode(city: string, department?: string): string {
   const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   
   // Direct match
-  if (COLOMBIA_DANE_CODES[normalizedCity]) {
-    return COLOMBIA_DANE_CODES[normalizedCity];
+  if (COLOMBIA_POSTAL_CODES[normalizedCity]) {
+    return COLOMBIA_POSTAL_CODES[normalizedCity];
   }
   
   // Partial match
-  for (const [cityKey, daneCode] of Object.entries(COLOMBIA_DANE_CODES)) {
+  for (const [cityKey, postalCode] of Object.entries(COLOMBIA_POSTAL_CODES)) {
     if (normalizedCity.includes(cityKey) || cityKey.includes(normalizedCity)) {
-      console.log(`🏛️ DANE code match: "${city}" → "${daneCode}"`);
-      return daneCode;
+      console.log(`📮 Postal code match: "${city}" → "${postalCode}"`);
+      return postalCode;
     }
   }
   
-  console.log(`⚠️ No DANE code found for city: "${city}"`);
-  return '';
+  console.log(`⚠️ No postal code found for city: "${city}", using default`);
+  // Return a generic postal code based on department if available
+  if (department) {
+    const normalizedDept = department.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (normalizedDept.includes('bogota') || normalizedDept === 'dc') return '111321';
+    if (normalizedDept.includes('antioquia')) return '050001';
+    if (normalizedDept.includes('valle')) return '760001';
+    if (normalizedDept.includes('atlantico')) return '080001';
+    if (normalizedDept.includes('bolivar')) return '130001';
+    if (normalizedDept.includes('santander') && !normalizedDept.includes('norte')) return '680001';
+    if (normalizedDept.includes('norte de santander')) return '540001';
+  }
+  return '111321'; // Default to Bogota
 }
 
 // Shopify province codes to Envia.com state codes mapping
@@ -670,36 +680,28 @@ serve(async (req) => {
     // ============= COLOMBIA ADDRESS FORMAT FOR ENVIA.COM =============
     // Envia.com (CO) expects:
     // - state: 2-letter department code (e.g., DC, AN, CN)
-    // - city: DANE municipality code (e.g., 11001 for Bogotá)
-    // - postalCode: SAME DANE municipality code
+    // - city: City NAME (e.g., "Bogota", "Medellin")
+    // - postalCode: Real postal code (e.g., "111321", "050001")
 
-    const originDaneCode = getDaneCode("Bogota", "Bogotá D.C.") || "11001";
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
+    // Get real postal codes (not DANE codes)
+    const originPostalCode = '111321'; // Bogota postal code
+    const destPostalCode = getPostalCode(body.destination_city, body.destination_department);
 
-    if (!destDaneCode) {
-      const msg = `No encuentro código DANE para la ciudad "${body.destination_city}". Revisa ciudad/departamento o agrégala al mapeo.`;
-      console.error(`❌ ${msg}`);
-      return new Response(JSON.stringify({ success: false, error: msg }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    console.log(`📍 Origin (CO): state="DC", city="Bogota", postalCode="${originPostalCode}"`);
+    console.log(`📍 Destination (CO): state="${stateCode}", city="${body.destination_city}", postalCode="${destPostalCode}"`);
 
-    console.log(`📍 Origin (CO): state="DC", city(DANE)="${originDaneCode}", postalCode="${originDaneCode}"`);
-    console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}", postalCode="${destDaneCode}"`);
-
-    // Build origin
+    // Build origin - use city NAME, not DANE code
     const originData = {
       ...DOSMICOS_ORIGIN_BASE,
-      city: originDaneCode,
+      city: "Bogota",
       state: "DC",
       country: "CO",
-      postalCode: originDaneCode,
+      postalCode: originPostalCode,
     };
 
     console.log(`📤 Origin address:`, originData);
 
-    // Build destination
+    // Build destination - use city NAME, not DANE code
     const destinationData: Record<string, any> = {
       name: body.recipient_name || "Cliente",
       company: "",
@@ -708,11 +710,11 @@ serve(async (req) => {
       street: street,
       number: number,
       district: district,
-      city: destDaneCode,
+      city: body.destination_city, // Use actual city name
       state: stateCode,
       country: "CO",
-      postalCode: destDaneCode,
-      reference: `Pedido #${body.order_number} - ${body.destination_city}`,
+      postalCode: destPostalCode, // Use real postal code
+      reference: `Pedido #${body.order_number}`,
       taxIdentification: "0000000000"
     };
 
