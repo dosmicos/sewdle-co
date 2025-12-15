@@ -99,44 +99,55 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, onLabelChange]);
 
-  // Fetch recommended carrier based on shipping coverage
+  // Determine recommended carrier based on business rules (same as backend)
   useEffect(() => {
-    const fetchRecommendedCarrier = async () => {
-      if (!currentOrganization?.id || !shippingAddress?.city || !shippingAddress?.province) {
+    const determineCarrier = () => {
+      if (!shippingAddress?.city || !shippingAddress?.province) {
         setRecommendedCarrier('coordinadora');
         return;
       }
 
-      try {
-        const coverage = await checkCoverage(
-          shippingAddress.city,
-          shippingAddress.province,
-          currentOrganization.id
-        );
+      const normalizeText = (text: string) => 
+        text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-        if (coverage) {
-          if (coverage.priority_carrier) {
-            setRecommendedCarrier(coverage.priority_carrier.toLowerCase());
-          } else if (coverage.coordinadora) {
-            setRecommendedCarrier('coordinadora');
-          } else if (coverage.interrapidisimo) {
-            setRecommendedCarrier('interrapidisimo');
-          } else if (coverage.deprisa) {
-            setRecommendedCarrier('deprisa');
-          } else {
-            setRecommendedCarrier('coordinadora');
-          }
-        } else {
-          setRecommendedCarrier('coordinadora');
-        }
-      } catch (error) {
-        console.error('Error fetching coverage:', error);
+      const city = normalizeText(shippingAddress.city);
+      const dept = normalizeText(shippingAddress.province);
+
+      // Rule 1: Cundinamarca (includes Bogotá) → Coordinadora
+      if (dept.includes('cundinamarca') || dept.includes('bogota') || 
+          city.includes('bogota') || dept === 'dc' || dept === 'bog') {
         setRecommendedCarrier('coordinadora');
+        return;
+      }
+
+      // Rule 2: Medellín, Antioquia → Coordinadora
+      if ((dept.includes('antioquia') || dept === 'ant') && city.includes('medellin')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
+      // Main cities for Deprisa (paid orders only)
+      const MAIN_CITIES = [
+        'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
+        'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
+        'armenia', 'popayan', 'sincelejo', 'valledupar', 'tunja', 
+        'florencia', 'riohacha'
+      ];
+
+      const isMainCity = MAIN_CITIES.some(mainCity => city.includes(mainCity));
+
+      // Rule 3: Main city + paid → Deprisa
+      // Rule 4: Main city + COD → Inter Rapidísimo
+      // Rule 5: Remote city → Inter Rapidísimo
+      if (isMainCity && !isCOD) {
+        setRecommendedCarrier('deprisa');
+      } else {
+        setRecommendedCarrier('interrapidisimo');
       }
     };
 
-    fetchRecommendedCarrier();
-  }, [shippingAddress?.city, shippingAddress?.province, currentOrganization?.id, checkCoverage]);
+    determineCarrier();
+  }, [shippingAddress?.city, shippingAddress?.province, isCOD]);
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
