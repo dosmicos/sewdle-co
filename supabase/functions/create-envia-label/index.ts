@@ -677,7 +677,7 @@ serve(async (req) => {
 
     // Use DANE codes for both city and postalCode fields
     // Envia.com Colombia requires DANE codes, not city names or postal codes
-    const originDaneCode = '11001'; // Bogotá DANE code
+    const originDaneCode = '11001000'; // Bogotá DANE code
     const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
 
     console.log(`📍 Origin (CO): state="DC", city(DANE)="${originDaneCode}"`);
