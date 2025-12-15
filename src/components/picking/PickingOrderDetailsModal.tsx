@@ -824,6 +824,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   <Badge className={`${statusColors[effectiveOrder.operational_status]} text-xs px-2 py-0.5`}>
                     {statusLabels[effectiveOrder.operational_status]}
                   </Badge>
+                  
+                  {/* Badge "Enviado" cuando hay guía de envío válida */}
+                  {shippingLabel && shippingLabel.status !== 'error' && shippingLabel.status !== 'cancelled' && (
+                    <Badge className="bg-blue-500 text-white text-xs px-2 py-0.5">
+                      🚚 Enviado
+                    </Badge>
+                  )}
                   {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
                     <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5">
                       Pendiente
