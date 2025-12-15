@@ -84,9 +84,9 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
 // According to Envia.com docs, Colombia uses DANE codes for both city and postalCode
 const COLOMBIA_DANE_CODES: Record<string, string> = {
   // Bogotá D.C.
-  'bogota': '11001',
-  'bogota d.c.': '11001',
-  'bogota dc': '11001',
+  'bogota': '11001000',
+  'bogota d.c.': '11001000',
+  'bogota dc': '11001000',
   // Antioquia
   'medellin': '05001',
   'envigado': '05266',
@@ -231,8 +231,8 @@ function getDaneCode(city: string, department?: string): string {
     }
   }
   
-  console.log(`⚠️ No DANE code found for city: "${city}", using Bogota fallback (11001)`);
-  return '11001'; // Default to Bogota
+  console.log(`⚠️ No DANE code found for city: "${city}", using Bogota fallback (11001000)`);
+  return '11001000'; // Default to Bogota
 }
 
 // Shopify province codes to Envia.com state codes mapping
