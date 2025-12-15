@@ -873,6 +873,85 @@ serve(async (req) => {
 
     console.log('✅ Label created successfully:', shipmentData.trackingNumber);
 
+    // === AUTO-FULFILL IN SHOPIFY ===
+    const SHOPIFY_STORE_DOMAIN = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+    const SHOPIFY_ACCESS_TOKEN = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+    
+    if (SHOPIFY_STORE_DOMAIN && SHOPIFY_ACCESS_TOKEN && body.shopify_order_id) {
+      try {
+        console.log('📦 Creating Shopify fulfillment for order:', body.shopify_order_id);
+        
+        // Map carrier names for Shopify
+        const carrierNamesMap: Record<string, string> = {
+          'coordinadora': 'Coordinadora Mercantil',
+          'interrapidisimo': 'Inter Rapidísimo',
+          'deprisa': 'Deprisa',
+          'servientrega': 'Servientrega',
+          'tcc': 'TCC',
+          'envia': 'Envia'
+        };
+        
+        const trackingCompany = carrierNamesMap[carrierConfig.carrier.toLowerCase()] || carrierConfig.carrier;
+        
+        // Create fulfillment in Shopify
+        const fulfillmentResponse = await fetch(
+          `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders/${body.shopify_order_id}/fulfillments.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fulfillment: {
+                tracking_number: shipmentData.trackingNumber,
+                tracking_company: trackingCompany,
+                notify_customer: true
+              }
+            })
+          }
+        );
+        
+        const fulfillmentData = await fulfillmentResponse.json();
+        
+        if (fulfillmentResponse.ok) {
+          console.log('✅ Shopify fulfillment created successfully');
+          
+          // Update picking_packing_orders to 'shipped'
+          const { error: pickingError } = await supabase
+            .from('picking_packing_orders')
+            .update({ 
+              operational_status: 'shipped',
+              shipped_at: new Date().toISOString()
+            })
+            .eq('shopify_order_id', body.shopify_order_id);
+          
+          if (pickingError) {
+            console.error('⚠️ Error updating picking_packing_orders:', pickingError);
+          } else {
+            console.log('✅ picking_packing_orders updated to shipped');
+          }
+          
+          // Update shopify_orders fulfillment_status
+          const { error: shopifyError } = await supabase
+            .from('shopify_orders')
+            .update({ fulfillment_status: 'fulfilled' })
+            .eq('shopify_order_id', body.shopify_order_id);
+          
+          if (shopifyError) {
+            console.error('⚠️ Error updating shopify_orders:', shopifyError);
+          } else {
+            console.log('✅ shopify_orders updated to fulfilled');
+          }
+        } else {
+          console.error('⚠️ Shopify fulfillment failed:', fulfillmentData);
+        }
+      } catch (fulfillmentError) {
+        console.error('⚠️ Error creating Shopify fulfillment:', fulfillmentError);
+        // Don't fail the whole request - label was created successfully
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
