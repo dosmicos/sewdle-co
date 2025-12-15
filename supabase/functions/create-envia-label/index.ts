@@ -432,13 +432,14 @@ async function lookupEnviaCity(country: string, cityName: string): Promise<Envia
 // Dosmicos origin address (fixed) - will be enriched with Queries API data
 const DOSMICOS_ORIGIN_BASE = {
   name: "Julian Castro",
-  company: "Dosmicos SAS",
+  company: "dosmicos sas",
   email: "dosmicoscol@gmail.com",
   phone: "3125456340",
-  street: "Cra 27",
-  number: "63b-61",
-  district: "Quinta de Mutis",
-  reference: "CASA 1er piso de rejas negras"
+  street: "Cra 27 # 63b -61",
+  number: "",
+  district: "Barrio Quinta de Mutis",
+  reference: "CASA 1er piso de rejas negras",
+  taxIdentification: "901412407"
 };
 
 // Default package dimensions
@@ -711,7 +712,8 @@ serve(async (req) => {
       state: stateCode,
       country: "CO",
       postalCode: destDaneCode,
-      reference: `Pedido #${body.order_number} - ${body.destination_city}`
+      reference: `Pedido #${body.order_number} - ${body.destination_city}`,
+      taxIdentification: "0000000000"
     };
 
     console.log(`📤 Destination address:`, destinationData);
