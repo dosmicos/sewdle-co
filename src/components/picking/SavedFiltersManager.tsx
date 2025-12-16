@@ -17,7 +17,7 @@ const PRESET_FILTERS = [
     filters: {
       financial_status: ['paid', 'pending', 'partially_paid'],
       tags: ['confirmado'],
-      exclude_tags: ['empacado'],
+      exclude_tags: ['empacado', 'bordado'],
     }
   },
   {
