@@ -549,6 +549,7 @@ interface CreateLabelRequest {
   recipient_phone: string;
   recipient_email: string;
   destination_address: string;
+  destination_address2?: string; // Apartamento, torre, etc.
   destination_city: string;
   destination_department: string;
   destination_postal_code?: string;
@@ -585,6 +586,7 @@ serve(async (req) => {
     console.log('📦 Creating label for order:', body.order_number);
     console.log('📍 Destination:', body.destination_city, body.destination_department);
     console.log('📍 Full address:', body.destination_address);
+    console.log('📍 Address2 (apt/tower):', body.destination_address2 || '(none)');
 
     // Validate required fields
     if (!body.destination_address || !body.destination_city) {
@@ -691,6 +693,12 @@ serve(async (req) => {
 
     console.log(`📤 Origin address:`, originData);
 
+    // Build reference text with address2 (apartment/tower info) + order number
+    const referenceText = [
+      body.destination_address2,  // "Apto 1133 torre 9 villa de los Angeles 2"
+      `Pedido #${body.order_number}`
+    ].filter(Boolean).join(' - ');
+
     // Build destination - use DANE code for both city and postalCode
     const destinationData: Record<string, any> = {
       name: body.recipient_name || "Cliente",
@@ -704,7 +712,7 @@ serve(async (req) => {
       state: stateCode,
       country: "CO",
       postalCode: destDaneCode,
-      reference: `Pedido #${body.order_number}`,
+      reference: referenceText,
       taxIdentification: "0000000000"
     };
 

@@ -108,6 +108,7 @@ export interface CreateLabelRequest {
   recipient_phone: string;
   recipient_email: string;
   destination_address: string;
+  destination_address2?: string; // Apartamento, torre, etc.
   destination_city: string;
   destination_department: string;
   destination_postal_code?: string;
