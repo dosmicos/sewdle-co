@@ -744,10 +744,31 @@ serve(async (req) => {
       }
     };
 
-    // Add Cash on Delivery (COD) if specified
+    // Add Cash on Delivery (COD) if specified - try multiple formats
     if (body.is_cod && body.cod_amount && body.cod_amount > 0) {
       console.log(`💵 COD enabled: ${body.cod_amount} COP`);
+      console.log(`💵 COD detection - is_cod: ${body.is_cod}, cod_amount: ${body.cod_amount}`);
+      
+      // Format 1: In shipment object (standard format)
       enviaRequest.shipment.cashOnDelivery = body.cod_amount;
+      
+      // Format 2: In settings object (alternative format)
+      enviaRequest.settings.cashOnDelivery = body.cod_amount;
+      
+      // Format 3: As additional service with object format
+      enviaRequest.settings.additionalServices = {
+        cashOnDelivery: {
+          amount: body.cod_amount,
+          currency: "COP"
+        }
+      };
+      
+      // Format 4: Direct in root (some APIs expect this)
+      enviaRequest.cashOnDelivery = body.cod_amount;
+      
+      console.log(`💵 COD added in multiple formats: shipment.cashOnDelivery, settings.cashOnDelivery, settings.additionalServices.cashOnDelivery, root.cashOnDelivery`);
+    } else {
+      console.log(`💵 COD NOT enabled - is_cod: ${body.is_cod}, cod_amount: ${body.cod_amount}`);
     }
 
     console.log('📤 Sending request to Envia.com API...');
@@ -849,6 +870,17 @@ serve(async (req) => {
       );
     }
 
+    // Log COD-related data in response for debugging
+    console.log('📥 COD Response Analysis:', JSON.stringify({
+      hasCashOnDelivery: !!shipmentData.cashOnDelivery,
+      cashOnDeliveryValue: shipmentData.cashOnDelivery,
+      additionalServices: shipmentData.additionalServices,
+      codInfo: shipmentData.codInfo,
+      amountToCollect: shipmentData.amountToCollect,
+      collectAmount: shipmentData.collectAmount,
+      allKeys: Object.keys(shipmentData)
+    }, null, 2));
+
     // Save successful label
     const labelRecord = {
       organization_id: body.organization_id,
@@ -865,7 +897,10 @@ serve(async (req) => {
       destination_address: body.destination_address,
       recipient_name: body.recipient_name,
       recipient_phone: body.recipient_phone,
-      raw_response: enviaData
+      raw_response: enviaData,
+      // Store COD info for debugging
+      cod_requested: body.is_cod,
+      cod_amount_requested: body.cod_amount
     };
 
     const { data: savedLabel, error: saveError } = await supabase
