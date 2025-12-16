@@ -272,20 +272,26 @@ serve(async (req) => {
     // Wait for all requests (3 carriers × 2 types = 6 requests)
     const results = await Promise.all(ratePromises);
 
-    // Combine successful quotes - ONLY ground services
+    // Combine successful quotes - ONLY ground/terrestrial services
     const quotes: CarrierQuote[] = [];
+    
+    // Valid ground service names (different carriers use different names)
+    const GROUND_SERVICES = ['ground', 'ecommerce', 'estandar', 'ground_small', 'terrestre'];
 
     for (const result of results) {
       if (result.success && result.data?.data && Array.isArray(result.data.data)) {
         for (const rate of result.data.data) {
           const service = (rate.service || 'ground').toLowerCase();
           
-          // ✅ Only include ground (terrestrial) services
-          if (service !== 'ground') {
+          // ✅ Only include ground/terrestrial services
+          const isGroundService = GROUND_SERVICES.some(gs => service.includes(gs));
+          if (!isGroundService) {
             console.log(`⏭️ Skipping ${result.carrier} ${service} (not ground)`);
             continue;
           }
 
+          console.log(`✅ Including ${result.carrier} ${service} (${result.deliveryType}) - $${rate.totalPrice || rate.price}`);
+          
           quotes.push({
             carrier: rate.carrier || result.carrier,
             service: service,

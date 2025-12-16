@@ -618,32 +618,45 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           </div>
         ) : quotes.length > 0 ? (
           <div className="space-y-1.5">
-            {quotes.map((quote) => (
-              <div 
-                key={quote.carrier}
-                onClick={() => setSelectedCarrier(quote.carrier)}
-                className={`flex items-center justify-between p-2.5 rounded-md border cursor-pointer transition-colors ${
-                  selectedCarrier === quote.carrier 
-                    ? 'border-primary bg-primary/5' 
-                    : 'border-border hover:bg-muted/50'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium capitalize">
-                    {CARRIER_NAMES[quote.carrier.toLowerCase() as CarrierCode] || quote.carrier}
-                  </span>
-                  {quote.estimated_days > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      ~{quote.estimated_days} días
+            {quotes.map((quote) => {
+              const quoteKey = `${quote.carrier}-${quote.deliveryType}`;
+              return (
+                <div 
+                  key={quoteKey}
+                  onClick={() => setSelectedCarrier(quote.carrier)}
+                  className={`flex items-center justify-between p-2.5 rounded-md border cursor-pointer transition-colors ${
+                    selectedCarrier === quote.carrier 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Truck className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium capitalize">
+                      {CARRIER_NAMES[quote.carrier.toLowerCase() as CarrierCode] || quote.carrier}
                     </span>
-                  )}
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[10px] h-5 ${
+                        quote.deliveryType === 'domicilio' 
+                          ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                    >
+                      {quote.deliveryType === 'domicilio' ? '🏠 Domicilio' : '🏢 Oficina'}
+                    </Badge>
+                    {quote.estimated_days > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        ~{quote.estimated_days} días
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-semibold text-green-600 text-sm">
+                    {formatCurrency(quote.price)}
+                  </span>
                 </div>
-                <span className="font-semibold text-green-600 text-sm">
-                  {formatCurrency(quote.price)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <Select value={selectedCarrier || 'auto'} onValueChange={setSelectedCarrier}>
