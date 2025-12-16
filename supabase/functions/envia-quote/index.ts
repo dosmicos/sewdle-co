@@ -36,6 +36,39 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vaupes': 'VA', 'vaupés': 'VA', 'vichada': 'VI'
 };
 
+// Colombia DANE codes (8 digits) for cities
+const COLOMBIA_DANE_CODES: Record<string, string> = {
+  'bogota': '11001000', 'bogotá': '11001000',
+  'medellin': '05001000', 'medellín': '05001000',
+  'cali': '76001000', 'barranquilla': '08001000',
+  'cartagena': '13001000', 'bucaramanga': '68001000',
+  'cucuta': '54001000', 'cúcuta': '54001000',
+  'pereira': '66001000', 'villavicencio': '50001000',
+  'pasto': '52001000', 'santa marta': '47001000',
+  'monteria': '23001000', 'montería': '23001000',
+  'armenia': '63001000', 'popayan': '19001000', 'popayán': '19001000',
+  'sincelejo': '70001000', 'valledupar': '20001000',
+  'tunja': '15001000', 'florencia': '18001000',
+  'riohacha': '44001000', 'ibague': '73001000', 'ibagué': '73001000',
+  'neiva': '41001000', 'manizales': '17001000',
+  'soacha': '25754000', 'soledad': '08758000',
+  'bello': '05088000', 'itagui': '05360000', 'itagüí': '05360000',
+  'envigado': '05266000', 'buenaventura': '76109000',
+  'palmira': '76520000', 'floridablanca': '68276000',
+  'tulua': '76834000', 'tuluá': '76834000',
+  'dosquebradas': '66170000', 'apartado': '05045000', 'apartadó': '05045000',
+  'barrancabermeja': '68081000', 'girardot': '25307000',
+  'chia': '25175000', 'chía': '25175000',
+  'zipaquira': '25899000', 'zipaquirá': '25899000',
+  'facatativa': '25269000', 'facatativá': '25269000',
+  'funza': '25286000', 'madrid': '25430000',
+  'mosquera': '25473000', 'cajica': '25126000', 'cajicá': '25126000',
+  'girardota': '05308000', 'rionegro': '05615000',
+  'la ceja': '05376000', 'marinilla': '05440000',
+  'sabaneta': '05631000', 'copacabana': '05212000',
+  'caldas': '05129000', 'la estrella': '05380000'
+};
+
 function getStateCode(department: string): string {
   const normalized = department.trim();
   const upper = normalized.toUpperCase();
@@ -51,6 +84,27 @@ function getStateCode(department: string): string {
   }
   
   return COLOMBIA_STATE_CODES[lower] || 'DC';
+}
+
+function getDaneCode(city: string): string {
+  const normalized = city.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Check exact match first
+  if (COLOMBIA_DANE_CODES[city.toLowerCase().trim()]) {
+    return COLOMBIA_DANE_CODES[city.toLowerCase().trim()];
+  }
+  
+  // Check normalized match
+  for (const [key, code] of Object.entries(COLOMBIA_DANE_CODES)) {
+    const normalizedKey = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalizedKey === normalized) {
+      return code;
+    }
+  }
+  
+  // Default to Bogotá
+  return '11001000';
 }
 
 // Dosmicos origin
@@ -113,21 +167,23 @@ serve(async (req) => {
     }
 
     const stateCode = getStateCode(body.destination_department);
+    const destinationDaneCode = getDaneCode(body.destination_city);
     console.log(`📍 Department "${body.destination_department}" -> State code "${stateCode}"`);
+    console.log(`📍 City "${body.destination_city}" -> DANE code "${destinationDaneCode}"`);
 
     // Build rate request following Envia.com API docs
     const rateRequest = {
       origin: {
         country: "CO",
         state: "DC",
-        city: "Bogota",
-        postalCode: "111321"
+        city: "11001000",      // Bogotá DANE code
+        postalCode: "11001000" // Same DANE code
       },
       destination: {
         country: "CO",
         state: stateCode,
-        city: body.destination_city,
-        postalCode: body.destination_postal_code || "000000"
+        city: destinationDaneCode,
+        postalCode: destinationDaneCode
       },
       packages: [{
         content: "Ropa",
@@ -144,6 +200,9 @@ serve(async (req) => {
           height: 10
         }
       }],
+      shipment: {
+        type: 1
+      },
       settings: {
         currency: "COP"
       }
@@ -162,9 +221,28 @@ serve(async (req) => {
       body: JSON.stringify(rateRequest)
     });
 
-    const enviaData = await enviaResponse.json();
+    // Get response as text first for better error handling
+    const responseText = await enviaResponse.text();
     console.log('📥 Envia.com rate response status:', enviaResponse.status);
-    console.log('📥 Envia.com rate response:', JSON.stringify(enviaData, null, 2));
+    console.log('📥 Envia.com raw response:', responseText.substring(0, 500));
+
+    // Try to parse JSON
+    let enviaData;
+    try {
+      enviaData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Response is not valid JSON:', responseText.substring(0, 200));
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'La API de Envia.com devolvió una respuesta inválida',
+          details: responseText.substring(0, 200)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 502 }
+      );
+    }
+
+    console.log('📥 Envia.com parsed response:', JSON.stringify(enviaData, null, 2));
 
     if (!enviaResponse.ok || enviaData.meta === 'error') {
       const errorMsg = enviaData?.error?.message || enviaData?.message || 'Error al obtener cotización';
@@ -203,7 +281,8 @@ serve(async (req) => {
         destination: {
           city: body.destination_city,
           department: body.destination_department,
-          state_code: stateCode
+          state_code: stateCode,
+          dane_code: destinationDaneCode
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
