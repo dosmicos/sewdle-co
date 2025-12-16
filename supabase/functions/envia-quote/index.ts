@@ -208,71 +208,76 @@ serve(async (req) => {
       }
     };
 
-    console.log('📤 Sending rate request to Envia.com API...');
-    console.log('📤 Request payload:', JSON.stringify(rateRequest, null, 2));
+    // Only these 3 carriers
+    const AVAILABLE_CARRIERS = ['coordinadora', 'interrapidisimo', 'deprisa'];
 
-    // Call Envia.com Rate API
-    const enviaResponse = await fetch('https://api.envia.com/ship/rate/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ENVIA_API_KEY}`
-      },
-      body: JSON.stringify(rateRequest)
+    console.log('📤 Getting quotes for carriers:', AVAILABLE_CARRIERS.join(', '));
+
+    // Make parallel requests for each carrier
+    const ratePromises = AVAILABLE_CARRIERS.map(async (carrier) => {
+      const requestWithCarrier = {
+        ...rateRequest,
+        shipment: { type: 1, carrier }
+      };
+
+      try {
+        console.log(`📤 Requesting quote from ${carrier}...`);
+        const response = await fetch('https://api.envia.com/ship/rate/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ENVIA_API_KEY}`
+          },
+          body: JSON.stringify(requestWithCarrier)
+        });
+
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.log(`⚠️ Invalid JSON from ${carrier}:`, text.substring(0, 100));
+          return { carrier, success: false, error: 'Invalid response' };
+        }
+
+        if (data.meta === 'error') {
+          console.log(`⚠️ ${carrier} error:`, data.error?.message || 'Unknown error');
+          return { carrier, success: false, error: data.error?.message };
+        }
+
+        console.log(`✅ Got quote from ${carrier}`);
+        return { carrier, success: true, data };
+      } catch (error: any) {
+        console.log(`❌ Error getting quote from ${carrier}:`, error.message);
+        return { carrier, success: false, error: error.message };
+      }
     });
 
-    // Get response as text first for better error handling
-    const responseText = await enviaResponse.text();
-    console.log('📥 Envia.com rate response status:', enviaResponse.status);
-    console.log('📥 Envia.com raw response:', responseText.substring(0, 500));
+    // Wait for all requests
+    const results = await Promise.all(ratePromises);
 
-    // Try to parse JSON
-    let enviaData;
-    try {
-      enviaData = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('❌ Response is not valid JSON:', responseText.substring(0, 200));
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'La API de Envia.com devolvió una respuesta inválida',
-          details: responseText.substring(0, 200)
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 502 }
-      );
-    }
-
-    console.log('📥 Envia.com parsed response:', JSON.stringify(enviaData, null, 2));
-
-    if (!enviaResponse.ok || enviaData.meta === 'error') {
-      const errorMsg = enviaData?.error?.message || enviaData?.message || 'Error al obtener cotización';
-      console.error('❌ Envia.com rate error:', errorMsg);
-      return new Response(
-        JSON.stringify({ success: false, error: errorMsg, details: enviaData }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-
-    // Parse quotes from response
+    // Combine successful quotes
     const quotes: CarrierQuote[] = [];
-    
-    if (enviaData.data && Array.isArray(enviaData.data)) {
-      for (const rate of enviaData.data) {
-        quotes.push({
-          carrier: rate.carrier || 'unknown',
-          service: rate.service || 'ground',
-          price: rate.totalPrice || rate.price || 0,
-          currency: rate.currency || 'COP',
-          estimated_days: rate.deliveryDays || rate.days || 0,
-          deliveryEstimate: rate.deliveryEstimate || null
-        });
+
+    for (const result of results) {
+      if (result.success && result.data?.data && Array.isArray(result.data.data)) {
+        for (const rate of result.data.data) {
+          quotes.push({
+            carrier: rate.carrier || result.carrier,
+            service: rate.service || 'ground',
+            price: rate.totalPrice || rate.price || 0,
+            currency: rate.currency || 'COP',
+            estimated_days: rate.deliveryDays || rate.days || 0,
+            deliveryEstimate: rate.deliveryEstimate || null
+          });
+        }
       }
     }
 
     // Sort by price (cheapest first)
     quotes.sort((a, b) => a.price - b.price);
 
-    console.log(`✅ Got ${quotes.length} quotes`);
+    console.log(`✅ Got ${quotes.length} total quotes from ${results.filter(r => r.success).length} carriers`);
 
     return new Response(
       JSON.stringify({
