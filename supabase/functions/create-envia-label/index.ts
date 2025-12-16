@@ -685,14 +685,29 @@ serve(async (req) => {
     // Use DANE code for destination city and postalCode
     const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
 
-    // For Inter Rapidísimo, use ONLY addressId to leverage pre-registered address with correct identification
+    // For Inter Rapidísimo, use addressId + basic fields WITHOUT taxIdentification
     // This avoids "Identification numbers are required" error for COD shipments
-    const useOnlyAddressId = carrierConfig.carrier === 'interrapidisimo';
-    const originData = useOnlyAddressId 
-      ? { addressId: DOSMICOS_ORIGIN.addressId }  // Only addressId for interrapidisimo
-      : DOSMICOS_ORIGIN;                           // Full data for other carriers
+    // The addressId references pre-registered address with valid identification data
+    const isInterRapidisimo = carrierConfig.carrier === 'interrapidisimo';
+    const originData = isInterRapidisimo 
+      ? {
+          addressId: DOSMICOS_ORIGIN.addressId,
+          name: DOSMICOS_ORIGIN.name,
+          company: DOSMICOS_ORIGIN.company,
+          email: DOSMICOS_ORIGIN.email,
+          phone: DOSMICOS_ORIGIN.phone,
+          street: DOSMICOS_ORIGIN.street,
+          district: DOSMICOS_ORIGIN.district,
+          city: DOSMICOS_ORIGIN.city,
+          state: DOSMICOS_ORIGIN.state,
+          country: DOSMICOS_ORIGIN.country,
+          postalCode: DOSMICOS_ORIGIN.postalCode,
+          reference: DOSMICOS_ORIGIN.reference,
+          // NO taxIdentification - let API use pre-registered address data from addressId
+        }
+      : DOSMICOS_ORIGIN;  // Full data including taxIdentification for other carriers
 
-    console.log(`📍 Origin mode: ${useOnlyAddressId ? 'addressId ONLY (interrapidisimo)' : 'full address data'}`);
+    console.log(`📍 Origin mode: ${isInterRapidisimo ? 'addressId + basic fields (NO taxIdentification)' : 'full address data'}`);
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
     console.log(`📤 Origin address:`, originData);
 
