@@ -133,11 +133,21 @@ interface QuoteRequest {
 interface CarrierQuote {
   carrier: string;
   service: string;
+  deliveryType: 'domicilio' | 'oficina';
   price: number;
   currency: string;
   estimated_days: number;
   deliveryEstimate?: string;
 }
+
+// Shipment types
+const SHIPMENT_TYPES = [
+  { type: 1, label: 'domicilio' as const },  // Door to door
+  { type: 2, label: 'oficina' as const }     // Door to branch/office
+];
+
+// Only these 3 carriers
+const AVAILABLE_CARRIERS = ['coordinadora', 'interrapidisimo', 'deprisa'];
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -208,63 +218,78 @@ serve(async (req) => {
       }
     };
 
-    // Only these 3 carriers
-    const AVAILABLE_CARRIERS = ['coordinadora', 'interrapidisimo', 'deprisa'];
-
     console.log('📤 Getting quotes for carriers:', AVAILABLE_CARRIERS.join(', '));
+    console.log('📦 Shipment types: domicilio (type=1) and oficina (type=2)');
 
-    // Make parallel requests for each carrier
-    const ratePromises = AVAILABLE_CARRIERS.map(async (carrier) => {
-      const requestWithCarrier = {
-        ...rateRequest,
-        shipment: { type: 1, carrier }
-      };
+    // Make parallel requests for each carrier × shipment type combination
+    const ratePromises: Promise<{ carrier: string; deliveryType: 'domicilio' | 'oficina'; success: boolean; data?: any; error?: string }>[] = [];
+    
+    for (const carrier of AVAILABLE_CARRIERS) {
+      for (const shipmentType of SHIPMENT_TYPES) {
+        const requestWithCarrier = {
+          ...rateRequest,
+          shipment: { type: shipmentType.type, carrier }
+        };
 
-      try {
-        console.log(`📤 Requesting quote from ${carrier}...`);
-        const response = await fetch('https://api.envia.com/ship/rate/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${ENVIA_API_KEY}`
-          },
-          body: JSON.stringify(requestWithCarrier)
-        });
+        const promise = (async () => {
+          try {
+            console.log(`📤 Requesting ${shipmentType.label} quote from ${carrier}...`);
+            const response = await fetch('https://api.envia.com/ship/rate/', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ENVIA_API_KEY}`
+              },
+              body: JSON.stringify(requestWithCarrier)
+            });
 
-        const text = await response.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          console.log(`⚠️ Invalid JSON from ${carrier}:`, text.substring(0, 100));
-          return { carrier, success: false, error: 'Invalid response' };
-        }
+            const text = await response.text();
+            let data;
+            try {
+              data = JSON.parse(text);
+            } catch {
+              console.log(`⚠️ Invalid JSON from ${carrier} (${shipmentType.label}):`, text.substring(0, 100));
+              return { carrier, deliveryType: shipmentType.label, success: false, error: 'Invalid response' };
+            }
 
-        if (data.meta === 'error') {
-          console.log(`⚠️ ${carrier} error:`, data.error?.message || 'Unknown error');
-          return { carrier, success: false, error: data.error?.message };
-        }
+            if (data.meta === 'error') {
+              console.log(`⚠️ ${carrier} (${shipmentType.label}) error:`, data.error?.message || 'Unknown error');
+              return { carrier, deliveryType: shipmentType.label, success: false, error: data.error?.message };
+            }
 
-        console.log(`✅ Got quote from ${carrier}`);
-        return { carrier, success: true, data };
-      } catch (error: any) {
-        console.log(`❌ Error getting quote from ${carrier}:`, error.message);
-        return { carrier, success: false, error: error.message };
+            console.log(`✅ Got ${shipmentType.label} quote from ${carrier}`);
+            return { carrier, deliveryType: shipmentType.label, success: true, data };
+          } catch (error: any) {
+            console.log(`❌ Error getting ${shipmentType.label} quote from ${carrier}:`, error.message);
+            return { carrier, deliveryType: shipmentType.label, success: false, error: error.message };
+          }
+        })();
+
+        ratePromises.push(promise);
       }
-    });
+    }
 
-    // Wait for all requests
+    // Wait for all requests (3 carriers × 2 types = 6 requests)
     const results = await Promise.all(ratePromises);
 
-    // Combine successful quotes
+    // Combine successful quotes - ONLY ground services
     const quotes: CarrierQuote[] = [];
 
     for (const result of results) {
       if (result.success && result.data?.data && Array.isArray(result.data.data)) {
         for (const rate of result.data.data) {
+          const service = (rate.service || 'ground').toLowerCase();
+          
+          // ✅ Only include ground (terrestrial) services
+          if (service !== 'ground') {
+            console.log(`⏭️ Skipping ${result.carrier} ${service} (not ground)`);
+            continue;
+          }
+
           quotes.push({
             carrier: rate.carrier || result.carrier,
-            service: rate.service || 'ground',
+            service: service,
+            deliveryType: result.deliveryType,
             price: rate.totalPrice || rate.price || 0,
             currency: rate.currency || 'COP',
             estimated_days: rate.deliveryDays || rate.days || 0,
@@ -276,13 +301,19 @@ serve(async (req) => {
 
     // Sort by price (cheapest first)
     quotes.sort((a, b) => a.price - b.price);
+    
+    // Separate by delivery type
+    const domicilioQuotes = quotes.filter(q => q.deliveryType === 'domicilio');
+    const oficinaQuotes = quotes.filter(q => q.deliveryType === 'oficina');
 
-    console.log(`✅ Got ${quotes.length} total quotes from ${results.filter(r => r.success).length} carriers`);
+    console.log(`✅ Got ${quotes.length} total ground quotes (${domicilioQuotes.length} domicilio, ${oficinaQuotes.length} oficina)`);
 
     return new Response(
       JSON.stringify({
         success: true,
         quotes,
+        domicilio: domicilioQuotes,
+        oficina: oficinaQuotes,
         destination: {
           city: body.destination_city,
           department: body.destination_department,
