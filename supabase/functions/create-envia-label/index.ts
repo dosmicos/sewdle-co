@@ -685,12 +685,15 @@ serve(async (req) => {
     // Use DANE code for destination city and postalCode
     const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
 
-    console.log(`📍 Origin: Using addressId ${DOSMICOS_ORIGIN.addressId} + full address data`);
+    // For Inter Rapidísimo, use ONLY addressId to leverage pre-registered address with correct identification
+    // This avoids "Identification numbers are required" error for COD shipments
+    const useOnlyAddressId = carrierConfig.carrier === 'interrapidisimo';
+    const originData = useOnlyAddressId 
+      ? { addressId: DOSMICOS_ORIGIN.addressId }  // Only addressId for interrapidisimo
+      : DOSMICOS_ORIGIN;                           // Full data for other carriers
+
+    console.log(`📍 Origin mode: ${useOnlyAddressId ? 'addressId ONLY (interrapidisimo)' : 'full address data'}`);
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
-
-    // Build origin - use addressId + full address data
-    const originData = DOSMICOS_ORIGIN;
-
     console.log(`📤 Origin address:`, originData);
 
     // Build reference text with address2 (apartment/tower info) + order number
