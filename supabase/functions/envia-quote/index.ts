@@ -217,15 +217,15 @@ serve(async (req) => {
         content: "Ropa",
         amount: 1,
         type: "box",
-        weight: body.package_weight || 1,
+        weight: body.package_weight || 0.5,
         insurance: 0,
         declaredValue: body.declared_value || 100000,
         weightUnit: "KG",
         lengthUnit: "CM",
         dimensions: {
-          length: 30,
-          width: 25,
-          height: 10
+          length: 20,
+          width: 10,
+          height: 6
         }
       }],
       shipment: {
