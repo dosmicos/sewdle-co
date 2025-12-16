@@ -129,8 +129,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           toast.info('Procesando, espera un momento...', { duration: 2000 });
           return;
         }
-        // Only trigger if order is not already packed and not cancelled
-        if (localOrder?.operational_status !== 'ready_to_ship' && !localOrder?.shopify_order?.cancelled_at) {
+        // Only trigger if order is not already packed/shipped and not cancelled
+        if (localOrder?.operational_status !== 'ready_to_ship' && localOrder?.operational_status !== 'shipped' && !localOrder?.shopify_order?.cancelled_at) {
           // Use ref to get latest function without circular dependency
           handleMarkAsPackedAndPrintRef.current();
         }
@@ -1349,7 +1349,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         )}
 
         {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
-        {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && (
+        {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'shipped' && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
               onClick={handleMarkAsPackedAndPrint}
