@@ -725,8 +725,8 @@ serve(async (req) => {
       }],
       shipment: {
         carrier: carrierConfig.carrier,
-        service: carrierConfig.service,
-        type: 1
+        service: (body as any).preferred_service || carrierConfig.service,
+        type: (body as any).delivery_type === 'oficina' ? 2 : 1
       },
       settings: {
         printFormat: "PDF",

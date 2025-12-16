@@ -175,6 +175,24 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     determineCarrier();
   }, [shippingAddress?.city, shippingAddress?.province, isCOD]);
 
+  // Auto-select best carrier based on business rules when quotes load
+  useEffect(() => {
+    if (quotes.length > 0 && !selectedCarrier) {
+      // Find best quote based on recommended carrier + domicilio preference
+      const bestQuote = quotes.find(q => 
+        q.carrier.toLowerCase() === recommendedCarrier.toLowerCase() &&
+        q.deliveryType === 'domicilio'
+      ) || quotes.find(q => 
+        q.carrier.toLowerCase() === recommendedCarrier.toLowerCase()
+      ) || quotes[0];
+      
+      if (bestQuote) {
+        const autoKey = `${bestQuote.carrier}:${bestQuote.service}:${bestQuote.deliveryType}`;
+        setSelectedCarrier(autoKey);
+      }
+    }
+  }, [quotes, recommendedCarrier, selectedCarrier]);
+
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
       return;
@@ -193,6 +211,23 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const department = shippingAddress.province || '';
     const postalCode = shippingAddress.zip || '';
 
+    // Parse selectedCarrier (format: "carrier:service:deliveryType")
+    let preferredCarrier: string | undefined;
+    let preferredService: string | undefined;
+    let deliveryType: 'domicilio' | 'oficina' | undefined;
+    
+    if (selectedCarrier && selectedCarrier !== 'auto') {
+      const parts = selectedCarrier.split(':');
+      if (parts.length === 3) {
+        preferredCarrier = parts[0];
+        preferredService = parts[1];
+        deliveryType = parts[2] as 'domicilio' | 'oficina';
+      } else {
+        // Fallback for old format (just carrier name)
+        preferredCarrier = selectedCarrier;
+      }
+    }
+
     const result = await createLabel({
       shopify_order_id: shopifyOrderId,
       organization_id: currentOrganization.id,
@@ -206,7 +241,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       destination_postal_code: postalCode,
       declared_value: totalPrice || 0,
       package_content: `Pedido ${orderNumber}`,
-      preferred_carrier: selectedCarrier && selectedCarrier !== 'auto' ? selectedCarrier : undefined,
+      preferred_carrier: preferredCarrier,
+      preferred_service: preferredService,
+      delivery_type: deliveryType,
       is_cod: isCOD,
       cod_amount: isCOD ? codAmount : undefined
     });
@@ -617,47 +654,66 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             Obteniendo precios...
           </div>
         ) : quotes.length > 0 ? (
-          <div className="space-y-1.5">
-            {quotes.map((quote) => {
-              const quoteKey = `${quote.carrier}-${quote.deliveryType}`;
-              return (
-                <div 
-                  key={quoteKey}
-                  onClick={() => setSelectedCarrier(quote.carrier)}
-                  className={`flex items-center justify-between p-2.5 rounded-md border cursor-pointer transition-colors ${
-                    selectedCarrier === quote.carrier 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:bg-muted/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Truck className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium capitalize">
-                      {CARRIER_NAMES[quote.carrier.toLowerCase() as CarrierCode] || quote.carrier}
-                    </span>
-                    <Badge 
-                      variant="outline" 
-                      className={`text-[10px] h-5 ${
-                        quote.deliveryType === 'domicilio' 
-                          ? 'bg-blue-50 text-blue-700 border-blue-200' 
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}
-                    >
-                      {quote.deliveryType === 'domicilio' ? '🏠 Domicilio' : '🏢 Oficina'}
-                    </Badge>
-                    {quote.estimated_days > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        ~{quote.estimated_days} días
+          <Select value={selectedCarrier} onValueChange={setSelectedCarrier}>
+            <SelectTrigger className="w-full h-auto min-h-10 py-2">
+              <SelectValue placeholder="Seleccionar transportadora y servicio">
+                {selectedCarrier && (() => {
+                  const [carrier, service, type] = selectedCarrier.split(':');
+                  const quote = quotes.find(q => 
+                    q.carrier === carrier && q.service === service && q.deliveryType === type
+                  );
+                  if (quote) {
+                    return (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium">{CARRIER_NAMES[quote.carrier.toLowerCase() as CarrierCode] || quote.carrier}</span>
+                        <span className="text-muted-foreground">{quote.serviceDisplayName}</span>
+                        <Badge variant="outline" className="text-[10px] h-5">
+                          {quote.deliveryType === 'domicilio' ? '🏠' : '🏢'}
+                        </Badge>
+                        <span className="text-green-600 font-semibold">{formatCurrency(quote.price)}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {quotes.map((quote) => {
+                const quoteKey = `${quote.carrier}:${quote.service}:${quote.deliveryType}`;
+                return (
+                  <SelectItem key={quoteKey} value={quoteKey} className="py-2">
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="font-medium min-w-[100px]">
+                        {CARRIER_NAMES[quote.carrier.toLowerCase() as CarrierCode] || quote.carrier}
                       </span>
-                    )}
-                  </div>
-                  <span className="font-semibold text-green-600 text-sm">
-                    {formatCurrency(quote.price)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                      <span className="text-muted-foreground text-xs min-w-[70px]">
+                        {quote.serviceDisplayName}
+                      </span>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-[10px] h-5 ${
+                          quote.deliveryType === 'domicilio' 
+                            ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                      >
+                        {quote.deliveryType === 'domicilio' ? '🏠 Domicilio' : '🏢 Sucursal'}
+                      </Badge>
+                      {quote.estimated_days > 0 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          ~{quote.estimated_days}d
+                        </span>
+                      )}
+                      <span className="font-semibold text-green-600 ml-auto">
+                        {formatCurrency(quote.price)}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         ) : (
           <Select value={selectedCarrier || 'auto'} onValueChange={setSelectedCarrier}>
             <SelectTrigger className="w-full h-9 text-sm">
