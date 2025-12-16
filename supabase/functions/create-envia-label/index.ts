@@ -454,15 +454,15 @@ const DEFAULT_PACKAGE = {
   content: "Ropa infantil",
   amount: 1,
   type: "box",
-  weight: 1,
+  weight: 0.5,
   insurance: 0,
   declaredValue: 100000,
   weightUnit: "KG",
   lengthUnit: "CM",
   dimensions: {
-    length: 30,
-    width: 25,
-    height: 10
+    length: 20,
+    width: 10,
+    height: 6
   }
 };
 
