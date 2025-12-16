@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.envia-cancel]
 verify_jwt = false
+
+[functions.populate-shipping-coverage]
+verify_jwt = false
