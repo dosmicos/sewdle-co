@@ -787,6 +787,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     has_raw_data: !!effectiveOrder.shopify_order?.raw_data
   });
 
+  // Determine if order is COD (Contraentrega) based on multiple criteria
+  const orderTags = effectiveOrder.shopify_order?.tags || '';
+  const hasContraentregaTag = orderTags.toLowerCase().includes('contraentrega');
+  const isPendingPayment = effectiveOrder.shopify_order?.financial_status === 'pending';
+  const isCODOrder = paymentMethod === 'Contraentrega' || isPendingPayment || hasContraentregaTag;
+
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
@@ -1325,7 +1331,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 customerPhone={effectiveOrder.shopify_order.customer_phone}
                 totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
                 isFulfilled={effectiveOrder.shopify_order.fulfillment_status === 'fulfilled'}
-                isCOD={paymentMethod === 'Contraentrega'}
+                isCOD={isCODOrder}
                 onLabelChange={setShippingLabel}
               />
             </div>
