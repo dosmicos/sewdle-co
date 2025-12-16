@@ -133,12 +133,29 @@ interface QuoteRequest {
 interface CarrierQuote {
   carrier: string;
   service: string;
+  serviceDisplayName: string;
   deliveryType: 'domicilio' | 'oficina';
+  deliveryTypeLabel: string;
   price: number;
   currency: string;
   estimated_days: number;
   deliveryEstimate?: string;
 }
+
+// Service display names - readable names for services
+const SERVICE_DISPLAY_NAMES: Record<string, string> = {
+  'ecommerce': 'Ecommerce',
+  'ground': 'Ground',
+  'estandar': 'Estándar',
+  'ground_small': 'Mensajería',
+  'terrestre': 'Terrestre'
+};
+
+// Delivery type labels
+const DELIVERY_TYPE_LABELS: Record<string, string> = {
+  'domicilio': 'Domicilio - Domicilio',
+  'oficina': 'Domicilio - Sucursal'
+};
 
 // Shipment types
 const SHIPMENT_TYPES = [
@@ -273,7 +290,7 @@ serve(async (req) => {
     const results = await Promise.all(ratePromises);
 
     // Combine successful quotes - ONLY ground/terrestrial services
-    const quotes: CarrierQuote[] = [];
+    const allQuotes: CarrierQuote[] = [];
     
     // Valid ground service names (different carriers use different names)
     const GROUND_SERVICES = ['ground', 'ecommerce', 'estandar', 'ground_small', 'terrestre'];
@@ -290,12 +307,26 @@ serve(async (req) => {
             continue;
           }
 
+          // Get display name for service
+          let serviceDisplayName = SERVICE_DISPLAY_NAMES[service] || service;
+          // If not found by exact match, try partial match
+          if (!SERVICE_DISPLAY_NAMES[service]) {
+            for (const [key, name] of Object.entries(SERVICE_DISPLAY_NAMES)) {
+              if (service.includes(key)) {
+                serviceDisplayName = name;
+                break;
+              }
+            }
+          }
+
           console.log(`✅ Including ${result.carrier} ${service} (${result.deliveryType}) - $${rate.totalPrice || rate.price}`);
           
-          quotes.push({
+          allQuotes.push({
             carrier: rate.carrier || result.carrier,
             service: service,
+            serviceDisplayName: serviceDisplayName.charAt(0).toUpperCase() + serviceDisplayName.slice(1),
             deliveryType: result.deliveryType,
+            deliveryTypeLabel: DELIVERY_TYPE_LABELS[result.deliveryType] || result.deliveryType,
             price: rate.totalPrice || rate.price || 0,
             currency: rate.currency || 'COP',
             estimated_days: rate.deliveryDays || rate.days || 0,
@@ -304,6 +335,17 @@ serve(async (req) => {
         }
       }
     }
+
+    // Keep only the cheapest quote per carrier + service + deliveryType combination
+    const uniqueQuotes = new Map<string, CarrierQuote>();
+    for (const quote of allQuotes) {
+      const key = `${quote.carrier}-${quote.service}-${quote.deliveryType}`;
+      const existing = uniqueQuotes.get(key);
+      if (!existing || quote.price < existing.price) {
+        uniqueQuotes.set(key, quote);
+      }
+    }
+    const quotes = Array.from(uniqueQuotes.values());
 
     // Sort by price (cheapest first)
     quotes.sort((a, b) => a.price - b.price);

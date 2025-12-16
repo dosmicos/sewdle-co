@@ -115,6 +115,8 @@ export interface CreateLabelRequest {
   package_weight?: number;
   declared_value?: number;
   preferred_carrier?: string;
+  preferred_service?: string;
+  delivery_type?: 'domicilio' | 'oficina';
   is_cod?: boolean; // Cash on Delivery (Contraentrega)
   cod_amount?: number; // Amount to collect on delivery
 }
@@ -140,7 +142,9 @@ export interface QuoteRequest {
 export interface CarrierQuote {
   carrier: string;
   service: string;
+  serviceDisplayName: string;
   deliveryType: 'domicilio' | 'oficina';
+  deliveryTypeLabel: string;
   price: number;
   currency: string;
   estimated_days: number;
