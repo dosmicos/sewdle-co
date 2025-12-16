@@ -689,14 +689,19 @@ serve(async (req) => {
     // This avoids "Identification numbers are required" error for COD shipments
     // The addressId references pre-registered address with valid identification data
     const isInterRapidisimo = carrierConfig.carrier === 'interrapidisimo';
-    const originData = isInterRapidisimo 
+
+    // Envia requires origin.street + origin.number; DOSMICOS_ORIGIN.street includes "#" so we extract the number.
+    const { street: originStreet, number: originNumber } = parseAddress(DOSMICOS_ORIGIN.street);
+
+    const originData = isInterRapidisimo
       ? {
           addressId: DOSMICOS_ORIGIN.addressId,
           name: DOSMICOS_ORIGIN.name,
           company: DOSMICOS_ORIGIN.company,
           email: DOSMICOS_ORIGIN.email,
           phone: DOSMICOS_ORIGIN.phone,
-          street: DOSMICOS_ORIGIN.street,
+          street: originStreet,
+          number: originNumber,
           district: DOSMICOS_ORIGIN.district,
           city: DOSMICOS_ORIGIN.city,
           state: DOSMICOS_ORIGIN.state,
@@ -705,7 +710,7 @@ serve(async (req) => {
           reference: DOSMICOS_ORIGIN.reference,
           // NO taxIdentification - let API use pre-registered address data from addressId
         }
-      : DOSMICOS_ORIGIN;  // Full data including taxIdentification for other carriers
+      : DOSMICOS_ORIGIN; // Full data including taxIdentification for other carriers
 
     console.log(`📍 Origin mode: ${isInterRapidisimo ? 'addressId + basic fields (NO taxIdentification)' : 'full address data'}`);
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
