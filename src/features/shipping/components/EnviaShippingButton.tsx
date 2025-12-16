@@ -64,7 +64,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     isCancellingLabel,
     cancelLabel,
     isDeletingLabel,
-    deleteFailedLabel
+    deleteFailedLabel,
+    isLoadingQuotes,
+    quotes,
+    getQuotes,
+    clearQuotes
   } = useEnviaShipping();
   
   const [hasChecked, setHasChecked] = useState(false);
@@ -72,10 +76,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [manualTracking, setManualTracking] = useState('');
   const [manualCarrier, setManualCarrier] = useState('coordinadora');
   const [isSavingManual, setIsSavingManual] = useState(false);
-  const [selectedCarrier, setSelectedCarrier] = useState<string>('auto');
+  const [selectedCarrier, setSelectedCarrier] = useState<string>('');
   const [recommendedCarrier, setRecommendedCarrier] = useState<string>('coordinadora');
   const [codAmount, setCodAmount] = useState<number>(totalPrice || 0);
   const [isEditingCod, setIsEditingCod] = useState(false);
+  const [quotesLoaded, setQuotesLoaded] = useState(false);
 
   // Update COD amount when totalPrice changes
   useEffect(() => {
@@ -88,16 +93,37 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   useEffect(() => {
     if (currentOrganization?.id && shopifyOrderId) {
       clearLabel();
+      clearQuotes();
       setHasChecked(false);
       setShowManualEntry(false);
       setManualTracking('');
-      setSelectedCarrier('auto');
+      setSelectedCarrier('');
+      setQuotesLoaded(false);
       getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
         onLabelChange?.(label);
       });
     }
-  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, onLabelChange]);
+  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, onLabelChange]);
+
+  // Auto-load quotes when address is valid and no existing label
+  useEffect(() => {
+    if (
+      currentOrganization?.id && 
+      shippingAddress?.city && 
+      shippingAddress?.province && 
+      !existingLabel && 
+      !quotesLoaded &&
+      hasChecked
+    ) {
+      getQuotes({
+        destination_city: shippingAddress.city,
+        destination_department: shippingAddress.province,
+        destination_postal_code: shippingAddress.zip,
+        declared_value: totalPrice || 100000
+      }).then(() => setQuotesLoaded(true));
+    }
+  }, [shippingAddress, currentOrganization?.id, existingLabel, quotesLoaded, hasChecked, totalPrice, getQuotes]);
 
   // Determine recommended carrier based on business rules (same as backend)
   useEffect(() => {
@@ -180,7 +206,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       destination_postal_code: postalCode,
       declared_value: totalPrice || 0,
       package_content: `Pedido ${orderNumber}`,
-      preferred_carrier: selectedCarrier !== 'auto' ? selectedCarrier : undefined,
+      preferred_carrier: selectedCarrier && selectedCarrier !== 'auto' ? selectedCarrier : undefined,
       is_cod: isCOD,
       cod_amount: isCOD ? codAmount : undefined
     });
@@ -578,26 +604,60 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         </div>
       )}
 
-      {/* Carrier selector */}
-      <div className="space-y-1.5">
+      {/* Carrier selector with quotes */}
+      <div className="space-y-2">
         <label className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Truck className="h-3 w-3" />
           Transportadora
         </label>
-        <Select value={selectedCarrier} onValueChange={setSelectedCarrier}>
-          <SelectTrigger className="w-full h-9 text-sm">
-            <SelectValue placeholder="Seleccionar transportadora" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="auto">Automático ({CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora'})</SelectItem>
-            <SelectItem value="coordinadora">Coordinadora</SelectItem>
-            <SelectItem value="interrapidisimo">Inter Rapidísimo</SelectItem>
-            <SelectItem value="servientrega">Servientrega</SelectItem>
-            <SelectItem value="deprisa">Deprisa</SelectItem>
-            <SelectItem value="tcc">TCC</SelectItem>
-            <SelectItem value="envia">Envía</SelectItem>
-          </SelectContent>
-        </Select>
+        
+        {isLoadingQuotes ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Obteniendo precios...
+          </div>
+        ) : quotes.length > 0 ? (
+          <div className="space-y-1.5">
+            {quotes.map((quote) => (
+              <div 
+                key={quote.carrier}
+                onClick={() => setSelectedCarrier(quote.carrier)}
+                className={`flex items-center justify-between p-2.5 rounded-md border cursor-pointer transition-colors ${
+                  selectedCarrier === quote.carrier 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium capitalize">
+                    {CARRIER_NAMES[quote.carrier.toLowerCase() as CarrierCode] || quote.carrier}
+                  </span>
+                  {quote.estimated_days > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      ~{quote.estimated_days} días
+                    </span>
+                  )}
+                </div>
+                <span className="font-semibold text-green-600 text-sm">
+                  {formatCurrency(quote.price)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Select value={selectedCarrier || 'auto'} onValueChange={setSelectedCarrier}>
+            <SelectTrigger className="w-full h-9 text-sm">
+              <SelectValue placeholder="Seleccionar transportadora" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Automático ({CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora'})</SelectItem>
+              <SelectItem value="coordinadora">Coordinadora</SelectItem>
+              <SelectItem value="interrapidisimo">Inter Rapidísimo</SelectItem>
+              <SelectItem value="deprisa">Deprisa</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Button 
