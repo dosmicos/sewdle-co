@@ -140,6 +140,7 @@ export interface QuoteRequest {
 export interface CarrierQuote {
   carrier: string;
   service: string;
+  deliveryType: 'domicilio' | 'oficina';
   price: number;
   currency: string;
   estimated_days: number;
@@ -149,6 +150,8 @@ export interface CarrierQuote {
 export interface QuoteResponse {
   success: boolean;
   quotes: CarrierQuote[];
+  domicilio: CarrierQuote[];
+  oficina: CarrierQuote[];
   destination: {
     city: string;
     department: string;
