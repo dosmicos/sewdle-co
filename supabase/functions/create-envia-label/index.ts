@@ -767,29 +767,21 @@ serve(async (req) => {
       }
     };
 
-    // Add Cash on Delivery (COD) if specified - try multiple formats
+    // Add Cash on Delivery (COD) as additionalServices in package (per Envia.com docs)
     if (body.is_cod && body.cod_amount && body.cod_amount > 0) {
       console.log(`💵 COD enabled: ${body.cod_amount} COP`);
-      console.log(`💵 COD detection - is_cod: ${body.is_cod}, cod_amount: ${body.cod_amount}`);
       
-      // Format 1: In shipment object (standard format)
-      enviaRequest.shipment.cashOnDelivery = body.cod_amount;
-      
-      // Format 2: In settings object (alternative format)
-      enviaRequest.settings.cashOnDelivery = body.cod_amount;
-      
-      // Format 3: As additional service with object format
-      enviaRequest.settings.additionalServices = {
-        cashOnDelivery: {
-          amount: body.cod_amount,
-          currency: "COP"
+      // Add additionalServices to the package (correct format per Envia.com docs)
+      enviaRequest.packages[0].additionalServices = [
+        {
+          data: {
+            amount: body.cod_amount
+          },
+          service: "cash_on_delivery"
         }
-      };
+      ];
       
-      // Format 4: Direct in root (some APIs expect this)
-      enviaRequest.cashOnDelivery = body.cod_amount;
-      
-      console.log(`💵 COD added in multiple formats: shipment.cashOnDelivery, settings.cashOnDelivery, settings.additionalServices.cashOnDelivery, root.cashOnDelivery`);
+      console.log(`💵 COD added to packages[0].additionalServices`);
     } else {
       console.log(`💵 COD NOT enabled - is_cod: ${body.is_cod}, cod_amount: ${body.cod_amount}`);
     }
