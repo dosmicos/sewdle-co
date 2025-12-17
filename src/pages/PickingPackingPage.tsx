@@ -137,6 +137,7 @@ const PickingPackingPage = () => {
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
   const shippingMethod = searchParams.get('shipping_method') || '';
+  const excludeShippingMethod = searchParams.get('exclude_shipping_method') || '';
   
   // Team division params
   const teamNumber = parseInt(searchParams.get('team') || '0'); // 0 = all, 1-4 = specific team
@@ -154,6 +155,7 @@ const PickingPackingPage = () => {
       priceRange: priceRange || undefined,
       dateRange: dateRange || undefined,
       shippingMethod: shippingMethod || undefined,
+      excludeShippingMethod: excludeShippingMethod || undefined,
       page: currentPage
     });
   };
@@ -190,7 +192,7 @@ const PickingPackingPage = () => {
       supabase.removeChannel(channel);
     };
   }, [currentOrganization?.id, searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentPage, selectedOrderId]);
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentPage, selectedOrderId]);
 
   // Auto-refresh list when modal closes if there were pending updates
   useEffect(() => {
@@ -381,6 +383,16 @@ const PickingPackingPage = () => {
     });
   }
 
+  if (excludeShippingMethod) {
+    const excludeLabel = excludeShippingMethod === 'express' ? 'Express' : 'Estándar';
+    activeFilters.push({
+      id: 'exclude_shipping_method',
+      label: 'Excluir envío',
+      value: excludeShippingMethod,
+      displayText: `Excluir envío: ${excludeLabel}`
+    });
+  }
+
   const handleFilterSelect = (option: FilterOption) => {
     console.log('🔍 Filter selected:', option);
     setSelectedFilterOption(option);
@@ -423,12 +435,13 @@ const PickingPackingPage = () => {
           priceRange: priceRange || undefined,
           dateRange: dateRange || undefined,
           shippingMethod: shippingMethod || undefined,
+          excludeShippingMethod: excludeShippingMethod || undefined,
           page: 1 
         });
       }
     }
   }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, currentOrganization?.id]);
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentOrganization?.id]);
 
   
 
@@ -449,6 +462,7 @@ const PickingPackingPage = () => {
         priceRange: priceRange || undefined,
         dateRange: dateRange || undefined,
         shippingMethod: shippingMethod || undefined,
+        excludeShippingMethod: excludeShippingMethod || undefined,
         page 
       });
     }
