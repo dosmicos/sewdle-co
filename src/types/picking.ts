@@ -65,6 +65,15 @@ export const FILTER_OPTIONS: FilterOption[] = [
     ]
   },
   {
+    id: 'shipping_method',
+    label: 'Método de envío',
+    type: 'select',
+    options: [
+      { value: 'express', label: 'Express' },
+      { value: 'standard', label: 'Estándar' },
+    ]
+  },
+  {
     id: 'price_range',
     label: 'Total del pedido',
     type: 'select',

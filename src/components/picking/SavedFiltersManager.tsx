@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Bookmark, Trash2, Users, Package, Plus } from 'lucide-react';
+import { Bookmark, Trash2, Users, Package, Plus, Rocket } from 'lucide-react';
 import { useSavedFilters } from '@/hooks/useSavedFilters';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +27,16 @@ const PRESET_FILTERS = [
       financial_status: ['paid', 'pending', 'partially_paid'],
       tags: ['confirmado', 'BORDADO'],
       exclude_tags: ['empacado'],
+    }
+  },
+  {
+    id: 'express',
+    name: 'Express',
+    filters: {
+      financial_status: ['paid', 'pending', 'partially_paid'],
+      tags: ['confirmado'],
+      exclude_tags: ['empacado'],
+      shipping_method: 'express',
     }
   }
 ];
@@ -92,9 +102,14 @@ export const SavedFiltersManager: React.FC<SavedFiltersManagerProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => onLoadFilter(preset.filters)}
-                className="gap-1.5 text-xs md:text-sm px-2 md:px-3 h-7 md:h-9 bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700 shrink-0"
+                className={cn(
+                  "gap-1.5 text-xs md:text-sm px-2 md:px-3 h-7 md:h-9 shrink-0",
+                  preset.id === 'express' 
+                    ? "bg-red-50 border-red-200 hover:bg-red-100 text-red-700"
+                    : "bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700"
+                )}
               >
-                <Package className="w-3 h-3" />
+                {preset.id === 'express' ? <Rocket className="w-3 h-3" /> : <Package className="w-3 h-3" />}
                 <span>{preset.name}</span>
               </Button>
             ))}

@@ -147,6 +147,7 @@ export const usePickingOrders = () => {
     excludeTags?: string[];
     priceRange?: string;
     dateRange?: string;
+    shippingMethod?: string;
     page?: number;
   }) => {
     if (!currentOrganization?.id) {
@@ -188,7 +189,8 @@ export const usePickingOrders = () => {
             currency,
             note,
             tags,
-            cancelled_at
+            cancelled_at,
+            raw_data
           )
         `, { count: 'exact' })
         .eq('organization_id', currentOrganization?.id)
@@ -327,6 +329,15 @@ export const usePickingOrders = () => {
         ordersData = ordersData.filter((order: any) => {
           const orderDate = new Date(order.shopify_order?.created_at_shopify || order.created_at);
           return orderDate >= startDate;
+        });
+      }
+
+      // Filter by shipping method
+      if (filters?.shippingMethod) {
+        const shippingFilter = filters.shippingMethod.toLowerCase();
+        ordersData = ordersData.filter((order: any) => {
+          const shippingTitle = order.shopify_order?.raw_data?.shipping_lines?.[0]?.title || '';
+          return shippingTitle.toLowerCase().includes(shippingFilter);
         });
       }
 
