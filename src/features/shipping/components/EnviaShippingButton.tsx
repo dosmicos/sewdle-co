@@ -70,7 +70,7 @@ const formatDate = (dateString: string) => {
   });
 };
 
-export const EnviaShippingButton = forwardRef<EnviaShippingButtonRef, EnviaShippingButtonProps>(({
+const EnviaShippingButtonInner: React.ForwardRefRenderFunction<EnviaShippingButtonRef, EnviaShippingButtonProps> = ({
   shopifyOrderId,
   orderNumber,
   shippingAddress,
@@ -845,6 +845,7 @@ export const EnviaShippingButton = forwardRef<EnviaShippingButtonRef, EnviaShipp
       <LabelHistorySection />
     </div>
   );
-});
+};
 
+export const EnviaShippingButton = forwardRef(EnviaShippingButtonInner);
 EnviaShippingButton.displayName = 'EnviaShippingButton';
