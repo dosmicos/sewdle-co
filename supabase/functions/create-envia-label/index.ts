@@ -738,10 +738,10 @@ serve(async (req) => {
       reference: referenceText,
     };
 
-    // Add taxIdentification: use DANE code for Inter Rapidísimo, placeholder for others
+    // Add taxIdentification: use phone for Inter Rapidísimo, placeholder for others
     if (isInterRapidisimo) {
-      // Inter Rapidísimo requires valid identification - use 8-digit DANE code
-      destinationData.taxIdentification = destDaneCode;
+      // Inter Rapidísimo requires valid identification - use customer phone (10 digits) or DANE as fallback
+      destinationData.taxIdentification = cleanPhone || destDaneCode;
     } else {
       destinationData.taxIdentification = "0000000000";
     }
