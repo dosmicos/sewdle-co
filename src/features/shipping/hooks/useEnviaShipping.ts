@@ -21,27 +21,37 @@ export const useEnviaShipping = () => {
   const [isCancellingLabel, setIsCancellingLabel] = useState(false);
   const [isDeletingLabel, setIsDeletingLabel] = useState(false);
   const [existingLabel, setExistingLabel] = useState<ShippingLabel | null>(null);
+  const [labelHistory, setLabelHistory] = useState<ShippingLabel[]>([]);
   const [quotes, setQuotes] = useState<CarrierQuote[]>([]);
   const [trackingInfo, setTrackingInfo] = useState<TrackingResponse | null>(null);
 
-  // Get existing label for an order
+  // Get all labels for an order (active + history)
   const getExistingLabel = useCallback(async (shopifyOrderId: number, organizationId: string): Promise<ShippingLabel | null> => {
     setIsLoadingLabel(true);
     try {
+      // Fetch ALL labels for this order (including cancelled)
       const { data, error } = await supabase
         .from('shipping_labels')
         .select('*')
         .eq('shopify_order_id', shopifyOrderId)
         .eq('organization_id', organizationId)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching existing label:', error);
+        console.error('Error fetching labels:', error);
         return null;
       }
 
-      setExistingLabel(data as ShippingLabel | null);
-      return data as ShippingLabel | null;
+      const allLabels = (data || []) as ShippingLabel[];
+      
+      // Separate active label from history
+      const activeLabel = allLabels.find(l => l.status !== 'cancelled' && l.status !== 'error') || null;
+      const history = allLabels.filter(l => l.status === 'cancelled' || l.status === 'error');
+
+      setExistingLabel(activeLabel);
+      setLabelHistory(history);
+      
+      return activeLabel;
     } catch (error) {
       console.error('Error in getExistingLabel:', error);
       return null;
@@ -200,6 +210,7 @@ export const useEnviaShipping = () => {
   // Clear existing label (for re-fetching)
   const clearLabel = useCallback(() => {
     setExistingLabel(null);
+    setLabelHistory([]);
   }, []);
 
   // Clear quotes
@@ -233,7 +244,13 @@ export const useEnviaShipping = () => {
       }
 
       console.log('✅ Label cancelled successfully. Balance returned:', data.balanceReturned);
-      clearLabel();
+      
+      // Move the cancelled label to history
+      if (existingLabel) {
+        const cancelledLabel = { ...existingLabel, status: 'cancelled' as const };
+        setLabelHistory(prev => [cancelledLabel, ...prev]);
+        setExistingLabel(null);
+      }
       
       return { 
         success: true, 
@@ -245,7 +262,7 @@ export const useEnviaShipping = () => {
     } finally {
       setIsCancellingLabel(false);
     }
-  }, [clearLabel]);
+  }, [existingLabel]);
 
   // Delete failed label to allow retry
   const deleteFailedLabel = useCallback(async (labelId: string): Promise<{ success: boolean; error?: string }> => {
@@ -280,6 +297,7 @@ export const useEnviaShipping = () => {
     isCreatingLabel,
     isLoadingLabel,
     existingLabel,
+    labelHistory,
     getExistingLabel,
     createLabel,
     clearLabel,

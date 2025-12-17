@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface ShippingAddress {
   name?: string;
@@ -36,13 +41,25 @@ interface EnviaShippingButtonProps {
   totalPrice?: number;
   disabled?: boolean;
   isFulfilled?: boolean;
-  isCOD?: boolean; // Is Cash on Delivery order
+  isCOD?: boolean;
   onLabelChange?: (label: ShippingLabel | null) => void;
 }
 
 // Helper to get proxied label URL
 const getProxyLabelUrl = (labelUrl: string): string => {
   return `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/proxy-label?url=${encodeURIComponent(labelUrl)}`;
+};
+
+// Format date for display
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
@@ -62,6 +79,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     isCreatingLabel, 
     isLoadingLabel, 
     existingLabel, 
+    labelHistory,
     getExistingLabel, 
     createLabel,
     clearLabel,
@@ -86,6 +104,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [codAmount, setCodAmount] = useState<number>(totalPrice || 0);
   const [isEditingCod, setIsEditingCod] = useState(false);
   const [quotesLoaded, setQuotesLoaded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Update COD amount when totalPrice changes
   useEffect(() => {
@@ -104,6 +123,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setManualTracking('');
       setSelectedCarrier('');
       setQuotesLoaded(false);
+      setShowHistory(false);
       getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
         onLabelChange?.(label);
@@ -130,7 +150,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shippingAddress, currentOrganization?.id, existingLabel, quotesLoaded, hasChecked, totalPrice, getQuotes]);
 
-  // Determine recommended carrier based on business rules (same as backend)
+  // Determine recommended carrier based on business rules
   useEffect(() => {
     const determineCarrier = () => {
       if (!shippingAddress?.city || !shippingAddress?.province) {
@@ -144,20 +164,17 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       const city = normalizeText(shippingAddress.city);
       const dept = normalizeText(shippingAddress.province);
 
-      // Rule 1: Cundinamarca (includes Bogotá) → Coordinadora
       if (dept.includes('cundinamarca') || dept.includes('bogota') || 
           city.includes('bogota') || dept === 'dc' || dept === 'bog') {
         setRecommendedCarrier('coordinadora');
         return;
       }
 
-      // Rule 2: Medellín, Antioquia → Coordinadora
       if ((dept.includes('antioquia') || dept === 'ant') && city.includes('medellin')) {
         setRecommendedCarrier('coordinadora');
         return;
       }
 
-      // Main cities for Deprisa (paid orders only)
       const MAIN_CITIES = [
         'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
@@ -167,9 +184,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
       const isMainCity = MAIN_CITIES.some(mainCity => city.includes(mainCity));
 
-      // Rule 3: Main city + paid → Deprisa
-      // Rule 4: Main city + COD → Inter Rapidísimo
-      // Rule 5: Remote city → Inter Rapidísimo
       if (isMainCity && !isCOD) {
         setRecommendedCarrier('deprisa');
       } else {
@@ -180,10 +194,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     determineCarrier();
   }, [shippingAddress?.city, shippingAddress?.province, isCOD]);
 
-  // Auto-select best carrier based on business rules when quotes load
+  // Auto-select best carrier when quotes load
   useEffect(() => {
     if (quotes.length > 0 && !selectedCarrier) {
-      // Find best quote based on recommended carrier + domicilio preference
       const bestQuote = quotes.find(q => 
         q.carrier.toLowerCase() === recommendedCarrier.toLowerCase() &&
         q.deliveryType === 'domicilio'
@@ -203,7 +216,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       return;
     }
 
-    // Build full address
     const fullAddress = [
       shippingAddress.address1,
       shippingAddress.address2
@@ -216,7 +228,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const department = shippingAddress.province || '';
     const postalCode = shippingAddress.zip || '';
 
-    // Parse selectedCarrier (format: "carrier:service:deliveryType")
     let preferredCarrier: string | undefined;
     let preferredService: string | undefined;
     let deliveryType: 'domicilio' | 'oficina' | undefined;
@@ -228,7 +239,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         preferredService = parts[1];
         deliveryType = parts[2] as 'domicilio' | 'oficina';
       } else {
-        // Fallback for old format (just carrier name)
         preferredCarrier = selectedCarrier;
       }
     }
@@ -257,7 +267,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     if (result.success && result.label) {
       onLabelChange?.(result.label);
       
-      // Auto-print label if URL is available (use proxy to avoid S3 blocks)
       if (result.label.label_url) {
         const proxyUrl = getProxyLabelUrl(result.label.label_url);
         const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');
@@ -275,7 +284,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   };
 
-  // Format currency for display
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -295,7 +303,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const handlePrintLabel = () => {
     if (!existingLabel?.label_url) return;
     
-    // Use proxy URL to avoid S3 blocks
     const proxyUrl = getProxyLabelUrl(existingLabel.label_url);
     const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');
     
@@ -346,7 +353,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setShowManualEntry(false);
       setManualTracking('');
       
-      // Refresh to show the saved label
       await getExistingLabel(shopifyOrderId, currentOrganization.id);
     } catch (error: any) {
       console.error('Error saving manual label:', error);
@@ -356,12 +362,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   };
 
-  // Handle cancel label
   const handleCancelLabel = async () => {
     if (!existingLabel?.id || !currentOrganization?.id) return;
 
     const confirmed = window.confirm(
-      '¿Estás seguro de cancelar esta guía? Esta acción no se puede deshacer.'
+      '¿Estás seguro de cancelar esta guía? Se cancelará el fulfillment en Shopify y podrás crear una nueva guía.'
     );
 
     if (!confirmed) return;
@@ -371,15 +376,77 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     if (result.success) {
       toast.success(
         result.balanceReturned 
-          ? 'Guía cancelada. El saldo fue devuelto.' 
-          : 'Guía cancelada exitosamente'
+          ? 'Guía cancelada. El saldo fue devuelto y el fulfillment cancelado.' 
+          : 'Guía cancelada y fulfillment revertido'
       );
       onLabelChange?.(null);
-      // Refresh to show no label
+      // Refresh to get updated history
       await getExistingLabel(shopifyOrderId, currentOrganization.id);
     } else {
       toast.error('Error al cancelar: ' + (result.error || 'Error desconocido'));
     }
+  };
+
+  // Label History Component
+  const LabelHistorySection = () => {
+    if (labelHistory.length === 0) return null;
+
+    return (
+      <Collapsible open={showHistory} onOpenChange={setShowHistory}>
+        <CollapsibleTrigger asChild>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="w-full text-xs text-muted-foreground hover:text-foreground justify-between"
+          >
+            <span className="flex items-center gap-1.5">
+              <History className="h-3 w-3" />
+              Historial de guías ({labelHistory.length})
+            </span>
+            {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-2 mt-2">
+          {labelHistory.map((label) => {
+            const carrierName = CARRIER_NAMES[label.carrier as CarrierCode] || label.carrier;
+            const rawResponse = label.raw_response as { cancelled_at?: string } | null;
+            const cancelledAt = rawResponse?.cancelled_at;
+            
+            return (
+              <div 
+                key={label.id} 
+                className="p-2 bg-muted/50 rounded-md border border-border/50 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="secondary" 
+                      className={
+                        label.status === 'cancelled' 
+                          ? "bg-gray-100 text-gray-600 text-[10px]" 
+                          : "bg-red-100 text-red-600 text-[10px]"
+                      }
+                    >
+                      {label.status === 'cancelled' ? 'Cancelada' : 'Error'}
+                    </Badge>
+                    <span className="font-medium">{carrierName}</span>
+                  </div>
+                  {label.tracking_number && (
+                    <span className="font-mono text-muted-foreground">{label.tracking_number}</span>
+                  )}
+                </div>
+                <div className="mt-1 text-muted-foreground">
+                  <span>Creada: {formatDate(label.created_at)}</span>
+                  {cancelledAt && (
+                    <span className="ml-2">• Cancelada: {formatDate(cancelledAt)}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </CollapsibleContent>
+      </Collapsible>
+    );
   };
 
   // Show loading state while checking for existing label
@@ -495,7 +562,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           </div>
         )}
 
-        {/* Cancel button - only for non-manual, non-cancelled labels with tracking */}
+        {/* Cancel button */}
         {canCancel && (
           <Button 
             variant="ghost" 
@@ -517,6 +584,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             )}
           </Button>
         )}
+
+        {/* History section */}
+        <LabelHistorySection />
       </div>
     );
   }
@@ -574,12 +644,15 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             Guardar
           </Button>
         </div>
+
+        {/* History section in manual entry view */}
+        <LabelHistorySection />
       </div>
     );
   }
 
   // For fulfilled orders without a label - show special message
-  if (isFulfilled) {
+  if (isFulfilled && !labelHistory.length) {
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -604,9 +677,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
   if (!canCreateLabel) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <AlertCircle className="h-4 w-4" />
-        <span>Dirección incompleta para crear guía</span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle className="h-4 w-4" />
+          <span>Dirección incompleta para crear guía</span>
+        </div>
+        <LabelHistorySection />
       </div>
     );
   }
@@ -784,6 +860,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         <Edit3 className="h-3 w-3 mr-1" />
         O registrar guía existente
       </Button>
+
+      {/* History section */}
+      <LabelHistorySection />
     </div>
   );
 };
