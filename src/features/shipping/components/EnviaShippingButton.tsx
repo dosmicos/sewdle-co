@@ -459,43 +459,31 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     );
   }
 
-  // Show existing label info
-  if (existingLabel) {
+  // Show existing label info (only for active labels - not cancelled or error)
+  const isActiveLabel = existingLabel && existingLabel.status !== 'cancelled' && existingLabel.status !== 'error';
+  
+  if (isActiveLabel) {
     const carrierName = CARRIER_NAMES[existingLabel.carrier as CarrierCode] || existingLabel.carrier;
     const isManual = existingLabel.status === 'manual';
-    const isError = existingLabel.status === 'error';
-    const isCancelled = existingLabel.status === 'cancelled';
-    const canCancel = !isManual && !isCancelled && existingLabel.tracking_number;
+    const canCancel = !isManual && existingLabel.tracking_number;
     
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
           <Badge 
             variant="secondary" 
-            className={
-              isCancelled ? "bg-gray-100 text-gray-800" :
-              isError ? "bg-red-100 text-red-800" : 
-              isManual ? "bg-blue-100 text-blue-800" : 
-              "bg-green-100 text-green-800"
-            }
+            className={isManual ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}
           >
             <Truck className="h-3 w-3 mr-1" />
             {carrierName}
             {isManual && " (Manual)"}
-            {isError && " (Error)"}
-            {isCancelled && " (Cancelada)"}
           </Badge>
           {existingLabel.tracking_number && (
             <span className="font-mono text-xs">{existingLabel.tracking_number}</span>
           )}
         </div>
         
-        {isCancelled ? (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <XCircle className="h-4 w-4" />
-            <span>Guía cancelada</span>
-          </div>
-        ) : existingLabel.label_url ? (
+        {existingLabel.label_url ? (
           <div className="flex gap-2">
             <Button 
               variant="outline" 
@@ -513,41 +501,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             >
               <Printer className="h-4 w-4 mr-2" />
               Imprimir
-            </Button>
-          </div>
-        ) : isError ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-red-600">
-              <AlertCircle className="h-4 w-4" />
-              <span>Error al crear guía</span>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="w-full"
-              onClick={async () => {
-                if (existingLabel?.id) {
-                  const result = await deleteFailedLabel(existingLabel.id);
-                  if (result.success) {
-                    toast.success('Guía con error eliminada. Puedes intentar de nuevo.');
-                  } else {
-                    toast.error('Error al eliminar: ' + result.error);
-                  }
-                }
-              }}
-              disabled={isDeletingLabel}
-            >
-              {isDeletingLabel ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  Eliminando...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Reintentar
-                </>
-              )}
             </Button>
           </div>
         ) : isManual ? (
