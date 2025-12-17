@@ -11,7 +11,7 @@ import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePi
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '@/features/shipping';
+import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode, EnviaShippingButtonRef } from '@/features/shipping';
 
 interface ShopifyLineItem {
   id: string;
@@ -69,6 +69,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [packedByName, setPackedByName] = useState<string | null>(null);
   const [shippingLabel, setShippingLabel] = useState<ShippingLabel | null>(null);
   const financialSummaryRef = useRef<HTMLDivElement>(null);
+  const shippingButtonRef = useRef<EnviaShippingButtonRef>(null);
+  const [isCreatingShippingLabel, setIsCreatingShippingLabel] = useState(false);
   
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
@@ -1324,6 +1326,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <span className="font-medium text-sm">Guía de Envío</span>
               </div>
               <EnviaShippingButton
+                ref={shippingButtonRef}
                 shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
                 orderNumber={effectiveOrder.shopify_order.order_number}
                 shippingAddress={shippingAddress}
@@ -1348,7 +1351,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           </div>
         )}
 
-        {/* Sticky Floating Action Button - Fixed at bottom right of modal */}
+        {/* Sticky Floating Action Button - "Marcar como Empacado" */}
         {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'shipped' && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
@@ -1363,6 +1366,35 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <>
                   <Package className="w-4 h-4 md:w-5 md:h-5" />
                   <span className="hidden sm:inline">Marcar como</span> Empacado
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Sticky Floating Action Button - "Crear Guía" (appears after packing) */}
+        {!effectiveOrder.shopify_order?.cancelled_at && 
+         effectiveOrder.operational_status === 'ready_to_ship' && 
+         (!shippingLabel || shippingLabel.status === 'cancelled' || shippingLabel.status === 'error') && (
+          <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
+            <Button
+              onClick={async () => {
+                setIsCreatingShippingLabel(true);
+                try {
+                  await shippingButtonRef.current?.createLabelWithDefaults();
+                } finally {
+                  setIsCreatingShippingLabel(false);
+                }
+              }}
+              disabled={isCreatingShippingLabel}
+              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
+            >
+              {isCreatingShippingLabel ? (
+                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+              ) : (
+                <>
+                  <Truck className="w-4 h-4 md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Crear</span> Guía
                 </>
               )}
             </Button>

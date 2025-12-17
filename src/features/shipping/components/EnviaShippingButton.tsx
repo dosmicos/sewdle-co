@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
@@ -45,6 +45,14 @@ interface EnviaShippingButtonProps {
   onLabelChange?: (label: ShippingLabel | null) => void;
 }
 
+// Ref interface for external control
+export interface EnviaShippingButtonRef {
+  createLabelWithDefaults: () => Promise<void>;
+  isReady: boolean;
+  isCreatingLabel: boolean;
+  hasExistingLabel: boolean;
+}
+
 // Helper to get proxied label URL
 const getProxyLabelUrl = (labelUrl: string): string => {
   return `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/proxy-label?url=${encodeURIComponent(labelUrl)}`;
@@ -62,7 +70,7 @@ const formatDate = (dateString: string) => {
   });
 };
 
-export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
+export const EnviaShippingButton = forwardRef<EnviaShippingButtonRef, EnviaShippingButtonProps>(({
   shopifyOrderId,
   orderNumber,
   shippingAddress,
@@ -73,7 +81,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   isFulfilled = false,
   isCOD = false,
   onLabelChange
-}) => {
+}, ref) => {
   const { currentOrganization } = useOrganization();
   const { 
     isCreatingLabel, 
@@ -210,6 +218,25 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       }
     }
   }, [quotes, recommendedCarrier, selectedCarrier]);
+
+  // Check if component is ready to create labels
+  const isActiveLabel = existingLabel && existingLabel.status !== 'cancelled' && existingLabel.status !== 'error';
+  const canCreateLabel = shippingAddress?.city && shippingAddress?.address1;
+  const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
+
+  // Expose methods via ref for external control
+  useImperativeHandle(ref, () => ({
+    createLabelWithDefaults: async () => {
+      if (!isReady || isCreatingLabel) {
+        toast.error('No es posible crear guía en este momento');
+        return;
+      }
+      await handleCreateLabel();
+    },
+    isReady: isReady || false,
+    isCreatingLabel,
+    hasExistingLabel: !!isActiveLabel
+  }), [isReady, isCreatingLabel, isActiveLabel]);
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
@@ -461,7 +488,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   }
 
   // Show existing label info (only for active labels - not cancelled or error)
-  const isActiveLabel = existingLabel && existingLabel.status !== 'cancelled' && existingLabel.status !== 'error';
+  // isActiveLabel already defined above for ref
   
   if (isActiveLabel) {
     const carrierName = CARRIER_NAMES[existingLabel.carrier as CarrierCode] || existingLabel.carrier;
@@ -626,8 +653,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     );
   }
 
-  // Check if we have enough info to create a label
-  const canCreateLabel = shippingAddress?.city && shippingAddress?.address1;
+  // canCreateLabel already defined above
 
   if (!canCreateLabel) {
     return (
@@ -819,4 +845,6 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       <LabelHistorySection />
     </div>
   );
-};
+});
+
+EnviaShippingButton.displayName = 'EnviaShippingButton';
