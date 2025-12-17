@@ -251,6 +251,18 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
     if (result.success && result.label) {
       onLabelChange?.(result.label);
+      
+      // Auto-print label if URL is available
+      if (result.label.label_url) {
+        const printWindow = window.open(result.label.label_url, '_blank', 'width=800,height=600');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
+      }
     }
   };
 
