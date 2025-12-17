@@ -433,20 +433,17 @@ async function lookupEnviaCity(country: string, cityName: string, apiKey: string
 
 // Dosmicos origin address - includes addressId + full address data
 const DOSMICOS_ORIGIN = {
-  addressId: 6289998,
+  addressId: 6289477,
   name: "Julian Castro",
   company: "dosmicos sas",
   email: "dosmicoscol@gmail.com",
   phone: "3125456340",
-  street: "Cra 27 # 63b -61 Barrio Quinta de Mutis",
-  number: "",
-  district: "Barrio Quinta de Mutis",
+  street: "Cra 27 63b -61",
   city: "11001000",        // Código DANE 8 dígitos para Bogotá
   state: "DC",
   country: "CO",
   postalCode: "11001000",  // Código DANE 8 dígitos
-  reference: "CASA 1er piso de rejas negras",
-  taxIdentification: "901412407"
+  reference: "Barrio quinta Mutis CASA 1er piso de rejas negras",
 };
 
 // Default package dimensions
@@ -690,25 +687,20 @@ serve(async (req) => {
     // The addressId references pre-registered address with valid identification data
     const isInterRapidisimo = carrierConfig.carrier === 'interrapidisimo';
 
-    // Envia requires origin.street + origin.number; DOSMICOS_ORIGIN.street includes "#" so we extract the number.
-    const { street: originStreet, number: originNumber } = parseAddress(DOSMICOS_ORIGIN.street);
-
-    // Full origin data for ALL carriers including taxIdentification (NIT)
+    // Full origin data for ALL carriers
     const originData = {
-      address_id: DOSMICOS_ORIGIN.addressId,
+      address_id: 6289477,
       name: DOSMICOS_ORIGIN.name,
       company: DOSMICOS_ORIGIN.company,
       email: DOSMICOS_ORIGIN.email,
       phone: DOSMICOS_ORIGIN.phone,
-      street: originStreet,
-      number: originNumber,
-      district: DOSMICOS_ORIGIN.district,
+      street: "Cra 27 63b -61",
+      number: "",
       city: DOSMICOS_ORIGIN.city,
       state: DOSMICOS_ORIGIN.state,
       country: DOSMICOS_ORIGIN.country,
       postalCode: DOSMICOS_ORIGIN.postalCode,
-      reference: `Pedido #${body.order_number} - ${DOSMICOS_ORIGIN.reference}`,
-      taxIdentification: DOSMICOS_ORIGIN.taxIdentification,
+      reference: DOSMICOS_ORIGIN.reference,
       identification_number: "901412407",
     };
 
