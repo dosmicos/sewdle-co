@@ -1,4 +1,4 @@
-import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
@@ -43,6 +43,7 @@ interface EnviaShippingButtonProps {
   isFulfilled?: boolean;
   isCOD?: boolean;
   onLabelChange?: (label: ShippingLabel | null) => void;
+  apiRef?: React.MutableRefObject<EnviaShippingButtonRef | null>;
 }
 
 // Ref interface for external control
@@ -70,7 +71,7 @@ const formatDate = (dateString: string) => {
   });
 };
 
-const EnviaShippingButtonInner: React.ForwardRefRenderFunction<EnviaShippingButtonRef, EnviaShippingButtonProps> = ({
+export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   shopifyOrderId,
   orderNumber,
   shippingAddress,
@@ -80,8 +81,9 @@ const EnviaShippingButtonInner: React.ForwardRefRenderFunction<EnviaShippingButt
   disabled = false,
   isFulfilled = false,
   isCOD = false,
-  onLabelChange
-}, ref) => {
+  onLabelChange,
+  apiRef
+}) => {
   const { currentOrganization } = useOrganization();
   const { 
     isCreatingLabel, 
@@ -297,19 +299,27 @@ const EnviaShippingButtonInner: React.ForwardRefRenderFunction<EnviaShippingButt
     }
   };
 
-  // Expose methods via ref for external control
-  useImperativeHandle(ref, () => ({
-    createLabelWithDefaults: async () => {
-      if (!isReady || isCreatingLabel) {
-        toast.error('No es posible crear guía en este momento');
-        return;
-      }
-      await handleCreateLabel();
-    },
-    isReady: isReady || false,
-    isCreatingLabel,
-    hasExistingLabel: !!isActiveLabel
-  }), [isReady, isCreatingLabel, isActiveLabel, handleCreateLabel]);
+  // Expose methods via apiRef for external control
+  useEffect(() => {
+    if (!apiRef) return;
+
+    apiRef.current = {
+      createLabelWithDefaults: async () => {
+        if (!isReady || isCreatingLabel) {
+          toast.error('No es posible crear guía en este momento');
+          return;
+        }
+        await handleCreateLabel();
+      },
+      isReady: !!isReady,
+      isCreatingLabel,
+      hasExistingLabel: !!isActiveLabel,
+    };
+
+    return () => {
+      apiRef.current = null;
+    };
+  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -847,5 +857,4 @@ const EnviaShippingButtonInner: React.ForwardRefRenderFunction<EnviaShippingButt
   );
 };
 
-export const EnviaShippingButton = forwardRef(EnviaShippingButtonInner);
 EnviaShippingButton.displayName = 'EnviaShippingButton';

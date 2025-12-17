@@ -19,6 +19,10 @@
     --primary-foreground: 36 67 98;
     --secondary: 39 29 89;
     --secondary-foreground: 30 11 16;
+
+    /* Color informativo (botones azules) */
+    --info: 210 90% 45%;
+    --info-foreground: 0 0% 100%;
     
     /* Colores de estado suaves */
     --muted: 38 50 96;
@@ -57,6 +61,10 @@
     --primary-foreground: 30 11 8;
     --secondary: 30 11 20;
     --secondary-foreground: 39 29 89;
+
+    /* Color informativo (botones azules) */
+    --info: 210 90% 55%;
+    --info-foreground: 0 0% 100%;
     
     --muted: 30 11 20;
     --muted-foreground: 30 15 60;

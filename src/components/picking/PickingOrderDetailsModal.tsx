@@ -11,7 +11,8 @@ import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePi
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode, EnviaShippingButtonRef } from '@/features/shipping';
+import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '@/features/shipping';
+import type { EnviaShippingButtonRef } from '@/features/shipping';
 
 interface ShopifyLineItem {
   id: string;
@@ -1326,7 +1327,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <span className="font-medium text-sm">Guía de Envío</span>
               </div>
               <EnviaShippingButton
-                ref={shippingButtonRef}
+                apiRef={shippingButtonRef}
                 shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
                 orderNumber={effectiveOrder.shopify_order.order_number}
                 shippingAddress={shippingAddress}
@@ -1378,6 +1379,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
          (!shippingLabel || shippingLabel.status === 'cancelled' || shippingLabel.status === 'error') && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
+              variant="info"
               onClick={async () => {
                 setIsCreatingShippingLabel(true);
                 try {
@@ -1387,7 +1389,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 }
               }}
               disabled={isCreatingShippingLabel}
-              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
+              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
             >
               {isCreatingShippingLabel ? (
                 <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
