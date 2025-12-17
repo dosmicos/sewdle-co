@@ -709,6 +709,7 @@ serve(async (req) => {
       postalCode: DOSMICOS_ORIGIN.postalCode,
       reference: `Pedido #${body.order_number} - ${DOSMICOS_ORIGIN.reference}`,
       taxIdentification: DOSMICOS_ORIGIN.taxIdentification,
+      identification_number: "901412407",
     };
 
     console.log(`📍 Origin mode: full address data for all carriers`);
