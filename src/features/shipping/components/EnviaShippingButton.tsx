@@ -382,6 +382,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       onLabelChange?.(null);
       // Refresh to get updated history
       await getExistingLabel(shopifyOrderId, currentOrganization.id);
+      setShowHistory(true);
     } else {
       toast.error('Error al cancelar: ' + (result.error || 'Error desconocido'));
     }

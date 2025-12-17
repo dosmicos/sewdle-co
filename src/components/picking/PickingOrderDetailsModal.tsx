@@ -1142,7 +1142,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                         </div>
                         
                         {/* Shipping Label Info */}
-                        {shippingLabel && shippingLabel.status !== 'error' && (
+                        {shippingLabel && shippingLabel.status !== 'error' && shippingLabel.status !== 'cancelled' && (
                           <div className="mt-3 pt-3 border-t border-green-200 space-y-1">
                             <div className="flex items-center gap-2 text-green-700 font-medium">
                               <Truck className="w-4 h-4" />
