@@ -695,7 +695,7 @@ serve(async (req) => {
 
     // Full origin data for ALL carriers including taxIdentification (NIT)
     const originData = {
-      addressId: DOSMICOS_ORIGIN.addressId,
+      address_id: DOSMICOS_ORIGIN.addressId,
       name: DOSMICOS_ORIGIN.name,
       company: DOSMICOS_ORIGIN.company,
       email: DOSMICOS_ORIGIN.email,
