@@ -2078,6 +2078,8 @@ export type Database = {
       shipping_labels: {
         Row: {
           carrier: string
+          cod_amount_requested: number | null
+          cod_requested: boolean | null
           created_at: string
           created_by: string | null
           destination_address: string | null
@@ -2099,6 +2101,8 @@ export type Database = {
         }
         Insert: {
           carrier: string
+          cod_amount_requested?: number | null
+          cod_requested?: boolean | null
           created_at?: string
           created_by?: string | null
           destination_address?: string | null
@@ -2120,6 +2124,8 @@ export type Database = {
         }
         Update: {
           carrier?: string
+          cod_amount_requested?: number | null
+          cod_requested?: boolean | null
           created_at?: string
           created_by?: string | null
           destination_address?: string | null
