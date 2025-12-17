@@ -693,13 +693,25 @@ serve(async (req) => {
     // Envia requires origin.street + origin.number; DOSMICOS_ORIGIN.street includes "#" so we extract the number.
     const { street: originStreet, number: originNumber } = parseAddress(DOSMICOS_ORIGIN.street);
 
-    // For Inter Rapidísimo: use ONLY addressId to let Envia.com use pre-registered data
-    // For other carriers: send full address data
-    const originData = isInterRapidisimo
-      ? { addressId: DOSMICOS_ORIGIN.addressId }
-      : DOSMICOS_ORIGIN;
+    // Full origin data for ALL carriers including taxIdentification (NIT)
+    const originData = {
+      addressId: DOSMICOS_ORIGIN.addressId,
+      name: DOSMICOS_ORIGIN.name,
+      company: DOSMICOS_ORIGIN.company,
+      email: DOSMICOS_ORIGIN.email,
+      phone: DOSMICOS_ORIGIN.phone,
+      street: originStreet,
+      number: originNumber,
+      district: DOSMICOS_ORIGIN.district,
+      city: DOSMICOS_ORIGIN.city,
+      state: DOSMICOS_ORIGIN.state,
+      country: DOSMICOS_ORIGIN.country,
+      postalCode: DOSMICOS_ORIGIN.postalCode,
+      reference: DOSMICOS_ORIGIN.reference,
+      taxIdentification: DOSMICOS_ORIGIN.taxIdentification,
+    };
 
-    console.log(`📍 Origin mode: ${isInterRapidisimo ? 'addressId ONLY (pre-registered)' : 'full address data'}`);
+    console.log(`📍 Origin mode: full address data for all carriers`);
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
     console.log(`📤 Origin address:`, originData);
 
