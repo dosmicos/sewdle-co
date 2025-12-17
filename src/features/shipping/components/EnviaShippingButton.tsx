@@ -455,22 +455,20 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
                 key={label.id} 
                 className="p-2 bg-muted/50 rounded-md border border-border/50 text-xs"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge 
-                      variant="secondary" 
-                      className={
-                        label.status === 'cancelled' 
-                          ? "bg-gray-100 text-gray-600 text-[10px]" 
-                          : "bg-red-100 text-red-600 text-[10px]"
-                      }
-                    >
-                      {label.status === 'cancelled' ? 'Cancelada' : 'Error'}
-                    </Badge>
-                    <span className="font-medium">{carrierName}</span>
-                  </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge 
+                    variant="secondary" 
+                    className={
+                      label.status === 'cancelled' 
+                        ? "bg-gray-100 text-gray-600 text-[10px]" 
+                        : "bg-red-100 text-red-600 text-[10px]"
+                    }
+                  >
+                    {label.status === 'cancelled' ? 'Cancelada' : 'Error'}
+                  </Badge>
+                  <span className="font-medium">{carrierName}</span>
                   {label.tracking_number && (
-                    <span className="font-mono text-muted-foreground">{label.tracking_number}</span>
+                    <span className="font-mono text-muted-foreground">#{label.tracking_number}</span>
                   )}
                 </div>
                 <div className="mt-1 text-muted-foreground">
