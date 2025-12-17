@@ -136,6 +136,7 @@ const PickingPackingPage = () => {
   const excludeTags = searchParams.get('exclude_tags')?.split(',').filter(Boolean) || [];
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
+  const shippingMethod = searchParams.get('shipping_method') || '';
   
   // Team division params
   const teamNumber = parseInt(searchParams.get('team') || '0'); // 0 = all, 1-4 = specific team
@@ -152,6 +153,7 @@ const PickingPackingPage = () => {
       excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
       priceRange: priceRange || undefined,
       dateRange: dateRange || undefined,
+      shippingMethod: shippingMethod || undefined,
       page: currentPage
     });
   };
@@ -271,6 +273,7 @@ const PickingPackingPage = () => {
     exclude_tags: excludeTags.length > 0 ? excludeTags : undefined,
     price_range: priceRange || undefined,
     date_range: dateRange || undefined,
+    shipping_method: shippingMethod || undefined,
   });
 
   // Load saved filter
@@ -368,6 +371,16 @@ const PickingPackingPage = () => {
     });
   }
 
+  if (shippingMethod) {
+    const shippingLabel = shippingMethod === 'express' ? 'Express' : 'Estándar';
+    activeFilters.push({
+      id: 'shipping_method',
+      label: 'Envío',
+      value: shippingMethod,
+      displayText: `Envío: ${shippingLabel}`
+    });
+  }
+
   const handleFilterSelect = (option: FilterOption) => {
     console.log('🔍 Filter selected:', option);
     setSelectedFilterOption(option);
@@ -409,12 +422,13 @@ const PickingPackingPage = () => {
           excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
           priceRange: priceRange || undefined,
           dateRange: dateRange || undefined,
+          shippingMethod: shippingMethod || undefined,
           page: 1 
         });
       }
     }
   }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, currentOrganization?.id]);
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, currentOrganization?.id]);
 
   
 
@@ -434,6 +448,7 @@ const PickingPackingPage = () => {
         excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
         priceRange: priceRange || undefined,
         dateRange: dateRange || undefined,
+        shippingMethod: shippingMethod || undefined,
         page 
       });
     }
