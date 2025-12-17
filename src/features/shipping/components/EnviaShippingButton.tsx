@@ -40,6 +40,11 @@ interface EnviaShippingButtonProps {
   onLabelChange?: (label: ShippingLabel | null) => void;
 }
 
+// Helper to get proxied label URL
+const getProxyLabelUrl = (labelUrl: string): string => {
+  return `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/proxy-label?url=${encodeURIComponent(labelUrl)}`;
+};
+
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   shopifyOrderId,
   orderNumber,
@@ -252,10 +257,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     if (result.success && result.label) {
       onLabelChange?.(result.label);
       
-      // Auto-print label if URL is available
+      // Auto-print label if URL is available (use proxy to avoid S3 blocks)
       if (result.label.label_url) {
-        // Open PDF and trigger print after delay (onload doesn't work well with PDFs)
-        const printWindow = window.open(result.label.label_url, '_blank', 'width=800,height=600');
+        const proxyUrl = getProxyLabelUrl(result.label.label_url);
+        const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');
         if (printWindow) {
           setTimeout(() => {
             try {
@@ -264,7 +269,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             } catch (e) {
               console.log('Print dialog may need to be triggered manually');
             }
-          }, 1500); // Wait for PDF to load
+          }, 1500);
         }
       }
     }
@@ -282,22 +287,27 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
   const handleOpenLabel = () => {
     if (existingLabel?.label_url) {
-      window.open(existingLabel.label_url, '_blank');
+      const proxyUrl = getProxyLabelUrl(existingLabel.label_url);
+      window.open(proxyUrl, '_blank');
     }
   };
 
   const handlePrintLabel = () => {
     if (!existingLabel?.label_url) return;
     
-    // Abrir PDF en ventana popup y disparar impresión automáticamente
-    const printWindow = window.open(existingLabel.label_url, '_blank', 'width=800,height=600');
+    // Use proxy URL to avoid S3 blocks
+    const proxyUrl = getProxyLabelUrl(existingLabel.label_url);
+    const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');
     
     if (printWindow) {
-      printWindow.onload = () => {
-        setTimeout(() => {
+      setTimeout(() => {
+        try {
+          printWindow.focus();
           printWindow.print();
-        }, 500); // Pequeño delay para asegurar que el PDF cargue
-      };
+        } catch (e) {
+          console.log('Print dialog may need to be triggered manually');
+        }
+      }, 1500);
     }
   };
 
