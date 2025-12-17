@@ -707,7 +707,7 @@ serve(async (req) => {
       state: DOSMICOS_ORIGIN.state,
       country: DOSMICOS_ORIGIN.country,
       postalCode: DOSMICOS_ORIGIN.postalCode,
-      reference: DOSMICOS_ORIGIN.reference,
+      reference: `Pedido #${body.order_number} - ${DOSMICOS_ORIGIN.reference}`,
       taxIdentification: DOSMICOS_ORIGIN.taxIdentification,
     };
 
