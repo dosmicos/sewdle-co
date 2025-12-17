@@ -18,6 +18,7 @@ const PRESET_FILTERS = [
       financial_status: ['paid', 'pending', 'partially_paid'],
       tags: ['confirmado'],
       exclude_tags: ['empacado', 'bordado'],
+      exclude_shipping_method: 'express',
     }
   },
   {

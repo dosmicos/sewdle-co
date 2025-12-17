@@ -148,6 +148,7 @@ export const usePickingOrders = () => {
     priceRange?: string;
     dateRange?: string;
     shippingMethod?: string;
+    excludeShippingMethod?: string;
     page?: number;
   }) => {
     if (!currentOrganization?.id) {
@@ -338,6 +339,15 @@ export const usePickingOrders = () => {
         ordersData = ordersData.filter((order: any) => {
           const shippingTitle = order.shopify_order?.raw_data?.shipping_lines?.[0]?.title || '';
           return shippingTitle.toLowerCase().includes(shippingFilter);
+        });
+      }
+
+      // Exclude by shipping method
+      if (filters?.excludeShippingMethod) {
+        const excludeFilter = filters.excludeShippingMethod.toLowerCase();
+        ordersData = ordersData.filter((order: any) => {
+          const shippingTitle = order.shopify_order?.raw_data?.shipping_lines?.[0]?.title || '';
+          return !shippingTitle.toLowerCase().includes(excludeFilter);
         });
       }
 
