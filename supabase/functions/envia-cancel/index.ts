@@ -90,7 +90,8 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
         raw_response: {
           ...((label.raw_response as object) || {}),
-          cancel_response: cancelResult
+          cancel_response: cancelResult,
+          cancelled_at: new Date().toISOString()
         }
       })
       .eq('id', label_id);
@@ -98,6 +99,104 @@ serve(async (req) => {
     if (updateError) {
       console.error('Error updating label status:', updateError);
       throw new Error(`Failed to update label: ${updateError.message}`);
+    }
+
+    // Cancel Shopify fulfillment if exists
+    const shopifyOrderId = label.shopify_order_id;
+    const organizationId = label.organization_id;
+    
+    if (shopifyOrderId && organizationId) {
+      console.log(`Cancelling Shopify fulfillment for order ${shopifyOrderId}`);
+      
+      try {
+        // Get organization's Shopify credentials
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('shopify_store_url, shopify_credentials')
+          .eq('id', organizationId)
+          .single();
+
+        if (org?.shopify_store_url && org?.shopify_credentials) {
+          const credentials = org.shopify_credentials as { access_token?: string };
+          const accessToken = credentials.access_token;
+          
+          if (accessToken) {
+            // Normalize domain
+            let shopDomain = org.shopify_store_url
+              .replace('https://', '')
+              .replace('http://', '')
+              .replace(/\/$/, '');
+            
+            if (!shopDomain.includes('.myshopify.com')) {
+              shopDomain = `${shopDomain}.myshopify.com`;
+            }
+
+            // Get existing fulfillments for this order
+            const fulfillmentsUrl = `https://${shopDomain}/admin/api/2024-01/orders/${shopifyOrderId}/fulfillments.json`;
+            const fulfillmentsResponse = await fetch(fulfillmentsUrl, {
+              headers: {
+                'X-Shopify-Access-Token': accessToken,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (fulfillmentsResponse.ok) {
+              const fulfillmentsData = await fulfillmentsResponse.json();
+              const fulfillments = fulfillmentsData.fulfillments || [];
+              
+              // Cancel each fulfillment
+              for (const fulfillment of fulfillments) {
+                if (fulfillment.status !== 'cancelled') {
+                  console.log(`Cancelling fulfillment ${fulfillment.id}`);
+                  
+                  const cancelFulfillmentUrl = `https://${shopDomain}/admin/api/2024-01/orders/${shopifyOrderId}/fulfillments/${fulfillment.id}/cancel.json`;
+                  const cancelFulfillmentResponse = await fetch(cancelFulfillmentUrl, {
+                    method: 'POST',
+                    headers: {
+                      'X-Shopify-Access-Token': accessToken,
+                      'Content-Type': 'application/json'
+                    }
+                  });
+
+                  if (cancelFulfillmentResponse.ok) {
+                    console.log(`Fulfillment ${fulfillment.id} cancelled successfully`);
+                  } else {
+                    const errorText = await cancelFulfillmentResponse.text();
+                    console.error(`Failed to cancel fulfillment ${fulfillment.id}:`, errorText);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Update local database status back to ready_to_ship
+        await supabase
+          .from('picking_packing_orders')
+          .update({
+            operational_status: 'ready_to_ship',
+            shipped_at: null,
+            shipped_by: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId);
+
+        // Update shopify_orders fulfillment status
+        await supabase
+          .from('shopify_orders')
+          .update({
+            fulfillment_status: null // unfulfilled
+          })
+          .eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId);
+
+        console.log('Local database status updated to ready_to_ship');
+
+      } catch (shopifyError) {
+        console.error('Error cancelling Shopify fulfillment:', shopifyError);
+        // Don't fail the whole operation if Shopify cancellation fails
+      }
     }
 
     // Extract balance info if available
