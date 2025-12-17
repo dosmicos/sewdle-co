@@ -736,8 +736,13 @@ serve(async (req) => {
       country: "CO",
       postalCode: destDaneCode,
       reference: referenceText,
-      taxIdentification: "0000000000"
     };
+
+    // Only add taxIdentification for non-Inter Rapidísimo carriers
+    // Inter Rapidísimo rejects invalid tax IDs like "0000000000"
+    if (!isInterRapidisimo) {
+      destinationData.taxIdentification = "0000000000";
+    }
 
     console.log(`📤 Destination address:`, destinationData);
     const enviaRequest: Record<string, any> = {
