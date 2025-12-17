@@ -738,9 +738,11 @@ serve(async (req) => {
       reference: referenceText,
     };
 
-    // Only add taxIdentification for non-Inter Rapidísimo carriers
-    // Inter Rapidísimo rejects invalid tax IDs like "0000000000"
-    if (!isInterRapidisimo) {
+    // Add taxIdentification: use DANE code for Inter Rapidísimo, placeholder for others
+    if (isInterRapidisimo) {
+      // Inter Rapidísimo requires valid identification - use 8-digit DANE code
+      destinationData.taxIdentification = destDaneCode;
+    } else {
       destinationData.taxIdentification = "0000000000";
     }
 
