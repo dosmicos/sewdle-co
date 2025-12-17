@@ -254,13 +254,17 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       
       // Auto-print label if URL is available
       if (result.label.label_url) {
+        // Open PDF and trigger print after delay (onload doesn't work well with PDFs)
         const printWindow = window.open(result.label.label_url, '_blank', 'width=800,height=600');
         if (printWindow) {
-          printWindow.onload = () => {
-            setTimeout(() => {
+          setTimeout(() => {
+            try {
+              printWindow.focus();
               printWindow.print();
-            }, 500);
-          };
+            } catch (e) {
+              console.log('Print dialog may need to be triggered manually');
+            }
+          }, 1500); // Wait for PDF to load
         }
       }
     }
