@@ -602,13 +602,14 @@ serve(async (req) => {
       .eq('organization_id', body.organization_id)
       .eq('status', 'error');
 
-    // Check if VALID label already exists (ignore error labels)
+    // Check if VALID label already exists (ignore error and cancelled labels)
     const { data: existingLabel } = await supabase
       .from('shipping_labels')
       .select('*')
       .eq('shopify_order_id', body.shopify_order_id)
       .eq('organization_id', body.organization_id)
       .neq('status', 'error')
+      .neq('status', 'cancelled')
       .maybeSingle();
 
     if (existingLabel) {
