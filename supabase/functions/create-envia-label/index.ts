@@ -730,13 +730,13 @@ serve(async (req) => {
       reference: referenceText,
     };
 
-    // Add taxIdentification: use phone for Inter Rapidísimo, placeholder for others
+    // Add identification_number: use phone for Inter Rapidísimo, placeholder for others
     if (isInterRapidisimo) {
       // Inter Rapidísimo requires valid identification - use customer phone (10 digits) or DANE as fallback
-      destinationData.taxIdentification = cleanPhone || destDaneCode;
+      destinationData.identification_number = cleanPhone || destDaneCode;
       destinationData.identificationType = "CC"; // Cédula de ciudadanía - required for Inter Rapidísimo
     } else {
-      destinationData.taxIdentification = "0000000000";
+      destinationData.identification_number = "0000000000";
     }
 
     console.log(`📤 Destination address:`, destinationData);
