@@ -224,20 +224,6 @@ export const EnviaShippingButton = forwardRef<EnviaShippingButtonRef, EnviaShipp
   const canCreateLabel = shippingAddress?.city && shippingAddress?.address1;
   const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
 
-  // Expose methods via ref for external control
-  useImperativeHandle(ref, () => ({
-    createLabelWithDefaults: async () => {
-      if (!isReady || isCreatingLabel) {
-        toast.error('No es posible crear guía en este momento');
-        return;
-      }
-      await handleCreateLabel();
-    },
-    isReady: isReady || false,
-    isCreatingLabel,
-    hasExistingLabel: !!isActiveLabel
-  }), [isReady, isCreatingLabel, isActiveLabel]);
-
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
       return;
@@ -310,6 +296,20 @@ export const EnviaShippingButton = forwardRef<EnviaShippingButtonRef, EnviaShipp
       }
     }
   };
+
+  // Expose methods via ref for external control
+  useImperativeHandle(ref, () => ({
+    createLabelWithDefaults: async () => {
+      if (!isReady || isCreatingLabel) {
+        toast.error('No es posible crear guía en este momento');
+        return;
+      }
+      await handleCreateLabel();
+    },
+    isReady: isReady || false,
+    isCreatingLabel,
+    hasExistingLabel: !!isActiveLabel
+  }), [isReady, isCreatingLabel, isActiveLabel, handleCreateLabel]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
