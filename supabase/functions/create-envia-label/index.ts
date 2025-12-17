@@ -708,11 +708,11 @@ serve(async (req) => {
           country: DOSMICOS_ORIGIN.country,
           postalCode: DOSMICOS_ORIGIN.postalCode,
           reference: DOSMICOS_ORIGIN.reference,
-          // NO taxIdentification - let API use pre-registered address data from addressId
+          taxIdentification: DOSMICOS_ORIGIN.taxIdentification, // Include NIT for Inter Rapidísimo
         }
       : DOSMICOS_ORIGIN; // Full data including taxIdentification for other carriers
 
-    console.log(`📍 Origin mode: ${isInterRapidisimo ? 'addressId + basic fields (NO taxIdentification)' : 'full address data'}`);
+    console.log(`📍 Origin mode: ${isInterRapidisimo ? 'addressId + full fields (with taxIdentification)' : 'full address data'}`);
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
     console.log(`📤 Origin address:`, originData);
 
