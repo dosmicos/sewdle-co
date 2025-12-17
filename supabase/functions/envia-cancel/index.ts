@@ -170,11 +170,26 @@ serve(async (req) => {
           }
         }
 
-        // Update local database status back to ready_to_ship
+        // Get current order state to determine correct status to restore
+        const { data: currentOrder } = await supabase
+          .from('picking_packing_orders')
+          .select('packed_at, packed_by, operational_status')
+          .eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId)
+          .single();
+
+        // Determine correct status based on whether order was actually packed:
+        // - If packed_at exists → 'ready_to_ship' (was packed before shipping)
+        // - If packed_at is null → 'pending' (was never properly packed)
+        const newStatus = currentOrder?.packed_at ? 'ready_to_ship' : 'pending';
+        
+        console.log(`Restoring order ${shopifyOrderId} to status: ${newStatus} (packed_at: ${currentOrder?.packed_at})`);
+
+        // Update local database status
         await supabase
           .from('picking_packing_orders')
           .update({
-            operational_status: 'ready_to_ship',
+            operational_status: newStatus,
             shipped_at: null,
             shipped_by: null,
             updated_at: new Date().toISOString()
