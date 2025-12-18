@@ -780,6 +780,7 @@ serve(async (req) => {
         printFormat: "PDF",
         printSize: "STOCK_4X6",
         currency: "COP",
+        orderId: String(body.order_number),
         comments: `Pedido Dosmicos #${body.order_number}${body.is_cod ? ' - CONTRAENTREGA' : ''}`
       }
     };
