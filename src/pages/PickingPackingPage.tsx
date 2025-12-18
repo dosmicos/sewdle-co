@@ -9,7 +9,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
-import { PickingBulkActionsBar } from '@/components/picking/PickingBulkActionsBar';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
 import { SavedFiltersManager } from '@/components/picking/SavedFiltersManager';
@@ -38,7 +37,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Pagination,
   PaginationContent,
@@ -114,10 +112,8 @@ const PickingPackingPage = () => {
     totalPages, 
     pageSize,
     fetchOrders,
-    bulkUpdateOrderStatus,
     bulkUpdateOrdersByDate
   } = usePickingOrders();
-  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [filterSelectorOpen, setFilterSelectorOpen] = useState(false);
   const [selectedFilterOption, setSelectedFilterOption] = useState<FilterOption | null>(null);
@@ -534,26 +530,6 @@ const PickingPackingPage = () => {
     ready: filteredOrdersByTeam.filter(o => o.operational_status === 'ready_to_ship').length,
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedOrders(filteredOrdersByTeam.map(o => o.id));
-    } else {
-      setSelectedOrders([]);
-    }
-  };
-
-  const handleSelectOrder = (orderId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedOrders([...selectedOrders, orderId]);
-    } else {
-      setSelectedOrders(selectedOrders.filter(id => id !== orderId));
-    }
-  };
-
-  const handleBulkMarkAsPacked = async (orderIds: string[]) => {
-    await bulkUpdateOrderStatus(orderIds, 'ready_to_ship');
-  };
-
   const handleBulkUpdateByDate = async () => {
     const confirmed = window.confirm(
       '⚠️ Esto marcará como ENVIADAS todas las órdenes antes del 1 de Agosto 2025.\n\nEstas órdenes desaparecerán de Sewdle.\n\n¿Deseas continuar?'
@@ -877,28 +853,21 @@ const PickingPackingPage = () => {
                   className="border rounded-lg p-3 bg-card cursor-pointer hover:bg-muted/50 active:bg-muted"
                   onClick={() => setSelectedOrderId(order.id)}
                 >
-                  {/* Row 1: Checkbox + Order Number + Price */}
+                  {/* Row 1: Order Number + Price */}
                   <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={selectedOrders.includes(order.id)}
-                        onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <span className="font-bold text-sm">#{order.shopify_order?.order_number}</span>
-                    </div>
+                    <span className="font-bold text-sm">#{order.shopify_order?.order_number}</span>
                     <span className="font-semibold text-sm">{totalPrice}</span>
                   </div>
                   
                   {/* Row 2: Customer • Items • Time */}
-                  <div className="text-xs text-muted-foreground mb-1.5 pl-6">
+                  <div className="text-xs text-muted-foreground mb-1.5">
                     {order.shopify_order?.customer_first_name} {order.shopify_order?.customer_last_name}
                     {itemCount > 0 && <span> • {itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}
                     {orderTime && <span> • {orderTime}</span>}
                   </div>
                   
                   {/* Row 3: Status Badges */}
-                  <div className="flex items-center gap-1.5 mb-1.5 pl-6">
+                  <div className="flex items-center gap-1.5 mb-1.5">
                     <Badge 
                       variant="secondary"
                       className={`text-[10px] px-1.5 py-0.5 ${statusColors[order.operational_status]}`}
@@ -915,7 +884,7 @@ const PickingPackingPage = () => {
                   
                   {/* Row 4: Shipping Method */}
                   {shippingMethod && (
-                    <div className="text-xs text-muted-foreground pl-6 truncate">
+                    <div className="text-xs text-muted-foreground truncate">
                       🚚 {shippingMethod}
                     </div>
                   )}
@@ -930,12 +899,6 @@ const PickingPackingPage = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedOrders.length === filteredOrdersByTeam.length && filteredOrdersByTeam.length > 0}
-                    onCheckedChange={handleSelectAll}
-                  />
-                </TableHead>
                 <TableHead>Pedido</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
@@ -946,7 +909,7 @@ const PickingPackingPage = () => {
             <TableBody>
               {filteredOrdersByTeam.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                     {teamNumber > 0 ? `No hay órdenes para el equipo ${teamNumber}` : 'No se encontraron órdenes'}
                   </TableCell>
                 </TableRow>
@@ -955,23 +918,15 @@ const PickingPackingPage = () => {
                   <TableRow 
                     key={order.id}
                     className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedOrderId(order.id)}
                   >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedOrders.includes(order.id)}
-                        onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
-                      />
-                    </TableCell>
-                    <TableCell 
-                      className="font-medium"
-                      onClick={() => setSelectedOrderId(order.id)}
-                    >
+                    <TableCell className="font-medium">
                       #{order.shopify_order?.order_number}
                     </TableCell>
-                    <TableCell onClick={() => setSelectedOrderId(order.id)}>
+                    <TableCell>
                       {formatDate(order.shopify_order?.created_at_shopify || order.created_at)}
                     </TableCell>
-                    <TableCell onClick={() => setSelectedOrderId(order.id)}>
+                    <TableCell>
                       {order.shopify_order?.customer_first_name} {order.shopify_order?.customer_last_name}
                       {order.shopify_order?.customer_email && (
                         <div className="text-xs text-muted-foreground">
@@ -979,7 +934,7 @@ const PickingPackingPage = () => {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell onClick={() => setSelectedOrderId(order.id)}>
+                    <TableCell>
                       <Badge 
                         variant="secondary"
                         className={paymentStatusColors[order.shopify_order?.financial_status as keyof typeof paymentStatusColors] || ''}
@@ -987,7 +942,7 @@ const PickingPackingPage = () => {
                         {paymentStatusLabels[order.shopify_order?.financial_status as keyof typeof paymentStatusLabels] || order.shopify_order?.financial_status}
                       </Badge>
                     </TableCell>
-                    <TableCell onClick={() => setSelectedOrderId(order.id)}>
+                    <TableCell>
                       <Badge 
                         variant="secondary"
                         className={statusColors[order.operational_status]}
@@ -1155,16 +1110,6 @@ const PickingPackingPage = () => {
           onClose={() => setSelectedOrderId(null)}
           allOrderIds={filteredOrdersByTeam.map(o => o.id)}
           onNavigate={(newOrderId) => setSelectedOrderId(newOrderId)}
-        />
-      )}
-
-      {/* Bulk Actions Bar */}
-      {selectedOrders.length > 0 && (
-        <PickingBulkActionsBar
-          selectedCount={selectedOrders.length}
-          selectedIds={selectedOrders}
-          onMarkAsPacked={handleBulkMarkAsPacked}
-          onClear={() => setSelectedOrders([])}
         />
       )}
 
