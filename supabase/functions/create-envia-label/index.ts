@@ -709,7 +709,7 @@ serve(async (req) => {
     // Full origin data for ALL carriers
     const originData = {
       address_id: 6289477,
-      name: `Dosmicos #${body.order_number}`,
+      name: `${body.order_number} - Dosmicos sas`,
       company: DOSMICOS_ORIGIN.company,
       email: DOSMICOS_ORIGIN.email,
       phone: DOSMICOS_ORIGIN.phone,
