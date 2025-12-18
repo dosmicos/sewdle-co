@@ -343,32 +343,33 @@ function extractDistrict(address: string, city: string): string {
 }
 
 // Parse address into street and number
+// Improved to capture full complement for Colombian addresses like "Calle 167 # 51 A - 41"
 function parseAddress(address: string): { street: string; number: string } {
-  // Colombian address patterns
+  // Colombian address patterns - capture EVERYTHING after the separator
   const patterns = [
-    // Cra 27 # 63B-61
-    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*[#]\s*(\d+[a-z]?\s*-?\s*\d*)/i,
-    // Cra 27 No. 63B-61
-    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*(?:no\.?|n°|num\.?)\s*(\d+[a-z]?\s*-?\s*\d*)/i,
-    // Cra 27 63B-61 (without separator)
-    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s+(\d+[a-z]?\s*-?\s*\d+)/i,
+    // Calle 167 # 51 A - 41 (capture all after #, including letters and dashes)
+    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*[#]\s*(.+)$/i,
+    // Cra 27 No. 63B-61 (capture all after No./N°)
+    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*(?:no\.?|n°|num\.?)\s*(.+)$/i,
+    // Cra 27 63B-61 (without separator, but number starts with digit)
+    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s+(\d+.*)$/i,
   ];
   
   for (const pattern of patterns) {
     const match = address.match(pattern);
     if (match) {
-      return {
-        street: match[1].trim(),
-        number: match[2].trim()
-      };
+      const street = match[1].trim();
+      const number = match[2].trim();
+      console.log(`📍 Address parsed: street="${street}", number="${number}"`);
+      return { street, number };
     }
   }
   
-  // Fallback: split by common separators
-  const parts = address.split(/[,#]/);
+  // Fallback: use entire address as street
+  console.log(`📍 Address fallback (no pattern matched): "${address}"`);
   return {
-    street: parts[0]?.trim() || address,
-    number: parts[1]?.trim() || "S/N"
+    street: address,
+    number: "S/N"
   };
 }
 
@@ -709,10 +710,11 @@ serve(async (req) => {
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
     console.log(`📤 Origin address:`, originData);
 
-    // Build reference text with address2 (apartment/tower info) + order number
+    // Build reference text: ORDER NUMBER FIRST (most important), then address2
+    // This ensures the order number is always visible even if Envia.com truncates the field
     const referenceText = [
-      body.destination_address2,  // "Apto 1133 torre 9 villa de los Angeles 2"
-      `Pedido #${body.order_number}`
+      `Pedido #${body.order_number}`,  // Order number first - always visible
+      body.destination_address2        // Apartment/tower info second
     ].filter(Boolean).join(' - ');
 
     // Build destination - use DANE code for both city and postalCode
