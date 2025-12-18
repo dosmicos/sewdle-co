@@ -386,7 +386,7 @@ function parseAddress(address: string): { street: string; number: string } {
   console.log(`📍 Address fallback (no pattern matched): "${address}"`);
   return {
     street: address,
-    number: "S/N"
+    number: ""
   };
 }
 
@@ -709,7 +709,7 @@ serve(async (req) => {
     // Full origin data for ALL carriers
     const originData = {
       address_id: 6289477,
-      name: DOSMICOS_ORIGIN.name,
+      name: `Dosmicos #${body.order_number}`,
       company: DOSMICOS_ORIGIN.company,
       email: DOSMICOS_ORIGIN.email,
       phone: DOSMICOS_ORIGIN.phone,
@@ -727,11 +727,9 @@ serve(async (req) => {
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
     console.log(`📤 Origin address:`, originData);
 
-    // Build reference text: ORDER NUMBER FIRST, then address2 (cleaned)
-    const referenceText = [
-      `#${body.order_number}`,
-      body.destination_address2?.trim()
-    ].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim();
+    // Build reference text: ONLY address2 for maximum observation space
+    // Order number now appears in sender name: "Dosmicos #65490"
+    const referenceText = (body.destination_address2 || '').trim().replace(/\s+/g, ' ').substring(0, 100);
 
     // Build destination - use DANE code for both city and postalCode
     const destinationData: Record<string, any> = {
