@@ -745,7 +745,33 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }
 
   const shippingAddress = effectiveOrder.shopify_order?.raw_data?.shipping_address;
-  const financialSummary = effectiveOrder.shopify_order?.raw_data || {};
+  const rawFinancialData = effectiveOrder.shopify_order?.raw_data || {};
+  
+  // Calculate financial summary dynamically based on active lineItems
+  // This fixes the issue where Shopify doesn't update totals when items are deleted
+  const calculatedSubtotal = lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  // Get original values for tax rate calculation
+  const originalSubtotal = parseFloat(rawFinancialData.subtotal_price) || 0;
+  const originalTax = parseFloat(rawFinancialData.total_tax) || 0;
+  const taxRate = originalSubtotal > 0 ? (originalTax / originalSubtotal) : 0;
+  
+  // Calculate tax proportionally based on new subtotal
+  const calculatedTax = calculatedSubtotal * taxRate;
+  
+  // Shipping stays the same (not affected by deleted items)
+  const shippingAmount = parseFloat(rawFinancialData.total_shipping_price_set?.shop_money?.amount) || 0;
+  
+  // Calculate total
+  const calculatedTotal = calculatedSubtotal + calculatedTax + shippingAmount;
+  
+  // Create financial summary with calculated values
+  const financialSummary = {
+    subtotal_price: calculatedSubtotal,
+    total_tax: calculatedTax,
+    total_price: calculatedTotal,
+    total_shipping_price_set: rawFinancialData.total_shipping_price_set
+  };
   
   // Shipping type detection
   const shippingLines = effectiveOrder.shopify_order?.raw_data?.shipping_lines || [];
@@ -981,7 +1007,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </CardContent>
               </Card>
 
-              {/* Financial Summary - Compact */}
+              {/* Financial Summary - Dynamically calculated based on active items */}
               <div ref={financialSummaryRef} className="px-4 py-3 bg-muted/30 rounded-lg border border-muted">
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs">
@@ -990,7 +1016,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Envío</span>
-                    <span className="font-medium">{formatCurrency(financialSummary.total_shipping_price_set?.shop_money?.amount, effectiveOrder.shopify_order?.currency)}</span>
+                    <span className="font-medium">{formatCurrency(shippingAmount, effectiveOrder.shopify_order?.currency)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Impuestos</span>
