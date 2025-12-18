@@ -91,7 +91,7 @@ const DeliveryBarcodeModal = ({
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           html, body { 
-            width: 102mm;
+            width: 100mm;
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
@@ -100,15 +100,15 @@ const DeliveryBarcodeModal = ({
           }
           .page { 
             display: grid;
-            grid-template-columns: repeat(2, 51mm);
+            grid-template-columns: repeat(2, 50mm);
             gap: 0;
             padding: 0;
             margin: 0;
           }
           .barcode-label {
-            width: 51mm;
-            height: 25mm;
-            padding: 2mm;
+            width: 50mm;
+            height: 20mm;
+            padding: 1mm;
             box-sizing: border-box;
             text-align: center;
             page-break-inside: avoid;
@@ -120,28 +120,28 @@ const DeliveryBarcodeModal = ({
             overflow: hidden;
           }
           .barcode-label svg {
-            max-width: 47mm;
+            max-width: 48mm;
             height: auto;
           }
           .product-info {
-            font-size: 6px;
+            font-size: 8px;
             font-weight: 500;
             margin-top: 1px;
             line-height: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 47mm;
+            max-width: 48mm;
             color: #333;
           }
           @media print {
             @page { 
-              size: 102mm 25mm;
+              size: 100mm 20mm;
               margin: 0 !important;
               padding: 0 !important;
             }
             html, body { 
-              width: 102mm;
+              width: 100mm;
               margin: 0 !important; 
               padding: 0 !important; 
             }
@@ -167,12 +167,12 @@ const DeliveryBarcodeModal = ({
           ${labelsWithCompactText.map(label => `
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
-              width: 1.8,
-              height: 40,
-              fontSize: 8,
+              width: 2.2,
+              height: 35,
+              fontSize: 9,
               margin: 0,
               displayValue: true,
-              textMargin: 1
+              textMargin: 0
             });
           `).join('')}
           setTimeout(() => { window.print(); window.close(); }, 500);
