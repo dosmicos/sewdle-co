@@ -907,7 +907,7 @@ serve(async (req) => {
           error: errorMsg,
           errorCode: isDifficultAccessError ? 'DIFFICULT_ACCESS_ZONE' : undefined
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
