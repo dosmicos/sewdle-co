@@ -710,12 +710,11 @@ serve(async (req) => {
     console.log(`📍 Destination (CO): state="${stateCode}", city(DANE)="${destDaneCode}"`);
     console.log(`📤 Origin address:`, originData);
 
-    // Build reference text: ORDER NUMBER FIRST (most important), then address2
-    // This ensures the order number is always visible even if Envia.com truncates the field
+    // Build reference text: ORDER NUMBER FIRST, then address2 (cleaned)
     const referenceText = [
-      `Pedido #${body.order_number}`,  // Order number first - always visible
-      body.destination_address2        // Apartment/tower info second
-    ].filter(Boolean).join(' - ');
+      `#${body.order_number}`,
+      body.destination_address2?.trim()
+    ].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim();
 
     // Build destination - use DANE code for both city and postalCode
     const destinationData: Record<string, any> = {
