@@ -872,6 +872,19 @@ serve(async (req) => {
       const errorMsg = enviaData.error?.message || enviaData.message || 'Error al generar guía';
       console.error('❌ Envia.com returned error:', errorMsg);
       
+      // Detectar errores de zonas de difícil acceso
+      const errorMsgLower = errorMsg.toLowerCase();
+      const isDifficultAccessError = 
+        errorMsgLower.includes('difícil acceso') ||
+        errorMsgLower.includes('dificil acceso') ||
+        errorMsgLower.includes('zonas de dificil') ||
+        errorMsgLower.includes('reclamo en oficina') ||
+        (errorMsgLower.includes('service provided not available') && errorMsgLower.includes('incorrect'));
+      
+      if (isDifficultAccessError) {
+        console.log('⚠️ Detected difficult access zone error');
+      }
+      
       await supabase
         .from('shipping_labels')
         .insert({
@@ -889,7 +902,11 @@ serve(async (req) => {
         });
 
       return new Response(
-        JSON.stringify({ success: false, error: errorMsg }),
+        JSON.stringify({ 
+          success: false, 
+          error: errorMsg,
+          errorCode: isDifficultAccessError ? 'DIFFICULT_ACCESS_ZONE' : undefined
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }

@@ -105,8 +105,18 @@ export const useEnviaShipping = () => {
 
       if (!data.success) {
         console.error('Label creation failed:', data.error);
-        toast.error('Error al crear la guía: ' + (data.error || 'Error desconocido'));
-        return { success: false, error: data.error };
+        
+        // Mostrar mensaje amigable para zonas de difícil acceso
+        if (data.errorCode === 'DIFFICULT_ACCESS_ZONE') {
+          toast.error(
+            'Algunos envíos tienen como destino zonas de difícil acceso, seguridad y movilidad; por favor remítalos con tipo de entrega reclamo en oficina.',
+            { duration: 8000 }
+          );
+        } else {
+          toast.error('Error al crear la guía: ' + (data.error || 'Error desconocido'));
+        }
+        
+        return { success: false, error: data.error, errorCode: data.errorCode };
       }
 
       console.log('✅ Label created successfully:', data);
