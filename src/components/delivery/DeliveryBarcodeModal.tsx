@@ -101,7 +101,8 @@ const DeliveryBarcodeModal = ({
           .page { 
             display: grid;
             grid-template-columns: repeat(2, 46mm);
-            gap: 8mm;
+            column-gap: 8mm;
+            row-gap: 0;
             padding: 0;
             margin: 0;
             justify-content: center;
@@ -147,7 +148,8 @@ const DeliveryBarcodeModal = ({
               padding: 0 !important; 
             }
             .page {
-              gap: 8mm;
+              column-gap: 8mm;
+              row-gap: 0;
               justify-content: center;
             }
             .barcode-label { 
