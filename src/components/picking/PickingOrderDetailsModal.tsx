@@ -762,8 +762,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Shipping stays the same (not affected by deleted items)
   const shippingAmount = parseFloat(rawFinancialData.total_shipping_price_set?.shop_money?.amount) || 0;
   
-  // Calculate total
-  const calculatedTotal = calculatedSubtotal + calculatedTax + shippingAmount;
+  // Check if taxes are included in prices (Shopify setting)
+  const taxesIncluded = rawFinancialData.taxes_included === true;
+  
+  // Calculate total - if taxes are included, don't add them again
+  const calculatedTotal = taxesIncluded 
+    ? calculatedSubtotal + shippingAmount  // Taxes already in subtotal
+    : calculatedSubtotal + calculatedTax + shippingAmount;
   
   // Create financial summary with calculated values
   const financialSummary = {
@@ -1019,7 +1024,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     <span className="font-medium">{formatCurrency(shippingAmount, effectiveOrder.shopify_order?.currency)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Impuestos</span>
+                    <span className="text-muted-foreground">
+                      Impuestos {taxesIncluded && <span className="text-xs opacity-70">(incluido)</span>}
+                    </span>
                     <span className="font-medium">{formatCurrency(financialSummary.total_tax, effectiveOrder.shopify_order?.currency)}</span>
                   </div>
                   <Separator className="my-1.5" />
