@@ -174,10 +174,10 @@ const DeliveryBarcodeModal = ({
               format: "CODE128",
               width: 2.5,
               height: 70,
-              fontSize: 14,
+              fontSize: 16,
               margin: 0,
               displayValue: true,
-              textMargin: 0
+              textMargin: 2
             });
           `).join('')}
           setTimeout(() => { window.print(); window.close(); }, 500);
