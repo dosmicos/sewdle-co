@@ -359,7 +359,7 @@ function parseAddress(address: string): { street: string; number: string } {
     const match = address.match(pattern);
     if (match) {
       const street = match[1].trim();
-      const number = match[2].trim();
+      const number = `# ${match[2].trim()}`; // Include # symbol for Colombian addresses
       console.log(`📍 Address parsed: street="${street}", number="${number}"`);
       return { street, number };
     }
