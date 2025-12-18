@@ -18,15 +18,15 @@ const BarcodeLabel = ({ sku, productName, variant, index }: BarcodeLabelProps) =
         <Barcode 
           value={sku} 
           format="CODE128"
-          width={2.5}
+          width={3}
           height={45}
-          fontSize={9}
+          fontSize={11}
           margin={1}
           displayValue={true}
           textMargin={0}
         />
       </div>
-      <p className="text-center w-full truncate" style={{ fontSize: '8px', lineHeight: 1, marginTop: '1px' }} title={compactText}>
+      <p className="text-center w-full truncate" style={{ fontSize: '10px', lineHeight: 1, marginTop: '1px' }} title={compactText}>
         {compactText}
       </p>
     </div>
