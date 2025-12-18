@@ -126,6 +126,7 @@ export interface CreateLabelResponse {
   success: boolean;
   label?: ShippingLabel;
   error?: string;
+  errorCode?: string;
   tracking_number?: string;
   label_url?: string;
   carrier?: string;
