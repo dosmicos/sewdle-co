@@ -128,7 +128,7 @@ const DeliveryBarcodeModal = ({
           .product-info {
             font-size: 12px;
             font-weight: 500;
-            margin-top: 1px;
+            margin-top: 3mm;
             line-height: 1;
             white-space: nowrap;
             overflow: hidden;
