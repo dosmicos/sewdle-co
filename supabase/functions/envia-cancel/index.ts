@@ -178,22 +178,45 @@ serve(async (req) => {
           .eq('organization_id', organizationId)
           .single();
 
-        // Determine correct status based on whether order was actually packed:
-        // - If packed_at exists → 'ready_to_ship' (was packed before shipping)
-        // - If packed_at is null → 'pending' (was never properly packed)
-        const newStatus = currentOrder?.packed_at ? 'ready_to_ship' : 'pending';
+        // Get Shopify tags to verify EMPACADO status
+        const { data: shopifyOrder } = await supabase
+          .from('shopify_orders')
+          .select('tags')
+          .eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId)
+          .single();
+
+        // Check if EMPACADO tag exists in Shopify
+        const hasEmpacadoTag = shopifyOrder?.tags
+          ?.split(',')
+          .map((t: string) => t.trim().toUpperCase())
+          .includes('EMPACADO') || false;
+
+        // Determine correct status based on both packed_at AND EMPACADO tag:
+        // - If packed_at exists AND EMPACADO tag exists → 'ready_to_ship'
+        // - Otherwise → 'pending' (needs to be repacked or never was)
+        const newStatus = (currentOrder?.packed_at && hasEmpacadoTag) ? 'ready_to_ship' : 'pending';
         
-        console.log(`Restoring order ${shopifyOrderId} to status: ${newStatus} (packed_at: ${currentOrder?.packed_at})`);
+        console.log(`Restoring order ${shopifyOrderId} to status: ${newStatus} (packed_at: ${currentOrder?.packed_at}, hasEmpacadoTag: ${hasEmpacadoTag})`);
+
+        // Build update data - if reverting to pending, also clear packed info
+        const updateData: Record<string, unknown> = {
+          operational_status: newStatus,
+          shipped_at: null,
+          shipped_by: null,
+          updated_at: new Date().toISOString()
+        };
+
+        // If reverting to pending, clear packed info too
+        if (newStatus === 'pending') {
+          updateData.packed_at = null;
+          updateData.packed_by = null;
+        }
 
         // Update local database status
         await supabase
           .from('picking_packing_orders')
-          .update({
-            operational_status: newStatus,
-            shipped_at: null,
-            shipped_by: null,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('shopify_order_id', shopifyOrderId)
           .eq('organization_id', organizationId);
 
@@ -206,7 +229,7 @@ serve(async (req) => {
           .eq('shopify_order_id', shopifyOrderId)
           .eq('organization_id', organizationId);
 
-        console.log('Local database status updated to ready_to_ship');
+        console.log(`Local database status updated to ${newStatus}`);
 
       } catch (shopifyError) {
         console.error('Error cancelling Shopify fulfillment:', shopifyError);
