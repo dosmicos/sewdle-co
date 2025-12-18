@@ -99,8 +99,18 @@ export const useEnviaShipping = () => {
 
       if (error) {
         console.error('Error creating label:', error);
-        toast.error('Error al crear la guía: ' + error.message);
-        return { success: false, error: error.message };
+        
+        // Revisar si el body contiene nuestro código de error personalizado
+        if (data?.errorCode === 'DIFFICULT_ACCESS_ZONE') {
+          toast.error(
+            'Algunos envíos tienen como destino zonas de difícil acceso, seguridad y movilidad; por favor remítalos con tipo de entrega reclamo en oficina.',
+            { duration: 8000 }
+          );
+        } else {
+          toast.error('Error al crear la guía: ' + (data?.error || error.message));
+        }
+        
+        return { success: false, error: data?.error || error.message, errorCode: data?.errorCode };
       }
 
       if (!data.success) {
