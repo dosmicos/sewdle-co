@@ -126,7 +126,7 @@ const DeliveryBarcodeModal = ({
             height: auto;
           }
           .product-info {
-            font-size: 10px;
+            font-size: 12px;
             font-weight: 500;
             margin-top: 1px;
             line-height: 1;
@@ -172,9 +172,9 @@ const DeliveryBarcodeModal = ({
           ${labelsWithCompactText.map(label => `
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
-              width: 3,
-              height: 35,
-              fontSize: 12,
+              width: 2.5,
+              height: 50,
+              fontSize: 14,
               margin: 0,
               displayValue: true,
               textMargin: 0
