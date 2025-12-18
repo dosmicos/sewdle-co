@@ -1366,7 +1366,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 shippingAddress={shippingAddress}
                 customerEmail={effectiveOrder.shopify_order.customer_email}
                 customerPhone={effectiveOrder.shopify_order.customer_phone}
-                totalPrice={Number(effectiveOrder.shopify_order.total_price) || 0}
+                totalPrice={calculatedTotal}
                 isFulfilled={effectiveOrder.shopify_order.fulfillment_status === 'fulfilled'}
                 isCOD={isCODOrder}
                 onLabelChange={setShippingLabel}
