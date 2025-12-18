@@ -343,26 +343,43 @@ function extractDistrict(address: string, city: string): string {
 }
 
 // Parse address into street and number
-// Improved to capture full complement for Colombian addresses like "Calle 167 # 51 A - 41"
+// Preserves the original separator (# or no/No/N°/num)
 function parseAddress(address: string): { street: string; number: string } {
-  // Colombian address patterns - capture EVERYTHING after the separator
-  const patterns = [
-    // Calle 167 # 51 A - 41 (capture all after #, including letters and dashes)
-    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*[#]\s*(.+)$/i,
-    // Cra 27 No. 63B-61 (capture all after No./N°)
-    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*(?:no\.?|n°|num\.?)\s*(.+)$/i,
-    // Cra 27 63B-61 (without separator, but number starts with digit)
-    /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s+(\d+.*)$/i,
-  ];
+  // Pattern 1: Uses # (e.g., "Calle 167 # 51 A - 41")
+  const patternHash = /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*[#]\s*(.+)$/i;
   
-  for (const pattern of patterns) {
-    const match = address.match(pattern);
-    if (match) {
-      const street = match[1].trim();
-      const number = `# ${match[2].trim()}`; // Include # symbol for Colombian addresses
-      console.log(`📍 Address parsed: street="${street}", number="${number}"`);
-      return { street, number };
-    }
+  // Pattern 2: Uses no/No/N°/num (e.g., "Cra 8 no 67-10") - CAPTURA EL SEPARADOR
+  const patternNo = /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s*(no\.?|n°|num\.?)\s*(.+)$/i;
+  
+  // Pattern 3: No separator (e.g., "Cra 27 63B-61")
+  const patternNoSep = /^((?:cra|carrera|calle|cl|av|avenida|diag|diagonal|trans|transversal|kr|k)\s*\.?\s*\d+[a-z]?)\s+(\d+.*)$/i;
+
+  // Check pattern 1 (with #)
+  let match = address.match(patternHash);
+  if (match) {
+    const street = match[1].trim();
+    const number = `# ${match[2].trim()}`;
+    console.log(`📍 Address parsed (with #): street="${street}", number="${number}"`);
+    return { street, number };
+  }
+  
+  // Check pattern 2 (with no/No/n°/num) - preserva el separador original
+  match = address.match(patternNo);
+  if (match) {
+    const street = match[1].trim();
+    const separator = match[2].replace('.', ''); // "no", "n°", "num" (sin punto)
+    const number = `${separator} ${match[3].trim()}`;
+    console.log(`📍 Address parsed (with ${separator}): street="${street}", number="${number}"`);
+    return { street, number };
+  }
+  
+  // Check pattern 3 (no separator - default to #)
+  match = address.match(patternNoSep);
+  if (match) {
+    const street = match[1].trim();
+    const number = `# ${match[2].trim()}`;
+    console.log(`📍 Address parsed (no separator, using #): street="${street}", number="${number}"`);
+    return { street, number };
   }
   
   // Fallback: use entire address as street
