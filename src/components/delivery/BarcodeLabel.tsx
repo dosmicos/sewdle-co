@@ -13,20 +13,20 @@ const BarcodeLabel = ({ sku, productName, variant, index }: BarcodeLabelProps) =
   const compactText = variant ? `${productName} - ${variant}` : productName;
   
   return (
-    <div className="barcode-label flex flex-col items-center justify-center p-1 border border-dashed border-border rounded bg-background" style={{ width: '189px', height: '94px' }}>
+    <div className="barcode-label flex flex-col items-center justify-center p-1 border border-dashed border-border rounded bg-background" style={{ width: '240px', height: '94px' }}>
       <div className="w-full overflow-hidden flex justify-center">
         <Barcode 
           value={sku} 
           format="CODE128"
-          width={3}
+          width={4}
           height={45}
-          fontSize={11}
+          fontSize={14}
           margin={1}
           displayValue={true}
           textMargin={0}
         />
       </div>
-      <p className="text-center w-full truncate" style={{ fontSize: '10px', lineHeight: 1, marginTop: '1px' }} title={compactText}>
+      <p className="text-center w-full truncate" style={{ fontSize: '12px', lineHeight: 1, marginTop: '1px' }} title={compactText}>
         {compactText}
       </p>
     </div>

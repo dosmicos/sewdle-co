@@ -100,15 +100,15 @@ const DeliveryBarcodeModal = ({
           }
           .page { 
             display: grid;
-            grid-template-columns: repeat(2, 46mm);
-            column-gap: 8mm;
+            grid-template-columns: repeat(2, 48mm);
+            column-gap: 4mm;
             row-gap: 0;
             padding: 0;
             margin: 0;
             justify-content: center;
           }
           .barcode-label {
-            width: 46mm;
+            width: 48mm;
             height: 20mm;
             padding: 1mm;
             box-sizing: border-box;
@@ -122,18 +122,18 @@ const DeliveryBarcodeModal = ({
             overflow: hidden;
           }
           .barcode-label svg {
-            max-width: 44mm;
+            max-width: 46mm;
             height: auto;
           }
           .product-info {
-            font-size: 8px;
+            font-size: 10px;
             font-weight: 500;
             margin-top: 1px;
             line-height: 1;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 44mm;
+            max-width: 46mm;
             color: #333;
           }
           @media print {
@@ -148,13 +148,13 @@ const DeliveryBarcodeModal = ({
               padding: 0 !important; 
             }
             .page {
-              column-gap: 8mm;
+              column-gap: 4mm;
               row-gap: 0;
               justify-content: center;
             }
             .barcode-label { 
               border: none;
-              width: 46mm;
+              width: 48mm;
             }
           }
         </style>
@@ -172,9 +172,9 @@ const DeliveryBarcodeModal = ({
           ${labelsWithCompactText.map(label => `
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
-              width: 2.2,
+              width: 3,
               height: 35,
-              fontSize: 9,
+              fontSize: 12,
               margin: 0,
               displayValue: true,
               textMargin: 0
