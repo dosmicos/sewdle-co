@@ -365,6 +365,22 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     });
   }
 
+  // ANTES de insertar, eliminar cualquier line item existente para este pedido
+  // (protección contra múltiples webhooks orders/create)
+  console.log(`🗑️ Limpiando line items previos de orden ${order.order_number}...`);
+  const { data: deletedItems, error: deleteError } = await supabase
+    .from('shopify_order_line_items')
+    .delete()
+    .eq('shopify_order_id', order.id)
+    .eq('organization_id', organizationId)
+    .select();
+
+  if (deleteError) {
+    console.error('⚠️ Error eliminando line items previos:', deleteError);
+  } else if (deletedItems && deletedItems.length > 0) {
+    console.log(`⚠️ Se eliminaron ${deletedItems.length} line items duplicados previos`);
+  }
+
   if (lineItemsToInsert.length > 0) {
     const { error: lineItemsError } = await supabase
       .from('shopify_order_line_items')
