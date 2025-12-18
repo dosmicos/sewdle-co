@@ -173,7 +173,7 @@ const DeliveryBarcodeModal = ({
             JsBarcode("#barcode-${label.sku}-${label.unitIndex}", "${label.sku}", {
               format: "CODE128",
               width: 2.5,
-              height: 50,
+              height: 70,
               fontSize: 14,
               margin: 0,
               displayValue: true,
