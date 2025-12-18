@@ -2093,6 +2093,9 @@ export type Database = {
           recipient_name: string | null
           recipient_phone: string | null
           shipment_id: string | null
+          shopify_fulfillment_error: string | null
+          shopify_fulfillment_id: string | null
+          shopify_fulfillment_status: string | null
           shopify_order_id: number
           status: string | null
           total_price: number | null
@@ -2116,6 +2119,9 @@ export type Database = {
           recipient_name?: string | null
           recipient_phone?: string | null
           shipment_id?: string | null
+          shopify_fulfillment_error?: string | null
+          shopify_fulfillment_id?: string | null
+          shopify_fulfillment_status?: string | null
           shopify_order_id: number
           status?: string | null
           total_price?: number | null
@@ -2139,6 +2145,9 @@ export type Database = {
           recipient_name?: string | null
           recipient_phone?: string | null
           shipment_id?: string | null
+          shopify_fulfillment_error?: string | null
+          shopify_fulfillment_id?: string | null
+          shopify_fulfillment_status?: string | null
           shopify_order_id?: number
           status?: string | null
           total_price?: number | null
