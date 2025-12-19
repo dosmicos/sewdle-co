@@ -448,6 +448,69 @@ export type Database = {
         }
         Relationships: []
       }
+      manifest_items: {
+        Row: {
+          created_at: string
+          destination_city: string | null
+          id: string
+          manifest_id: string
+          notes: string | null
+          order_number: string
+          recipient_name: string | null
+          scan_status: string | null
+          scanned_at: string | null
+          scanned_by: string | null
+          shipping_label_id: string
+          shopify_order_id: number
+          tracking_number: string
+        }
+        Insert: {
+          created_at?: string
+          destination_city?: string | null
+          id?: string
+          manifest_id: string
+          notes?: string | null
+          order_number: string
+          recipient_name?: string | null
+          scan_status?: string | null
+          scanned_at?: string | null
+          scanned_by?: string | null
+          shipping_label_id: string
+          shopify_order_id: number
+          tracking_number: string
+        }
+        Update: {
+          created_at?: string
+          destination_city?: string | null
+          id?: string
+          manifest_id?: string
+          notes?: string | null
+          order_number?: string
+          recipient_name?: string | null
+          scan_status?: string | null
+          scanned_at?: string | null
+          scanned_by?: string | null
+          shipping_label_id?: string
+          shopify_order_id?: number
+          tracking_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manifest_items_manifest_id_fkey"
+            columns: ["manifest_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_manifests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manifest_items_shipping_label_id_fkey"
+            columns: ["shipping_label_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       material_deliveries: {
         Row: {
           created_at: string
@@ -2164,6 +2227,71 @@ export type Database = {
           },
         ]
       }
+      shipping_manifests: {
+        Row: {
+          carrier: string
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          manifest_date: string
+          manifest_number: string
+          notes: string | null
+          organization_id: string
+          pickup_confirmed_at: string | null
+          pickup_confirmed_by: string | null
+          status: string
+          total_packages: number | null
+          total_verified: number | null
+          updated_at: string
+        }
+        Insert: {
+          carrier: string
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          manifest_date?: string
+          manifest_number: string
+          notes?: string | null
+          organization_id: string
+          pickup_confirmed_at?: string | null
+          pickup_confirmed_by?: string | null
+          status?: string
+          total_packages?: number | null
+          total_verified?: number | null
+          updated_at?: string
+        }
+        Update: {
+          carrier?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          manifest_date?: string
+          manifest_number?: string
+          notes?: string | null
+          organization_id?: string
+          pickup_confirmed_at?: string | null
+          pickup_confirmed_by?: string | null
+          status?: string
+          total_packages?: number | null
+          total_verified?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_manifests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_order_line_items: {
         Row: {
           created_at: string
@@ -3068,6 +3196,10 @@ export type Database = {
       }
       fix_delivery_sync_status_inconsistencies: { Args: never; Returns: Json }
       generate_delivery_number: { Args: never; Returns: string }
+      generate_manifest_number: {
+        Args: { carrier_code: string; org_id: string }
+        Returns: string
+      }
       generate_material_sku: {
         Args: { category_name: string }
         Returns: string
