@@ -126,12 +126,23 @@ serve(async (req) => {
           return 'PERSON_ENTITY';
         };
 
+        // Build nameObject from name field (Alegra Colombia requires this)
+        const fullName = String(contact.name || '').trim();
+        const nameParts = fullName.split(' ').filter(Boolean);
+        const firstName = nameParts[0] || 'Cliente';
+        const lastName = nameParts.slice(1).join(' ') || 'Sin Apellido';
+
         const normalizedContact = {
           ...contact,
           identificationType,
           identificationNumber,
           // Required by Alegra (tipo de persona)
           kindOfPerson: normalizeKindOfPerson(contact.kindOfPerson, identificationType),
+          // Alegra Colombia requires nameObject with firstName and lastName
+          nameObject: {
+            firstName,
+            lastName,
+          },
           // Alegra expects `identification` as a string in many endpoints
           identification: identificationNumber,
           // Some responses use `identificationObject`; include it for compatibility
