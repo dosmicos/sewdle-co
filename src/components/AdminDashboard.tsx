@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell, Tooltip } from 'recharts';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
+import ShopifyOrderStatsCard from '@/components/dashboard/ShopifyOrderStatsCard';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -174,6 +175,9 @@ const AdminDashboard = () => {
           </div>
         </Card>
       </div>
+
+      {/* Shopify Order Stats */}
+      <ShopifyOrderStatsCard />
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
