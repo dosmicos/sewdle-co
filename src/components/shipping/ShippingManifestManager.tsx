@@ -1,16 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +33,6 @@ import {
   MoreVertical,
   CheckCircle2,
   Clock,
-  XCircle,
   Loader2,
   Search,
   Printer,
@@ -51,7 +41,7 @@ import {
 } from 'lucide-react';
 import { useShippingManifests, ShippingManifest, ManifestWithItems } from '@/hooks/useShippingManifests';
 import { ManifestCreationModal } from './ManifestCreationModal';
-import { ManifestScannerModal } from './ManifestScannerModal';
+import { ManifestDetailView } from './ManifestDetailView';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -74,7 +64,6 @@ export const ShippingManifestManager: React.FC = () => {
   } = useShippingManifests();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showScannerModal, setShowScannerModal] = useState(false);
   const [selectedManifest, setSelectedManifest] = useState<ManifestWithItems | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -88,12 +77,11 @@ export const ShippingManifestManager: React.FC = () => {
     fetchManifests();
   }, [fetchManifests]);
 
-  const handleOpenScanner = async (manifestId: string) => {
+  const handleOpenManifest = async (manifestId: string) => {
     setActionLoading(manifestId);
     const manifest = await fetchManifestWithItems(manifestId);
     if (manifest) {
       setSelectedManifest(manifest);
-      setShowScannerModal(true);
     }
     setActionLoading(null);
   };
@@ -117,7 +105,6 @@ export const ShippingManifestManager: React.FC = () => {
   };
 
   const handlePrint = (manifest: ShippingManifest) => {
-    // TODO: Implement print view
     window.print();
   };
 
@@ -140,6 +127,17 @@ export const ShippingManifestManager: React.FC = () => {
   const todayManifests = manifests.filter(
     m => m.manifest_date === format(new Date(), 'yyyy-MM-dd')
   ).length;
+
+  // If a manifest is selected, show detail view
+  if (selectedManifest) {
+    return (
+      <ManifestDetailView
+        manifest={selectedManifest}
+        onBack={() => setSelectedManifest(null)}
+        onUpdate={() => fetchManifests()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -238,7 +236,8 @@ export const ShippingManifestManager: React.FC = () => {
             return (
               <div 
                 key={manifest.id} 
-                className="border rounded-lg p-4 bg-card hover:bg-muted/30 transition-colors"
+                className="border rounded-lg p-4 bg-card hover:bg-muted/30 transition-colors cursor-pointer"
+                onClick={() => handleOpenManifest(manifest.id)}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   {/* Manifest Info */}
@@ -269,13 +268,13 @@ export const ShippingManifestManager: React.FC = () => {
                   </div>
 
                   {/* Direct Action Buttons */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                     {manifest.status === 'open' && (
                       <>
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => handleOpenScanner(manifest.id)}
+                          onClick={() => handleOpenManifest(manifest.id)}
                           disabled={isActionLoading}
                           className="gap-1.5"
                         >
@@ -352,18 +351,6 @@ export const ShippingManifestManager: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
         onCreated={() => fetchManifests()}
       />
-
-      {selectedManifest && (
-        <ManifestScannerModal
-          open={showScannerModal}
-          onClose={() => {
-            setShowScannerModal(false);
-            setSelectedManifest(null);
-          }}
-          manifest={selectedManifest}
-          onUpdate={() => fetchManifests()}
-        />
-      )}
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
