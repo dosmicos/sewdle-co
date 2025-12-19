@@ -4,7 +4,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { OrganizationSelector } from './OrganizationSelector';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter } from '@/components/ui/sidebar';
-import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users, Package2, Palette, Shield, DollarSign, Brain, TrendingUp, ShoppingCart, Settings, ChevronDown, Target, UserPlus, Calculator, PackageSearch } from 'lucide-react';
+import { LayoutDashboard, FileText, Building2, Package, Truck, LogOut, User, Users, Package2, Palette, Shield, DollarSign, Brain, TrendingUp, ShoppingCart, Settings, ChevronDown, Target, UserPlus, Calculator, PackageSearch, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -34,6 +34,7 @@ const AppSidebar = () => {
     { title: 'Reposición IA', url: '/replenishment', icon: Brain },
     { title: 'Reclutamiento', url: '/prospects', icon: UserPlus },
     { title: 'Finanzas', url: '/financial', icon: DollarSign },
+    { title: 'Alegra', url: '/alegra', icon: Receipt },
     { title: 'Usuarios & Roles', url: '/users-roles', icon: Users }
   ];
   
