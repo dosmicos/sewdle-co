@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle, Store } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
@@ -40,6 +40,7 @@ const statusColors = {
   picking: 'bg-blue-100 text-blue-800',
   packing: 'bg-purple-100 text-purple-800',
   ready_to_ship: 'bg-green-100 text-green-800',
+  awaiting_pickup: 'bg-orange-100 text-orange-800',
   shipped: 'bg-gray-100 text-gray-800',
 };
 
@@ -48,6 +49,7 @@ const statusLabels = {
   picking: 'Picking en Proceso',
   packing: 'Empacando',
   ready_to_ship: 'Empacado',
+  awaiting_pickup: 'Esperando Retiro',
   shipped: 'Enviado',
 };
 
@@ -72,6 +74,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const financialSummaryRef = useRef<HTMLDivElement>(null);
   const shippingButtonRef = useRef<EnviaShippingButtonRef>(null);
   const [isCreatingShippingLabel, setIsCreatingShippingLabel] = useState(false);
+  const [isProcessingPickup, setIsProcessingPickup] = useState(false);
   
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
@@ -708,6 +711,89 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   useEffect(() => {
     handleMarkAsPackedAndPrintRef.current = handleMarkAsPackedAndPrint;
   }, [handleMarkAsPackedAndPrint]);
+
+  // Handler for "Listo para Retiro" - creates fulfillment in Shopify and sets awaiting_pickup
+  const handleReadyForPickup = useCallback(async () => {
+    if (!localOrder?.shopify_order?.shopify_order_id) {
+      toast.error('Error: ID de Shopify no disponible');
+      return;
+    }
+
+    setIsProcessingPickup(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fulfill-pickup-order', {
+        body: {
+          shopify_order_id: localOrder.shopify_order.shopify_order_id,
+          organization_id: localOrder.organization_id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(data.message || 'Pedido listo para retiro. Cliente notificado.');
+        
+        // Update local state
+        setLocalOrder(prev => prev ? {
+          ...prev,
+          operational_status: 'awaiting_pickup' as OperationalStatus
+        } : prev);
+        
+        await refetchOrder(orderId);
+      } else {
+        throw new Error(data?.error || 'Error procesando pedido');
+      }
+    } catch (error: any) {
+      console.error('Error en Listo para Retiro:', error);
+      toast.error(error.message || 'Error procesando pedido para retiro');
+    } finally {
+      setIsProcessingPickup(false);
+    }
+  }, [localOrder, orderId, refetchOrder]);
+
+  // Handler for "Marcar como Entregado" - confirms pickup delivery
+  const handleConfirmPickupDelivery = useCallback(async () => {
+    if (!localOrder?.shopify_order?.shopify_order_id) {
+      toast.error('Error: ID de Shopify no disponible');
+      return;
+    }
+
+    setIsProcessingPickup(true);
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      
+      const { data, error } = await supabase.functions.invoke('confirm-pickup-delivery', {
+        body: {
+          shopify_order_id: localOrder.shopify_order.shopify_order_id,
+          organization_id: localOrder.organization_id,
+          user_id: user?.id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success('Entrega confirmada exitosamente');
+        
+        // Update local state
+        setLocalOrder(prev => prev ? {
+          ...prev,
+          operational_status: 'shipped' as OperationalStatus,
+          shipped_at: new Date().toISOString(),
+          shipped_by: user?.id
+        } : prev);
+        
+        await refetchOrder(orderId);
+      } else {
+        throw new Error(data?.error || 'Error confirmando entrega');
+      }
+    } catch (error: any) {
+      console.error('Error confirmando entrega:', error);
+      toast.error(error.message || 'Error confirmando entrega');
+    } finally {
+      setIsProcessingPickup(false);
+    }
+  }, [localOrder, orderId, refetchOrder]);
 
   const formatCurrency = (amount?: number, currency?: string) => {
     if (!amount) return '$0';
@@ -1386,7 +1472,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         )}
 
         {/* Sticky Floating Action Button - "Marcar como Empacado" */}
-        {!effectiveOrder.shopify_order?.cancelled_at && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'shipped' && (
+        {!effectiveOrder.shopify_order?.cancelled_at && 
+         effectiveOrder.operational_status !== 'ready_to_ship' && 
+         effectiveOrder.operational_status !== 'awaiting_pickup' && 
+         effectiveOrder.operational_status !== 'shipped' && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
               onClick={handleMarkAsPackedAndPrint}
@@ -1406,9 +1495,53 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           </div>
         )}
 
-        {/* Sticky Floating Action Button - "Crear Guía" (appears after packing) */}
+        {/* Sticky Floating Action Button - "Listo para Retiro" (pickup orders after packing) */}
         {!effectiveOrder.shopify_order?.cancelled_at && 
          effectiveOrder.operational_status === 'ready_to_ship' && 
+         shippingType?.label === 'Recoger' && (
+          <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
+            <Button
+              onClick={handleReadyForPickup}
+              disabled={isProcessingPickup}
+              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
+            >
+              {isProcessingPickup ? (
+                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+              ) : (
+                <>
+                  <Store className="w-4 h-4 md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Listo para</span> Retiro
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Sticky Floating Action Button - "Marcar como Entregado" (awaiting_pickup orders) */}
+        {!effectiveOrder.shopify_order?.cancelled_at && 
+         effectiveOrder.operational_status === 'awaiting_pickup' && (
+          <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
+            <Button
+              onClick={handleConfirmPickupDelivery}
+              disabled={isProcessingPickup}
+              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
+            >
+              {isProcessingPickup ? (
+                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Marcar como</span> Entregado
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Sticky Floating Action Button - "Crear Guía" (shipping orders after packing) */}
+        {!effectiveOrder.shopify_order?.cancelled_at && 
+         effectiveOrder.operational_status === 'ready_to_ship' && 
+         shippingType?.label !== 'Recoger' &&
          (!shippingLabel || shippingLabel.status === 'cancelled' || shippingLabel.status === 'error') && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button

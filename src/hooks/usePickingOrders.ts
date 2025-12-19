@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { logger } from '@/lib/logger';
 
-export type OperationalStatus = 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'shipped';
+export type OperationalStatus = 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'awaiting_pickup' | 'shipped';
 
 // Helper function to map Shopify tags to operational status
 const getOperationalStatusFromTags = (
@@ -31,6 +31,7 @@ const getOperationalStatusFromTags = (
 export interface PickingOrder {
   id: string;
   shopify_order_id: number;
+  organization_id: string;
   operational_status: OperationalStatus;
   created_at: string;
   updated_at: string;
@@ -421,11 +422,12 @@ export const usePickingOrders = () => {
         return;
       }
       
-      const statusTags = {
+      const statusTags: Record<OperationalStatus, string> = {
         pending: 'PENDIENTE',
         picking: 'PICKING_EN_PROCESO',
         packing: 'EMPACANDO',
         ready_to_ship: 'EMPACADO',
+        awaiting_pickup: 'LISTO_PARA_RETIRO',
         shipped: 'ENVIADO'
       };
 
