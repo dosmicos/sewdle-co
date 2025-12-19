@@ -36,6 +36,7 @@ async function makeAlegraRequest(endpoint: string, method: string = 'GET', body?
   
   if (body && method !== 'GET') {
     options.body = JSON.stringify(body);
+    console.log('Request body:', JSON.stringify(body));
   }
   
   const response = await fetch(url, options);
@@ -94,9 +95,15 @@ serve(async (req) => {
         break;
         
       case 'get-invoices':
-        // Get all invoices
+        // Get all invoices with optional params
         const params = data?.params ? `?${new URLSearchParams(data.params).toString()}` : '';
         result = await makeAlegraRequest(`/invoices${params}`);
+        break;
+        
+      case 'search-invoices':
+        // Search invoices by query (useful for finding by observations field)
+        const searchQuery = data.query ? `?query=${encodeURIComponent(data.query)}` : '';
+        result = await makeAlegraRequest(`/invoices${searchQuery}`);
         break;
         
       case 'get-invoice':
@@ -112,6 +119,18 @@ serve(async (req) => {
       case 'send-invoice-email':
         // Send invoice by email
         result = await makeAlegraRequest(`/invoices/${data.invoiceId}/email`, 'POST', data.emailData);
+        break;
+        
+      case 'stamp-invoices':
+        // Stamp invoices with DIAN (electronic invoicing) - max 10 per request
+        if (!data.ids || !Array.isArray(data.ids) || data.ids.length === 0) {
+          throw new Error('Se requiere un array de IDs de facturas (máximo 10)');
+        }
+        if (data.ids.length > 10) {
+          throw new Error('Máximo 10 facturas por solicitud de emisión');
+        }
+        console.log(`Stamping invoices with DIAN: ${data.ids.join(', ')}`);
+        result = await makeAlegraRequest('/invoices/stamp', 'POST', { ids: data.ids });
         break;
         
       case 'get-resolutions':

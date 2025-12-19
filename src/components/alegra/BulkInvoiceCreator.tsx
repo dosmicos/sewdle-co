@@ -15,7 +15,10 @@ import {
   FileText,
   User,
   Package,
-  ShoppingCart
+  ShoppingCart,
+  Send,
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -40,6 +43,13 @@ interface ShopifyOrderForInvoice {
   financial_status: string;
   fulfillment_status: string | null;
   created_at_shopify: string;
+  // Alegra fields
+  alegra_invoice_id: number | null;
+  alegra_invoice_number: string | null;
+  alegra_invoice_status: string | null;
+  alegra_stamped: boolean | null;
+  alegra_cufe: string | null;
+  alegra_synced_at: string | null;
   line_items: Array<{
     id: string;
     title: string;
@@ -50,22 +60,47 @@ interface ShopifyOrderForInvoice {
   }>;
 }
 
+type ProcessingStatus = 
+  | 'idle' 
+  | 'searching_invoice' 
+  | 'searching_contact' 
+  | 'creating_contact'
+  | 'creating_invoice' 
+  | 'stamping' 
+  | 'success' 
+  | 'error'
+  | 'already_stamped';
+
 interface InvoiceResult {
   orderId: string;
   orderNumber: string;
-  success: boolean;
-  invoiceId?: string;
+  status: ProcessingStatus;
+  invoiceId?: number;
   invoiceNumber?: string;
+  cufe?: string;
   error?: string;
 }
+
+const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactNode; color: string }> = {
+  idle: { label: 'Pendiente', icon: <Clock className="h-4 w-4" />, color: 'text-muted-foreground' },
+  searching_invoice: { label: 'Buscando factura...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
+  searching_contact: { label: 'Buscando cliente...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
+  creating_contact: { label: 'Creando cliente...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
+  creating_invoice: { label: 'Creando factura...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
+  stamping: { label: 'Emitiendo con DIAN...', icon: <Send className="h-4 w-4 animate-pulse" />, color: 'text-orange-600' },
+  success: { label: 'Factura electrónica emitida', icon: <CheckCircle className="h-4 w-4" />, color: 'text-green-600' },
+  error: { label: 'Error', icon: <AlertCircle className="h-4 w-4" />, color: 'text-red-600' },
+  already_stamped: { label: 'Ya emitida', icon: <CheckCircle className="h-4 w-4" />, color: 'text-green-600' },
+};
 
 const BulkInvoiceCreator = () => {
   const [orders, setOrders] = useState<ShopifyOrderForInvoice[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [results, setResults] = useState<InvoiceResult[]>([]);
+  const [results, setResults] = useState<Map<string, InvoiceResult>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'stamped'>('all');
 
   useEffect(() => {
     fetchShopifyOrders();
@@ -74,7 +109,6 @@ const BulkInvoiceCreator = () => {
   const fetchShopifyOrders = async () => {
     setIsLoading(true);
     try {
-      // Fetch Shopify orders
       const { data: ordersData, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('*')
@@ -84,7 +118,6 @@ const BulkInvoiceCreator = () => {
 
       if (ordersError) throw ordersError;
 
-      // Fetch line items for each order
       const ordersWithItems: ShopifyOrderForInvoice[] = [];
       
       for (const order of ordersData || []) {
@@ -120,35 +153,103 @@ const BulkInvoiceCreator = () => {
 
   const toggleAll = () => {
     const filteredOrders = getFilteredOrders();
-    if (selectedOrders.size === filteredOrders.length) {
+    const selectableOrders = filteredOrders.filter(o => !o.alegra_stamped);
+    if (selectedOrders.size === selectableOrders.length) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(new Set(filteredOrders.map(o => o.id)));
+      setSelectedOrders(new Set(selectableOrders.map(o => o.id)));
     }
   };
 
   const getFilteredOrders = () => {
-    if (!searchTerm) return orders;
-    const term = searchTerm.toLowerCase();
-    return orders.filter(order => 
-      order.order_number?.toLowerCase().includes(term) ||
-      order.customer_email?.toLowerCase().includes(term) ||
-      order.customer_first_name?.toLowerCase().includes(term) ||
-      order.customer_last_name?.toLowerCase().includes(term)
+    let filtered = orders;
+    
+    // Filter by status
+    if (filterStatus === 'pending') {
+      filtered = filtered.filter(o => !o.alegra_stamped);
+    } else if (filterStatus === 'stamped') {
+      filtered = filtered.filter(o => o.alegra_stamped);
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(order => 
+        order.order_number?.toLowerCase().includes(term) ||
+        order.customer_email?.toLowerCase().includes(term) ||
+        order.customer_first_name?.toLowerCase().includes(term) ||
+        order.customer_last_name?.toLowerCase().includes(term) ||
+        order.alegra_invoice_number?.toLowerCase().includes(term) ||
+        order.alegra_cufe?.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
+  };
+
+  const updateResult = (orderId: string, result: Partial<InvoiceResult>) => {
+    setResults(prev => {
+      const newResults = new Map(prev);
+      const existing = newResults.get(orderId) || { orderId, orderNumber: '', status: 'idle' as ProcessingStatus };
+      newResults.set(orderId, { ...existing, ...result });
+      return newResults;
+    });
+  };
+
+  const updateOrderAlegraStatus = async (
+    orderId: string, 
+    invoiceId: number, 
+    invoiceNumber: string,
+    stamped: boolean,
+    cufe?: string
+  ) => {
+    const { error } = await supabase
+      .from('shopify_orders')
+      .update({
+        alegra_invoice_id: invoiceId,
+        alegra_invoice_number: invoiceNumber,
+        alegra_stamped: stamped,
+        alegra_cufe: cufe || null,
+        alegra_synced_at: new Date().toISOString()
+      })
+      .eq('id', orderId);
+
+    if (error) {
+      console.error('Error updating order Alegra status:', error);
+    }
+  };
+
+  const searchInvoiceByOrderNumber = async (orderNumber: string) => {
+    const { data, error } = await supabase.functions.invoke('alegra-api', {
+      body: { 
+        action: 'search-invoices', 
+        data: { query: `Pedido Shopify #${orderNumber}` } 
+      }
+    });
+
+    if (error || !data?.success) {
+      console.log('No existing invoice found for order:', orderNumber);
+      return null;
+    }
+
+    // Find invoice that matches this order in observations
+    const matchingInvoice = data.data?.find((inv: any) => 
+      inv.observations?.includes(`Pedido Shopify #${orderNumber}`)
     );
+
+    return matchingInvoice || null;
   };
 
   const searchOrCreateContact = async (order: ShopifyOrderForInvoice) => {
     const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || order.email || 'Cliente';
     const customerEmail = order.customer_email || order.email;
 
-    // Search for existing contact in Alegra by email
+    // Search for existing contact in Alegra
     const { data: searchResult } = await supabase.functions.invoke('alegra-api', {
       body: { action: 'get-contacts' }
     });
 
     if (searchResult?.success && searchResult.data) {
-      // Try to find by email first
       const existingContact = searchResult.data.find((c: any) => 
         c.email?.toLowerCase() === customerEmail?.toLowerCase() ||
         c.name?.toLowerCase() === customerName.toLowerCase()
@@ -159,10 +260,9 @@ const BulkInvoiceCreator = () => {
       }
     }
 
-    // Extract address from billing or shipping
+    // Create new contact if not found
     const address = order.billing_address || order.shipping_address || {};
     
-    // Create new contact if not found
     const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
       body: {
         action: 'create-contact',
@@ -182,7 +282,7 @@ const BulkInvoiceCreator = () => {
     });
 
     if (error || !createResult?.success) {
-      throw new Error('No se pudo crear el contacto en Alegra: ' + (createResult?.error || error?.message));
+      throw new Error('No se pudo crear el contacto: ' + (createResult?.error || error?.message));
     }
 
     return { id: createResult.data.id, isNew: true, name: customerName };
@@ -190,11 +290,11 @@ const BulkInvoiceCreator = () => {
 
   const createInvoice = async (order: ShopifyOrderForInvoice, contactId: string) => {
     const items = order.line_items.map(item => ({
-      id: 1, // Default Alegra item
+      id: 1,
       name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
       price: item.price,
       quantity: item.quantity,
-      tax: [] // Adjust based on your tax configuration
+      tax: []
     }));
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
@@ -220,6 +320,21 @@ const BulkInvoiceCreator = () => {
     return data.data;
   };
 
+  const stampInvoices = async (invoiceIds: number[]) => {
+    const { data, error } = await supabase.functions.invoke('alegra-api', {
+      body: {
+        action: 'stamp-invoices',
+        data: { ids: invoiceIds }
+      }
+    });
+
+    if (error || !data?.success) {
+      throw new Error(data?.error || 'Error al emitir factura con DIAN');
+    }
+
+    return data.data;
+  };
+
   const processInvoices = async () => {
     if (selectedOrders.size === 0) {
       toast.warning('Selecciona al menos un pedido');
@@ -227,50 +342,145 @@ const BulkInvoiceCreator = () => {
     }
 
     setIsProcessing(true);
-    setResults([]);
-    const newResults: InvoiceResult[] = [];
+    setResults(new Map());
+
+    const invoicesToStamp: { orderId: string; invoiceId: number; orderNumber: string }[] = [];
 
     for (const orderId of selectedOrders) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
 
+      updateResult(orderId, { orderNumber: order.order_number, status: 'searching_invoice' });
+
       try {
-        // Search or create contact
+        // 1. Check if already stamped
+        if (order.alegra_stamped && order.alegra_cufe) {
+          updateResult(orderId, { 
+            status: 'already_stamped',
+            invoiceId: order.alegra_invoice_id || undefined,
+            invoiceNumber: order.alegra_invoice_number || undefined,
+            cufe: order.alegra_cufe
+          });
+          continue;
+        }
+
+        // 2. Check if has invoice linked but not stamped
+        if (order.alegra_invoice_id && !order.alegra_stamped) {
+          invoicesToStamp.push({ orderId, invoiceId: order.alegra_invoice_id, orderNumber: order.order_number });
+          continue;
+        }
+
+        // 3. Search for existing invoice in Alegra
+        const existingInvoice = await searchInvoiceByOrderNumber(order.order_number);
+        
+        if (existingInvoice) {
+          // Invoice exists - check if already stamped
+          if (existingInvoice.stamp?.cufe) {
+            await updateOrderAlegraStatus(
+              orderId, 
+              existingInvoice.id, 
+              existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
+              true,
+              existingInvoice.stamp.cufe
+            );
+            updateResult(orderId, { 
+              status: 'already_stamped',
+              invoiceId: existingInvoice.id,
+              invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
+              cufe: existingInvoice.stamp.cufe
+            });
+          } else {
+            // Invoice exists but not stamped - queue for stamping
+            await updateOrderAlegraStatus(orderId, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
+            invoicesToStamp.push({ orderId, invoiceId: existingInvoice.id, orderNumber: order.order_number });
+          }
+          continue;
+        }
+
+        // 4. No invoice exists - create everything
+        updateResult(orderId, { status: 'searching_contact' });
         const contact = await searchOrCreateContact(order);
         
-        // Create invoice
+        if (contact.isNew) {
+          updateResult(orderId, { status: 'creating_contact' });
+        }
+
+        updateResult(orderId, { status: 'creating_invoice' });
         const invoice = await createInvoice(order, contact.id);
         
-        newResults.push({
-          orderId,
-          orderNumber: order.order_number,
-          success: true,
-          invoiceId: invoice.id,
-          invoiceNumber: invoice.numberTemplate?.fullNumber || invoice.id
-        });
+        await updateOrderAlegraStatus(orderId, invoice.id, invoice.numberTemplate?.fullNumber || String(invoice.id), false);
+        invoicesToStamp.push({ orderId, invoiceId: invoice.id, orderNumber: order.order_number });
 
-        toast.success(`Factura creada para pedido #${order.order_number}`);
       } catch (error: any) {
-        newResults.push({
-          orderId,
-          orderNumber: order.order_number,
-          success: false,
-          error: error.message
-        });
-        toast.error(`Error en pedido #${order.order_number}: ${error.message}`);
+        updateResult(orderId, { status: 'error', error: error.message });
+        toast.error(`Error en #${order.order_number}: ${error.message}`);
       }
     }
 
-    setResults(newResults);
+    // 5. Stamp all pending invoices in batches of 10
+    if (invoicesToStamp.length > 0) {
+      const batches = [];
+      for (let i = 0; i < invoicesToStamp.length; i += 10) {
+        batches.push(invoicesToStamp.slice(i, i + 10));
+      }
+
+      for (const batch of batches) {
+        // Update status to stamping
+        batch.forEach(item => {
+          updateResult(item.orderId, { status: 'stamping' });
+        });
+
+        try {
+          const stampResult = await stampInvoices(batch.map(b => b.invoiceId));
+          
+          // Process stamp results
+          if (Array.isArray(stampResult)) {
+            for (const stampedInvoice of stampResult) {
+              const matchingItem = batch.find(b => b.invoiceId === stampedInvoice.id);
+              if (matchingItem) {
+                const cufe = stampedInvoice.stamp?.cufe;
+                const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
+                
+                await updateOrderAlegraStatus(matchingItem.orderId, stampedInvoice.id, invoiceNumber, true, cufe);
+                
+                // Update local order state
+                const orderIndex = orders.findIndex(o => o.id === matchingItem.orderId);
+                if (orderIndex >= 0) {
+                  orders[orderIndex].alegra_stamped = true;
+                  orders[orderIndex].alegra_cufe = cufe;
+                  orders[orderIndex].alegra_invoice_number = invoiceNumber;
+                }
+                
+                updateResult(matchingItem.orderId, { 
+                  status: 'success',
+                  invoiceId: stampedInvoice.id,
+                  invoiceNumber,
+                  cufe
+                });
+              }
+            }
+          }
+        } catch (error: any) {
+          batch.forEach(item => {
+            updateResult(item.orderId, { status: 'error', error: error.message });
+          });
+          toast.error(`Error al emitir lote: ${error.message}`);
+        }
+      }
+    }
+
     setIsProcessing(false);
     
-    const successCount = newResults.filter(r => r.success).length;
+    const successCount = Array.from(results.values()).filter(r => r.status === 'success' || r.status === 'already_stamped').length;
     if (successCount > 0) {
-      toast.success(`${successCount} facturas creadas exitosamente`);
+      toast.success(`${successCount} facturas electrónicas emitidas`);
+      fetchShopifyOrders(); // Refresh orders
     }
   };
 
   const filteredOrders = getFilteredOrders();
+  const pendingCount = orders.filter(o => !o.alegra_stamped).length;
+  const stampedCount = orders.filter(o => o.alegra_stamped).length;
 
   if (isLoading) {
     return (
@@ -282,27 +492,56 @@ const BulkInvoiceCreator = () => {
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por número de pedido, email o nombre..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filters & Search */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por número, email, CUFE..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={filterStatus === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilterStatus('all')}
+          >
+            Todos ({orders.length})
+          </Button>
+          <Button
+            variant={filterStatus === 'pending' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilterStatus('pending')}
+          >
+            Pendientes ({pendingCount})
+          </Button>
+          <Button
+            variant={filterStatus === 'stamped' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilterStatus('stamped')}
+          >
+            Emitidas ({stampedCount})
+          </Button>
+        </div>
       </div>
 
       {/* Header Actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
+            checked={selectedOrders.size > 0 && selectedOrders.size === filteredOrders.filter(o => !o.alegra_stamped).length}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-muted-foreground">
-            {selectedOrders.size} de {filteredOrders.length} pedidos seleccionados
+            {selectedOrders.size} seleccionados
           </span>
+          <Button variant="ghost" size="sm" onClick={fetchShopifyOrders}>
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Actualizar
+          </Button>
         </div>
         
         <Button 
@@ -316,53 +555,45 @@ const BulkInvoiceCreator = () => {
             </>
           ) : (
             <>
-              <Receipt className="h-4 w-4 mr-2" />
-              Crear {selectedOrders.size} Facturas
+              <Send className="h-4 w-4 mr-2" />
+              Emitir {selectedOrders.size} Facturas DIAN
             </>
           )}
         </Button>
       </div>
 
-      {/* Results Summary */}
-      {results.length > 0 && (
-        <Alert className={results.every(r => r.success) ? 'border-green-500' : 'border-yellow-500'}>
-          <FileText className="h-4 w-4" />
-          <AlertDescription>
-            {results.filter(r => r.success).length} facturas creadas exitosamente, {' '}
-            {results.filter(r => !r.success).length} con errores
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Orders List */}
       {filteredOrders.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg font-medium">No hay pedidos pagados</p>
-          <p className="text-sm">Los pedidos pagados de Shopify aparecerán aquí para facturar.</p>
+          <p className="text-lg font-medium">No hay pedidos</p>
+          <p className="text-sm">Los pedidos pagados de Shopify aparecerán aquí.</p>
         </div>
       ) : (
         <ScrollArea className="h-[500px]">
           <div className="space-y-3">
             {filteredOrders.map(order => {
-              const result = results.find(r => r.orderId === order.id);
+              const result = results.get(order.id);
               const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim();
+              const isStamped = order.alegra_stamped || result?.status === 'success' || result?.status === 'already_stamped';
+              const cufe = result?.cufe || order.alegra_cufe;
+              const invoiceNumber = result?.invoiceNumber || order.alegra_invoice_number;
+              const currentStatus = result?.status || (isStamped ? 'already_stamped' : 'idle');
+              const statusInfo = statusLabels[currentStatus];
               
               return (
                 <Card 
                   key={order.id}
                   className={`cursor-pointer transition-colors ${
                     selectedOrders.has(order.id) ? 'border-primary bg-primary/5' : ''
-                  } ${result?.success ? 'border-green-500 bg-green-50' : ''} ${
-                    result && !result.success ? 'border-red-500 bg-red-50' : ''
-                  }`}
-                  onClick={() => !result?.success && toggleOrder(order.id)}
+                  } ${isStamped ? 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20' : ''}`}
+                  onClick={() => !isStamped && toggleOrder(order.id)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
                       <Checkbox
                         checked={selectedOrders.has(order.id)}
-                        disabled={result?.success}
+                        disabled={isStamped}
                         onCheckedChange={() => toggleOrder(order.id)}
                         onClick={e => e.stopPropagation()}
                       />
@@ -370,15 +601,14 @@ const BulkInvoiceCreator = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              #{order.order_number}
-                            </span>
+                            <span className="font-medium">#{order.order_number}</span>
                             <Badge variant="outline" className="text-green-600">
                               {order.financial_status}
                             </Badge>
-                            {order.fulfillment_status && (
-                              <Badge variant="secondary">
-                                {order.fulfillment_status}
+                            {isStamped && (
+                              <Badge className="bg-green-600">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                DIAN
                               </Badge>
                             )}
                           </div>
@@ -406,20 +636,28 @@ const BulkInvoiceCreator = () => {
                           {order.line_items.length} productos • {order.customer_email}
                         </div>
 
-                        {result && (
-                          <div className={`mt-2 text-sm flex items-center gap-1 ${
-                            result.success ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {result.success ? (
-                              <>
-                                <CheckCircle className="h-4 w-4" />
-                                Factura #{result.invoiceNumber} creada
-                              </>
-                            ) : (
-                              <>
-                                <AlertCircle className="h-4 w-4" />
+                        {/* Alegra Status */}
+                        {(invoiceNumber || cufe || result) && (
+                          <div className="mt-3 p-2 bg-muted/50 rounded-md text-sm space-y-1">
+                            <div className={`flex items-center gap-1 ${statusInfo.color}`}>
+                              {statusInfo.icon}
+                              <span>{statusInfo.label}</span>
+                            </div>
+                            {invoiceNumber && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <FileText className="h-3 w-3" />
+                                Factura: <span className="font-mono">{invoiceNumber}</span>
+                              </div>
+                            )}
+                            {cufe && (
+                              <div className="text-xs text-muted-foreground font-mono truncate" title={cufe}>
+                                CUFE: {cufe.substring(0, 20)}...
+                              </div>
+                            )}
+                            {result?.error && (
+                              <div className="text-red-600 text-xs">
                                 {result.error}
-                              </>
+                              </div>
                             )}
                           </div>
                         )}
