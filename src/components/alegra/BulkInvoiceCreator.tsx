@@ -81,6 +81,49 @@ interface InvoiceResult {
   error?: string;
 }
 
+const normalizeForAlegra = (city?: string, province?: string) => {
+  const cityLower = (city || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const provinceLower = (province || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  // Bogotá D.C.
+  if (
+    cityLower.includes('bogota') ||
+    provinceLower.includes('bogota') ||
+    provinceLower.includes('cundinamarca')
+  ) {
+    return { city: 'Bogotá, D.C.', department: 'Bogotá' };
+  }
+  // Medellín
+  if (cityLower.includes('medellin') || provinceLower.includes('antioquia')) {
+    return { city: 'Medellín', department: 'Antioquia' };
+  }
+  // Cali
+  if (cityLower.includes('cali') || provinceLower.includes('valle')) {
+    return { city: 'Cali', department: 'Valle del Cauca' };
+  }
+  // Barranquilla
+  if (cityLower.includes('barranquilla') || provinceLower.includes('atlantico')) {
+    return { city: 'Barranquilla', department: 'Atlántico' };
+  }
+  // Cartagena
+  if (cityLower.includes('cartagena') || provinceLower.includes('bolivar')) {
+    return { city: 'Cartagena de Indias', department: 'Bolívar' };
+  }
+  // Bucaramanga
+  if (cityLower.includes('bucaramanga') || provinceLower.includes('santander')) {
+    return { city: 'Bucaramanga', department: 'Santander' };
+  }
+
+  // Default: Bogotá (most common in Colombia)
+  return { city: 'Bogotá, D.C.', department: 'Bogotá' };
+};
+
 const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactNode; color: string }> = {
   idle: { label: 'Pendiente', icon: <Clock className="h-4 w-4" />, color: 'text-muted-foreground' },
   searching_invoice: { label: 'Buscando factura...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
@@ -240,6 +283,36 @@ const BulkInvoiceCreator = () => {
     return matchingInvoice || null;
   };
 
+  const ensureContactAddress = async (contactId: string, order: ShopifyOrderForInvoice) => {
+    const address = order.billing_address || order.shipping_address || {};
+    const alegraAddress = normalizeForAlegra(address.city, address.province || address.province_code);
+
+    const { data, error } = await supabase.functions.invoke('alegra-api', {
+      body: {
+        action: 'update-contact',
+        data: {
+          contactId,
+          patch: {
+            address: {
+              address: address.address1 ? `${address.address1} ${address.address2 || ''}`.trim() : '',
+              city: alegraAddress.city,
+              department: alegraAddress.department,
+              country: 'Colombia',
+            },
+          },
+        },
+      },
+    });
+
+    if (error || !data?.success) {
+      throw new Error(
+        data?.error ||
+          error?.message ||
+          'No se pudo actualizar la dirección del cliente en Alegra'
+      );
+    }
+  };
+
   const searchOrCreateContact = async (order: ShopifyOrderForInvoice) => {
     const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || order.email || 'Cliente';
     const customerEmail = order.customer_email || order.email;
@@ -260,49 +333,56 @@ const BulkInvoiceCreator = () => {
       if (identificationNumber) {
         const contactByIdentification = searchResult.data.find((c: any) => {
           // Check multiple possible field names for identification
-          const contactId = c.identificationNumber || 
-                           c.identification || 
-                           c.identificationObject?.number || 
-                           '';
+          const contactId =
+            c.identificationNumber || c.identification || c.identificationObject?.number || '';
           return String(contactId).replace(/\D/g, '') === identificationNumber;
         });
         if (contactByIdentification) {
           console.log('Contact found by identification:', contactByIdentification.name);
-          return { id: contactByIdentification.id, isNew: false, name: contactByIdentification.name };
+          await ensureContactAddress(String(contactByIdentification.id), order);
+          return {
+            id: contactByIdentification.id,
+            isNew: false,
+            name: contactByIdentification.name,
+          };
         }
       }
 
       // 2. Then search by phone number
       if (customerPhone) {
         const phoneClean = customerPhone.replace(/[^0-9]/g, '');
-        const contactByPhone = searchResult.data.find((c: any) => 
-          c.phonePrimary?.replace(/[^0-9]/g, '') === phoneClean ||
-          c.mobile?.replace(/[^0-9]/g, '') === phoneClean
+        const contactByPhone = searchResult.data.find(
+          (c: any) =>
+            c.phonePrimary?.replace(/[^0-9]/g, '') === phoneClean ||
+            c.mobile?.replace(/[^0-9]/g, '') === phoneClean
         );
         if (contactByPhone) {
           console.log('Contact found by phone:', contactByPhone.name);
+          await ensureContactAddress(String(contactByPhone.id), order);
           return { id: contactByPhone.id, isNew: false, name: contactByPhone.name };
         }
       }
 
       // 3. Then search by email
       if (customerEmail) {
-        const contactByEmail = searchResult.data.find((c: any) => 
-          c.email?.toLowerCase() === customerEmail.toLowerCase()
+        const contactByEmail = searchResult.data.find(
+          (c: any) => c.email?.toLowerCase() === customerEmail.toLowerCase()
         );
         if (contactByEmail) {
           console.log('Contact found by email:', contactByEmail.name);
+          await ensureContactAddress(String(contactByEmail.id), order);
           return { id: contactByEmail.id, isNew: false, name: contactByEmail.name };
         }
       }
 
       // 4. Finally search by name (normalized comparison)
       const normalizedName = customerName.toLowerCase().trim();
-      const contactByName = searchResult.data.find((c: any) => 
-        c.name?.toLowerCase().trim() === normalizedName
+      const contactByName = searchResult.data.find(
+        (c: any) => c.name?.toLowerCase().trim() === normalizedName
       );
       if (contactByName) {
         console.log('Contact found by name:', contactByName.name);
+        await ensureContactAddress(String(contactByName.id), order);
         return { id: contactByName.id, isNew: false, name: contactByName.name };
       }
     }
@@ -315,41 +395,8 @@ const BulkInvoiceCreator = () => {
     
     console.log('Creating new contact:', customerName, 'with identification:', finalIdentificationNumber);
     
-    // Mapeo de ciudades/departamentos de Shopify a códigos DANE para Alegra
-    const normalizeForAlegra = (city: string, province: string) => {
-      const cityLower = (city || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const provinceLower = (province || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      
-      // Bogotá D.C.
-      if (cityLower.includes('bogota') || provinceLower.includes('bogota') || provinceLower.includes('cundinamarca')) {
-        return { city: 'Bogotá, D.C.', department: 'Bogotá' };
-      }
-      // Medellín
-      if (cityLower.includes('medellin') || provinceLower.includes('antioquia')) {
-        return { city: 'Medellín', department: 'Antioquia' };
-      }
-      // Cali
-      if (cityLower.includes('cali') || provinceLower.includes('valle')) {
-        return { city: 'Cali', department: 'Valle del Cauca' };
-      }
-      // Barranquilla
-      if (cityLower.includes('barranquilla') || provinceLower.includes('atlantico')) {
-        return { city: 'Barranquilla', department: 'Atlántico' };
-      }
-      // Cartagena
-      if (cityLower.includes('cartagena') || provinceLower.includes('bolivar')) {
-        return { city: 'Cartagena de Indias', department: 'Bolívar' };
-      }
-      // Bucaramanga
-      if (cityLower.includes('bucaramanga') || provinceLower.includes('santander')) {
-        return { city: 'Bucaramanga', department: 'Santander' };
-      }
-      // Default: Bogotá (most common in Colombia)
-      return { city: 'Bogotá, D.C.', department: 'Bogotá' };
-    };
-    
     const alegraAddress = normalizeForAlegra(address.city, address.province || address.province_code);
-    
+
     const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
       body: {
         action: 'create-contact',
@@ -530,8 +577,35 @@ const BulkInvoiceCreator = () => {
         });
 
         try {
+          // Ensure the invoice's client has a valid city/department before stamping
+          await Promise.all(
+            batch.map(async (item) => {
+              const order = orders.find((o) => o.id === item.orderId);
+              if (!order) return;
+
+              const { data: invResp, error: invErr } = await supabase.functions.invoke('alegra-api', {
+                body: { action: 'get-invoice', data: { invoiceId: item.invoiceId } },
+              });
+
+              if (invErr || !invResp?.success) {
+                throw new Error(invResp?.error || invErr?.message || 'No se pudo consultar la factura en Alegra');
+              }
+
+              const invoice = invResp.data;
+              const clientId =
+                invoice?.client?.id ??
+                invoice?.client?.idClient ??
+                invoice?.client ??
+                invoice?.clientId ??
+                invoice?.client_id;
+
+              if (!clientId) return;
+              await ensureContactAddress(String(clientId), order);
+            })
+          );
+
           const stampResult = await stampInvoices(batch.map(b => b.invoiceId));
-          
+
           // Process stamp results
           if (Array.isArray(stampResult)) {
             for (const stampedInvoice of stampResult) {

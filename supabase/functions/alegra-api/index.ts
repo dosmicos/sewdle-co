@@ -44,7 +44,17 @@ async function makeAlegraRequest(endpoint: string, method: string = 'GET', body?
   
   if (!response.ok) {
     console.error('Alegra API error:', data);
-    const err = new Error(data.message || `Error ${response.status} from Alegra API`);
+
+    // Alegra often returns validation errors under `error: [{ message, code, ... }]`
+    const alegraDetail =
+      data?.message ||
+      data?.error?.[0]?.message ||
+      data?.error?.message ||
+      (typeof data === 'string' ? data : undefined);
+
+    const err = new Error(
+      alegraDetail || `Error ${response.status} from Alegra API`
+    );
     (err as any).alegra = data;
     (err as any).status = response.status;
     throw err;
@@ -81,7 +91,55 @@ serve(async (req) => {
         // Get specific contact
         result = await makeAlegraRequest(`/contacts/${data.contactId}`);
         break;
-        
+
+      case 'update-contact': {
+        // Update specific contact (merge + PUT)
+        const contactId = data?.contactId;
+        const patch = data?.patch || {};
+
+        if (!contactId) {
+          throw new Error('contactId requerido');
+        }
+
+        const current = await makeAlegraRequest(`/contacts/${contactId}`);
+
+        const allowedKeys = [
+          'name',
+          'email',
+          'phonePrimary',
+          'mobile',
+          'address',
+          'identification',
+          'identificationType',
+          'identificationNumber',
+          'kindOfPerson',
+          'nameObject',
+          'type',
+        ] as const;
+
+        const base: Record<string, unknown> = {};
+        for (const key of allowedKeys) {
+          if (current?.[key] !== undefined) base[key] = current[key];
+        }
+
+        const mergedAddress = {
+          ...(typeof base.address === 'object' && base.address ? base.address : {}),
+          ...(patch.address || {}),
+        };
+
+        const updated = {
+          ...base,
+          ...patch,
+          address: mergedAddress,
+        };
+
+        // Avoid sending ID fields back
+        delete (updated as any).id;
+
+        result = await makeAlegraRequest(`/contacts/${contactId}`, 'PUT', updated);
+        break;
+      }
+
       case 'create-contact': {
         // Create a new contact
         const contact = data?.contact || {};
