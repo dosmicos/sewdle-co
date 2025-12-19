@@ -218,36 +218,18 @@ serve(async (req) => {
           .map((t: string) => t.trim().toUpperCase())
           .includes('EMPACADO') || false;
 
-        // Determine correct status based on fulfillment cancellation success:
-        // - If Shopify fulfillment was NOT cancelled, keep as shipped (Shopify is source of truth)
-        // - If cancelled successfully: restore based on packed_at and EMPACADO tag
-        let newStatus: string;
-        if (!shopifyFulfillmentCancelled) {
-          // Keep shipped because Shopify still shows fulfilled
-          newStatus = 'shipped';
-          console.log(`Keeping order ${shopifyOrderId} as shipped because Shopify fulfillment cancellation failed`);
-        } else {
-          newStatus = (currentOrder?.packed_at && hasEmpacadoTag) ? 'ready_to_ship' : 'pending';
-          console.log(`Restoring order ${shopifyOrderId} to status: ${newStatus} (packed_at: ${currentOrder?.packed_at}, hasEmpacadoTag: ${hasEmpacadoTag})`);
-        }
+        // SIEMPRE restaurar a estado 'packing' cuando se cancela una guía
+        // Esto permite que el pedido vuelva a la cola de preparación para empacar nuevamente
+        const newStatus = 'packing';
+        console.log(`Restoring order ${shopifyOrderId} to status: packing (guide cancelled, shopifyFulfillmentCancelled: ${shopifyFulfillmentCancelled})`);
 
-        // Build update data - if reverting to pending, also clear packed info
+        // Build update data - always clear shipped info and set to packing
         const updateData: Record<string, unknown> = {
           operational_status: newStatus,
+          shipped_at: null,
+          shipped_by: null,
           updated_at: new Date().toISOString()
         };
-
-        // Only clear shipped info if Shopify fulfillment was successfully cancelled
-        if (shopifyFulfillmentCancelled) {
-          updateData.shipped_at = null;
-          updateData.shipped_by = null;
-          
-          // If reverting to pending, clear packed info too
-          if (newStatus === 'pending') {
-            updateData.packed_at = null;
-            updateData.packed_by = null;
-          }
-        }
 
         // Update local database status
         await supabase
@@ -267,7 +249,7 @@ serve(async (req) => {
             .eq('organization_id', organizationId);
         }
 
-        console.log(`Local database status updated to ${newStatus}`);
+        console.log(`Local database status updated to packing`);
 
       } catch (shopifyError) {
         console.error('Error cancelling Shopify fulfillment:', shopifyError);

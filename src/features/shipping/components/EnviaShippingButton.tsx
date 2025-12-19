@@ -413,9 +413,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     if (result.success) {
       // Check if Shopify fulfillment was cancelled
       if (result.shopifyFulfillmentCancelled === false) {
-        // Shopify fulfillment NOT cancelled - show warning with link
+        // Shopify fulfillment NOT cancelled - show warning with link but order still goes to packing
         toast.warning(
-          'Guía cancelada en Envia, pero el fulfillment en Shopify no se pudo cancelar automáticamente. Debes cancelarlo manualmente en Shopify Admin.',
+          'Guía cancelada. El pedido volvió a preparación. Recuerda cancelar el fulfillment manualmente en Shopify.',
           { 
             duration: 10000,
             action: {
@@ -430,8 +430,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       } else {
         toast.success(
           result.balanceReturned 
-            ? 'Guía cancelada. El saldo fue devuelto y el fulfillment cancelado.' 
-            : 'Guía cancelada y fulfillment revertido'
+            ? 'Guía cancelada. El pedido volvió a preparación y el saldo fue devuelto.' 
+            : 'Guía cancelada. El pedido volvió a preparación.'
         );
       }
       onLabelChange?.(null);
