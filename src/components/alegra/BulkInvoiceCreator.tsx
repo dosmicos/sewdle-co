@@ -263,12 +263,19 @@ const BulkInvoiceCreator = () => {
     // Create new contact if not found
     const address = order.billing_address || order.shipping_address || {};
     
+    // Generate a unique identification number based on email or phone
+    const identificationNumber = customerEmail?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
+                                  order.customer_phone?.replace(/[^0-9]/g, '') || 
+                                  `CLI${Date.now()}`;
+    
     const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
       body: {
         action: 'create-contact',
         data: {
           contact: {
             name: customerName,
+            identificationType: 'CC', // Cédula de Ciudadanía - tipo por defecto
+            identificationNumber: identificationNumber,
             email: customerEmail || undefined,
             phonePrimary: order.customer_phone || address.phone || '',
             address: {
