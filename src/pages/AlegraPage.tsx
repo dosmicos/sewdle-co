@@ -5,6 +5,7 @@ import { Receipt, CheckCircle, AlertCircle, Loader2, Building2, RefreshCw } from
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import BulkInvoiceCreator from '@/components/alegra/BulkInvoiceCreator';
 
 interface CompanyInfo {
   name?: string;
@@ -135,24 +136,20 @@ const AlegraPage = () => {
         </CardContent>
       </Card>
 
-      {/* Invoice Module */}
+      {/* Bulk Invoice Module */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5" />
-            Facturación Electrónica
+            Facturación Masiva
           </CardTitle>
           <CardDescription>
-            Emite facturas electrónicas válidas ante la DIAN directamente desde la plataforma
+            Crea facturas electrónicas desde entregas aprobadas. Los clientes se buscarán primero en Alegra.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isConnected ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Módulo de facturación</p>
-              <p className="text-sm">Próximamente podrás crear y gestionar facturas desde aquí.</p>
-            </div>
+            <BulkInvoiceCreator />
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
