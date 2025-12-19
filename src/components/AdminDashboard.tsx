@@ -179,7 +179,7 @@ const AdminDashboard = () => {
       {/* Main Stats Tabs */}
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
         <Tabs defaultValue="produccion" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="produccion" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
               Progreso de la Producción
@@ -191,6 +191,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="shopify" className="flex items-center gap-2">
               <Package className="w-4 h-4" />
               Estadísticas Shopify
+            </TabsTrigger>
+            <TabsTrigger value="actividad" className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Actividad Reciente
             </TabsTrigger>
           </TabsList>
 
@@ -305,42 +309,42 @@ const AdminDashboard = () => {
           <TabsContent value="shopify">
             <ShopifyOrderStatsCard embedded />
           </TabsContent>
-        </Tabs>
-      </Card>
 
-      {/* Recent Activity */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-            Actividad Reciente
-          </h3>
-          <div className="space-y-4">
-            {recentActivity.length > 0 ? recentActivity.map((activity) => {
-              const IconComponent = getActivityIcon(activity.icon);
-              return (
-                <div key={activity.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl">
-                  <IconComponent className={`w-5 h-5 mt-0.5 ${activity.color}`} />
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-medium" style={{ color: 'rgb(29 29 31)' }}>
-                      {activity.title}
-                    </p>
-                    <p className="text-xs" style={{ color: 'rgb(99 99 102)' }}>
-                      {activity.description}
-                    </p>
+          {/* Tab: Actividad Reciente */}
+          <TabsContent value="actividad">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+                Actividad Reciente
+              </h3>
+              <div className="space-y-4">
+                {recentActivity.length > 0 ? recentActivity.map((activity) => {
+                  const IconComponent = getActivityIcon(activity.icon);
+                  return (
+                    <div key={activity.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl">
+                      <IconComponent className={`w-5 h-5 mt-0.5 ${activity.color}`} />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium" style={{ color: 'rgb(29 29 31)' }}>
+                          {activity.title}
+                        </p>
+                        <p className="text-xs" style={{ color: 'rgb(99 99 102)' }}>
+                          {activity.description}
+                        </p>
+                      </div>
+                      <p className="text-xs" style={{ color: 'rgb(142 142 147)' }}>
+                        {activity.time}
+                      </p>
+                    </div>
+                  );
+                }) : (
+                  <div className="text-center py-8">
+                    <Clock className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">No hay actividad reciente</p>
                   </div>
-                  <p className="text-xs" style={{ color: 'rgb(142 142 147)' }}>
-                    {activity.time}
-                  </p>
-                </div>
-              );
-            }) : (
-              <div className="text-center py-8">
-                <Clock className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500">No hay actividad reciente</p>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </Card>
     </div>
   );
