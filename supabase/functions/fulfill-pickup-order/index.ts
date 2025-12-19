@@ -71,15 +71,14 @@ Deno.serve(async (req) => {
       
       // String format: "pick-up", "PICK_UP", "local", etc.
       if (typeof deliveryMethod === 'string') {
-        const methodLower = deliveryMethod.toLowerCase();
-        return methodLower === 'pick-up' || methodLower === 'pick_up' || 
-               methodLower === 'pickup' || methodLower === 'local';
+        const methodLower = deliveryMethod.toLowerCase().replace(/-/g, '_');
+        return methodLower === 'pick_up' || methodLower === 'pickup' || methodLower === 'local';
       }
       
-      // Object format: { method_type: 'PICK_UP' }
+      // Object format: { method_type: 'pick-up' } or { method_type: 'PICK_UP' }
       if (typeof deliveryMethod === 'object' && deliveryMethod.method_type) {
-        const methodType = deliveryMethod.method_type.toUpperCase();
-        return methodType === 'PICK_UP' || methodType === 'LOCAL';
+        const methodType = deliveryMethod.method_type.toLowerCase().replace(/-/g, '_');
+        return methodType === 'pick_up' || methodType === 'pickup' || methodType === 'local';
       }
       
       return false;
