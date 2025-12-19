@@ -23,9 +23,9 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white">
+    <div className="fixed inset-0 z-50 bg-white overflow-auto">
       {/* Print controls - hidden when printing */}
-      <div className="print:hidden flex items-center justify-between p-4 border-b bg-gray-100">
+      <div className="print:hidden flex items-center justify-between p-4 border-b bg-gray-100 sticky top-0">
         <h2 className="font-semibold">Vista previa de impresión</h2>
         <div className="flex gap-2">
           <button
@@ -44,23 +44,38 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
       </div>
 
       {/* Printable content */}
-      <div className="p-4 print:p-2 max-w-[210mm] mx-auto">
+      <div className="p-4 print:p-0 max-w-[210mm] mx-auto print:max-w-none">
         {/* Header */}
         <div className="border-2 border-black mb-2">
           <div className="flex justify-between items-start p-2 border-b border-black">
             <div>
-              <h1 className="text-lg font-bold">
+              <h1 className="text-base font-bold uppercase">
                 {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}
               </h1>
-              <p className="text-xs">MANIFIESTO DE CARGA</p>
+              <p className="text-[10px] font-semibold">MANIFIESTO DE CARGA</p>
             </div>
-            <div className="text-right text-sm">
-              <p className="font-bold">{manifest.manifest_number}</p>
+            <div className="text-right text-[10px]">
+              <p className="font-bold text-sm">{manifest.manifest_number}</p>
               <p>{format(new Date(manifest.manifest_date), 'dd/MM/yyyy', { locale: es })}</p>
             </div>
           </div>
           
-          <div className="flex text-xs p-2 border-b border-black">
+          {/* Remitente/Destinatario info */}
+          <div className="grid grid-cols-2 text-[9px] border-b border-black">
+            <div className="p-1.5 border-r border-black">
+              <p className="font-bold">REMITENTE:</p>
+              <p>Dosmicos S.A.S</p>
+              <p>Bogotá D.C.</p>
+              <p>dosmicos.sas@gmail.com</p>
+            </div>
+            <div className="p-1.5">
+              <p className="font-bold">DESTINATARIO:</p>
+              <p>Múltiples destinos</p>
+              <p>Ver detalle por guía</p>
+            </div>
+          </div>
+          
+          <div className="flex text-[10px] p-1.5">
             <div className="flex-1">
               <p><strong>Total de guías:</strong> {items.length}</p>
             </div>
@@ -71,15 +86,15 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
         </div>
 
         {/* Two column table */}
-        <table className="w-full border-collapse text-[9px] leading-tight">
+        <table className="w-full border-collapse text-[8px] leading-tight">
           <thead>
             <tr className="bg-gray-200">
-              <th className="border border-black px-1 py-0.5 w-[5%] text-center">No.</th>
-              <th className="border border-black px-1 py-0.5 w-[30%] text-left">Número de Guía</th>
-              <th className="border border-black px-1 py-0.5 w-[10%] text-center">Paq.</th>
-              <th className="border border-black px-1 py-0.5 w-[5%] text-center">No.</th>
-              <th className="border border-black px-1 py-0.5 w-[30%] text-left">Número de Guía</th>
-              <th className="border border-black px-1 py-0.5 w-[10%] text-center">Paq.</th>
+              <th className="border border-black px-0.5 py-0.5 w-[4%] text-center">No.</th>
+              <th className="border border-black px-0.5 py-0.5 w-[32%] text-left">Número de Guía</th>
+              <th className="border border-black px-0.5 py-0.5 w-[8%] text-center">Paq.</th>
+              <th className="border border-black px-0.5 py-0.5 w-[4%] text-center">No.</th>
+              <th className="border border-black px-0.5 py-0.5 w-[32%] text-left">Número de Guía</th>
+              <th className="border border-black px-0.5 py-0.5 w-[8%] text-center">Paq.</th>
             </tr>
           </thead>
           <tbody>
@@ -90,29 +105,29 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
               
               return (
                 <tr key={leftItem.id} className="even:bg-gray-50">
-                  <td className="border border-black px-1 py-0.5 text-center font-medium">
+                  <td className="border border-black px-0.5 py-0.5 text-center font-medium">
                     {String(leftNum).padStart(2, '0')}
                   </td>
-                  <td className="border border-black px-1 py-0.5 font-mono">
+                  <td className="border border-black px-0.5 py-0.5 font-mono text-[7px]">
                     {leftItem.tracking_number}
                   </td>
-                  <td className="border border-black px-1 py-0.5 text-center">1</td>
+                  <td className="border border-black px-0.5 py-0.5 text-center">1</td>
                   
                   {rightItem ? (
                     <>
-                      <td className="border border-black px-1 py-0.5 text-center font-medium">
+                      <td className="border border-black px-0.5 py-0.5 text-center font-medium">
                         {String(rightNum).padStart(2, '0')}
                       </td>
-                      <td className="border border-black px-1 py-0.5 font-mono">
+                      <td className="border border-black px-0.5 py-0.5 font-mono text-[7px]">
                         {rightItem.tracking_number}
                       </td>
-                      <td className="border border-black px-1 py-0.5 text-center">1</td>
+                      <td className="border border-black px-0.5 py-0.5 text-center">1</td>
                     </>
                   ) : (
                     <>
-                      <td className="border border-black px-1 py-0.5"></td>
-                      <td className="border border-black px-1 py-0.5"></td>
-                      <td className="border border-black px-1 py-0.5"></td>
+                      <td className="border border-black px-0.5 py-0.5"></td>
+                      <td className="border border-black px-0.5 py-0.5"></td>
+                      <td className="border border-black px-0.5 py-0.5"></td>
                     </>
                   )}
                 </tr>
@@ -121,19 +136,48 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
           </tbody>
         </table>
 
-        {/* Footer */}
-        <div className="mt-4 border-2 border-black p-2">
-          <div className="grid grid-cols-2 gap-4 text-xs">
-            <div>
-              <p className="font-bold mb-2">Total paquetes: {items.length}</p>
-              <div className="border-t border-black pt-4 mt-4">
-                <p>Firma del transportador: _______________________</p>
+        {/* Footer with signature fields */}
+        <div className="mt-3 border-2 border-black">
+          {/* Totals row */}
+          <div className="flex border-b border-black text-[10px]">
+            <div className="flex-1 p-2 border-r border-black">
+              <p><strong>Peso Total:</strong> ______________ kg</p>
+            </div>
+            <div className="flex-1 p-2">
+              <p><strong>Total Paquetes:</strong> {items.length}</p>
+            </div>
+          </div>
+          
+          {/* Signatures section */}
+          <div className="grid grid-cols-2 text-[9px]">
+            {/* Left: Client signature */}
+            <div className="p-2 border-r border-black">
+              <p className="font-bold mb-6">Cliente:</p>
+              <div className="border-t border-black pt-1 mt-8">
+                <p>Nombre: _________________________</p>
+                <p className="mt-1">Firma: __________________________</p>
+                <p className="mt-1">Fecha: __________________________</p>
               </div>
             </div>
-            <div>
-              <p className="font-bold mb-2">Fecha de recogida:</p>
-              <div className="border-t border-black pt-4 mt-4">
-                <p>Fecha y hora: _______________________</p>
+            
+            {/* Right: Driver/vehicle info */}
+            <div className="p-2 space-y-2">
+              <div>
+                <p><strong>Tipo de vehículo:</strong></p>
+                <p className="border-b border-black mt-1 pb-1">_____________________________</p>
+              </div>
+              <div>
+                <p><strong>Placa de vehículo:</strong></p>
+                <p className="border-b border-black mt-1 pb-1">_____________________________</p>
+              </div>
+              <div>
+                <p><strong>Cédula conductor/destino:</strong></p>
+                <p className="border-b border-black mt-1 pb-1">_____________________________</p>
+              </div>
+              <div className="pt-2">
+                <p>Nombre: _________________________</p>
+                <p className="mt-1">Firma: __________________________</p>
+                <p className="mt-1">Fecha: __________________________</p>
               </div>
             </div>
           </div>
@@ -154,8 +198,11 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
           .print\\:hidden {
             display: none !important;
           }
-          .print\\:p-2 {
-            padding: 0.5rem !important;
+          .print\\:p-0 {
+            padding: 0 !important;
+          }
+          .print\\:max-w-none {
+            max-width: none !important;
           }
         }
       `}</style>
