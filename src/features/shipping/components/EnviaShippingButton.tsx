@@ -411,11 +411,29 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const result = await cancelLabel(existingLabel.id);
 
     if (result.success) {
-      toast.success(
-        result.balanceReturned 
-          ? 'Guía cancelada. El saldo fue devuelto y el fulfillment cancelado.' 
-          : 'Guía cancelada y fulfillment revertido'
-      );
+      // Check if Shopify fulfillment was cancelled
+      if (result.shopifyFulfillmentCancelled === false) {
+        // Shopify fulfillment NOT cancelled - show warning with link
+        toast.warning(
+          'Guía cancelada en Envia, pero el fulfillment en Shopify no se pudo cancelar automáticamente. Debes cancelarlo manualmente en Shopify Admin.',
+          { 
+            duration: 10000,
+            action: {
+              label: 'Ir a Shopify',
+              onClick: () => {
+                const shopifyAdminUrl = `https://admin.shopify.com/store/sewdle/orders/${shopifyOrderId}`;
+                window.open(shopifyAdminUrl, '_blank');
+              }
+            }
+          }
+        );
+      } else {
+        toast.success(
+          result.balanceReturned 
+            ? 'Guía cancelada. El saldo fue devuelto y el fulfillment cancelado.' 
+            : 'Guía cancelada y fulfillment revertido'
+        );
+      }
       onLabelChange?.(null);
       // Refresh to get updated history
       await getExistingLabel(shopifyOrderId, currentOrganization.id);
