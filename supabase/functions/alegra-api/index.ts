@@ -127,15 +127,38 @@ serve(async (req) => {
           ...(patch.address || {}),
         };
 
+        // Ensure identificationType is always present (required by Alegra Colombia)
+        let identificationType = base.identificationType || 
+                                  current?.identificationObject?.type || 
+                                  patch.identificationType || 
+                                  'CC';
+        let identificationNumber = base.identificationNumber || 
+                                    base.identification || 
+                                    current?.identificationObject?.number ||
+                                    patch.identificationNumber ||
+                                    String(Date.now());
+
+        // Ensure kindOfPerson is present
+        let kindOfPerson = base.kindOfPerson || current?.kindOfPerson || 'PERSON_ENTITY';
+        const idType = String(identificationType).toUpperCase();
+        if (idType === 'NIT' || idType === 'RUC' || idType === 'RUT') {
+          kindOfPerson = 'LEGAL_ENTITY';
+        }
+
         const updated = {
           ...base,
           ...patch,
           address: mergedAddress,
+          identificationType: String(identificationType),
+          identificationNumber: String(identificationNumber),
+          identification: String(identificationNumber),
+          kindOfPerson,
         };
 
         // Avoid sending ID fields back
         delete (updated as any).id;
 
+        console.log('Updating contact with:', JSON.stringify(updated, null, 2));
         result = await makeAlegraRequest(`/contacts/${contactId}`, 'PUT', updated);
         break;
       }
