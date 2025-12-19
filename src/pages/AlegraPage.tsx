@@ -136,7 +136,7 @@ const AlegraPage = () => {
         </CardContent>
       </Card>
 
-      {/* Bulk Invoice Module */}
+      {/* Bulk Invoice Module from Shopify */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -144,7 +144,7 @@ const AlegraPage = () => {
             Facturación Masiva
           </CardTitle>
           <CardDescription>
-            Crea facturas electrónicas desde entregas aprobadas. Los clientes se buscarán primero en Alegra.
+            Crea facturas electrónicas desde pedidos pagados de Shopify. Los clientes se buscarán primero en Alegra.
           </CardDescription>
         </CardHeader>
         <CardContent>
