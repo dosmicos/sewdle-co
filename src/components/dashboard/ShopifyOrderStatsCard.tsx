@@ -28,7 +28,11 @@ const formatTime = (seconds: number | null): string => {
   return `${hours}h ${remainingMinutes}min`;
 };
 
-const ShopifyOrderStatsCard: React.FC = () => {
+interface ShopifyOrderStatsCardProps {
+  embedded?: boolean;
+}
+
+const ShopifyOrderStatsCard: React.FC<ShopifyOrderStatsCardProps> = ({ embedded = false }) => {
   const { stats, loading, dateRange, setDateRange } = useShopifyOrderStats('today');
 
   const efficiencyRate = stats.ordersReceived > 0 
@@ -59,27 +63,31 @@ const ShopifyOrderStatsCard: React.FC = () => {
   );
 
   if (loading) {
+    const loadingContent = (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-9 w-40" />
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+        <Skeleton className="h-48" />
+      </div>
+    );
+
+    if (embedded) return loadingContent;
     return (
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-9 w-40" />
-          </div>
-          <div className="grid grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
-              <Skeleton key={i} className="h-24" />
-            ))}
-          </div>
-          <Skeleton className="h-48" />
-        </div>
+        {loadingContent}
       </Card>
     );
   }
 
-  return (
-    <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-      <div className="space-y-6">
+  const content = (
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -362,6 +370,12 @@ const ShopifyOrderStatsCard: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
+  );
+
+  if (embedded) return content;
+  return (
+    <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+      {content}
     </Card>
   );
 };
