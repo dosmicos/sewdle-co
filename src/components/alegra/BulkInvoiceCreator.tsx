@@ -364,7 +364,8 @@ const BulkInvoiceCreator = () => {
             dueDate: format(new Date(), 'yyyy-MM-dd'),
             items,
             observations: `Pedido Shopify #${order.order_number}`,
-            status: 'open'
+            status: 'open',
+            paymentMethod: 'CASH'
           }
         }
       }
