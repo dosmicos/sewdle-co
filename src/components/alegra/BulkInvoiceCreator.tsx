@@ -370,7 +370,8 @@ const BulkInvoiceCreator = () => {
             items,
             observations: `Pedido Shopify #${order.order_number}`,
             status: 'open',
-            paymentMethod: 'CASH'
+            paymentMethod: 'CASH',
+            paymentForm: 'CASH'
           }
         }
       }

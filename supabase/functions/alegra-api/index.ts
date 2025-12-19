@@ -180,7 +180,9 @@ serve(async (req) => {
         
       case 'create-invoice':
         // Create an invoice
+        console.log('Creating invoice with data:', JSON.stringify(data.invoice, null, 2));
         result = await makeAlegraRequest('/invoices', 'POST', data.invoice);
+        console.log('Invoice created:', JSON.stringify(result, null, 2));
         break;
         
       case 'get-invoices':
