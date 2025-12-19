@@ -436,7 +436,7 @@ const VariantRow: React.FC<{
   productName: string;
   onAdd: (quantity: number) => void;
 }> = ({ variant, productName, onAdd }) => {
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(0);
   
   const variantText = [variant.size, variant.color].filter(Boolean).join(' - ');
   
@@ -449,9 +449,9 @@ const VariantRow: React.FC<{
       <div className="flex items-center gap-2 ml-2">
         <Input
           type="number"
-          min={1}
+          min={0}
           value={qty}
-          onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+          onChange={(e) => setQty(Math.max(0, parseInt(e.target.value) || 0))}
           className="w-16 h-7 text-center"
         />
         <Button 
