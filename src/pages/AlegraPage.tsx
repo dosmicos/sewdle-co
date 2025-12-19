@@ -1,9 +1,55 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Receipt, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Receipt, CheckCircle, AlertCircle, Loader2, Building2, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface CompanyInfo {
+  name?: string;
+  identification?: string;
+  email?: string;
+  address?: {
+    address?: string;
+    city?: string;
+  };
+}
 
 const AlegraPage = () => {
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const testConnection = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('alegra-api', {
+        body: { action: 'test-connection' }
+      });
+
+      if (error) throw error;
+      
+      if (data.success) {
+        setIsConnected(true);
+        setCompanyInfo(data.data);
+        toast.success('Conexión exitosa con Alegra');
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error: any) {
+      console.error('Error testing Alegra connection:', error);
+      setIsConnected(false);
+      toast.error('Error al conectar con Alegra: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    testConnection();
+  }, []);
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -13,14 +59,83 @@ const AlegraPage = () => {
         </p>
       </div>
 
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Configuración pendiente</AlertTitle>
-        <AlertDescription>
-          Para habilitar la facturación electrónica, es necesario configurar las credenciales de API de Alegra (token y API key).
-        </AlertDescription>
-      </Alert>
+      {/* Connection Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            Estado de Conexión
+          </CardTitle>
+          <CardDescription>
+            Conexión con tu cuenta de Alegra
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Verificando conexión...
+            </div>
+          ) : isConnected === true ? (
+            <div className="space-y-4">
+              <Alert className="border-green-500 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertTitle className="text-green-800">Conectado</AlertTitle>
+                <AlertDescription className="text-green-700">
+                  La conexión con Alegra está activa y funcionando correctamente.
+                </AlertDescription>
+              </Alert>
+              
+              {companyInfo && (
+                <div className="grid gap-2 text-sm">
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground">Empresa:</span>
+                    <span className="font-medium">{companyInfo.name || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground">NIT:</span>
+                    <span className="font-medium">{companyInfo.identification || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <span className="text-muted-foreground">Email:</span>
+                    <span className="font-medium">{companyInfo.email || 'N/A'}</span>
+                  </div>
+                  {companyInfo.address && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Dirección:</span>
+                      <span className="font-medium">
+                        {companyInfo.address.address}, {companyInfo.address.city}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <Button variant="outline" onClick={testConnection} disabled={isLoading}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Verificar conexión
+              </Button>
+            </div>
+          ) : isConnected === false ? (
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error de conexión</AlertTitle>
+                <AlertDescription>
+                  No se pudo conectar con Alegra. Verifica que las credenciales sean correctas.
+                </AlertDescription>
+              </Alert>
+              
+              <Button onClick={testConnection} disabled={isLoading}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reintentar conexión
+              </Button>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
+      {/* Invoice Module */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -32,11 +147,19 @@ const AlegraPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-12 text-muted-foreground">
-            <Receipt className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Módulo en preparación</p>
-            <p className="text-sm">Una vez configuradas las credenciales, podrás emitir facturas electrónicas aquí.</p>
-          </div>
+          {isConnected ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Módulo de facturación</p>
+              <p className="text-sm">Próximamente podrás crear y gestionar facturas desde aquí.</p>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Conexión requerida</p>
+              <p className="text-sm">Primero debes establecer conexión con Alegra para usar este módulo.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
