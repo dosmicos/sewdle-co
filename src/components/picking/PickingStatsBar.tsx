@@ -1,9 +1,9 @@
 import React from 'react';
 import { usePickingOrderStats } from '@/hooks/usePickingOrderStats';
-import { ShoppingBag, Package, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, Package, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
 
 interface PickingStatsBarProps {
-  onFilterClick: (filterType: 'pedidos' | 'para_empacar' | 'no_confirmados' | 'empacados') => void;
+  onFilterClick: (filterType: 'pedidos' | 'para_empacar' | 'no_confirmados' | 'express' | 'empacados') => void;
 }
 
 export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick }) => {
@@ -51,6 +51,17 @@ export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick 
           <AlertCircle className="w-3 h-3 text-muted-foreground/70" />
           <span className="text-muted-foreground/70">No confirmados:</span>
           <span className="font-medium text-foreground">{stats.noConfirmados}</span>
+        </button>
+
+        <span className="text-border">|</span>
+
+        <button
+          onClick={() => onFilterClick('express')}
+          className="flex items-center gap-1.5 hover:text-foreground transition-colors whitespace-nowrap"
+        >
+          <Zap className="w-3 h-3 text-purple-500" />
+          <span className="text-muted-foreground/70">Express:</span>
+          <span className="font-medium text-purple-600">{stats.express}</span>
         </button>
 
         <span className="text-border">|</span>

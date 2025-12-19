@@ -7,6 +7,7 @@ const MIN_ORDER_NUMBER = 62303;
 export interface PickingOrderStats {
   paraEmpacar: number;
   noConfirmados: number;
+  express: number;
   empacados: number;
 }
 
@@ -15,6 +16,7 @@ export const usePickingOrderStats = () => {
   const [stats, setStats] = useState<PickingOrderStats>({
     paraEmpacar: 0,
     noConfirmados: 0,
+    express: 0,
     empacados: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ export const usePickingOrderStats = () => {
       const orgId = currentOrganization.id;
 
       // Execute all queries in parallel
-      const [paraEmpacarRes, noConfirmadosRes, empacadosRes] = await Promise.all([
+      const [paraEmpacarRes, noConfirmadosRes, expressRes, empacadosRes] = await Promise.all([
         // Para empacar: tags contains 'confirmado', NOT contains 'empacado', specific payment statuses
         supabase
           .from('shopify_orders')
@@ -48,6 +50,17 @@ export const usePickingOrderStats = () => {
           .is('cancelled_at', null)
           .or('tags.is.null,tags.not.ilike.%confirmado%'),
 
+        // Express: tags contains 'express', NOT contains 'empacado'
+        supabase
+          .from('shopify_orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', orgId)
+          .gte('order_number', MIN_ORDER_NUMBER)
+          .is('cancelled_at', null)
+          .ilike('tags', '%express%')
+          .not('tags', 'ilike', '%empacado%')
+          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled'),
+
         // Empacados: tags contains 'empacado'
         supabase
           .from('shopify_orders')
@@ -60,6 +73,7 @@ export const usePickingOrderStats = () => {
       setStats({
         paraEmpacar: paraEmpacarRes.count || 0,
         noConfirmados: noConfirmadosRes.count || 0,
+        express: expressRes.count || 0,
         empacados: empacadosRes.count || 0,
       });
     } catch (error) {
