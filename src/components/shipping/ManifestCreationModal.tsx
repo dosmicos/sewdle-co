@@ -137,15 +137,15 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh]">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl flex flex-col max-h-[85vh]">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
             Crear Nuevo Manifiesto
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-auto space-y-4 pr-1">
           {/* Carrier selection */}
           <div className="space-y-2">
             <Label>Transportadora *</Label>
@@ -219,13 +219,13 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
                 />
               </div>
 
-              <ScrollArea className="h-64 border rounded-md">
+              <ScrollArea className="h-48 border rounded-md">
                 {loadingLabels ? (
-                  <div className="flex items-center justify-center h-full">
+                  <div className="flex items-center justify-center h-full py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : filteredLabels.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 py-8">
                     <Package className="h-8 w-8 mb-2" />
                     <p>No hay guías disponibles</p>
                     <p className="text-sm">para {CARRIER_NAMES[carrier as CarrierCode]} en este rango</p>
@@ -284,13 +284,14 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
           <Button
             onClick={handleCreate}
             disabled={!carrier || selectedIds.size === 0 || loading}
+            size="lg"
           >
             {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Crear Manifiesto ({selectedIds.size} guías)
