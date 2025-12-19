@@ -91,37 +91,44 @@ const normalizeForAlegra = (city?: string, province?: string) => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
-  // Bogotá D.C.
+  // Bogotá D.C. (Alegra/DlAN valida ciudad y departamento con valores específicos)
+  // - Ciudad: "Bogotá"
+  // - Departamento: "Bogotá, D.C."
   if (
     cityLower.includes('bogota') ||
     provinceLower.includes('bogota') ||
     provinceLower.includes('cundinamarca')
   ) {
-    return { city: 'Bogotá, D.C.', department: 'Bogotá' };
+    return { city: 'Bogotá', department: 'Bogotá, D.C.' };
   }
+
   // Medellín
   if (cityLower.includes('medellin') || provinceLower.includes('antioquia')) {
     return { city: 'Medellín', department: 'Antioquia' };
   }
+
   // Cali
   if (cityLower.includes('cali') || provinceLower.includes('valle')) {
     return { city: 'Cali', department: 'Valle del Cauca' };
   }
+
   // Barranquilla
   if (cityLower.includes('barranquilla') || provinceLower.includes('atlantico')) {
     return { city: 'Barranquilla', department: 'Atlántico' };
   }
+
   // Cartagena
   if (cityLower.includes('cartagena') || provinceLower.includes('bolivar')) {
     return { city: 'Cartagena de Indias', department: 'Bolívar' };
   }
+
   // Bucaramanga
   if (cityLower.includes('bucaramanga') || provinceLower.includes('santander')) {
     return { city: 'Bucaramanga', department: 'Santander' };
   }
 
   // Default: Bogotá (most common in Colombia)
-  return { city: 'Bogotá, D.C.', department: 'Bogotá' };
+  return { city: 'Bogotá', department: 'Bogotá, D.C.' };
 };
 
 const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactNode; color: string }> = {
