@@ -143,217 +143,208 @@ export const ShippingManifestManager: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Package className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Manifiestos</p>
-              <p className="text-2xl font-bold">{manifests.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-              <Clock className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Manifiestos Abiertos</p>
-              <p className="text-2xl font-bold">{openManifests}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <Truck className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Manifiestos Hoy</p>
-              <p className="text-2xl font-bold">{todayManifests}</p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Prominent Create Button */}
+      <Button 
+        onClick={() => setShowCreateModal(true)} 
+        size="lg" 
+        className="w-full gap-2"
+      >
+        <Plus className="h-5 w-5" />
+        Crear Nuevo Manifiesto
+      </Button>
+
+      {/* Compact Stats Bar */}
+      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg text-sm">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Total:</span>
+            <span className="font-semibold">{manifests.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-yellow-600" />
+            <span className="text-muted-foreground">Abiertos:</span>
+            <span className="font-semibold">{openManifests}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Truck className="h-4 w-4 text-green-600" />
+            <span className="text-muted-foreground">Hoy:</span>
+            <span className="font-semibold">{todayManifests}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Actions and filters */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Manifiestos de Envío
-            </CardTitle>
-            <Button onClick={() => setShowCreateModal(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Crear Manifiesto
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por número de manifiesto..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="open">Abierto</SelectItem>
-                <SelectItem value="closed">Cerrado</SelectItem>
-                <SelectItem value="picked_up">Recogido</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={carrierFilter} onValueChange={setCarrierFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Transportadora" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                {Object.entries(CARRIER_NAMES).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por número de manifiesto..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-36">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="open">Abierto</SelectItem>
+            <SelectItem value="closed">Cerrado</SelectItem>
+            <SelectItem value="picked_up">Recogido</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={carrierFilter} onValueChange={setCarrierFilter}>
+          <SelectTrigger className="w-full sm:w-44">
+            <SelectValue placeholder="Transportadora" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            {Object.entries(CARRIER_NAMES).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-          {/* Table */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredManifests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Package className="h-12 w-12 mb-4" />
-              <p className="text-lg font-medium">No hay manifiestos</p>
-              <p className="text-sm">Crea un nuevo manifiesto para comenzar</p>
-            </div>
-          ) : (
-            <div className="border rounded-md overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>N° Manifiesto</TableHead>
-                    <TableHead>Transportadora</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead className="text-center">Guías</TableHead>
-                    <TableHead className="text-center">Verificadas</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredManifests.map((manifest) => {
-                    const status = statusConfig[manifest.status] || statusConfig.open;
-                    const progress = manifest.total_packages > 0
-                      ? Math.round((manifest.total_verified / manifest.total_packages) * 100)
-                      : 0;
+      {/* Manifests List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredManifests.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border rounded-lg bg-muted/30">
+          <Package className="h-12 w-12 mb-4" />
+          <p className="text-lg font-medium">No hay manifiestos</p>
+          <p className="text-sm mb-4">Crea un nuevo manifiesto para comenzar</p>
+          <Button onClick={() => setShowCreateModal(true)} variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Crear Manifiesto
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredManifests.map((manifest) => {
+            const status = statusConfig[manifest.status] || statusConfig.open;
+            const progress = manifest.total_packages > 0
+              ? Math.round((manifest.total_verified / manifest.total_packages) * 100)
+              : 0;
+            const isActionLoading = actionLoading === manifest.id;
 
-                    return (
-                      <TableRow key={manifest.id}>
-                        <TableCell className="font-mono font-medium">
-                          {manifest.manifest_number}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Truck className="h-4 w-4 text-muted-foreground" />
-                            {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {format(new Date(manifest.manifest_date), 'dd MMM yyyy', { locale: es })}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline">{manifest.total_packages}</Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge
-                            variant={progress === 100 ? 'default' : 'secondary'}
-                            className={progress === 100 ? 'bg-green-600' : ''}
+            return (
+              <div 
+                key={manifest.id} 
+                className="border rounded-lg p-4 bg-card hover:bg-muted/30 transition-colors"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Manifest Info */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-semibold text-sm">
+                        {manifest.manifest_number}
+                      </span>
+                      <Badge variant={status.variant} className="gap-1 text-xs">
+                        {status.icon}
+                        {status.label}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Truck className="h-3.5 w-3.5" />
+                        {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}
+                      </span>
+                      <span>
+                        {format(new Date(manifest.manifest_date), 'dd MMM yyyy', { locale: es })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Package className="h-3.5 w-3.5" />
+                        {manifest.total_verified}/{manifest.total_packages} guías
+                        {progress === 100 && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Direct Action Buttons */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {manifest.status === 'open' && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => handleOpenScanner(manifest.id)}
+                          disabled={isActionLoading}
+                          className="gap-1.5"
+                        >
+                          {isActionLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ScanLine className="h-4 w-4" />
+                          )}
+                          Escanear
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCloseManifest(manifest.id)}
+                          disabled={isActionLoading}
+                          className="gap-1.5"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Cerrar
+                        </Button>
+                      </>
+                    )}
+                    {manifest.status === 'closed' && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => handleConfirmPickup(manifest.id)}
+                        disabled={isActionLoading}
+                        className="gap-1.5"
+                      >
+                        {isActionLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <PackageCheck className="h-4 w-4" />
+                        )}
+                        Confirmar Retiro
+                      </Button>
+                    )}
+                    
+                    {/* Additional actions in dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handlePrint(manifest)}>
+                          <Printer className="h-4 w-4 mr-2" />
+                          Imprimir
+                        </DropdownMenuItem>
+                        {manifest.status === 'open' && (
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => setDeleteConfirm(manifest.id)}
                           >
-                            {manifest.total_verified} ({progress}%)
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={status.variant} className="gap-1">
-                            {status.icon}
-                            {status.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={actionLoading === manifest.id}
-                              >
-                                {actionLoading === manifest.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <MoreVertical className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {manifest.status === 'open' && (
-                                <>
-                                  <DropdownMenuItem onClick={() => handleOpenScanner(manifest.id)}>
-                                    <ScanLine className="h-4 w-4 mr-2" />
-                                    Escanear Guías
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleCloseManifest(manifest.id)}>
-                                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                                    Cerrar Manifiesto
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {manifest.status === 'closed' && (
-                                <DropdownMenuItem onClick={() => handleConfirmPickup(manifest.id)}>
-                                  <PackageCheck className="h-4 w-4 mr-2" />
-                                  Confirmar Retiro
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={() => handlePrint(manifest)}>
-                                <Printer className="h-4 w-4 mr-2" />
-                                Imprimir
-                              </DropdownMenuItem>
-                              {manifest.status === 'open' && (
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => setDeleteConfirm(manifest.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Eliminar
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Modals */}
       <ManifestCreationModal
