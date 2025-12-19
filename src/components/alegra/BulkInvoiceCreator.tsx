@@ -460,7 +460,9 @@ const BulkInvoiceCreator = () => {
             observations: `Pedido Shopify #${order.order_number}`,
             status: 'open',
             paymentMethod: 'CASH',
-            paymentForm: 'CASH'
+            paymentForm: 'CASH',
+            // Numeración 2025 y 2026 (ID 21) - vigente hasta 2027-10-29
+            numberTemplate: { id: '21' }
           }
         }
       }
