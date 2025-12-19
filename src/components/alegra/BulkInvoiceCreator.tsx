@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
 import { 
   Receipt, 
   Loader2, 
@@ -13,50 +14,45 @@ import {
   Search,
   FileText,
   User,
-  Package
+  Package,
+  ShoppingCart
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-interface DeliveryForInvoice {
+interface ShopifyOrderForInvoice {
   id: string;
-  delivery_date: string;
-  status: string;
-  tracking_number: string | null;
-  recipient_name: string | null;
-  recipient_address: string | null;
-  recipient_phone: string | null;
-  order: {
+  shopify_order_id: number;
+  order_number: string;
+  email: string | null;
+  customer_email: string | null;
+  customer_first_name: string | null;
+  customer_last_name: string | null;
+  customer_phone: string | null;
+  billing_address: any;
+  shipping_address: any;
+  total_price: number;
+  subtotal_price: number;
+  total_tax: number;
+  currency: string;
+  financial_status: string;
+  fulfillment_status: string | null;
+  created_at_shopify: string;
+  line_items: Array<{
     id: string;
-    order_number: string;
-    total_amount: number | null;
-  };
-  workshop: {
-    id: string;
-    name: string;
-  };
-  items: Array<{
-    id: string;
-    quantity_delivered: number;
-    quantity_approved: number;
-    order_item: {
-      unit_price: number;
-      product_variant: {
-        size: string | null;
-        color: string | null;
-        product: {
-          name: string;
-          sku: string;
-        };
-      };
-    };
+    title: string;
+    variant_title: string | null;
+    sku: string | null;
+    quantity: number;
+    price: number;
   }>;
 }
 
 interface InvoiceResult {
-  deliveryId: string;
+  orderId: string;
+  orderNumber: string;
   success: boolean;
   invoiceId?: string;
   invoiceNumber?: string;
@@ -64,116 +60,120 @@ interface InvoiceResult {
 }
 
 const BulkInvoiceCreator = () => {
-  const [deliveries, setDeliveries] = useState<DeliveryForInvoice[]>([]);
-  const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set());
+  const [orders, setOrders] = useState<ShopifyOrderForInvoice[]>([]);
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<InvoiceResult[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchApprovedDeliveries();
+    fetchShopifyOrders();
   }, []);
 
-  const fetchApprovedDeliveries = async () => {
+  const fetchShopifyOrders = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('deliveries')
-        .select(`
-          id,
-          delivery_date,
-          status,
-          tracking_number,
-          recipient_name,
-          recipient_address,
-          recipient_phone,
-          order:orders!deliveries_order_id_fkey (
-            id,
-            order_number,
-            total_amount
-          ),
-          workshop:workshops!deliveries_workshop_id_fkey (
-            id,
-            name
-          ),
-          items:delivery_items (
-            id,
-            quantity_delivered,
-            quantity_approved,
-            order_item:order_items!delivery_items_order_item_id_fkey (
-              unit_price,
-              product_variant:product_variants!order_items_product_variant_id_fkey (
-                size,
-                color,
-                product:products!product_variants_product_id_fkey (
-                  name,
-                  sku
-                )
-              )
-            )
-          )
-        `)
-        .eq('status', 'approved')
-        .order('delivery_date', { ascending: false })
-        .limit(50);
+      // Fetch Shopify orders
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('shopify_orders')
+        .select('*')
+        .eq('financial_status', 'paid')
+        .order('created_at_shopify', { ascending: false })
+        .limit(100);
 
-      if (error) throw error;
+      if (ordersError) throw ordersError;
+
+      // Fetch line items for each order
+      const ordersWithItems: ShopifyOrderForInvoice[] = [];
       
-      // Type assertion to handle the Supabase response
-      setDeliveries((data || []) as unknown as DeliveryForInvoice[]);
+      for (const order of ordersData || []) {
+        const { data: lineItems } = await supabase
+          .from('shopify_order_line_items')
+          .select('id, title, variant_title, sku, quantity, price')
+          .eq('shopify_order_id', order.shopify_order_id);
+
+        ordersWithItems.push({
+          ...order,
+          line_items: lineItems || []
+        });
+      }
+
+      setOrders(ordersWithItems);
     } catch (error: any) {
-      console.error('Error fetching deliveries:', error);
-      toast.error('Error al cargar entregas: ' + error.message);
+      console.error('Error fetching Shopify orders:', error);
+      toast.error('Error al cargar pedidos: ' + error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const toggleDelivery = (deliveryId: string) => {
-    const newSelected = new Set(selectedDeliveries);
-    if (newSelected.has(deliveryId)) {
-      newSelected.delete(deliveryId);
+  const toggleOrder = (orderId: string) => {
+    const newSelected = new Set(selectedOrders);
+    if (newSelected.has(orderId)) {
+      newSelected.delete(orderId);
     } else {
-      newSelected.add(deliveryId);
+      newSelected.add(orderId);
     }
-    setSelectedDeliveries(newSelected);
+    setSelectedOrders(newSelected);
   };
 
   const toggleAll = () => {
-    if (selectedDeliveries.size === deliveries.length) {
-      setSelectedDeliveries(new Set());
+    const filteredOrders = getFilteredOrders();
+    if (selectedOrders.size === filteredOrders.length) {
+      setSelectedOrders(new Set());
     } else {
-      setSelectedDeliveries(new Set(deliveries.map(d => d.id)));
+      setSelectedOrders(new Set(filteredOrders.map(o => o.id)));
     }
   };
 
-  const searchOrCreateContact = async (delivery: DeliveryForInvoice) => {
-    // Search for existing contact in Alegra
+  const getFilteredOrders = () => {
+    if (!searchTerm) return orders;
+    const term = searchTerm.toLowerCase();
+    return orders.filter(order => 
+      order.order_number?.toLowerCase().includes(term) ||
+      order.customer_email?.toLowerCase().includes(term) ||
+      order.customer_first_name?.toLowerCase().includes(term) ||
+      order.customer_last_name?.toLowerCase().includes(term)
+    );
+  };
+
+  const searchOrCreateContact = async (order: ShopifyOrderForInvoice) => {
+    const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || order.email || 'Cliente';
+    const customerEmail = order.customer_email || order.email;
+
+    // Search for existing contact in Alegra by email
     const { data: searchResult } = await supabase.functions.invoke('alegra-api', {
       body: { action: 'get-contacts' }
     });
 
     if (searchResult?.success && searchResult.data) {
-      // Try to find by name (case-insensitive)
+      // Try to find by email first
       const existingContact = searchResult.data.find((c: any) => 
-        c.name?.toLowerCase() === delivery.recipient_name?.toLowerCase()
+        c.email?.toLowerCase() === customerEmail?.toLowerCase() ||
+        c.name?.toLowerCase() === customerName.toLowerCase()
       );
       
       if (existingContact) {
-        return { id: existingContact.id, isNew: false };
+        return { id: existingContact.id, isNew: false, name: existingContact.name };
       }
     }
 
+    // Extract address from billing or shipping
+    const address = order.billing_address || order.shipping_address || {};
+    
     // Create new contact if not found
     const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
       body: {
         action: 'create-contact',
         data: {
           contact: {
-            name: delivery.recipient_name || 'Cliente Sin Nombre',
-            phonePrimary: delivery.recipient_phone || '',
+            name: customerName,
+            email: customerEmail || undefined,
+            phonePrimary: order.customer_phone || address.phone || '',
             address: {
-              address: delivery.recipient_address || ''
+              address: address.address1 ? `${address.address1} ${address.address2 || ''}`.trim() : '',
+              city: address.city || ''
             },
             type: ['client']
           }
@@ -182,18 +182,18 @@ const BulkInvoiceCreator = () => {
     });
 
     if (error || !createResult?.success) {
-      throw new Error('No se pudo crear el contacto en Alegra');
+      throw new Error('No se pudo crear el contacto en Alegra: ' + (createResult?.error || error?.message));
     }
 
-    return { id: createResult.data.id, isNew: true };
+    return { id: createResult.data.id, isNew: true, name: customerName };
   };
 
-  const createInvoice = async (delivery: DeliveryForInvoice, contactId: string) => {
-    const items = delivery.items.map(item => ({
-      id: 1, // Default Alegra item (service)
-      name: `${item.order_item.product_variant.product.name} - ${item.order_item.product_variant.size || ''} ${item.order_item.product_variant.color || ''}`.trim(),
-      price: item.order_item.unit_price,
-      quantity: item.quantity_approved || item.quantity_delivered,
+  const createInvoice = async (order: ShopifyOrderForInvoice, contactId: string) => {
+    const items = order.line_items.map(item => ({
+      id: 1, // Default Alegra item
+      name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
+      price: item.price,
+      quantity: item.quantity,
       tax: [] // Adjust based on your tax configuration
     }));
 
@@ -206,7 +206,7 @@ const BulkInvoiceCreator = () => {
             date: format(new Date(), 'yyyy-MM-dd'),
             dueDate: format(new Date(), 'yyyy-MM-dd'),
             items,
-            observations: `Entrega: ${delivery.tracking_number || delivery.id} - Pedido: ${delivery.order?.order_number || 'N/A'}`,
+            observations: `Pedido Shopify #${order.order_number}`,
             status: 'open'
           }
         }
@@ -221,8 +221,8 @@ const BulkInvoiceCreator = () => {
   };
 
   const processInvoices = async () => {
-    if (selectedDeliveries.size === 0) {
-      toast.warning('Selecciona al menos una entrega');
+    if (selectedOrders.size === 0) {
+      toast.warning('Selecciona al menos un pedido');
       return;
     }
 
@@ -230,32 +230,34 @@ const BulkInvoiceCreator = () => {
     setResults([]);
     const newResults: InvoiceResult[] = [];
 
-    for (const deliveryId of selectedDeliveries) {
-      const delivery = deliveries.find(d => d.id === deliveryId);
-      if (!delivery) continue;
+    for (const orderId of selectedOrders) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) continue;
 
       try {
         // Search or create contact
-        const contact = await searchOrCreateContact(delivery);
+        const contact = await searchOrCreateContact(order);
         
         // Create invoice
-        const invoice = await createInvoice(delivery, contact.id);
+        const invoice = await createInvoice(order, contact.id);
         
         newResults.push({
-          deliveryId,
+          orderId,
+          orderNumber: order.order_number,
           success: true,
           invoiceId: invoice.id,
           invoiceNumber: invoice.numberTemplate?.fullNumber || invoice.id
         });
 
-        toast.success(`Factura creada para ${delivery.order?.order_number}`);
+        toast.success(`Factura creada para pedido #${order.order_number}`);
       } catch (error: any) {
         newResults.push({
-          deliveryId,
+          orderId,
+          orderNumber: order.order_number,
           success: false,
           error: error.message
         });
-        toast.error(`Error en ${delivery.order?.order_number}: ${error.message}`);
+        toast.error(`Error en pedido #${order.order_number}: ${error.message}`);
       }
     }
 
@@ -268,12 +270,7 @@ const BulkInvoiceCreator = () => {
     }
   };
 
-  const calculateDeliveryTotal = (delivery: DeliveryForInvoice) => {
-    return delivery.items.reduce((sum, item) => {
-      const qty = item.quantity_approved || item.quantity_delivered;
-      return sum + (qty * item.order_item.unit_price);
-    }, 0);
-  };
+  const filteredOrders = getFilteredOrders();
 
   if (isLoading) {
     return (
@@ -285,21 +282,32 @@ const BulkInvoiceCreator = () => {
 
   return (
     <div className="space-y-4">
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por número de pedido, email o nombre..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {/* Header Actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={selectedDeliveries.size === deliveries.length && deliveries.length > 0}
+            checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-muted-foreground">
-            {selectedDeliveries.size} de {deliveries.length} entregas seleccionadas
+            {selectedOrders.size} de {filteredOrders.length} pedidos seleccionados
           </span>
         </div>
         
         <Button 
           onClick={processInvoices} 
-          disabled={selectedDeliveries.size === 0 || isProcessing}
+          disabled={selectedOrders.size === 0 || isProcessing}
         >
           {isProcessing ? (
             <>
@@ -309,7 +317,7 @@ const BulkInvoiceCreator = () => {
           ) : (
             <>
               <Receipt className="h-4 w-4 mr-2" />
-              Crear {selectedDeliveries.size} Facturas
+              Crear {selectedOrders.size} Facturas
             </>
           )}
         </Button>
@@ -326,36 +334,36 @@ const BulkInvoiceCreator = () => {
         </Alert>
       )}
 
-      {/* Deliveries List */}
-      {deliveries.length === 0 ? (
+      {/* Orders List */}
+      {filteredOrders.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg font-medium">No hay entregas aprobadas</p>
-          <p className="text-sm">Las entregas aprobadas aparecerán aquí para facturar.</p>
+          <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg font-medium">No hay pedidos pagados</p>
+          <p className="text-sm">Los pedidos pagados de Shopify aparecerán aquí para facturar.</p>
         </div>
       ) : (
         <ScrollArea className="h-[500px]">
           <div className="space-y-3">
-            {deliveries.map(delivery => {
-              const result = results.find(r => r.deliveryId === delivery.id);
-              const total = calculateDeliveryTotal(delivery);
+            {filteredOrders.map(order => {
+              const result = results.find(r => r.orderId === order.id);
+              const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim();
               
               return (
                 <Card 
-                  key={delivery.id}
+                  key={order.id}
                   className={`cursor-pointer transition-colors ${
-                    selectedDeliveries.has(delivery.id) ? 'border-primary bg-primary/5' : ''
+                    selectedOrders.has(order.id) ? 'border-primary bg-primary/5' : ''
                   } ${result?.success ? 'border-green-500 bg-green-50' : ''} ${
                     result && !result.success ? 'border-red-500 bg-red-50' : ''
                   }`}
-                  onClick={() => !result?.success && toggleDelivery(delivery.id)}
+                  onClick={() => !result?.success && toggleOrder(order.id)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
                       <Checkbox
-                        checked={selectedDeliveries.has(delivery.id)}
+                        checked={selectedOrders.has(order.id)}
                         disabled={result?.success}
-                        onCheckedChange={() => toggleDelivery(delivery.id)}
+                        onCheckedChange={() => toggleOrder(order.id)}
                         onClick={e => e.stopPropagation()}
                       />
                       
@@ -363,33 +371,39 @@ const BulkInvoiceCreator = () => {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="font-medium">
-                              {delivery.order?.order_number || 'Sin pedido'}
+                              #{order.order_number}
                             </span>
-                            <Badge variant="outline">
-                              {delivery.tracking_number || 'Sin tracking'}
+                            <Badge variant="outline" className="text-green-600">
+                              {order.financial_status}
                             </Badge>
+                            {order.fulfillment_status && (
+                              <Badge variant="secondary">
+                                {order.fulfillment_status}
+                              </Badge>
+                            )}
                           </div>
                           <span className="font-bold text-lg">
-                            ${total.toLocaleString('es-CO')}
+                            ${order.total_price?.toLocaleString('es-CO')} {order.currency}
                           </span>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
-                            {delivery.recipient_name || 'Sin destinatario'}
+                            {customerName || order.customer_email || 'Sin cliente'}
                           </div>
                           <div>
-                            {delivery.delivery_date && format(
-                              new Date(delivery.delivery_date), 
-                              'dd MMM yyyy', 
+                            {order.created_at_shopify && format(
+                              new Date(order.created_at_shopify), 
+                              'dd MMM yyyy HH:mm', 
                               { locale: es }
                             )}
                           </div>
                         </div>
 
                         <div className="mt-2 text-xs text-muted-foreground">
-                          {delivery.items.length} productos • Taller: {delivery.workshop?.name}
+                          <Package className="h-3 w-3 inline mr-1" />
+                          {order.line_items.length} productos • {order.customer_email}
                         </div>
 
                         {result && (
