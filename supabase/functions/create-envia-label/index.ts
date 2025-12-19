@@ -1080,9 +1080,10 @@ serve(async (req) => {
                         fulfillment_order_id: fulfillmentOrderId
                       }
                     ],
-                    tracking_info: {
+                tracking_info: {
                       company: trackingCompany,
-                      number: shipmentData.trackingNumber
+                      number: shipmentData.trackingNumber,
+                      url: `https://envia.com/es-CO/tracking?label=${shipmentData.trackingNumber}`
                     },
                     notify_customer: true
                   }
