@@ -22,18 +22,18 @@ import {
   AlertTriangle,
   Package,
   Loader2,
-  Volume2,
-  VolumeX,
   ArrowLeft,
   Truck,
   Calendar,
   Flag,
+  Printer,
 } from 'lucide-react';
 import { useShippingManifests, ManifestWithItems, ManifestItem } from '@/hooks/useShippingManifests';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ManifestPrintView } from './ManifestPrintView';
 
 interface ManifestDetailViewProps {
   manifest: ManifestWithItems;
@@ -52,26 +52,18 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   onBack,
   onUpdate,
 }) => {
-  const { scanTrackingNumber, closeManifest, fetchManifestWithItems } = useShippingManifests();
+  const { scanTrackingNumber, closeManifest } = useShippingManifests();
   
   const [scanInput, setScanInput] = useState('');
   const [scanning, setScanning] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [scanHistory, setScanHistory] = useState<ScanFeedback[]>([]);
   const [items, setItems] = useState<ManifestItem[]>(manifest.items);
   const [extraScans, setExtraScans] = useState<string[]>([]);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [closingManifest, setClosingManifest] = useState(false);
+  const [showPrintView, setShowPrintView] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
-  const successAudio = useRef<HTMLAudioElement | null>(null);
-  const errorAudio = useRef<HTMLAudioElement | null>(null);
-
-  // Initialize audio
-  useEffect(() => {
-    successAudio.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp+fn5+fnp6enZubmZeVk5GPjoiCfXdxbGllY2JjZmpxe4aMlJmdn6GhoaKioaGgnpuYlI+LhYB6dG9qaGdoa22Ah5CXm5+hoqOko6OioaCempmVkIuGgHpzb2tpaGlrbXSDipKYnaCio6OjoqKhoJ6cmpmVkYyGgXx2cWxqaGlrbXOAh46Vm56goqOjo6KioaCenZqWko2IhIB6dXFsaWdnamxyfIWMk5idoKGio6OioqGgnpyamJSTj4uGgXx3c29saWlqbHB4gIaOlJmdoKGioqKioKGfnZuZl5STkIyIhIB7d3Jua2pqa25zeICGjpOYnaCho6OjoqKhoJ6cmpmXlJGNiYWBfXhzbm1rbG1wdX2DipGWm56goqOjo6KioaCenJqYlpOQjYmFgXx4c29tbGxucXZ9g4qRlpueoKKjo6OioqGgnp2bmJaUkY2JhYF9eHRwbmxtb3J3foWLkZabnqChoqOjoqKhn56cm5mXlJKPi4iEgH15dXJwb3Bydnx+hIqQlZqdoKGio6OioqGgnpybmZeTkY6KhoKAfHh1cnFwcXN3fIKHjZKXm56goqKjoqKhoJ+enJqYlpORjoqGg398eHVycHBxc3d8gYaLkJWZnaCho6OjoqKhoJ6cm5mXlZKPjImFgn56d3Rybm5vcnV6f4WKj5SYnJ+hoqOjoqKhoJ+enJqYlpSSj4uHhIB9end0cXBwcXR4fYKHjJGWmp2goKKjoqOioaCfnZuZl5WTkI2KhoOAfXp3dHJxcHJ0d3yAhYqPlJeanaCioqOioqGgoJ6cmpmXlZKPjImGg397eHVzcXBxc3Z6foOIjZGVmZyfoaKjoqKhoaCfnZuZmJaUko+Mi4eDf3x5dnRycHFzdnh8gYaKj5OXm56goaKjoqKhoaCenJuZl5WTkI2KhoOAfHl2dHJxcnR3e3+EiI2Rl5qdn6GioqOioaGgn52bmZeVk5CPjIqGg398eXZ0c3JydHd7f4OHjJCUmJueoKGio6KioaCfnZyamJaUkpCOi4eDgH15d3V0c3N0dnh8gISIjJCUl5qdoKGioqKioaCfnZyamJaUko+Ni4iEgX56eHZ0c3R1d3p9gYWJjZGVmJudn6GioqKioaCfnpyamJaVk5COjIqHhIB9enl3dXR0dXd5fICDh4uPlJeZnJ6goaKioqGhoJ6dnJqYlpSTkY+Mi4eDgH16eHZ1dHV2eHuAgYaKjpGVmJudoKGhoqKhoaCfnpyamJaVk5GPjYqHhIF+e3l4dnV1dXd5fH+DhouOkZWYmp2foKGioqGgoKCenZuZl5WTkY+NioeEgX57eXd2dXV2eHp9gIOGio2Qlpibm56goaKioaCgoJ6dnJqYlpSSkI6Mi4eDgX57eXd2dXZ3eXt+gYOHi46Rlpibm56foaGioaGgoJ6dnJqYl5WTkY+Ni4qHhIB+e3l4dnV2d3l7foGEiIuPlJeZnJ6foKGioaGgoJ+dnJqYl5WTkY+NioeEgX57enh2dXZ3eXx+gYSHi46SlZibnp+goaGhoaGgnp2cmpmXlZSSkI6LiYeFgn97enh2dXV2eHp8f4KFiIyPkpaZm52foKGhoaGgoJ+dnJqYl5WTkZCOjIqHhIJ/fHp4dnV1dnh6fX+ChYmMj5OWmZudn6ChoaGhoKCfnpyamJaVk5GPjYuJh4SBf3x6eHZ1dXZ4eny/gYSHio6RlZibnZ+goaGhoaGgn56cmpiXlZSSj42LiYaEgX98enh2dXZ2eHt9gIOFiYyPk5aYm52foKGhoaGgoJ+enJuZl5WUkpCOjIqIhYKAfXt5d3Z1dXd5e36Ag4aJjI+SlZibnZ+goKGhoKCgn56cm5mXlZSTkY+NjImHhIF+fHp4dXR1dnh6fYCDh4qMj5KVmJudnp+goaGhoKCfnpybmZeVlJKQjoqJh4WCgH16eHZ1dHV3eXuAgYWIi46QlJeam52foKCgoKCgoZ+enJqYl5WTkY6MioeEgX97eXd2dXV2eHp9gIOGiYyPkpWYm52fn6CgoKCgn5+dnJqYlpWTkY+MioeDgH56eHZ1dXV2eHp9gIOGiYyPlJaZm52en6CgoKCgn56dnJqYlpWTkY6LiYeCf3x6eHZ1dXV3eXyAgoWIi4+Sk5eZnJ6fn6CgoKCfnpybmpqXlZSTkI6MiYaDgH16eHZ1dHV2eHqAgIWHio2QkpWYm52en6CgoKCfnpybmpmXlZSTkI6MioeDgH56eHZ1dHV2eHp9gIOGiYyPlJaZm52en6CgoKCfnpybmpmXlZSTkI6MiYaDgH56eHZ1dHV2eHp9gIOGiYyPkpWYm52en6CgoKCfnpybmpmXlZSTkI6MioeDgH56eHZ1dXV2eHp9gIOGiYyPkpWYm52en6CgoKCfnpybmpmXlZSSj42LiYeDgH17eXd2dXZ2eHp9gIOGiYyPkpWYm52en6CgoKCfnpybmpmXlZSSj42LiYeDgH17eXd2dXZ2eHt9gIOGiYyPkpWYm52en6CgoKCfnpybmpmXlZSSj42LiYeDgH17eXd2dXZ2eHt9gIOGiYyPkpWYm52en6CgoKCfnpybmpmXlZSSj42LiYeDgH17eXd2dXZ2eHt9gIOGiYyOkJKTlQ==');
-    errorAudio.current = new Audio('data:audio/wav;base64,UklGRigCAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQCAAD+/wIA/v8CAP7/AgD+/wIA/v8EAPz/BgD6/wgA+P8KAPb/DAD0/w4A8v8QAPD/EgDu/xQA7P8WAOr/GADo/xoA5v8cAOT/HgDi/yAA4P8iAN7/JADc/yYA2v8oANj/KgDW/ywA1P8uANL/MADQPzIA0P8yAM7/NADM/zYAyv84AMj/OgDI/zoAxv88AMT/PgDC/0AAwP9CAMD/QgC+/0QAvP9GALr/SAC4/0oAtv9MALb/TAC0/04Asv9QALD/UgCu/1QArP9WAKz/VgCq/1gAqP9aAKb/XACk/14Aov9gAKL/YACg/2IAnv9kAJz/ZgCa/2gAmv9oAJj/agCW/2wAlP9uAJL/cACQ/3IAkP9yAI7/dACM/3YAiv94AIj/egCI/3oAhv98AIT/fgCC/4AAf/+CAID/ggB+/4QAfP+GAHr/iAB4/4oAdv+MAHb/jAB0/44Acv+QAHD/kgBu/5QAbP+WAGz/lgBq/5gAaP+aAGb/nABk/54AZP+eAGL/oABg/6IAXv+kAFz/pgBa/6gAWv+oAFj/qgBW/6wAVP+uAFL/sABQ/7IAUP+yAE7/tABM/7YATP+2AEr/uABI/7oARv+8AET/vgBE/74AQv/AAED/wgA+/8QAPP/GADz/xgA6/8gAOP/KADb/zAA0/84AMP/QADL/0AAw/9IAMf/SAD');
-  }, []);
 
   // Auto-focus input
   useEffect(() => {
@@ -84,15 +76,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   useEffect(() => {
     setItems(manifest.items);
   }, [manifest.items]);
-
-  const playSound = (type: 'success' | 'error') => {
-    if (!soundEnabled) return;
-    const audio = type === 'success' ? successAudio.current : errorAudio.current;
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-    }
-  };
 
   const handleScan = useCallback(async () => {
     const trackingNumber = scanInput.trim().toUpperCase();
@@ -112,20 +95,16 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     setScanHistory(prev => [feedback, ...prev.slice(0, 49)]);
 
     if (result.success) {
-      playSound('success');
       setItems(prev => prev.map(item =>
         item.tracking_number === trackingNumber
           ? { ...item, scanned_at: new Date().toISOString(), scan_status: 'verified' }
           : item
       ));
     } else if (result.status === 'not_found') {
-      playSound('error');
       // Track extra scans (guides not in manifest)
       if (!extraScans.includes(trackingNumber)) {
         setExtraScans(prev => [...prev, trackingNumber]);
       }
-    } else {
-      playSound('error');
     }
 
     setScanning(false);
@@ -169,6 +148,16 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const hasMissing = pendingItems.length > 0;
   const hasExtras = extraScans.length > 0;
 
+  // Show print view
+  if (showPrintView) {
+    return (
+      <ManifestPrintView
+        manifest={manifest}
+        onClose={() => setShowPrintView(false)}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -199,12 +188,12 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
           </div>
         </div>
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          title={soundEnabled ? 'Silenciar' : 'Activar sonido'}
+          onClick={() => setShowPrintView(true)}
+          title="Imprimir manifiesto"
         >
-          {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          <Printer className="h-4 w-4" />
         </Button>
       </div>
 
