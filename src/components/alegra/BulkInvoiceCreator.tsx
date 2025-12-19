@@ -243,6 +243,12 @@ const BulkInvoiceCreator = () => {
   const searchOrCreateContact = async (order: ShopifyOrderForInvoice) => {
     const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || order.email || 'Cliente';
     const customerEmail = order.customer_email || order.email;
+    const customerPhone = order.customer_phone || (order.billing_address || order.shipping_address || {}).phone || '';
+    
+    // Generate identification number (same logic as creation)
+    const identificationNumber = customerPhone?.replace(/[^0-9]/g, '') || 
+                                  customerEmail?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
+                                  '';
 
     // Search for existing contact in Alegra
     const { data: searchResult } = await supabase.functions.invoke('alegra-api', {
@@ -250,23 +256,59 @@ const BulkInvoiceCreator = () => {
     });
 
     if (searchResult?.success && searchResult.data) {
-      const existingContact = searchResult.data.find((c: any) => 
-        c.email?.toLowerCase() === customerEmail?.toLowerCase() ||
-        c.name?.toLowerCase() === customerName.toLowerCase()
+      // 1. First search by identification number (most reliable)
+      if (identificationNumber) {
+        const contactByIdentification = searchResult.data.find((c: any) => 
+          c.identificationNumber === identificationNumber
+        );
+        if (contactByIdentification) {
+          console.log('Contact found by identification:', contactByIdentification.name);
+          return { id: contactByIdentification.id, isNew: false, name: contactByIdentification.name };
+        }
+      }
+
+      // 2. Then search by phone number
+      if (customerPhone) {
+        const phoneClean = customerPhone.replace(/[^0-9]/g, '');
+        const contactByPhone = searchResult.data.find((c: any) => 
+          c.phonePrimary?.replace(/[^0-9]/g, '') === phoneClean ||
+          c.mobile?.replace(/[^0-9]/g, '') === phoneClean
+        );
+        if (contactByPhone) {
+          console.log('Contact found by phone:', contactByPhone.name);
+          return { id: contactByPhone.id, isNew: false, name: contactByPhone.name };
+        }
+      }
+
+      // 3. Then search by email
+      if (customerEmail) {
+        const contactByEmail = searchResult.data.find((c: any) => 
+          c.email?.toLowerCase() === customerEmail.toLowerCase()
+        );
+        if (contactByEmail) {
+          console.log('Contact found by email:', contactByEmail.name);
+          return { id: contactByEmail.id, isNew: false, name: contactByEmail.name };
+        }
+      }
+
+      // 4. Finally search by name (normalized comparison)
+      const normalizedName = customerName.toLowerCase().trim();
+      const contactByName = searchResult.data.find((c: any) => 
+        c.name?.toLowerCase().trim() === normalizedName
       );
-      
-      if (existingContact) {
-        return { id: existingContact.id, isNew: false, name: existingContact.name };
+      if (contactByName) {
+        console.log('Contact found by name:', contactByName.name);
+        return { id: contactByName.id, isNew: false, name: contactByName.name };
       }
     }
 
-    // Create new contact if not found
+    // Create new contact if not found by any method
     const address = order.billing_address || order.shipping_address || {};
     
-    // Generate a unique identification number based on email or phone
-    const identificationNumber = customerEmail?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
-                                  order.customer_phone?.replace(/[^0-9]/g, '') || 
-                                  `CLI${Date.now()}`;
+    // Use phone as primary identification, fallback to email-derived
+    const finalIdentificationNumber = identificationNumber || `CLI${Date.now()}`;
+    
+    console.log('Creating new contact:', customerName, 'with identification:', finalIdentificationNumber);
     
     const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
       body: {
@@ -275,9 +317,9 @@ const BulkInvoiceCreator = () => {
           contact: {
             name: customerName,
             identificationType: 'CC', // Cédula de Ciudadanía - tipo por defecto
-            identificationNumber: identificationNumber,
+            identificationNumber: finalIdentificationNumber,
             email: customerEmail || undefined,
-            phonePrimary: order.customer_phone || address.phone || '',
+            phonePrimary: customerPhone,
             address: {
               address: address.address1 ? `${address.address1} ${address.address2 || ''}`.trim() : '',
               city: address.city || ''
