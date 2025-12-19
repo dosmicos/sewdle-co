@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`🏪 Procesando Listo para Retiro - Orden Shopify: ${shopify_order_id}`);
+    console.log(`🏪 Marcando pedido como listo para retiro - Orden Shopify: ${shopify_order_id}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -28,55 +28,50 @@ Deno.serve(async (req) => {
     const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
 
     if (!rawShopifyDomain || !shopifyToken) {
-      throw new Error('SHOPIFY_STORE_DOMAIN y SHOPIFY_ACCESS_TOKEN son requeridos');
+      throw new Error('Credenciales de Shopify no configuradas');
     }
 
     const shopifyDomain = rawShopifyDomain.includes('.myshopify.com')
       ? rawShopifyDomain
       : `${rawShopifyDomain}.myshopify.com`;
 
-    // Step 1: Get fulfillment orders from Shopify
-    console.log(`📦 Obteniendo fulfillment_orders de Shopify...`);
-    
+    // Step 1: Get fulfillment orders for this order
+    console.log(`📦 Obteniendo fulfillment orders...`);
     const fulfillmentOrdersRes = await fetch(
       `https://${shopifyDomain}/admin/api/2024-01/orders/${shopify_order_id}/fulfillment_orders.json`,
       {
         headers: {
           'X-Shopify-Access-Token': shopifyToken,
-          'Content-Type': 'application/json',
-        },
+        }
       }
     );
 
     if (!fulfillmentOrdersRes.ok) {
       const errorText = await fulfillmentOrdersRes.text();
-      console.error(`❌ Error obteniendo fulfillment_orders: ${fulfillmentOrdersRes.status}`, errorText);
-      throw new Error(`Error obteniendo fulfillment_orders: ${fulfillmentOrdersRes.status}`);
+      console.error(`❌ Error obteniendo fulfillment orders:`, errorText);
+      throw new Error(`Error obteniendo fulfillment orders: ${fulfillmentOrdersRes.status}`);
     }
 
     const fulfillmentOrdersData = await fulfillmentOrdersRes.json();
     const fulfillmentOrders = fulfillmentOrdersData.fulfillment_orders || [];
     
-    console.log(`📋 Fulfillment orders encontrados: ${fulfillmentOrders.length}`);
+    console.log(`📋 Fulfillment orders encontradas: ${fulfillmentOrders.length}`);
 
-    if (fulfillmentOrders.length === 0) {
-      throw new Error('No se encontraron fulfillment_orders para esta orden');
-    }
-
-    // Find open fulfillment order
+    // Find the open fulfillment order
     const openFulfillmentOrder = fulfillmentOrders.find(
-      (fo: any) => fo.status === 'open' || fo.status === 'in_progress'
+      (fo: { status: string }) => fo.status === 'open' || fo.status === 'in_progress'
     );
 
     if (!openFulfillmentOrder) {
-      console.log(`⚠️ No hay fulfillment_orders abiertos. Estados: ${fulfillmentOrders.map((fo: any) => fo.status).join(', ')}`);
+      // Check if already prepared for pickup or fulfilled
+      const preparedOrder = fulfillmentOrders.find(
+        (fo: { status: string }) => fo.status === 'scheduled' || fo.status === 'ready_for_pickup'
+      );
       
-      // Check if already fulfilled
-      const alreadyFulfilled = fulfillmentOrders.some((fo: any) => fo.status === 'closed');
-      if (alreadyFulfilled) {
-        console.log(`✅ La orden ya está fulfilled en Shopify`);
-        // Still update local status
-        const { error: updateError } = await supabase
+      if (preparedOrder) {
+        console.log(`ℹ️ El pedido ya está listo para retiro en Shopify`);
+        // Update local status anyway
+        await supabase
           .from('picking_packing_orders')
           .update({
             operational_status: 'awaiting_pickup',
@@ -85,110 +80,139 @@ Deno.serve(async (req) => {
           .eq('shopify_order_id', shopify_order_id)
           .eq('organization_id', organization_id);
 
-        if (updateError) {
-          console.error(`❌ Error actualizando estado local:`, updateError);
-        }
-
         return new Response(
           JSON.stringify({
             success: true,
-            message: 'Orden ya estaba fulfilled en Shopify. Estado local actualizado.',
-            alreadyFulfilled: true
+            message: 'El pedido ya estaba listo para retiro',
+            already_prepared: true
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      
-      throw new Error('No hay fulfillment_orders abiertos para procesar');
+
+      console.error(`❌ No se encontró fulfillment order abierta. Estados:`, 
+        fulfillmentOrders.map((fo: { id: number; status: string }) => ({ id: fo.id, status: fo.status }))
+      );
+      throw new Error('No se encontró una fulfillment order abierta para este pedido');
     }
 
-    // Step 2: Create fulfillment WITHOUT tracking info (for pickup)
-    console.log(`📬 Creando fulfillment para retiro (sin guía)...`);
+    const fulfillmentOrderId = openFulfillmentOrder.id;
+    console.log(`✅ Fulfillment order encontrada: ${fulfillmentOrderId}`);
+
+    // Step 2: Use GraphQL to mark as prepared for pickup
+    console.log(`🏪 Marcando como listo para retiro via GraphQL...`);
     
-    const fulfillmentPayload = {
-      fulfillment: {
-        line_items_by_fulfillment_order: [
-          {
-            fulfillment_order_id: openFulfillmentOrder.id
+    const graphqlQuery = `
+      mutation fulfillmentOrderLineItemsPreparedForPickup($input: FulfillmentOrderLineItemsPreparedForPickupInput!) {
+        fulfillmentOrderLineItemsPreparedForPickup(input: $input) {
+          userErrors {
+            field
+            message
           }
-        ],
-        notify_customer: true, // Notify customer that order is ready for pickup
-        message: "Tu pedido está listo para recoger. ¡Te esperamos!"
+        }
+      }
+    `;
+
+    const variables = {
+      input: {
+        lineItemsByFulfillmentOrder: [
+          {
+            fulfillmentOrderId: `gid://shopify/FulfillmentOrder/${fulfillmentOrderId}`
+          }
+        ]
       }
     };
 
-    const fulfillmentRes = await fetch(
-      `https://${shopifyDomain}/admin/api/2024-01/fulfillments.json`,
+    const graphqlRes = await fetch(
+      `https://${shopifyDomain}/admin/api/2024-01/graphql.json`,
       {
         method: 'POST',
         headers: {
           'X-Shopify-Access-Token': shopifyToken,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(fulfillmentPayload)
+        body: JSON.stringify({ query: graphqlQuery, variables })
       }
     );
 
-    if (!fulfillmentRes.ok) {
-      const errorText = await fulfillmentRes.text();
-      console.error(`❌ Error creando fulfillment: ${fulfillmentRes.status}`, errorText);
-      throw new Error(`Error creando fulfillment: ${fulfillmentRes.status} - ${errorText}`);
+    if (!graphqlRes.ok) {
+      const errorText = await graphqlRes.text();
+      console.error(`❌ Error en GraphQL:`, errorText);
+      throw new Error(`Error en GraphQL: ${graphqlRes.status}`);
     }
 
-    const fulfillmentData = await fulfillmentRes.json();
-    console.log(`✅ Fulfillment creado exitosamente:`, fulfillmentData.fulfillment?.id);
+    const graphqlData = await graphqlRes.json();
+    console.log(`📊 Respuesta GraphQL:`, JSON.stringify(graphqlData));
+
+    if (graphqlData.errors) {
+      console.error(`❌ Errores GraphQL:`, graphqlData.errors);
+      throw new Error(`Errores GraphQL: ${JSON.stringify(graphqlData.errors)}`);
+    }
+
+    const userErrors = graphqlData.data?.fulfillmentOrderLineItemsPreparedForPickup?.userErrors || [];
+    if (userErrors.length > 0) {
+      console.error(`❌ User errors:`, userErrors);
+      throw new Error(`Errores de Shopify: ${JSON.stringify(userErrors)}`);
+    }
+
+    console.log(`✅ Pedido marcado como listo para retiro en Shopify`);
 
     // Step 3: Add LISTO_PARA_RETIRO tag to Shopify order
     console.log(`🏷️ Agregando tag LISTO_PARA_RETIRO...`);
-    
-    // First get current tags
-    const orderRes = await fetch(
-      `https://${shopifyDomain}/admin/api/2024-01/orders/${shopify_order_id}.json?fields=tags`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': shopifyToken,
-        }
-      }
-    );
-
-    let currentTags = '';
-    if (orderRes.ok) {
-      const orderData = await orderRes.json();
-      currentTags = orderData.order?.tags || '';
-    }
-
-    // Add new tag
-    const tagsArray = currentTags.split(',').map((t: string) => t.trim()).filter(Boolean);
-    if (!tagsArray.includes('LISTO_PARA_RETIRO')) {
-      tagsArray.push('LISTO_PARA_RETIRO');
-    }
-
-    const updateTagsRes = await fetch(
-      `https://${shopifyDomain}/admin/api/2024-01/orders/${shopify_order_id}.json`,
-      {
-        method: 'PUT',
-        headers: {
-          'X-Shopify-Access-Token': shopifyToken,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          order: {
-            id: shopify_order_id,
-            tags: tagsArray.join(', ')
+    try {
+      const orderRes = await fetch(
+        `https://${shopifyDomain}/admin/api/2024-01/orders/${shopify_order_id}.json?fields=tags`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
           }
-        })
-      }
-    );
+        }
+      );
 
-    if (!updateTagsRes.ok) {
-      console.warn(`⚠️ Error actualizando tags: ${updateTagsRes.status}`);
-    } else {
+      let currentTags = '';
+      if (orderRes.ok) {
+        const orderData = await orderRes.json();
+        currentTags = orderData.order?.tags || '';
+      }
+
+      const tagsArray = currentTags.split(',').map((t: string) => t.trim()).filter(Boolean);
+      if (!tagsArray.includes('LISTO_PARA_RETIRO')) {
+        tagsArray.push('LISTO_PARA_RETIRO');
+      }
+
+      await fetch(
+        `https://${shopifyDomain}/admin/api/2024-01/orders/${shopify_order_id}.json`,
+        {
+          method: 'PUT',
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            order: {
+              id: shopify_order_id,
+              tags: tagsArray.join(', ')
+            }
+          })
+        }
+      );
+      
       console.log(`✅ Tag LISTO_PARA_RETIRO agregado`);
+
+      // Update local shopify_orders table with new tags
+      await supabase
+        .from('shopify_orders')
+        .update({ tags: tagsArray.join(', ') })
+        .eq('shopify_order_id', shopify_order_id)
+        .eq('organization_id', organization_id);
+
+    } catch (tagError) {
+      console.warn(`⚠️ Error agregando tag:`, tagError);
+      // Continue - tag is not critical
     }
 
-    // Step 4: Update local database
+    // Step 4: Update local database status
     console.log(`💾 Actualizando estado local a 'awaiting_pickup'...`);
-    
     const { error: updateError } = await supabase
       .from('picking_packing_orders')
       .update({
@@ -203,27 +227,13 @@ Deno.serve(async (req) => {
       throw updateError;
     }
 
-    // Update shopify_orders table
-    const { error: shopifyUpdateError } = await supabase
-      .from('shopify_orders')
-      .update({
-        fulfillment_status: 'fulfilled',
-        tags: tagsArray.join(', ')
-      })
-      .eq('shopify_order_id', shopify_order_id)
-      .eq('organization_id', organization_id);
-
-    if (shopifyUpdateError) {
-      console.warn(`⚠️ Error actualizando shopify_orders:`, shopifyUpdateError);
-    }
-
-    console.log(`✅ Listo para Retiro completado exitosamente`);
+    console.log(`✅ Proceso completado exitosamente`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Pedido marcado como Listo para Retiro. El cliente fue notificado.',
-        fulfillment_id: fulfillmentData.fulfillment?.id
+        message: 'Pedido marcado como listo para retiro',
+        fulfillment_order_id: fulfillmentOrderId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -233,7 +243,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Error procesando la orden'
+        error: error.message || 'Error procesando pedido de retiro'
       }),
       {
         status: 500,
