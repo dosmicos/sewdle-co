@@ -79,10 +79,42 @@ serve(async (req) => {
         result = await makeAlegraRequest(`/contacts/${data.contactId}`);
         break;
         
-      case 'create-contact':
+      case 'create-contact': {
         // Create a new contact
-        result = await makeAlegraRequest('/contacts', 'POST', data.contact);
+        const contact = data?.contact || {};
+
+        // Normalize identification fields because Alegra validates them strictly
+        const rawType = contact.identificationType || contact.identificationObject?.type || contact.identification?.type || 'CC';
+        let rawNumber = contact.identificationNumber || contact.identificationObject?.number || contact.identification?.number || contact.identification;
+
+        let identificationType = String(rawType || 'CC').trim() || 'CC';
+        let identificationNumber = String(rawNumber || '').trim();
+
+        // Ensure we send a numeric identification number (Alegra commonly expects digits)
+        const digitsOnly = identificationNumber.replace(/\D/g, '');
+        identificationNumber = digitsOnly || identificationNumber;
+        if (!identificationNumber) {
+          identificationNumber = String(Date.now());
+        }
+
+        const normalizedContact = {
+          ...contact,
+          identificationType,
+          identificationNumber,
+          // Alegra expects `identification` as a string in many endpoints
+          identification: identificationNumber,
+          // Some responses use `identificationObject`; include it for compatibility
+          identificationObject: { type: identificationType, number: identificationNumber },
+        };
+
+        // Remove object-shaped identification to avoid confusing the API
+        if (typeof (normalizedContact as any).identification === 'object') {
+          (normalizedContact as any).identification = identificationNumber;
+        }
+
+        result = await makeAlegraRequest('/contacts', 'POST', normalizedContact);
         break;
+      }
         
       case 'get-items':
         // Get all items/products
