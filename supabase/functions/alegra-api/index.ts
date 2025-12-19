@@ -48,23 +48,27 @@ function normalizeAlegraCOAddress(address: unknown): {
   let department = rawDepartment;
 
   // --- Bogotá ---
+  // Según catálogo DIAN: Bogotá D.C. es un distrito capital (no pertenece a Cundinamarca para efectos fiscales)
+  // Los valores exactos del catálogo DIAN de Alegra son:
+  // - city: "Bogotá, D.C." (código DANE: 11001)  
+  // - department: "Bogotá D.C." (código DANE: 11)
   const isBogotaCity = /\bbogot(a|á)\b/i.test(cityLower);
-  const isBogotaDept = /\bbogot(a|á)\b/i.test(deptLower);
+  const isBogotaDept = /\bbogot(a|á)\b/i.test(deptLower) || /\bcundinamarca\b/i.test(deptLower);
   const cityLooksLikeBogotaDC = /(d\s*c|distrito\s*capital)/i.test(cityLower);
   const deptLooksLikeBogotaDC = /(d\s*c|distrito\s*capital)/i.test(deptLower);
 
   // Fix swapped inputs (e.g. city="Bogotá, D.C." department="Bogotá")
   if (cityLooksLikeBogotaDC && isBogotaDept && !deptLooksLikeBogotaDC) {
-    city = "Bogotá";
-    department = "Cundinamarca";
+    city = "Bogotá, D.C.";
+    department = "Bogotá D.C.";
   }
 
   if (isBogotaCity) {
-    city = "Bogotá";
+    city = "Bogotá, D.C.";
   }
 
   if (isBogotaDept) {
-    department = "Cundinamarca";
+    department = "Bogotá D.C.";
   }
 
   const out: { city?: string; department?: string } = {};
