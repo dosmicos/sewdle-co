@@ -333,8 +333,7 @@ const BulkInvoiceCreator = () => {
               country: 'Colombia'
             },
             type: ['client'],
-            kindOfPerson: 'NATURAL_PERSON',
-            regime: 'SIMPLIFIED_REGIME'
+            seller: 1
           }
         }
       }
