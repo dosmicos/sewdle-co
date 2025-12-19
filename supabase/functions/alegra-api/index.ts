@@ -56,7 +56,7 @@ function normalizeAlegraCOAddress(address: unknown): {
   // Fix swapped inputs (e.g. city="Bogotá, D.C." department="Bogotá")
   if (cityLooksLikeBogotaDC && isBogotaDept && !deptLooksLikeBogotaDC) {
     city = "Bogotá";
-    department = "Bogotá, D.C.";
+    department = "Cundinamarca";
   }
 
   if (isBogotaCity) {
@@ -64,8 +64,7 @@ function normalizeAlegraCOAddress(address: unknown): {
   }
 
   if (isBogotaDept) {
-    // Prefer the canonical string that Alegra usually expects/returns
-    department = "Bogotá, D.C.";
+    department = "Cundinamarca";
   }
 
   const out: { city?: string; department?: string } = {};
