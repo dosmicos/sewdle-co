@@ -678,6 +678,10 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                 case 'no_confirmados':
                   newParams.set('exclude_tags', 'confirmado');
                   break;
+                case 'express':
+                  newParams.set('tags', 'express');
+                  newParams.set('exclude_tags', 'empacado');
+                  break;
                 case 'empacados':
                   newParams.set('tags', 'empacado');
                   break;
