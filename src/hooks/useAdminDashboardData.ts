@@ -23,14 +23,6 @@ interface WorkshopRanking {
   compositeScore: number;
 }
 
-interface RecentActivity {
-  id: string;
-  icon: string;
-  color: string;
-  title: string;
-  description: string;
-  time: string;
-}
 
 export const useAdminDashboardData = () => {
   const [stats, setStats] = useState<AdminDashboardStats>({
@@ -41,7 +33,6 @@ export const useAdminDashboardData = () => {
   });
   const [productionData, setProductionData] = useState<ProductionData[]>([]);
   const [workshopRanking, setWorkshopRanking] = useState<WorkshopRanking[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -292,61 +283,12 @@ export const useAdminDashboardData = () => {
     }
   };
 
-  const fetchRecentActivity = async () => {
-    try {
-      const { data: deliveries, error } = await supabase
-        .from('deliveries')
-        .select(`
-          *,
-          orders (order_number),
-          workshops (name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(4);
-
-      if (error) throw error;
-
-      const activities = deliveries?.map(delivery => ({
-        id: delivery.id,
-        icon: 'CheckCircle',
-        color: delivery.status === 'approved' ? 'text-green-600' : 
-              delivery.status === 'pending' ? 'text-orange-600' : 'text-blue-600',
-        title: `Entrega ${delivery.tracking_number}`,
-        description: `${delivery.workshops?.name || 'Taller'} - ${delivery.orders?.order_number || 'Orden'}`,
-        time: getTimeAgo(delivery.created_at)
-      })) || [];
-
-      setRecentActivity(activities);
-
-    } catch (error) {
-      console.error('Error fetching recent activity:', error);
-    }
-  };
-
-  const getTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (days > 0) {
-      return `Hace ${days} día${days > 1 ? 's' : ''}`;
-    } else if (hours > 0) {
-      return `Hace ${hours} hora${hours > 1 ? 's' : ''}`;
-    } else {
-      return 'Hace unos minutos';
-    }
-  };
-
   const loadAllData = async () => {
     setLoading(true);
     await Promise.all([
       fetchDashboardStats(),
       fetchProductionData(),
-      fetchWorkshopRanking(),
-      fetchRecentActivity()
+      fetchWorkshopRanking()
     ]);
     setLoading(false);
   };
@@ -359,7 +301,6 @@ export const useAdminDashboardData = () => {
     stats,
     productionData,
     workshopRanking,
-    recentActivity,
     viewMode,
     setViewMode,
     loading,
