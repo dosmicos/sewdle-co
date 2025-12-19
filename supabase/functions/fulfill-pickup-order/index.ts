@@ -56,15 +56,38 @@ Deno.serve(async (req) => {
     const fulfillmentOrders = fulfillmentOrdersData.fulfillment_orders || [];
     
     console.log(`📋 Fulfillment orders encontradas: ${fulfillmentOrders.length}`);
-    console.log(`📋 Estados:`, fulfillmentOrders.map((fo: any) => ({ 
-      id: fo.id, 
-      status: fo.status,
-      delivery_method: fo.delivery_method?.method_type 
-    })));
+    fulfillmentOrders.forEach((fo: any, index: number) => {
+      console.log(`📋 FO[${index}]:`, { 
+        id: fo.id, 
+        status: fo.status,
+        delivery_method_type: typeof fo.delivery_method,
+        delivery_method_value: JSON.stringify(fo.delivery_method)
+      });
+    });
 
-    // Find the pickup fulfillment order (PICK_UP delivery method)
+    // Helper to detect if it's a pickup order - handles both string and object formats
+    const isPickupDelivery = (deliveryMethod: any): boolean => {
+      if (!deliveryMethod) return false;
+      
+      // String format: "pick-up", "PICK_UP", "local", etc.
+      if (typeof deliveryMethod === 'string') {
+        const methodLower = deliveryMethod.toLowerCase();
+        return methodLower === 'pick-up' || methodLower === 'pick_up' || 
+               methodLower === 'pickup' || methodLower === 'local';
+      }
+      
+      // Object format: { method_type: 'PICK_UP' }
+      if (typeof deliveryMethod === 'object' && deliveryMethod.method_type) {
+        const methodType = deliveryMethod.method_type.toUpperCase();
+        return methodType === 'PICK_UP' || methodType === 'LOCAL';
+      }
+      
+      return false;
+    };
+
+    // Find the pickup fulfillment order
     const pickupFulfillmentOrder = fulfillmentOrders.find(
-      (fo: any) => fo.delivery_method?.method_type === 'PICK_UP' && 
+      (fo: any) => isPickupDelivery(fo.delivery_method) && 
                    (fo.status === 'open' || fo.status === 'in_progress')
     );
 
@@ -74,13 +97,13 @@ Deno.serve(async (req) => {
     );
 
     if (!openFulfillmentOrder) {
-      // Check if already prepared for pickup or fulfilled
+      // Check if already prepared for pickup
       const preparedOrder = fulfillmentOrders.find(
         (fo: any) => fo.status === 'scheduled' || fo.status === 'ready_for_pickup'
       );
       
       if (preparedOrder) {
-        console.log(`ℹ️ El pedido ya está listo para retiro en Shopify`);
+        console.log(`ℹ️ El pedido ya está listo para retiro en Shopify (status: ${preparedOrder.status})`);
         await supabase
           .from('picking_packing_orders')
           .update({
@@ -131,100 +154,78 @@ Deno.serve(async (req) => {
     }
 
     const fulfillmentOrderId = openFulfillmentOrder.id;
-    const isPickupOrder = openFulfillmentOrder.delivery_method?.method_type === 'PICK_UP';
-    console.log(`✅ Fulfillment order: ${fulfillmentOrderId}, Es pickup: ${isPickupOrder}`);
+    const isPickupOrder = isPickupDelivery(openFulfillmentOrder.delivery_method);
+    console.log(`✅ Fulfillment order: ${fulfillmentOrderId}`);
+    console.log(`🏪 Es pickup order: ${isPickupOrder}`);
+    console.log(`📦 delivery_method: ${JSON.stringify(openFulfillmentOrder.delivery_method)}`);
 
-    let shopifySuccess = false;
+    // IMPORTANT: Only proceed if this is a pickup order
+    if (!isPickupOrder) {
+      console.error(`❌ Este pedido no es de retiro en tienda`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Este pedido no es de retiro en tienda. Use la opción de envío regular.'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Step 2: Try GraphQL mutation for pickup orders first
-    if (isPickupOrder) {
-      console.log(`🏪 Intentando marcar como listo para retiro via GraphQL...`);
-      
-      const graphqlQuery = `
-        mutation fulfillmentOrderLineItemsPreparedForPickup($input: FulfillmentOrderLineItemsPreparedForPickupInput!) {
-          fulfillmentOrderLineItemsPreparedForPickup(input: $input) {
-            userErrors {
-              field
-              message
-            }
+    // Step 2: Use GraphQL mutation for pickup orders
+    console.log(`🏪 Marcando como listo para retiro via GraphQL...`);
+    
+    const graphqlQuery = `
+      mutation fulfillmentOrderLineItemsPreparedForPickup($input: FulfillmentOrderLineItemsPreparedForPickupInput!) {
+        fulfillmentOrderLineItemsPreparedForPickup(input: $input) {
+          userErrors {
+            field
+            message
           }
         }
-      `;
-
-      const variables = {
-        input: {
-          lineItemsByFulfillmentOrder: [
-            {
-              fulfillmentOrderId: `gid://shopify/FulfillmentOrder/${fulfillmentOrderId}`
-            }
-          ]
-        }
-      };
-
-      const graphqlRes = await fetch(
-        `https://${shopifyDomain}/admin/api/2024-01/graphql.json`,
-        {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query: graphqlQuery, variables })
-        }
-      );
-
-      if (graphqlRes.ok) {
-        const graphqlData = await graphqlRes.json();
-        console.log(`📊 Respuesta GraphQL:`, JSON.stringify(graphqlData));
-
-        const userErrors = graphqlData.data?.fulfillmentOrderLineItemsPreparedForPickup?.userErrors || [];
-        if (userErrors.length === 0 && !graphqlData.errors) {
-          console.log(`✅ Pedido marcado como listo para retiro via GraphQL`);
-          shopifySuccess = true;
-        } else {
-          console.log(`⚠️ GraphQL no exitoso, intentando fulfillment directo...`);
-        }
       }
+    `;
+
+    const variables = {
+      input: {
+        lineItemsByFulfillmentOrder: [
+          {
+            fulfillmentOrderId: `gid://shopify/FulfillmentOrder/${fulfillmentOrderId}`
+          }
+        ]
+      }
+    };
+
+    const graphqlRes = await fetch(
+      `https://${shopifyDomain}/admin/api/2024-01/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopifyToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: graphqlQuery, variables })
+      }
+    );
+
+    if (!graphqlRes.ok) {
+      const errorText = await graphqlRes.text();
+      console.error(`❌ Error en GraphQL:`, errorText);
+      throw new Error(`Error en GraphQL: ${graphqlRes.status}`);
     }
 
-    // Step 3: If GraphQL didn't work or not a pickup order, create fulfillment directly
-    if (!shopifySuccess) {
-      console.log(`📬 Creando fulfillment directo...`);
-      
-      const fulfillmentPayload = {
-        fulfillment: {
-          line_items_by_fulfillment_order: [
-            {
-              fulfillment_order_id: fulfillmentOrderId
-            }
-          ],
-          notify_customer: true,
-          message: "Tu pedido está listo para recoger. ¡Te esperamos!"
-        }
-      };
+    const graphqlData = await graphqlRes.json();
+    console.log(`📊 Respuesta GraphQL:`, JSON.stringify(graphqlData));
 
-      const fulfillmentRes = await fetch(
-        `https://${shopifyDomain}/admin/api/2024-01/fulfillments.json`,
-        {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(fulfillmentPayload)
-        }
-      );
-
-      if (!fulfillmentRes.ok) {
-        const errorText = await fulfillmentRes.text();
-        console.error(`❌ Error creando fulfillment:`, errorText);
-        throw new Error(`Error creando fulfillment: ${fulfillmentRes.status}`);
-      }
-
-      const fulfillmentData = await fulfillmentRes.json();
-      console.log(`✅ Fulfillment creado:`, fulfillmentData.fulfillment?.id);
-      shopifySuccess = true;
+    const userErrors = graphqlData.data?.fulfillmentOrderLineItemsPreparedForPickup?.userErrors || [];
+    
+    if (userErrors.length > 0 || graphqlData.errors) {
+      const errorMessages = userErrors.map((e: any) => e.message).join(', ') || 
+                           graphqlData.errors?.map((e: any) => e.message).join(', ');
+      console.error(`❌ Errores de Shopify:`, JSON.stringify(userErrors.length > 0 ? userErrors : graphqlData.errors));
+      throw new Error(`Errores de Shopify: ${errorMessages}`);
     }
+
+    console.log(`✅ Pedido marcado como listo para retiro via GraphQL`);
 
     // Step 4: Add LISTO_PARA_RETIRO tag
     console.log(`🏷️ Agregando tag LISTO_PARA_RETIRO...`);
@@ -273,14 +274,13 @@ Deno.serve(async (req) => {
       console.warn(`⚠️ Error agregando tag:`, tagError);
     }
 
-    // Step 5: Update local database - use 'shipped' if fulfillment was created, 'awaiting_pickup' if just prepared
-    const newStatus = shopifySuccess && !isPickupOrder ? 'shipped' : 'awaiting_pickup';
-    console.log(`💾 Actualizando estado local a '${newStatus}'...`);
+    // Step 4: Update local database to awaiting_pickup
+    console.log(`💾 Actualizando estado local a 'awaiting_pickup'...`);
     
     const { error: updateError } = await supabase
       .from('picking_packing_orders')
       .update({
-        operational_status: newStatus,
+        operational_status: 'awaiting_pickup',
         updated_at: new Date().toISOString()
       })
       .eq('shopify_order_id', shopify_order_id)
@@ -296,9 +296,9 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: isPickupOrder ? 'Pedido marcado como listo para retiro' : 'Pedido procesado exitosamente',
+        message: 'Pedido marcado como listo para retiro',
         fulfillment_order_id: fulfillmentOrderId,
-        new_status: newStatus
+        new_status: 'awaiting_pickup'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
