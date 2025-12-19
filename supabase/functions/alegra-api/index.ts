@@ -97,10 +97,41 @@ serve(async (req) => {
           identificationNumber = String(Date.now());
         }
 
+        const normalizeKindOfPerson = (value: unknown, idType: string) => {
+          const v = String(value ?? '').trim().toUpperCase();
+          if (v === 'PERSON_ENTITY' || v === 'LEGAL_ENTITY') return v;
+
+          // Common aliases we may receive from UI or other systems
+          if (
+            v === 'NATURAL_PERSON' ||
+            v === 'PERSONA_NATURAL' ||
+            v === 'NATURAL' ||
+            v === 'PERSON'
+          ) {
+            return 'PERSON_ENTITY';
+          }
+
+          if (
+            v === 'JURIDICA' ||
+            v === 'PERSONA_JURIDICA' ||
+            v === 'LEGAL' ||
+            v === 'COMPANY'
+          ) {
+            return 'LEGAL_ENTITY';
+          }
+
+          // Sensible default based on identification type
+          const id = String(idType || '').toUpperCase();
+          if (id === 'NIT' || id === 'RUC' || id === 'RUT') return 'LEGAL_ENTITY';
+          return 'PERSON_ENTITY';
+        };
+
         const normalizedContact = {
           ...contact,
           identificationType,
           identificationNumber,
+          // Required by Alegra (tipo de persona)
+          kindOfPerson: normalizeKindOfPerson(contact.kindOfPerson, identificationType),
           // Alegra expects `identification` as a string in many endpoints
           identification: identificationNumber,
           // Some responses use `identificationObject`; include it for compatibility
