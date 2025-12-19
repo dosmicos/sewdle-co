@@ -102,6 +102,7 @@ serve(async (req) => {
         }
 
         const current = await makeAlegraRequest(`/contacts/${contactId}`);
+        console.log('Current contact data:', JSON.stringify(current, null, 2));
 
         const allowedKeys = [
           'name',
@@ -122,36 +123,65 @@ serve(async (req) => {
           if (current?.[key] !== undefined) base[key] = current[key];
         }
 
+        // Merge address with proper formatting for Alegra Colombia
+        const currentAddress = typeof current?.address === 'object' ? current.address : {};
         const mergedAddress = {
-          ...(typeof base.address === 'object' && base.address ? base.address : {}),
+          ...currentAddress,
           ...(patch.address || {}),
         };
 
         // Ensure identificationType is always present (required by Alegra Colombia)
-        let identificationType = base.identificationType || 
-                                  current?.identificationObject?.type || 
-                                  patch.identificationType || 
-                                  'CC';
-        let identificationNumber = base.identificationNumber || 
-                                    base.identification || 
-                                    current?.identificationObject?.number ||
-                                    patch.identificationNumber ||
-                                    String(Date.now());
+        let identificationType = 
+          patch.identificationType ||
+          base.identificationType || 
+          current?.identificationObject?.type || 
+          'CC';
+        
+        let identificationNumber = 
+          patch.identificationNumber ||
+          base.identificationNumber || 
+          (typeof base.identification === 'string' ? base.identification : null) ||
+          current?.identificationObject?.number ||
+          String(Date.now());
 
-        // Ensure kindOfPerson is present
-        let kindOfPerson = base.kindOfPerson || current?.kindOfPerson || 'PERSON_ENTITY';
-        const idType = String(identificationType).toUpperCase();
-        if (idType === 'NIT' || idType === 'RUC' || idType === 'RUT') {
-          kindOfPerson = 'LEGAL_ENTITY';
+        // Ensure kindOfPerson is present and valid
+        const normalizeKindOfPerson = (value: unknown, idType: string) => {
+          const v = String(value ?? '').trim().toUpperCase();
+          if (v === 'PERSON_ENTITY' || v === 'LEGAL_ENTITY') return v;
+          if (v === 'NATURAL_PERSON' || v === 'PERSONA_NATURAL' || v === 'NATURAL' || v === 'PERSON') return 'PERSON_ENTITY';
+          if (v === 'JURIDICA' || v === 'PERSONA_JURIDICA' || v === 'LEGAL' || v === 'COMPANY') return 'LEGAL_ENTITY';
+          const id = String(idType || '').toUpperCase();
+          if (id === 'NIT' || id === 'RUC' || id === 'RUT') return 'LEGAL_ENTITY';
+          return 'PERSON_ENTITY';
+        };
+
+        const kindOfPerson = normalizeKindOfPerson(
+          patch.kindOfPerson || base.kindOfPerson || current?.kindOfPerson,
+          String(identificationType)
+        );
+
+        // Ensure nameObject is always properly structured (required by Alegra Colombia)
+        let nameObject = current?.nameObject || base.nameObject || patch.nameObject;
+        const fullName = String(patch.name || base.name || current?.name || '').trim();
+        
+        if (!nameObject || !nameObject.firstName || !nameObject.lastName) {
+          const nameParts = fullName.split(' ').filter(Boolean);
+          nameObject = {
+            firstName: nameParts[0] || 'Cliente',
+            lastName: nameParts.slice(1).join(' ') || 'Sin Apellido',
+          };
         }
 
         const updated = {
           ...base,
           ...patch,
+          name: fullName || 'Cliente',
+          nameObject,
           address: mergedAddress,
           identificationType: String(identificationType),
           identificationNumber: String(identificationNumber),
           identification: String(identificationNumber),
+          identificationObject: { type: String(identificationType), number: String(identificationNumber) },
           kindOfPerson,
         };
 
