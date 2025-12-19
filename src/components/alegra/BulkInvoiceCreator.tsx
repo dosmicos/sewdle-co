@@ -258,9 +258,14 @@ const BulkInvoiceCreator = () => {
     if (searchResult?.success && searchResult.data) {
       // 1. First search by identification number (most reliable)
       if (identificationNumber) {
-        const contactByIdentification = searchResult.data.find((c: any) => 
-          c.identificationNumber === identificationNumber
-        );
+        const contactByIdentification = searchResult.data.find((c: any) => {
+          // Check multiple possible field names for identification
+          const contactId = c.identificationNumber || 
+                           c.identification || 
+                           c.identificationObject?.number || 
+                           '';
+          return String(contactId).replace(/\D/g, '') === identificationNumber;
+        });
         if (contactByIdentification) {
           console.log('Contact found by identification:', contactByIdentification.name);
           return { id: contactByIdentification.id, isNew: false, name: contactByIdentification.name };
