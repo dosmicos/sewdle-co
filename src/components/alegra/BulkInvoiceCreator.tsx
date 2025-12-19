@@ -332,7 +332,9 @@ const BulkInvoiceCreator = () => {
               department: address.province || address.province_code || 'Bogotá D.C.',
               country: 'Colombia'
             },
-            type: ['client']
+            type: ['client'],
+            kindOfPerson: 'PERSON_ENTITY',
+            regime: 'SIMPLIFIED_REGIME'
           }
         }
       }
