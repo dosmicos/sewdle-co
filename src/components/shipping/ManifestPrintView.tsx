@@ -147,7 +147,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
           <div className="grid grid-cols-2 text-[9px]">
             {/* Left: Transportadora signature */}
             <div className="p-2 border-r border-black">
-              <p className="font-bold mb-4">Transportadora:</p>
+              <p className="font-bold mb-4">Transportadora: {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}</p>
               <div className="border-t border-black pt-1 mt-12"></div>
             </div>
             
