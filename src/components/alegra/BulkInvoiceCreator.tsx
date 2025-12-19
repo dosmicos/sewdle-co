@@ -316,8 +316,14 @@ const BulkInvoiceCreator = () => {
         data: {
           contact: {
             name: customerName,
-            identificationType: 'CC', // Cédula de Ciudadanía - tipo por defecto
-            identificationNumber: finalIdentificationNumber,
+            // Alegra requiere el objeto identification para crear contactos
+            identification: {
+              type: 'CC',
+              number: String(finalIdentificationNumber).slice(0, 20),
+            },
+            // Mantener también los campos legacy por compatibilidad
+            identificationType: 'CC',
+            identificationNumber: String(finalIdentificationNumber).slice(0, 20),
             email: customerEmail || undefined,
             phonePrimary: customerPhone,
             address: {
