@@ -328,7 +328,9 @@ const BulkInvoiceCreator = () => {
             phonePrimary: customerPhone,
             address: {
               address: address.address1 ? `${address.address1} ${address.address2 || ''}`.trim() : '',
-              city: address.city || ''
+              city: address.city || '',
+              department: address.province || address.province_code || 'Bogotá D.C.',
+              country: 'Colombia'
             },
             type: ['client']
           }
