@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.confirm-pickup-delivery]
 verify_jwt = false
+
+[functions.alegra-api]
+verify_jwt = false
