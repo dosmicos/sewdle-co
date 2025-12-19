@@ -44,7 +44,10 @@ async function makeAlegraRequest(endpoint: string, method: string = 'GET', body?
   
   if (!response.ok) {
     console.error('Alegra API error:', data);
-    throw new Error(data.message || `Error ${response.status} from Alegra API`);
+    const err = new Error(data.message || `Error ${response.status} from Alegra API`);
+    (err as any).alegra = data;
+    (err as any).status = response.status;
+    throw err;
   }
   
   return data;
@@ -154,7 +157,19 @@ serve(async (req) => {
           (normalizedContact as any).identification = identificationNumber;
         }
 
-        result = await makeAlegraRequest('/contacts', 'POST', normalizedContact);
+        try {
+          result = await makeAlegraRequest('/contacts', 'POST', normalizedContact);
+        } catch (e) {
+          const alegra = (e as any)?.alegra;
+
+          // If contact already exists, Alegra returns code 2006 with contactId.
+          if (alegra?.code === 2006 && alegra?.contactId) {
+            console.log('Contact already exists, fetching existing contact:', alegra.contactId);
+            result = await makeAlegraRequest(`/contacts/${alegra.contactId}`);
+          } else {
+            throw e;
+          }
+        }
         break;
       }
         
