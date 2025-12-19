@@ -332,8 +332,7 @@ const BulkInvoiceCreator = () => {
               department: address.province || address.province_code || 'Bogotá D.C.',
               country: 'Colombia'
             },
-            type: ['client'],
-            seller: 1
+            type: ['client']
           }
         }
       }
