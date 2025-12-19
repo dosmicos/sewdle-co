@@ -315,6 +315,41 @@ const BulkInvoiceCreator = () => {
     
     console.log('Creating new contact:', customerName, 'with identification:', finalIdentificationNumber);
     
+    // Mapeo de ciudades/departamentos de Shopify a códigos DANE para Alegra
+    const normalizeForAlegra = (city: string, province: string) => {
+      const cityLower = (city || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const provinceLower = (province || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      // Bogotá D.C.
+      if (cityLower.includes('bogota') || provinceLower.includes('bogota') || provinceLower.includes('cundinamarca')) {
+        return { city: 'Bogotá, D.C.', department: 'Bogotá' };
+      }
+      // Medellín
+      if (cityLower.includes('medellin') || provinceLower.includes('antioquia')) {
+        return { city: 'Medellín', department: 'Antioquia' };
+      }
+      // Cali
+      if (cityLower.includes('cali') || provinceLower.includes('valle')) {
+        return { city: 'Cali', department: 'Valle del Cauca' };
+      }
+      // Barranquilla
+      if (cityLower.includes('barranquilla') || provinceLower.includes('atlantico')) {
+        return { city: 'Barranquilla', department: 'Atlántico' };
+      }
+      // Cartagena
+      if (cityLower.includes('cartagena') || provinceLower.includes('bolivar')) {
+        return { city: 'Cartagena de Indias', department: 'Bolívar' };
+      }
+      // Bucaramanga
+      if (cityLower.includes('bucaramanga') || provinceLower.includes('santander')) {
+        return { city: 'Bucaramanga', department: 'Santander' };
+      }
+      // Default: Bogotá (most common in Colombia)
+      return { city: 'Bogotá, D.C.', department: 'Bogotá' };
+    };
+    
+    const alegraAddress = normalizeForAlegra(address.city, address.province || address.province_code);
+    
     const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
       body: {
         action: 'create-contact',
@@ -333,8 +368,8 @@ const BulkInvoiceCreator = () => {
             phonePrimary: customerPhone,
             address: {
               address: address.address1 ? `${address.address1} ${address.address2 || ''}`.trim() : '',
-              city: address.city || '',
-              department: address.province || address.province_code || 'Bogotá D.C.',
+              city: alegraAddress.city,
+              department: alegraAddress.department,
               country: 'Colombia'
             },
             type: ['client']
