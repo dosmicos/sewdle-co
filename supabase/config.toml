@@ -59,3 +59,9 @@ verify_jwt = false
 
 [functions.proxy-label]
 verify_jwt = false
+
+[functions.fulfill-pickup-order]
+verify_jwt = false
+
+[functions.confirm-pickup-delivery]
+verify_jwt = false

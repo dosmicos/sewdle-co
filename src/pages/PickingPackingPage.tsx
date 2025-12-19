@@ -51,6 +51,7 @@ const statusColors = {
   picking: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
   packing: 'bg-purple-100 text-purple-800 hover:bg-purple-100',
   ready_to_ship: 'bg-green-100 text-green-800 hover:bg-green-100',
+  awaiting_pickup: 'bg-orange-100 text-orange-800 hover:bg-orange-100',
   shipped: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
 };
 
@@ -59,6 +60,7 @@ const statusLabels = {
   picking: 'Picking',
   packing: 'Empacando',
   ready_to_ship: 'Empacado',
+  awaiting_pickup: 'Esperando Retiro',
   shipped: 'Enviado',
 };
 
