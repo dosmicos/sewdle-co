@@ -139,25 +139,16 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
         {/* Footer with signature fields */}
         <div className="mt-3 border-2 border-black">
           {/* Totals row */}
-          <div className="flex border-b border-black text-[10px]">
-            <div className="flex-1 p-2 border-r border-black">
-              <p><strong>Peso Total:</strong> ______________ kg</p>
-            </div>
-            <div className="flex-1 p-2">
-              <p><strong>Total Paquetes:</strong> {items.length}</p>
-            </div>
+          <div className="p-2 border-b border-black text-[10px]">
+            <p><strong>Total Paquetes:</strong> {items.length}</p>
           </div>
           
           {/* Signatures section */}
           <div className="grid grid-cols-2 text-[9px]">
-            {/* Left: Client signature */}
+            {/* Left: Transportadora signature */}
             <div className="p-2 border-r border-black">
-              <p className="font-bold mb-6">Cliente:</p>
-              <div className="border-t border-black pt-1 mt-8">
-                <p>Nombre: _________________________</p>
-                <p className="mt-1">Firma: __________________________</p>
-                <p className="mt-1">Fecha: __________________________</p>
-              </div>
+              <p className="font-bold mb-4">Transportadora:</p>
+              <div className="border-t border-black pt-1 mt-12"></div>
             </div>
             
             {/* Right: Driver/vehicle info */}
@@ -173,11 +164,6 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
               <div>
                 <p><strong>Cédula conductor/destino:</strong></p>
                 <p className="border-b border-black mt-1 pb-1">_____________________________</p>
-              </div>
-              <div className="pt-2">
-                <p>Nombre: _________________________</p>
-                <p className="mt-1">Firma: __________________________</p>
-                <p className="mt-1">Fecha: __________________________</p>
               </div>
             </div>
           </div>
