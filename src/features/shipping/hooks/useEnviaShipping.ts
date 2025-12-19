@@ -244,7 +244,13 @@ export const useEnviaShipping = () => {
   }, []);
 
   // Cancel shipping label
-  const cancelLabel = useCallback(async (labelId: string): Promise<{ success: boolean; error?: string; balanceReturned?: boolean }> => {
+  const cancelLabel = useCallback(async (labelId: string): Promise<{ 
+    success: boolean; 
+    error?: string; 
+    balanceReturned?: boolean;
+    shopifyFulfillmentCancelled?: boolean;
+    shopifyFulfillmentError?: string | null;
+  }> => {
     setIsCancellingLabel(true);
     try {
       console.log('🚫 Cancelling shipping label:', labelId);
@@ -263,7 +269,7 @@ export const useEnviaShipping = () => {
         return { success: false, error: data.error };
       }
 
-      console.log('✅ Label cancelled successfully. Balance returned:', data.balanceReturned);
+      console.log('✅ Label cancelled successfully. Balance returned:', data.balanceReturned, 'Shopify fulfillment cancelled:', data.shopifyFulfillmentCancelled);
       
       // Move the cancelled label to history
       if (existingLabel) {
@@ -274,7 +280,9 @@ export const useEnviaShipping = () => {
       
       return { 
         success: true, 
-        balanceReturned: data.balanceReturned 
+        balanceReturned: data.balanceReturned,
+        shopifyFulfillmentCancelled: data.shopifyFulfillmentCancelled,
+        shopifyFulfillmentError: data.shopifyFulfillmentError
       };
     } catch (error: any) {
       console.error('Error in cancelLabel:', error);

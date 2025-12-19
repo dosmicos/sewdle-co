@@ -104,6 +104,9 @@ serve(async (req) => {
     // Cancel Shopify fulfillment if exists
     const shopifyOrderId = label.shopify_order_id;
     const organizationId = label.organization_id;
+    let shopifyFulfillmentCancelled = true;
+    let shopifyFulfillmentError: string | null = null;
+    let pendingFulfillmentIds: string[] = [];
     
     if (shopifyOrderId && organizationId) {
       console.log(`Cancelling Shopify fulfillment for order ${shopifyOrderId}`);
@@ -163,12 +166,35 @@ serve(async (req) => {
                   } else {
                     const errorText = await cancelFulfillmentResponse.text();
                     console.error(`Failed to cancel fulfillment ${fulfillment.id}:`, errorText);
+                    shopifyFulfillmentCancelled = false;
+                    shopifyFulfillmentError = `Fulfillment ${fulfillment.id}: ${cancelFulfillmentResponse.status} - ${errorText}`;
+                    pendingFulfillmentIds.push(String(fulfillment.id));
                   }
                 }
               }
+            } else {
+              const errorText = await fulfillmentsResponse.text();
+              console.error(`Failed to get fulfillments:`, errorText);
+              shopifyFulfillmentCancelled = false;
+              shopifyFulfillmentError = `Error obteniendo fulfillments: ${fulfillmentsResponse.status}`;
             }
           }
         }
+
+        // Update shipping_labels with Shopify cancellation status
+        await supabase
+          .from('shipping_labels')
+          .update({
+            raw_response: {
+              ...((label.raw_response as object) || {}),
+              cancel_response: cancelResult,
+              cancelled_at: new Date().toISOString(),
+              shopify_fulfillment_cancelled: shopifyFulfillmentCancelled,
+              shopify_cancellation_error: shopifyFulfillmentError,
+              pending_fulfillment_ids: pendingFulfillmentIds
+            }
+          })
+          .eq('id', label_id);
 
         // Get current order state to determine correct status to restore
         const { data: currentOrder } = await supabase
@@ -192,25 +218,35 @@ serve(async (req) => {
           .map((t: string) => t.trim().toUpperCase())
           .includes('EMPACADO') || false;
 
-        // Determine correct status based on both packed_at AND EMPACADO tag:
-        // - If packed_at exists AND EMPACADO tag exists → 'ready_to_ship'
-        // - Otherwise → 'pending' (needs to be repacked or never was)
-        const newStatus = (currentOrder?.packed_at && hasEmpacadoTag) ? 'ready_to_ship' : 'pending';
-        
-        console.log(`Restoring order ${shopifyOrderId} to status: ${newStatus} (packed_at: ${currentOrder?.packed_at}, hasEmpacadoTag: ${hasEmpacadoTag})`);
+        // Determine correct status based on fulfillment cancellation success:
+        // - If Shopify fulfillment was NOT cancelled, keep as shipped (Shopify is source of truth)
+        // - If cancelled successfully: restore based on packed_at and EMPACADO tag
+        let newStatus: string;
+        if (!shopifyFulfillmentCancelled) {
+          // Keep shipped because Shopify still shows fulfilled
+          newStatus = 'shipped';
+          console.log(`Keeping order ${shopifyOrderId} as shipped because Shopify fulfillment cancellation failed`);
+        } else {
+          newStatus = (currentOrder?.packed_at && hasEmpacadoTag) ? 'ready_to_ship' : 'pending';
+          console.log(`Restoring order ${shopifyOrderId} to status: ${newStatus} (packed_at: ${currentOrder?.packed_at}, hasEmpacadoTag: ${hasEmpacadoTag})`);
+        }
 
         // Build update data - if reverting to pending, also clear packed info
         const updateData: Record<string, unknown> = {
           operational_status: newStatus,
-          shipped_at: null,
-          shipped_by: null,
           updated_at: new Date().toISOString()
         };
 
-        // If reverting to pending, clear packed info too
-        if (newStatus === 'pending') {
-          updateData.packed_at = null;
-          updateData.packed_by = null;
+        // Only clear shipped info if Shopify fulfillment was successfully cancelled
+        if (shopifyFulfillmentCancelled) {
+          updateData.shipped_at = null;
+          updateData.shipped_by = null;
+          
+          // If reverting to pending, clear packed info too
+          if (newStatus === 'pending') {
+            updateData.packed_at = null;
+            updateData.packed_by = null;
+          }
         }
 
         // Update local database status
@@ -220,33 +256,41 @@ serve(async (req) => {
           .eq('shopify_order_id', shopifyOrderId)
           .eq('organization_id', organizationId);
 
-        // Update shopify_orders fulfillment status
-        await supabase
-          .from('shopify_orders')
-          .update({
-            fulfillment_status: null // unfulfilled
-          })
-          .eq('shopify_order_id', shopifyOrderId)
-          .eq('organization_id', organizationId);
+        // Update shopify_orders fulfillment status only if Shopify was successfully updated
+        if (shopifyFulfillmentCancelled) {
+          await supabase
+            .from('shopify_orders')
+            .update({
+              fulfillment_status: null // unfulfilled
+            })
+            .eq('shopify_order_id', shopifyOrderId)
+            .eq('organization_id', organizationId);
+        }
 
         console.log(`Local database status updated to ${newStatus}`);
 
       } catch (shopifyError) {
         console.error('Error cancelling Shopify fulfillment:', shopifyError);
-        // Don't fail the whole operation if Shopify cancellation fails
+        shopifyFulfillmentCancelled = false;
+        shopifyFulfillmentError = shopifyError instanceof Error ? shopifyError.message : 'Unknown error';
       }
     }
 
     // Extract balance info if available
     const balanceReturned = cancelResult.data?.[0]?.balanceReturned || false;
 
-    console.log(`Label ${label_id} cancelled successfully. Balance returned: ${balanceReturned}`);
+    console.log(`Label ${label_id} cancelled successfully. Balance returned: ${balanceReturned}. Shopify fulfillment cancelled: ${shopifyFulfillmentCancelled}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Label cancelled successfully',
+        message: shopifyFulfillmentCancelled 
+          ? 'Label cancelled successfully' 
+          : 'Label cancelled but Shopify fulfillment requires manual cancellation',
         balanceReturned,
+        shopifyFulfillmentCancelled,
+        shopifyFulfillmentError,
+        pendingFulfillmentIds,
         data: cancelResult
       }),
       { 
