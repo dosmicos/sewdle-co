@@ -4,7 +4,7 @@ import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout'
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks, ClipboardList } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
@@ -16,6 +16,8 @@ import { PickingStatsBar } from '@/components/picking/PickingStatsBar';
 import { ParaEmpacarItemsModal } from '@/components/picking/ParaEmpacarItemsModal';
 import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
 import { useShopifyTags } from '@/hooks/useShopifyTags';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ShippingManifestManager } from '@/components/shipping/ShippingManifestManager';
 import {
   Popover,
   PopoverContent,
@@ -123,7 +125,8 @@ const PickingPackingPage = () => {
   const [commandValue, setCommandValue] = useState('');
   const [lastWebhookUpdate, setLastWebhookUpdate] = useState<Date | null>(null);
   const [hasPendingUpdates, setHasPendingUpdates] = useState(false);
-  const [showItemsModal, setShowItemsModal] = useState(false);
+const [showItemsModal, setShowItemsModal] = useState(false);
+  const [showManifestsPanel, setShowManifestsPanel] = useState(false);
 
   // Read filters from URL - must be declared before handleRefreshList
   const searchTerm = searchParams.get('search') || '';
@@ -638,6 +641,16 @@ const PickingPackingPage = () => {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowManifestsPanel(true)}
+                className="gap-1.5 px-2 md:px-3"
+                title="Gestionar manifiestos de envío"
+              >
+                <ClipboardList className="w-4 h-4" />
+                <span className="hidden sm:inline">Manifiestos</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleRefreshList}
                 disabled={loading}
                 title="Refrescar lista de pedidos"
@@ -1142,6 +1155,21 @@ const PickingPackingPage = () => {
           setShowItemsModal(false);
         }}
       />
+
+      {/* Manifiestos Sheet */}
+      <Sheet open={showManifestsPanel} onOpenChange={setShowManifestsPanel}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5" />
+              Manifiestos de Envío
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-6">
+            <ShippingManifestManager />
+          </div>
+        </SheetContent>
+      </Sheet>
 
     </PickingPackingLayout>
   );
