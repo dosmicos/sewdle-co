@@ -176,116 +176,137 @@ const AdminDashboard = () => {
         </Card>
       </div>
 
-      {/* Shopify Order Stats */}
-      <ShopifyOrderStatsCard />
+      {/* Main Stats Tabs */}
+      <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+        <Tabs defaultValue="produccion" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="produccion" className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Progreso de la Producción
+            </TabsTrigger>
+            <TabsTrigger value="ranking" className="flex items-center gap-2">
+              <Award className="w-4 h-4" />
+              Ranking de Talleres
+            </TabsTrigger>
+            <TabsTrigger value="shopify" className="flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Estadísticas Shopify
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-                Progreso de la Producción
-              </h3>
-              <Tabs value={viewMode} onValueChange={(value: 'weekly' | 'monthly') => setViewMode(value)}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="weekly">Semanal</TabsTrigger>
-                  <TabsTrigger value="monthly">Mensual</TabsTrigger>
-                </TabsList>
-              </Tabs>
+          {/* Tab: Progreso de la Producción */}
+          <TabsContent value="produccion">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+                  Progreso de la Producción
+                </h3>
+                <Tabs value={viewMode} onValueChange={(value: 'weekly' | 'monthly') => setViewMode(value)}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="weekly">Semanal</TabsTrigger>
+                    <TabsTrigger value="monthly">Mensual</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={productionData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="period" 
+                      stroke="#6b7280"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#6b7280' }}
+                    />
+                    <YAxis 
+                      stroke="#6b7280"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#6b7280' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        color: 'rgb(29 29 31)'
+                      }}
+                      formatter={(value, name) => [`${value} unidades`, name]}
+                      labelStyle={{ color: 'rgb(99 99 102)' }}
+                    />
+                    <Legend />
+                    <Bar 
+                      dataKey="delivered" 
+                      name="Entregadas"
+                      fill="#FF9500" 
+                      radius={[4, 4, 0, 0]} 
+                    />
+                    <Bar 
+                      dataKey="approved" 
+                      name="Aprobadas"
+                      fill="#34C759" 
+                      radius={[4, 4, 0, 0]} 
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={productionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="period" 
-                    stroke="#6b7280"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <YAxis 
-                    stroke="#6b7280"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                      color: 'rgb(29 29 31)'
-                    }}
-                    formatter={(value, name) => [`${value} unidades`, name]}
-                    labelStyle={{ color: 'rgb(99 99 102)' }}
-                  />
-                  <Legend />
-                  <Bar 
-                    dataKey="delivered" 
-                    name="Entregadas"
-                    fill="#FF9500" 
-                    radius={[4, 4, 0, 0]} 
-                  />
-                  <Bar 
-                    dataKey="approved" 
-                    name="Aprobadas"
-                    fill="#34C759" 
-                    radius={[4, 4, 0, 0]} 
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </Card>
+          </TabsContent>
 
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Award className="w-5 h-5 text-gold-600" />
-              <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
-                Ranking de Talleres
-              </h3>
-            </div>
-            <p className="text-sm text-gray-600">Última semana - Producción y Calidad</p>
-            <div className="space-y-3">
-              {workshopRanking.length > 0 ? workshopRanking.map((workshop, index) => (
-                <div key={workshop.workshopName} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-white rounded-full border-2 border-gray-200">
-                      <span className="text-sm font-bold text-gray-600">#{index + 1}</span>
+          {/* Tab: Ranking de Talleres */}
+          <TabsContent value="ranking">
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Award className="w-5 h-5 text-amber-500" />
+                <h3 className="text-lg font-semibold" style={{ color: 'rgb(29 29 31)' }}>
+                  Ranking de Talleres
+                </h3>
+              </div>
+              <p className="text-sm text-gray-600">Última semana - Producción y Calidad</p>
+              <div className="space-y-3">
+                {workshopRanking.length > 0 ? workshopRanking.map((workshop, index) => (
+                  <div key={workshop.workshopName} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center justify-center w-8 h-8 bg-white rounded-full border-2 border-gray-200">
+                        <span className="text-sm font-bold text-gray-600">#{index + 1}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{workshop.workshopName}</p>
+                        <p className="text-xs text-gray-600">
+                          {workshop.approvedUnits} aprobadas / {workshop.deliveredUnits} entregadas
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{workshop.workshopName}</p>
-                      <p className="text-xs text-gray-600">
-                        {workshop.approvedUnits} aprobadas / {workshop.deliveredUnits} entregadas
-                      </p>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary" className="text-xs">
+                        Calidad: {workshop.qualityScore}%
+                      </Badge>
+                      <div className="flex items-center space-x-1">
+                        <Target className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-bold text-blue-600">{workshop.compositeScore}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary" className="text-xs">
-                      Calidad: {workshop.qualityScore}%
-                    </Badge>
-                    <div className="flex items-center space-x-1">
-                      <Target className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-bold text-blue-600">{workshop.compositeScore}</span>
-                    </div>
+                )) : (
+                  <div className="text-center py-8">
+                    <Award className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">No hay datos de talleres esta semana</p>
                   </div>
-                </div>
-              )) : (
-                <div className="text-center py-8">
-                  <Award className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">No hay datos de talleres esta semana</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </TabsContent>
+
+          {/* Tab: Estadísticas Shopify */}
+          <TabsContent value="shopify">
+            <ShopifyOrderStatsCard embedded />
+          </TabsContent>
+        </Tabs>
+      </Card>
 
       {/* Recent Activity */}
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
