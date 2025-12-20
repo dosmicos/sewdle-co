@@ -52,6 +52,7 @@ export interface EnviaShippingButtonRef {
   isReady: boolean;
   isCreatingLabel: boolean;
   hasExistingLabel: boolean;
+  selectedCarrierName: string | null;
 }
 
 // Helper to get proxied label URL
@@ -299,6 +300,21 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   };
 
+  // Helper to get the selected carrier display name
+  const getSelectedCarrierDisplayName = (): string | null => {
+    if (selectedCarrier && selectedCarrier !== 'auto') {
+      // If quotes are available and selectedCarrier is in format "carrier:service:type"
+      if (quotes.length > 0 && selectedCarrier.includes(':')) {
+        const [carrierCode] = selectedCarrier.split(':');
+        return CARRIER_NAMES[carrierCode as CarrierCode] || carrierCode;
+      }
+      // Direct carrier code
+      return CARRIER_NAMES[selectedCarrier as CarrierCode] || selectedCarrier;
+    }
+    // Auto or no selection - use recommended carrier
+    return CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora';
+  };
+
   // Expose methods via apiRef for external control
   useEffect(() => {
     if (!apiRef) return;
@@ -314,12 +330,13 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       isReady: !!isReady,
       isCreatingLabel,
       hasExistingLabel: !!isActiveLabel,
+      selectedCarrierName: getSelectedCarrierDisplayName(),
     };
 
     return () => {
       apiRef.current = null;
     };
-  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel]);
+  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel, selectedCarrier, quotes, recommendedCarrier]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {

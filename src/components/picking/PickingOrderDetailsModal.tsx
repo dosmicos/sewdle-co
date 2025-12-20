@@ -75,6 +75,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const shippingButtonRef = useRef<EnviaShippingButtonRef>(null);
   const [isCreatingShippingLabel, setIsCreatingShippingLabel] = useState(false);
   const [isProcessingPickup, setIsProcessingPickup] = useState(false);
+  const [selectedCarrierName, setSelectedCarrierName] = useState<string | null>(null);
   
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
@@ -333,6 +334,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       setShowScrollHint(true);
     }
   }, [lineItems.length]);
+
+  // Update selected carrier name from shipping button ref
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (shippingButtonRef.current?.selectedCarrierName) {
+        setSelectedCarrierName(shippingButtonRef.current.selectedCarrierName);
+      }
+    }, 300);
+    return () => clearInterval(interval);
+  }, []);
 
   // Hide scroll hint when financial summary section becomes visible, show again when scrolling up
   const handleContentScroll = useCallback(() => {
@@ -1563,6 +1574,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <>
                   <Truck className="w-4 h-4 md:w-5 md:h-5" />
                   <span className="hidden sm:inline">Crear</span> Guía
+                  {selectedCarrierName && <span className="text-xs opacity-90">({selectedCarrierName})</span>}
                 </>
               )}
             </Button>
