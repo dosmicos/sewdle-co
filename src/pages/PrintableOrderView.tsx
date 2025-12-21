@@ -89,9 +89,9 @@ const PrintableOrderView = () => {
       {/* Order Number */}
       <div className="mb-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-xs font-bold">ORDEN #{order.order_number}</h1>
+          <h1 className="text-sm font-bold">ORDEN #{order.order_number}</h1>
           {paymentMethod && (
-          <span className="payment-badge px-1.5 py-0.5 bg-transparent text-black border-2 border-black font-semibold text-xs rounded">
+          <span className="payment-badge px-1.5 py-0.5 bg-transparent text-black border-2 border-black font-semibold text-sm rounded">
             {paymentMethod}
           </span>
           )}
@@ -100,8 +100,8 @@ const PrintableOrderView = () => {
 
       {/* Shipping Address */}
       <div className="mb-1">
-        <h2 className="text-xs font-semibold mb-0.5">ENVÍE A:</h2>
-        <div className="space-y-0.5" style={{ fontSize: '0.6875rem' }}>
+        <h2 className="text-sm font-semibold mb-0.5">ENVÍE A:</h2>
+        <div className="space-y-0.5" style={{ fontSize: '0.825rem' }}>
           <p className="font-medium">{shippingAddress?.name || `${order.customer_first_name} ${order.customer_last_name}`}</p>
           {shippingAddress?.company && <p>{shippingAddress.company}</p>}
           {shippingAddress?.address1 && <p>{shippingAddress.address1}</p>}
@@ -120,7 +120,7 @@ const PrintableOrderView = () => {
 
       {/* COD Banner */}
       {isCOD && (
-        <div className="cod-banner my-1 p-1 bg-black text-white text-center font-semibold text-xs rounded">
+        <div className="cod-banner my-1 p-1 bg-black text-white text-center font-semibold text-sm rounded">
           PAGO CONTRA ENTREGA
         </div>
       )}
@@ -128,8 +128,8 @@ const PrintableOrderView = () => {
       {/* Notes */}
       {order.note && (
         <div className="mb-1">
-          <h2 className="text-xs font-semibold mb-0.5">NOTES</h2>
-          <div className="whitespace-pre-wrap border-l-2 border-primary pl-2" style={{ fontSize: '0.625rem' }}>
+          <h2 className="text-sm font-semibold mb-0.5">NOTES</h2>
+          <div className="whitespace-pre-wrap border-l-2 border-primary pl-2" style={{ fontSize: '0.75rem' }}>
             {order.note}
           </div>
         </div>
@@ -161,7 +161,7 @@ const PrintableOrderView = () => {
             margin: 1.5mm 0 !important;
             border-radius: 0 !important;
             page-break-inside: avoid;
-            font-size: 9pt !important;
+            font-size: 11pt !important;
           }
 
           .payment-badge {
