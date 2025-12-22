@@ -323,8 +323,13 @@ const BulkInvoiceCreator = () => {
     const customerEmail = order.customer_email || order.email;
     const customerPhone = order.customer_phone || (order.billing_address || order.shipping_address || {}).phone || '';
     
-    // Generate identification number (same logic as creation)
-    const identificationNumber = customerPhone?.replace(/[^0-9]/g, '') || 
+    // Get identification from company field (cedula) - this is where Colombian stores put the ID number
+    const addressForId = order.billing_address || order.shipping_address || {};
+    const identificationFromCompany = (addressForId.company || '').replace(/[^0-9]/g, '');
+    
+    // Use company field (cedula) as primary, then phone as fallback, then email-derived
+    const identificationNumber = identificationFromCompany || 
+                                  customerPhone?.replace(/[^0-9]/g, '') || 
                                   customerEmail?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
                                   '';
 
@@ -395,10 +400,13 @@ const BulkInvoiceCreator = () => {
     // Create new contact if not found by any method
     const address = order.billing_address || order.shipping_address || {};
     
-    // Use phone as primary identification, fallback to email-derived
-    const finalIdentificationNumber = identificationNumber || `CLI${Date.now()}`;
+    // Use company (cedula) as primary identification, then phone, then fallback
+    const finalIdentificationNumber = identificationFromCompany || 
+                                       customerPhone?.replace(/[^0-9]/g, '') ||
+                                       customerEmail?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) ||
+                                       `CLI${Date.now()}`;
     
-    console.log('Creating new contact:', customerName, 'with identification:', finalIdentificationNumber);
+    console.log('Creating new contact:', customerName, 'with identification:', finalIdentificationNumber, '(from company:', identificationFromCompany || 'N/A', ')');
     
     const alegraAddress = normalizeForAlegra(address.city, address.province || address.province_code);
 
