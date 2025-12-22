@@ -132,9 +132,28 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   // Caldas
   'manizales': '17001000',
   'villamaria': '17873000',
-  // Tolima
+  // Tolima - EXPANDED
   'ibague': '73001000',
   'espinal': '73268000',
+  'libano': '73411000',
+  'honda': '73349000',
+  'mariquita': '73443000',
+  'melgar': '73449000',
+  'flandes': '73275000',
+  'lerida': '73408000',
+  'chaparral': '73168000',
+  'fresno': '73283000',
+  'guamo': '73319000',
+  'purificacion': '73585000',
+  'armero': '73055000',
+  'venadillo': '73861000',
+  'saldana': '73671000',
+  'natagaima': '73483000',
+  'ortega': '73504000',
+  'rovira': '73624000',
+  'san luis': '73678000',
+  'cajamarca': '73124000',
+  'anzoategui': '73043000',
   // Magdalena
   'santa marta': '47001000',
   'cienaga': '47189000',
@@ -144,6 +163,8 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   // Meta
   'villavicencio': '50001000',
   'acacias': '50006000',
+  'granada': '50313000',
+  'puerto lopez': '50573000',
   // Nariño
   'pasto': '52001000',
   'tumaco': '52835000',
@@ -151,9 +172,13 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   // Huila
   'neiva': '41001000',
   'pitalito': '41551000',
+  'garzon': '41298000',
+  'la plata': '41396000',
   // Quindío
   'armenia': '63001000',
   'calarca': '63130000',
+  'montenegro': '63470000',
+  'circasia': '63190000',
   // Cauca
   'popayan': '19001000',
   'santander de quilichao': '19698000',
@@ -167,6 +192,8 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   'tunja': '15001000',
   'duitama': '15238000',
   'sogamoso': '15759000',
+  'chiquinquira': '15176000',
+  'paipa': '15516000',
   // Caquetá
   'florencia': '18001000',
   // La Guajira
@@ -213,26 +240,41 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   'villeta': '25873000'
 };
 
-// Get DANE code for a city
-function getDaneCode(city: string, department?: string): string {
+// Get DANE code for a city - async to support API lookup as fallback
+async function getDaneCode(city: string, department?: string, apiKey?: string): Promise<string> {
   const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   
-  // Direct match
+  // Direct match in local dictionary
   if (COLOMBIA_DANE_CODES[normalizedCity]) {
-    console.log(`📮 DANE code found: "${city}" → "${COLOMBIA_DANE_CODES[normalizedCity]}"`);
+    console.log(`📮 DANE code found locally: "${city}" → "${COLOMBIA_DANE_CODES[normalizedCity]}"`);
     return COLOMBIA_DANE_CODES[normalizedCity];
   }
   
-  // Partial match
+  // Partial match in local dictionary
   for (const [cityKey, daneCode] of Object.entries(COLOMBIA_DANE_CODES)) {
     if (normalizedCity.includes(cityKey) || cityKey.includes(normalizedCity)) {
-      console.log(`📮 DANE code partial match: "${city}" → "${daneCode}"`);
+      console.log(`📮 DANE code partial match: "${city}" (matches "${cityKey}") → "${daneCode}"`);
       return daneCode;
     }
   }
   
-  console.log(`⚠️ No DANE code found for city: "${city}", using Bogota fallback (11001000)`);
-  return '11001000'; // Default to Bogota
+  // Try API lookup if we have the API key
+  if (apiKey) {
+    console.log(`🔍 City "${city}" not in local dictionary, looking up via Envia API...`);
+    try {
+      const enviaCity = await lookupEnviaCity('CO', city, apiKey);
+      if (enviaCity && enviaCity.zipCode) {
+        console.log(`✅ DANE code found via API: "${city}" → "${enviaCity.zipCode}"`);
+        return enviaCity.zipCode;
+      }
+    } catch (error) {
+      console.error(`⚠️ API lookup failed for "${city}":`, error);
+    }
+  }
+  
+  console.log(`⚠️ NO DANE CODE FOUND for city: "${city}" (dept: ${department || 'unknown'})`);
+  console.log(`⚠️ FALLING BACK TO BOGOTA (11001000) - THIS MAY CAUSE INCORRECT SHIPPING!`);
+  return '11001000'; // Default to Bogota - should be avoided!
 }
 
 // Shopify province codes to Envia.com state codes mapping
@@ -698,8 +740,8 @@ serve(async (req) => {
     // - city: City NAME (e.g., "Bogota", "Medellin")
     // - postalCode: Real postal code (e.g., "111321", "050001")
 
-    // Use DANE code for destination city and postalCode
-    const destDaneCode = getDaneCode(body.destination_city, body.destination_department);
+    // Use DANE code for destination city and postalCode - now async with API fallback
+    const destDaneCode = await getDaneCode(body.destination_city, body.destination_department, ENVIA_API_KEY);
 
     // For Inter Rapidísimo, use addressId + basic fields WITHOUT taxIdentification
     // This avoids "Identification numbers are required" error for COD shipments
