@@ -108,6 +108,7 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   // Boyacá
   'tunja': '15001000', 'duitama': '15238000',
   'sogamoso': '15759000', 'chiquinquira': '15176000', 'paipa': '15516000',
+  'villa de leyva': '15407000', 'moniquira': '15469000', 'socha': '15757000',
   // Caquetá
   'florencia': '18001000',
   // La Guajira
@@ -140,7 +141,23 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   'fusagasuga': '25290000', 'girardot': '25307000',
   'tocancipa': '25817000', 'sopo': '25758000',
   'tabio': '25785000', 'tenjo': '25799000',
-  'sibate': '25740000', 'silvania': '25743000', 'villeta': '25873000'
+  'sibate': '25740000', 'silvania': '25743000', 'villeta': '25873000',
+  'subachoque': '25769000', 'suesca': '25772000',
+  'guaduas': '25320000', 'choconta': '25183000',
+  'san bernardo': '25649000', 'villapinzon': '25873000', 'villa pinzon': '25873000',
+  // Antioquia - Additional
+  'el santuario': '05697000', 'santuario': '05697000',
+  'la ceja': '05376000', 'el retiro': '05607000', 'retiro': '05607000',
+  // Huila - Additional
+  'san agustin': '41668000',
+  // Tolima - Additional
+  'icononzo': '73352000',
+  // Valle del Cauca - Additional
+  'jamundi': '76364000',
+  // Santander - Additional
+  'guaca': '68318000',
+  // Norte de Santander - Additional
+  'ocana': '54498000'
 };
 
 function getDaneCode(city: string): string {
