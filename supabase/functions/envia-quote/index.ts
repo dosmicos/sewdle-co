@@ -37,6 +37,32 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vaupes': 'VA', 'vaupés': 'VA', 'vichada': 'VI'
 };
 
+// Get state code from department name
+function getStateCode(department: string): string {
+  const normalized = department.trim();
+  const upper = normalized.toUpperCase();
+  
+  // Check Shopify codes first
+  if (SHOPIFY_TO_ENVIA_CODES[upper]) {
+    return SHOPIFY_TO_ENVIA_CODES[upper];
+  }
+  
+  // Check department names
+  const lowerDept = normalized.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  for (const [deptName, code] of Object.entries(COLOMBIA_STATE_CODES)) {
+    const normalizedDeptName = deptName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (lowerDept.includes(normalizedDeptName) || normalizedDeptName.includes(lowerDept)) {
+      return code;
+    }
+  }
+  
+  // Default to Bogotá/DC
+  console.log(`⚠️ Department "${department}" not found, defaulting to DC`);
+  return 'DC';
+}
+
 // Colombia DANE codes (8 digits) for cities - EXPANDED to match create-envia-label
 const COLOMBIA_DANE_CODES: Record<string, string> = {
   // Bogotá D.C.
