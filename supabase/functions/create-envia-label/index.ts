@@ -272,9 +272,9 @@ async function getDaneCode(city: string, department?: string, apiKey?: string): 
     }
   }
   
-  console.log(`⚠️ NO DANE CODE FOUND for city: "${city}" (dept: ${department || 'unknown'})`);
-  console.log(`⚠️ FALLING BACK TO BOGOTA (11001000) - THIS MAY CAUSE INCORRECT SHIPPING!`);
-  return '11001000'; // Default to Bogota - should be avoided!
+  // CRITICAL: Throw error instead of using Bogotá fallback to prevent wrong destinations
+  console.error(`❌ NO DANE CODE FOUND for city: "${city}" (dept: ${department || 'unknown'})`);
+  throw new Error(`No se encontró el código DANE para la ciudad "${city}"${department ? ` en ${department}` : ''}. Por favor contacte soporte para agregar esta ciudad al sistema.`);
 }
 
 // Shopify province codes to Envia.com state codes mapping
