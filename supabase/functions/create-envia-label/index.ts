@@ -194,6 +194,9 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   'sogamoso': '15759000',
   'chiquinquira': '15176000',
   'paipa': '15516000',
+  'villa de leyva': '15407000',
+  'moniquira': '15469000',
+  'socha': '15757000',
   // Caquetá
   'florencia': '18001000',
   // La Guajira
@@ -237,7 +240,30 @@ const COLOMBIA_DANE_CODES: Record<string, string> = {
   'tenjo': '25799000',
   'sibate': '25740000',
   'silvania': '25743000',
-  'villeta': '25873000'
+  'villeta': '25873000',
+  'subachoque': '25769000',
+  'suesca': '25772000',
+  'guaduas': '25320000',
+  'choconta': '25183000',
+  'san bernardo': '25649000',
+  'villapinzon': '25873000',
+  'villa pinzon': '25873000',
+  // Antioquia - Additional
+  'el santuario': '05697000',
+  'santuario': '05697000',
+  'la ceja': '05376000',
+  'el retiro': '05607000',
+  'retiro': '05607000',
+  // Huila - Additional
+  'san agustin': '41668000',
+  // Tolima - Additional
+  'icononzo': '73352000',
+  // Valle del Cauca - Additional
+  'jamundi': '76364000',
+  // Santander - Additional
+  'guaca': '68318000',
+  // Norte de Santander - Additional
+  'ocana': '54498000'
 };
 
 // Get DANE code for a city - async to support API lookup as fallback
