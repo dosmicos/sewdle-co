@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.alegra-api]
 verify_jwt = false
+
+[functions.import-colombia-locations]
+verify_jwt = false
