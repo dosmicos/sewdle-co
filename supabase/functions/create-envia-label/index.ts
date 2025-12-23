@@ -80,222 +80,55 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vichada': 'VI'
 };
 
-// Colombia DANE CODES - Required for Envia.com API city and postalCode fields
-// According to Envia.com docs, Colombia uses 8-digit DANE codes for both city and postalCode
-const COLOMBIA_DANE_CODES: Record<string, string> = {
-  // Bogotá D.C.
-  'bogota': '11001000',
-  'bogota d.c.': '11001000',
-  'bogota dc': '11001000',
-  // Antioquia
-  'medellin': '05001000',
-  'envigado': '05266000',
-  'sabaneta': '05631000',
-  'itagui': '05360000',
-  'bello': '05088000',
-  'rionegro': '05615000',
-  'la estrella': '05380000',
-  'caldas': '05129000',
-  'copacabana': '05212000',
-  'girardota': '05308000',
-  'barbosa': '05079000',
-  // Valle del Cauca
-  'cali': '76001000',
-  'palmira': '76520000',
-  'buenaventura': '76109000',
-  'tulua': '76834000',
-  'buga': '76111000',
-  'cartago': '76147000',
-  'yumbo': '76892000',
-  // Atlántico
-  'barranquilla': '08001000',
-  'soledad': '08758000',
-  'malambo': '08433000',
-  // Bolívar
-  'cartagena': '13001000',
-  'turbaco': '13836000',
-  'magangue': '13430000',
-  // Santander
-  'bucaramanga': '68001000',
-  'floridablanca': '68276000',
-  'giron': '68307000',
-  'piedecuesta': '68547000',
-  'barrancabermeja': '68081000',
-  // Norte de Santander
-  'cucuta': '54001000',
-  'villa del rosario': '54874000',
-  'los patios': '54405000',
-  // Risaralda
-  'pereira': '66001000',
-  'dosquebradas': '66170000',
-  'santa rosa de cabal': '66682000',
-  // Caldas
-  'manizales': '17001000',
-  'villamaria': '17873000',
-  // Tolima - EXPANDED
-  'ibague': '73001000',
-  'espinal': '73268000',
-  'libano': '73411000',
-  'honda': '73349000',
-  'mariquita': '73443000',
-  'melgar': '73449000',
-  'flandes': '73275000',
-  'lerida': '73408000',
-  'chaparral': '73168000',
-  'fresno': '73283000',
-  'guamo': '73319000',
-  'purificacion': '73585000',
-  'armero': '73055000',
-  'venadillo': '73861000',
-  'saldana': '73671000',
-  'natagaima': '73483000',
-  'ortega': '73504000',
-  'rovira': '73624000',
-  'san luis': '73678000',
-  'cajamarca': '73124000',
-  'anzoategui': '73043000',
-  // Magdalena
-  'santa marta': '47001000',
-  'cienaga': '47189000',
-  // Córdoba
-  'monteria': '23001000',
-  'cerete': '23162000',
-  // Meta
-  'villavicencio': '50001000',
-  'acacias': '50006000',
-  'granada': '50313000',
-  'puerto lopez': '50573000',
-  // Nariño
-  'pasto': '52001000',
-  'tumaco': '52835000',
-  'ipiales': '52356000',
-  // Huila
-  'neiva': '41001000',
-  'pitalito': '41551000',
-  'garzon': '41298000',
-  'la plata': '41396000',
-  // Quindío
-  'armenia': '63001000',
-  'calarca': '63130000',
-  'montenegro': '63470000',
-  'circasia': '63190000',
-  // Cauca
-  'popayan': '19001000',
-  'santander de quilichao': '19698000',
-  // Sucre
-  'sincelejo': '70001000',
-  'corozal': '70215000',
-  // Cesar
-  'valledupar': '20001000',
-  'aguachica': '20011000',
-  // Boyacá
-  'tunja': '15001000',
-  'duitama': '15238000',
-  'sogamoso': '15759000',
-  'chiquinquira': '15176000',
-  'paipa': '15516000',
-  'villa de leyva': '15407000',
-  'moniquira': '15469000',
-  'socha': '15757000',
-  // Caquetá
-  'florencia': '18001000',
-  // La Guajira
-  'riohacha': '44001000',
-  'maicao': '44430000',
-  // Chocó
-  'quibdo': '27001000',
-  // Casanare
-  'yopal': '85001000',
-  'aguazul': '85010000',
-  // Putumayo
-  'mocoa': '86001000',
-  // Amazonas
-  'leticia': '91001000',
-  // Guainía
-  'inirida': '94001000',
-  // Vaupés
-  'mitu': '97001000',
-  // Vichada
-  'puerto carreno': '99001000',
-  // Guaviare
-  'san jose del guaviare': '95001000',
-  // Arauca
-  'arauca': '81001000',
-  // Cundinamarca (municipalities near Bogotá)
-  'soacha': '25754000',
-  'chia': '25175000',
-  'zipaquira': '25899000',
-  'facatativa': '25269000',
-  'madrid': '25430000',
-  'funza': '25286000',
-  'mosquera': '25473000',
-  'cajica': '25126000',
-  'cota': '25214000',
-  'la calera': '25377000',
-  'fusagasuga': '25290000',
-  'girardot': '25307000',
-  'tocancipa': '25817000',
-  'sopo': '25758000',
-  'tabio': '25785000',
-  'tenjo': '25799000',
-  'sibate': '25740000',
-  'silvania': '25743000',
-  'villeta': '25873000',
-  'subachoque': '25769000',
-  'suesca': '25772000',
-  'guaduas': '25320000',
-  'choconta': '25183000',
-  'san bernardo': '25649000',
-  'villapinzon': '25873000',
-  'villa pinzon': '25873000',
-  // Antioquia - Additional
-  'el santuario': '05697000',
-  'santuario': '05697000',
-  'la ceja': '05376000',
-  'el retiro': '05607000',
-  'retiro': '05607000',
-  // Huila - Additional
-  'san agustin': '41668000',
-  // Tolima - Additional
-  'icononzo': '73352000',
-  // Valle del Cauca - Additional
-  'jamundi': '76364000',
-  // Santander - Additional
-  'guaca': '68318000',
-  // Norte de Santander - Additional
-  'ocana': '54498000'
-};
-
-// Get DANE code for a city - async to support API lookup as fallback
-async function getDaneCode(city: string, department?: string, apiKey?: string): Promise<string> {
-  const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+// Get DANE code from database - queries shipping_coverage table
+async function getDaneCodeFromDB(supabase: any, city: string, department?: string): Promise<string> {
+  const normalizedCity = city.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
-  // Direct match in local dictionary
-  if (COLOMBIA_DANE_CODES[normalizedCity]) {
-    console.log(`📮 DANE code found locally: "${city}" → "${COLOMBIA_DANE_CODES[normalizedCity]}"`);
-    return COLOMBIA_DANE_CODES[normalizedCity];
+  console.log(`🔍 Looking up DANE code for city: "${city}" (normalized: "${normalizedCity}")`);
+  
+  // Try exact match first
+  let query = supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department')
+    .ilike('municipality', normalizedCity)
+    .limit(1);
+  
+  let { data, error } = await query;
+  
+  if (data && data.length > 0) {
+    console.log(`✅ DANE code found (exact): "${city}" → "${data[0].dane_code}"`);
+    return data[0].dane_code;
   }
   
-  // Partial match in local dictionary
-  for (const [cityKey, daneCode] of Object.entries(COLOMBIA_DANE_CODES)) {
-    if (normalizedCity.includes(cityKey) || cityKey.includes(normalizedCity)) {
-      console.log(`📮 DANE code partial match: "${city}" (matches "${cityKey}") → "${daneCode}"`);
-      return daneCode;
-    }
-  }
+  // Try partial match
+  const { data: partialData, error: partialError } = await supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department')
+    .or(`municipality.ilike.%${normalizedCity}%,municipality.ilike.${normalizedCity}%`)
+    .limit(5);
   
-  // Try API lookup if we have the API key
-  if (apiKey) {
-    console.log(`🔍 City "${city}" not in local dictionary, looking up via Envia API...`);
-    try {
-      const enviaCity = await lookupEnviaCity('CO', city, apiKey);
-      if (enviaCity && enviaCity.zipCode) {
-        console.log(`✅ DANE code found via API: "${city}" → "${enviaCity.zipCode}"`);
-        return enviaCity.zipCode;
+  if (partialData && partialData.length > 0) {
+    // If department is provided, try to match it
+    if (department) {
+      const normalizedDept = department.toLowerCase().trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      const deptMatch = partialData.find((item: any) => {
+        const itemDept = item.department.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
+      });
+      
+      if (deptMatch) {
+        console.log(`✅ DANE code found (dept match): "${city}, ${department}" → "${deptMatch.dane_code}"`);
+        return deptMatch.dane_code;
       }
-    } catch (error) {
-      console.error(`⚠️ API lookup failed for "${city}":`, error);
     }
+    
+    // Return first partial match
+    console.log(`✅ DANE code found (partial): "${city}" → "${partialData[0].dane_code}" (${partialData[0].municipality})`);
+    return partialData[0].dane_code;
   }
   
   // CRITICAL: Throw error instead of using Bogotá fallback to prevent wrong destinations
@@ -766,8 +599,8 @@ serve(async (req) => {
     // - city: City NAME (e.g., "Bogota", "Medellin")
     // - postalCode: Real postal code (e.g., "111321", "050001")
 
-    // Use DANE code for destination city and postalCode - now async with API fallback
-    const destDaneCode = await getDaneCode(body.destination_city, body.destination_department, ENVIA_API_KEY);
+    // Use DANE code for destination city and postalCode - now from database
+    const destDaneCode = await getDaneCodeFromDB(supabase, body.destination_city, body.destination_department);
 
     // For Inter Rapidísimo, use addressId + basic fields WITHOUT taxIdentification
     // This avoids "Identification numbers are required" error for COD shipments

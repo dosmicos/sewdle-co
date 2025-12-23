@@ -63,159 +63,59 @@ function getStateCode(department: string): string {
   return 'DC';
 }
 
-// Colombia DANE codes (8 digits) for cities - EXPANDED to match create-envia-label
-const COLOMBIA_DANE_CODES: Record<string, string> = {
-  // Bogotá D.C.
-  'bogota': '11001000', 'bogotá': '11001000',
-  'bogota d.c.': '11001000', 'bogota dc': '11001000',
-  // Antioquia
-  'medellin': '05001000', 'medellín': '05001000',
-  'envigado': '05266000', 'sabaneta': '05631000',
-  'itagui': '05360000', 'itagüí': '05360000',
-  'bello': '05088000', 'rionegro': '05615000',
-  'la estrella': '05380000', 'caldas': '05129000',
-  'copacabana': '05212000', 'girardota': '05308000',
-  'barbosa': '05079000', 'la ceja': '05376000',
-  'marinilla': '05440000', 'apartado': '05045000', 'apartadó': '05045000',
-  // Valle del Cauca
-  'cali': '76001000', 'palmira': '76520000',
-  'buenaventura': '76109000', 'tulua': '76834000', 'tuluá': '76834000',
-  'buga': '76111000', 'cartago': '76147000', 'yumbo': '76892000',
-  // Atlántico
-  'barranquilla': '08001000', 'soledad': '08758000', 'malambo': '08433000',
-  // Bolívar
-  'cartagena': '13001000', 'turbaco': '13836000', 'magangue': '13430000',
-  // Santander
-  'bucaramanga': '68001000', 'floridablanca': '68276000',
-  'giron': '68307000', 'piedecuesta': '68547000',
-  'barrancabermeja': '68081000',
-  // Norte de Santander
-  'cucuta': '54001000', 'cúcuta': '54001000',
-  'villa del rosario': '54874000', 'los patios': '54405000',
-  // Risaralda
-  'pereira': '66001000', 'dosquebradas': '66170000',
-  'santa rosa de cabal': '66682000',
-  // Caldas
-  'manizales': '17001000', 'villamaria': '17873000',
-  // Tolima - EXPANDED
-  'ibague': '73001000', 'ibagué': '73001000',
-  'espinal': '73268000', 'libano': '73411000', 'líbano': '73411000',
-  'honda': '73349000', 'mariquita': '73443000',
-  'melgar': '73449000', 'flandes': '73275000',
-  'lerida': '73408000', 'chaparral': '73168000',
-  'fresno': '73283000', 'guamo': '73319000',
-  'purificacion': '73585000', 'armero': '73055000',
-  'venadillo': '73861000', 'saldana': '73671000',
-  'natagaima': '73483000', 'ortega': '73504000',
-  'rovira': '73624000', 'san luis': '73678000',
-  'cajamarca': '73124000', 'anzoategui': '73043000',
-  // Magdalena
-  'santa marta': '47001000', 'cienaga': '47189000',
-  // Córdoba
-  'monteria': '23001000', 'montería': '23001000', 'cerete': '23162000',
-  // Meta
-  'villavicencio': '50001000', 'acacias': '50006000',
-  'granada': '50313000', 'puerto lopez': '50573000',
-  // Nariño
-  'pasto': '52001000', 'tumaco': '52835000', 'ipiales': '52356000',
-  // Huila
-  'neiva': '41001000', 'pitalito': '41551000',
-  'garzon': '41298000', 'la plata': '41396000',
-  // Quindío
-  'armenia': '63001000', 'calarca': '63130000',
-  'montenegro': '63470000', 'circasia': '63190000',
-  // Cauca
-  'popayan': '19001000', 'popayán': '19001000',
-  'santander de quilichao': '19698000',
-  // Sucre
-  'sincelejo': '70001000', 'corozal': '70215000',
-  // Cesar
-  'valledupar': '20001000', 'aguachica': '20011000',
-  // Boyacá
-  'tunja': '15001000', 'duitama': '15238000',
-  'sogamoso': '15759000', 'chiquinquira': '15176000', 'paipa': '15516000',
-  'villa de leyva': '15407000', 'moniquira': '15469000', 'socha': '15757000',
-  // Caquetá
-  'florencia': '18001000',
-  // La Guajira
-  'riohacha': '44001000', 'maicao': '44430000',
-  // Chocó
-  'quibdo': '27001000',
-  // Casanare
-  'yopal': '85001000', 'aguazul': '85010000',
-  // Putumayo
-  'mocoa': '86001000',
-  // Amazonas
-  'leticia': '91001000',
-  // Guainía
-  'inirida': '94001000',
-  // Vaupés
-  'mitu': '97001000',
-  // Vichada
-  'puerto carreno': '99001000',
-  // Guaviare
-  'san jose del guaviare': '95001000',
-  // Arauca
-  'arauca': '81001000',
-  // Cundinamarca
-  'soacha': '25754000', 'chia': '25175000', 'chía': '25175000',
-  'zipaquira': '25899000', 'zipaquirá': '25899000',
-  'facatativa': '25269000', 'facatativá': '25269000',
-  'madrid': '25430000', 'funza': '25286000',
-  'mosquera': '25473000', 'cajica': '25126000', 'cajicá': '25126000',
-  'cota': '25214000', 'la calera': '25377000',
-  'fusagasuga': '25290000', 'girardot': '25307000',
-  'tocancipa': '25817000', 'sopo': '25758000',
-  'tabio': '25785000', 'tenjo': '25799000',
-  'sibate': '25740000', 'silvania': '25743000', 'villeta': '25873000',
-  'subachoque': '25769000', 'suesca': '25772000',
-  'guaduas': '25320000', 'choconta': '25183000',
-  'san bernardo': '25649000', 'villapinzon': '25873000', 'villa pinzon': '25873000',
-  // Antioquia - Additional
-  'el santuario': '05697000', 'santuario': '05697000',
-  'la ceja': '05376000', 'el retiro': '05607000', 'retiro': '05607000',
-  // Huila - Additional
-  'san agustin': '41668000',
-  // Tolima - Additional
-  'icononzo': '73352000',
-  // Valle del Cauca - Additional
-  'jamundi': '76364000',
-  // Santander - Additional
-  'guaca': '68318000',
-  // Norte de Santander - Additional
-  'ocana': '54498000'
-};
-
-function getDaneCode(city: string): string {
-  const normalized = city.toLowerCase().trim()
+// Get DANE code from database - queries shipping_coverage table
+async function getDaneCodeFromDB(supabase: any, city: string, department?: string): Promise<string> {
+  const normalizedCity = city.toLowerCase().trim()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
-  // Check exact match first
-  if (COLOMBIA_DANE_CODES[city.toLowerCase().trim()]) {
-    console.log(`📍 City "${city}" -> DANE code "${COLOMBIA_DANE_CODES[city.toLowerCase().trim()]}"`);
-    return COLOMBIA_DANE_CODES[city.toLowerCase().trim()];
+  console.log(`🔍 Looking up DANE code for city: "${city}" (normalized: "${normalizedCity}")`);
+  
+  // Try exact match first
+  let query = supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department')
+    .ilike('municipality', normalizedCity)
+    .limit(1);
+  
+  let { data, error } = await query;
+  
+  if (data && data.length > 0) {
+    console.log(`✅ DANE code found (exact): "${city}" → "${data[0].dane_code}"`);
+    return data[0].dane_code;
   }
   
-  // Check normalized match
-  for (const [key, code] of Object.entries(COLOMBIA_DANE_CODES)) {
-    const normalizedKey = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (normalizedKey === normalized) {
-      console.log(`📍 City "${city}" (normalized) -> DANE code "${code}"`);
-      return code;
+  // Try partial match
+  const { data: partialData, error: partialError } = await supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department')
+    .or(`municipality.ilike.%${normalizedCity}%,municipality.ilike.${normalizedCity}%`)
+    .limit(5);
+  
+  if (partialData && partialData.length > 0) {
+    // If department is provided, try to match it
+    if (department) {
+      const normalizedDept = department.toLowerCase().trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      const deptMatch = partialData.find((item: any) => {
+        const itemDept = item.department.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
+      });
+      
+      if (deptMatch) {
+        console.log(`✅ DANE code found (dept match): "${city}, ${department}" → "${deptMatch.dane_code}"`);
+        return deptMatch.dane_code;
+      }
     }
+    
+    // Return first partial match
+    console.log(`✅ DANE code found (partial): "${city}" → "${partialData[0].dane_code}" (${partialData[0].municipality})`);
+    return partialData[0].dane_code;
   }
   
-  // Partial match
-  for (const [key, code] of Object.entries(COLOMBIA_DANE_CODES)) {
-    const normalizedKey = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (normalized.includes(normalizedKey) || normalizedKey.includes(normalized)) {
-      console.log(`📍 City "${city}" (partial match with "${key}") -> DANE code "${code}"`);
-      return code;
-    }
-  }
-  
-  // Default to Bogotá with warning
-  console.log(`⚠️ City "${city}" not found in DANE codes, using Bogotá fallback (11001000)`);
+  // Fallback to Bogotá
+  console.log(`⚠️ DANE code not found for "${city}", using Bogotá fallback (11001000)`);
   return '11001000';
 }
 
@@ -285,6 +185,8 @@ serve(async (req) => {
 
   try {
     const ENVIA_API_KEY = Deno.env.get('ENVIA_API_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     if (!ENVIA_API_KEY) {
       console.error('❌ ENVIA_API_KEY not configured');
@@ -293,6 +195,9 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+
+    // Initialize Supabase client for database queries
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const body: QuoteRequest = await req.json();
 
@@ -306,7 +211,8 @@ serve(async (req) => {
     }
 
     const stateCode = getStateCode(body.destination_department);
-    const destinationDaneCode = getDaneCode(body.destination_city);
+    // Get DANE code from database instead of hardcoded values
+    const destinationDaneCode = await getDaneCodeFromDB(supabase, body.destination_city, body.destination_department);
     console.log(`📍 Department "${body.destination_department}" -> State code "${stateCode}"`);
     console.log(`📍 City "${body.destination_city}" -> DANE code "${destinationDaneCode}"`);
 
