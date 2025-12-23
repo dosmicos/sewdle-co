@@ -91,13 +91,13 @@ const normalizeForAlegra = (city?: string, province?: string) => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
-  // Bogotá - city and department both as "Bogotá D.C."
+  // Bogotá - formato DIAN: city="Bogotá, DC", department="Bogotá D.C."
   if (
     cityLower.includes('bogota') ||
     provinceLower.includes('bogota') ||
     provinceLower.includes('cundinamarca')
   ) {
-    return { city: 'Bogotá D.C.', department: 'Bogotá D.C.' };
+    return { city: 'Bogotá, DC', department: 'Bogotá D.C.' };
   }
 
   // Medellín
@@ -125,8 +125,8 @@ const normalizeForAlegra = (city?: string, province?: string) => {
     return { city: 'Bucaramanga', department: 'Santander' };
   }
 
-  // Default: Bogotá D.C. (most common in Colombia)
-  return { city: 'Bogotá D.C.', department: 'Bogotá D.C.' };
+  // Default: Bogotá (most common in Colombia)
+  return { city: 'Bogotá, DC', department: 'Bogotá D.C.' };
 };
 
 const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactNode; color: string }> = {

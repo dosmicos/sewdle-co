@@ -48,23 +48,13 @@ function normalizeAlegraCOAddress(address: unknown): {
   let department = rawDepartment;
 
   // --- Bogotá ---
-  // city: "Bogotá", department: "Bogotá D.C."
+  // city: "Bogotá, DC", department: "Bogotá D.C." (formato DIAN)
   const isBogotaCity = /\bbogot(a|á)\b/i.test(cityLower);
   const isBogotaDept = /\bbogot(a|á)\b/i.test(deptLower) || /\bcundinamarca\b/i.test(deptLower);
-  const cityLooksLikeBogotaDC = /(d\s*c|distrito\s*capital)/i.test(cityLower);
-  const deptLooksLikeBogotaDC = /(d\s*c|distrito\s*capital)/i.test(deptLower);
 
-  // Fix swapped inputs (e.g. city="Bogotá, D.C." department="Bogotá")
-  if (cityLooksLikeBogotaDC && isBogotaDept && !deptLooksLikeBogotaDC) {
-    city = "Bogotá";
-    department = "Bogotá D.C.";
-  }
-
-  if (isBogotaCity) {
-    city = "Bogotá";
-  }
-
-  if (isBogotaDept) {
+  // Si es Bogotá (ciudad o departamento), normalizar a formato DIAN
+  if (isBogotaCity || isBogotaDept) {
+    city = "Bogotá, DC";
     department = "Bogotá D.C.";
   }
 
