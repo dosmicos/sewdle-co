@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import DeliveryDetails from '@/components/DeliveryDetails';
@@ -8,6 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 const DeliveryDetailsPage = () => {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { fetchDeliveryByTrackingNumber } = useDeliveries();
   const { deliveries: allDeliveries } = useFilteredDeliveries();
   const { hasPermission } = usePermissions();
@@ -18,30 +19,75 @@ const DeliveryDetailsPage = () => {
   // Check permissions - same as in DeliveriesPage
   const canViewDeliveries = hasPermission('deliveries', 'view');
 
-  // Calculate navigation
+  // Read filters from URL
+  const searchTerm = searchParams.get('search') || '';
+  const statusFilter = searchParams.get('status') || 'all';
+  const workshopFilter = searchParams.get('workshop') || 'all';
+  const tabFilter = searchParams.get('tab') || 'all';
+
+  // Apply same filters as DeliveriesPage for navigation
+  const filteredDeliveriesForNav = useMemo(() => {
+    let filtered = allDeliveries;
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(d => 
+        d.tracking_number?.toLowerCase().includes(term) ||
+        d.order?.order_number?.toLowerCase().includes(term) ||
+        d.workshop?.name?.toLowerCase().includes(term)
+      );
+    }
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(d => d.status === statusFilter);
+    }
+    
+    if (workshopFilter !== 'all') {
+      filtered = filtered.filter(d => d.workshop?.name === workshopFilter);
+    }
+    
+    // Tab-based filtering
+    if (tabFilter !== 'all' && tabFilter !== 'sync') {
+      filtered = filtered.filter(d => {
+        switch (tabFilter) {
+          case 'pending': return d.status === 'pending';
+          case 'in_quality': return d.status === 'in_quality';
+          case 'approved': return d.status === 'approved' || d.status === 'partial_approved';
+          case 'rejected': return d.status === 'rejected';
+          default: return true;
+        }
+      });
+    }
+    
+    return filtered;
+  }, [allDeliveries, searchTerm, statusFilter, workshopFilter, tabFilter]);
+
+  // Calculate navigation using filtered list
   const navigation = useMemo(() => {
-    if (!deliveryId || allDeliveries.length === 0) {
+    if (!deliveryId || filteredDeliveriesForNav.length === 0) {
       return { currentIndex: -1, hasPrevious: false, hasNext: false };
     }
-    const currentIndex = allDeliveries.findIndex(d => d.tracking_number === deliveryId);
+    const currentIndex = filteredDeliveriesForNav.findIndex(d => d.tracking_number === deliveryId);
     return {
       currentIndex,
       hasPrevious: currentIndex > 0,
-      hasNext: currentIndex >= 0 && currentIndex < allDeliveries.length - 1
+      hasNext: currentIndex >= 0 && currentIndex < filteredDeliveriesForNav.length - 1
     };
-  }, [deliveryId, allDeliveries]);
+  }, [deliveryId, filteredDeliveriesForNav]);
 
   const goToPrevious = () => {
     if (navigation.hasPrevious) {
-      const prevDelivery = allDeliveries[navigation.currentIndex - 1];
-      navigate(`/deliveries/${prevDelivery.tracking_number}`);
+      const prevDelivery = filteredDeliveriesForNav[navigation.currentIndex - 1];
+      const queryString = searchParams.toString();
+      navigate(`/deliveries/${prevDelivery.tracking_number}${queryString ? `?${queryString}` : ''}`);
     }
   };
 
   const goToNext = () => {
     if (navigation.hasNext) {
-      const nextDelivery = allDeliveries[navigation.currentIndex + 1];
-      navigate(`/deliveries/${nextDelivery.tracking_number}`);
+      const nextDelivery = filteredDeliveriesForNav[navigation.currentIndex + 1];
+      const queryString = searchParams.toString();
+      navigate(`/deliveries/${nextDelivery.tracking_number}${queryString ? `?${queryString}` : ''}`);
     }
   };
 

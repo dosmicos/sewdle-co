@@ -207,7 +207,10 @@ const DeliveriesPage = () => {
   };
 
   const handleViewDelivery = (delivery: any) => {
-    navigate(`/deliveries/${delivery.tracking_number}`, {
+    // Preservar los filtros actuales en la URL
+    const queryString = searchParams.toString();
+    const url = `/deliveries/${delivery.tracking_number}${queryString ? `?${queryString}` : ''}`;
+    navigate(url, {
       state: { from: 'deliveries' }
     });
   };
