@@ -31,11 +31,15 @@ const DeliveryDetailsPage = () => {
     
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(d => 
-        d.tracking_number?.toLowerCase().includes(term) ||
-        d.order?.order_number?.toLowerCase().includes(term) ||
-        d.workshop?.name?.toLowerCase().includes(term)
-      );
+      filtered = filtered.filter(d => {
+        const orderNumber = d.order_number ?? d.order?.order_number;
+        const workshopName = d.workshop_name ?? d.workshop?.name;
+        return (
+          d.tracking_number?.toLowerCase().includes(term) ||
+          orderNumber?.toLowerCase().includes(term) ||
+          workshopName?.toLowerCase().includes(term)
+        );
+      });
     }
     
     if (statusFilter !== 'all') {
@@ -43,7 +47,10 @@ const DeliveryDetailsPage = () => {
     }
     
     if (workshopFilter !== 'all') {
-      filtered = filtered.filter(d => d.workshop?.name === workshopFilter);
+      filtered = filtered.filter(d => {
+        const workshopName = d.workshop_name ?? d.workshop?.name;
+        return workshopName === workshopFilter;
+      });
     }
     
     // Tab-based filtering
