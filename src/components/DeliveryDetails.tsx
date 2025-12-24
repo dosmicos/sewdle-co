@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown } from 'lucide-react';
 import DeliverySyncStatus from './DeliverySyncStatus';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -27,9 +27,11 @@ interface DeliveryDetailsProps {
   delivery: any;
   onBack?: (shouldRefresh?: boolean) => void;
   onDeliveryUpdated?: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
 }
 
-const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated }: DeliveryDetailsProps) => {
+const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated, onPrevious, onNext }: DeliveryDetailsProps) => {
   const navigate = useNavigate();
   const [delivery, setDelivery] = useState(initialDelivery);
   const [isEditing, setIsEditing] = useState(false);
@@ -864,6 +866,29 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated 
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver
           </Button>
+          
+          {/* Navegador de entregas */}
+          <div className="flex items-center">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={onPrevious}
+              disabled={!onPrevious}
+              className="rounded-r-none border-r-0 h-9 w-9"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={onNext}
+              disabled={!onNext}
+              className="rounded-l-none h-9 w-9"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </div>
+          
           <div>
             <h1 className="text-2xl font-bold">{delivery.tracking_number}</h1>
             <p className="text-muted-foreground">

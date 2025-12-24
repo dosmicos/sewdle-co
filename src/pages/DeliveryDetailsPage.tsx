@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDeliveries } from '@/hooks/useDeliveries';
+import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import DeliveryDetails from '@/components/DeliveryDetails';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -8,6 +9,7 @@ const DeliveryDetailsPage = () => {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const navigate = useNavigate();
   const { fetchDeliveryByTrackingNumber } = useDeliveries();
+  const { deliveries: allDeliveries } = useFilteredDeliveries();
   const { hasPermission } = usePermissions();
   const [delivery, setDelivery] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -15,6 +17,33 @@ const DeliveryDetailsPage = () => {
 
   // Check permissions - same as in DeliveriesPage
   const canViewDeliveries = hasPermission('deliveries', 'view');
+
+  // Calculate navigation
+  const navigation = useMemo(() => {
+    if (!deliveryId || allDeliveries.length === 0) {
+      return { currentIndex: -1, hasPrevious: false, hasNext: false };
+    }
+    const currentIndex = allDeliveries.findIndex(d => d.tracking_number === deliveryId);
+    return {
+      currentIndex,
+      hasPrevious: currentIndex > 0,
+      hasNext: currentIndex >= 0 && currentIndex < allDeliveries.length - 1
+    };
+  }, [deliveryId, allDeliveries]);
+
+  const goToPrevious = () => {
+    if (navigation.hasPrevious) {
+      const prevDelivery = allDeliveries[navigation.currentIndex - 1];
+      navigate(`/deliveries/${prevDelivery.tracking_number}`);
+    }
+  };
+
+  const goToNext = () => {
+    if (navigation.hasNext) {
+      const nextDelivery = allDeliveries[navigation.currentIndex + 1];
+      navigate(`/deliveries/${nextDelivery.tracking_number}`);
+    }
+  };
 
   useEffect(() => {
     if (!deliveryId || !canViewDeliveries) {
@@ -101,6 +130,8 @@ const DeliveryDetailsPage = () => {
       onDeliveryUpdated={() => {
         // Optionally reload delivery data if needed
       }}
+      onPrevious={navigation.hasPrevious ? goToPrevious : undefined}
+      onNext={navigation.hasNext ? goToNext : undefined}
     />
   );
 };
