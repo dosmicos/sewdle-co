@@ -27,6 +27,83 @@ function normalizeWhitespace(input: unknown): string {
     .replace(/\u00A0/g, " ");
 }
 
+function normalizeDigits(input: unknown): string {
+  return String(input ?? "").replace(/\D/g, "");
+}
+
+function normalizeCOPhone(input: unknown): string {
+  const digits = normalizeDigits(input);
+  if (!digits) return "";
+  // Colombia: guardar/normalizar a 10 dígitos; si viene con 57, tomar los últimos 10.
+  if (digits.startsWith("57") && digits.length > 10) return digits.slice(-10);
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+async function findContactInAlegra(params: {
+  phone?: unknown;
+  identification?: unknown;
+  email?: unknown;
+}) {
+  const phone = normalizeCOPhone(params.phone);
+  const identification = normalizeDigits(params.identification);
+  const email = normalizeWhitespace(params.email).toLowerCase();
+
+  const pageSize = 30;
+  const maxPages = 200; // hasta 6000 contactos (corta antes si se acaban)
+
+  const fetchPage = async (start: number) =>
+    await makeAlegraRequest(`/contacts?type=client&start=${start}&limit=${pageSize}`);
+
+  // 1) Buscar por teléfono (requiere paginación; Alegra no filtra por phone)
+  if (phone) {
+    for (let page = 0; page < maxPages; page++) {
+      const start = page * pageSize;
+      const pageData = await fetchPage(start);
+      if (!Array.isArray(pageData) || pageData.length === 0) break;
+
+      const found = pageData.find((c: any) => {
+        const p1 = normalizeCOPhone(c.phonePrimary);
+        const p2 = normalizeCOPhone(c.mobile);
+        return (p1 && p1 === phone) || (p2 && p2 === phone);
+      });
+
+      if (found) {
+        return { found: true, matchedBy: "phone", contact: found };
+      }
+    }
+  }
+
+  // 2) Buscar por cédula/identificación (Alegra sí filtra por identificación)
+  if (identification) {
+    const byId = await makeAlegraRequest(
+      `/contacts?type=client&identification=${encodeURIComponent(identification)}&start=0&limit=${pageSize}`,
+    );
+    if (Array.isArray(byId) && byId.length > 0) {
+      return { found: true, matchedBy: "identification", contact: byId[0] };
+    }
+  }
+
+  // 3) Buscar por email (requiere paginación; Alegra no filtra por email)
+  if (email) {
+    for (let page = 0; page < maxPages; page++) {
+      const start = page * pageSize;
+      const pageData = await fetchPage(start);
+      if (!Array.isArray(pageData) || pageData.length === 0) break;
+
+      const found = pageData.find((c: any) => {
+        const cEmail = normalizeWhitespace(c.email).toLowerCase();
+        return cEmail && cEmail === email;
+      });
+
+      if (found) {
+        return { found: true, matchedBy: "email", contact: found };
+      }
+    }
+  }
+
+  return { found: false, matchedBy: "created", contact: null };
+}
+
 /**
  * Alegra (Colombia) valida ciudad/departamento contra su catálogo DIAN.
  * Normalizamos variantes comunes para evitar errores como:
@@ -233,6 +310,15 @@ serve(async (req) => {
         // Test connection by fetching company info
         result = await makeAlegraRequest("/company");
         break;
+
+      case "find-contact": {
+        const phone = data?.phone;
+        const identification = data?.identification;
+        const email = data?.email;
+
+        result = await findContactInAlegra({ phone, identification, email });
+        break;
+      }
 
       case "get-contacts":
         // Get all contacts/clients

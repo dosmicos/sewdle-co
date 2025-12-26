@@ -46,26 +46,18 @@ export const validateOrderForInvoice = async (
 
   // 1. CLIENT VALIDATION (phone → identification → email → create)
   try {
-    const customerPhone = editedData?.customer?.phone || 
-                          order.customer_phone || 
-                          order.billing_address?.phone || 
-                          order.shipping_address?.phone;
-    
+    const customerPhone = editedData?.customer?.phone ||
+      order.customer_phone ||
+      order.billing_address?.phone ||
+      order.shipping_address?.phone;
+
     const identificationNumber = editedData?.customer?.identificationNumber ||
-                                 (order.billing_address?.company || order.shipping_address?.company || '').replace(/[^0-9]/g, '');
+      (order.billing_address?.company || order.shipping_address?.company || '').replace(/[^0-9]/g, '');
 
-    const customerEmail = editedData?.customer?.email || 
-                          order.customer_email || 
-                          order.billing_address?.email || 
-                          order.shipping_address?.email;
-
-    // Search contacts in Alegra
-    const { data: contactsResult } = await supabase.functions.invoke('alegra-api', {
-      body: { action: 'get-contacts' }
-    });
-
-    let contactFound = false;
-    let matchedBy: 'phone' | 'identification' | 'email' | 'created' = 'created';
+    const customerEmail = editedData?.customer?.email ||
+      order.customer_email ||
+      order.billing_address?.email ||
+      order.shipping_address?.email;
 
     console.log('Validación cliente - Datos del pedido:', {
       phone: customerPhone,
@@ -74,68 +66,42 @@ export const validateOrderForInvoice = async (
       orderNumber: order.order_number,
     });
 
-    if (contactsResult?.success && contactsResult.data) {
-      console.log('Validación cliente - Total contactos en Alegra:', contactsResult.data.length);
+    // Buscar cliente en Alegra (con paginación / filtros desde el edge function)
+    const { data: findContactResponse, error: findContactError } = await supabase.functions.invoke('alegra-api', {
+      body: {
+        action: 'find-contact',
+        data: {
+          phone: customerPhone,
+          identification: identificationNumber,
+          email: customerEmail,
+        },
+      },
+    });
 
-      // Step 1: Search by phone
-      if (customerPhone) {
-        const phoneClean = customerPhone.replace(/[^0-9]/g, '');
-        const contactByPhone = contactsResult.data.find((c: any) => {
-          const primaryClean = String(c.phonePrimary || '').replace(/[^0-9]/g, '');
-          const mobileClean = String(c.mobile || '').replace(/[^0-9]/g, '');
-          return primaryClean === phoneClean || mobileClean === phoneClean;
-        });
-        if (contactByPhone) {
-          contactFound = true;
-          matchedBy = 'phone';
-          console.log('Validación cliente - Encontrado por teléfono:', contactByPhone.name);
-        }
-      }
+    if (findContactError) throw findContactError;
 
-      // Step 2: Search by identification if not found by phone
-      if (!contactFound && identificationNumber) {
-        const contactById = contactsResult.data.find((c: any) => {
-          // Priorizar campos correctos de Alegra
-          const contactIdentification = String(
-            c.identificationObject?.number || 
-            c.identification || 
-            ''
-          ).replace(/\D/g, '');
-          return contactIdentification === identificationNumber;
-        });
-        if (contactById) {
-          contactFound = true;
-          matchedBy = 'identification';
-          console.log('Validación cliente - Encontrado por cédula:', contactById.name);
-        }
-      }
+    const payload = findContactResponse as any;
+    const found = Boolean(payload?.success && payload?.data?.found);
+    const matchedBy = (payload?.data?.matchedBy || 'created') as 'phone' | 'identification' | 'email' | 'created';
 
-      // Step 3: Search by email if not found by phone or identification
-      if (!contactFound && customerEmail) {
-        const emailLower = customerEmail.toLowerCase().trim();
-        const contactByEmail = contactsResult.data.find((c: any) =>
-          c.email?.toLowerCase().trim() === emailLower
-        );
-        if (contactByEmail) {
-          contactFound = true;
-          matchedBy = 'email';
-          console.log('Validación cliente - Encontrado por email:', contactByEmail.name);
-        }
-      }
-    }
+    console.log('Validación cliente - Resultado búsqueda:', {
+      found,
+      matchedBy,
+      contactId: payload?.data?.contact?.id,
+      contactName: payload?.data?.contact?.name,
+    });
 
-    if (contactFound) {
+    if (found) {
       checks.clientCheck = {
         passed: true,
         matchedBy,
-        message: matchedBy === 'phone' 
-          ? 'Cliente encontrado por teléfono' 
+        message: matchedBy === 'phone'
+          ? 'Cliente encontrado por teléfono'
           : matchedBy === 'identification'
           ? 'Cliente encontrado por cédula'
           : 'Cliente encontrado por email',
       };
     } else {
-      console.log('Validación cliente - No encontrado, se creará nuevo cliente');
       checks.clientCheck = {
         passed: true,
         matchedBy: 'created',
