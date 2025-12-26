@@ -450,46 +450,14 @@ export const usePickingOrders = () => {
 
   const updateShopifyTags = async (shopifyOrderId: number, newTags: string[]) => {
     try {
-      // 1. Obtener etiquetas existentes DESDE LA BASE DE DATOS
-      const { data: orderData, error: fetchError } = await supabase
-        .from('shopify_orders')
-        .select('tags')
-        .eq('shopify_order_id', shopifyOrderId)
-        .single();
+      console.log(`🏷️ Agregando tags a orden ${shopifyOrderId} usando merge:`, newTags);
       
-      if (fetchError) {
-        console.error(`❌ Error fetching tags for order ${shopifyOrderId}:`, fetchError);
-        throw fetchError;
-      }
-      
-      const existingTags = orderData?.tags 
-        ? orderData.tags.split(',').map(t => t.trim()).filter(Boolean)
-        : [];
-      
-      console.log(`📋 Tags existentes para orden ${shopifyOrderId}:`, existingTags);
-      
-      // 2. Combinar con nuevas etiquetas (sin duplicados)
-      const allTags = [...new Set([...existingTags, ...newTags])];
-      
-      console.log(`📋 Tags combinados para orden ${shopifyOrderId}:`, allTags);
-      
-      // 3. Validar que los tags no estén vacíos ni tengan caracteres inválidos
-      const validTags = allTags.filter(tag => tag && tag.length > 0);
-      
-      if (validTags.length === 0) {
-        console.log(`⚠️ No hay tags válidos para actualizar orden ${shopifyOrderId}`);
-        return;
-      }
-      
-      // 4. Actualizar en Shopify primero
-      const tagsString = validTags.join(', ');
-      console.log(`🏷️ Enviando a Shopify orden ${shopifyOrderId}:`, tagsString);
-      
+      // Use add_tags action - reads from Shopify, merges, and updates
       const { data: shopifyResponse, error: shopifyError } = await supabase.functions.invoke('update-shopify-order', {
         body: {
           orderId: shopifyOrderId,
-          action: 'update_tags',
-          data: { tags: tagsString }
+          action: 'add_tags',
+          data: { tags: newTags }
         }
       });
 
@@ -498,13 +466,21 @@ export const usePickingOrders = () => {
         throw shopifyError;
       }
       
+      if (!shopifyResponse?.success) {
+        throw new Error(shopifyResponse?.error || 'Error updating Shopify');
+      }
+      
       console.log(`✅ Shopify actualizado para orden ${shopifyOrderId}`);
       
-      // 5. Actualizar localmente solo después de confirmar Shopify
+      // Update local DB with final tags from Shopify response
+      const finalTagsString = shopifyResponse.finalTags 
+        ? (Array.isArray(shopifyResponse.finalTags) ? shopifyResponse.finalTags.join(', ') : shopifyResponse.finalTags)
+        : newTags.join(', ');
+      
       const { error: dbError } = await supabase
         .from('shopify_orders')
         .update({ 
-          tags: tagsString,
+          tags: finalTagsString,
           updated_at: new Date().toISOString()
         })
         .eq('shopify_order_id', shopifyOrderId);
@@ -514,7 +490,7 @@ export const usePickingOrders = () => {
         throw dbError;
       }
       
-      console.log(`✅ Tags actualizados en Shopify y DB para orden ${shopifyOrderId}:`, validTags);
+      console.log(`✅ Tags actualizados en Shopify y DB para orden ${shopifyOrderId}:`, finalTagsString);
         
     } catch (error: any) {
       console.error(`❌ Error updating Shopify tags para orden ${shopifyOrderId}:`, error);

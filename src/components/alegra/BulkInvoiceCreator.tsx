@@ -136,47 +136,44 @@ const normalizeForAlegra = (city?: string, province?: string) => {
 };
 
 // Helper function to add FACTURADO tag to Shopify order after successful DIAN stamp
-const addFacturadoTag = async (shopifyOrderId: number, currentTags: string | null): Promise<void> => {
+// Uses add_tags action which merges using Shopify as source of truth
+const addFacturadoTag = async (shopifyOrderId: number): Promise<void> => {
   try {
-    const tagsArray = currentTags 
-      ? currentTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-      : [];
-
-    // If already has the tag, skip
-    if (tagsArray.includes('FACTURADO')) {
-      console.log(`🏷️ Orden ${shopifyOrderId} ya tiene etiqueta FACTURADO`);
-      return;
-    }
-
-    // Add FACTURADO tag
-    tagsArray.push('FACTURADO');
-    const newTagsString = tagsArray.join(', ');
-
-    console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${shopifyOrderId}`);
+    console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${shopifyOrderId} usando merge...`);
     
-    // Update in Shopify
+    // Use add_tags action - it reads from Shopify, merges, and updates
     const { data, error } = await supabase.functions.invoke('update-shopify-order', {
       body: {
         orderId: shopifyOrderId,
-        action: 'update_tags',
-        data: { tags: newTagsString }
+        action: 'add_tags',
+        data: { tags: ['FACTURADO'] }
       }
     });
 
     if (error || !data?.success) {
       console.error('⚠️ Error al agregar etiqueta FACTURADO:', error || data?.error);
+      toast.error('Error al agregar etiqueta FACTURADO en Shopify');
       return;
     }
 
-    // Update in local database
-    await supabase
-      .from('shopify_orders')
-      .update({ tags: newTagsString })
-      .eq('shopify_order_id', shopifyOrderId);
-
-    console.log(`✅ Etiqueta FACTURADO agregada a orden ${shopifyOrderId}`);
+    // Update local database with final tags from Shopify
+    if (data.finalTags) {
+      const finalTagsString = Array.isArray(data.finalTags) 
+        ? data.finalTags.join(', ') 
+        : data.finalTags;
+      
+      await supabase
+        .from('shopify_orders')
+        .update({ tags: finalTagsString })
+        .eq('shopify_order_id', shopifyOrderId);
+      
+      console.log(`✅ Etiqueta FACTURADO agregada. Tags finales: ${finalTagsString}`);
+    } else {
+      console.log(`✅ Etiqueta FACTURADO enviada a Shopify (sin finalTags en respuesta)`);
+    }
   } catch (error) {
     console.error('⚠️ Error al agregar etiqueta FACTURADO:', error);
+    toast.error('Error al agregar etiqueta FACTURADO');
     // Don't throw - tag failure shouldn't stop the invoice process
   }
 };
@@ -619,6 +616,11 @@ const BulkInvoiceCreator = () => {
           invoiceNumber: order.alegra_invoice_number || undefined,
           cufe: order.alegra_cufe
         });
+        
+        // Ensure FACTURADO tag exists even for already stamped orders
+        console.log(`🏷️ Orden ${order.order_number} ya emitida, verificando tag FACTURADO...`);
+        await addFacturadoTag(order.shopify_order_id);
+        
         toast.info('Esta factura ya fue emitida');
         setIsProcessing(false);
         return;
@@ -674,7 +676,7 @@ const BulkInvoiceCreator = () => {
         
         // Add FACTURADO tag to Shopify order
         console.log(`🏷️ Intentando agregar etiqueta FACTURADO a orden ${order.order_number}`);
-        await addFacturadoTag(order.shopify_order_id, order.tags || null);
+        await addFacturadoTag(order.shopify_order_id);
         
         toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
         fetchShopifyOrders();
@@ -849,7 +851,7 @@ const BulkInvoiceCreator = () => {
         // 3. Search for existing invoice in Alegra
         const existingInvoice = await searchInvoiceByOrderNumber(order.order_number);
         
-        if (existingInvoice) {
+          if (existingInvoice) {
           // Invoice exists - check if already stamped
           if (existingInvoice.stamp?.cufe) {
             await updateOrderAlegraStatus(
@@ -865,6 +867,9 @@ const BulkInvoiceCreator = () => {
               invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
               cufe: existingInvoice.stamp.cufe
             });
+            
+            // Ensure FACTURADO tag exists even for already stamped invoices
+            await addFacturadoTag(order.shopify_order_id);
           } else {
             // Invoice exists but not stamped - queue for stamping
             await updateOrderAlegraStatus(orderId, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
@@ -964,7 +969,7 @@ const BulkInvoiceCreator = () => {
                 // Add FACTURADO tag to Shopify order
                 const orderForTag = orders.find(o => o.id === matchingItem.orderId);
                 if (orderForTag) {
-                  await addFacturadoTag(orderForTag.shopify_order_id, orderForTag.tags || null);
+                  await addFacturadoTag(orderForTag.shopify_order_id);
                 }
               }
             }
@@ -1079,6 +1084,19 @@ const BulkInvoiceCreator = () => {
     
     setValidationResults(results);
     setIsValidating(false);
+    
+    // Auto-emit if single valid order with no errors (UX improvement)
+    const validResults = results.filter(r => r.validationResult.valid);
+    const hasErrors = results.some(r => !r.validationResult.valid);
+    
+    if (validResults.length === 1 && !hasErrors && selectedOrders.size === 1) {
+      // Single valid order - emit directly without showing modal
+      console.log(`🚀 Auto-emitiendo factura única válida: ${validResults[0].orderNumber}`);
+      await processInvoices([validResults[0].orderId]);
+      return;
+    }
+    
+    // Multiple orders or has errors/warnings - show modal for confirmation
     setShowValidationModal(true);
   };
   

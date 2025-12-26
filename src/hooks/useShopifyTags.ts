@@ -55,7 +55,7 @@ export const useShopifyTags = () => {
     }
   };
 
-  // Add tag to order
+  // Add tag to order using merge action (Shopify as source of truth)
   const addTagToOrder = async (
     orderId: string, 
     shopifyOrderId: number, 
@@ -64,34 +64,16 @@ export const useShopifyTags = () => {
   ): Promise<string | null> => {
     setLoading(true);
     try {
-      // Parse current tags
-      const tagsArray = currentTags 
-        ? currentTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-        : [];
-
-      // Check if tag already exists
-      if (tagsArray.includes(tag)) {
-        toast.error('La etiqueta ya existe en esta orden');
-        return null;
-      }
-
-      // Add new tag
-      tagsArray.push(tag);
-      const newTagsString = tagsArray.join(', ');
-
-      console.log(`🏷️ Adding tag "${tag}" to order ${shopifyOrderId}`);
+      console.log(`🏷️ Adding tag "${tag}" to order ${shopifyOrderId} using merge...`);
       
-      // Update Shopify via edge function
+      // Use add_tags action - it reads from Shopify, merges, and updates
       const { data: functionData, error: functionError } = await supabase.functions.invoke(
         'update-shopify-order',
         {
           body: {
             orderId: shopifyOrderId,
-            action: 'update_tags',
-            data: {
-              tags: tagsArray,
-              previousTags: currentTags
-            }
+            action: 'add_tags',
+            data: { tags: [tag] }
           }
         }
       );
@@ -99,10 +81,14 @@ export const useShopifyTags = () => {
       if (functionError) throw functionError;
       if (!functionData?.success) throw new Error(functionData?.error || 'Error updating Shopify');
 
-      // Update local database
+      // Update local database with final tags from response
+      const finalTagsString = functionData.finalTags 
+        ? (Array.isArray(functionData.finalTags) ? functionData.finalTags.join(', ') : functionData.finalTags)
+        : currentTags + (currentTags ? ', ' : '') + tag;
+      
       const { error: dbError } = await supabase
         .from('shopify_orders')
-        .update({ tags: newTagsString })
+        .update({ tags: finalTagsString })
         .eq('shopify_order_id', shopifyOrderId);
 
       if (dbError) {
@@ -117,7 +103,7 @@ export const useShopifyTags = () => {
         await fetchAvailableTags();
       }
 
-      return newTagsString;
+      return finalTagsString;
     } catch (error: any) {
       console.error('❌ Error adding tag:', error);
       toast.error(error.message || 'Error al agregar etiqueta');
@@ -127,7 +113,7 @@ export const useShopifyTags = () => {
     }
   };
 
-  // Remove tag from order
+  // Remove tag from order using remove_tags action (Shopify as source of truth)
   const removeTagFromOrder = async (
     orderId: string,
     shopifyOrderId: number,
@@ -136,28 +122,16 @@ export const useShopifyTags = () => {
   ): Promise<string | null> => {
     setLoading(true);
     try {
-      // Parse current tags
-      const tagsArray = currentTags 
-        ? currentTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-        : [];
-
-      // Remove tag
-      const newTagsArray = tagsArray.filter(t => t !== tag);
-      const newTagsString = newTagsArray.join(', ');
-
-      console.log(`🏷️ Removing tag "${tag}" from order ${shopifyOrderId}`);
+      console.log(`🏷️ Removing tag "${tag}" from order ${shopifyOrderId} using merge...`);
       
-      // Update Shopify via edge function
+      // Use remove_tags action - it reads from Shopify, removes, and updates
       const { data: functionData, error: functionError } = await supabase.functions.invoke(
         'update-shopify-order',
         {
           body: {
             orderId: shopifyOrderId,
-            action: 'update_tags',
-            data: {
-              tags: newTagsArray,
-              previousTags: currentTags
-            }
+            action: 'remove_tags',
+            data: { tags: [tag] }
           }
         }
       );
@@ -165,10 +139,14 @@ export const useShopifyTags = () => {
       if (functionError) throw functionError;
       if (!functionData?.success) throw new Error(functionData?.error || 'Error updating Shopify');
 
-      // Update local database
+      // Update local database with final tags from response
+      const finalTagsString = functionData.finalTags 
+        ? (Array.isArray(functionData.finalTags) ? functionData.finalTags.join(', ') : functionData.finalTags)
+        : currentTags.split(',').map(t => t.trim()).filter(t => t !== tag).join(', ');
+      
       const { error: dbError } = await supabase
         .from('shopify_orders')
-        .update({ tags: newTagsString })
+        .update({ tags: finalTagsString })
         .eq('shopify_order_id', shopifyOrderId);
 
       if (dbError) {
@@ -177,7 +155,7 @@ export const useShopifyTags = () => {
       }
 
       toast.success(`Etiqueta "${tag}" eliminada correctamente`);
-      return newTagsString;
+      return finalTagsString;
     } catch (error: any) {
       console.error('❌ Error removing tag:', error);
       toast.error(error.message || 'Error al eliminar etiqueta');
