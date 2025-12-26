@@ -142,11 +142,154 @@ async function findContactInAlegra(params: {
   return { found: false, matchedBy: "created", contact: null };
 }
 
+// Tipos de identificación válidos según documentación Alegra DIAN
+const VALID_IDENTIFICATION_TYPES = ['RC', 'TI', 'CC', 'TE', 'CE', 'NIT', 'PP', 'PEP', 'DIE', 'NUIP', 'FOREIGN_NIT'];
+
+// Diccionario de normalización de ciudades para DIAN
+// Fuente: https://developer.alegra.com/reference/colombiaBF
+const ALEGRA_CITY_NORMALIZATIONS: Record<string, { city: string; department: string }> = {
+  // Bogotá variaciones
+  'bogota': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogotá': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogota dc': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogota d.c.': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogota d.c': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogotá dc': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogotá d.c.': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogotá d.c': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  
+  // Cartagena
+  'cartagena': { city: 'Cartagena de Indias', department: 'Bolívar' },
+  'cartagena de indias': { city: 'Cartagena de Indias', department: 'Bolívar' },
+  
+  // Medellín
+  'medellin': { city: 'Medellín', department: 'Antioquia' },
+  'medellín': { city: 'Medellín', department: 'Antioquia' },
+  
+  // Cali
+  'cali': { city: 'Cali', department: 'Valle del Cauca' },
+  'santiago de cali': { city: 'Cali', department: 'Valle del Cauca' },
+  
+  // Barranquilla
+  'barranquilla': { city: 'Barranquilla', department: 'Atlántico' },
+  
+  // Bucaramanga
+  'bucaramanga': { city: 'Bucaramanga', department: 'Santander' },
+  
+  // Ciudades con nombres especiales
+  'ubate': { city: 'Villa de San Diego de Ubaté', department: 'Cundinamarca' },
+  'ubaté': { city: 'Villa de San Diego de Ubaté', department: 'Cundinamarca' },
+  'villa de san diego de ubate': { city: 'Villa de San Diego de Ubaté', department: 'Cundinamarca' },
+  'villapinzon': { city: 'Villapinzón', department: 'Cundinamarca' },
+  'villa pinzon': { city: 'Villapinzón', department: 'Cundinamarca' },
+  'villapinzón': { city: 'Villapinzón', department: 'Cundinamarca' },
+  'buga': { city: 'Guadalajara de Buga', department: 'Valle del Cauca' },
+  'guadalajara de buga': { city: 'Guadalajara de Buga', department: 'Valle del Cauca' },
+  'santa marta': { city: 'Santa Marta', department: 'Magdalena' },
+  'pereira': { city: 'Pereira', department: 'Risaralda' },
+  'manizales': { city: 'Manizales', department: 'Caldas' },
+  'ibague': { city: 'Ibagué', department: 'Tolima' },
+  'ibagué': { city: 'Ibagué', department: 'Tolima' },
+  'neiva': { city: 'Neiva', department: 'Huila' },
+  'villavicencio': { city: 'Villavicencio', department: 'Meta' },
+  'cucuta': { city: 'Cúcuta', department: 'Norte de Santander' },
+  'cúcuta': { city: 'Cúcuta', department: 'Norte de Santander' },
+  'pasto': { city: 'Pasto', department: 'Nariño' },
+  'san juan de pasto': { city: 'Pasto', department: 'Nariño' },
+  'monteria': { city: 'Montería', department: 'Córdoba' },
+  'montería': { city: 'Montería', department: 'Córdoba' },
+  'armenia': { city: 'Armenia', department: 'Quindío' },
+  'popayan': { city: 'Popayán', department: 'Cauca' },
+  'popayán': { city: 'Popayán', department: 'Cauca' },
+  'sincelejo': { city: 'Sincelejo', department: 'Sucre' },
+  'valledupar': { city: 'Valledupar', department: 'Cesar' },
+  'tunja': { city: 'Tunja', department: 'Boyacá' },
+  'florencia': { city: 'Florencia', department: 'Caquetá' },
+  'quibdo': { city: 'Quibdó', department: 'Chocó' },
+  'quibdó': { city: 'Quibdó', department: 'Chocó' },
+  'riohacha': { city: 'Riohacha', department: 'La Guajira' },
+  'yopal': { city: 'Yopal', department: 'Casanare' },
+  'mocoa': { city: 'Mocoa', department: 'Putumayo' },
+  'leticia': { city: 'Leticia', department: 'Amazonas' },
+  'arauca': { city: 'Arauca', department: 'Arauca' },
+  'san jose del guaviare': { city: 'San José del Guaviare', department: 'Guaviare' },
+  'mitu': { city: 'Mitú', department: 'Vaupés' },
+  'mitú': { city: 'Mitú', department: 'Vaupés' },
+  'puerto carreño': { city: 'Puerto Carreño', department: 'Vichada' },
+  'puerto carreno': { city: 'Puerto Carreño', department: 'Vichada' },
+  'inirida': { city: 'Inírida', department: 'Guainía' },
+  'inírida': { city: 'Inírida', department: 'Guainía' },
+  // Soacha y ciudades cercanas a Bogotá
+  'soacha': { city: 'Soacha', department: 'Cundinamarca' },
+  'chia': { city: 'Chía', department: 'Cundinamarca' },
+  'chía': { city: 'Chía', department: 'Cundinamarca' },
+  'zipaquira': { city: 'Zipaquirá', department: 'Cundinamarca' },
+  'zipaquirá': { city: 'Zipaquirá', department: 'Cundinamarca' },
+  'facatativa': { city: 'Facatativá', department: 'Cundinamarca' },
+  'facatativá': { city: 'Facatativá', department: 'Cundinamarca' },
+  'fusagasuga': { city: 'Fusagasugá', department: 'Cundinamarca' },
+  'fusagasugá': { city: 'Fusagasugá', department: 'Cundinamarca' },
+  'girardot': { city: 'Girardot', department: 'Cundinamarca' },
+  'mosquera': { city: 'Mosquera', department: 'Cundinamarca' },
+  'funza': { city: 'Funza', department: 'Cundinamarca' },
+  'madrid': { city: 'Madrid', department: 'Cundinamarca' },
+  'cajica': { city: 'Cajicá', department: 'Cundinamarca' },
+  'cajicá': { city: 'Cajicá', department: 'Cundinamarca' },
+  'cota': { city: 'Cota', department: 'Cundinamarca' },
+  // Ciudades del Valle del Cauca
+  'palmira': { city: 'Palmira', department: 'Valle del Cauca' },
+  'buenaventura': { city: 'Buenaventura', department: 'Valle del Cauca' },
+  'tulua': { city: 'Tuluá', department: 'Valle del Cauca' },
+  'tuluá': { city: 'Tuluá', department: 'Valle del Cauca' },
+  'cartago': { city: 'Cartago', department: 'Valle del Cauca' },
+  // Ciudades de Antioquia
+  'envigado': { city: 'Envigado', department: 'Antioquia' },
+  'itagui': { city: 'Itagüí', department: 'Antioquia' },
+  'itagüí': { city: 'Itagüí', department: 'Antioquia' },
+  'bello': { city: 'Bello', department: 'Antioquia' },
+  'rionegro': { city: 'Rionegro', department: 'Antioquia' },
+  'sabaneta': { city: 'Sabaneta', department: 'Antioquia' },
+  'la estrella': { city: 'La Estrella', department: 'Antioquia' },
+  'apartado': { city: 'Apartadó', department: 'Antioquia' },
+  'apartadó': { city: 'Apartadó', department: 'Antioquia' },
+  // Costa Atlántica
+  'soledad': { city: 'Soledad', department: 'Atlántico' },
+  'malambo': { city: 'Malambo', department: 'Atlántico' },
+  'sabanalarga': { city: 'Sabanalarga', department: 'Atlántico' },
+  'magangue': { city: 'Magangué', department: 'Bolívar' },
+  'magangué': { city: 'Magangué', department: 'Bolívar' },
+  'turbaco': { city: 'Turbaco', department: 'Bolívar' },
+  'lorica': { city: 'Lorica', department: 'Córdoba' },
+  'cerete': { city: 'Cereté', department: 'Córdoba' },
+  'cereté': { city: 'Cereté', department: 'Córdoba' },
+  'cienaga': { city: 'Ciénaga', department: 'Magdalena' },
+  'ciénaga': { city: 'Ciénaga', department: 'Magdalena' },
+};
+
+/**
+ * Normaliza el tipo de identificación según documentación DIAN/Alegra
+ */
+function normalizeIdentificationType(type: unknown): string {
+  const t = String(type || '').toUpperCase().trim();
+  if (VALID_IDENTIFICATION_TYPES.includes(t)) return t;
+  
+  // Mapear aliases comunes
+  if (t === 'CEDULA' || t === 'CÉDULA' || t === 'CEDULA DE CIUDADANIA' || t === 'CÉDULA DE CIUDADANÍA') return 'CC';
+  if (t === 'PASAPORTE') return 'PP';
+  if (t === 'CEDULA DE EXTRANJERIA' || t === 'CÉDULA DE EXTRANJERÍA' || t === 'CARNET DE EXTRANJERIA') return 'CE';
+  if (t === 'TARJETA DE IDENTIDAD') return 'TI';
+  if (t === 'REGISTRO CIVIL') return 'RC';
+  if (t === 'TARJETA DE EXTRANJERIA' || t === 'TARJETA DE EXTRANJERÍA') return 'TE';
+  if (t === 'PERMISO ESPECIAL DE PERMANENCIA') return 'PEP';
+  if (t === 'DOCUMENTO DE IDENTIFICACION EXTRANJERO' || t === 'DOCUMENTO DE IDENTIFICACIÓN EXTRANJERO') return 'DIE';
+  
+  return 'CC'; // Default: Cédula de ciudadanía
+}
+
 /**
  * Alegra (Colombia) valida ciudad/departamento contra su catálogo DIAN.
- * Normalizamos variantes comunes para evitar errores como:
- * - "Bogota" -> "Bogotá"
- * - "Bogota D.C." -> "Bogotá, D.C."
+ * Normalizamos variantes comunes para evitar errores.
+ * Fuente: https://developer.alegra.com/reference/colombiaBF
  */
 function normalizeAlegraCOAddress(address: unknown): {
   city?: string;
@@ -156,26 +299,39 @@ function normalizeAlegraCOAddress(address: unknown): {
   const rawCity = normalizeWhitespace(a.city);
   const rawDepartment = normalizeWhitespace(a.department);
 
-  const cityLower = rawCity.toLowerCase().replace(/\./g, "");
-  const deptLower = rawDepartment.toLowerCase().replace(/\./g, "");
+  // Normalizar para búsqueda en diccionario
+  const cityKey = rawCity
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quitar acentos
+    .replace(/[.,]/g, '')
+    .trim();
 
-  let city = rawCity;
-  let department = rawDepartment;
-
-  // --- Bogotá ---
-  // city: "Bogotá, DC", department: "Bogotá D.C." (formato DIAN)
-  const isBogotaCity = /\bbogot(a|á)\b/i.test(cityLower);
-  const isBogotaDept = /\bbogot(a|á)\b/i.test(deptLower) || /\bcundinamarca\b/i.test(deptLower);
-
-  // Si es Bogotá (ciudad o departamento), normalizar a formato DIAN
-  if (isBogotaCity || isBogotaDept) {
-    city = "Bogotá, DC";
-    department = "Bogotá D.C.";
+  // Buscar en diccionario de normalizaciones
+  const normalized = ALEGRA_CITY_NORMALIZATIONS[cityKey];
+  if (normalized) {
+    console.log(`normalizeAlegraCOAddress: "${rawCity}" -> "${normalized.city}", "${normalized.department}"`);
+    return {
+      city: normalized.city,
+      department: normalized.department,
+    };
   }
 
+  // Caso especial Bogotá (fallback para variantes no listadas)
+  const isBogotaCity = /\bbogot[aá]\b/i.test(rawCity);
+  const isBogotaDept = /\bbogot[aá]\b/i.test(rawDepartment);
+  
+  if (isBogotaCity || isBogotaDept) {
+    console.log(`normalizeAlegraCOAddress: Bogotá fallback para "${rawCity}"`);
+    return {
+      city: 'Bogotá, D.C.',
+      department: 'Bogotá D.C.',
+    };
+  }
+
+  // Retornar valores originales si no hay normalización
   const out: { city?: string; department?: string } = {};
-  if (city) out.city = city;
-  if (department) out.department = department;
+  if (rawCity) out.city = rawCity;
+  if (rawDepartment) out.department = rawDepartment;
   return out;
 }
 
@@ -267,12 +423,13 @@ async function putMergedContact(contactId: string, patch: any) {
     ...normalized,
   };
 
-  // Ensure identificationType is always present (required by Alegra Colombia)
-  const identificationType =
+  // Ensure identificationType is always present and normalized (required by Alegra Colombia)
+  const rawIdType =
     patch?.identificationType ||
     (base as any).identificationType ||
     (current as any)?.identificationObject?.type ||
     "CC";
+  const identificationType = normalizeIdentificationType(rawIdType);
 
   const identificationNumber =
     patch?.identificationNumber ||
@@ -396,7 +553,8 @@ serve(async (req) => {
           contact.identification?.number ||
           contact.identification;
 
-        let identificationType = String(rawType || "CC").trim() || "CC";
+        // Usar función de normalización para validar tipo de identificación según DIAN
+        let identificationType = normalizeIdentificationType(rawType);
         let identificationNumber = String(rawNumber || "").trim();
 
         // Ensure we send a numeric identification number (Alegra commonly expects digits)
