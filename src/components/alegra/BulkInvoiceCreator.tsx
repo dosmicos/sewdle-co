@@ -18,14 +18,16 @@ import {
   ShoppingCart,
   Send,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Eye
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import InvoiceDetailsModal, { EditedInvoiceData } from './InvoiceDetailsModal';
 
-interface ShopifyOrderForInvoice {
+export interface ShopifyOrderForInvoice {
   id: string;
   shopify_order_id: number;
   order_number: string;
@@ -149,6 +151,11 @@ const BulkInvoiceCreator = () => {
   const [results, setResults] = useState<Map<string, InvoiceResult>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'stamped'>('all');
+  
+  // Modal state
+  const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<ShopifyOrderForInvoice | null>(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [editedOrders, setEditedOrders] = useState<Map<string, EditedInvoiceData>>(new Map());
 
   useEffect(() => {
     fetchShopifyOrders();
@@ -496,11 +503,246 @@ const BulkInvoiceCreator = () => {
     return data.data;
   };
 
-  const processInvoices = async () => {
-    if (selectedOrders.size === 0) {
-      toast.warning('Selecciona al menos un pedido');
-      return;
+  // Handler to open invoice details modal
+  const handleOrderClick = (order: ShopifyOrderForInvoice) => {
+    setSelectedOrderForDetails(order);
+    setDetailsModalOpen(true);
+  };
+
+  // Handler to save edited data locally
+  const handleSaveDetails = (editedData: EditedInvoiceData) => {
+    if (!selectedOrderForDetails) return;
+    
+    setEditedOrders(prev => {
+      const newMap = new Map(prev);
+      newMap.set(selectedOrderForDetails.id, editedData);
+      return newMap;
+    });
+    
+    // Ensure order is selected for batch emission
+    setSelectedOrders(prev => new Set([...prev, selectedOrderForDetails.id]));
+    setDetailsModalOpen(false);
+    toast.success('Cambios guardados. Listo para emitir en lote.');
+  };
+
+  // Handler to save and emit immediately
+  const handleSaveAndEmit = async (editedData: EditedInvoiceData) => {
+    if (!selectedOrderForDetails) return;
+    
+    // Save to edited orders
+    setEditedOrders(prev => {
+      const newMap = new Map(prev);
+      newMap.set(selectedOrderForDetails.id, editedData);
+      return newMap;
+    });
+    
+    // Process single order with edited data
+    await processSingleOrder(selectedOrderForDetails, editedData);
+    setDetailsModalOpen(false);
+  };
+
+  // Process a single order with optional edited data
+  const processSingleOrder = async (order: ShopifyOrderForInvoice, editedData?: EditedInvoiceData) => {
+    setIsProcessing(true);
+    setResults(new Map());
+    
+    updateResult(order.id, { orderNumber: order.order_number, status: 'searching_invoice' });
+    
+    try {
+      // Check if already stamped
+      if (order.alegra_stamped && order.alegra_cufe) {
+        updateResult(order.id, { 
+          status: 'already_stamped',
+          invoiceId: order.alegra_invoice_id || undefined,
+          invoiceNumber: order.alegra_invoice_number || undefined,
+          cufe: order.alegra_cufe
+        });
+        toast.info('Esta factura ya fue emitida');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Search or create contact with edited data
+      updateResult(order.id, { status: 'searching_contact' });
+      const contact = await searchOrCreateContactWithData(order, editedData);
+      
+      if (contact.isNew) {
+        updateResult(order.id, { status: 'creating_contact' });
+      }
+
+      // Create invoice
+      updateResult(order.id, { status: 'creating_invoice' });
+      const invoice = await createInvoiceWithData(order, contact.id, editedData);
+      
+      // Update DB with invoice ID
+      await updateOrderAlegraStatus(order.id, invoice.id, invoice.numberTemplate?.fullNumber || String(invoice.id), false);
+
+      // Stamp immediately
+      updateResult(order.id, { status: 'stamping' });
+      
+      // Ensure contact has valid address before stamping
+      if (editedData) {
+        await updateContactAddress(contact.id, editedData.address);
+      }
+      
+      const stampResult = await stampInvoices([invoice.id]);
+      
+      if (Array.isArray(stampResult) && stampResult.length > 0) {
+        const stampedInvoice = stampResult[0];
+        const cufe = stampedInvoice.stamp?.cufe;
+        const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
+        
+        await updateOrderAlegraStatus(order.id, stampedInvoice.id, invoiceNumber, true, cufe);
+        
+        // Update local state
+        const orderIndex = orders.findIndex(o => o.id === order.id);
+        if (orderIndex >= 0) {
+          orders[orderIndex].alegra_stamped = true;
+          orders[orderIndex].alegra_cufe = cufe;
+          orders[orderIndex].alegra_invoice_number = invoiceNumber;
+        }
+        
+        updateResult(order.id, { 
+          status: 'success',
+          invoiceId: stampedInvoice.id,
+          invoiceNumber,
+          cufe
+        });
+        
+        toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
+        fetchShopifyOrders();
+      }
+    } catch (error: any) {
+      updateResult(order.id, { status: 'error', error: error.message });
+      toast.error(`Error: ${error.message}`);
     }
+    
+    setIsProcessing(false);
+  };
+
+  // Create contact using edited data if available
+  const searchOrCreateContactWithData = async (order: ShopifyOrderForInvoice, editedData?: EditedInvoiceData) => {
+    if (!editedData) {
+      return searchOrCreateContact(order);
+    }
+
+    const customerName = `${editedData.customer.firstName} ${editedData.customer.lastName}`.trim();
+    const identificationNumber = editedData.customer.identificationNumber;
+
+    // Search for existing contact
+    const { data: searchResult } = await supabase.functions.invoke('alegra-api', {
+      body: { action: 'get-contacts' }
+    });
+
+    if (searchResult?.success && searchResult.data) {
+      // Search by identification number
+      if (identificationNumber) {
+        const contactByIdentification = searchResult.data.find((c: any) => {
+          const contactId = c.identificationNumber || c.identification || c.identificationObject?.number || '';
+          return String(contactId).replace(/\D/g, '') === identificationNumber.replace(/\D/g, '');
+        });
+        if (contactByIdentification) {
+          await updateContactAddress(String(contactByIdentification.id), editedData.address);
+          return { id: contactByIdentification.id, isNew: false, name: contactByIdentification.name };
+        }
+      }
+    }
+
+    // Create new contact with edited data
+    const { data: createResult, error } = await supabase.functions.invoke('alegra-api', {
+      body: {
+        action: 'create-contact',
+        data: {
+          contact: {
+            name: customerName,
+            identification: {
+              type: editedData.customer.identificationType,
+              number: String(identificationNumber).slice(0, 20),
+            },
+            identificationType: editedData.customer.identificationType,
+            identificationNumber: String(identificationNumber).slice(0, 20),
+            email: editedData.customer.email || undefined,
+            phonePrimary: editedData.customer.phone,
+            address: {
+              address: editedData.address.address,
+              city: editedData.address.city,
+              department: editedData.address.department,
+              country: 'Colombia'
+            },
+            type: ['client']
+          }
+        }
+      }
+    });
+
+    if (error || !createResult?.success) {
+      throw new Error('No se pudo crear el contacto: ' + (createResult?.error || error?.message));
+    }
+
+    return { id: createResult.data.id, isNew: true, name: customerName };
+  };
+
+  // Update contact address
+  const updateContactAddress = async (contactId: string, address: EditedInvoiceData['address']) => {
+    const { data, error } = await supabase.functions.invoke('alegra-api', {
+      body: {
+        action: 'update-contact',
+        data: {
+          contactId,
+          patch: {
+            address: {
+              address: address.address,
+              city: address.city,
+              department: address.department,
+              country: 'Colombia',
+            },
+          },
+        },
+      },
+    });
+
+    if (error || !data?.success) {
+      throw new Error(data?.error || error?.message || 'No se pudo actualizar la dirección');
+    }
+  };
+
+  // Create invoice using edited data if available
+  const createInvoiceWithData = async (order: ShopifyOrderForInvoice, contactId: string, editedData?: EditedInvoiceData) => {
+    const items = (editedData?.lineItems || order.line_items).map(item => ({
+      id: 1,
+      name: 'title' in item ? item.title : `${(item as any).title}${(item as any).variant_title ? ' - ' + (item as any).variant_title : ''}`,
+      price: item.price,
+      quantity: item.quantity,
+      tax: []
+    }));
+
+    const { data, error } = await supabase.functions.invoke('alegra-api', {
+      body: {
+        action: 'create-invoice',
+        data: {
+          invoice: {
+            client: contactId,
+            date: format(new Date(), 'yyyy-MM-dd'),
+            dueDate: format(new Date(), 'yyyy-MM-dd'),
+            items,
+            observations: `Pedido Shopify #${order.order_number}`,
+            status: 'open',
+            paymentMethod: 'CASH',
+            paymentForm: 'CASH',
+            numberTemplate: { id: '21' }
+          }
+        }
+      }
+    });
+
+    if (error || !data?.success) {
+      throw new Error(data?.error || 'Error al crear factura');
+    }
+
+    return data.data;
+  };
+
+  const processInvoices = async () => {
 
     setIsProcessing(true);
     setResults(new Map());
@@ -772,10 +1014,9 @@ const BulkInvoiceCreator = () => {
               return (
                 <Card 
                   key={order.id}
-                  className={`cursor-pointer transition-colors ${
+                  className={`transition-colors ${
                     selectedOrders.has(order.id) ? 'border-primary bg-primary/5' : ''
                   } ${isStamped ? 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20' : ''}`}
-                  onClick={() => !isStamped && toggleOrder(order.id)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
@@ -789,7 +1030,12 @@ const BulkInvoiceCreator = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">#{order.order_number}</span>
+                            <button
+                              onClick={() => handleOrderClick(order)}
+                              className="font-medium hover:text-primary hover:underline cursor-pointer"
+                            >
+                              #{order.order_number}
+                            </button>
                             <Badge variant="outline" className="text-green-600">
                               {order.financial_status}
                             </Badge>
@@ -799,10 +1045,26 @@ const BulkInvoiceCreator = () => {
                                 DIAN
                               </Badge>
                             )}
+                            {editedOrders.has(order.id) && !isStamped && (
+                              <Badge variant="secondary" className="text-xs">
+                                Editado
+                              </Badge>
+                            )}
                           </div>
-                          <span className="font-bold text-lg">
-                            ${order.total_price?.toLocaleString('es-CO')} {order.currency}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOrderClick(order)}
+                              className="h-7 px-2"
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              Ver
+                            </Button>
+                            <span className="font-bold text-lg">
+                              ${order.total_price?.toLocaleString('es-CO')} {order.currency}
+                            </span>
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
@@ -858,6 +1120,15 @@ const BulkInvoiceCreator = () => {
           </div>
         </ScrollArea>
       )}
+
+      {/* Invoice Details Modal */}
+      <InvoiceDetailsModal
+        open={detailsModalOpen}
+        onOpenChange={setDetailsModalOpen}
+        order={selectedOrderForDetails}
+        onSave={handleSaveDetails}
+        onSaveAndEmit={handleSaveAndEmit}
+      />
     </div>
   );
 };
