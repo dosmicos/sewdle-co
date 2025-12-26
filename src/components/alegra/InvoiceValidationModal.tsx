@@ -16,7 +16,8 @@ import {
   Truck, 
   DollarSign, 
   CreditCard,
-  Loader2
+  Loader2,
+  Send
 } from 'lucide-react';
 
 export interface ValidationResult {
@@ -125,6 +126,17 @@ const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
               </Alert>
             )}
 
+            {/* Success Message */}
+            {!hasErrors && !hasWarnings && (
+              <Alert className="border-green-500 bg-green-50 dark:bg-green-950/20">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertTitle className="text-green-800 dark:text-green-400">Todo listo para emitir</AlertTitle>
+                <AlertDescription className="text-green-700 dark:text-green-300">
+                  Todas las validaciones pasaron correctamente. Puedes proceder con la emisión a DIAN.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Validation Checks */}
             <div className="space-y-3 pt-2">
               {/* Client Check */}
@@ -206,23 +218,26 @@ const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isEmitting}>
-            Cancelar
+            {hasErrors ? 'Volver a editar' : 'Cancelar'}
           </Button>
-          <Button 
-            onClick={onConfirmEmit} 
-            disabled={!canEmit || isEmitting}
-          >
-            {isEmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Emitiendo...
-              </>
-            ) : hasErrors ? (
-              'No se puede emitir'
-            ) : (
-              'Confirmar y Emitir'
-            )}
-          </Button>
+          {!hasErrors && (
+            <Button 
+              onClick={onConfirmEmit} 
+              disabled={isEmitting}
+            >
+              {isEmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Emitiendo a DIAN...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Confirmar y Emitir a DIAN
+                </>
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
