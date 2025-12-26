@@ -211,37 +211,34 @@ export const validateOrderForInvoice = async (
     }
   }
 
-  // 3. PRICE VALIDATION - Calculate dynamically based on line items
-  // Calculate subtotal from line items (this is what we'll invoice)
-  const lineItemsSubtotal = order.line_items.reduce(
+  // 3. PRICE VALIDATION - Compare invoice total with Shopify total (both include shipping)
+  // Calculate invoice total from edited data or line items (shipping is included as a line item)
+  const lineItemsTotal = order.line_items.reduce(
     (sum, item) => sum + (item.price * item.quantity), 0
   );
   
-  // Calculate what the invoice total will be (from edited data or line items)
   const invoiceTotal = editedData
     ? editedData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-    : lineItemsSubtotal;
+    : lineItemsTotal;
   
-  // For comparison, calculate the expected Shopify total from line items
-  // If taxes_included is true, the line item prices already include tax
-  // The total_price from Shopify includes shipping, so we compare subtotals
-  const shopifySubtotal = order.subtotal_price ?? lineItemsSubtotal;
+  // Use Shopify's total_price which includes products + shipping
+  const shopifyTotal = order.total_price;
   
-  // Compare invoice total with Shopify subtotal (excluding shipping which isn't invoiced)
-  const priceDifference = Math.abs(invoiceTotal - shopifySubtotal);
+  // Compare totals (both should include shipping)
+  const priceDifference = Math.abs(invoiceTotal - shopifyTotal);
   const priceMatch = priceDifference <= 100; // $100 COP tolerance for rounding
 
   checks.priceCheck = {
     passed: priceMatch,
     invoiceTotal,
-    shopifyTotal: shopifySubtotal,
+    shopifyTotal,
     message: priceMatch
-      ? `Total coincide: $${shopifySubtotal.toLocaleString('es-CO')}`
-      : `Diferencia de $${priceDifference.toLocaleString('es-CO')} (Factura: $${invoiceTotal.toLocaleString('es-CO')} vs Shopify: $${shopifySubtotal.toLocaleString('es-CO')})`,
+      ? `Total coincide: $${shopifyTotal.toLocaleString('es-CO')}`
+      : `Diferencia de $${priceDifference.toLocaleString('es-CO')} (Factura: $${invoiceTotal.toLocaleString('es-CO')} vs Shopify: $${shopifyTotal.toLocaleString('es-CO')})`,
   };
 
   if (!priceMatch) {
-    warnings.push(`El total de la factura ($${invoiceTotal.toLocaleString('es-CO')}) difiere del subtotal de Shopify ($${shopifySubtotal.toLocaleString('es-CO')})`);
+    warnings.push(`El total de la factura ($${invoiceTotal.toLocaleString('es-CO')}) difiere del total de Shopify ($${shopifyTotal.toLocaleString('es-CO')})`);
   }
 
   // 4. PAID ORDER VALIDATION
