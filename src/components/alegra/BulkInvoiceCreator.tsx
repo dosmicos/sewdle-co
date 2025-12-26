@@ -135,6 +135,52 @@ const normalizeForAlegra = (city?: string, province?: string) => {
   return { city: 'Bogotá, DC', department: 'Bogotá D.C.' };
 };
 
+// Helper function to add FACTURADO tag to Shopify order after successful DIAN stamp
+const addFacturadoTag = async (shopifyOrderId: number, currentTags: string | null): Promise<void> => {
+  try {
+    const tagsArray = currentTags 
+      ? currentTags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+      : [];
+
+    // If already has the tag, skip
+    if (tagsArray.includes('FACTURADO')) {
+      console.log(`🏷️ Orden ${shopifyOrderId} ya tiene etiqueta FACTURADO`);
+      return;
+    }
+
+    // Add FACTURADO tag
+    tagsArray.push('FACTURADO');
+    const newTagsString = tagsArray.join(', ');
+
+    console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${shopifyOrderId}`);
+    
+    // Update in Shopify
+    const { data, error } = await supabase.functions.invoke('update-shopify-order', {
+      body: {
+        orderId: shopifyOrderId,
+        action: 'update_tags',
+        data: { tags: newTagsString }
+      }
+    });
+
+    if (error || !data?.success) {
+      console.error('⚠️ Error al agregar etiqueta FACTURADO:', error || data?.error);
+      return;
+    }
+
+    // Update in local database
+    await supabase
+      .from('shopify_orders')
+      .update({ tags: newTagsString })
+      .eq('shopify_order_id', shopifyOrderId);
+
+    console.log(`✅ Etiqueta FACTURADO agregada a orden ${shopifyOrderId}`);
+  } catch (error) {
+    console.error('⚠️ Error al agregar etiqueta FACTURADO:', error);
+    // Don't throw - tag failure shouldn't stop the invoice process
+  }
+};
+
 const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactNode; color: string }> = {
   idle: { label: 'Pendiente', icon: <Clock className="h-4 w-4" />, color: 'text-muted-foreground' },
   searching_invoice: { label: 'Buscando factura...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
@@ -618,6 +664,9 @@ const BulkInvoiceCreator = () => {
           cufe
         });
         
+        // Add FACTURADO tag to Shopify order
+        await addFacturadoTag(order.shopify_order_id, order.tags || null);
+        
         toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
         fetchShopifyOrders();
       }
@@ -898,6 +947,12 @@ const BulkInvoiceCreator = () => {
                   invoiceNumber,
                   cufe
                 });
+                
+                // Add FACTURADO tag to Shopify order
+                const orderForTag = orders.find(o => o.id === matchingItem.orderId);
+                if (orderForTag) {
+                  await addFacturadoTag(orderForTag.shopify_order_id, orderForTag.tags || null);
+                }
               }
             }
           }
