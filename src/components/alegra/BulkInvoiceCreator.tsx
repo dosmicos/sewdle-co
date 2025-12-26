@@ -555,7 +555,14 @@ const BulkInvoiceCreator = () => {
       throw new Error(data?.error || 'Error al emitir factura con DIAN');
     }
 
-    return data.data;
+    // Normalize response: ensure always returns an array
+    const result = data.data;
+    if (Array.isArray(result)) {
+      return result;
+    } else if (result && typeof result === 'object') {
+      return [result]; // Wrap single object in array
+    }
+    return [];
   };
 
   // Handler to open invoice details modal
@@ -642,7 +649,8 @@ const BulkInvoiceCreator = () => {
       
       const stampResult = await stampInvoices([invoice.id]);
       
-      if (Array.isArray(stampResult) && stampResult.length > 0) {
+      // stampResult is now always an array (normalized in stampInvoices)
+      if (stampResult && stampResult.length > 0) {
         const stampedInvoice = stampResult[0];
         const cufe = stampedInvoice.stamp?.cufe;
         const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
@@ -665,10 +673,15 @@ const BulkInvoiceCreator = () => {
         });
         
         // Add FACTURADO tag to Shopify order
+        console.log(`🏷️ Intentando agregar etiqueta FACTURADO a orden ${order.order_number}`);
         await addFacturadoTag(order.shopify_order_id, order.tags || null);
         
         toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
         fetchShopifyOrders();
+      } else {
+        // Handle case where no results returned (shouldn't happen)
+        console.error('⚠️ stampInvoices no devolvió resultados para factura', invoice.id);
+        throw new Error('No se recibió confirmación de emisión DIAN');
       }
     } catch (error: any) {
       updateResult(order.id, { status: 'error', error: error.message });
