@@ -81,17 +81,28 @@ export const validateOrderForInvoice = async (
     if (findContactError) throw findContactError;
 
     const payload = findContactResponse as any;
-    const found = Boolean(payload?.success && payload?.data?.found);
-    const matchedBy = (payload?.data?.matchedBy || 'created') as 'phone' | 'identification' | 'email' | 'created';
+    const searchResult = payload?.data || payload;
+    const rateLimited = Boolean(searchResult?.rateLimited);
+    const retryAfterSec = searchResult?.retryAfterSec || 20;
+    const found = Boolean(searchResult?.found);
+    const matchedBy = (searchResult?.matchedBy || 'created') as 'phone' | 'identification' | 'email' | 'created' | 'rate_limited';
 
     console.log('Validación cliente - Resultado búsqueda:', {
       found,
       matchedBy,
-      contactId: payload?.data?.contact?.id,
-      contactName: payload?.data?.contact?.name,
+      rateLimited,
+      contactId: searchResult?.contact?.id,
+      contactName: searchResult?.contact?.name,
     });
 
-    if (found) {
+    if (rateLimited) {
+      // Rate limit - mostrar mensaje claro sin bloquear como error fatal
+      checks.clientCheck = {
+        passed: false,
+        message: `Alegra está limitando solicitudes. Espera ${retryAfterSec} segundos y reintenta.`,
+      };
+      warnings.push(`Rate limit de Alegra. Espera ${retryAfterSec}s y reintenta la validación.`);
+    } else if (found) {
       checks.clientCheck = {
         passed: true,
         matchedBy,
@@ -111,11 +122,21 @@ export const validateOrderForInvoice = async (
     }
   } catch (error: any) {
     console.error('Validación cliente - Error:', error);
-    checks.clientCheck = {
-      passed: false,
-      message: 'Error al verificar cliente: ' + error.message,
-    };
-    errors.push('Error al verificar cliente: ' + error.message);
+    const errorMsg = error?.message || String(error);
+    // Detectar rate limit en errores
+    if (errorMsg.toLowerCase().includes('too many requests') || errorMsg.toLowerCase().includes('rate limit')) {
+      checks.clientCheck = {
+        passed: false,
+        message: 'Alegra está limitando solicitudes. Espera 20 segundos y reintenta.',
+      };
+      warnings.push('Rate limit de Alegra. Espera 20s y reintenta.');
+    } else {
+      checks.clientCheck = {
+        passed: false,
+        message: 'Error al verificar cliente: ' + errorMsg,
+      };
+      errors.push('Error al verificar cliente: ' + errorMsg);
+    }
   }
 
   // 2. COD DELIVERY VALIDATION
