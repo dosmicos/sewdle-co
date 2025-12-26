@@ -43,64 +43,102 @@ async function findContactInAlegra(params: {
   phone?: unknown;
   identification?: unknown;
   email?: unknown;
-}) {
+}): Promise<{
+  found: boolean;
+  matchedBy: "identification" | "phone" | "email" | "created" | "rate_limited";
+  contact: any;
+  rateLimited?: boolean;
+  retryAfterSec?: number;
+}> {
   const phone = normalizeCOPhone(params.phone);
   const identification = normalizeDigits(params.identification);
   const email = normalizeWhitespace(params.email).toLowerCase();
 
   const pageSize = 30;
-  const maxPages = 200; // hasta 6000 contactos (corta antes si se acaban)
+  const maxPages = 100; // hasta 3000 contactos
 
-  const fetchPage = async (start: number) =>
-    await makeAlegraRequest(`/contacts?type=client&start=${start}&limit=${pageSize}`);
+  console.log("findContactInAlegra - Buscando:", { phone, identification, email });
 
-  // 1) Buscar por teléfono (requiere paginación; Alegra no filtra por phone)
-  if (phone) {
-    for (let page = 0; page < maxPages; page++) {
-      const start = page * pageSize;
-      const pageData = await fetchPage(start);
-      if (!Array.isArray(pageData) || pageData.length === 0) break;
+  // Helper para detectar rate limit
+  const isRateLimitError = (e: any) => {
+    const msg = String(e?.message || e?.alegra?.message || "").toLowerCase();
+    return msg.includes("too many requests") || msg.includes("rate limit") || e?.status === 429;
+  };
 
-      const found = pageData.find((c: any) => {
-        const p1 = normalizeCOPhone(c.phonePrimary);
-        const p2 = normalizeCOPhone(c.mobile);
-        return (p1 && p1 === phone) || (p2 && p2 === phone);
-      });
-
-      if (found) {
-        return { found: true, matchedBy: "phone", contact: found };
-      }
-    }
-  }
-
-  // 2) Buscar por cédula/identificación (Alegra sí filtra por identificación)
+  // 1) Buscar por cédula/identificación PRIMERO (1 request, más eficiente)
   if (identification) {
-    const byId = await makeAlegraRequest(
-      `/contacts?type=client&identification=${encodeURIComponent(identification)}&start=0&limit=${pageSize}`,
-    );
-    if (Array.isArray(byId) && byId.length > 0) {
-      return { found: true, matchedBy: "identification", contact: byId[0] };
-    }
-  }
-
-  // 3) Buscar por email (requiere paginación; Alegra no filtra por email)
-  if (email) {
-    for (let page = 0; page < maxPages; page++) {
-      const start = page * pageSize;
-      const pageData = await fetchPage(start);
-      if (!Array.isArray(pageData) || pageData.length === 0) break;
-
-      const found = pageData.find((c: any) => {
-        const cEmail = normalizeWhitespace(c.email).toLowerCase();
-        return cEmail && cEmail === email;
-      });
-
-      if (found) {
-        return { found: true, matchedBy: "email", contact: found };
+    try {
+      console.log("findContactInAlegra - Buscando por identificación:", identification);
+      const byId = await makeAlegraRequest(
+        `/contacts?type=client&identification=${encodeURIComponent(identification)}&start=0&limit=${pageSize}`,
+      );
+      if (Array.isArray(byId) && byId.length > 0) {
+        console.log("findContactInAlegra - Encontrado por identificación:", byId[0].id, byId[0].name);
+        return { found: true, matchedBy: "identification", contact: byId[0] };
       }
+    } catch (e: any) {
+      if (isRateLimitError(e)) {
+        console.warn("findContactInAlegra - Rate limit en búsqueda por identificación");
+        return { found: false, matchedBy: "rate_limited", contact: null, rateLimited: true, retryAfterSec: 20 };
+      }
+      console.error("findContactInAlegra - Error buscando por identificación:", e.message);
     }
   }
 
+  // 2) Buscar por teléfono Y email en UNA SOLA paginación (reduce requests)
+  if (phone || email) {
+    try {
+      for (let page = 0; page < maxPages; page++) {
+        const start = page * pageSize;
+        console.log(`findContactInAlegra - Paginando contactos (page ${page}, start ${start})`);
+        
+        const pageData = await makeAlegraRequest(`/contacts?type=client&start=${start}&limit=${pageSize}`);
+        if (!Array.isArray(pageData) || pageData.length === 0) {
+          console.log("findContactInAlegra - Fin de paginación, no más contactos");
+          break;
+        }
+
+        // Buscar por teléfono en esta página
+        if (phone) {
+          const foundByPhone = pageData.find((c: any) => {
+            const p1 = normalizeCOPhone(c.phonePrimary);
+            const p2 = normalizeCOPhone(c.mobile);
+            return (p1 && p1 === phone) || (p2 && p2 === phone);
+          });
+          if (foundByPhone) {
+            console.log("findContactInAlegra - Encontrado por teléfono:", foundByPhone.id, foundByPhone.name);
+            return { found: true, matchedBy: "phone", contact: foundByPhone };
+          }
+        }
+
+        // Buscar por email en esta página
+        if (email) {
+          const foundByEmail = pageData.find((c: any) => {
+            const cEmail = normalizeWhitespace(c.email).toLowerCase();
+            return cEmail && cEmail === email;
+          });
+          if (foundByEmail) {
+            console.log("findContactInAlegra - Encontrado por email:", foundByEmail.id, foundByEmail.name);
+            return { found: true, matchedBy: "email", contact: foundByEmail };
+          }
+        }
+
+        // Si la página está incompleta, no hay más datos
+        if (pageData.length < pageSize) {
+          console.log("findContactInAlegra - Última página alcanzada");
+          break;
+        }
+      }
+    } catch (e: any) {
+      if (isRateLimitError(e)) {
+        console.warn("findContactInAlegra - Rate limit en paginación");
+        return { found: false, matchedBy: "rate_limited", contact: null, rateLimited: true, retryAfterSec: 20 };
+      }
+      console.error("findContactInAlegra - Error en paginación:", e.message);
+    }
+  }
+
+  console.log("findContactInAlegra - No se encontró cliente, se creará uno nuevo");
   return { found: false, matchedBy: "created", contact: null };
 }
 
