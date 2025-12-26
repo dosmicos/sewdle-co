@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      alegra_invoices: {
+        Row: {
+          alegra_invoice_id: number
+          alegra_invoice_number: string | null
+          created_at: string | null
+          cufe: string | null
+          id: string
+          organization_id: string
+          shopify_order_id: number
+          shopify_order_number: string
+          stamped: boolean | null
+          stamped_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          alegra_invoice_id: number
+          alegra_invoice_number?: string | null
+          created_at?: string | null
+          cufe?: string | null
+          id?: string
+          organization_id: string
+          shopify_order_id: number
+          shopify_order_number: string
+          stamped?: boolean | null
+          stamped_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          alegra_invoice_id?: number
+          alegra_invoice_number?: string | null
+          created_at?: string | null
+          cufe?: string | null
+          id?: string
+          organization_id?: string
+          shopify_order_id?: number
+          shopify_order_number?: string
+          stamped?: boolean | null
+          stamped_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alegra_invoices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deliveries: {
         Row: {
           created_at: string
