@@ -19,13 +19,16 @@ import {
   Send,
   Clock,
   RefreshCw,
-  Eye
+  Eye,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import InvoiceDetailsModal, { EditedInvoiceData } from './InvoiceDetailsModal';
+import BulkValidationResultsModal, { BulkValidationResult } from './BulkValidationResultsModal';
+import { validateOrderForInvoice } from '@/hooks/useInvoiceValidation';
 
 export interface ShopifyOrderForInvoice {
   id: string;
@@ -157,6 +160,11 @@ const BulkInvoiceCreator = () => {
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<ShopifyOrderForInvoice | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [editedOrders, setEditedOrders] = useState<Map<string, EditedInvoiceData>>(new Map());
+  
+  // Bulk validation state
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationResults, setValidationResults] = useState<BulkValidationResult[]>([]);
+  const [showValidationModal, setShowValidationModal] = useState(false);
 
   useEffect(() => {
     fetchShopifyOrders();
@@ -743,14 +751,16 @@ const BulkInvoiceCreator = () => {
     return data.data;
   };
 
-  const processInvoices = async () => {
-
+  const processInvoices = async (orderIdsToProcess?: string[]) => {
+    const idsToProcess = orderIdsToProcess || Array.from(selectedOrders);
+    if (idsToProcess.length === 0) return;
+    
     setIsProcessing(true);
     setResults(new Map());
 
     const invoicesToStamp: { orderId: string; invoiceId: number; orderNumber: string }[] = [];
 
-    for (const orderId of selectedOrders) {
+    for (const orderId of idsToProcess) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
 
@@ -909,6 +919,116 @@ const BulkInvoiceCreator = () => {
     }
   };
 
+  // Validate all selected orders before emitting
+  const validateSelectedOrders = async () => {
+    if (selectedOrders.size === 0) return;
+    
+    setIsValidating(true);
+    const results: BulkValidationResult[] = [];
+    
+    for (const orderId of selectedOrders) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) continue;
+      
+      // Already stamped = skip validation with error
+      if (order.alegra_stamped) {
+        results.push({
+          orderId,
+          orderNumber: order.order_number,
+          customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Sin nombre',
+          total: order.total_price,
+          validationResult: {
+            valid: false,
+            errors: ['Ya tiene factura emitida en DIAN'],
+            warnings: [],
+            checks: {
+              clientCheck: { passed: true, message: 'N/A' },
+              priceCheck: { passed: true, invoiceTotal: order.total_price, shopifyTotal: order.total_price, message: 'N/A' },
+              paymentCheck: { passed: true, message: 'N/A' },
+            }
+          }
+        });
+        continue;
+      }
+      
+      // Use edited data if available
+      const editedData = editedOrders.get(orderId);
+      
+      try {
+        // Convert order to validation format
+        const orderForValidation = {
+          id: order.id,
+          shopify_order_id: order.shopify_order_id,
+          order_number: order.order_number,
+          customer_phone: order.customer_phone,
+          customer_email: order.customer_email,
+          billing_address: order.billing_address,
+          shipping_address: order.shipping_address,
+          total_price: order.total_price,
+          financial_status: order.financial_status,
+          tags: order.tags,
+          line_items: order.line_items,
+        };
+        
+        // Convert edited data to validation format if exists
+        const editedDataForValidation = editedData ? {
+          customer: {
+            identificationNumber: editedData.customer.identificationNumber,
+            phone: editedData.customer.phone,
+            email: editedData.customer.email,
+          },
+          lineItems: editedData.lineItems,
+        } : undefined;
+        
+        const validationResult = await validateOrderForInvoice(orderForValidation, editedDataForValidation);
+        
+        results.push({
+          orderId,
+          orderNumber: order.order_number,
+          customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Sin nombre',
+          total: order.total_price,
+          validationResult
+        });
+      } catch (error: any) {
+        results.push({
+          orderId,
+          orderNumber: order.order_number,
+          customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Sin nombre',
+          total: order.total_price,
+          validationResult: {
+            valid: false,
+            errors: ['Error al validar: ' + error.message],
+            warnings: [],
+            checks: {
+              clientCheck: { passed: false, message: 'Error de validación' },
+              priceCheck: { passed: false, invoiceTotal: 0, shopifyTotal: order.total_price, message: 'Error' },
+              paymentCheck: { passed: false, message: 'Error' },
+            }
+          }
+        });
+      }
+    }
+    
+    setValidationResults(results);
+    setIsValidating(false);
+    setShowValidationModal(true);
+  };
+  
+  // Emit only the valid orders after validation
+  const emitValidOrders = async () => {
+    const validOrderIds = validationResults
+      .filter(r => r.validationResult.valid)
+      .map(r => r.orderId);
+    
+    if (validOrderIds.length === 0) {
+      toast.error('No hay facturas válidas para emitir');
+      return;
+    }
+    
+    setShowValidationModal(false);
+    await processInvoices(validOrderIds);
+  };
+
   const filteredOrders = getFilteredOrders();
   const pendingCount = orders.filter(o => !o.alegra_stamped).length;
   const stampedCount = orders.filter(o => o.alegra_stamped).length;
@@ -976,18 +1096,23 @@ const BulkInvoiceCreator = () => {
         </div>
         
         <Button 
-          onClick={processInvoices} 
-          disabled={selectedOrders.size === 0 || isProcessing}
+          onClick={validateSelectedOrders} 
+          disabled={selectedOrders.size === 0 || isProcessing || isValidating}
         >
-          {isProcessing ? (
+          {isValidating ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Procesando...
+              Validando...
+            </>
+          ) : isProcessing ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Emitiendo...
             </>
           ) : (
             <>
-              <Send className="h-4 w-4 mr-2" />
-              Emitir {selectedOrders.size} Facturas DIAN
+              <ShieldCheck className="h-4 w-4 mr-2" />
+              Validar y Emitir {selectedOrders.size} Facturas
             </>
           )}
         </Button>
@@ -1129,6 +1254,15 @@ const BulkInvoiceCreator = () => {
         order={selectedOrderForDetails}
         onSave={handleSaveDetails}
         onSaveAndEmit={handleSaveAndEmit}
+      />
+      
+      {/* Bulk Validation Results Modal */}
+      <BulkValidationResultsModal
+        open={showValidationModal}
+        onOpenChange={setShowValidationModal}
+        results={validationResults}
+        isEmitting={isProcessing}
+        onEmitValid={emitValidOrders}
       />
     </div>
   );
