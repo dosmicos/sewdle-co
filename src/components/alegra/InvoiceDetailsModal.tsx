@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,19 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { 
   User, 
   MapPin, 
@@ -30,6 +43,7 @@ import {
   Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useProducts } from '@/hooks/useProducts';
 
 interface ShopifyOrderForInvoice {
   id: string;
@@ -161,6 +175,9 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
   onSaveAndEmit,
 }) => {
   const [isEmitting, setIsEmitting] = useState(false);
+  const [productSelectorOpen, setProductSelectorOpen] = useState(false);
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const { products, loading: productsLoading } = useProducts();
   const [formData, setFormData] = useState<EditedInvoiceData>({
     customer: {
       firstName: '',
@@ -276,7 +293,31 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
     }));
   };
 
-  const handleAddLineItem = () => {
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    const searchLower = productSearchTerm.toLowerCase();
+    return products.filter(p => 
+      p.name.toLowerCase().includes(searchLower) ||
+      p.sku?.toLowerCase().includes(searchLower)
+    );
+  }, [products, productSearchTerm]);
+
+  const handleAddProductFromCatalog = (product: { name: string; base_price: number | null }) => {
+    setFormData(prev => ({
+      ...prev,
+      lineItems: [...prev.lineItems, {
+        id: `new-${Date.now()}`,
+        title: product.name,
+        quantity: 1,
+        price: product.base_price || 0,
+        isShipping: false,
+      }],
+    }));
+    setProductSelectorOpen(false);
+    setProductSearchTerm('');
+  };
+
+  const handleAddManualLineItem = () => {
     setFormData(prev => ({
       ...prev,
       lineItems: [...prev.lineItems, {
@@ -481,10 +522,80 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                   <Package className="h-4 w-4 text-primary" />
                   <h3 className="font-semibold">Productos</h3>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleAddLineItem}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Agregar
-                </Button>
+                <Popover open={productSelectorOpen} onOpenChange={setProductSelectorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Agregar Producto
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="end">
+                    <Command shouldFilter={false}>
+                      <CommandInput 
+                        placeholder="Buscar producto por nombre o SKU..." 
+                        value={productSearchTerm}
+                        onValueChange={setProductSearchTerm}
+                      />
+                      <CommandList className="max-h-[300px]">
+                        {productsLoading ? (
+                          <div className="p-4 text-center text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                            Cargando productos...
+                          </div>
+                        ) : filteredProducts.length === 0 ? (
+                          <CommandEmpty>
+                            <div className="py-2">
+                              <p className="text-muted-foreground mb-2">No se encontraron productos</p>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  handleAddManualLineItem();
+                                  setProductSelectorOpen(false);
+                                }}
+                              >
+                                Agregar manualmente
+                              </Button>
+                            </div>
+                          </CommandEmpty>
+                        ) : (
+                          <CommandGroup>
+                            {filteredProducts.slice(0, 15).map((product) => (
+                              <CommandItem
+                                key={product.id}
+                                onSelect={() => handleAddProductFromCatalog(product)}
+                                className="cursor-pointer"
+                              >
+                                <div className="flex items-center justify-between w-full gap-3">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    {product.image_url ? (
+                                      <img 
+                                        src={product.image_url} 
+                                        alt={product.name}
+                                        className="w-10 h-10 rounded object-cover flex-shrink-0" 
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                                        <Package className="h-5 w-5 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium text-sm truncate">{product.name}</p>
+                                      <p className="text-xs text-muted-foreground truncate">{product.sku}</p>
+                                    </div>
+                                  </div>
+                                  <span className="text-sm font-medium text-primary flex-shrink-0">
+                                    ${product.base_price?.toLocaleString('es-CO') || '0'}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               
               <div className="border rounded-lg overflow-hidden">
