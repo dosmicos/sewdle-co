@@ -1,0 +1,329 @@
+import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+  Send,
+  User,
+  DollarSign,
+  Truck,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import type { ValidationResult } from '@/components/alegra/InvoiceValidationModal';
+
+export interface BulkValidationResult {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  total: number;
+  validationResult: ValidationResult;
+}
+
+interface BulkValidationResultsModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  results: BulkValidationResult[];
+  isEmitting: boolean;
+  onEmitValid: () => void;
+}
+
+const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
+  open,
+  onOpenChange,
+  results,
+  isEmitting,
+  onEmitValid,
+}) => {
+  const [expandedOrders, setExpandedOrders] = React.useState<Set<string>>(new Set());
+
+  const validResults = results.filter(r => r.validationResult.valid);
+  const errorResults = results.filter(r => !r.validationResult.valid);
+  const warningResults = results.filter(
+    r => r.validationResult.valid && r.validationResult.warnings.length > 0
+  );
+
+  const toggleExpanded = (orderId: string) => {
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const getStatusIcon = (result: BulkValidationResult) => {
+    if (!result.validationResult.valid) {
+      return <XCircle className="h-5 w-5 text-red-500" />;
+    }
+    if (result.validationResult.warnings.length > 0) {
+      return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+    }
+    return <CheckCircle className="h-5 w-5 text-green-500" />;
+  };
+
+  const getStatusBadge = (result: BulkValidationResult) => {
+    if (!result.validationResult.valid) {
+      return <Badge variant="destructive">Error</Badge>;
+    }
+    if (result.validationResult.warnings.length > 0) {
+      return <Badge className="bg-yellow-500 hover:bg-yellow-600">Advertencia</Badge>;
+    }
+    return <Badge className="bg-green-600 hover:bg-green-700">Válida</Badge>;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            📋 Resultados de Validación Masiva
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-hidden">
+          {/* Summary */}
+          <div className="flex gap-4 mb-4">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <div className="font-semibold text-green-800 dark:text-green-400">
+                  {validResults.length}
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-500">Válidas</div>
+              </div>
+            </div>
+            {warningResults.length > 0 && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800">
+                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <div className="font-semibold text-yellow-800 dark:text-yellow-400">
+                    {warningResults.length}
+                  </div>
+                  <div className="text-xs text-yellow-600 dark:text-yellow-500">Con advertencias</div>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+              <XCircle className="h-5 w-5 text-red-600" />
+              <div>
+                <div className="font-semibold text-red-800 dark:text-red-400">
+                  {errorResults.length}
+                </div>
+                <div className="text-xs text-red-600 dark:text-red-500">Con errores</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Success message if all valid */}
+          {errorResults.length === 0 && results.length > 0 && (
+            <Alert className="border-green-500 bg-green-50 dark:bg-green-950/20 mb-4">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertTitle className="text-green-800 dark:text-green-400">
+                Todas las facturas están listas
+              </AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-300">
+                Las {validResults.length} facturas seleccionadas pasaron la validación y pueden emitirse.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error warning */}
+          {errorResults.length > 0 && validResults.length > 0 && (
+            <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 mb-4">
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertTitle className="text-yellow-800 dark:text-yellow-400">
+                Algunas facturas tienen errores
+              </AlertTitle>
+              <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+                {errorResults.length} factura(s) no pasaron la validación. Puedes emitir las {validResults.length} válidas.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* All have errors */}
+          {errorResults.length > 0 && validResults.length === 0 && (
+            <Alert className="border-red-500 bg-red-50 dark:bg-red-950/20 mb-4">
+              <XCircle className="h-4 w-4 text-red-600" />
+              <AlertTitle className="text-red-800 dark:text-red-400">
+                Ninguna factura puede emitirse
+              </AlertTitle>
+              <AlertDescription className="text-red-700 dark:text-red-300">
+                Todas las facturas seleccionadas tienen errores. Revisa y corrige los problemas indicados.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Results list */}
+          <ScrollArea className="h-[350px] pr-4">
+            <div className="space-y-2">
+              {results.map(result => {
+                const isExpanded = expandedOrders.has(result.orderId);
+                const checks = result.validationResult.checks;
+                
+                return (
+                  <Collapsible key={result.orderId} open={isExpanded}>
+                    <div
+                      className={`rounded-lg border p-3 transition-colors ${
+                        !result.validationResult.valid
+                          ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20'
+                          : result.validationResult.warnings.length > 0
+                          ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20'
+                          : 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20'
+                      }`}
+                    >
+                      <CollapsibleTrigger
+                        onClick={() => toggleExpanded(result.orderId)}
+                        className="w-full"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {getStatusIcon(result)}
+                            <div className="text-left">
+                              <div className="font-medium">#{result.orderNumber}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {result.customerName}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold">
+                              ${result.total.toLocaleString('es-CO')}
+                            </span>
+                            {getStatusBadge(result)}
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent>
+                        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+                          {/* Checks summary */}
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            {/* Client check */}
+                            <div className="flex items-center gap-2">
+                              {checks.clientCheck?.passed ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-red-500" />
+                              )}
+                              <User className="h-3 w-3 text-muted-foreground" />
+                              <span className="truncate text-xs">
+                                {checks.clientCheck?.message || 'Cliente'}
+                              </span>
+                            </div>
+
+                            {/* Price check */}
+                            <div className="flex items-center gap-2">
+                              {checks.priceCheck?.passed ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-red-500" />
+                              )}
+                              <DollarSign className="h-3 w-3 text-muted-foreground" />
+                              <span className="truncate text-xs">
+                                {checks.priceCheck?.passed
+                                  ? `Total: $${checks.priceCheck.shopifyTotal?.toLocaleString('es-CO')}`
+                                  : checks.priceCheck?.message || 'Precio'}
+                              </span>
+                            </div>
+
+                            {/* Delivery check (if applicable) */}
+                            {checks.deliveryCheck && (
+                              <div className="flex items-center gap-2">
+                                {checks.deliveryCheck?.passed ? (
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                )}
+                                <Truck className="h-3 w-3 text-muted-foreground" />
+                                <span className="truncate text-xs">
+                                  {checks.deliveryCheck?.message || 'Entrega'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Errors */}
+                          {result.validationResult.errors.length > 0 && (
+                            <div className="mt-2 p-2 rounded bg-red-100 dark:bg-red-900/30">
+                              <div className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">
+                                Errores:
+                              </div>
+                              <ul className="text-xs text-red-600 dark:text-red-300 space-y-1">
+                                {result.validationResult.errors.map((err, i) => (
+                                  <li key={i}>• {err}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Warnings */}
+                          {result.validationResult.warnings.length > 0 && (
+                            <div className="mt-2 p-2 rounded bg-yellow-100 dark:bg-yellow-900/30">
+                              <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">
+                                Advertencias:
+                              </div>
+                              <ul className="text-xs text-yellow-600 dark:text-yellow-300 space-y-1">
+                                {result.validationResult.warnings.map((warn, i) => (
+                                  <li key={i}>• {warn}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0 mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isEmitting}>
+            {errorResults.length > 0 && validResults.length === 0 ? 'Cerrar' : 'Cancelar'}
+          </Button>
+          {validResults.length > 0 && (
+            <Button onClick={onEmitValid} disabled={isEmitting}>
+              {isEmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Emitiendo...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Emitir {validResults.length} Factura{validResults.length !== 1 ? 's' : ''} Válida{validResults.length !== 1 ? 's' : ''}
+                </>
+              )}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default BulkValidationResultsModal;
