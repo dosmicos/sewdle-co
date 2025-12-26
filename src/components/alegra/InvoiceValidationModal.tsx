@@ -26,7 +26,7 @@ export interface ValidationResult {
   checks: {
     clientCheck: {
       passed: boolean;
-      matchedBy?: 'phone' | 'identification' | 'created';
+      matchedBy?: 'phone' | 'identification' | 'email' | 'created';
       message: string;
     };
     deliveryCheck?: {
