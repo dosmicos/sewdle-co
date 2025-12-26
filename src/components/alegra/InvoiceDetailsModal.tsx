@@ -25,7 +25,9 @@ import {
   Calculator, 
   Loader2,
   Save,
-  Send
+  Send,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -82,6 +84,7 @@ export interface EditedInvoiceData {
     title: string;
     quantity: number;
     price: number;
+    isShipping?: boolean;
   }>;
 }
 
@@ -191,6 +194,27 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                                     email?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
                                     '';
 
+      // Create base line items
+      const baseItems = order.line_items.map(item => ({
+        id: item.id,
+        title: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
+        quantity: item.quantity,
+        price: item.price,
+        isShipping: false,
+      }));
+
+      // Add shipping as a product if exists
+      const shippingCost = order.total_price - order.subtotal_price - order.total_tax;
+      if (shippingCost > 0) {
+        baseItems.push({
+          id: 'shipping',
+          title: 'Envío',
+          quantity: 1,
+          price: shippingCost,
+          isShipping: true,
+        });
+      }
+
       setFormData({
         customer: {
           firstName: order.customer_first_name || '',
@@ -205,12 +229,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
           city: normalized.city,
           department: normalized.department,
         },
-        lineItems: order.line_items.map(item => ({
-          id: item.id,
-          title: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
-          quantity: item.quantity,
-          price: item.price,
-        })),
+        lineItems: baseItems,
       });
     }
   }, [order]);
@@ -238,6 +257,35 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
         department,
         city: location?.city || prev.address.city,
       },
+    }));
+  };
+
+  const handleLineItemChange = (index: number, field: 'title' | 'quantity' | 'price', value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      lineItems: prev.lineItems.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  const handleRemoveLineItem = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      lineItems: prev.lineItems.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleAddLineItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      lineItems: [...prev.lineItems, {
+        id: `new-${Date.now()}`,
+        title: 'Nuevo producto',
+        quantity: 1,
+        price: 0,
+        isShipping: false,
+      }],
     }));
   };
 
@@ -428,29 +476,68 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
 
             {/* Products */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Package className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold">Productos</h3>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold">Productos</h3>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleAddLineItem}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Agregar
+                </Button>
               </div>
               
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted">
                     <tr>
-                      <th className="text-left p-3">Producto</th>
-                      <th className="text-center p-3 w-20">Cant.</th>
-                      <th className="text-right p-3 w-28">Precio</th>
-                      <th className="text-right p-3 w-28">Total</th>
+                      <th className="text-left p-2">Producto</th>
+                      <th className="text-center p-2 w-20">Cant.</th>
+                      <th className="text-right p-2 w-28">Precio</th>
+                      <th className="text-right p-2 w-28">Total</th>
+                      <th className="p-2 w-10"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {formData.lineItems.map(item => (
+                    {formData.lineItems.map((item, index) => (
                       <tr key={item.id} className="border-t">
-                        <td className="p-3">{item.title}</td>
-                        <td className="text-center p-3">{item.quantity}</td>
-                        <td className="text-right p-3">${item.price.toLocaleString('es-CO')}</td>
-                        <td className="text-right p-3 font-medium">
+                        <td className="p-2">
+                          <Input
+                            value={item.title}
+                            onChange={(e) => handleLineItemChange(index, 'title', e.target.value)}
+                            className="h-8"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => handleLineItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                            className="h-8 text-center"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.price}
+                            onChange={(e) => handleLineItemChange(index, 'price', parseFloat(e.target.value) || 0)}
+                            className="h-8 text-right"
+                          />
+                        </td>
+                        <td className="text-right p-2 font-medium whitespace-nowrap">
                           ${(item.price * item.quantity).toLocaleString('es-CO')}
+                        </td>
+                        <td className="p-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveLineItem(index)}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -480,7 +567,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total:</span>
-                  <span>${order.total_price?.toLocaleString('es-CO')} {order.currency}</span>
+                  <span>${subtotal.toLocaleString('es-CO')} {order.currency}</span>
                 </div>
               </div>
             </div>
