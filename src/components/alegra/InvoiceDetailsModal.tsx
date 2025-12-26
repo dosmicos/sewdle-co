@@ -204,7 +204,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
       }));
 
       // Add shipping as a product if exists
-      const shippingCost = order.total_price - order.subtotal_price - order.total_tax;
+      const shippingCost = order.total_price - order.subtotal_price;
       if (shippingCost > 0) {
         baseItems.push({
           id: 'shipping',
