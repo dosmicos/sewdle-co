@@ -45,6 +45,7 @@ export interface ShopifyOrderForInvoice {
   financial_status: string;
   fulfillment_status: string | null;
   created_at_shopify: string;
+  tags?: string;
   // Alegra fields
   alegra_invoice_id: number | null;
   alegra_invoice_number: string | null;
