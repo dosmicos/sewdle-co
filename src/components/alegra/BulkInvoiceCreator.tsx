@@ -178,6 +178,90 @@ const addFacturadoTag = async (shopifyOrderId: number): Promise<void> => {
   }
 };
 
+// ==================== REGISTRO DE FACTURAS EN alegra_invoices ====================
+
+// Verificar si ya existe factura emitida para este pedido (tabla local + Alegra API)
+const verifyNoExistingInvoice = async (
+  order: ShopifyOrderForInvoice,
+  searchInvoiceFn: (orderNumber: string) => Promise<any>
+): Promise<{ exists: boolean; invoice?: any; source?: 'local' | 'alegra' }> => {
+  try {
+    // 1. Buscar en tabla local alegra_invoices
+    const { data: localRecord } = await supabase
+      .from('alegra_invoices')
+      .select('*')
+      .eq('shopify_order_id', order.shopify_order_id)
+      .eq('stamped', true)
+      .maybeSingle();
+    
+    if (localRecord) {
+      console.log(`⚠️ Factura ya registrada localmente para orden ${order.order_number}:`, localRecord.alegra_invoice_number);
+      return { exists: true, invoice: localRecord, source: 'local' };
+    }
+
+    // 2. Buscar en Alegra API
+    const existingInvoice = await searchInvoiceFn(order.order_number);
+    if (existingInvoice?.stamp?.cufe) {
+      console.log(`⚠️ Factura ya existe en Alegra para orden ${order.order_number}:`, existingInvoice.numberTemplate?.fullNumber);
+      
+      // Sincronizar registro local
+      await registerInvoice(order, existingInvoice, true, existingInvoice.stamp.cufe);
+      
+      return { exists: true, invoice: existingInvoice, source: 'alegra' };
+    }
+    
+    return { exists: false };
+  } catch (error) {
+    console.error('Error verificando factura existente:', error);
+    // En caso de error, permitir continuar pero loguear
+    return { exists: false };
+  }
+};
+
+// Registrar factura emitida en tabla alegra_invoices
+const registerInvoice = async (
+  order: ShopifyOrderForInvoice,
+  invoice: any,
+  stamped: boolean = false,
+  cufe?: string
+): Promise<void> => {
+  try {
+    // Obtener organization_id del usuario actual
+    const { data: orgData } = await supabase.rpc('get_current_organization_safe');
+    const organizationId = orgData;
+    
+    if (!organizationId) {
+      console.error('No se pudo obtener organization_id para registrar factura');
+      return;
+    }
+
+    const invoiceRecord = {
+      organization_id: organizationId,
+      shopify_order_id: order.shopify_order_id,
+      shopify_order_number: order.order_number,
+      alegra_invoice_id: invoice.id,
+      alegra_invoice_number: invoice.numberTemplate?.fullNumber || String(invoice.id),
+      stamped,
+      cufe: cufe || null,
+      stamped_at: stamped ? new Date().toISOString() : null
+    };
+
+    const { error } = await supabase
+      .from('alegra_invoices')
+      .upsert(invoiceRecord, {
+        onConflict: 'organization_id,shopify_order_id,alegra_invoice_id'
+      });
+
+    if (error) {
+      console.error('Error registrando factura en alegra_invoices:', error);
+    } else {
+      console.log(`✅ Factura registrada en alegra_invoices: ${invoiceRecord.alegra_invoice_number} (stamped: ${stamped})`);
+    }
+  } catch (error) {
+    console.error('Error registrando factura:', error);
+  }
+};
+
 const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactNode; color: string }> = {
   idle: { label: 'Pendiente', icon: <Clock className="h-4 w-4" />, color: 'text-muted-foreground' },
   searching_invoice: { label: 'Buscando factura...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
@@ -608,7 +692,38 @@ const BulkInvoiceCreator = () => {
     updateResult(order.id, { orderNumber: order.order_number, status: 'searching_invoice' });
     
     try {
-      // Check if already stamped
+      // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API
+      const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber);
+      
+      if (existingCheck.exists) {
+        const existingInvoice = existingCheck.invoice;
+        updateResult(order.id, { 
+          status: 'already_stamped',
+          invoiceId: existingInvoice.alegra_invoice_id || existingInvoice.id,
+          invoiceNumber: existingInvoice.alegra_invoice_number || existingInvoice.numberTemplate?.fullNumber,
+          cufe: existingInvoice.cufe || existingInvoice.stamp?.cufe
+        });
+        
+        // Asegurar tag FACTURADO
+        await addFacturadoTag(order.shopify_order_id);
+        
+        // Sincronizar campos en shopify_orders si vienen de Alegra
+        if (existingCheck.source === 'alegra') {
+          await updateOrderAlegraStatus(
+            order.id,
+            existingInvoice.id,
+            existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
+            true,
+            existingInvoice.stamp?.cufe
+          );
+        }
+        
+        toast.info(`Esta factura ya fue emitida (detectado en ${existingCheck.source})`);
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Check legacy fields as fallback
       if (order.alegra_stamped && order.alegra_cufe) {
         updateResult(order.id, { 
           status: 'already_stamped',
@@ -617,8 +732,7 @@ const BulkInvoiceCreator = () => {
           cufe: order.alegra_cufe
         });
         
-        // Ensure FACTURADO tag exists even for already stamped orders
-        console.log(`🏷️ Orden ${order.order_number} ya emitida, verificando tag FACTURADO...`);
+        console.log(`🏷️ Orden ${order.order_number} ya emitida (legacy), verificando tag FACTURADO...`);
         await addFacturadoTag(order.shopify_order_id);
         
         toast.info('Esta factura ya fue emitida');
@@ -626,7 +740,7 @@ const BulkInvoiceCreator = () => {
         return;
       }
 
-      // Search or create contact with edited data
+      // 2. Crear contacto
       updateResult(order.id, { status: 'searching_contact' });
       const contact = await searchOrCreateContactWithData(order, editedData);
       
@@ -634,28 +748,32 @@ const BulkInvoiceCreator = () => {
         updateResult(order.id, { status: 'creating_contact' });
       }
 
-      // Create invoice
+      // 3. Crear factura
       updateResult(order.id, { status: 'creating_invoice' });
       const invoice = await createInvoiceWithData(order, contact.id, editedData);
+      
+      // Registrar factura creada (antes de stamp)
+      await registerInvoice(order, invoice, false);
       
       // Update DB with invoice ID
       await updateOrderAlegraStatus(order.id, invoice.id, invoice.numberTemplate?.fullNumber || String(invoice.id), false);
 
-      // Stamp immediately
+      // 4. Emitir con DIAN
       updateResult(order.id, { status: 'stamping' });
       
-      // Ensure contact has valid address before stamping
       if (editedData) {
         await updateContactAddress(contact.id, editedData.address);
       }
       
       const stampResult = await stampInvoices([invoice.id]);
       
-      // stampResult is now always an array (normalized in stampInvoices)
       if (stampResult && stampResult.length > 0) {
         const stampedInvoice = stampResult[0];
         const cufe = stampedInvoice.stamp?.cufe;
         const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
+        
+        // Actualizar registro con CUFE
+        await registerInvoice(order, stampedInvoice, true, cufe);
         
         await updateOrderAlegraStatus(order.id, stampedInvoice.id, invoiceNumber, true, cufe);
         
@@ -674,14 +792,13 @@ const BulkInvoiceCreator = () => {
           cufe
         });
         
-        // Add FACTURADO tag to Shopify order
-        console.log(`🏷️ Intentando agregar etiqueta FACTURADO a orden ${order.order_number}`);
+        // Add FACTURADO tag
+        console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${order.order_number}`);
         await addFacturadoTag(order.shopify_order_id);
         
         toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
         fetchShopifyOrders();
       } else {
-        // Handle case where no results returned (shouldn't happen)
         console.error('⚠️ stampInvoices no devolvió resultados para factura', invoice.id);
         throw new Error('No se recibió confirmación de emisión DIAN');
       }
@@ -822,7 +939,7 @@ const BulkInvoiceCreator = () => {
     setIsProcessing(true);
     setResults(new Map());
 
-    const invoicesToStamp: { orderId: string; invoiceId: number; orderNumber: string }[] = [];
+    const invoicesToStamp: { orderId: string; invoiceId: number; orderNumber: string; order: ShopifyOrderForInvoice }[] = [];
 
     for (const orderId of idsToProcess) {
       const order = orders.find(o => o.id === orderId);
@@ -831,7 +948,35 @@ const BulkInvoiceCreator = () => {
       updateResult(orderId, { orderNumber: order.order_number, status: 'searching_invoice' });
 
       try {
-        // 1. Check if already stamped
+        // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API
+        const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber);
+        
+        if (existingCheck.exists) {
+          const existingInvoice = existingCheck.invoice;
+          updateResult(orderId, { 
+            status: 'already_stamped',
+            invoiceId: existingInvoice.alegra_invoice_id || existingInvoice.id,
+            invoiceNumber: existingInvoice.alegra_invoice_number || existingInvoice.numberTemplate?.fullNumber,
+            cufe: existingInvoice.cufe || existingInvoice.stamp?.cufe
+          });
+          
+          // Asegurar tag FACTURADO
+          await addFacturadoTag(order.shopify_order_id);
+          
+          // Sincronizar campos si viene de Alegra
+          if (existingCheck.source === 'alegra') {
+            await updateOrderAlegraStatus(
+              orderId,
+              existingInvoice.id,
+              existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
+              true,
+              existingInvoice.stamp?.cufe
+            );
+          }
+          continue;
+        }
+        
+        // Fallback: check legacy fields
         if (order.alegra_stamped && order.alegra_cufe) {
           updateResult(orderId, { 
             status: 'already_stamped',
@@ -839,21 +984,23 @@ const BulkInvoiceCreator = () => {
             invoiceNumber: order.alegra_invoice_number || undefined,
             cufe: order.alegra_cufe
           });
+          await addFacturadoTag(order.shopify_order_id);
           continue;
         }
 
         // 2. Check if has invoice linked but not stamped
         if (order.alegra_invoice_id && !order.alegra_stamped) {
-          invoicesToStamp.push({ orderId, invoiceId: order.alegra_invoice_id, orderNumber: order.order_number });
+          invoicesToStamp.push({ orderId, invoiceId: order.alegra_invoice_id, orderNumber: order.order_number, order });
           continue;
         }
 
-        // 3. Search for existing invoice in Alegra
+        // 3. Search for existing invoice in Alegra (sin stamp)
         const existingInvoice = await searchInvoiceByOrderNumber(order.order_number);
         
-          if (existingInvoice) {
-          // Invoice exists - check if already stamped
+        if (existingInvoice) {
           if (existingInvoice.stamp?.cufe) {
+            // Ya emitida - registrar y marcar
+            await registerInvoice(order, existingInvoice, true, existingInvoice.stamp.cufe);
             await updateOrderAlegraStatus(
               orderId, 
               existingInvoice.id, 
@@ -867,13 +1014,12 @@ const BulkInvoiceCreator = () => {
               invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
               cufe: existingInvoice.stamp.cufe
             });
-            
-            // Ensure FACTURADO tag exists even for already stamped invoices
             await addFacturadoTag(order.shopify_order_id);
           } else {
             // Invoice exists but not stamped - queue for stamping
+            await registerInvoice(order, existingInvoice, false);
             await updateOrderAlegraStatus(orderId, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
-            invoicesToStamp.push({ orderId, invoiceId: existingInvoice.id, orderNumber: order.order_number });
+            invoicesToStamp.push({ orderId, invoiceId: existingInvoice.id, orderNumber: order.order_number, order });
           }
           continue;
         }
@@ -889,8 +1035,11 @@ const BulkInvoiceCreator = () => {
         updateResult(orderId, { status: 'creating_invoice' });
         const invoice = await createInvoice(order, contact.id);
         
+        // Registrar factura creada
+        await registerInvoice(order, invoice, false);
+        
         await updateOrderAlegraStatus(orderId, invoice.id, invoice.numberTemplate?.fullNumber || String(invoice.id), false);
-        invoicesToStamp.push({ orderId, invoiceId: invoice.id, orderNumber: order.order_number });
+        invoicesToStamp.push({ orderId, invoiceId: invoice.id, orderNumber: order.order_number, order });
 
       } catch (error: any) {
         updateResult(orderId, { status: 'error', error: error.message });
@@ -906,13 +1055,12 @@ const BulkInvoiceCreator = () => {
       }
 
       for (const batch of batches) {
-        // Update status to stamping
         batch.forEach(item => {
           updateResult(item.orderId, { status: 'stamping' });
         });
 
         try {
-          // Ensure the invoice's client has a valid city/department before stamping
+          // Ensure client addresses before stamping
           await Promise.all(
             batch.map(async (item) => {
               const order = orders.find((o) => o.id === item.orderId);
@@ -941,7 +1089,6 @@ const BulkInvoiceCreator = () => {
 
           const stampResult = await stampInvoices(batch.map(b => b.invoiceId));
 
-          // Process stamp results
           if (Array.isArray(stampResult)) {
             for (const stampedInvoice of stampResult) {
               const matchingItem = batch.find(b => b.invoiceId === stampedInvoice.id);
@@ -949,9 +1096,11 @@ const BulkInvoiceCreator = () => {
                 const cufe = stampedInvoice.stamp?.cufe;
                 const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
                 
+                // Actualizar registro con CUFE
+                await registerInvoice(matchingItem.order, stampedInvoice, true, cufe);
+                
                 await updateOrderAlegraStatus(matchingItem.orderId, stampedInvoice.id, invoiceNumber, true, cufe);
                 
-                // Update local order state
                 const orderIndex = orders.findIndex(o => o.id === matchingItem.orderId);
                 if (orderIndex >= 0) {
                   orders[orderIndex].alegra_stamped = true;
@@ -966,11 +1115,7 @@ const BulkInvoiceCreator = () => {
                   cufe
                 });
                 
-                // Add FACTURADO tag to Shopify order
-                const orderForTag = orders.find(o => o.id === matchingItem.orderId);
-                if (orderForTag) {
-                  await addFacturadoTag(orderForTag.shopify_order_id);
-                }
+                await addFacturadoTag(matchingItem.order.shopify_order_id);
               }
             }
           }
@@ -988,7 +1133,7 @@ const BulkInvoiceCreator = () => {
     const successCount = Array.from(results.values()).filter(r => r.status === 'success' || r.status === 'already_stamped').length;
     if (successCount > 0) {
       toast.success(`${successCount} facturas electrónicas emitidas`);
-      fetchShopifyOrders(); // Refresh orders
+      fetchShopifyOrders();
     }
   };
 
