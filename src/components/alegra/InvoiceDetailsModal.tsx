@@ -40,10 +40,13 @@ import {
   Save,
   Send,
   Trash2,
-  Plus
+  Plus,
+  ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProducts } from '@/hooks/useProducts';
+import InvoiceValidationModal, { ValidationResult } from './InvoiceValidationModal';
+import { validateOrderForInvoice } from '@/hooks/useInvoiceValidation';
 
 interface ShopifyOrderForInvoice {
   id: string;
@@ -63,6 +66,7 @@ interface ShopifyOrderForInvoice {
   financial_status: string;
   fulfillment_status: string | null;
   created_at_shopify: string;
+  tags?: string;
   alegra_invoice_id: number | null;
   alegra_invoice_number: string | null;
   alegra_invoice_status: string | null;
@@ -175,6 +179,9 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
   onSaveAndEmit,
 }) => {
   const [isEmitting, setIsEmitting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationModalOpen, setValidationModalOpen] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [productSelectorOpen, setProductSelectorOpen] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const { products, loading: productsLoading } = useProducts();
@@ -360,16 +367,59 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
     }
   };
 
-  const handleSaveAndEmit = async () => {
+  const handleValidateAndEmit = async () => {
+    if (!validateForm() || !order) return;
+    
+    // Open validation modal and start validation
+    setValidationModalOpen(true);
+    setIsValidating(true);
+    setValidationResult(null);
+    
+    try {
+      const result = await validateOrderForInvoice(order, {
+        customer: {
+          identificationNumber: formData.customer.identificationNumber,
+          phone: formData.customer.phone,
+          email: formData.customer.email,
+        },
+        lineItems: formData.lineItems,
+      });
+      setValidationResult(result);
+      
+      // If validation passed with no warnings, proceed automatically
+      if (result.valid && result.warnings.length === 0) {
+        await handleConfirmEmit();
+      }
+    } catch (error: any) {
+      setValidationResult({
+        valid: false,
+        errors: ['Error en la validación: ' + error.message],
+        warnings: [],
+        checks: {
+          clientCheck: { passed: false, message: 'Error al verificar' },
+          priceCheck: { passed: false, invoiceTotal: 0, shopifyTotal: order.total_price, message: 'Error al verificar' },
+          paymentCheck: { passed: false, message: 'Error al verificar' },
+        },
+      });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleConfirmEmit = async () => {
     if (!validateForm()) return;
     
     setIsEmitting(true);
     try {
       await onSaveAndEmit(formData);
+      setValidationModalOpen(false);
     } finally {
       setIsEmitting(false);
     }
   };
+
+  // Legacy handler for backward compatibility
+  const handleSaveAndEmit = handleValidateAndEmit;
 
   const subtotal = formData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -693,21 +743,37 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
             <Save className="h-4 w-4 mr-2" />
             Guardar Cambios
           </Button>
-          <Button onClick={handleSaveAndEmit} disabled={isEmitting}>
+          <Button onClick={handleValidateAndEmit} disabled={isEmitting || isValidating}>
             {isEmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Emitiendo...
               </>
+            ) : isValidating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Validando...
+              </>
             ) : (
               <>
-                <Send className="h-4 w-4 mr-2" />
-                Guardar y Emitir
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                Validar y Emitir
               </>
             )}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Validation Modal */}
+      <InvoiceValidationModal
+        open={validationModalOpen}
+        onOpenChange={setValidationModalOpen}
+        orderNumber={order.order_number}
+        validationResult={validationResult}
+        isValidating={isValidating}
+        onConfirmEmit={handleConfirmEmit}
+        isEmitting={isEmitting}
+      />
     </Dialog>
   );
 };
