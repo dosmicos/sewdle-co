@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -6,6 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
+import { 
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { 
   Receipt, 
   Loader2, 
@@ -29,6 +38,30 @@ import { es } from 'date-fns/locale';
 import InvoiceDetailsModal, { EditedInvoiceData } from './InvoiceDetailsModal';
 import BulkValidationResultsModal, { BulkValidationResult } from './BulkValidationResultsModal';
 import { validateOrderForInvoice } from '@/hooks/useInvoiceValidation';
+
+const ITEMS_PER_PAGE = 10;
+
+// Helper function to generate page numbers with ellipsis
+const generatePageNumbers = (currentPage: number, totalPages: number): (number | '...')[] => {
+  const pages: (number | '...')[] = [];
+  
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (currentPage > 3) pages.push('...');
+    
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    
+    for (let i = start; i <= end; i++) pages.push(i);
+    
+    if (currentPage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+  }
+  
+  return pages;
+};
 
 export interface ShopifyOrderForInvoice {
   id: string;
@@ -282,6 +315,7 @@ const BulkInvoiceCreator = () => {
   const [results, setResults] = useState<Map<string, InvoiceResult>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'stamped'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Modal state
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<ShopifyOrderForInvoice | null>(null);
@@ -293,6 +327,11 @@ const BulkInvoiceCreator = () => {
   const [validationResults, setValidationResults] = useState<BulkValidationResult[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
+
   useEffect(() => {
     fetchShopifyOrders();
   }, []);
@@ -303,9 +342,9 @@ const BulkInvoiceCreator = () => {
       const { data: ordersData, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('*')
-        .eq('financial_status', 'paid')
+        .in('financial_status', ['paid', 'pending'])
         .order('created_at_shopify', { ascending: false })
-        .limit(100);
+        .limit(500);
 
       if (ordersError) throw ordersError;
 
@@ -343,8 +382,7 @@ const BulkInvoiceCreator = () => {
   };
 
   const toggleAll = () => {
-    const filteredOrders = getFilteredOrders();
-    const selectableOrders = filteredOrders.filter(o => !o.alegra_stamped);
+    const selectableOrders = getFilteredOrders.filter(o => !o.alegra_stamped);
     if (selectedOrders.size === selectableOrders.length) {
       setSelectedOrders(new Set());
     } else {
@@ -352,7 +390,7 @@ const BulkInvoiceCreator = () => {
     }
   };
 
-  const getFilteredOrders = () => {
+  const getFilteredOrders = useMemo(() => {
     let filtered = orders;
     
     // Filter by status
@@ -376,7 +414,14 @@ const BulkInvoiceCreator = () => {
     }
     
     return filtered;
-  };
+  }, [orders, filterStatus, searchTerm]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(getFilteredOrders.length / ITEMS_PER_PAGE);
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return getFilteredOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [getFilteredOrders, currentPage]);
 
   const updateResult = (orderId: string, result: Partial<InvoiceResult>) => {
     setResults(prev => {
@@ -1260,7 +1305,6 @@ const BulkInvoiceCreator = () => {
     await processInvoices(validOrderIds);
   };
 
-  const filteredOrders = getFilteredOrders();
   const pendingCount = orders.filter(o => !o.alegra_stamped).length;
   const stampedCount = orders.filter(o => o.alegra_stamped).length;
 
@@ -1314,7 +1358,7 @@ const BulkInvoiceCreator = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={selectedOrders.size > 0 && selectedOrders.size === filteredOrders.filter(o => !o.alegra_stamped).length}
+            checked={selectedOrders.size > 0 && selectedOrders.size === getFilteredOrders.filter(o => !o.alegra_stamped).length}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-muted-foreground">
@@ -1350,132 +1394,177 @@ const BulkInvoiceCreator = () => {
       </div>
 
       {/* Orders List */}
-      {filteredOrders.length === 0 ? (
+      {getFilteredOrders.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium">No hay pedidos</p>
-          <p className="text-sm">Los pedidos pagados de Shopify aparecerán aquí.</p>
+          <p className="text-sm">Los pedidos pagados y contra entrega de Shopify aparecerán aquí.</p>
         </div>
       ) : (
-        <ScrollArea className="h-[500px]">
-          <div className="space-y-3">
-            {filteredOrders.map(order => {
-              const result = results.get(order.id);
-              const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim();
-              const isStamped = order.alegra_stamped || result?.status === 'success' || result?.status === 'already_stamped';
-              const cufe = result?.cufe || order.alegra_cufe;
-              const invoiceNumber = result?.invoiceNumber || order.alegra_invoice_number;
-              const currentStatus = result?.status || (isStamped ? 'already_stamped' : 'idle');
-              const statusInfo = statusLabels[currentStatus];
-              
-              return (
-                <Card 
-                  key={order.id}
-                  className={`transition-colors ${
-                    selectedOrders.has(order.id) ? 'border-primary bg-primary/5' : ''
-                  } ${isStamped ? 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20' : ''}`}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      <Checkbox
-                        checked={selectedOrders.has(order.id)}
-                        disabled={isStamped}
-                        onCheckedChange={() => toggleOrder(order.id)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleOrderClick(order)}
-                              className="font-medium hover:text-primary hover:underline cursor-pointer"
-                            >
-                              #{order.order_number}
-                            </button>
-                            <Badge variant="outline" className="text-green-600">
-                              {order.financial_status}
-                            </Badge>
-                            {isStamped && (
-                              <Badge className="bg-green-600">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                DIAN
-                              </Badge>
-                            )}
-                            {editedOrders.has(order.id) && !isStamped && (
-                              <Badge variant="secondary" className="text-xs">
-                                Editado
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOrderClick(order)}
-                              className="h-7 px-2"
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              Ver
-                            </Button>
-                            <span className="font-bold text-lg">
-                              ${order.total_price?.toLocaleString('es-CO')} {order.currency}
-                            </span>
-                          </div>
-                        </div>
+        <>
+          <ScrollArea className="h-[500px]">
+            <div className="space-y-3">
+              {paginatedOrders.map(order => {
+                const result = results.get(order.id);
+                const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim();
+                const isStamped = order.alegra_stamped || result?.status === 'success' || result?.status === 'already_stamped';
+                const cufe = result?.cufe || order.alegra_cufe;
+                const invoiceNumber = result?.invoiceNumber || order.alegra_invoice_number;
+                const currentStatus = result?.status || (isStamped ? 'already_stamped' : 'idle');
+                const statusInfo = statusLabels[currentStatus];
+                
+                return (
+                  <Card 
+                    key={order.id}
+                    className={`transition-colors ${
+                      selectedOrders.has(order.id) ? 'border-primary bg-primary/5' : ''
+                    } ${isStamped ? 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20' : ''}`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <Checkbox
+                          checked={selectedOrders.has(order.id)}
+                          disabled={isStamped}
+                          onCheckedChange={() => toggleOrder(order.id)}
+                          onClick={e => e.stopPropagation()}
+                        />
                         
-                        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {customerName || order.customer_email || 'Sin cliente'}
-                          </div>
-                          <div>
-                            {order.created_at_shopify && format(
-                              new Date(order.created_at_shopify), 
-                              'dd MMM yyyy HH:mm', 
-                              { locale: es }
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          <Package className="h-3 w-3 inline mr-1" />
-                          {order.line_items.length} productos • {order.customer_email}
-                        </div>
-
-                        {/* Alegra Status */}
-                        {(invoiceNumber || cufe || result) && (
-                          <div className="mt-3 p-2 bg-muted/50 rounded-md text-sm space-y-1">
-                            <div className={`flex items-center gap-1 ${statusInfo.color}`}>
-                              {statusInfo.icon}
-                              <span>{statusInfo.label}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleOrderClick(order)}
+                                className="font-medium hover:text-primary hover:underline cursor-pointer"
+                              >
+                                #{order.order_number}
+                              </button>
+                              <Badge variant="outline" className={order.financial_status === 'paid' ? 'text-green-600' : 'text-amber-600'}>
+                                {order.financial_status === 'paid' ? 'Pagado' : 'Contra entrega'}
+                              </Badge>
+                              {isStamped && (
+                                <Badge className="bg-green-600">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  DIAN
+                                </Badge>
+                              )}
+                              {editedOrders.has(order.id) && !isStamped && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Editado
+                                </Badge>
+                              )}
                             </div>
-                            {invoiceNumber && (
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <FileText className="h-3 w-3" />
-                                Factura: <span className="font-mono">{invoiceNumber}</span>
-                              </div>
-                            )}
-                            {cufe && (
-                              <div className="text-xs text-muted-foreground font-mono truncate" title={cufe}>
-                                CUFE: {cufe.substring(0, 20)}...
-                              </div>
-                            )}
-                            {result?.error && (
-                              <div className="text-red-600 text-xs">
-                                {result.error}
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOrderClick(order)}
+                                className="h-7 px-2"
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Ver
+                              </Button>
+                              <span className="font-bold text-lg">
+                                ${order.total_price?.toLocaleString('es-CO')} {order.currency}
+                              </span>
+                            </div>
                           </div>
-                        )}
+                          
+                          <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              {customerName || order.customer_email || 'Sin cliente'}
+                            </div>
+                            <div>
+                              {order.created_at_shopify && format(
+                                new Date(order.created_at_shopify), 
+                                'dd MMM yyyy HH:mm', 
+                                { locale: es }
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            <Package className="h-3 w-3 inline mr-1" />
+                            {order.line_items.length} productos • {order.customer_email}
+                          </div>
+
+                          {/* Alegra Status */}
+                          {(invoiceNumber || cufe || result) && (
+                            <div className="mt-3 p-2 bg-muted/50 rounded-md text-sm space-y-1">
+                              <div className={`flex items-center gap-1 ${statusInfo.color}`}>
+                                {statusInfo.icon}
+                                <span>{statusInfo.label}</span>
+                              </div>
+                              {invoiceNumber && (
+                                <div className="flex items-center gap-1 text-muted-foreground">
+                                  <FileText className="h-3 w-3" />
+                                  Factura: <span className="font-mono">{invoiceNumber}</span>
+                                </div>
+                              )}
+                              {cufe && (
+                                <div className="text-xs text-muted-foreground font-mono truncate" title={cufe}>
+                                  CUFE: {cufe.substring(0, 20)}...
+                                </div>
+                              )}
+                              {result?.error && (
+                                <div className="text-red-600 text-xs">
+                                  {result.error}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </ScrollArea>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-4 space-y-2">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  
+                  {generatePageNumbers(currentPage, totalPages).map((page, i) => (
+                    <PaginationItem key={i}>
+                      {page === '...' ? (
+                        <PaginationEllipsis />
+                      ) : (
+                        <PaginationLink 
+                          isActive={currentPage === page}
+                          onClick={() => setCurrentPage(page as number)}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      )}
+                    </PaginationItem>
+                  ))}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+              
+              <p className="text-sm text-muted-foreground text-center">
+                Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, getFilteredOrders.length)} de {getFilteredOrders.length} pedidos
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Invoice Details Modal */}
