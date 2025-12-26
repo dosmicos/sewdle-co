@@ -44,7 +44,7 @@ export const validateOrderForInvoice = async (
     paymentCheck: { passed: false, message: 'Verificando...' },
   };
 
-  // 1. CLIENT VALIDATION (phone → identification → create)
+  // 1. CLIENT VALIDATION (phone → identification → email → create)
   try {
     const customerPhone = editedData?.customer?.phone || 
                           order.customer_phone || 
@@ -54,37 +54,72 @@ export const validateOrderForInvoice = async (
     const identificationNumber = editedData?.customer?.identificationNumber ||
                                  (order.billing_address?.company || order.shipping_address?.company || '').replace(/[^0-9]/g, '');
 
+    const customerEmail = editedData?.customer?.email || 
+                          order.customer_email || 
+                          order.billing_address?.email || 
+                          order.shipping_address?.email;
+
     // Search contacts in Alegra
     const { data: contactsResult } = await supabase.functions.invoke('alegra-api', {
       body: { action: 'get-contacts' }
     });
 
     let contactFound = false;
-    let matchedBy: 'phone' | 'identification' | 'created' = 'created';
+    let matchedBy: 'phone' | 'identification' | 'email' | 'created' = 'created';
+
+    console.log('Validación cliente - Datos del pedido:', {
+      phone: customerPhone,
+      identification: identificationNumber,
+      email: customerEmail,
+      orderNumber: order.order_number,
+    });
 
     if (contactsResult?.success && contactsResult.data) {
+      console.log('Validación cliente - Total contactos en Alegra:', contactsResult.data.length);
+
       // Step 1: Search by phone
       if (customerPhone) {
         const phoneClean = customerPhone.replace(/[^0-9]/g, '');
-        const contactByPhone = contactsResult.data.find((c: any) =>
-          c.phonePrimary?.replace(/[^0-9]/g, '') === phoneClean ||
-          c.mobile?.replace(/[^0-9]/g, '') === phoneClean
-        );
+        const contactByPhone = contactsResult.data.find((c: any) => {
+          const primaryClean = String(c.phonePrimary || '').replace(/[^0-9]/g, '');
+          const mobileClean = String(c.mobile || '').replace(/[^0-9]/g, '');
+          return primaryClean === phoneClean || mobileClean === phoneClean;
+        });
         if (contactByPhone) {
           contactFound = true;
           matchedBy = 'phone';
+          console.log('Validación cliente - Encontrado por teléfono:', contactByPhone.name);
         }
       }
 
       // Step 2: Search by identification if not found by phone
       if (!contactFound && identificationNumber) {
         const contactById = contactsResult.data.find((c: any) => {
-          const contactId = String(c.identificationNumber || c.identification || c.identificationObject?.number || '').replace(/\D/g, '');
-          return contactId === identificationNumber;
+          // Priorizar campos correctos de Alegra
+          const contactIdentification = String(
+            c.identificationObject?.number || 
+            c.identification || 
+            ''
+          ).replace(/\D/g, '');
+          return contactIdentification === identificationNumber;
         });
         if (contactById) {
           contactFound = true;
           matchedBy = 'identification';
+          console.log('Validación cliente - Encontrado por cédula:', contactById.name);
+        }
+      }
+
+      // Step 3: Search by email if not found by phone or identification
+      if (!contactFound && customerEmail) {
+        const emailLower = customerEmail.toLowerCase().trim();
+        const contactByEmail = contactsResult.data.find((c: any) =>
+          c.email?.toLowerCase().trim() === emailLower
+        );
+        if (contactByEmail) {
+          contactFound = true;
+          matchedBy = 'email';
+          console.log('Validación cliente - Encontrado por email:', contactByEmail.name);
         }
       }
     }
@@ -95,9 +130,12 @@ export const validateOrderForInvoice = async (
         matchedBy,
         message: matchedBy === 'phone' 
           ? 'Cliente encontrado por teléfono' 
-          : 'Cliente encontrado por cédula',
+          : matchedBy === 'identification'
+          ? 'Cliente encontrado por cédula'
+          : 'Cliente encontrado por email',
       };
     } else {
+      console.log('Validación cliente - No encontrado, se creará nuevo cliente');
       checks.clientCheck = {
         passed: true,
         matchedBy: 'created',
@@ -106,6 +144,7 @@ export const validateOrderForInvoice = async (
       warnings.push('Se creará un nuevo cliente en Alegra');
     }
   } catch (error: any) {
+    console.error('Validación cliente - Error:', error);
     checks.clientCheck = {
       passed: false,
       message: 'Error al verificar cliente: ' + error.message,
