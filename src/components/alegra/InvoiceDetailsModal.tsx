@@ -386,10 +386,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
       });
       setValidationResult(result);
       
-      // If validation passed with no warnings, proceed automatically
-      if (result.valid && result.warnings.length === 0) {
-        await handleConfirmEmit();
-      }
+      // Always show the modal - user must confirm before emitting
     } catch (error: any) {
       setValidationResult({
         valid: false,
@@ -743,13 +740,8 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
             <Save className="h-4 w-4 mr-2" />
             Guardar Cambios
           </Button>
-          <Button onClick={handleValidateAndEmit} disabled={isEmitting || isValidating}>
-            {isEmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Emitiendo...
-              </>
-            ) : isValidating ? (
+          <Button onClick={handleValidateAndEmit} disabled={isValidating}>
+            {isValidating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Validando...
@@ -757,7 +749,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
             ) : (
               <>
                 <ShieldCheck className="h-4 w-4 mr-2" />
-                Validar y Emitir
+                Validar
               </>
             )}
           </Button>
