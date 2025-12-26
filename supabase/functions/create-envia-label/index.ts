@@ -592,6 +592,13 @@ serve(async (req) => {
 
     // Clean phone number (remove non-numeric characters except +)
     const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
+    
+    // Clean identification number: ONLY numeric characters, no + or country prefix
+    let cleanIdentification = (body.recipient_phone || "1234567890").replace(/[^0-9]/g, '');
+    // If starts with 57 and is longer than 10 digits, remove the country prefix
+    if (cleanIdentification.startsWith('57') && cleanIdentification.length > 10) {
+      cleanIdentification = cleanIdentification.substring(2);
+    }
 
     // ============= COLOMBIA ADDRESS FORMAT FOR ENVIA.COM =============
     // Envia.com (CO) expects:
@@ -648,11 +655,12 @@ serve(async (req) => {
       reference: referenceText,
     };
 
-    // Add identificationNumber: use phone for Inter Rapidísimo, placeholder for others
+    // Add identificationNumber: use cleaned phone (only digits, no +57) for Inter Rapidísimo
     if (isInterRapidisimo) {
       // Inter Rapidísimo requires valid identification - use customer phone (10 digits) or DANE as fallback
-      destinationData.identificationNumber = cleanPhone || destDaneCode;
+      destinationData.identificationNumber = cleanIdentification || destDaneCode;
       destinationData.identificationType = "CC"; // Cédula de ciudadanía - required for Inter Rapidísimo
+      console.log(`📋 Inter Rapidísimo identification: ${cleanIdentification}`);
     } else {
       destinationData.identificationNumber = "0000000000";
     }
