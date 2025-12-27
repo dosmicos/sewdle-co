@@ -41,13 +41,14 @@ export const usePickingOrderStats = () => {
           .in('financial_status', ['paid', 'pending', 'partially_paid'])
           .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled'),
 
-        // No confirmados: tags NOT contains 'confirmado' OR tags IS NULL, AND not fulfilled
+        // No confirmados: Sin tag confirmado + no enviados + pago pendiente
         supabase
           .from('shopify_orders')
           .select('*', { count: 'exact', head: true })
           .eq('organization_id', orgId)
           .gte('order_number', MIN_ORDER_NUMBER)
           .is('cancelled_at', null)
+          .eq('financial_status', 'pending')
           .or('tags.is.null,tags.not.ilike.%confirmado%')
           .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled'),
 
