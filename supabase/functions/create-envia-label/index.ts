@@ -80,102 +80,130 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
   'vichada': 'VI'
 };
 
-// Get DANE code from database - queries shipping_coverage table
-// Searches with BOTH original name (with accents) and normalized name (without accents)
-async function getDaneCodeFromDB(supabase: any, city: string, department?: string, organizationId?: string): Promise<string> {
-  const originalCity = city.trim();
-  const normalizedCity = originalCity.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Normalize text for comparison (removes accents and lowercases)
+// Defined here so it can be used by getDaneCodeFromDB
+function normalizeForComparison(text: string): string {
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+// Find coverage row with accent-insensitive matching in JavaScript
+// This solves the ilike limitation with accents (Medellin vs Medellín)
+async function findCoverageRowNormalized(
+  supabase: any, 
+  organizationId: string, 
+  city: string, 
+  department?: string
+): Promise<{ dane_code: string; municipality: string; department: string } | null> {
+  const normalizedCity = normalizeForComparison(city);
+  const normalizedDept = department ? normalizeForComparison(department) : null;
   
-  console.log(`🔍 Looking up DANE code for city: "${originalCity}" (normalized: "${normalizedCity}")`);
+  console.log(`🔍 Finding coverage (accent-insensitive): city="${city}" (norm: "${normalizedCity}"), dept="${department}" (norm: "${normalizedDept}")`);
   
-  // Build base query with organization filter if provided
-  const buildQuery = (searchTerm: string) => {
-    let query = supabase
-      .from('shipping_coverage')
-      .select('dane_code, municipality, department');
+  // Build query - get candidates filtered by organization and optionally department
+  let query = supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department')
+    .eq('organization_id', organizationId);
+  
+  // If department provided, filter by it (also accent-insensitive via ilike partial)
+  if (normalizedDept) {
+    query = query.ilike('department', `%${normalizedDept.substring(0, 5)}%`);
+  }
+  
+  // Limit candidates for performance
+  query = query.limit(500);
+  
+  const { data: candidates, error } = await query;
+  
+  if (error) {
+    console.error('❌ Error querying shipping_coverage:', error);
+    return null;
+  }
+  
+  if (!candidates || candidates.length === 0) {
+    console.log(`⚠️ No coverage candidates found for org=${organizationId}, dept contains "${normalizedDept?.substring(0, 5) || 'any'}"`);
+    return null;
+  }
+  
+  console.log(`📊 Found ${candidates.length} coverage candidates, matching city...`);
+  
+  // Match in JavaScript using normalized comparison
+  // Priority 1: Exact match (normalized)
+  let match = candidates.find((row: any) => 
+    normalizeForComparison(row.municipality) === normalizedCity
+  );
+  
+  if (match) {
+    console.log(`✅ DANE found (exact norm match): "${city}" → "${match.dane_code}" (${match.municipality})`);
+    return match;
+  }
+  
+  // Priority 2: Municipality contains city or vice versa
+  match = candidates.find((row: any) => {
+    const normMunicipality = normalizeForComparison(row.municipality);
+    return normMunicipality.includes(normalizedCity) || normalizedCity.includes(normMunicipality);
+  });
+  
+  if (match) {
+    console.log(`✅ DANE found (partial norm match): "${city}" → "${match.dane_code}" (${match.municipality})`);
+    return match;
+  }
+  
+  console.log(`⚠️ No matching municipality found for "${city}" among ${candidates.length} candidates`);
+  return null;
+}
+
+// Get DANE code - uses normalized matching + fallback to Envia Queries API
+async function getDaneCodeFromDB(
+  supabase: any, 
+  city: string, 
+  department: string | undefined, 
+  organizationId: string,
+  enviaApiKey: string
+): Promise<{ daneCode: string; source: string } | null> {
+  
+  // Step 1: Try to find in shipping_coverage with accent-insensitive matching
+  const coverage = await findCoverageRowNormalized(supabase, organizationId, city, department);
+  
+  if (coverage?.dane_code) {
+    return { daneCode: coverage.dane_code, source: 'db' };
+  }
+  
+  // Step 2: Fallback to Envia Queries API
+  console.log(`🔄 DANE not in DB, falling back to Envia Queries API for "${city}"...`);
+  const enviaLookup = await lookupEnviaCity('CO', city, enviaApiKey);
+  
+  if (enviaLookup?.zipCode && /^\d{5,8}$/.test(enviaLookup.zipCode)) {
+    console.log(`✅ DANE from Envia API: "${city}" → "${enviaLookup.zipCode}"`);
     
-    if (organizationId) {
-      query = query.eq('organization_id', organizationId);
+    // Optional: Cache this DANE in shipping_coverage for future use
+    try {
+      const { error: insertError } = await supabase
+        .from('shipping_coverage')
+        .insert({
+          organization_id: organizationId,
+          municipality: city,
+          department: department || enviaLookup.state || 'Unknown',
+          dane_code: enviaLookup.zipCode,
+          carrier: 'envia_lookup',
+          is_covered: true
+        });
+      
+      if (!insertError) {
+        console.log(`💾 Cached DANE for "${city}" in shipping_coverage`);
+      } else {
+        console.log(`⚠️ Could not cache DANE (non-critical):`, insertError.message);
+      }
+    } catch (cacheError) {
+      console.log(`⚠️ Cache error (non-critical):`, cacheError);
     }
     
-    return query.ilike('municipality', searchTerm).limit(5);
-  };
-  
-  // STEP 1: Try exact match with ORIGINAL name (preserves accents like "Medellín")
-  let { data, error } = await buildQuery(originalCity);
-  
-  if (data && data.length > 0) {
-    // If department provided, try to find a match
-    if (department && data.length > 1) {
-      const normalizedDept = department.toLowerCase().trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
-      const deptMatch = data.find((item: any) => {
-        const itemDept = item.department.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
-      });
-      
-      if (deptMatch) {
-        console.log(`✅ DANE found (exact+dept): "${originalCity}, ${department}" → "${deptMatch.dane_code}"`);
-        return deptMatch.dane_code;
-      }
-    }
-    console.log(`✅ DANE found (exact): "${originalCity}" → "${data[0].dane_code}"`);
-    return data[0].dane_code;
+    return { daneCode: enviaLookup.zipCode, source: 'envia_api' };
   }
   
-  // STEP 2: Try partial match with original name
-  const { data: partialOriginal } = await buildQuery(`%${originalCity}%`);
-  
-  if (partialOriginal && partialOriginal.length > 0) {
-    if (department) {
-      const normalizedDept = department.toLowerCase().trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
-      const deptMatch = partialOriginal.find((item: any) => {
-        const itemDept = item.department.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
-      });
-      
-      if (deptMatch) {
-        console.log(`✅ DANE found (partial+dept): "${originalCity}" → "${deptMatch.dane_code}"`);
-        return deptMatch.dane_code;
-      }
-    }
-    console.log(`✅ DANE found (partial): "${originalCity}" → "${partialOriginal[0].dane_code}"`);
-    return partialOriginal[0].dane_code;
-  }
-  
-  // STEP 3: Try with NORMALIZED name (without accents) as fallback
-  // This handles cases where DB has "Medellin" but user sends "Medellín"
-  const { data: normalizedData } = await buildQuery(`%${normalizedCity}%`);
-  
-  if (normalizedData && normalizedData.length > 0) {
-    if (department) {
-      const normalizedDept = department.toLowerCase().trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
-      const deptMatch = normalizedData.find((item: any) => {
-        const itemDept = item.department.toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
-      });
-      
-      if (deptMatch) {
-        console.log(`✅ DANE found (normalized+dept): "${normalizedCity}" → "${deptMatch.dane_code}"`);
-        return deptMatch.dane_code;
-      }
-    }
-    console.log(`✅ DANE found (normalized): "${normalizedCity}" → "${normalizedData[0].dane_code}"`);
-    return normalizedData[0].dane_code;
-  }
-  
-  // CRITICAL: Throw error instead of using Bogotá fallback to prevent wrong destinations
-  console.error(`❌ NO DANE CODE FOUND for city: "${originalCity}" (dept: ${department || 'unknown'})`);
-  throw new Error(`No se encontró el código DANE para la ciudad "${originalCity}"${department ? ` en ${department}` : ''}. Por favor contacte soporte para agregar esta ciudad al sistema.`);
+  // No DANE found anywhere
+  console.error(`❌ NO DANE CODE FOUND for city: "${city}" (dept: ${department || 'unknown'})`);
+  return null;
 }
 
 // Shopify province codes to Envia.com state codes mapping
@@ -442,9 +470,10 @@ const MAIN_CITIES = [
   'tunja', 'florencia', 'riohacha'
 ];
 
-// Normalize text for comparison (removes accents and lowercases)
+// normalizeForComparison is defined earlier in the file (line ~83)
+// This normalizeText is kept for backward compatibility with selectCarrierByRules
 function normalizeText(text: string): string {
-  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return normalizeForComparison(text);
 }
 
 /**
@@ -588,35 +617,33 @@ serve(async (req) => {
       );
     }
 
-    // Look up coverage for the destination city (try original name first for accent matching)
-    const originalCity = body.destination_city.trim();
-    const normalizedCityForCoverage = originalCity.toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    console.log(`🔍 Checking coverage for: ${originalCity}, ${body.destination_department}`);
-
-    // First try with original city name (preserves accents like "Medellín")
-    let { data: coverage } = await supabase
-      .from('shipping_coverage')
-      .select('*')
-      .eq('organization_id', body.organization_id)
-      .ilike('municipality', originalCity)
-      .maybeSingle();
+    // ============= GET DANE CODE (accent-insensitive with fallback) =============
+    // Use the new normalized lookup that handles accents properly
+    console.log(`🔍 Looking up DANE for: ${body.destination_city}, ${body.destination_department}`);
     
-    // If not found, try partial match with normalized name
-    if (!coverage) {
-      const { data: coverageNormalized } = await supabase
-        .from('shipping_coverage')
-        .select('*')
-        .eq('organization_id', body.organization_id)
-        .ilike('municipality', `%${normalizedCityForCoverage}%`)
-        .maybeSingle();
-      coverage = coverageNormalized;
+    const daneResult = await getDaneCodeFromDB(
+      supabase, 
+      body.destination_city, 
+      body.destination_department, 
+      body.organization_id,
+      ENVIA_API_KEY
+    );
+    
+    if (!daneResult) {
+      // Return controlled error with 200 so frontend can display proper message
+      console.error(`❌ DANE not found for "${body.destination_city}", returning controlled error`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `No se encontró el código DANE para la ciudad "${body.destination_city}"${body.destination_department ? ` en ${body.destination_department}` : ''}. Por favor contacte soporte para agregar esta ciudad al sistema.`,
+          errorCode: 'DANE_NOT_FOUND'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
-    if (coverage) {
-      console.log(`✅ Coverage found: ${coverage.municipality} → DANE: ${coverage.dane_code}`);
-    }
+    const destDaneCode = daneResult.daneCode;
+    console.log(`✅ DANE resolved: ${destDaneCode} (source: ${daneResult.source})`);
 
     // Determine carrier using business rules
     let selectedCarrier = body.preferred_carrier?.toLowerCase();
@@ -662,18 +689,8 @@ serve(async (req) => {
     // ============= COLOMBIA ADDRESS FORMAT FOR ENVIA.COM =============
     // Envia.com (CO) expects:
     // - state: 2-letter department code (e.g., DC, AN, CN)
-    // - city: City NAME (e.g., "Bogota", "Medellin")
-    // - postalCode: Real postal code (e.g., "111321", "050001")
-
-    // Use DANE code for destination city and postalCode - reuse coverage query if available
-    let destDaneCode: string;
-    if (coverage?.dane_code) {
-      console.log(`✅ Using DANE from coverage query: ${coverage.dane_code}`);
-      destDaneCode = coverage.dane_code;
-    } else {
-      // Fallback to dedicated DANE lookup with organization filter
-      destDaneCode = await getDaneCodeFromDB(supabase, body.destination_city, body.destination_department, body.organization_id);
-    }
+    // - city: DANE code (e.g., "05001000" for Medellín)
+    // - postalCode: DANE code
 
     // For Inter Rapidísimo, use addressId + basic fields WITHOUT taxIdentification
     // This avoids "Identification numbers are required" error for COD shipments
