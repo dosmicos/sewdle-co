@@ -561,24 +561,48 @@ const BulkInvoiceCreator = () => {
   };
 
   const searchInvoiceByOrderNumber = async (orderNumber: string) => {
+    console.log(`🔍 Buscando factura existente para orden ${orderNumber}...`);
+    
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: { 
         action: 'search-invoices', 
-        data: { query: `Pedido Shopify #${orderNumber}` } 
+        data: { orderNumber } // Pass orderNumber directly for local filtering in API
       }
     });
 
     if (error || !data?.success) {
-      console.log('No existing invoice found for order:', orderNumber);
+      console.log(`❌ No se encontró factura para orden ${orderNumber}:`, error || data?.error);
       return null;
     }
 
-    // Find invoice that matches this order in observations
-    const matchingInvoice = data.data?.find((inv: any) => 
-      inv.observations?.includes(`Pedido Shopify #${orderNumber}`)
-    );
-
-    return matchingInvoice || null;
+    const invoices = data.data || [];
+    
+    if (invoices.length === 0) {
+      console.log(`❌ No hay facturas que coincidan con orden ${orderNumber}`);
+      return null;
+    }
+    
+    console.log(`📋 Encontradas ${invoices.length} facturas para orden ${orderNumber}`);
+    
+    // Sort: prefer unstamped (drafts) first, then oldest first within same status
+    const sorted = invoices.sort((a: any, b: any) => {
+      const aStamped = !!a.stamp?.cufe;
+      const bStamped = !!b.stamp?.cufe;
+      
+      // Unstamped first (so we can validate and stamp them)
+      if (!aStamped && bStamped) return -1;
+      if (aStamped && !bStamped) return 1;
+      
+      // Same status: oldest first (prefer first created invoice)
+      const aDate = new Date(a.date || a.createdAt || 0).getTime();
+      const bDate = new Date(b.date || b.createdAt || 0).getTime();
+      return aDate - bDate;
+    });
+    
+    const selected = sorted[0];
+    console.log(`✅ Seleccionada factura ${selected.numberTemplate?.fullNumber || selected.id} (CUFE: ${selected.stamp?.cufe ? 'Sí' : 'No'})`);
+    
+    return selected;
   };
 
   // Obtener detalles completos de una factura en Alegra

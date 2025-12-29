@@ -670,11 +670,48 @@ serve(async (req) => {
       }
 
       case "search-invoices": {
-        // Search invoices by query (useful for finding by observations field)
-        const searchQuery = data.query
-          ? `?query=${encodeURIComponent(data.query)}`
-          : "";
-        result = await makeAlegraRequest(`/invoices${searchQuery}`);
+        // Search invoices by orderNumber - fetch recent and filter locally by observations
+        // Alegra's query param doesn't reliably search in observations field
+        const orderNumber = data.orderNumber;
+        const query = data.query;
+        
+        console.log(`search-invoices: Fetching recent invoices to find orderNumber=${orderNumber}, query=${query}`);
+        
+        // Fetch last 100 invoices, ordered by date descending
+        const params = new URLSearchParams();
+        params.set('limit', '100');
+        params.set('order_field', 'date');
+        params.set('order_direction', 'DESC');
+        
+        const allInvoices = await makeAlegraRequest(`/invoices?${params.toString()}`);
+        
+        if (!Array.isArray(allInvoices)) {
+          console.log('search-invoices: No invoices returned from Alegra');
+          result = [];
+          break;
+        }
+        
+        console.log(`search-invoices: Fetched ${allInvoices.length} invoices, filtering...`);
+        
+        // Filter locally by observations field
+        if (orderNumber) {
+          const searchPattern = `Pedido Shopify #${orderNumber}`;
+          const filtered = allInvoices.filter((inv: any) => 
+            inv.observations?.includes(searchPattern)
+          );
+          console.log(`search-invoices: Found ${filtered.length} invoices matching orderNumber ${orderNumber}`);
+          result = filtered;
+        } else if (query) {
+          // General query search in observations or invoice number
+          const filtered = allInvoices.filter((inv: any) => 
+            inv.observations?.includes(query) ||
+            inv.numberTemplate?.fullNumber?.includes(query)
+          );
+          console.log(`search-invoices: Found ${filtered.length} invoices matching query "${query}"`);
+          result = filtered;
+        } else {
+          result = allInvoices;
+        }
         break;
       }
 
