@@ -326,6 +326,7 @@ const BulkInvoiceCreator = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [validationResults, setValidationResults] = useState<BulkValidationResult[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
+  const [manualDeliveryConfirmations, setManualDeliveryConfirmations] = useState<Map<string, boolean>>(new Map());
 
   // Reset page when filters change
   useEffect(() => {
@@ -1292,10 +1293,85 @@ const BulkInvoiceCreator = () => {
     setShowValidationModal(true);
   };
   
-  // Emit only the valid orders after validation
+  // Handle manual delivery confirmation change - re-validate order with new confirmation status
+  const handleManualDeliveryChange = async (orderId: string, confirmed: boolean) => {
+    // Update the map
+    setManualDeliveryConfirmations(prev => {
+      const newMap = new Map(prev);
+      if (confirmed) {
+        newMap.set(orderId, true);
+      } else {
+        newMap.delete(orderId);
+      }
+      return newMap;
+    });
+    
+    // Find order and re-validate with the new confirmation status
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const editedData = editedOrders.get(orderId);
+    
+    try {
+      const orderForValidation = {
+        id: order.id,
+        shopify_order_id: order.shopify_order_id,
+        order_number: order.order_number,
+        customer_phone: order.customer_phone,
+        customer_email: order.customer_email,
+        billing_address: order.billing_address,
+        shipping_address: order.shipping_address,
+        total_price: order.total_price,
+        subtotal_price: order.subtotal_price,
+        total_tax: order.total_tax,
+        financial_status: order.financial_status,
+        tags: order.tags,
+        line_items: order.line_items,
+      };
+      
+      const editedDataForValidation = editedData ? {
+        customer: {
+          identificationNumber: editedData.customer.identificationNumber,
+          phone: editedData.customer.phone,
+          email: editedData.customer.email,
+        },
+        lineItems: editedData.lineItems,
+      } : undefined;
+      
+      const validationResult = await validateOrderForInvoice(orderForValidation, editedDataForValidation, confirmed);
+      
+      // Update the specific result in validationResults
+      setValidationResults(prev => prev.map(r => 
+        r.orderId === orderId 
+          ? { ...r, validationResult }
+          : r
+      ));
+    } catch (error: any) {
+      console.error('Error re-validating order:', error);
+    }
+  };
+  
+  // Emit only the valid orders after validation (includes manual confirmations)
   const emitValidOrders = async () => {
+    // Filter valid orders - consider manual confirmations
     const validOrderIds = validationResults
-      .filter(r => r.validationResult.valid)
+      .filter(r => {
+        // If already valid, include it
+        if (r.validationResult.valid) return true;
+        
+        // Check if the only error is delivery-related and manual confirmation is provided
+        const hasManualConfirmation = manualDeliveryConfirmations.get(r.orderId);
+        if (!hasManualConfirmation) return false;
+        
+        // Check if delivery error is the only blocking issue
+        const deliveryCheck = r.validationResult.checks.deliveryCheck;
+        const isDeliveryOnlyError = deliveryCheck && !deliveryCheck.passed &&
+          r.validationResult.errors.every(e => 
+            e.includes('contraentrega') || e.includes('guía') || e.includes('entrega')
+          );
+        
+        return isDeliveryOnlyError;
+      })
       .map(r => r.orderId);
     
     if (validOrderIds.length === 0) {
@@ -1585,6 +1661,8 @@ const BulkInvoiceCreator = () => {
         results={validationResults}
         isEmitting={isProcessing}
         onEmitValid={emitValidOrders}
+        manualDeliveryConfirmations={manualDeliveryConfirmations}
+        onManualDeliveryChange={handleManualDeliveryChange}
       />
     </div>
   );
