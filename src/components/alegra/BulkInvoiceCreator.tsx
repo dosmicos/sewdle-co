@@ -865,10 +865,9 @@ const BulkInvoiceCreator = () => {
       return newMap;
     });
     
-    // Ensure order is selected for batch emission
-    setSelectedOrders(prev => new Set([...prev, selectedOrderForDetails.id]));
+    // Do NOT auto-select - user must manually check the order they want to emit
     setDetailsModalOpen(false);
-    toast.success('Cambios guardados. Listo para emitir en lote.');
+    toast.success('Cambios guardados.');
   };
 
   // Handler to save and emit immediately
