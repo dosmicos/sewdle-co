@@ -18,7 +18,12 @@ import {
   DollarSign, 
   CreditCard,
   Loader2,
-  Send
+  Send,
+  Package,
+  Undo2,
+  HelpCircle,
+  UserCheck,
+  AlertOctagon,
 } from 'lucide-react';
 
 export interface ValidationResult {
@@ -35,6 +40,7 @@ export interface ValidationResult {
       passed: boolean;
       status?: string;
       message: string;
+      detail?: string;
     };
     priceCheck: {
       passed: boolean;
@@ -60,6 +66,93 @@ interface InvoiceValidationModalProps {
   manualDeliveryConfirmed?: boolean;
   onManualDeliveryChange?: (confirmed: boolean) => void;
 }
+
+// Helper component for delivery status display
+const DeliveryStatusAlert: React.FC<{
+  status: string;
+  message: string;
+  detail?: string;
+}> = ({ status, message, detail }) => {
+  const getStatusIcon = () => {
+    switch (status) {
+      case 'sin_guia':
+        return <Package className="h-4 w-4 text-amber-600" />;
+      case 'sin_tracking':
+        return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+      case 'in_transit':
+      case 'en_transito':
+      case 'recogido':
+      case 'collected':
+        return <Truck className="h-4 w-4 text-blue-600" />;
+      case 'en_bodega':
+      case 'in_warehouse':
+        return <Package className="h-4 w-4 text-blue-600" />;
+      case 'devuelto':
+      case 'returned':
+        return <Undo2 className="h-4 w-4 text-red-600" />;
+      case 'cancelled':
+      case 'cancelado':
+        return <XCircle className="h-4 w-4 text-red-600" />;
+      case 'novedad':
+      case 'exception':
+        return <AlertOctagon className="h-4 w-4 text-orange-600" />;
+      case 'delivered':
+      case 'entregado':
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'manual_confirmed':
+        return <UserCheck className="h-4 w-4 text-green-600" />;
+      case 'error':
+        return <AlertTriangle className="h-4 w-4 text-red-600" />;
+      default:
+        return <HelpCircle className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const getBgColor = () => {
+    switch (status) {
+      case 'sin_guia':
+      case 'sin_tracking':
+        return 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800';
+      case 'in_transit':
+      case 'en_transito':
+      case 'recogido':
+      case 'collected':
+      case 'en_bodega':
+      case 'in_warehouse':
+      case 'pending':
+        return 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800';
+      case 'devuelto':
+      case 'returned':
+      case 'cancelled':
+      case 'cancelado':
+      case 'error':
+        return 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800';
+      case 'novedad':
+      case 'exception':
+        return 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800';
+      case 'delivered':
+      case 'entregado':
+      case 'manual_confirmed':
+        return 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800';
+      default:
+        return 'bg-muted/50 border-border';
+    }
+  };
+
+  return (
+    <div className={`mt-2 p-3 rounded-lg border ${getBgColor()}`}>
+      <div className="flex items-start gap-2">
+        {getStatusIcon()}
+        <div className="flex-1">
+          <span className="font-medium text-sm">{message}</span>
+          {detail && (
+            <p className="text-xs text-muted-foreground mt-0.5">{detail}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
   open,
@@ -188,11 +281,24 @@ const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
                       <Truck className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">Entrega (Contraentrega)</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {manualDeliveryConfirmed && !validationResult.checks.deliveryCheck.passed
-                        ? 'Entrega confirmada manualmente'
-                        : validationResult.checks.deliveryCheck.message}
-                    </p>
+                    
+                    {/* Detailed delivery status alert */}
+                    {!validationResult.checks.deliveryCheck.passed && !manualDeliveryConfirmed && (
+                      <DeliveryStatusAlert 
+                        status={validationResult.checks.deliveryCheck.status || 'unknown'}
+                        message={validationResult.checks.deliveryCheck.message}
+                        detail={validationResult.checks.deliveryCheck.detail}
+                      />
+                    )}
+                    
+                    {/* Show success message when passed or manually confirmed */}
+                    {(validationResult.checks.deliveryCheck.passed || manualDeliveryConfirmed) && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {manualDeliveryConfirmed && !validationResult.checks.deliveryCheck.passed
+                          ? 'Entrega confirmada manualmente'
+                          : validationResult.checks.deliveryCheck.message}
+                      </p>
+                    )}
                     
                     {/* Manual delivery confirmation checkbox */}
                     {canResolveWithManualConfirmation && onManualDeliveryChange && (
