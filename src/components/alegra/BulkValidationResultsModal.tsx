@@ -217,80 +217,81 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                       </CollapsibleTrigger>
 
                       <CollapsibleContent>
-                        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-                          {/* Checks summary */}
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            {/* Client check */}
-                            <div className="flex items-center gap-2">
-                              {checks.clientCheck?.passed ? (
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                              ) : (
-                                <XCircle className="h-4 w-4 text-red-500" />
-                              )}
-                              <User className="h-3 w-3 text-muted-foreground" />
-                              <span className="truncate text-xs">
-                                {checks.clientCheck?.message || 'Cliente'}
-                              </span>
-                            </div>
-
-                            {/* Price check */}
-                            <div className="flex items-center gap-2">
-                              {checks.priceCheck?.passed ? (
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                              ) : (
-                                <XCircle className="h-4 w-4 text-red-500" />
-                              )}
-                              <DollarSign className="h-3 w-3 text-muted-foreground" />
-                              <span className="truncate text-xs">
-                                {checks.priceCheck?.passed
-                                  ? `Total: $${checks.priceCheck.shopifyTotal?.toLocaleString('es-CO')}`
-                                  : checks.priceCheck?.message || 'Precio'}
-                              </span>
-                            </div>
-
-                            {/* Delivery check (if applicable) */}
-                            {checks.deliveryCheck && (
-                              <div className="flex items-center gap-2">
-                                {checks.deliveryCheck?.passed ? (
-                                  <CheckCircle className="h-4 w-4 text-green-500" />
-                                ) : (
-                                  <XCircle className="h-4 w-4 text-red-500" />
-                                )}
-                                <Truck className="h-3 w-3 text-muted-foreground" />
-                                <span className="truncate text-xs">
-                                  {checks.deliveryCheck?.message || 'Entrega'}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Errors */}
+                        <div className="mt-3 pt-3 border-t border-border/50 space-y-3">
+                          {/* Errors first (blocking) */}
                           {result.validationResult.errors.length > 0 && (
-                            <div className="mt-2 p-2 rounded bg-red-100 dark:bg-red-900/30">
+                            <div className="p-2 rounded bg-red-100 dark:bg-red-900/30">
                               <div className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">
-                                Errores:
+                                Errores que bloquean la emisión:
                               </div>
-                              <ul className="text-xs text-red-600 dark:text-red-300 space-y-1">
+                              <ul className="text-xs text-red-600 dark:text-red-300 space-y-1 list-disc list-inside">
                                 {result.validationResult.errors.map((err, i) => (
-                                  <li key={i}>• {err}</li>
+                                  <li key={i}>{err}</li>
                                 ))}
                               </ul>
                             </div>
                           )}
 
-                          {/* Warnings */}
+                          {/* Warnings (non-blocking) */}
                           {result.validationResult.warnings.length > 0 && (
-                            <div className="mt-2 p-2 rounded bg-yellow-100 dark:bg-yellow-900/30">
+                            <div className="p-2 rounded bg-yellow-100 dark:bg-yellow-900/30">
                               <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">
                                 Advertencias:
                               </div>
-                              <ul className="text-xs text-yellow-600 dark:text-yellow-300 space-y-1">
+                              <ul className="text-xs text-yellow-600 dark:text-yellow-300 space-y-1 list-disc list-inside">
                                 {result.validationResult.warnings.map((warn, i) => (
-                                  <li key={i}>• {warn}</li>
+                                  <li key={i}>{warn}</li>
                                 ))}
                               </ul>
                             </div>
                           )}
+
+                          {/* Verification details */}
+                          <div className="p-2 rounded bg-muted/50">
+                            <div className="text-xs font-medium text-muted-foreground mb-2">
+                              Verificaciones:
+                            </div>
+                            <ul className="text-xs space-y-1.5">
+                              {/* Delivery check first (most important for COD) */}
+                              {checks.deliveryCheck && (
+                                <li className="flex items-center gap-2">
+                                  {checks.deliveryCheck.passed ? (
+                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                  ) : (
+                                    <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                  )}
+                                  <Truck className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <span className={checks.deliveryCheck.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}>
+                                    {checks.deliveryCheck.message}
+                                  </span>
+                                </li>
+                              )}
+                              {/* Client check */}
+                              <li className="flex items-center gap-2">
+                                {checks.clientCheck?.passed ? (
+                                  <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                ) : (
+                                  <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                )}
+                                <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span className={checks.clientCheck?.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}>
+                                  {checks.clientCheck?.message}
+                                </span>
+                              </li>
+                              {/* Price check */}
+                              <li className="flex items-center gap-2">
+                                {checks.priceCheck?.passed ? (
+                                  <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                ) : (
+                                  <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
+                                )}
+                                <DollarSign className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span className={checks.priceCheck?.passed ? 'text-muted-foreground' : 'text-yellow-600 dark:text-yellow-400'}>
+                                  {checks.priceCheck?.message}
+                                </span>
+                              </li>
+                            </ul>
+                          </div>
                         </div>
                       </CollapsibleContent>
                     </div>
