@@ -774,6 +774,37 @@ serve(async (req) => {
         result = await makeAlegraRequest("/taxes");
         break;
 
+      case "get-bank-accounts":
+        // Get available bank accounts for payments
+        result = await makeAlegraRequest("/bank-accounts");
+        break;
+
+      case "create-payment": {
+        // Create a payment associated with an invoice
+        const payment = data?.payment || {};
+        
+        if (!payment.invoiceId) {
+          throw new Error("invoiceId requerido para crear pago");
+        }
+        
+        const paymentPayload = {
+          date: payment.date || new Date().toISOString().split('T')[0],
+          type: "in", // Ingreso (cobro)
+          bankAccount: payment.bankAccount || 1, // Cuenta predeterminada
+          paymentMethod: payment.paymentMethod || "cash",
+          invoices: [{
+            id: payment.invoiceId,
+            amount: payment.amount
+          }],
+          observations: payment.observations || ""
+        };
+        
+        console.log("Creating payment:", JSON.stringify(paymentPayload, null, 2));
+        result = await makeAlegraRequest("/payments", "POST", paymentPayload);
+        console.log("Payment created:", JSON.stringify(result, null, 2));
+        break;
+      }
+
       default:
         throw new Error(`Acción no reconocida: ${action}`);
     }
