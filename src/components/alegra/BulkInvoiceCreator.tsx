@@ -777,25 +777,28 @@ const BulkInvoiceCreator = () => {
   };
 
   const createInvoice = async (order: ShopifyOrderForInvoice, contactId: string) => {
+    // Build items WITHOUT id - let Alegra create free-form items instead of catalog lookup
     const items = order.line_items.map(item => ({
-      id: 1,
       name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
-      price: item.price,
+      price: Number(item.price),
       quantity: item.quantity,
+      reference: item.sku || undefined, // SKU for traceability
       tax: []
     }));
 
-    // Agregar envío si existe diferencia entre total y subtotal
+    // Add shipping if there's a difference between total and subtotal
     const shippingCost = order.total_price - order.subtotal_price;
     if (shippingCost > 0) {
       items.push({
-        id: 1,
         name: 'Envío',
-        price: shippingCost,
+        price: Number(shippingCost),
         quantity: 1,
+        reference: 'ENVIO',
         tax: []
       });
     }
+    
+    console.log(`📦 Creando factura para orden ${order.order_number} con items:`, items.map(i => ({ name: i.name, price: i.price, qty: i.quantity })));
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
@@ -1183,25 +1186,45 @@ const BulkInvoiceCreator = () => {
 
   // Create invoice using edited data if available
   const createInvoiceWithData = async (order: ShopifyOrderForInvoice, contactId: string, editedData?: EditedInvoiceData) => {
-    const items = (editedData?.lineItems || order.line_items).map(item => ({
-      id: 1,
-      name: 'title' in item ? item.title : `${(item as any).title}${(item as any).variant_title ? ' - ' + (item as any).variant_title : ''}`,
-      price: item.price,
-      quantity: item.quantity,
-      tax: []
-    }));
+    const sourceItems = editedData?.lineItems || order.line_items;
+    
+    // Build items WITHOUT id - let Alegra create free-form items
+    const items = sourceItems.map(item => {
+      // Check if it's an edited item (has 'title') or Shopify line item
+      const isEditedItem = 'title' in item && !('variant_title' in item);
+      const name = isEditedItem 
+        ? (item as any).title 
+        : `${(item as any).title}${(item as any).variant_title ? ' - ' + (item as any).variant_title : ''}`;
+      
+      return {
+        name,
+        price: Number(item.price),
+        quantity: item.quantity,
+        reference: (item as any).sku || undefined,
+        tax: []
+      };
+    });
 
-    // Agregar envío si existe diferencia entre total y subtotal
+    // Check if shipping already exists in edited items (to avoid duplication)
+    const hasShippingItem = sourceItems.some((item: any) => 
+      item.isShipping === true || 
+      item.title?.toLowerCase() === 'envío' || 
+      item.title?.toLowerCase() === 'envio'
+    );
+
+    // Add shipping only if not already present and there's a shipping cost
     const shippingCost = order.total_price - order.subtotal_price;
-    if (shippingCost > 0) {
+    if (shippingCost > 0 && !hasShippingItem) {
       items.push({
-        id: 1,
         name: 'Envío',
-        price: shippingCost,
+        price: Number(shippingCost),
         quantity: 1,
+        reference: 'ENVIO',
         tax: []
       });
     }
+    
+    console.log(`📦 Creando factura (editada) para orden ${order.order_number} con items:`, items.map(i => ({ name: i.name, price: i.price, qty: i.quantity })));
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
