@@ -648,10 +648,22 @@ serve(async (req) => {
         break;
       }
 
-      case "get-items":
-        // Get all items/products
-        result = await makeAlegraRequest("/items");
+      case "get-items": {
+        // Get all items/products with pagination support
+        const start = data?.start || 0;
+        const limit = data?.limit || 100;
+        const search = data?.search;
+        
+        let endpoint = `/items?start=${start}&limit=${limit}`;
+        if (search) {
+          endpoint += `&name=${encodeURIComponent(search)}`;
+        }
+        
+        console.log(`Fetching Alegra items: ${endpoint}`);
+        result = await makeAlegraRequest(endpoint);
+        console.log(`Found ${Array.isArray(result) ? result.length : 0} items`);
         break;
+      }
 
       case "create-invoice":
         // Create an invoice

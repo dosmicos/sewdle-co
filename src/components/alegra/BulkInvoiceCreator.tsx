@@ -792,13 +792,43 @@ const BulkInvoiceCreator = () => {
   };
 
   const createInvoice = async (order: ShopifyOrderForInvoice, contactId: string) => {
-    // Build items WITHOUT id - let Alegra create free-form items instead of catalog lookup
-    const items = order.line_items.map(item => ({
-      name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
-      price: Number(item.price),
-      quantity: item.quantity,
-      reference: item.sku || undefined, // SKU for traceability
-      tax: []
+    // Fetch product mappings for this organization
+    const { data: mappings } = await supabase
+      .from('alegra_product_mapping')
+      .select('*');
+    
+    // Build items - use Alegra catalog ID if mapped, otherwise create free-form items
+    const items = await Promise.all(order.line_items.map(async item => {
+      const productTitle = item.title;
+      const variantTitle = item.variant_title || null;
+      
+      // Find mapping by exact product+variant match, then by product only
+      const mapping = mappings?.find(m => 
+        m.shopify_product_title === productTitle && 
+        (m.shopify_variant_title === variantTitle || (!m.shopify_variant_title && !variantTitle))
+      ) || mappings?.find(m => 
+        m.shopify_product_title === productTitle && !m.shopify_variant_title
+      );
+      
+      if (mapping?.alegra_item_id) {
+        // Use Alegra catalog item ID - this links to inventory, accounting, and taxes
+        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id}`);
+        return {
+          id: mapping.alegra_item_id,
+          price: Number(item.price),
+          quantity: item.quantity,
+          // tax is inherited from the catalog item in Alegra
+        };
+      } else {
+        // No mapping - use free-form item (current behavior)
+        return {
+          name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
+          price: Number(item.price),
+          quantity: item.quantity,
+          reference: item.sku || undefined,
+          tax: []
+        };
+      }
     }));
 
     // Add shipping if there's a difference between total and subtotal
@@ -810,10 +840,10 @@ const BulkInvoiceCreator = () => {
         quantity: 1,
         reference: 'ENVIO',
         tax: []
-      });
+      } as any);
     }
     
-    console.log(`📦 Creando factura para orden ${order.order_number} con items:`, items.map(i => ({ name: i.name, price: i.price, qty: i.quantity })));
+    console.log(`📦 Creando factura para orden ${order.order_number} con items:`, items.map(i => ({ id: (i as any).id, name: (i as any).name, price: i.price, qty: i.quantity })));
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
@@ -1202,22 +1232,50 @@ const BulkInvoiceCreator = () => {
   const createInvoiceWithData = async (order: ShopifyOrderForInvoice, contactId: string, editedData?: EditedInvoiceData) => {
     const sourceItems = editedData?.lineItems || order.line_items;
     
-    // Build items WITHOUT id - let Alegra create free-form items
-    const items = sourceItems.map(item => {
+    // Fetch product mappings for this organization
+    const { data: mappings } = await supabase
+      .from('alegra_product_mapping')
+      .select('*');
+    
+    // Build items - use Alegra catalog ID if mapped, otherwise create free-form items
+    const items = await Promise.all(sourceItems.map(async (item: any) => {
       // Check if it's an edited item (has 'title') or Shopify line item
       const isEditedItem = 'title' in item && !('variant_title' in item);
-      const name = isEditedItem 
-        ? (item as any).title 
-        : `${(item as any).title}${(item as any).variant_title ? ' - ' + (item as any).variant_title : ''}`;
+      const productTitle = item.title;
+      const variantTitle = isEditedItem ? null : item.variant_title || null;
       
-      return {
-        name,
-        price: Number(item.price),
-        quantity: item.quantity,
-        reference: (item as any).sku || undefined,
-        tax: []
-      };
-    });
+      // Find mapping by exact product+variant match, then by product only
+      const mapping = mappings?.find(m => 
+        m.shopify_product_title === productTitle && 
+        (m.shopify_variant_title === variantTitle || (!m.shopify_variant_title && !variantTitle))
+      ) || mappings?.find(m => 
+        m.shopify_product_title === productTitle && !m.shopify_variant_title
+      );
+      
+      if (mapping?.alegra_item_id) {
+        // Use Alegra catalog item ID - this links to inventory, accounting, and taxes
+        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id}`);
+        return {
+          id: mapping.alegra_item_id,
+          price: Number(item.price),
+          quantity: item.quantity,
+          // tax is inherited from the catalog item in Alegra
+        };
+      } else {
+        // No mapping - use free-form item
+        const name = isEditedItem 
+          ? productTitle 
+          : `${productTitle}${variantTitle ? ' - ' + variantTitle : ''}`;
+        
+        return {
+          name,
+          price: Number(item.price),
+          quantity: item.quantity,
+          reference: item.sku || undefined,
+          tax: []
+        };
+      }
+    }));
 
     // Check if shipping already exists in edited items (to avoid duplication)
     const hasShippingItem = sourceItems.some((item: any) => 
@@ -1235,10 +1293,10 @@ const BulkInvoiceCreator = () => {
         quantity: 1,
         reference: 'ENVIO',
         tax: []
-      });
+      } as any);
     }
     
-    console.log(`📦 Creando factura (editada) para orden ${order.order_number} con items:`, items.map(i => ({ name: i.name, price: i.price, qty: i.quantity })));
+    console.log(`📦 Creando factura (editada) para orden ${order.order_number} con items:`, items.map(i => ({ id: (i as any).id, name: (i as any).name, price: i.price, qty: i.quantity })));
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
