@@ -37,7 +37,8 @@ interface EditedInvoiceData {
 
 export const validateOrderForInvoice = async (
   order: ShopifyOrder,
-  editedData?: EditedInvoiceData
+  editedData?: EditedInvoiceData,
+  manualDeliveryConfirmed?: boolean
 ): Promise<ValidationResult> => {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -161,12 +162,21 @@ export const validateOrderForInvoice = async (
       if (labelError) throw labelError;
 
       if (!shippingLabel) {
-        checks.deliveryCheck = {
-          passed: false,
-          status: 'sin_guia',
-          message: 'Contraentrega sin guía de envío generada',
-        };
-        errors.push('Pedido contraentrega sin guía de envío generada');
+        // No shipping label found - check if manual confirmation was provided
+        if (manualDeliveryConfirmed) {
+          checks.deliveryCheck = {
+            passed: true,
+            status: 'manual_confirmed',
+            message: 'Entrega confirmada manualmente',
+          };
+        } else {
+          checks.deliveryCheck = {
+            passed: false,
+            status: 'sin_guia',
+            message: 'No se encontró guía de envío registrada',
+          };
+          errors.push('Pedido contraentrega sin guía de envío registrada');
+        }
       } else if (shippingLabel.tracking_number) {
         // Check tracking status
         const { data: trackingResult } = await supabase.functions.invoke('envia-track', {
@@ -177,12 +187,21 @@ export const validateOrderForInvoice = async (
         });
 
         const deliveryStatus = trackingResult?.status || shippingLabel.status || 'unknown';
+        const deliveryStatusLower = deliveryStatus.toLowerCase();
 
-        if (deliveryStatus === 'delivered' || deliveryStatus === 'entregado') {
+        // Case-insensitive comparison for delivery status
+        if (deliveryStatusLower === 'delivered' || deliveryStatusLower === 'entregado') {
           checks.deliveryCheck = {
             passed: true,
             status: deliveryStatus,
             message: 'Entrega confirmada',
+          };
+        } else if (manualDeliveryConfirmed) {
+          // Status not delivered but manual confirmation provided
+          checks.deliveryCheck = {
+            passed: true,
+            status: 'manual_confirmed',
+            message: 'Entrega confirmada manualmente',
           };
         } else {
           checks.deliveryCheck = {
@@ -193,12 +212,21 @@ export const validateOrderForInvoice = async (
           errors.push(`Contraentrega no entregada. Estado actual: ${deliveryStatus}`);
         }
       } else {
-        checks.deliveryCheck = {
-          passed: false,
-          status: 'pending',
-          message: 'Guía sin número de rastreo',
-        };
-        errors.push('Guía de envío sin número de rastreo');
+        // Has shipping label but no tracking number
+        if (manualDeliveryConfirmed) {
+          checks.deliveryCheck = {
+            passed: true,
+            status: 'manual_confirmed',
+            message: 'Entrega confirmada manualmente',
+          };
+        } else {
+          checks.deliveryCheck = {
+            passed: false,
+            status: 'pending',
+            message: 'Guía sin número de rastreo',
+          };
+          errors.push('Guía de envío sin número de rastreo');
+        }
       }
     } catch (error: any) {
       checks.deliveryCheck = {

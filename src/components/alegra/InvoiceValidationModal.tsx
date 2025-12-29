@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   CheckCircle, 
   XCircle, 
@@ -56,6 +57,8 @@ interface InvoiceValidationModalProps {
   isValidating: boolean;
   onConfirmEmit: () => void;
   isEmitting: boolean;
+  manualDeliveryConfirmed?: boolean;
+  onManualDeliveryChange?: (confirmed: boolean) => void;
 }
 
 const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
@@ -66,10 +69,25 @@ const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
   isValidating,
   onConfirmEmit,
   isEmitting,
+  manualDeliveryConfirmed,
+  onManualDeliveryChange,
 }) => {
   const hasErrors = validationResult && validationResult.errors.length > 0;
   const hasWarnings = validationResult && validationResult.warnings.length > 0;
-  const canEmit = validationResult && !hasErrors;
+  
+  // Check if the only error is delivery-related and can be resolved with manual confirmation
+  const deliveryCheck = validationResult?.checks.deliveryCheck;
+  const canResolveWithManualConfirmation = hasErrors && deliveryCheck && !deliveryCheck.passed &&
+    (deliveryCheck.status === 'sin_guia' || deliveryCheck.status === 'pending' ||
+     (deliveryCheck.status && !['delivered', 'entregado', 'manual_confirmed'].includes(deliveryCheck.status.toLowerCase()))) &&
+    validationResult?.errors.every(e => 
+      e.toLowerCase().includes('contraentrega') || 
+      e.toLowerCase().includes('guía') || 
+      e.toLowerCase().includes('entrega')
+    );
+  
+  // Can emit if no errors OR if manual confirmation resolves the only error
+  const canEmit = validationResult && (!hasErrors || (canResolveWithManualConfirmation && manualDeliveryConfirmed));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,19 +178,41 @@ const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
               {/* Delivery Check (only for COD) */}
               {validationResult.checks.deliveryCheck && (
                 <div className="flex items-start gap-3">
-                  {validationResult.checks.deliveryCheck.passed ? (
+                  {validationResult.checks.deliveryCheck.passed || manualDeliveryConfirmed ? (
                     <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   ) : (
                     <XCircle className="h-5 w-5 text-destructive mt-0.5" />
                   )}
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <Truck className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">Entrega (Contraentrega)</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {validationResult.checks.deliveryCheck.message}
+                      {manualDeliveryConfirmed && !validationResult.checks.deliveryCheck.passed
+                        ? 'Entrega confirmada manualmente'
+                        : validationResult.checks.deliveryCheck.message}
                     </p>
+                    
+                    {/* Manual delivery confirmation checkbox */}
+                    {canResolveWithManualConfirmation && onManualDeliveryChange && (
+                      <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="manual-delivery-confirm"
+                            checked={manualDeliveryConfirmed || false}
+                            onCheckedChange={(checked) => onManualDeliveryChange(checked === true)}
+                            className="mt-0.5"
+                          />
+                          <label 
+                            htmlFor="manual-delivery-confirm"
+                            className="text-sm text-amber-800 dark:text-amber-300 cursor-pointer"
+                          >
+                            Confirmo que este pedido ya fue entregado al cliente
+                          </label>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -218,9 +258,9 @@ const InvoiceValidationModal: React.FC<InvoiceValidationModalProps> = ({
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isEmitting}>
-            {hasErrors ? 'Volver a editar' : 'Cancelar'}
+            {hasErrors && !canEmit ? 'Volver a editar' : 'Cancelar'}
           </Button>
-          {!hasErrors && (
+          {canEmit && (
             <Button 
               onClick={onConfirmEmit} 
               disabled={isEmitting}

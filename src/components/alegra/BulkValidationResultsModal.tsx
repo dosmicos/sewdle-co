@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   CheckCircle,
   XCircle,
@@ -38,6 +39,8 @@ interface BulkValidationResultsModalProps {
   results: BulkValidationResult[];
   isEmitting: boolean;
   onEmitValid: () => void;
+  manualDeliveryConfirmations: Map<string, boolean>;
+  onManualDeliveryChange: (orderId: string, confirmed: boolean) => void;
 }
 
 const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
@@ -46,11 +49,32 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
   results,
   isEmitting,
   onEmitValid,
+  manualDeliveryConfirmations,
+  onManualDeliveryChange,
 }) => {
   const [expandedOrders, setExpandedOrders] = React.useState<Set<string>>(new Set());
 
-  const validResults = results.filter(r => r.validationResult.valid);
-  const errorResults = results.filter(r => !r.validationResult.valid);
+  // Helper to check if an order is valid (including manual confirmations)
+  const isOrderValid = (result: BulkValidationResult) => {
+    if (result.validationResult.valid) return true;
+    
+    // Check if manual confirmation resolves the delivery error
+    const hasManualConfirmation = manualDeliveryConfirmations.get(result.orderId);
+    if (!hasManualConfirmation) return false;
+    
+    const deliveryCheck = result.validationResult.checks.deliveryCheck;
+    const isDeliveryOnlyError = deliveryCheck && !deliveryCheck.passed &&
+      result.validationResult.errors.every(e => 
+        e.toLowerCase().includes('contraentrega') || 
+        e.toLowerCase().includes('guía') || 
+        e.toLowerCase().includes('entrega')
+      );
+    
+    return isDeliveryOnlyError;
+  };
+
+  const validResults = results.filter(r => isOrderValid(r));
+  const errorResults = results.filter(r => !isOrderValid(r));
   const warningResults = results.filter(
     r => r.validationResult.valid && r.validationResult.warnings.length > 0
   );
@@ -68,23 +92,26 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
   };
 
   const getStatusIcon = (result: BulkValidationResult) => {
-    if (!result.validationResult.valid) {
-      return <XCircle className="h-5 w-5 text-red-500" />;
+    if (isOrderValid(result)) {
+      if (result.validationResult.warnings.length > 0 || manualDeliveryConfirmations.get(result.orderId)) {
+        return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+      }
+      return <CheckCircle className="h-5 w-5 text-green-500" />;
     }
-    if (result.validationResult.warnings.length > 0) {
-      return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-    }
-    return <CheckCircle className="h-5 w-5 text-green-500" />;
+    return <XCircle className="h-5 w-5 text-red-500" />;
   };
 
   const getStatusBadge = (result: BulkValidationResult) => {
-    if (!result.validationResult.valid) {
-      return <Badge variant="destructive">Error</Badge>;
+    if (isOrderValid(result)) {
+      if (manualDeliveryConfirmations.get(result.orderId)) {
+        return <Badge className="bg-amber-500 hover:bg-amber-600">Confirmada manualmente</Badge>;
+      }
+      if (result.validationResult.warnings.length > 0) {
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600">Advertencia</Badge>;
+      }
+      return <Badge className="bg-green-600 hover:bg-green-700">Válida</Badge>;
     }
-    if (result.validationResult.warnings.length > 0) {
-      return <Badge className="bg-yellow-500 hover:bg-yellow-600">Advertencia</Badge>;
-    }
-    return <Badge className="bg-green-600 hover:bg-green-700">Válida</Badge>;
+    return <Badge variant="destructive">Error</Badge>;
   };
 
   return (
@@ -244,6 +271,28 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                             </div>
                           )}
 
+                          {/* Manual delivery confirmation checkbox for orders without shipping label */}
+                          {checks.deliveryCheck && !checks.deliveryCheck.passed && 
+                           (checks.deliveryCheck.status === 'sin_guia' || checks.deliveryCheck.status === 'pending' || 
+                            (checks.deliveryCheck.status && !['delivered', 'entregado', 'manual_confirmed'].includes(checks.deliveryCheck.status.toLowerCase()))) && (
+                            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                              <div className="flex items-start gap-3">
+                                <Checkbox
+                                  id={`manual-delivery-${result.orderId}`}
+                                  checked={manualDeliveryConfirmations.get(result.orderId) || false}
+                                  onCheckedChange={(checked) => onManualDeliveryChange(result.orderId, checked === true)}
+                                  className="mt-0.5"
+                                />
+                                <label 
+                                  htmlFor={`manual-delivery-${result.orderId}`}
+                                  className="text-sm text-amber-800 dark:text-amber-300 cursor-pointer"
+                                >
+                                  Confirmo que este pedido ya fue entregado al cliente
+                                </label>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Verification details */}
                           <div className="p-2 rounded bg-muted/50">
                             <div className="text-xs font-medium text-muted-foreground mb-2">
@@ -253,14 +302,16 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                               {/* Delivery check first (most important for COD) */}
                               {checks.deliveryCheck && (
                                 <li className="flex items-center gap-2">
-                                  {checks.deliveryCheck.passed ? (
+                                  {checks.deliveryCheck.passed || manualDeliveryConfirmations.get(result.orderId) ? (
                                     <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                   ) : (
                                     <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
                                   )}
                                   <Truck className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                  <span className={`whitespace-normal break-words ${checks.deliveryCheck.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}`}>
-                                    {checks.deliveryCheck.message}
+                                  <span className={`whitespace-normal break-words ${checks.deliveryCheck.passed || manualDeliveryConfirmations.get(result.orderId) ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}`}>
+                                    {manualDeliveryConfirmations.get(result.orderId) && !checks.deliveryCheck.passed
+                                      ? 'Entrega confirmada manualmente'
+                                      : checks.deliveryCheck.message}
                                   </span>
                                 </li>
                               )}
