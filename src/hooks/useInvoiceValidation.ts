@@ -45,7 +45,7 @@ export const validateOrderForInvoice = async (
   // Initialize checks
   const checks: ValidationResult['checks'] = {
     clientCheck: { passed: false, message: 'Verificando...' },
-    priceCheck: { passed: false, invoiceTotal: 0, shopifyTotal: order.total_price, message: 'Verificando...' },
+    priceCheck: { passed: false, invoiceTotal: 0, shopifyTotal: order.subtotal_price ?? order.total_price, message: 'Verificando...' },
     paymentCheck: { passed: false, message: 'Verificando...' },
   };
 
@@ -211,8 +211,8 @@ export const validateOrderForInvoice = async (
     }
   }
 
-  // 3. PRICE VALIDATION - Compare invoice total with Shopify total (both include shipping)
-  // Calculate invoice total from edited data or line items (shipping is included as a line item)
+  // 3. PRICE VALIDATION - Compare invoice total with Shopify subtotal (products only, no shipping)
+  // Calculate invoice total from edited data or line items
   const lineItemsTotal = order.line_items.reduce(
     (sum, item) => sum + (item.price * item.quantity), 0
   );
@@ -221,24 +221,25 @@ export const validateOrderForInvoice = async (
     ? editedData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
     : lineItemsTotal;
   
-  // Use Shopify's total_price which includes products + shipping
-  const shopifyTotal = order.total_price;
+  // Use Shopify's subtotal_price (products only, no shipping) for comparison
+  // This matches line_items which also don't include shipping
+  const shopifySubtotal = order.subtotal_price ?? order.total_price;
   
-  // Compare totals (both should include shipping)
-  const priceDifference = Math.abs(invoiceTotal - shopifyTotal);
+  // Compare totals (both are products only)
+  const priceDifference = Math.abs(invoiceTotal - shopifySubtotal);
   const priceMatch = priceDifference <= 100; // $100 COP tolerance for rounding
 
   checks.priceCheck = {
     passed: priceMatch,
     invoiceTotal,
-    shopifyTotal,
+    shopifyTotal: shopifySubtotal,
     message: priceMatch
-      ? `Total coincide: $${shopifyTotal.toLocaleString('es-CO')}`
-      : `Diferencia de $${priceDifference.toLocaleString('es-CO')} (Factura: $${invoiceTotal.toLocaleString('es-CO')} vs Shopify: $${shopifyTotal.toLocaleString('es-CO')})`,
+      ? `Total productos: $${shopifySubtotal.toLocaleString('es-CO')}`
+      : `Diferencia de $${priceDifference.toLocaleString('es-CO')} (Factura: $${invoiceTotal.toLocaleString('es-CO')} vs Shopify: $${shopifySubtotal.toLocaleString('es-CO')})`,
   };
 
   if (!priceMatch) {
-    warnings.push(`El total de la factura ($${invoiceTotal.toLocaleString('es-CO')}) difiere del total de Shopify ($${shopifyTotal.toLocaleString('es-CO')})`);
+    warnings.push(`El total de la factura ($${invoiceTotal.toLocaleString('es-CO')}) difiere del subtotal de Shopify ($${shopifySubtotal.toLocaleString('es-CO')})`);
   }
 
   // 4. PAID ORDER VALIDATION
