@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   CheckCircle,
@@ -90,14 +89,14 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-2xl w-full max-h-[85vh] grid grid-rows-[auto_1fr_auto] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             📋 Resultados de Validación Masiva
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="min-h-0 overflow-y-auto pr-2">
           {/* Summary */}
           <div className="flex gap-4 mb-4">
             <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
@@ -171,7 +170,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
           )}
 
           {/* Results list */}
-          <div className="max-h-[350px] overflow-y-auto pr-4 space-y-2">
+          <div className="space-y-2 pb-2">
               {results.map(result => {
                 const isExpanded = expandedOrders.has(result.orderId);
                 const checks = result.validationResult.checks;
@@ -225,7 +224,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                               </div>
                               <ul className="text-xs text-red-600 dark:text-red-300 space-y-1 list-disc list-inside">
                                 {result.validationResult.errors.map((err, i) => (
-                                  <li key={i}>{err}</li>
+                                  <li key={i} className="whitespace-normal break-words">{err}</li>
                                 ))}
                               </ul>
                             </div>
@@ -239,7 +238,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                               </div>
                               <ul className="text-xs text-yellow-600 dark:text-yellow-300 space-y-1 list-disc list-inside">
                                 {result.validationResult.warnings.map((warn, i) => (
-                                  <li key={i}>{warn}</li>
+                                  <li key={i} className="whitespace-normal break-words">{warn}</li>
                                 ))}
                               </ul>
                             </div>
@@ -260,7 +259,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                                     <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
                                   )}
                                   <Truck className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                  <span className={checks.deliveryCheck.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}>
+                                  <span className={`whitespace-normal break-words ${checks.deliveryCheck.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}`}>
                                     {checks.deliveryCheck.message}
                                   </span>
                                 </li>
@@ -273,7 +272,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                                   <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
                                 )}
                                 <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                <span className={checks.clientCheck?.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}>
+                                <span className={`whitespace-normal break-words ${checks.clientCheck?.passed ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}`}>
                                   {checks.clientCheck?.message}
                                 </span>
                               </li>
@@ -285,7 +284,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                                   <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
                                 )}
                                 <DollarSign className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                <span className={checks.priceCheck?.passed ? 'text-muted-foreground' : 'text-yellow-600 dark:text-yellow-400'}>
+                                <span className={`whitespace-normal break-words ${checks.priceCheck?.passed ? 'text-muted-foreground' : 'text-yellow-600 dark:text-yellow-400'}`}>
                                   {checks.priceCheck?.message}
                                 </span>
                               </li>
