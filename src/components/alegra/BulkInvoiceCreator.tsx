@@ -298,42 +298,91 @@ const verifyNoExistingInvoice = async (
   needsValidation?: boolean;
 }> => {
   try {
-    // 1. Buscar en tabla local alegra_invoices (solo emitidas)
+    // 1. Buscar en tabla local alegra_invoices (solo emitidas con CUFE)
     const { data: localRecord } = await supabase
       .from('alegra_invoices')
       .select('*')
       .eq('shopify_order_id', order.shopify_order_id)
       .eq('stamped', true)
+      .not('cufe', 'is', null)
       .maybeSingle();
     
-    if (localRecord) {
-      console.log(`⚠️ Factura ya registrada localmente para orden ${order.order_number}:`, localRecord.alegra_invoice_number);
+    if (localRecord && localRecord.cufe) {
+      console.log(`⚠️ Factura ya registrada localmente para orden ${order.order_number}:`, localRecord.alegra_invoice_number, 'CUFE:', localRecord.cufe);
       return { exists: true, invoice: localRecord, source: 'local' };
     }
 
-    // 2. Buscar en Alegra API (now with client-based fallback)
+    // 2. Si hay registro local SIN CUFE, verificar directamente en Alegra si ya fue emitida
+    const { data: localRecordAny } = await supabase
+      .from('alegra_invoices')
+      .select('*')
+      .eq('shopify_order_id', order.shopify_order_id)
+      .maybeSingle();
+    
+    if (localRecordAny?.alegra_invoice_id) {
+      console.log(`📋 Encontrado registro local para ${order.order_number}, verificando estado en Alegra...`);
+      
+      // Verificar directamente en Alegra el estado actual de la factura
+      if (getInvoiceDetailsFn) {
+        try {
+          const alegraInvoice = await getInvoiceDetailsFn(localRecordAny.alegra_invoice_id);
+          if (alegraInvoice?.stamp?.cufe) {
+            // La factura YA está emitida en Alegra, sincronizar y bloquear
+            console.log(`✅ Factura ${alegraInvoice.numberTemplate?.fullNumber} ya está emitida en Alegra con CUFE`);
+            await registerInvoice(order, alegraInvoice, true, alegraInvoice.stamp.cufe);
+            
+            // También actualizar shopify_orders
+            await supabase
+              .from('shopify_orders')
+              .update({
+                alegra_stamped: true,
+                alegra_cufe: alegraInvoice.stamp.cufe,
+                alegra_invoice_number: alegraInvoice.numberTemplate?.fullNumber
+              })
+              .eq('id', order.id);
+            
+            return { exists: true, invoice: alegraInvoice, source: 'alegra' };
+          }
+        } catch (e) {
+          console.warn('Error verificando factura en Alegra:', e);
+        }
+      }
+    }
+
+    // 3. Buscar en Alegra API (con fallback por cliente)
     const existingInvoice = await searchInvoiceFn(order.order_number, order);
     
     if (existingInvoice) {
-      if (existingInvoice.stamp?.cufe) {
-        // Ya emitida con CUFE - sincronizar y marcar como existente
-        console.log(`⚠️ Factura ya existe en Alegra para orden ${order.order_number}:`, existingInvoice.numberTemplate?.fullNumber);
-        await registerInvoice(order, existingInvoice, true, existingInvoice.stamp.cufe);
-        return { exists: true, invoice: existingInvoice, source: 'alegra' };
-      }
-      
-      // Existe factura pero NO está emitida - validar coherencia
-      console.log(`📋 Factura existente sin emitir para orden ${order.order_number}, validando coherencia...`);
-      
-      // Obtener detalles completos de la factura si tenemos la función
+      // Siempre obtener detalles completos para verificar CUFE
       let invoiceDetails = existingInvoice;
-      if (getInvoiceDetailsFn) {
+      if (getInvoiceDetailsFn && existingInvoice.id) {
         try {
           invoiceDetails = await getInvoiceDetailsFn(existingInvoice.id);
         } catch (e) {
           console.warn('No se pudieron obtener detalles de factura, usando datos básicos');
         }
       }
+      
+      if (invoiceDetails.stamp?.cufe) {
+        // Ya emitida con CUFE - sincronizar y marcar como existente
+        console.log(`⚠️ Factura ya existe en Alegra para orden ${order.order_number}:`, invoiceDetails.numberTemplate?.fullNumber);
+        await registerInvoice(order, invoiceDetails, true, invoiceDetails.stamp.cufe);
+        
+        // También actualizar shopify_orders
+        await supabase
+          .from('shopify_orders')
+          .update({
+            alegra_stamped: true,
+            alegra_cufe: invoiceDetails.stamp.cufe,
+            alegra_invoice_number: invoiceDetails.numberTemplate?.fullNumber
+          })
+          .eq('id', order.id);
+        
+        return { exists: true, invoice: invoiceDetails, source: 'alegra' };
+      }
+      
+      // Existe factura pero NO está emitida - validar coherencia
+      console.log(`📋 Factura existente sin emitir para orden ${order.order_number}, validando coherencia...`);
       
       const validation = await validateExistingInvoice(order, invoiceDetails);
       
