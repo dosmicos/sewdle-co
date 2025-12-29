@@ -35,6 +35,30 @@ interface EditedInvoiceData {
   }>;
 }
 
+// Delivery status messages mapping
+const DELIVERY_STATUS_MESSAGES: Record<string, { message: string; detail: string }> = {
+  'sin_guia': { message: 'Sin registro de guía', detail: 'No hay guía de envío registrada en el sistema para este pedido' },
+  'sin_tracking': { message: 'Guía incompleta', detail: 'Tiene guía registrada pero sin número de rastreo' },
+  'pending': { message: 'Pendiente', detail: 'El envío está pendiente de procesamiento' },
+  'in_transit': { message: 'En tránsito', detail: 'El paquete está en camino pero no ha sido entregado' },
+  'en_transito': { message: 'En tránsito', detail: 'El paquete está en camino pero no ha sido entregado' },
+  'recogido': { message: 'Recogido', detail: 'El paquete fue recogido pero aún no entregado' },
+  'collected': { message: 'Recogido', detail: 'El paquete fue recogido pero aún no entregado' },
+  'en_bodega': { message: 'En bodega', detail: 'El paquete está en bodega de la transportadora' },
+  'in_warehouse': { message: 'En bodega', detail: 'El paquete está en bodega de la transportadora' },
+  'devuelto': { message: 'Devuelto', detail: 'El paquete fue devuelto al remitente' },
+  'returned': { message: 'Devuelto', detail: 'El paquete fue devuelto al remitente' },
+  'cancelled': { message: 'Cancelado', detail: 'El envío fue cancelado' },
+  'cancelado': { message: 'Cancelado', detail: 'El envío fue cancelado' },
+  'novedad': { message: 'Con novedad', detail: 'El envío tiene una novedad pendiente de resolver' },
+  'exception': { message: 'Con novedad', detail: 'El envío tiene una novedad pendiente de resolver' },
+  'delivered': { message: 'Entregada', detail: 'Entrega confirmada por la transportadora' },
+  'entregado': { message: 'Entregada', detail: 'Entrega confirmada por la transportadora' },
+  'manual_confirmed': { message: 'Confirmada manualmente', detail: 'El usuario confirmó que el pedido fue entregado' },
+  'error': { message: 'Error de verificación', detail: 'No se pudo verificar el estado del envío' },
+  'unknown': { message: 'Estado desconocido', detail: 'No se pudo determinar el estado actual del envío' },
+};
+
 export const validateOrderForInvoice = async (
   order: ShopifyOrder,
   editedData?: EditedInvoiceData,
@@ -163,19 +187,22 @@ export const validateOrderForInvoice = async (
 
       if (!shippingLabel) {
         // No shipping label found - check if manual confirmation was provided
+        const statusInfo = DELIVERY_STATUS_MESSAGES[manualDeliveryConfirmed ? 'manual_confirmed' : 'sin_guia'];
         if (manualDeliveryConfirmed) {
           checks.deliveryCheck = {
             passed: true,
             status: 'manual_confirmed',
-            message: 'Entrega confirmada manualmente',
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
         } else {
           checks.deliveryCheck = {
             passed: false,
             status: 'sin_guia',
-            message: 'No se encontró guía de envío registrada',
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
-          errors.push('Pedido contraentrega sin guía de envío registrada');
+          errors.push(`${statusInfo.message}: ${statusInfo.detail}`);
         }
       } else if (shippingLabel.tracking_number) {
         // Check tracking status
@@ -191,51 +218,63 @@ export const validateOrderForInvoice = async (
 
         // Case-insensitive comparison for delivery status
         if (deliveryStatusLower === 'delivered' || deliveryStatusLower === 'entregado') {
+          const statusInfo = DELIVERY_STATUS_MESSAGES['delivered'];
           checks.deliveryCheck = {
             passed: true,
-            status: deliveryStatus,
-            message: 'Entrega confirmada',
+            status: 'delivered',
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
         } else if (manualDeliveryConfirmed) {
           // Status not delivered but manual confirmation provided
+          const statusInfo = DELIVERY_STATUS_MESSAGES['manual_confirmed'];
           checks.deliveryCheck = {
             passed: true,
             status: 'manual_confirmed',
-            message: 'Entrega confirmada manualmente',
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
         } else {
+          // Get specific status info or fallback to unknown
+          const statusInfo = DELIVERY_STATUS_MESSAGES[deliveryStatusLower] || DELIVERY_STATUS_MESSAGES['unknown'];
           checks.deliveryCheck = {
             passed: false,
-            status: deliveryStatus,
-            message: `Contraentrega no entregada. Estado: ${deliveryStatus}`,
+            status: deliveryStatusLower,
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
-          errors.push(`Contraentrega no entregada. Estado actual: ${deliveryStatus}`);
+          errors.push(`No entregada (${statusInfo.message}): ${statusInfo.detail}`);
         }
       } else {
         // Has shipping label but no tracking number
+        const statusInfo = DELIVERY_STATUS_MESSAGES[manualDeliveryConfirmed ? 'manual_confirmed' : 'sin_tracking'];
         if (manualDeliveryConfirmed) {
           checks.deliveryCheck = {
             passed: true,
             status: 'manual_confirmed',
-            message: 'Entrega confirmada manualmente',
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
         } else {
           checks.deliveryCheck = {
             passed: false,
-            status: 'pending',
-            message: 'Guía sin número de rastreo',
+            status: 'sin_tracking',
+            message: statusInfo.message,
+            detail: statusInfo.detail,
           };
-          errors.push('Guía de envío sin número de rastreo');
+          errors.push(`${statusInfo.message}: ${statusInfo.detail}`);
         }
       }
     } catch (error: any) {
+      const statusInfo = DELIVERY_STATUS_MESSAGES['error'];
       checks.deliveryCheck = {
         passed: false,
         status: 'error',
-        message: 'Error al verificar entrega: ' + error.message,
+        message: statusInfo.message,
+        detail: error.message,
       };
       // Don't block emission for tracking errors, just warn
-      warnings.push('No se pudo verificar el estado de entrega: ' + error.message);
+      warnings.push(`${statusInfo.message}: ${error.message}`);
     }
   }
 

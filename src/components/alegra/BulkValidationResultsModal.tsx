@@ -21,6 +21,11 @@ import {
   Truck,
   ChevronDown,
   ChevronUp,
+  Package,
+  Undo2,
+  HelpCircle,
+  UserCheck,
+  AlertOctagon,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { ValidationResult } from '@/components/alegra/InvoiceValidationModal';
@@ -42,6 +47,42 @@ interface BulkValidationResultsModalProps {
   manualDeliveryConfirmations: Map<string, boolean>;
   onManualDeliveryChange: (orderId: string, confirmed: boolean) => void;
 }
+
+// Helper component for delivery status icons
+const DeliveryStatusIcon: React.FC<{ status: string }> = ({ status }) => {
+  switch (status) {
+    case 'sin_guia':
+      return <Package className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />;
+    case 'sin_tracking':
+      return <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />;
+    case 'in_transit':
+    case 'en_transito':
+    case 'recogido':
+    case 'collected':
+      return <Truck className="h-3.5 w-3.5 text-blue-500 flex-shrink-0 mt-0.5" />;
+    case 'en_bodega':
+    case 'in_warehouse':
+      return <Package className="h-3.5 w-3.5 text-blue-500 flex-shrink-0 mt-0.5" />;
+    case 'devuelto':
+    case 'returned':
+      return <Undo2 className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />;
+    case 'cancelled':
+    case 'cancelado':
+      return <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />;
+    case 'novedad':
+    case 'exception':
+      return <AlertOctagon className="h-3.5 w-3.5 text-orange-500 flex-shrink-0 mt-0.5" />;
+    case 'delivered':
+    case 'entregado':
+      return <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />;
+    case 'manual_confirmed':
+      return <UserCheck className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />;
+    case 'error':
+      return <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />;
+    default:
+      return <HelpCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />;
+  }
+};
 
 const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
   open,
@@ -301,18 +342,22 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                             <ul className="text-xs space-y-1.5">
                               {/* Delivery check first (most important for COD) */}
                               {checks.deliveryCheck && (
-                                <li className="flex items-center gap-2">
+                                <li className="flex items-start gap-2">
                                   {checks.deliveryCheck.passed || manualDeliveryConfirmations.get(result.orderId) ? (
-                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                    <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" />
                                   ) : (
-                                    <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                    <DeliveryStatusIcon status={checks.deliveryCheck.status || 'unknown'} />
                                   )}
-                                  <Truck className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                  <span className={`whitespace-normal break-words ${checks.deliveryCheck.passed || manualDeliveryConfirmations.get(result.orderId) ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}`}>
-                                    {manualDeliveryConfirmations.get(result.orderId) && !checks.deliveryCheck.passed
-                                      ? 'Entrega confirmada manualmente'
-                                      : checks.deliveryCheck.message}
-                                  </span>
+                                  <div className="flex-1">
+                                    <span className={`whitespace-normal break-words text-sm ${checks.deliveryCheck.passed || manualDeliveryConfirmations.get(result.orderId) ? 'text-muted-foreground' : 'text-foreground font-medium'}`}>
+                                      {manualDeliveryConfirmations.get(result.orderId) && !checks.deliveryCheck.passed
+                                        ? 'Entrega confirmada manualmente'
+                                        : checks.deliveryCheck.message}
+                                    </span>
+                                    {!checks.deliveryCheck.passed && !manualDeliveryConfirmations.get(result.orderId) && checks.deliveryCheck.detail && (
+                                      <p className="text-xs text-muted-foreground mt-0.5">{checks.deliveryCheck.detail}</p>
+                                    )}
+                                  </div>
                                 </li>
                               )}
                               {/* Client check */}
