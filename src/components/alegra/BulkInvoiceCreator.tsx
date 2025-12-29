@@ -643,6 +643,18 @@ const BulkInvoiceCreator = () => {
       tax: []
     }));
 
+    // Agregar envío si existe diferencia entre total y subtotal
+    const shippingCost = order.total_price - order.subtotal_price;
+    if (shippingCost > 0) {
+      items.push({
+        id: 1,
+        name: 'Envío',
+        price: shippingCost,
+        quantity: 1,
+        tax: []
+      });
+    }
+
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
         action: 'create-invoice',
@@ -842,6 +854,34 @@ const BulkInvoiceCreator = () => {
         console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${order.order_number}`);
         await addFacturadoTag(order.shopify_order_id);
         
+        // Registrar pago automáticamente si el pedido está pagado
+        if (order.financial_status === 'paid') {
+          try {
+            console.log(`💰 Registrando pago para factura ${invoiceNumber}`);
+            const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('alegra-api', {
+              body: {
+                action: 'create-payment',
+                data: {
+                  payment: {
+                    invoiceId: stampedInvoice.id,
+                    amount: order.total_price,
+                    paymentMethod: 'transfer',
+                    observations: `Pago pedido Shopify #${order.order_number}`
+                  }
+                }
+              }
+            });
+            
+            if (paymentError || !paymentResult?.success) {
+              console.error('⚠️ Error registrando pago:', paymentError || paymentResult?.error);
+            } else {
+              console.log(`✅ Pago registrado en Alegra para factura ${invoiceNumber}`);
+            }
+          } catch (paymentErr) {
+            console.error('⚠️ Error al registrar pago:', paymentErr);
+          }
+        }
+        
         toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
         fetchShopifyOrders();
       } else {
@@ -951,6 +991,18 @@ const BulkInvoiceCreator = () => {
       quantity: item.quantity,
       tax: []
     }));
+
+    // Agregar envío si existe diferencia entre total y subtotal
+    const shippingCost = order.total_price - order.subtotal_price;
+    if (shippingCost > 0) {
+      items.push({
+        id: 1,
+        name: 'Envío',
+        price: shippingCost,
+        quantity: 1,
+        tax: []
+      });
+    }
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
@@ -1162,6 +1214,35 @@ const BulkInvoiceCreator = () => {
                 });
                 
                 await addFacturadoTag(matchingItem.order.shopify_order_id);
+                
+                // Registrar pago automáticamente si el pedido está pagado
+                if (matchingItem.order.financial_status === 'paid') {
+                  try {
+                    console.log(`💰 Registrando pago para factura ${invoiceNumber}`);
+                    const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('alegra-api', {
+                      body: {
+                        action: 'create-payment',
+                        data: {
+                          payment: {
+                            invoiceId: stampedInvoice.id,
+                            amount: matchingItem.order.total_price,
+                            paymentMethod: 'transfer',
+                            observations: `Pago pedido Shopify #${matchingItem.order.order_number}`
+                          }
+                        }
+                      }
+                    });
+                    
+                    if (paymentError || !paymentResult?.success) {
+                      console.error('⚠️ Error registrando pago:', paymentError || paymentResult?.error);
+                    } else {
+                      console.log(`✅ Pago registrado en Alegra para factura ${invoiceNumber}`);
+                    }
+                  } catch (paymentErr) {
+                    console.error('⚠️ Error al registrar pago:', paymentErr);
+                    // No bloquear el proceso, solo advertir
+                  }
+                }
               }
             }
           }
