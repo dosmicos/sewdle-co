@@ -171,8 +171,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
           )}
 
           {/* Results list */}
-          <ScrollArea className="h-[350px] pr-4">
-            <div className="space-y-2">
+          <div className="max-h-[350px] overflow-y-auto pr-4 space-y-2">
               {results.map(result => {
                 const isExpanded = expandedOrders.has(result.orderId);
                 const checks = result.validationResult.checks;
@@ -298,8 +297,7 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                   </Collapsible>
                 );
               })}
-            </div>
-          </ScrollArea>
+          </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 mt-4">
