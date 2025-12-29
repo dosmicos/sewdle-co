@@ -797,53 +797,79 @@ const BulkInvoiceCreator = () => {
       .from('alegra_product_mapping')
       .select('*');
     
-    // Build items - use Alegra catalog ID if mapped, otherwise create free-form items
-    const items = await Promise.all(order.line_items.map(async item => {
+    const missingItems: Array<{ title: string; variant: string | null; sku: string | null }> = [];
+    
+    // Build items - ALL items MUST have an Alegra catalog ID
+    const items: Array<{ id: string; price: number; quantity: number }> = [];
+    
+    for (const item of order.line_items) {
       const productTitle = item.title;
       const variantTitle = item.variant_title || null;
+      const sku = item.sku || null;
       
-      // Find mapping by exact product+variant match, then by product only
-      const mapping = mappings?.find(m => 
-        m.shopify_product_title === productTitle && 
-        (m.shopify_variant_title === variantTitle || (!m.shopify_variant_title && !variantTitle))
-      ) || mappings?.find(m => 
-        m.shopify_product_title === productTitle && !m.shopify_variant_title
-      );
+      // Priority 1: Match by SKU (most reliable)
+      let mapping = sku ? mappings?.find(m => m.shopify_sku === sku) : null;
+      
+      // Priority 2: Match by exact product+variant
+      if (!mapping) {
+        mapping = mappings?.find(m => 
+          m.shopify_product_title === productTitle && 
+          (m.shopify_variant_title === variantTitle || (!m.shopify_variant_title && !variantTitle))
+        );
+      }
+      
+      // Priority 3: Match by product title only (no variant)
+      if (!mapping) {
+        mapping = mappings?.find(m => 
+          m.shopify_product_title === productTitle && !m.shopify_variant_title
+        );
+      }
       
       if (mapping?.alegra_item_id) {
-        // Use Alegra catalog item ID - this links to inventory, accounting, and taxes
         console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id}`);
-        return {
+        items.push({
           id: mapping.alegra_item_id,
           price: Number(item.price),
           quantity: item.quantity,
-          // tax is inherited from the catalog item in Alegra
-        };
+        });
       } else {
-        // No mapping - use free-form item with 19% IVA
-        return {
-          name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
-          price: Number(item.price),
-          quantity: item.quantity,
-          reference: item.sku || undefined,
-          tax: [{ id: 3 }] // IVA 19% en Alegra
-        };
+        // No mapping found - track missing item
+        missingItems.push({ title: productTitle, variant: variantTitle, sku });
       }
-    }));
+    }
 
-    // Add shipping if there's a difference between total and subtotal
+    // Check shipping mapping
     const shippingCost = order.total_price - order.subtotal_price;
     if (shippingCost > 0) {
-      items.push({
-        name: 'Envío',
-        price: Number(shippingCost),
-        quantity: 1,
-        reference: 'ENVIO',
-        tax: [{ id: 3 }] // IVA 19% en Alegra
-      } as any);
+      // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
+      const shippingMapping = mappings?.find(m => 
+        m.shopify_sku === 'ENVIO' || 
+        m.shopify_product_title?.toLowerCase() === 'envío' ||
+        m.shopify_product_title?.toLowerCase() === 'envio'
+      );
+      
+      if (shippingMapping?.alegra_item_id) {
+        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id}`);
+        items.push({
+          id: shippingMapping.alegra_item_id,
+          price: Number(shippingCost),
+          quantity: 1,
+        });
+      } else {
+        missingItems.push({ title: 'Envío', variant: null, sku: 'ENVIO' });
+      }
     }
     
-    console.log(`📦 Creando factura para orden ${order.order_number} con items:`, items.map(i => ({ id: (i as any).id, name: (i as any).name, price: i.price, qty: i.quantity })));
+    // Block if any items are missing mapping
+    if (missingItems.length > 0) {
+      const missingList = missingItems.map(m => 
+        `• ${m.title}${m.variant ? ` - ${m.variant}` : ''}${m.sku ? ` (SKU: ${m.sku})` : ''}`
+      ).join('\n');
+      
+      throw new Error(`Faltan mapeos de Alegra para ${missingItems.length} producto(s):\n${missingList}\n\nMapéalos en la pestaña "Mapeo de Productos" antes de emitir.`);
+    }
+    
+    console.log(`📦 Creando factura para orden ${order.order_number} con ${items.length} items mapeados`);
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
@@ -1237,47 +1263,57 @@ const BulkInvoiceCreator = () => {
       .from('alegra_product_mapping')
       .select('*');
     
-    // Build items - use Alegra catalog ID if mapped, otherwise create free-form items
-    const items = await Promise.all(sourceItems.map(async (item: any) => {
+    const missingItems: Array<{ title: string; variant: string | null; sku: string | null }> = [];
+    
+    // Build items - ALL items MUST have an Alegra catalog ID
+    const items: Array<{ id: string; price: number; quantity: number }> = [];
+    
+    for (const item of sourceItems) {
       // Check if it's an edited item (has 'title') or Shopify line item
       const isEditedItem = 'title' in item && !('variant_title' in item);
       const productTitle = item.title;
-      const variantTitle = isEditedItem ? null : item.variant_title || null;
+      const variantTitle = isEditedItem ? null : (item as any).variant_title || null;
+      const sku = (item as any).sku || null;
       
-      // Find mapping by exact product+variant match, then by product only
-      const mapping = mappings?.find(m => 
-        m.shopify_product_title === productTitle && 
-        (m.shopify_variant_title === variantTitle || (!m.shopify_variant_title && !variantTitle))
-      ) || mappings?.find(m => 
-        m.shopify_product_title === productTitle && !m.shopify_variant_title
-      );
+      // Skip shipping items - handled separately below
+      if ((item as any).isShipping === true || 
+          productTitle?.toLowerCase() === 'envío' || 
+          productTitle?.toLowerCase() === 'envio') {
+        continue;
+      }
+      
+      // Priority 1: Match by SKU (most reliable)
+      let mapping = sku ? mappings?.find(m => m.shopify_sku === sku) : null;
+      
+      // Priority 2: Match by exact product+variant
+      if (!mapping) {
+        mapping = mappings?.find(m => 
+          m.shopify_product_title === productTitle && 
+          (m.shopify_variant_title === variantTitle || (!m.shopify_variant_title && !variantTitle))
+        );
+      }
+      
+      // Priority 3: Match by product title only (no variant)
+      if (!mapping) {
+        mapping = mappings?.find(m => 
+          m.shopify_product_title === productTitle && !m.shopify_variant_title
+        );
+      }
       
       if (mapping?.alegra_item_id) {
-        // Use Alegra catalog item ID - this links to inventory, accounting, and taxes
         console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id}`);
-        return {
+        items.push({
           id: mapping.alegra_item_id,
           price: Number(item.price),
           quantity: item.quantity,
-          // tax is inherited from the catalog item in Alegra
-        };
+        });
       } else {
-        // No mapping - use free-form item with 19% IVA
-        const name = isEditedItem 
-          ? productTitle 
-          : `${productTitle}${variantTitle ? ' - ' + variantTitle : ''}`;
-        
-        return {
-          name,
-          price: Number(item.price),
-          quantity: item.quantity,
-          reference: item.sku || undefined,
-          tax: [{ id: 3 }] // IVA 19% en Alegra
-        };
+        // No mapping found - track missing item
+        missingItems.push({ title: productTitle, variant: variantTitle, sku });
       }
-    }));
+    }
 
-    // Check if shipping already exists in edited items (to avoid duplication)
+    // Check if shipping already exists in edited items
     const hasShippingItem = sourceItems.some((item: any) => 
       item.isShipping === true || 
       item.title?.toLowerCase() === 'envío' || 
@@ -1287,16 +1323,35 @@ const BulkInvoiceCreator = () => {
     // Add shipping only if not already present and there's a shipping cost
     const shippingCost = order.total_price - order.subtotal_price;
     if (shippingCost > 0 && !hasShippingItem) {
-      items.push({
-        name: 'Envío',
-        price: Number(shippingCost),
-        quantity: 1,
-        reference: 'ENVIO',
-        tax: [{ id: 3 }] // IVA 19% en Alegra
-      } as any);
+      // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
+      const shippingMapping = mappings?.find(m => 
+        m.shopify_sku === 'ENVIO' || 
+        m.shopify_product_title?.toLowerCase() === 'envío' ||
+        m.shopify_product_title?.toLowerCase() === 'envio'
+      );
+      
+      if (shippingMapping?.alegra_item_id) {
+        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id}`);
+        items.push({
+          id: shippingMapping.alegra_item_id,
+          price: Number(shippingCost),
+          quantity: 1,
+        });
+      } else {
+        missingItems.push({ title: 'Envío', variant: null, sku: 'ENVIO' });
+      }
     }
     
-    console.log(`📦 Creando factura (editada) para orden ${order.order_number} con items:`, items.map(i => ({ id: (i as any).id, name: (i as any).name, price: i.price, qty: i.quantity })));
+    // Block if any items are missing mapping
+    if (missingItems.length > 0) {
+      const missingList = missingItems.map(m => 
+        `• ${m.title}${m.variant ? ` - ${m.variant}` : ''}${m.sku ? ` (SKU: ${m.sku})` : ''}`
+      ).join('\n');
+      
+      throw new Error(`Faltan mapeos de Alegra para ${missingItems.length} producto(s):\n${missingList}\n\nMapéalos en la pestaña "Mapeo de Productos" antes de emitir.`);
+    }
+    
+    console.log(`📦 Creando factura (editada) para orden ${order.order_number} con ${items.length} items mapeados`);
 
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: {
