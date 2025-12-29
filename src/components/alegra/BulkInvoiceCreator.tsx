@@ -468,6 +468,15 @@ const BulkInvoiceCreator = () => {
       }
 
       setOrders(ordersWithItems);
+      
+      // Clean up selectedOrders: keep only IDs that exist in loaded orders and are not stamped
+      const validOrderIds = new Set(
+        ordersWithItems.filter(o => !o.alegra_stamped).map(o => o.id)
+      );
+      setSelectedOrders(prev => {
+        const cleaned = new Set([...prev].filter(id => validOrderIds.has(id)));
+        return cleaned;
+      });
     } catch (error: any) {
       console.error('Error fetching Shopify orders:', error);
       toast.error('Error al cargar pedidos: ' + error.message);
@@ -520,6 +529,12 @@ const BulkInvoiceCreator = () => {
     
     return filtered;
   }, [orders, filterStatus, searchTerm]);
+
+  // Compute valid selected count - only count orders that exist and are not stamped
+  const validSelectedCount = useMemo(() => {
+    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped).map(o => o.id));
+    return [...selectedOrders].filter(id => validOrderIds.has(id)).length;
+  }, [selectedOrders, orders]);
 
   // Pagination calculations
   const totalPages = Math.ceil(getFilteredOrders.length / ITEMS_PER_PAGE);
@@ -1482,12 +1497,19 @@ const BulkInvoiceCreator = () => {
 
   // Validate all selected orders before emitting
   const validateSelectedOrders = async () => {
-    if (selectedOrders.size === 0) return;
+    // Build valid selection: only IDs that exist in orders and are not stamped
+    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped).map(o => o.id));
+    const validSelection = [...selectedOrders].filter(id => validOrderIds.has(id));
+    
+    if (validSelection.length === 0) {
+      toast.info('No hay órdenes válidas seleccionadas');
+      return;
+    }
     
     setIsValidating(true);
     const results: BulkValidationResult[] = [];
     
-    for (const orderId of selectedOrders) {
+    for (const orderId of validSelection) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
       
@@ -1733,11 +1755,11 @@ const BulkInvoiceCreator = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={selectedOrders.size > 0 && selectedOrders.size === getFilteredOrders.filter(o => !o.alegra_stamped).length}
+            checked={validSelectedCount > 0 && validSelectedCount === getFilteredOrders.filter(o => !o.alegra_stamped).length}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-muted-foreground">
-            {selectedOrders.size} seleccionados
+            {validSelectedCount} seleccionados
           </span>
           <Button variant="ghost" size="sm" onClick={fetchShopifyOrders}>
             <RefreshCw className="h-4 w-4 mr-1" />
@@ -1747,7 +1769,7 @@ const BulkInvoiceCreator = () => {
         
         <Button 
           onClick={validateSelectedOrders} 
-          disabled={selectedOrders.size === 0 || isProcessing || isValidating}
+          disabled={validSelectedCount === 0 || isProcessing || isValidating}
         >
           {isValidating ? (
             <>
@@ -1762,7 +1784,7 @@ const BulkInvoiceCreator = () => {
           ) : (
             <>
               <ShieldCheck className="h-4 w-4 mr-2" />
-              Validar y Emitir {selectedOrders.size} Facturas
+              Validar y Emitir {validSelectedCount} Facturas
             </>
           )}
         </Button>
