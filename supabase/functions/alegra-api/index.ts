@@ -651,7 +651,7 @@ serve(async (req) => {
       case "get-items": {
         // Get all items/products with pagination support
         const start = data?.start || 0;
-        const limit = data?.limit || 100;
+        const limit = Math.min(data?.limit || 30, 30);
         const search = data?.search;
         
         let endpoint = `/items?start=${start}&limit=${limit}`;
