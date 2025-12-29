@@ -29,7 +29,8 @@ import {
   Clock,
   RefreshCw,
   Eye,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -108,7 +109,22 @@ type ProcessingStatus =
   | 'stamping' 
   | 'success' 
   | 'error'
-  | 'already_stamped';
+  | 'already_stamped'
+  | 'invoice_mismatch';
+
+interface InvoiceDiscrepancy {
+  type: 'total' | 'items' | 'client';
+  expected: any;
+  actual: any;
+  message: string;
+}
+
+interface InvoiceValidationResult {
+  isValid: boolean;
+  discrepancies: InvoiceDiscrepancy[];
+  existingInvoice: any;
+  clientFromInvoice?: { id: string; name: string };
+}
 
 interface InvoiceResult {
   orderId: string;
@@ -118,6 +134,8 @@ interface InvoiceResult {
   invoiceNumber?: string;
   cufe?: string;
   error?: string;
+  discrepancies?: InvoiceDiscrepancy[];
+  existingInvoice?: any;
 }
 
 const normalizeForAlegra = (city?: string, province?: string) => {
@@ -213,13 +231,74 @@ const addFacturadoTag = async (shopifyOrderId: number): Promise<void> => {
 
 // ==================== REGISTRO DE FACTURAS EN alegra_invoices ====================
 
+// Validar coherencia entre factura existente en Alegra y pedido de Shopify
+const validateExistingInvoice = async (
+  order: ShopifyOrderForInvoice,
+  existingInvoice: any
+): Promise<InvoiceValidationResult> => {
+  const discrepancies: InvoiceDiscrepancy[] = [];
+  
+  // Calcular total esperado incluyendo envío
+  const expectedTotal = order.total_price;
+  
+  // Obtener total de la factura en Alegra
+  const invoiceTotal = parseFloat(existingInvoice.total || existingInvoice.totalAmount || 0);
+  
+  // Tolerancia de $500 para diferencias de redondeo
+  const tolerance = 500;
+  const totalDiff = Math.abs(expectedTotal - invoiceTotal);
+  
+  if (totalDiff > tolerance) {
+    discrepancies.push({
+      type: 'total',
+      expected: expectedTotal,
+      actual: invoiceTotal,
+      message: `Total Alegra: $${invoiceTotal.toLocaleString()} vs Shopify: $${expectedTotal.toLocaleString()} (diferencia: $${totalDiff.toLocaleString()})`
+    });
+  }
+  
+  // Validar número de items (productos + envío si aplica)
+  const invoiceItems = existingInvoice.items || [];
+  const expectedItemCount = order.line_items.length + (order.total_price > order.subtotal_price ? 1 : 0); // +1 para envío
+  
+  if (invoiceItems.length !== expectedItemCount && invoiceItems.length !== order.line_items.length) {
+    discrepancies.push({
+      type: 'items',
+      expected: expectedItemCount,
+      actual: invoiceItems.length,
+      message: `Items en factura: ${invoiceItems.length} vs esperados: ${expectedItemCount}`
+    });
+  }
+  
+  // Extraer cliente de la factura
+  const clientFromInvoice = existingInvoice.client ? {
+    id: String(existingInvoice.client.id || existingInvoice.client),
+    name: existingInvoice.client.name || 'Cliente'
+  } : undefined;
+  
+  return {
+    isValid: discrepancies.length === 0,
+    discrepancies,
+    existingInvoice,
+    clientFromInvoice
+  };
+};
+
 // Verificar si ya existe factura emitida para este pedido (tabla local + Alegra API)
+// Ahora también valida coherencia para facturas no emitidas
 const verifyNoExistingInvoice = async (
   order: ShopifyOrderForInvoice,
-  searchInvoiceFn: (orderNumber: string) => Promise<any>
-): Promise<{ exists: boolean; invoice?: any; source?: 'local' | 'alegra' }> => {
+  searchInvoiceFn: (orderNumber: string) => Promise<any>,
+  getInvoiceDetailsFn?: (invoiceId: number) => Promise<any>
+): Promise<{ 
+  exists: boolean; 
+  invoice?: any; 
+  source?: 'local' | 'alegra';
+  validation?: InvoiceValidationResult;
+  needsValidation?: boolean;
+}> => {
   try {
-    // 1. Buscar en tabla local alegra_invoices
+    // 1. Buscar en tabla local alegra_invoices (solo emitidas)
     const { data: localRecord } = await supabase
       .from('alegra_invoices')
       .select('*')
@@ -234,13 +313,37 @@ const verifyNoExistingInvoice = async (
 
     // 2. Buscar en Alegra API
     const existingInvoice = await searchInvoiceFn(order.order_number);
-    if (existingInvoice?.stamp?.cufe) {
-      console.log(`⚠️ Factura ya existe en Alegra para orden ${order.order_number}:`, existingInvoice.numberTemplate?.fullNumber);
+    
+    if (existingInvoice) {
+      if (existingInvoice.stamp?.cufe) {
+        // Ya emitida con CUFE - sincronizar y marcar como existente
+        console.log(`⚠️ Factura ya existe en Alegra para orden ${order.order_number}:`, existingInvoice.numberTemplate?.fullNumber);
+        await registerInvoice(order, existingInvoice, true, existingInvoice.stamp.cufe);
+        return { exists: true, invoice: existingInvoice, source: 'alegra' };
+      }
       
-      // Sincronizar registro local
-      await registerInvoice(order, existingInvoice, true, existingInvoice.stamp.cufe);
+      // Existe factura pero NO está emitida - validar coherencia
+      console.log(`📋 Factura existente sin emitir para orden ${order.order_number}, validando coherencia...`);
       
-      return { exists: true, invoice: existingInvoice, source: 'alegra' };
+      // Obtener detalles completos de la factura si tenemos la función
+      let invoiceDetails = existingInvoice;
+      if (getInvoiceDetailsFn) {
+        try {
+          invoiceDetails = await getInvoiceDetailsFn(existingInvoice.id);
+        } catch (e) {
+          console.warn('No se pudieron obtener detalles de factura, usando datos básicos');
+        }
+      }
+      
+      const validation = await validateExistingInvoice(order, invoiceDetails);
+      
+      return { 
+        exists: false, // No bloqueamos, pero indicamos que necesita validación
+        invoice: invoiceDetails, 
+        source: 'alegra',
+        validation,
+        needsValidation: true
+      };
     }
     
     return { exists: false };
@@ -305,6 +408,7 @@ const statusLabels: Record<ProcessingStatus, { label: string; icon: React.ReactN
   success: { label: 'Factura electrónica emitida', icon: <CheckCircle className="h-4 w-4" />, color: 'text-green-600' },
   error: { label: 'Error', icon: <AlertCircle className="h-4 w-4" />, color: 'text-red-600' },
   already_stamped: { label: 'Ya emitida', icon: <CheckCircle className="h-4 w-4" />, color: 'text-green-600' },
+  invoice_mismatch: { label: 'Factura con diferencias', icon: <AlertTriangle className="h-4 w-4" />, color: 'text-amber-600' },
 };
 
 const BulkInvoiceCreator = () => {
@@ -475,6 +579,20 @@ const BulkInvoiceCreator = () => {
     );
 
     return matchingInvoice || null;
+  };
+
+  // Obtener detalles completos de una factura en Alegra
+  const getInvoiceDetails = async (invoiceId: number): Promise<any> => {
+    const { data, error } = await supabase.functions.invoke('alegra-api', {
+      body: { action: 'get-invoice', data: { invoiceId } }
+    });
+
+    if (error || !data?.success) {
+      console.error('Error getting invoice details:', error || data?.error);
+      return null;
+    }
+
+    return data.data;
   };
 
   const ensureContactAddress = async (contactId: string, order: ShopifyOrderForInvoice) => {
@@ -750,8 +868,8 @@ const BulkInvoiceCreator = () => {
     updateResult(order.id, { orderNumber: order.order_number, status: 'searching_invoice' });
     
     try {
-      // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API
-      const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber);
+      // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API (con validación de coherencia)
+      const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber, getInvoiceDetails);
       
       if (existingCheck.exists) {
         const existingInvoice = existingCheck.invoice;
@@ -777,6 +895,63 @@ const BulkInvoiceCreator = () => {
         }
         
         toast.info(`Esta factura ya fue emitida (detectado en ${existingCheck.source})`);
+        setIsProcessing(false);
+        return;
+      }
+      
+      // 2. Si hay factura sin emitir que necesita validación
+      if (existingCheck.needsValidation && existingCheck.validation) {
+        const { validation, invoice: existingInvoice } = existingCheck;
+        
+        if (!validation.isValid) {
+          // Factura existe pero tiene discrepancias - informar al usuario
+          console.log(`⚠️ Factura existente con discrepancias para ${order.order_number}:`, validation.discrepancies);
+          updateResult(order.id, { 
+            status: 'invoice_mismatch',
+            invoiceId: existingInvoice.id,
+            invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
+            discrepancies: validation.discrepancies,
+            existingInvoice
+          });
+          
+          const discrepancyMessages = validation.discrepancies.map(d => d.message).join('; ');
+          toast.warning(`Factura existente con diferencias: ${discrepancyMessages}`);
+          setIsProcessing(false);
+          return;
+        }
+        
+        // Factura válida - usar cliente de la factura y continuar con stamp
+        console.log(`✅ Factura existente válida para ${order.order_number}, procediendo a emitir...`);
+        await registerInvoice(order, existingInvoice, false);
+        await updateOrderAlegraStatus(order.id, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
+        
+        // Continuar directamente al stamp
+        updateResult(order.id, { status: 'stamping' });
+        
+        const stampResult = await stampInvoices([existingInvoice.id]);
+        if (stampResult && stampResult.length > 0) {
+          const stampedInvoice = stampResult[0];
+          const cufe = stampedInvoice.stamp?.cufe;
+          const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
+          
+          await registerInvoice(order, stampedInvoice, true, cufe);
+          await updateOrderAlegraStatus(order.id, stampedInvoice.id, invoiceNumber, true, cufe);
+          
+          updateResult(order.id, { status: 'success', invoiceId: stampedInvoice.id, invoiceNumber, cufe });
+          await addFacturadoTag(order.shopify_order_id);
+          
+          // Registrar pago si está pagado
+          if (order.financial_status === 'paid') {
+            try {
+              await supabase.functions.invoke('alegra-api', {
+                body: { action: 'create-payment', data: { payment: { invoiceId: stampedInvoice.id, amount: order.total_price, paymentMethod: 'transfer', observations: `Pago pedido Shopify #${order.order_number}` } } }
+              });
+            } catch (e) { console.error('Error registrando pago:', e); }
+          }
+          
+          toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
+          fetchShopifyOrders();
+        }
         setIsProcessing(false);
         return;
       }
@@ -1046,8 +1221,8 @@ const BulkInvoiceCreator = () => {
       updateResult(orderId, { orderNumber: order.order_number, status: 'searching_invoice' });
 
       try {
-        // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API
-        const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber);
+        // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API (con validación de coherencia)
+        const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber, getInvoiceDetails);
         
         if (existingCheck.exists) {
           const existingInvoice = existingCheck.invoice;
@@ -1074,6 +1249,31 @@ const BulkInvoiceCreator = () => {
           continue;
         }
         
+        // 2. Si hay factura sin emitir que necesita validación
+        if (existingCheck.needsValidation && existingCheck.validation) {
+          const { validation, invoice: existingInvoice } = existingCheck;
+          
+          if (!validation.isValid) {
+            // Factura existe pero tiene discrepancias - marcar para revisión
+            console.log(`⚠️ Factura existente con discrepancias para ${order.order_number}:`, validation.discrepancies);
+            updateResult(orderId, { 
+              status: 'invoice_mismatch',
+              invoiceId: existingInvoice.id,
+              invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
+              discrepancies: validation.discrepancies,
+              existingInvoice
+            });
+            continue;
+          }
+          
+          // Factura válida - usar cliente de la factura existente y emitir
+          console.log(`✅ Factura existente válida para ${order.order_number}, procediendo a emitir...`);
+          await registerInvoice(order, existingInvoice, false);
+          await updateOrderAlegraStatus(orderId, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
+          invoicesToStamp.push({ orderId, invoiceId: existingInvoice.id, orderNumber: order.order_number, order });
+          continue;
+        }
+        
         // Fallback: check legacy fields
         if (order.alegra_stamped && order.alegra_cufe) {
           updateResult(orderId, { 
@@ -1086,39 +1286,9 @@ const BulkInvoiceCreator = () => {
           continue;
         }
 
-        // 2. Check if has invoice linked but not stamped
+        // 3. Check if has invoice linked but not stamped (from DB)
         if (order.alegra_invoice_id && !order.alegra_stamped) {
           invoicesToStamp.push({ orderId, invoiceId: order.alegra_invoice_id, orderNumber: order.order_number, order });
-          continue;
-        }
-
-        // 3. Search for existing invoice in Alegra (sin stamp)
-        const existingInvoice = await searchInvoiceByOrderNumber(order.order_number);
-        
-        if (existingInvoice) {
-          if (existingInvoice.stamp?.cufe) {
-            // Ya emitida - registrar y marcar
-            await registerInvoice(order, existingInvoice, true, existingInvoice.stamp.cufe);
-            await updateOrderAlegraStatus(
-              orderId, 
-              existingInvoice.id, 
-              existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
-              true,
-              existingInvoice.stamp.cufe
-            );
-            updateResult(orderId, { 
-              status: 'already_stamped',
-              invoiceId: existingInvoice.id,
-              invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
-              cufe: existingInvoice.stamp.cufe
-            });
-            await addFacturadoTag(order.shopify_order_id);
-          } else {
-            // Invoice exists but not stamped - queue for stamping
-            await registerInvoice(order, existingInvoice, false);
-            await updateOrderAlegraStatus(orderId, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
-            invoicesToStamp.push({ orderId, invoiceId: existingInvoice.id, orderNumber: order.order_number, order });
-          }
           continue;
         }
 
@@ -1668,6 +1838,22 @@ const BulkInvoiceCreator = () => {
                               {result?.error && (
                                 <div className="text-red-600 text-xs">
                                   {result.error}
+                                </div>
+                              )}
+                              {/* Discrepancies for invoice_mismatch status */}
+                              {result?.status === 'invoice_mismatch' && result.discrepancies && (
+                                <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-800">
+                                  <div className="text-amber-700 dark:text-amber-400 text-xs font-medium mb-1">
+                                    Diferencias encontradas:
+                                  </div>
+                                  <ul className="text-xs text-amber-600 dark:text-amber-500 space-y-1">
+                                    {result.discrepancies.map((d, idx) => (
+                                      <li key={idx}>• {d.message}</li>
+                                    ))}
+                                  </ul>
+                                  <div className="mt-2 text-xs text-muted-foreground">
+                                    Edite los datos del pedido para corregir o contacte a soporte.
+                                  </div>
                                 </div>
                               )}
                             </div>
