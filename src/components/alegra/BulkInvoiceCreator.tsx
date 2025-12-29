@@ -820,13 +820,13 @@ const BulkInvoiceCreator = () => {
           // tax is inherited from the catalog item in Alegra
         };
       } else {
-        // No mapping - use free-form item (current behavior)
+        // No mapping - use free-form item with 19% IVA
         return {
           name: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
           price: Number(item.price),
           quantity: item.quantity,
           reference: item.sku || undefined,
-          tax: []
+          tax: [{ id: 3 }] // IVA 19% en Alegra
         };
       }
     }));
@@ -839,7 +839,7 @@ const BulkInvoiceCreator = () => {
         price: Number(shippingCost),
         quantity: 1,
         reference: 'ENVIO',
-        tax: []
+        tax: [{ id: 3 }] // IVA 19% en Alegra
       } as any);
     }
     
@@ -1262,7 +1262,7 @@ const BulkInvoiceCreator = () => {
           // tax is inherited from the catalog item in Alegra
         };
       } else {
-        // No mapping - use free-form item
+        // No mapping - use free-form item with 19% IVA
         const name = isEditedItem 
           ? productTitle 
           : `${productTitle}${variantTitle ? ' - ' + variantTitle : ''}`;
@@ -1272,7 +1272,7 @@ const BulkInvoiceCreator = () => {
           price: Number(item.price),
           quantity: item.quantity,
           reference: item.sku || undefined,
-          tax: []
+          tax: [{ id: 3 }] // IVA 19% en Alegra
         };
       }
     }));
@@ -1292,7 +1292,7 @@ const BulkInvoiceCreator = () => {
         price: Number(shippingCost),
         quantity: 1,
         reference: 'ENVIO',
-        tax: []
+        tax: [{ id: 3 }] // IVA 19% en Alegra
       } as any);
     }
     
