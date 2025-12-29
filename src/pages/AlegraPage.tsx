@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Receipt, CheckCircle, AlertCircle, Loader2, Building2, RefreshCw } from 'lucide-react';
+import { Receipt, CheckCircle, AlertCircle, Loader2, Building2, RefreshCw, Package } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BulkInvoiceCreator from '@/components/alegra/BulkInvoiceCreator';
+import AlegraProductMapper from '@/components/alegra/AlegraProductMapper';
 
 interface CompanyInfo {
   name?: string;
@@ -136,29 +138,61 @@ const AlegraPage = () => {
         </CardContent>
       </Card>
 
-      {/* Bulk Invoice Module from Shopify */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Facturación Masiva
-          </CardTitle>
-          <CardDescription>
-            Crea facturas electrónicas desde pedidos pagados de Shopify. Los clientes se buscarán primero en Alegra.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isConnected ? (
-            <BulkInvoiceCreator />
-          ) : (
+      {/* Main Content with Tabs */}
+      {isConnected ? (
+        <Tabs defaultValue="invoices" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="invoices" className="flex items-center gap-2">
+              <Receipt className="h-4 w-4" />
+              Facturación Masiva
+            </TabsTrigger>
+            <TabsTrigger value="products" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Mapeo de Productos
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="invoices">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5" />
+                  Facturación Masiva
+                </CardTitle>
+                <CardDescription>
+                  Crea facturas electrónicas desde pedidos pagados de Shopify. Los clientes se buscarán primero en Alegra.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <BulkInvoiceCreator />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="products">
+            <AlegraProductMapper />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Facturación Masiva
+            </CardTitle>
+            <CardDescription>
+              Crea facturas electrónicas desde pedidos pagados de Shopify. Los clientes se buscarán primero en Alegra.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="text-center py-8 text-muted-foreground">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium">Conexión requerida</p>
               <p className="text-sm">Primero debes establecer conexión con Alegra para usar este módulo.</p>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

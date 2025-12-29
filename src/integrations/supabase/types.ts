@@ -64,6 +64,50 @@ export type Database = {
           },
         ]
       }
+      alegra_product_mapping: {
+        Row: {
+          alegra_item_id: string
+          alegra_item_name: string | null
+          created_at: string | null
+          id: string
+          organization_id: string
+          shopify_product_title: string
+          shopify_sku: string | null
+          shopify_variant_title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          alegra_item_id: string
+          alegra_item_name?: string | null
+          created_at?: string | null
+          id?: string
+          organization_id: string
+          shopify_product_title: string
+          shopify_sku?: string | null
+          shopify_variant_title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          alegra_item_id?: string
+          alegra_item_name?: string | null
+          created_at?: string | null
+          id?: string
+          organization_id?: string
+          shopify_product_title?: string
+          shopify_sku?: string | null
+          shopify_variant_title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alegra_product_mapping_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deliveries: {
         Row: {
           created_at: string
