@@ -673,37 +673,68 @@ serve(async (req) => {
         break;
 
       case "get-invoices": {
-        // Get all invoices with optional params
-        const params = data?.params
-          ? `?${new URLSearchParams(data.params).toString()}`
+        // Get all invoices with optional params - CLAMP limit to 30 (Alegra max)
+        const rawParams = data?.params || {};
+        if (rawParams.limit) {
+          rawParams.limit = String(Math.min(Math.max(Number(rawParams.limit) || 30, 0), 30));
+        }
+        const params = Object.keys(rawParams).length > 0
+          ? `?${new URLSearchParams(rawParams).toString()}`
           : "";
         result = await makeAlegraRequest(`/invoices${params}`);
         break;
       }
 
       case "search-invoices": {
-        // Search invoices by orderNumber - fetch recent and filter locally by observations
-        // Alegra's query param doesn't reliably search in observations field
+        // Search invoices by orderNumber - paginate with limit=30 (Alegra max)
         const orderNumber = data.orderNumber;
         const query = data.query;
         
-        console.log(`search-invoices: Fetching recent invoices to find orderNumber=${orderNumber}, query=${query}`);
+        console.log(`search-invoices: Searching for orderNumber=${orderNumber}, query=${query}`);
         
-        // Fetch last 100 invoices, ordered by date descending
-        const params = new URLSearchParams();
-        params.set('limit', '100');
-        params.set('order_field', 'date');
-        params.set('order_direction', 'DESC');
+        const pageSize = 30; // Alegra max limit
+        const maxPages = 10; // Up to 300 invoices
+        const allInvoices: any[] = [];
         
-        const allInvoices = await makeAlegraRequest(`/invoices?${params.toString()}`);
-        
-        if (!Array.isArray(allInvoices)) {
-          console.log('search-invoices: No invoices returned from Alegra');
-          result = [];
-          break;
+        // Paginate through invoices
+        for (let page = 0; page < maxPages; page++) {
+          const start = page * pageSize;
+          const params = new URLSearchParams();
+          params.set('start', String(start));
+          params.set('limit', String(pageSize));
+          params.set('order_field', 'date');
+          params.set('order_direction', 'DESC');
+          
+          console.log(`search-invoices: Fetching page ${page} (start=${start})`);
+          const pageData = await makeAlegraRequest(`/invoices?${params.toString()}`);
+          
+          if (!Array.isArray(pageData) || pageData.length === 0) {
+            console.log(`search-invoices: No more invoices at page ${page}`);
+            break;
+          }
+          
+          allInvoices.push(...pageData);
+          
+          // Early exit if we found matches and are searching by orderNumber
+          if (orderNumber) {
+            const searchPattern = `Pedido Shopify #${orderNumber}`;
+            const foundInPage = pageData.filter((inv: any) => 
+              inv.observations?.includes(searchPattern)
+            );
+            if (foundInPage.length > 0) {
+              console.log(`search-invoices: Found ${foundInPage.length} matches in page ${page}, stopping early`);
+              break;
+            }
+          }
+          
+          // Stop if page is incomplete
+          if (pageData.length < pageSize) {
+            console.log(`search-invoices: Last page reached (${pageData.length} items)`);
+            break;
+          }
         }
         
-        console.log(`search-invoices: Fetched ${allInvoices.length} invoices, filtering...`);
+        console.log(`search-invoices: Total fetched ${allInvoices.length} invoices, filtering...`);
         
         // Filter locally by observations field
         if (orderNumber) {
