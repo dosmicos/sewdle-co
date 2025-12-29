@@ -288,7 +288,7 @@ const validateExistingInvoice = async (
 // Ahora también valida coherencia para facturas no emitidas
 const verifyNoExistingInvoice = async (
   order: ShopifyOrderForInvoice,
-  searchInvoiceFn: (orderNumber: string) => Promise<any>,
+  searchInvoiceFn: (orderNumber: string, order?: ShopifyOrderForInvoice) => Promise<any>,
   getInvoiceDetailsFn?: (invoiceId: number) => Promise<any>
 ): Promise<{ 
   exists: boolean; 
@@ -311,8 +311,8 @@ const verifyNoExistingInvoice = async (
       return { exists: true, invoice: localRecord, source: 'local' };
     }
 
-    // 2. Buscar en Alegra API
-    const existingInvoice = await searchInvoiceFn(order.order_number);
+    // 2. Buscar en Alegra API (now with client-based fallback)
+    const existingInvoice = await searchInvoiceFn(order.order_number, order);
     
     if (existingInvoice) {
       if (existingInvoice.stamp?.cufe) {
@@ -575,49 +575,83 @@ const BulkInvoiceCreator = () => {
     }
   };
 
-  const searchInvoiceByOrderNumber = async (orderNumber: string) => {
+  // Search for existing invoice - now accepts order for client-based fallback search
+  const searchInvoiceByOrderNumber = async (orderNumber: string, order?: ShopifyOrderForInvoice) => {
     console.log(`🔍 Buscando factura existente para orden ${orderNumber}...`);
     
+    // Method 1: Search by "Pedido Shopify #X" in observations (our format)
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: { 
         action: 'search-invoices', 
-        data: { orderNumber } // Pass orderNumber directly for local filtering in API
+        data: { orderNumber }
       }
     });
 
-    if (error || !data?.success) {
-      console.log(`❌ No se encontró factura para orden ${orderNumber}:`, error || data?.error);
-      return null;
-    }
-
-    const invoices = data.data || [];
-    
-    if (invoices.length === 0) {
-      console.log(`❌ No hay facturas que coincidan con orden ${orderNumber}`);
-      return null;
-    }
-    
-    console.log(`📋 Encontradas ${invoices.length} facturas para orden ${orderNumber}`);
-    
-    // Sort: prefer unstamped (drafts) first, then oldest first within same status
-    const sorted = invoices.sort((a: any, b: any) => {
-      const aStamped = !!a.stamp?.cufe;
-      const bStamped = !!b.stamp?.cufe;
+    if (!error && data?.success && data.data?.length > 0) {
+      const invoices = data.data;
+      console.log(`📋 Encontradas ${invoices.length} facturas por observations para orden ${orderNumber}`);
       
-      // Unstamped first (so we can validate and stamp them)
-      if (!aStamped && bStamped) return -1;
-      if (aStamped && !bStamped) return 1;
+      // Sort: prefer unstamped (drafts) first, then oldest first within same status
+      const sorted = invoices.sort((a: any, b: any) => {
+        const aStamped = !!a.stamp?.cufe;
+        const bStamped = !!b.stamp?.cufe;
+        if (!aStamped && bStamped) return -1;
+        if (aStamped && !bStamped) return 1;
+        const aDate = new Date(a.date || a.createdAt || 0).getTime();
+        const bDate = new Date(b.date || b.createdAt || 0).getTime();
+        return aDate - bDate;
+      });
       
-      // Same status: oldest first (prefer first created invoice)
-      const aDate = new Date(a.date || a.createdAt || 0).getTime();
-      const bDate = new Date(b.date || b.createdAt || 0).getTime();
-      return aDate - bDate;
-    });
+      const selected = sorted[0];
+      console.log(`✅ Seleccionada factura ${selected.numberTemplate?.fullNumber || selected.id} (CUFE: ${selected.stamp?.cufe ? 'Sí' : 'No'})`);
+      return selected;
+    }
     
-    const selected = sorted[0];
-    console.log(`✅ Seleccionada factura ${selected.numberTemplate?.fullNumber || selected.id} (CUFE: ${selected.stamp?.cufe ? 'Sí' : 'No'})`);
+    console.log(`❌ No se encontró factura por observations, intentando búsqueda por cliente...`);
     
-    return selected;
+    // Method 2: Search by client identification + amount (for Shopify-created invoices)
+    if (order) {
+      const addressForId = order.billing_address || order.shipping_address || {};
+      const identificationNumber = (addressForId.company || '').replace(/[^0-9]/g, '');
+      const email = order.customer_email || order.email;
+      
+      if (identificationNumber || email) {
+        const { data: clientData, error: clientError } = await supabase.functions.invoke('alegra-api', {
+          body: { 
+            action: 'search-invoices-by-client', 
+            data: { 
+              identificationNumber,
+              email,
+              totalAmount: order.total_price,
+              dateRange: 60 // Search last 60 days
+            }
+          }
+        });
+        
+        if (!clientError && clientData?.success && clientData.data?.length > 0) {
+          const invoices = clientData.data;
+          console.log(`📋 Encontradas ${invoices.length} facturas por cliente para orden ${orderNumber}`);
+          
+          // Sort: prefer unstamped first
+          const sorted = invoices.sort((a: any, b: any) => {
+            const aStamped = !!a.stamp?.cufe;
+            const bStamped = !!b.stamp?.cufe;
+            if (!aStamped && bStamped) return -1;
+            if (aStamped && !bStamped) return 1;
+            const aDate = new Date(a.date || a.createdAt || 0).getTime();
+            const bDate = new Date(b.date || b.createdAt || 0).getTime();
+            return aDate - bDate;
+          });
+          
+          const selected = sorted[0];
+          console.log(`✅ Factura encontrada por cliente: ${selected.numberTemplate?.fullNumber || selected.id} (CUFE: ${selected.stamp?.cufe ? 'Sí' : 'No'})`);
+          return selected;
+        }
+      }
+    }
+    
+    console.log(`❌ No se encontró factura para orden ${orderNumber}`);
+    return null;
   };
 
   // Obtener detalles completos de una factura en Alegra
