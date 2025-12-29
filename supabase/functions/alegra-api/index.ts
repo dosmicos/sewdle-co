@@ -900,7 +900,43 @@ serve(async (req) => {
           }
         }
 
-        result = await makeAlegraRequest("/invoices/stamp", "POST", { ids: data.ids });
+        const stampResponse = await makeAlegraRequest("/invoices/stamp", "POST", { ids: data.ids });
+        console.log("Stamp response from Alegra:", JSON.stringify(stampResponse, null, 2));
+        
+        // The stamp endpoint doesn't return CUFE, so we need to fetch full invoice details
+        // after stamping to get the CUFE and complete information
+        const enrichedResults = [];
+        const stampResults = Array.isArray(stampResponse) ? stampResponse : [stampResponse];
+        
+        for (const stampResult of stampResults) {
+          const invoiceId = stampResult?.id;
+          if (!invoiceId) {
+            enrichedResults.push(stampResult);
+            continue;
+          }
+          
+          try {
+            // Fetch full invoice details including CUFE
+            console.log(`Fetching full invoice details for ${invoiceId}...`);
+            const fullInvoice = await makeAlegraRequest(`/invoices/${invoiceId}`);
+            console.log(`Invoice ${invoiceId} CUFE: ${fullInvoice?.stamp?.cufe || 'N/A'}`);
+            
+            enrichedResults.push({
+              ...fullInvoice,
+              _stampMessage: stampResult.message || stampResult.emissionStatus,
+              _stampSuccess: true
+            });
+          } catch (fetchError) {
+            console.error(`Failed to fetch invoice ${invoiceId} details after stamping:`, fetchError);
+            enrichedResults.push({
+              ...stampResult,
+              _stampSuccess: true,
+              _fetchError: (fetchError as any)?.message
+            });
+          }
+        }
+        
+        result = enrichedResults;
         break;
       }
 
