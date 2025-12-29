@@ -758,6 +758,71 @@ serve(async (req) => {
         break;
       }
 
+      case "search-invoices-by-client": {
+        // Search invoices by client identification + amount (for Shopify-created invoices)
+        const { identificationNumber, email, totalAmount, dateRange } = data;
+        
+        console.log(`search-invoices-by-client: Searching by identification=${identificationNumber}, email=${email}, total=${totalAmount}`);
+        
+        // 1. First find the client in Alegra
+        let clientId: string | null = null;
+        
+        if (identificationNumber) {
+          // Search by identification number
+          const contacts = await makeAlegraRequest(`/contacts?identification=${encodeURIComponent(identificationNumber)}`);
+          if (Array.isArray(contacts) && contacts.length > 0) {
+            clientId = String(contacts[0].id);
+            console.log(`search-invoices-by-client: Found client by identification: ${contacts[0].name} (ID: ${clientId})`);
+          }
+        }
+        
+        // Fallback: search by email
+        if (!clientId && email) {
+          const contacts = await makeAlegraRequest(`/contacts?email=${encodeURIComponent(email)}`);
+          if (Array.isArray(contacts) && contacts.length > 0) {
+            clientId = String(contacts[0].id);
+            console.log(`search-invoices-by-client: Found client by email: ${contacts[0].name} (ID: ${clientId})`);
+          }
+        }
+        
+        if (!clientId) {
+          console.log(`search-invoices-by-client: No client found`);
+          result = [];
+          break;
+        }
+        
+        // 2. Get recent invoices for this client
+        const days = dateRange || 30;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        const startDateStr = startDate.toISOString().split('T')[0];
+        
+        const invoices = await makeAlegraRequest(`/invoices?client=${clientId}&start_date=${startDateStr}&order_direction=DESC&limit=30`);
+        
+        if (!Array.isArray(invoices) || invoices.length === 0) {
+          console.log(`search-invoices-by-client: No invoices found for client ${clientId}`);
+          result = [];
+          break;
+        }
+        
+        console.log(`search-invoices-by-client: Found ${invoices.length} invoices for client`);
+        
+        // 3. Filter by total amount (tolerance of $500 for rounding)
+        const tolerance = 500;
+        const targetTotal = parseFloat(String(totalAmount)) || 0;
+        
+        const matchingInvoices = invoices.filter((inv: any) => {
+          const invoiceTotal = parseFloat(inv.total || inv.totalAmount || 0);
+          const diff = Math.abs(invoiceTotal - targetTotal);
+          return diff <= tolerance;
+        });
+        
+        console.log(`search-invoices-by-client: ${matchingInvoices.length} invoices match amount ${targetTotal} (±${tolerance})`);
+        
+        result = matchingInvoices;
+        break;
+      }
+
       case "get-invoice":
         // Get specific invoice
         result = await makeAlegraRequest(`/invoices/${data.invoiceId}`);
