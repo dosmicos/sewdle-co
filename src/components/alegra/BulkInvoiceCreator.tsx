@@ -1218,7 +1218,7 @@ const BulkInvoiceCreator = () => {
       const editedData = editedOrders.get(orderId);
       
       try {
-        // Convert order to validation format
+        // Convert order to validation format - include subtotal_price for accurate price validation
         const orderForValidation = {
           id: order.id,
           shopify_order_id: order.shopify_order_id,
@@ -1228,6 +1228,8 @@ const BulkInvoiceCreator = () => {
           billing_address: order.billing_address,
           shipping_address: order.shipping_address,
           total_price: order.total_price,
+          subtotal_price: order.subtotal_price,
+          total_tax: order.total_tax,
           financial_status: order.financial_status,
           tags: order.tags,
           line_items: order.line_items,
