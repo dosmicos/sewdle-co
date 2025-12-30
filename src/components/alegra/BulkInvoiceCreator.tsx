@@ -793,9 +793,9 @@ const BulkInvoiceCreator = () => {
 
       setOrders(ordersWithItems);
       
-      // Clean up selectedOrders: keep only IDs that exist in loaded orders and are not stamped
+      // Clean up selectedOrders: keep only IDs that exist in loaded orders, are not stamped, and don't have an invoice number
       const validOrderIds = new Set(
-        ordersWithItems.filter(o => !o.alegra_stamped).map(o => o.id)
+        ordersWithItems.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).map(o => o.id)
       );
       setSelectedOrders(prev => {
         const cleaned = new Set([...prev].filter(id => validOrderIds.has(id)));
@@ -1974,8 +1974,8 @@ const BulkInvoiceCreator = () => {
 
   // Validate all selected orders before emitting
   const validateSelectedOrders = async () => {
-    // Build valid selection: only IDs that exist in orders and are not stamped
-    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped).map(o => o.id));
+    // Build valid selection: only IDs that exist in orders, are not stamped, and don't have an invoice number
+    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).map(o => o.id));
     const validSelection = [...selectedOrders].filter(id => validOrderIds.has(id));
     
     if (validSelection.length === 0) {
@@ -1990,8 +1990,8 @@ const BulkInvoiceCreator = () => {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
       
-      // Already stamped = skip validation with error
-      if (order.alegra_stamped) {
+      // Already stamped or has invoice number = skip validation with error
+      if (order.alegra_stamped || order.alegra_invoice_number) {
         results.push({
           orderId,
           orderNumber: order.order_number,
@@ -2232,7 +2232,7 @@ const BulkInvoiceCreator = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={validSelectedCount > 0 && validSelectedCount === getFilteredOrders.filter(o => !o.alegra_stamped).length}
+            checked={validSelectedCount > 0 && validSelectedCount === getFilteredOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).length}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-muted-foreground">
