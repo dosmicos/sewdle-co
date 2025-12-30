@@ -2565,9 +2565,23 @@ const BulkInvoiceCreator = () => {
                                   CUFE: {cufe.substring(0, 20)}...
                                 </div>
                               )}
-                              {result?.error && (
-                                <div className="text-red-600 text-xs">
-                                  {result.error}
+                              {/* Error prominente con mensaje completo de Alegra */}
+                              {result?.status === 'error' && result?.error && (
+                                <div className="mt-2 p-3 bg-destructive/10 border border-destructive/30 rounded-md">
+                                  <div className="flex items-start gap-2">
+                                    <Badge variant="destructive" className="shrink-0">
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      Error Alegra
+                                    </Badge>
+                                  </div>
+                                  <p className="mt-2 text-sm text-destructive font-medium">
+                                    {result.error}
+                                  </p>
+                                  {result.error.toLowerCase().includes('stock') && (
+                                    <p className="mt-1 text-xs text-destructive/80">
+                                      💡 Ve a Alegra → Items → Busca el producto → Ajusta inventario o desactiva control de stock
+                                    </p>
+                                  )}
                                 </div>
                               )}
                               {/* Discrepancies for invoice_mismatch status */}
