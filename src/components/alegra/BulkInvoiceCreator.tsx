@@ -768,36 +768,74 @@ const BulkInvoiceCreator = () => {
     syncPendingInvoices();
   }, []);
 
+  // Only load necessary fields to reduce response size by ~90%
+  const ORDER_FIELDS = `
+    id, shopify_order_id, order_number, email, customer_email,
+    customer_first_name, customer_last_name, customer_phone,
+    billing_address, shipping_address, total_price, subtotal_price,
+    total_tax, total_discounts, currency, financial_status,
+    fulfillment_status, created_at_shopify, tags,
+    alegra_invoice_id, alegra_invoice_number, alegra_invoice_status,
+    alegra_stamped, alegra_cufe, alegra_synced_at
+  `;
+
   const fetchShopifyOrders = async () => {
     setIsLoading(true);
     try {
-      const { data: ordersData, error: ordersError } = await supabase
-        .from('shopify_orders')
-        .select('*')
-        .in('financial_status', ['paid', 'pending'])
-        .gte('created_at_shopify', '2025-12-01T00:00:00Z')
-        .order('created_at_shopify', { ascending: false });
+      const BATCH_SIZE = 1000;
+      let allOrders: any[] = [];
+      let page = 0;
+      let hasMore = true;
 
-      if (ordersError) throw ordersError;
+      // Paginate to bypass Supabase's 1000 row default limit
+      while (hasMore) {
+        const from = page * BATCH_SIZE;
+        const to = from + BATCH_SIZE - 1;
 
-      // Batch load ALL line_items in a single query instead of 500 individual queries
-      const orderIds = ordersData?.map(o => o.shopify_order_id) || [];
-      
-      const { data: allLineItems } = await supabase
-        .from('shopify_order_line_items')
-        .select('shopify_order_id, id, title, variant_title, sku, quantity, price, total_discount')
-        .in('shopify_order_id', orderIds);
+        const { data, error } = await supabase
+          .from('shopify_orders')
+          .select(ORDER_FIELDS)
+          .in('financial_status', ['paid', 'pending'])
+          .gte('created_at_shopify', '2025-12-01T00:00:00Z')
+          .order('created_at_shopify', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+
+        allOrders = [...allOrders, ...(data || [])];
+        hasMore = data?.length === BATCH_SIZE;
+        page++;
+        
+        console.log(`Cargados ${allOrders.length} pedidos (batch ${page})...`);
+      }
+
+      console.log(`Total: ${allOrders.length} pedidos cargados`);
+
+      // Load line_items in chunks to avoid large .in() arrays
+      const orderIds = allOrders.map(o => o.shopify_order_id);
+      const CHUNK_SIZE = 500;
+      const allLineItems: any[] = [];
+
+      for (let i = 0; i < orderIds.length; i += CHUNK_SIZE) {
+        const chunk = orderIds.slice(i, i + CHUNK_SIZE);
+        const { data } = await supabase
+          .from('shopify_order_line_items')
+          .select('shopify_order_id, id, title, variant_title, sku, quantity, price, total_discount')
+          .in('shopify_order_id', chunk);
+        
+        if (data) allLineItems.push(...data);
+      }
 
       // Group line_items by order using a Map for O(1) lookups
       const lineItemsByOrder = new Map<number, any[]>();
-      for (const item of allLineItems || []) {
+      for (const item of allLineItems) {
         const existing = lineItemsByOrder.get(item.shopify_order_id) || [];
         existing.push(item);
         lineItemsByOrder.set(item.shopify_order_id, existing);
       }
 
       // Build ordersWithItems without additional queries
-      const ordersWithItems: ShopifyOrderForInvoice[] = (ordersData || []).map(order => ({
+      const ordersWithItems: ShopifyOrderForInvoice[] = allOrders.map(order => ({
         ...order,
         total_discounts: order.total_discounts || 0,
         line_items: (lineItemsByOrder.get(order.shopify_order_id) || []).map(item => ({
