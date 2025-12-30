@@ -1850,6 +1850,13 @@ const BulkInvoiceCreator = () => {
         // Agregar etiqueta FACTURADO inmediatamente después de crear la factura
         console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${order.order_number} (factura creada)`);
         await addFacturadoTag(order.shopify_order_id);
+        
+        // Deseleccionar orden inmediatamente ya que tiene factura creada
+        setSelectedOrders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(orderId);
+          return newSet;
+        });
 
       } catch (error: any) {
         updateResult(orderId, { status: 'error', error: error.message });
@@ -1923,6 +1930,13 @@ const BulkInvoiceCreator = () => {
                   invoiceId: stampedInvoice.id,
                   invoiceNumber,
                   cufe
+                });
+                
+                // Deseleccionar orden después de éxito completo
+                setSelectedOrders(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(matchingItem.orderId);
+                  return newSet;
                 });
                 
                 await addFacturadoTag(matchingItem.order.shopify_order_id);
