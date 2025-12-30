@@ -572,6 +572,9 @@ const BulkInvoiceCreator = () => {
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [manualDeliveryConfirmations, setManualDeliveryConfirmations] = useState<Map<string, boolean>>(new Map());
   
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  
   // Alegra catalog cache
   const alegraItemsCache = useRef<AlegraItem[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
@@ -671,6 +674,80 @@ const BulkInvoiceCreator = () => {
     return { alegraItemId: match.id, alegraItemName: match.name };
   };
 
+  // Sync pending invoices - fetch CUFE from Alegra for invoices that were stamped but not synced
+  const syncPendingInvoices = async () => {
+    console.log('🔄 Sincronizando facturas pendientes...');
+    
+    try {
+      // 1. Find local records with alegra_invoice_id but no CUFE
+      const { data: pendingInvoices } = await supabase
+        .from('alegra_invoices')
+        .select('*')
+        .eq('stamped', false)
+        .not('alegra_invoice_id', 'is', null);
+      
+      if (!pendingInvoices?.length) {
+        console.log('✅ No hay facturas pendientes de sincronización');
+        return 0;
+      }
+      
+      console.log(`📋 Encontradas ${pendingInvoices.length} facturas pendientes de CUFE`);
+      let syncedCount = 0;
+      
+      for (const invoice of pendingInvoices) {
+        try {
+          // 2. Fetch current state from Alegra
+          const { data, error } = await supabase.functions.invoke('alegra-api', {
+            body: { action: 'get-invoice', data: { id: invoice.alegra_invoice_id } }
+          });
+          
+          if (error || !data?.success) {
+            console.warn(`⚠️ Error obteniendo factura ${invoice.alegra_invoice_id}:`, error || data?.error);
+            continue;
+          }
+          
+          const alegraInvoice = data.data;
+          const cufe = alegraInvoice?.stamp?.cufe;
+          
+          if (cufe) {
+            console.log(`✅ CUFE encontrado para factura ${invoice.alegra_invoice_id}: ${cufe.substring(0, 20)}...`);
+            
+            // 3. Update alegra_invoices
+            await supabase.from('alegra_invoices').update({
+              stamped: true,
+              cufe: cufe,
+              stamped_at: new Date().toISOString()
+            }).eq('id', invoice.id);
+            
+            // 4. Update shopify_orders
+            await supabase.from('shopify_orders').update({
+              alegra_stamped: true,
+              alegra_cufe: cufe
+            }).eq('shopify_order_id', invoice.shopify_order_id);
+            
+            // 5. Add FACTURADO tag if not already present
+            await addFacturadoTag(invoice.shopify_order_id);
+            
+            syncedCount++;
+          } else {
+            console.log(`⏳ Factura ${invoice.alegra_invoice_id} aún sin CUFE en Alegra`);
+          }
+        } catch (err) {
+          console.error(`Error sincronizando factura ${invoice.alegra_invoice_id}:`, err);
+        }
+      }
+      
+      if (syncedCount > 0) {
+        toast.success(`${syncedCount} factura(s) sincronizada(s) correctamente`);
+      }
+      
+      return syncedCount;
+    } catch (err) {
+      console.error('Error en syncPendingInvoices:', err);
+      return 0;
+    }
+  };
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -685,6 +762,8 @@ const BulkInvoiceCreator = () => {
   const fetchShopifyOrders = async () => {
     setIsLoading(true);
     try {
+      // Sync pending invoices first (CUFE recovery)
+      await syncPendingInvoices();
       const { data: ordersData, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('*')
@@ -2156,9 +2235,25 @@ const BulkInvoiceCreator = () => {
           <span className="text-sm text-muted-foreground">
             {validSelectedCount} seleccionados
           </span>
-          <Button variant="ghost" size="sm" onClick={fetchShopifyOrders}>
-            <RefreshCw className="h-4 w-4 mr-1" />
+          <Button variant="ghost" size="sm" onClick={fetchShopifyOrders} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
             Actualizar
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={async () => {
+              setIsSyncing(true);
+              const synced = await syncPendingInvoices();
+              if (synced > 0) {
+                await fetchShopifyOrders();
+              }
+              setIsSyncing(false);
+            }} 
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar CUFE'}
           </Button>
         </div>
         
