@@ -2124,7 +2124,7 @@ const BulkInvoiceCreator = () => {
           orderId,
           orderNumber: order.order_number,
           customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Sin nombre',
-          total: order.total_price,
+          total: getEffectiveOrderTotals(order).total,
           validationResult: {
             valid: false,
             errors: ['Ya tiene factura emitida en DIAN'],
@@ -2176,7 +2176,7 @@ const BulkInvoiceCreator = () => {
           orderId,
           orderNumber: order.order_number,
           customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Sin nombre',
-          total: order.total_price,
+          total: getEffectiveOrderTotals(order).total,
           validationResult
         });
       } catch (error: any) {
@@ -2184,7 +2184,7 @@ const BulkInvoiceCreator = () => {
           orderId,
           orderNumber: order.order_number,
           customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Sin nombre',
-          total: order.total_price,
+          total: getEffectiveOrderTotals(order).total,
           validationResult: {
             valid: false,
             errors: ['Error al validar: ' + error.message],
