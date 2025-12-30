@@ -883,7 +883,8 @@ const BulkInvoiceCreator = () => {
     const missingItems: Array<{ title: string; variant: string | null; sku: string | null }> = [];
     
     // Build items - ALL items MUST have an Alegra catalog ID
-    const items: Array<{ id: string; price: number; quantity: number }> = [];
+    // Shopify prices include IVA (taxes_included: true), so divide by 1.19 and add tax: [{ id: 3 }] (19% IVA)
+    const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
     
     for (const item of order.line_items) {
       const productTitle = item.title;
@@ -909,11 +910,14 @@ const BulkInvoiceCreator = () => {
       }
       
       if (mapping?.alegra_item_id) {
-        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id}`);
+        // Shopify price includes IVA, divide by 1.19 to get base price
+        const precioSinIva = Math.round(Number(item.price) / 1.19);
+        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (precio con IVA: ${item.price}, sin IVA: ${precioSinIva})`);
         items.push({
           id: mapping.alegra_item_id,
-          price: Number(item.price),
+          price: precioSinIva,
           quantity: item.quantity,
+          tax: [{ id: 3 }], // IVA 19% en Alegra Colombia
         });
       } else {
         // No mapping found - track missing item
@@ -932,11 +936,14 @@ const BulkInvoiceCreator = () => {
       );
       
       if (shippingMapping?.alegra_item_id) {
-        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id}`);
+        // Shipping also includes IVA, divide by 1.19
+        const shippingSinIva = Math.round(Number(shippingCost) / 1.19);
+        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
         items.push({
           id: shippingMapping.alegra_item_id,
-          price: Number(shippingCost),
+          price: shippingSinIva,
           quantity: 1,
+          tax: [{ id: 3 }], // IVA 19%
         });
       } else {
         missingItems.push({ title: 'Envío', variant: null, sku: 'ENVIO' });
@@ -1349,7 +1356,8 @@ const BulkInvoiceCreator = () => {
     const missingItems: Array<{ title: string; variant: string | null; sku: string | null }> = [];
     
     // Build items - ALL items MUST have an Alegra catalog ID
-    const items: Array<{ id: string; price: number; quantity: number }> = [];
+    // Shopify prices include IVA (taxes_included: true), so divide by 1.19 and add tax: [{ id: 3 }] (19% IVA)
+    const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
     
     for (const item of sourceItems) {
       // Check if it's an edited item (has 'title') or Shopify line item
@@ -1384,11 +1392,14 @@ const BulkInvoiceCreator = () => {
       }
       
       if (mapping?.alegra_item_id) {
-        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id}`);
+        // Shopify price includes IVA, divide by 1.19 to get base price
+        const precioSinIva = Math.round(Number(item.price) / 1.19);
+        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (precio con IVA: ${item.price}, sin IVA: ${precioSinIva})`);
         items.push({
           id: mapping.alegra_item_id,
-          price: Number(item.price),
+          price: precioSinIva,
           quantity: item.quantity,
+          tax: [{ id: 3 }], // IVA 19% en Alegra Colombia
         });
       } else {
         // No mapping found - track missing item
@@ -1414,11 +1425,14 @@ const BulkInvoiceCreator = () => {
       );
       
       if (shippingMapping?.alegra_item_id) {
-        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id}`);
+        // Shipping also includes IVA, divide by 1.19
+        const shippingSinIva = Math.round(Number(shippingCost) / 1.19);
+        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
         items.push({
           id: shippingMapping.alegra_item_id,
-          price: Number(shippingCost),
+          price: shippingSinIva,
           quantity: 1,
+          tax: [{ id: 3 }], // IVA 19%
         });
       } else {
         missingItems.push({ title: 'Envío', variant: null, sku: 'ENVIO' });
