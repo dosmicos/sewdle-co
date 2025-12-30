@@ -1846,6 +1846,10 @@ const BulkInvoiceCreator = () => {
         
         await updateOrderAlegraStatus(orderId, invoice.id, invoice.numberTemplate?.fullNumber || String(invoice.id), false);
         invoicesToStamp.push({ orderId, invoiceId: invoice.id, orderNumber: order.order_number, order });
+        
+        // Agregar etiqueta FACTURADO inmediatamente después de crear la factura
+        console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${order.order_number} (factura creada)`);
+        await addFacturadoTag(order.shopify_order_id);
 
       } catch (error: any) {
         updateResult(orderId, { status: 'error', error: error.message });
