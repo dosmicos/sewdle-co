@@ -1278,15 +1278,26 @@ const BulkInvoiceCreator = () => {
     const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
     
     // Calcular el factor de descuento proporcional basado en descuentos a nivel de orden
-    // subtotal_price ya tiene los descuentos aplicados, así que lo usamos para calcular el factor
+    // IMPORTANTE: Detectar si hay items eliminados (subtotal Shopify > suma de items activos)
+    // En ese caso NO aplicar factor, porque el subtotal viejo incluye items que ya no existen
     const itemsTotalOriginal = order.line_items.reduce(
       (sum, item) => sum + (Number(item.price) * item.quantity), 0
     );
-    const discountFactor = itemsTotalOriginal > 0 
-      ? Number(order.subtotal_price) / itemsTotalOriginal 
+    
+    // Detectar items eliminados: subtotal de Shopify mayor que suma de items activos
+    const hasDeletedItems = Number(order.subtotal_price) > itemsTotalOriginal + 100; // tolerancia 100 COP
+    
+    // Solo aplicar descuento si Shopify subtotal es MENOR que suma de items (descuento real tipo cupón)
+    // Si es mayor o igual, no hay descuento real - usar factor 1
+    const hasRealDiscount = Number(order.subtotal_price) < itemsTotalOriginal - 100;
+    const discountFactor = hasRealDiscount && itemsTotalOriginal > 0
+      ? Number(order.subtotal_price) / itemsTotalOriginal
       : 1;
     
-    console.log(`📊 Cálculo de descuento: Original=$${itemsTotalOriginal}, Subtotal=$${order.subtotal_price}, Factor=${discountFactor.toFixed(4)}`);
+    if (hasDeletedItems) {
+      console.log(`⚠️ Items eliminados detectados. Subtotal Shopify ($${order.subtotal_price}) > Items activos ($${itemsTotalOriginal}). Usando factor=1`);
+    }
+    console.log(`📊 Cálculo de descuento: Original=$${itemsTotalOriginal}, Subtotal=$${order.subtotal_price}, Factor=${discountFactor.toFixed(4)}, hasDeletedItems=${hasDeletedItems}, hasRealDiscount=${hasRealDiscount}`);
     
     for (const item of order.line_items) {
       const productTitle = item.title;
