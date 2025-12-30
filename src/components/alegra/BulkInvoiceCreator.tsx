@@ -768,13 +768,51 @@ const BulkInvoiceCreator = () => {
     syncPendingInvoices();
   }, []);
 
+  // Helper to get shipping cost from the most reliable source
+  const getShippingFromOrder = (order: any): number => {
+    // Priority 1: shipping_lines in raw_data (most reliable, always updated)
+    const shippingLines = order.raw_data?.shipping_lines;
+    if (Array.isArray(shippingLines) && shippingLines.length > 0) {
+      return shippingLines.reduce((sum: number, line: any) => 
+        sum + (parseFloat(line.price) || 0), 0);
+    }
+    // Priority 2: total_shipping if exists
+    if (order.total_shipping && order.total_shipping > 0) {
+      return order.total_shipping;
+    }
+    // Fallback: difference (less reliable when items deleted)
+    return Math.max(0, (order.total_price || 0) - (order.subtotal_price || 0));
+  };
+
+  // Helper to get effective totals based on active line_items
+  // Shopify doesn't update subtotal_price/total_price when items are deleted
+  const getEffectiveOrderTotals = (order: any): { subtotal: number; shipping: number; total: number; hasDeletedItems: boolean } => {
+    // Calculate actual subtotal from current line_items
+    const calculatedSubtotal = (order.line_items || []).reduce(
+      (sum: number, item: any) => sum + (Number(item.price) * item.quantity), 0
+    );
+    
+    // Get shipping from reliable source
+    const shipping = getShippingFromOrder(order);
+    
+    // Detect deleted items: Shopify subtotal > calculated from line_items
+    const hasDeletedItems = (order.subtotal_price || 0) > calculatedSubtotal + 100; // $100 tolerance
+    
+    return {
+      subtotal: calculatedSubtotal,
+      shipping,
+      total: calculatedSubtotal + shipping,
+      hasDeletedItems
+    };
+  };
+
   // Only load necessary fields to reduce response size by ~90%
   const ORDER_FIELDS = `
     id, shopify_order_id, order_number, email, customer_email,
     customer_first_name, customer_last_name, customer_phone,
     billing_address, shipping_address, total_price, subtotal_price,
-    total_tax, total_discounts, currency, financial_status,
-    fulfillment_status, created_at_shopify, tags,
+    total_tax, total_discounts, total_shipping, currency, financial_status,
+    fulfillment_status, created_at_shopify, tags, raw_data,
     alegra_invoice_id, alegra_invoice_number, alegra_invoice_status,
     alegra_stamped, alegra_cufe, alegra_synced_at
   `;
@@ -1311,8 +1349,8 @@ const BulkInvoiceCreator = () => {
       }
     }
 
-    // Add shipping as separate item
-    const shippingCost = order.total_price - order.subtotal_price;
+    // Add shipping as separate item - use reliable source
+    const shippingCost = getShippingFromOrder(order);
     if (shippingCost > 0) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
       let shippingMapping = mappings?.find(m => 
@@ -1781,7 +1819,7 @@ const BulkInvoiceCreator = () => {
     );
 
     // Add shipping only if not already present and there's a shipping cost
-    const shippingCost = order.total_price - order.subtotal_price;
+    const shippingCost = getShippingFromOrder(order);
     if (shippingCost > 0 && !hasShippingItem) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
       let shippingMapping = mappings?.find(m => 
@@ -2465,9 +2503,17 @@ const BulkInvoiceCreator = () => {
                                 <Eye className="h-3 w-3 mr-1" />
                                 Ver
                               </Button>
-                              <span className="font-bold text-lg">
-                                ${order.total_price?.toLocaleString('es-CO')} {order.currency}
-                              </span>
+                              {(() => {
+                                const effectiveTotals = getEffectiveOrderTotals(order);
+                                return (
+                                  <span className={`font-bold text-lg ${effectiveTotals.hasDeletedItems ? 'text-amber-600' : ''}`}>
+                                    ${effectiveTotals.total?.toLocaleString('es-CO')} {order.currency}
+                                    {effectiveTotals.hasDeletedItems && (
+                                      <span className="text-xs font-normal ml-1" title="Total recalculado (hay artículos eliminados)">⚠️</span>
+                                    )}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
                           
