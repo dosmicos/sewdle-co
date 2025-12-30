@@ -32,6 +32,35 @@ import {
   ShieldCheck,
   AlertTriangle
 } from 'lucide-react';
+
+// Helper para extraer mensaje de error completo de Edge Function responses
+const extractEdgeFunctionError = async (error: any, data: any, fallbackMessage: string): Promise<string> => {
+  // Si data tiene el error, usarlo directamente
+  if (data?.error) {
+    return data.error;
+  }
+  
+  // Si hay FunctionsHttpError, extraer el body JSON
+  if (error?.context) {
+    try {
+      const errorBody = await error.context.json();
+      if (errorBody?.error) {
+        return errorBody.error;
+      }
+    } catch (e) {
+      // Si no se puede parsear, intentar texto
+      try {
+        const errorText = await error.context.text();
+        if (errorText) {
+          return errorText;
+        }
+      } catch {}
+    }
+  }
+  
+  // Fallback al mensaje del error o mensaje genérico
+  return error?.message || fallbackMessage;
+};
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -1426,7 +1455,8 @@ const BulkInvoiceCreator = () => {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || 'Error al crear factura');
+      const errorMessage = await extractEdgeFunctionError(error, data, 'Error al crear factura');
+      throw new Error(errorMessage);
     }
 
     return data.data;
@@ -1441,7 +1471,8 @@ const BulkInvoiceCreator = () => {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || 'Error al emitir factura con DIAN');
+      const errorMessage = await extractEdgeFunctionError(error, data, 'Error al emitir factura con DIAN');
+      throw new Error(errorMessage);
     }
 
     // Normalize response: ensure always returns an array
@@ -1894,7 +1925,8 @@ const BulkInvoiceCreator = () => {
     });
 
     if (error || !data?.success) {
-      throw new Error(data?.error || 'Error al crear factura');
+      const errorMessage = await extractEdgeFunctionError(error, data, 'Error al crear factura');
+      throw new Error(errorMessage);
     }
 
     return data.data;
