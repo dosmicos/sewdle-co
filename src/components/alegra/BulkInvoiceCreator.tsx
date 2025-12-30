@@ -277,6 +277,13 @@ const normalizeForAlegra = (city?: string, province?: string) => {
   return { city: 'Bogotá, DC', department: 'Bogotá D.C.' };
 };
 
+// Helper to check if order has FACTURADO tag (facturado externamente)
+const hasFacturadoTag = (order: ShopifyOrderForInvoice): boolean => {
+  if (!order.tags) return false;
+  const tagsArray = order.tags.split(',').map(t => t.trim().toUpperCase());
+  return tagsArray.includes('FACTURADO');
+};
+
 // Helper function to add FACTURADO tag to Shopify order after successful DIAN stamp
 // Uses add_tags action which merges using Shopify as source of truth
 const addFacturadoTag = async (shopifyOrderId: number): Promise<void> => {
@@ -769,8 +776,7 @@ const BulkInvoiceCreator = () => {
         .select('*')
         .in('financial_status', ['paid', 'pending'])
         .gte('created_at_shopify', '2025-12-01T00:00:00Z')
-        .order('created_at_shopify', { ascending: false })
-        .limit(3000);
+        .order('created_at_shopify', { ascending: false });
 
       if (ordersError) throw ordersError;
 
@@ -802,9 +808,9 @@ const BulkInvoiceCreator = () => {
 
       setOrders(ordersWithItems);
       
-      // Clean up selectedOrders: keep only IDs that exist in loaded orders, are not stamped, and don't have an invoice number
+      // Clean up selectedOrders: keep only IDs that exist in loaded orders, are not stamped, don't have an invoice number, and don't have FACTURADO tag
       const validOrderIds = new Set(
-        ordersWithItems.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).map(o => o.id)
+        ordersWithItems.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o)).map(o => o.id)
       );
       setSelectedOrders(prev => {
         const cleaned = new Set([...prev].filter(id => validOrderIds.has(id)));
@@ -829,8 +835,8 @@ const BulkInvoiceCreator = () => {
   };
 
   const toggleAll = () => {
-    // Only use orders from the current page, excluding stamped or already invoiced
-    const selectablePageOrders = paginatedOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
+    // Only use orders from the current page, excluding stamped, already invoiced, or with FACTURADO tag
+    const selectablePageOrders = paginatedOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o));
     const currentPageIds = new Set(selectablePageOrders.map(o => o.id));
     
     // Check if all selectable orders on current page are selected
@@ -862,11 +868,11 @@ const BulkInvoiceCreator = () => {
     
     // Filter by status
     if (filterStatus === 'pending') {
-      // Pending = no stamped AND no invoice number
-      filtered = filtered.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
+      // Pending = no stamped AND no invoice number AND no FACTURADO tag
+      filtered = filtered.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o));
     } else if (filterStatus === 'stamped') {
-      // Stamped = has invoice number OR is stamped
-      filtered = filtered.filter(o => o.alegra_stamped || o.alegra_invoice_number);
+      // Stamped = has invoice number OR is stamped OR has FACTURADO tag
+      filtered = filtered.filter(o => o.alegra_stamped || o.alegra_invoice_number || hasFacturadoTag(o));
     }
     
     // Filter by search term
@@ -885,9 +891,9 @@ const BulkInvoiceCreator = () => {
     return filtered;
   }, [orders, filterStatus, searchTerm]);
 
-  // Compute valid selected count - only count orders that exist, are not stamped, and don't have an invoice number
+  // Compute valid selected count - only count orders that exist, are not stamped, don't have an invoice number, and don't have FACTURADO tag
   const validSelectedCount = useMemo(() => {
-    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).map(o => o.id));
+    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o)).map(o => o.id));
     return [...selectedOrders].filter(id => validOrderIds.has(id)).length;
   }, [selectedOrders, orders]);
 
@@ -2225,8 +2231,8 @@ const BulkInvoiceCreator = () => {
     await processInvoices(validOrderIds);
   };
 
-  const pendingCount = orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).length;
-  const stampedCount = orders.filter(o => o.alegra_stamped || o.alegra_invoice_number).length;
+  const pendingCount = orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o)).length;
+  const stampedCount = orders.filter(o => o.alegra_stamped || o.alegra_invoice_number || hasFacturadoTag(o)).length;
 
   if (isLoading) {
     return (
@@ -2279,7 +2285,7 @@ const BulkInvoiceCreator = () => {
         <div className="flex items-center gap-4">
           <Checkbox
             checked={(() => {
-              const selectablePageOrders = paginatedOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
+              const selectablePageOrders = paginatedOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o));
               return selectablePageOrders.length > 0 && selectablePageOrders.every(o => selectedOrders.has(o.id));
             })()}
             onCheckedChange={toggleAll}
@@ -2349,9 +2355,10 @@ const BulkInvoiceCreator = () => {
               {paginatedOrders.map(order => {
                 const result = results.get(order.id);
                 const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim();
-                // Consider an order as "invoiced" if it has a stamped flag OR if it already has an invoice number
+                // Consider an order as "invoiced" if it has a stamped flag OR if it already has an invoice number OR has FACTURADO tag
                 const hasExistingInvoice = !!order.alegra_invoice_number;
-                const isStamped = order.alegra_stamped || hasExistingInvoice || result?.status === 'success' || result?.status === 'already_stamped';
+                const isFacturadoByTag = hasFacturadoTag(order) && !order.alegra_stamped && !order.alegra_invoice_number;
+                const isStamped = order.alegra_stamped || hasExistingInvoice || isFacturadoByTag || result?.status === 'success' || result?.status === 'already_stamped';
                 const cufe = result?.cufe || order.alegra_cufe;
                 const invoiceNumber = result?.invoiceNumber || order.alegra_invoice_number;
                 const currentStatus = result?.status || (isStamped ? 'already_stamped' : 'idle');
@@ -2396,6 +2403,12 @@ const BulkInvoiceCreator = () => {
                                 <Badge className="bg-amber-500">
                                   <Clock className="h-3 w-3 mr-1" />
                                   Pendiente CUFE
+                                </Badge>
+                              )}
+                              {isFacturadoByTag && (
+                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Facturado (Shopify)
                                 </Badge>
                               )}
                               {editedOrders.has(order.id) && !isStamped && (
