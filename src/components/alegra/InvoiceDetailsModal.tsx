@@ -218,14 +218,38 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                                     email?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
                                     '';
 
-      // Create base line items
-      const baseItems = order.line_items.map(item => ({
-        id: item.id,
-        title: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
-        quantity: item.quantity,
-        price: item.price,
-        isShipping: false,
-      }));
+      // Calcular factor de descuento proporcional basado en subtotal
+      // subtotal_price ya tiene los descuentos aplicados
+      const itemsTotalOriginal = order.line_items.reduce(
+        (sum, item) => sum + (Number(item.price) * item.quantity), 0
+      );
+      const discountFactor = itemsTotalOriginal > 0 
+        ? Number(order.subtotal_price) / itemsTotalOriginal 
+        : 1;
+      
+      const hasDiscount = discountFactor < 0.999; // Tiene descuento si el factor es menor a 1
+
+      // Create base line items with discounted prices
+      const baseItems = order.line_items.map(item => {
+        let precioFinal = Number(item.price);
+        
+        // Aplicar descuento específico del line item (si existe)
+        const itemDiscount = (item as any).total_discount || 0;
+        if (itemDiscount > 0) {
+          precioFinal = precioFinal - (itemDiscount / item.quantity);
+        }
+        
+        // Aplicar factor de descuento proporcional
+        precioFinal = precioFinal * discountFactor;
+        
+        return {
+          id: item.id,
+          title: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
+          quantity: item.quantity,
+          price: Math.round(precioFinal), // Precio con descuento aplicado
+          isShipping: false,
+        };
+      });
 
       // Add shipping as a product if exists
       const shippingCost = order.total_price - order.subtotal_price;

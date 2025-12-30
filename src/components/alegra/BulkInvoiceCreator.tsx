@@ -78,6 +78,7 @@ export interface ShopifyOrderForInvoice {
   total_price: number;
   subtotal_price: number;
   total_tax: number;
+  total_discounts: number; // Descuento total de la orden
   currency: string;
   financial_status: string;
   fulfillment_status: string | null;
@@ -96,7 +97,8 @@ export interface ShopifyOrderForInvoice {
     variant_title: string | null;
     sku: string | null;
     quantity: number;
-    price: number;
+    price: number; // Precio original del item (sin descuento)
+    total_discount: number; // Descuento específico de este item
   }>;
 }
 
@@ -507,12 +509,16 @@ const BulkInvoiceCreator = () => {
       for (const order of ordersData || []) {
         const { data: lineItems } = await supabase
           .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, quantity, price')
+          .select('id, title, variant_title, sku, quantity, price, total_discount')
           .eq('shopify_order_id', order.shopify_order_id);
 
         ordersWithItems.push({
           ...order,
-          line_items: lineItems || []
+          total_discounts: order.total_discounts || 0,
+          line_items: (lineItems || []).map(item => ({
+            ...item,
+            total_discount: item.total_discount || 0
+          }))
         });
       }
 
@@ -886,6 +892,17 @@ const BulkInvoiceCreator = () => {
     // Shopify prices include IVA (taxes_included: true), so divide by 1.19 and add tax: [{ id: 3 }] (19% IVA)
     const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
     
+    // Calcular el factor de descuento proporcional basado en descuentos a nivel de orden
+    // subtotal_price ya tiene los descuentos aplicados, así que lo usamos para calcular el factor
+    const itemsTotalOriginal = order.line_items.reduce(
+      (sum, item) => sum + (Number(item.price) * item.quantity), 0
+    );
+    const discountFactor = itemsTotalOriginal > 0 
+      ? Number(order.subtotal_price) / itemsTotalOriginal 
+      : 1;
+    
+    console.log(`📊 Cálculo de descuento: Original=$${itemsTotalOriginal}, Subtotal=$${order.subtotal_price}, Factor=${discountFactor.toFixed(4)}`);
+    
     for (const item of order.line_items) {
       const productTitle = item.title;
       const variantTitle = item.variant_title || null;
@@ -910,9 +927,22 @@ const BulkInvoiceCreator = () => {
       }
       
       if (mapping?.alegra_item_id) {
-        // Shopify price includes IVA, divide by 1.19 to get base price
-        const precioSinIva = Math.round(Number(item.price) / 1.19);
-        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (precio con IVA: ${item.price}, sin IVA: ${precioSinIva})`);
+        // 1. Precio original del item
+        let precioFinal = Number(item.price);
+        
+        // 2. Aplicar descuento específico del line item (si existe)
+        const itemDiscount = item.total_discount || 0;
+        if (itemDiscount > 0) {
+          precioFinal = precioFinal - (itemDiscount / item.quantity);
+        }
+        
+        // 3. Aplicar factor de descuento proporcional de la orden
+        precioFinal = precioFinal * discountFactor;
+        
+        // 4. Dividir por 1.19 para obtener precio sin IVA
+        const precioSinIva = Math.round(precioFinal / 1.19);
+        
+        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (original: $${item.price}, con descuento: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
         items.push({
           id: mapping.alegra_item_id,
           price: precioSinIva,
@@ -925,7 +955,7 @@ const BulkInvoiceCreator = () => {
       }
     }
 
-    // Check shipping mapping
+    // Add shipping as separate item
     const shippingCost = order.total_price - order.subtotal_price;
     if (shippingCost > 0) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
@@ -1052,93 +1082,28 @@ const BulkInvoiceCreator = () => {
     setIsProcessing(true);
     setResults(new Map());
     
-    updateResult(order.id, { orderNumber: order.order_number, status: 'searching_invoice' });
+    updateResult(order.id, { orderNumber: order.order_number, status: 'searching_contact' });
     
     try {
-      // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API (con validación de coherencia)
-      const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber, getInvoiceDetails);
+      // 1. Verificar solo en tabla local si ya tiene CUFE (ya emitida)
+      const { data: localRecord } = await supabase
+        .from('alegra_invoices')
+        .select('*')
+        .eq('shopify_order_id', order.shopify_order_id)
+        .eq('stamped', true)
+        .not('cufe', 'is', null)
+        .maybeSingle();
       
-      if (existingCheck.exists) {
-        const existingInvoice = existingCheck.invoice;
+      if (localRecord && localRecord.cufe) {
+        console.log(`⚠️ Factura ya registrada para orden ${order.order_number}:`, localRecord.alegra_invoice_number);
         updateResult(order.id, { 
           status: 'already_stamped',
-          invoiceId: existingInvoice.alegra_invoice_id || existingInvoice.id,
-          invoiceNumber: existingInvoice.alegra_invoice_number || existingInvoice.numberTemplate?.fullNumber,
-          cufe: existingInvoice.cufe || existingInvoice.stamp?.cufe
+          invoiceId: localRecord.alegra_invoice_id,
+          invoiceNumber: localRecord.alegra_invoice_number || undefined,
+          cufe: localRecord.cufe
         });
-        
-        // Asegurar tag FACTURADO
         await addFacturadoTag(order.shopify_order_id);
-        
-        // Sincronizar campos en shopify_orders si vienen de Alegra
-        if (existingCheck.source === 'alegra') {
-          await updateOrderAlegraStatus(
-            order.id,
-            existingInvoice.id,
-            existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
-            true,
-            existingInvoice.stamp?.cufe
-          );
-        }
-        
-        toast.info(`Esta factura ya fue emitida (detectado en ${existingCheck.source})`);
-        setIsProcessing(false);
-        return;
-      }
-      
-      // 2. Si hay factura sin emitir que necesita validación
-      if (existingCheck.needsValidation && existingCheck.validation) {
-        const { validation, invoice: existingInvoice } = existingCheck;
-        
-        if (!validation.isValid) {
-          // Factura existe pero tiene discrepancias - informar al usuario
-          console.log(`⚠️ Factura existente con discrepancias para ${order.order_number}:`, validation.discrepancies);
-          updateResult(order.id, { 
-            status: 'invoice_mismatch',
-            invoiceId: existingInvoice.id,
-            invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
-            discrepancies: validation.discrepancies,
-            existingInvoice
-          });
-          
-          const discrepancyMessages = validation.discrepancies.map(d => d.message).join('; ');
-          toast.warning(`Factura existente con diferencias: ${discrepancyMessages}`);
-          setIsProcessing(false);
-          return;
-        }
-        
-        // Factura válida - usar cliente de la factura y continuar con stamp
-        console.log(`✅ Factura existente válida para ${order.order_number}, procediendo a emitir...`);
-        await registerInvoice(order, existingInvoice, false);
-        await updateOrderAlegraStatus(order.id, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
-        
-        // Continuar directamente al stamp
-        updateResult(order.id, { status: 'stamping' });
-        
-        const stampResult = await stampInvoices([existingInvoice.id]);
-        if (stampResult && stampResult.length > 0) {
-          const stampedInvoice = stampResult[0];
-          const cufe = stampedInvoice.stamp?.cufe;
-          const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(stampedInvoice.id);
-          
-          await registerInvoice(order, stampedInvoice, true, cufe);
-          await updateOrderAlegraStatus(order.id, stampedInvoice.id, invoiceNumber, true, cufe);
-          
-          updateResult(order.id, { status: 'success', invoiceId: stampedInvoice.id, invoiceNumber, cufe });
-          await addFacturadoTag(order.shopify_order_id);
-          
-          // Registrar pago si está pagado
-          if (order.financial_status === 'paid') {
-            try {
-              await supabase.functions.invoke('alegra-api', {
-                body: { action: 'create-payment', data: { payment: { invoiceId: stampedInvoice.id, amount: order.total_price, paymentMethod: 'transfer', observations: `Pago pedido Shopify #${order.order_number}` } } }
-              });
-            } catch (e) { console.error('Error registrando pago:', e); }
-          }
-          
-          toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
-          fetchShopifyOrders();
-        }
+        toast.info('Esta factura ya fue emitida');
         setIsProcessing(false);
         return;
       }
@@ -1151,10 +1116,7 @@ const BulkInvoiceCreator = () => {
           invoiceNumber: order.alegra_invoice_number || undefined,
           cufe: order.alegra_cufe
         });
-        
-        console.log(`🏷️ Orden ${order.order_number} ya emitida (legacy), verificando tag FACTURADO...`);
         await addFacturadoTag(order.shopify_order_id);
-        
         toast.info('Esta factura ya fue emitida');
         setIsProcessing(false);
         return;
@@ -1346,6 +1308,9 @@ const BulkInvoiceCreator = () => {
 
   // Create invoice using edited data if available
   const createInvoiceWithData = async (order: ShopifyOrderForInvoice, contactId: string, editedData?: EditedInvoiceData) => {
+    // Si hay datos editados, usamos el precio editado directamente (ya contiene el descuento aplicado)
+    // Si no, usamos los line_items originales con el cálculo de descuento proporcional
+    const useEditedData = !!editedData?.lineItems;
     const sourceItems = editedData?.lineItems || order.line_items;
     
     // Fetch product mappings for this organization
@@ -1356,8 +1321,19 @@ const BulkInvoiceCreator = () => {
     const missingItems: Array<{ title: string; variant: string | null; sku: string | null }> = [];
     
     // Build items - ALL items MUST have an Alegra catalog ID
-    // Shopify prices include IVA (taxes_included: true), so divide by 1.19 and add tax: [{ id: 3 }] (19% IVA)
     const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
+    
+    // Calcular factor de descuento solo si usamos datos originales (no editados)
+    let discountFactor = 1;
+    if (!useEditedData) {
+      const itemsTotalOriginal = order.line_items.reduce(
+        (sum, item) => sum + (Number(item.price) * item.quantity), 0
+      );
+      discountFactor = itemsTotalOriginal > 0 
+        ? Number(order.subtotal_price) / itemsTotalOriginal 
+        : 1;
+      console.log(`📊 Cálculo de descuento: Original=$${itemsTotalOriginal}, Subtotal=$${order.subtotal_price}, Factor=${discountFactor.toFixed(4)}`);
+    }
     
     for (const item of sourceItems) {
       // Check if it's an edited item (has 'title') or Shopify line item
@@ -1392,9 +1368,22 @@ const BulkInvoiceCreator = () => {
       }
       
       if (mapping?.alegra_item_id) {
-        // Shopify price includes IVA, divide by 1.19 to get base price
-        const precioSinIva = Math.round(Number(item.price) / 1.19);
-        console.log(`🔗 Mapeo encontrado: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (precio con IVA: ${item.price}, sin IVA: ${precioSinIva})`);
+        let precioFinal = Number(item.price);
+        
+        if (!useEditedData) {
+          // Datos originales: aplicar descuento de línea y factor proporcional
+          const itemDiscount = (item as any).total_discount || 0;
+          if (itemDiscount > 0) {
+            precioFinal = precioFinal - (itemDiscount / item.quantity);
+          }
+          precioFinal = precioFinal * discountFactor;
+        }
+        // Si son datos editados, el precio ya viene correcto del modal
+        
+        // Dividir por 1.19 para obtener precio sin IVA
+        const precioSinIva = Math.round(precioFinal / 1.19);
+        
+        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (precio final: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
         items.push({
           id: mapping.alegra_item_id,
           price: precioSinIva,
@@ -1485,63 +1474,32 @@ const BulkInvoiceCreator = () => {
 
     const invoicesToStamp: { orderId: string; invoiceId: number; orderNumber: string; order: ShopifyOrderForInvoice }[] = [];
 
+    // 1. Verificar y crear facturas para cada orden
     for (const orderId of idsToProcess) {
       const order = orders.find(o => o.id === orderId);
       if (!order) continue;
 
-      updateResult(orderId, { orderNumber: order.order_number, status: 'searching_invoice' });
-
+      updateResult(orderId, { orderNumber: order.order_number, status: 'searching_contact' });
+      
       try {
-        // 1. VERIFICACIÓN DOBLE: tabla local + Alegra API (con validación de coherencia)
-        const existingCheck = await verifyNoExistingInvoice(order, searchInvoiceByOrderNumber, getInvoiceDetails);
+        // Verificar solo en tabla local si ya tiene CUFE
+        const { data: localRecord } = await supabase
+          .from('alegra_invoices')
+          .select('*')
+          .eq('shopify_order_id', order.shopify_order_id)
+          .eq('stamped', true)
+          .not('cufe', 'is', null)
+          .maybeSingle();
         
-        if (existingCheck.exists) {
-          const existingInvoice = existingCheck.invoice;
+        if (localRecord && localRecord.cufe) {
+          console.log(`⚠️ Factura ya registrada para orden ${order.order_number}`);
           updateResult(orderId, { 
             status: 'already_stamped',
-            invoiceId: existingInvoice.alegra_invoice_id || existingInvoice.id,
-            invoiceNumber: existingInvoice.alegra_invoice_number || existingInvoice.numberTemplate?.fullNumber,
-            cufe: existingInvoice.cufe || existingInvoice.stamp?.cufe
+            invoiceId: localRecord.alegra_invoice_id,
+            invoiceNumber: localRecord.alegra_invoice_number || undefined,
+            cufe: localRecord.cufe
           });
-          
-          // Asegurar tag FACTURADO
           await addFacturadoTag(order.shopify_order_id);
-          
-          // Sincronizar campos si viene de Alegra
-          if (existingCheck.source === 'alegra') {
-            await updateOrderAlegraStatus(
-              orderId,
-              existingInvoice.id,
-              existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
-              true,
-              existingInvoice.stamp?.cufe
-            );
-          }
-          continue;
-        }
-        
-        // 2. Si hay factura sin emitir que necesita validación
-        if (existingCheck.needsValidation && existingCheck.validation) {
-          const { validation, invoice: existingInvoice } = existingCheck;
-          
-          if (!validation.isValid) {
-            // Factura existe pero tiene discrepancias - marcar para revisión
-            console.log(`⚠️ Factura existente con discrepancias para ${order.order_number}:`, validation.discrepancies);
-            updateResult(orderId, { 
-              status: 'invoice_mismatch',
-              invoiceId: existingInvoice.id,
-              invoiceNumber: existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id),
-              discrepancies: validation.discrepancies,
-              existingInvoice
-            });
-            continue;
-          }
-          
-          // Factura válida - usar cliente de la factura existente y emitir
-          console.log(`✅ Factura existente válida para ${order.order_number}, procediendo a emitir...`);
-          await registerInvoice(order, existingInvoice, false);
-          await updateOrderAlegraStatus(orderId, existingInvoice.id, existingInvoice.numberTemplate?.fullNumber || String(existingInvoice.id), false);
-          invoicesToStamp.push({ orderId, invoiceId: existingInvoice.id, orderNumber: order.order_number, order });
           continue;
         }
         
@@ -1557,13 +1515,7 @@ const BulkInvoiceCreator = () => {
           continue;
         }
 
-        // 3. Check if has invoice linked but not stamped (from DB)
-        if (order.alegra_invoice_id && !order.alegra_stamped) {
-          invoicesToStamp.push({ orderId, invoiceId: order.alegra_invoice_id, orderNumber: order.order_number, order });
-          continue;
-        }
-
-        // 4. No invoice exists - create everything
+        // 2. Crear contacto
         updateResult(orderId, { status: 'searching_contact' });
         const contact = await searchOrCreateContact(order);
         
@@ -1571,6 +1523,7 @@ const BulkInvoiceCreator = () => {
           updateResult(orderId, { status: 'creating_contact' });
         }
 
+        // 3. Crear factura con todos los datos correctos
         updateResult(orderId, { status: 'creating_invoice' });
         const invoice = await createInvoice(order, contact.id);
         
