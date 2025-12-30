@@ -828,12 +828,31 @@ const BulkInvoiceCreator = () => {
   };
 
   const toggleAll = () => {
-    // Exclude orders that are stamped OR already have an invoice number
-    const selectableOrders = getFilteredOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
-    if (selectedOrders.size === selectableOrders.length) {
-      setSelectedOrders(new Set());
+    // Only use orders from the current page, excluding stamped or already invoiced
+    const selectablePageOrders = paginatedOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
+    const currentPageIds = new Set(selectablePageOrders.map(o => o.id));
+    
+    // Check if all selectable orders on current page are selected
+    const allPageSelected = selectablePageOrders.length > 0 && selectablePageOrders.every(o => selectedOrders.has(o.id));
+    
+    if (allPageSelected) {
+      // Deselect only current page orders
+      setSelectedOrders(prev => {
+        const newSet = new Set(prev);
+        for (const id of currentPageIds) {
+          newSet.delete(id);
+        }
+        return newSet;
+      });
     } else {
-      setSelectedOrders(new Set(selectableOrders.map(o => o.id)));
+      // Select only current page orders (add to existing selection)
+      setSelectedOrders(prev => {
+        const newSet = new Set(prev);
+        for (const id of currentPageIds) {
+          newSet.add(id);
+        }
+        return newSet;
+      });
     }
   };
 
@@ -2258,11 +2277,14 @@ const BulkInvoiceCreator = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={validSelectedCount > 0 && validSelectedCount === getFilteredOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).length}
+            checked={(() => {
+              const selectablePageOrders = paginatedOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
+              return selectablePageOrders.length > 0 && selectablePageOrders.every(o => selectedOrders.has(o.id));
+            })()}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-muted-foreground">
-            {validSelectedCount} seleccionados
+            {validSelectedCount} seleccionados (pág. {currentPage}/{totalPages})
           </span>
           <Button variant="ghost" size="sm" onClick={fetchShopifyOrders} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
