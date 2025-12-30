@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,6 +39,95 @@ import { es } from 'date-fns/locale';
 import InvoiceDetailsModal, { EditedInvoiceData } from './InvoiceDetailsModal';
 import BulkValidationResultsModal, { BulkValidationResult } from './BulkValidationResultsModal';
 import { validateOrderForInvoice } from '@/hooks/useInvoiceValidation';
+
+// ==================== AUTO-MATCH ALEGRA PRODUCTS ====================
+
+interface AlegraItem {
+  id: string;
+  name: string;
+  reference?: string;
+  price?: number[] | { price: number }[];
+}
+
+// Normalize product name for matching - remove accents, TOG, sizes, common words
+const normalizeProductName = (name: string): string => {
+  return name
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/tog\s*[\d.]+/gi, "") // Remove TOG
+    .replace(/talla?\s*\w+/gi, "") // Remove sizes like "talla 2" or "talla XL"
+    .replace(/-?\s*(navidad|halloween|pascua|dia de|año nuevo|san valentin)/gi, "") // Remove seasonal
+    .replace(/\s*-\s*/g, " ") // Replace hyphens with spaces
+    .replace(/[.,]/g, "") // Remove punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+// Extract keywords from product name
+const extractKeywords = (name: string): string[] => {
+  const normalized = normalizeProductName(name);
+  // Common words to exclude
+  const stopWords = new Set(['de', 'la', 'el', 'los', 'las', 'un', 'una', 'y', 'con', 'para', 'por', 'en']);
+  return normalized.split(' ').filter(word => word.length > 2 && !stopWords.has(word));
+};
+
+// Calculate similarity score between two sets of keywords
+const calculateSimilarity = (keywords1: string[], keywords2: string[]): number => {
+  if (keywords1.length === 0 || keywords2.length === 0) return 0;
+  
+  const set1 = new Set(keywords1);
+  const set2 = new Set(keywords2);
+  
+  let matchCount = 0;
+  for (const word of set1) {
+    // Check exact match or partial match (word contained in another)
+    if (set2.has(word)) {
+      matchCount += 1;
+    } else {
+      // Check if any word in set2 contains this word or vice versa
+      for (const word2 of set2) {
+        if (word.includes(word2) || word2.includes(word)) {
+          matchCount += 0.5;
+          break;
+        }
+      }
+    }
+  }
+  
+  // Jaccard-like score weighted by match quality
+  const union = new Set([...set1, ...set2]).size;
+  return matchCount / union;
+};
+
+// Find best matching Alegra item for a Shopify product
+const findBestAlegraMatch = (
+  shopifyTitle: string, 
+  allAlegraItems: AlegraItem[],
+  minScore: number = 0.3
+): AlegraItem | null => {
+  const shopifyKeywords = extractKeywords(shopifyTitle);
+  
+  if (shopifyKeywords.length === 0) return null;
+  
+  let bestMatch: AlegraItem | null = null;
+  let bestScore = 0;
+  
+  for (const item of allAlegraItems) {
+    const alegraKeywords = extractKeywords(item.name);
+    const score = calculateSimilarity(shopifyKeywords, alegraKeywords);
+    
+    if (score > bestScore && score >= minScore) {
+      bestScore = score;
+      bestMatch = item;
+    }
+  }
+  
+  if (bestMatch) {
+    console.log(`🔍 Auto-match: "${shopifyTitle}" → "${bestMatch.name}" (score: ${bestScore.toFixed(2)})`);
+  }
+  
+  return bestMatch;
+};
 
 const ITEMS_PER_PAGE = 10;
 
@@ -482,6 +571,105 @@ const BulkInvoiceCreator = () => {
   const [validationResults, setValidationResults] = useState<BulkValidationResult[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [manualDeliveryConfirmations, setManualDeliveryConfirmations] = useState<Map<string, boolean>>(new Map());
+  
+  // Alegra catalog cache
+  const alegraItemsCache = useRef<AlegraItem[]>([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  
+  // Load full Alegra catalog (once)
+  const loadAlegraFullCatalog = async (): Promise<AlegraItem[]> => {
+    if (alegraItemsCache.current.length > 0) {
+      console.log(`📦 Usando catálogo Alegra en cache: ${alegraItemsCache.current.length} productos`);
+      return alegraItemsCache.current;
+    }
+    
+    setIsCatalogLoading(true);
+    console.log('📦 Cargando catálogo completo de Alegra...');
+    
+    const allItems: AlegraItem[] = [];
+    let start = 0;
+    const limit = 30; // Alegra API limit
+    
+    try {
+      while (true) {
+        const { data, error } = await supabase.functions.invoke('alegra-api', {
+          body: { action: 'get-items', data: { start, limit } }
+        });
+        
+        if (error || !data?.success) {
+          console.error('Error cargando catálogo Alegra:', error || data?.error);
+          break;
+        }
+        
+        const items = data.data || [];
+        if (items.length === 0) break;
+        
+        allItems.push(...items);
+        console.log(`  → Cargados ${allItems.length} productos...`);
+        
+        start += limit;
+        
+        if (items.length < limit) break;
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      alegraItemsCache.current = allItems;
+      console.log(`✅ Catálogo Alegra cargado: ${allItems.length} productos`);
+    } catch (err) {
+      console.error('Error cargando catálogo Alegra:', err);
+    } finally {
+      setIsCatalogLoading(false);
+    }
+    
+    return allItems;
+  };
+  
+  // Auto-match and optionally save mapping
+  const autoMatchProduct = async (
+    productTitle: string, 
+    variantTitle: string | null,
+    sku: string | null,
+    alegraItems: AlegraItem[]
+  ): Promise<{ alegraItemId: string; alegraItemName: string } | null> => {
+    // Build full title for matching
+    const fullTitle = variantTitle ? `${productTitle} ${variantTitle}` : productTitle;
+    
+    const match = findBestAlegraMatch(fullTitle, alegraItems);
+    if (!match) return null;
+    
+    // Auto-save mapping for future use (ignore if already exists)
+    try {
+      const { data: orgData } = await supabase.rpc('get_current_organization_safe');
+      if (orgData) {
+        // Check if mapping already exists
+        const { data: existing } = await supabase
+          .from('alegra_product_mapping')
+          .select('id')
+          .eq('organization_id', orgData)
+          .eq('shopify_product_title', productTitle)
+          .eq('shopify_variant_title', variantTitle || '')
+          .maybeSingle();
+        
+        if (!existing) {
+          await supabase.from('alegra_product_mapping').insert({
+            organization_id: orgData,
+            shopify_product_title: productTitle,
+            shopify_variant_title: variantTitle,
+            shopify_sku: sku,
+            alegra_item_id: match.id,
+            alegra_item_name: match.name
+          });
+          console.log(`💾 Auto-guardado mapeo: "${productTitle}" → "${match.name}"`);
+        }
+      }
+    } catch (err) {
+      console.warn('No se pudo guardar mapeo automático:', err);
+    }
+    
+    return { alegraItemId: match.id, alegraItemName: match.name };
+  };
 
   // Reset page when filters change
   useEffect(() => {
@@ -490,6 +678,8 @@ const BulkInvoiceCreator = () => {
 
   useEffect(() => {
     fetchShopifyOrders();
+    // Preload Alegra catalog in background for faster invoice creation
+    loadAlegraFullCatalog();
   }, []);
 
   const fetchShopifyOrders = async () => {
@@ -881,6 +1071,9 @@ const BulkInvoiceCreator = () => {
   };
 
   const createInvoice = async (order: ShopifyOrderForInvoice, contactId: string) => {
+    // Load Alegra catalog for auto-matching
+    const alegraItems = await loadAlegraFullCatalog();
+    
     // Fetch product mappings for this organization
     const { data: mappings } = await supabase
       .from('alegra_product_mapping')
@@ -926,7 +1119,16 @@ const BulkInvoiceCreator = () => {
         );
       }
       
-      if (mapping?.alegra_item_id) {
+      // Priority 4: AUTO-MATCH by name similarity
+      let alegraItemId = mapping?.alegra_item_id;
+      if (!alegraItemId && alegraItems.length > 0) {
+        const autoMatch = await autoMatchProduct(productTitle, variantTitle, sku, alegraItems);
+        if (autoMatch) {
+          alegraItemId = autoMatch.alegraItemId;
+        }
+      }
+      
+      if (alegraItemId) {
         // 1. Precio original del item
         let precioFinal = Number(item.price);
         
@@ -942,9 +1144,9 @@ const BulkInvoiceCreator = () => {
         // 4. Dividir por 1.19 para obtener precio sin IVA
         const precioSinIva = Math.round(precioFinal / 1.19);
         
-        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (original: $${item.price}, con descuento: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
+        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (original: $${item.price}, con descuento: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
         items.push({
-          id: mapping.alegra_item_id,
+          id: alegraItemId,
           price: precioSinIva,
           quantity: item.quantity,
           tax: [{ id: 3 }], // IVA 19% en Alegra Colombia
@@ -959,18 +1161,27 @@ const BulkInvoiceCreator = () => {
     const shippingCost = order.total_price - order.subtotal_price;
     if (shippingCost > 0) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
-      const shippingMapping = mappings?.find(m => 
+      let shippingMapping = mappings?.find(m => 
         m.shopify_sku === 'ENVIO' || 
         m.shopify_product_title?.toLowerCase() === 'envío' ||
         m.shopify_product_title?.toLowerCase() === 'envio'
       );
       
-      if (shippingMapping?.alegra_item_id) {
+      // Auto-match shipping if no mapping exists
+      let shippingItemId = shippingMapping?.alegra_item_id;
+      if (!shippingItemId && alegraItems.length > 0) {
+        const autoMatch = await autoMatchProduct('Envío', null, 'ENVIO', alegraItems);
+        if (autoMatch) {
+          shippingItemId = autoMatch.alegraItemId;
+        }
+      }
+      
+      if (shippingItemId) {
         // Shipping also includes IVA, divide by 1.19
         const shippingSinIva = Math.round(Number(shippingCost) / 1.19);
-        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
+        console.log(`🔗 Mapeo de envío: Alegra ID ${shippingItemId} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
         items.push({
-          id: shippingMapping.alegra_item_id,
+          id: shippingItemId,
           price: shippingSinIva,
           quantity: 1,
           tax: [{ id: 3 }], // IVA 19%
@@ -986,7 +1197,7 @@ const BulkInvoiceCreator = () => {
         `• ${m.title}${m.variant ? ` - ${m.variant}` : ''}${m.sku ? ` (SKU: ${m.sku})` : ''}`
       ).join('\n');
       
-      throw new Error(`Faltan mapeos de Alegra para ${missingItems.length} producto(s):\n${missingList}\n\nMapéalos en la pestaña "Mapeo de Productos" antes de emitir.`);
+      throw new Error(`No se encontró en Alegra ${missingItems.length} producto(s):\n${missingList}\n\nCréalos en Alegra o mapéalos manualmente.`);
     }
     
     console.log(`📦 Creando factura para orden ${order.order_number} con ${items.length} items mapeados`);
@@ -1308,6 +1519,9 @@ const BulkInvoiceCreator = () => {
 
   // Create invoice using edited data if available
   const createInvoiceWithData = async (order: ShopifyOrderForInvoice, contactId: string, editedData?: EditedInvoiceData) => {
+    // Load Alegra catalog for auto-matching
+    const alegraItems = await loadAlegraFullCatalog();
+    
     // Si hay datos editados, usamos el precio editado directamente (ya contiene el descuento aplicado)
     // Si no, usamos los line_items originales con el cálculo de descuento proporcional
     const useEditedData = !!editedData?.lineItems;
@@ -1367,7 +1581,16 @@ const BulkInvoiceCreator = () => {
         );
       }
       
-      if (mapping?.alegra_item_id) {
+      // Priority 4: AUTO-MATCH by name similarity
+      let alegraItemId = mapping?.alegra_item_id;
+      if (!alegraItemId && alegraItems.length > 0) {
+        const autoMatch = await autoMatchProduct(productTitle, variantTitle, sku, alegraItems);
+        if (autoMatch) {
+          alegraItemId = autoMatch.alegraItemId;
+        }
+      }
+      
+      if (alegraItemId) {
         let precioFinal = Number(item.price);
         
         if (!useEditedData) {
@@ -1383,9 +1606,9 @@ const BulkInvoiceCreator = () => {
         // Dividir por 1.19 para obtener precio sin IVA
         const precioSinIva = Math.round(precioFinal / 1.19);
         
-        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${mapping.alegra_item_id} (precio final: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
+        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (precio final: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
         items.push({
-          id: mapping.alegra_item_id,
+          id: alegraItemId,
           price: precioSinIva,
           quantity: item.quantity,
           tax: [{ id: 3 }], // IVA 19% en Alegra Colombia
@@ -1407,18 +1630,27 @@ const BulkInvoiceCreator = () => {
     const shippingCost = order.total_price - order.subtotal_price;
     if (shippingCost > 0 && !hasShippingItem) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
-      const shippingMapping = mappings?.find(m => 
+      let shippingMapping = mappings?.find(m => 
         m.shopify_sku === 'ENVIO' || 
         m.shopify_product_title?.toLowerCase() === 'envío' ||
         m.shopify_product_title?.toLowerCase() === 'envio'
       );
       
-      if (shippingMapping?.alegra_item_id) {
+      // Auto-match shipping if no mapping exists
+      let shippingItemId = shippingMapping?.alegra_item_id;
+      if (!shippingItemId && alegraItems.length > 0) {
+        const autoMatch = await autoMatchProduct('Envío', null, 'ENVIO', alegraItems);
+        if (autoMatch) {
+          shippingItemId = autoMatch.alegraItemId;
+        }
+      }
+      
+      if (shippingItemId) {
         // Shipping also includes IVA, divide by 1.19
         const shippingSinIva = Math.round(Number(shippingCost) / 1.19);
-        console.log(`🔗 Mapeo de envío encontrado: Alegra ID ${shippingMapping.alegra_item_id} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
+        console.log(`🔗 Mapeo de envío: Alegra ID ${shippingItemId} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
         items.push({
-          id: shippingMapping.alegra_item_id,
+          id: shippingItemId,
           price: shippingSinIva,
           quantity: 1,
           tax: [{ id: 3 }], // IVA 19%
@@ -1434,7 +1666,7 @@ const BulkInvoiceCreator = () => {
         `• ${m.title}${m.variant ? ` - ${m.variant}` : ''}${m.sku ? ` (SKU: ${m.sku})` : ''}`
       ).join('\n');
       
-      throw new Error(`Faltan mapeos de Alegra para ${missingItems.length} producto(s):\n${missingList}\n\nMapéalos en la pestaña "Mapeo de Productos" antes de emitir.`);
+      throw new Error(`No se encontró en Alegra ${missingItems.length} producto(s):\n${missingList}\n\nCréalos en Alegra o mapéalos manualmente.`);
     }
     
     console.log(`📦 Creando factura (editada) para orden ${order.order_number} con ${items.length} items mapeados`);
