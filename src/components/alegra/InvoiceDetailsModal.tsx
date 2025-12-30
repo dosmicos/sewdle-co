@@ -418,7 +418,11 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
   // Legacy handler for backward compatibility
   const handleSaveAndEmit = handleValidateAndEmit;
 
-  const subtotal = formData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  // Shopify prices include IVA (taxes_included: true for Colombia)
+  // Calculate: totalConIva (what user sees) → precioBase (send to Alegra) + IVA 19%
+  const totalConIva = formData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotalSinIva = Math.round(totalConIva / 1.19);
+  const ivaCalculado = totalConIva - subtotalSinIva;
 
   if (!order) return null;
 
@@ -715,17 +719,17 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
               
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toLocaleString('es-CO')}</span>
+                  <span>Subtotal (sin IVA):</span>
+                  <span>${subtotalSinIva.toLocaleString('es-CO')}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>IVA (19%):</span>
-                  <span>$0</span>
+                  <span>${ivaCalculado.toLocaleString('es-CO')} (incluido)</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total:</span>
-                  <span>${subtotal.toLocaleString('es-CO')} {order.currency}</span>
+                  <span>${totalConIva.toLocaleString('es-CO')} {order.currency}</span>
                 </div>
               </div>
             </div>
