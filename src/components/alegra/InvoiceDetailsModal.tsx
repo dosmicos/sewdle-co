@@ -442,11 +442,21 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
   // Legacy handler for backward compatibility
   const handleSaveAndEmit = handleValidateAndEmit;
 
-  // Shopify prices include IVA (taxes_included: true for Colombia)
-  // Calculate: totalConIva (what user sees) → precioBase (send to Alegra) + IVA 19%
-  const totalConIva = formData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const subtotalSinIva = Math.round(totalConIva / 1.19);
-  const ivaCalculado = totalConIva - subtotalSinIva;
+  // Separate products (with IVA 19%) from shipping (no IVA)
+  const productItems = formData.lineItems.filter(item => !item.isShipping);
+  const shippingItems = formData.lineItems.filter(item => item.isShipping);
+
+  // Products include IVA 19%
+  const productosTotalConIva = productItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const productosSubtotalSinIva = Math.round(productosTotalConIva / 1.19);
+  const ivaCalculado = productosTotalConIva - productosSubtotalSinIva;
+
+  // Shipping has NO IVA
+  const envioTotal = shippingItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  // Final totals
+  const subtotalSinIva = productosSubtotalSinIva + envioTotal;
+  const totalConIva = productosTotalConIva + envioTotal;
 
   if (!order) return null;
 
@@ -743,13 +753,19 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
               
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between">
-                  <span>Subtotal (sin IVA):</span>
-                  <span>${subtotalSinIva.toLocaleString('es-CO')}</span>
+                  <span>Productos (sin IVA):</span>
+                  <span>${productosSubtotalSinIva.toLocaleString('es-CO')}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>IVA (19%):</span>
+                  <span>IVA productos (19%):</span>
                   <span>${ivaCalculado.toLocaleString('es-CO')} (incluido)</span>
                 </div>
+                {envioTotal > 0 && (
+                  <div className="flex justify-between">
+                    <span>Envío (sin IVA):</span>
+                    <span>${envioTotal.toLocaleString('es-CO')}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total:</span>

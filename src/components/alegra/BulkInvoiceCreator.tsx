@@ -1256,14 +1256,14 @@ const BulkInvoiceCreator = () => {
       }
       
       if (shippingItemId) {
-        // Shipping also includes IVA, divide by 1.19
-        const shippingSinIva = Math.round(Number(shippingCost) / 1.19);
-        console.log(`🔗 Mapeo de envío: Alegra ID ${shippingItemId} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
+        // Shipping does NOT have tax - use full price without IVA calculation
+        const shippingPrice = Math.round(Number(shippingCost));
+        console.log(`🔗 Mapeo de envío: Alegra ID ${shippingItemId} (sin impuesto: ${shippingPrice})`);
         items.push({
           id: shippingItemId,
-          price: shippingSinIva,
+          price: shippingPrice,
           quantity: 1,
-          tax: [{ id: 3 }], // IVA 19%
+          tax: [], // Sin impuesto
         });
       } else {
         missingItems.push({ title: 'Envío', variant: null, sku: 'ENVIO' });
@@ -1725,14 +1725,14 @@ const BulkInvoiceCreator = () => {
       }
       
       if (shippingItemId) {
-        // Shipping also includes IVA, divide by 1.19
-        const shippingSinIva = Math.round(Number(shippingCost) / 1.19);
-        console.log(`🔗 Mapeo de envío: Alegra ID ${shippingItemId} (con IVA: ${shippingCost}, sin IVA: ${shippingSinIva})`);
+        // Shipping does NOT have tax - use full price without IVA calculation
+        const shippingPrice = Math.round(Number(shippingCost));
+        console.log(`🔗 Mapeo de envío: Alegra ID ${shippingItemId} (sin impuesto: ${shippingPrice})`);
         items.push({
           id: shippingItemId,
-          price: shippingSinIva,
+          price: shippingPrice,
           quantity: 1,
-          tax: [{ id: 3 }], // IVA 19%
+          tax: [], // Sin impuesto
         });
       } else {
         missingItems.push({ title: 'Envío', variant: null, sku: 'ENVIO' });
