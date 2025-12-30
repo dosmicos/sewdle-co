@@ -820,7 +820,8 @@ const BulkInvoiceCreator = () => {
   };
 
   const toggleAll = () => {
-    const selectableOrders = getFilteredOrders.filter(o => !o.alegra_stamped);
+    // Exclude orders that are stamped OR already have an invoice number
+    const selectableOrders = getFilteredOrders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
     if (selectedOrders.size === selectableOrders.length) {
       setSelectedOrders(new Set());
     } else {
@@ -833,9 +834,11 @@ const BulkInvoiceCreator = () => {
     
     // Filter by status
     if (filterStatus === 'pending') {
-      filtered = filtered.filter(o => !o.alegra_stamped);
+      // Pending = no stamped AND no invoice number
+      filtered = filtered.filter(o => !o.alegra_stamped && !o.alegra_invoice_number);
     } else if (filterStatus === 'stamped') {
-      filtered = filtered.filter(o => o.alegra_stamped);
+      // Stamped = has invoice number OR is stamped
+      filtered = filtered.filter(o => o.alegra_stamped || o.alegra_invoice_number);
     }
     
     // Filter by search term
@@ -854,9 +857,9 @@ const BulkInvoiceCreator = () => {
     return filtered;
   }, [orders, filterStatus, searchTerm]);
 
-  // Compute valid selected count - only count orders that exist and are not stamped
+  // Compute valid selected count - only count orders that exist, are not stamped, and don't have an invoice number
   const validSelectedCount = useMemo(() => {
-    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped).map(o => o.id));
+    const validOrderIds = new Set(orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).map(o => o.id));
     return [...selectedOrders].filter(id => validOrderIds.has(id)).length;
   }, [selectedOrders, orders]);
 
@@ -2176,8 +2179,8 @@ const BulkInvoiceCreator = () => {
     await processInvoices(validOrderIds);
   };
 
-  const pendingCount = orders.filter(o => !o.alegra_stamped).length;
-  const stampedCount = orders.filter(o => o.alegra_stamped).length;
+  const pendingCount = orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number).length;
+  const stampedCount = orders.filter(o => o.alegra_stamped || o.alegra_invoice_number).length;
 
   if (isLoading) {
     return (
@@ -2294,10 +2297,13 @@ const BulkInvoiceCreator = () => {
               {paginatedOrders.map(order => {
                 const result = results.get(order.id);
                 const customerName = `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim();
-                const isStamped = order.alegra_stamped || result?.status === 'success' || result?.status === 'already_stamped';
+                // Consider an order as "invoiced" if it has a stamped flag OR if it already has an invoice number
+                const hasExistingInvoice = !!order.alegra_invoice_number;
+                const isStamped = order.alegra_stamped || hasExistingInvoice || result?.status === 'success' || result?.status === 'already_stamped';
                 const cufe = result?.cufe || order.alegra_cufe;
                 const invoiceNumber = result?.invoiceNumber || order.alegra_invoice_number;
                 const currentStatus = result?.status || (isStamped ? 'already_stamped' : 'idle');
+                const pendingCufe = hasExistingInvoice && !order.alegra_cufe && !order.alegra_stamped;
                 const statusInfo = statusLabels[currentStatus];
                 
                 return (
@@ -2328,10 +2334,16 @@ const BulkInvoiceCreator = () => {
                               <Badge variant="outline" className={order.financial_status === 'paid' ? 'text-green-600' : 'text-amber-600'}>
                                 {order.financial_status === 'paid' ? 'Pagado' : 'Contra entrega'}
                               </Badge>
-                              {isStamped && (
+                              {isStamped && order.alegra_cufe && (
                                 <Badge className="bg-green-600">
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   DIAN
+                                </Badge>
+                              )}
+                              {pendingCufe && (
+                                <Badge className="bg-amber-500">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Pendiente CUFE
                                 </Badge>
                               )}
                               {editedOrders.has(order.id) && !isStamped && (
