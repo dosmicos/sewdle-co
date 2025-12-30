@@ -757,13 +757,13 @@ const BulkInvoiceCreator = () => {
     fetchShopifyOrders();
     // Preload Alegra catalog in background for faster invoice creation
     loadAlegraFullCatalog();
+    // Sync pending invoices in background (don't block loading)
+    syncPendingInvoices();
   }, []);
 
   const fetchShopifyOrders = async () => {
     setIsLoading(true);
     try {
-      // Sync pending invoices first (CUFE recovery)
-      await syncPendingInvoices();
       const { data: ordersData, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('*')
@@ -773,23 +773,31 @@ const BulkInvoiceCreator = () => {
 
       if (ordersError) throw ordersError;
 
-      const ordersWithItems: ShopifyOrderForInvoice[] = [];
+      // Batch load ALL line_items in a single query instead of 500 individual queries
+      const orderIds = ordersData?.map(o => o.shopify_order_id) || [];
       
-      for (const order of ordersData || []) {
-        const { data: lineItems } = await supabase
-          .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, quantity, price, total_discount')
-          .eq('shopify_order_id', order.shopify_order_id);
+      const { data: allLineItems } = await supabase
+        .from('shopify_order_line_items')
+        .select('shopify_order_id, id, title, variant_title, sku, quantity, price, total_discount')
+        .in('shopify_order_id', orderIds);
 
-        ordersWithItems.push({
-          ...order,
-          total_discounts: order.total_discounts || 0,
-          line_items: (lineItems || []).map(item => ({
-            ...item,
-            total_discount: item.total_discount || 0
-          }))
-        });
+      // Group line_items by order using a Map for O(1) lookups
+      const lineItemsByOrder = new Map<number, any[]>();
+      for (const item of allLineItems || []) {
+        const existing = lineItemsByOrder.get(item.shopify_order_id) || [];
+        existing.push(item);
+        lineItemsByOrder.set(item.shopify_order_id, existing);
       }
+
+      // Build ordersWithItems without additional queries
+      const ordersWithItems: ShopifyOrderForInvoice[] = (ordersData || []).map(order => ({
+        ...order,
+        total_discounts: order.total_discounts || 0,
+        line_items: (lineItemsByOrder.get(order.shopify_order_id) || []).map(item => ({
+          ...item,
+          total_discount: item.total_discount || 0
+        }))
+      }));
 
       setOrders(ordersWithItems);
       
