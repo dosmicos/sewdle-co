@@ -3748,6 +3748,10 @@ export type Database = {
         Args: { tags: string }
         Returns: string
       }
+      mark_delivery_as_synced: {
+        Args: { p_delivery_id: string }
+        Returns: number
+      }
       mark_password_changed: { Args: { user_uuid: string }; Returns: undefined }
       migrate_ruana_mapache_variants: { Args: never; Returns: Json }
       migrate_sleeping_walker_dinosaurios_variants: {
