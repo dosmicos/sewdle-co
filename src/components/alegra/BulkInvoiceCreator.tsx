@@ -768,8 +768,9 @@ const BulkInvoiceCreator = () => {
         .from('shopify_orders')
         .select('*')
         .in('financial_status', ['paid', 'pending'])
+        .gte('created_at_shopify', '2025-12-01T00:00:00Z')
         .order('created_at_shopify', { ascending: false })
-        .limit(500);
+        .limit(3000);
 
       if (ordersError) throw ordersError;
 
@@ -2285,6 +2286,9 @@ const BulkInvoiceCreator = () => {
           />
           <span className="text-sm text-muted-foreground">
             {validSelectedCount} seleccionados (pág. {currentPage}/{totalPages})
+          </span>
+          <span className="text-xs text-muted-foreground border-l pl-3">
+            Desde 1 dic 2025
           </span>
           <Button variant="ghost" size="sm" onClick={fetchShopifyOrders} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
