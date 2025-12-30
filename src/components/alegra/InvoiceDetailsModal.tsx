@@ -218,16 +218,17 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                                     email?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
                                     '';
 
-      // Calcular factor de descuento proporcional basado en subtotal
-      // subtotal_price ya tiene los descuentos aplicados
-      const itemsTotalOriginal = order.line_items.reduce(
+      // Calcular subtotal real de los line_items actuales
+      const itemsTotalFromLineItems = order.line_items.reduce(
         (sum, item) => sum + (Number(item.price) * item.quantity), 0
       );
-      const discountFactor = itemsTotalOriginal > 0 
-        ? Number(order.subtotal_price) / itemsTotalOriginal 
-        : 1;
       
-      const hasDiscount = discountFactor < 0.999; // Tiene descuento si el factor es menor a 1
+      // Calcular factor de descuento SOLO si hay un descuento real
+      // Si subtotal_price > suma de line_items, hay artículos eliminados (no es descuento)
+      const hasRealDiscount = Number(order.subtotal_price) < itemsTotalFromLineItems - 100;
+      const discountFactor = hasRealDiscount && itemsTotalFromLineItems > 0 
+        ? Number(order.subtotal_price) / itemsTotalFromLineItems 
+        : 1;
 
       // Create base line items with discounted prices
       const baseItems = order.line_items.map(item => {
@@ -239,7 +240,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
           precioFinal = precioFinal - (itemDiscount / item.quantity);
         }
         
-        // Aplicar factor de descuento proporcional
+        // Aplicar factor de descuento proporcional solo si hay descuento real
         precioFinal = precioFinal * discountFactor;
         
         return {
@@ -251,8 +252,20 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
         };
       });
 
-      // Add shipping as a product if exists
-      const shippingCost = order.total_price - order.subtotal_price;
+      // Get shipping from reliable source (shipping_lines in raw_data)
+      const getShippingCost = (): number => {
+        const rawData = (order as any).raw_data;
+        const shippingLines = rawData?.shipping_lines;
+        if (Array.isArray(shippingLines) && shippingLines.length > 0) {
+          return shippingLines.reduce((sum: number, line: any) => 
+            sum + (parseFloat(line.price) || 0), 0);
+        }
+        // Fallback: use difference only if no deleted items detected
+        const diff = order.total_price - order.subtotal_price;
+        return diff > 0 && diff < order.total_price * 0.5 ? diff : 0;
+      };
+      
+      const shippingCost = getShippingCost();
       if (shippingCost > 0) {
         baseItems.push({
           id: 'shipping',
