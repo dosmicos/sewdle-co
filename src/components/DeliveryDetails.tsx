@@ -208,8 +208,12 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
         quality_notes: variantData.reason || null
       };
       
-      // Si estamos en modo re-edición, resetear la sincronización para permitir nueva sincronización
-      if (isReEditingQuality) {
+      // Verificar si la variante ya estaba sincronizada - si es así, resetear sincronización
+      const currentItem = delivery.delivery_items?.find((di: any) => di.id === itemId);
+      const wasAlreadySynced = currentItem?.synced_to_shopify === true;
+      
+      // Resetear sincronización si estamos en modo re-edición O si la variante ya estaba sincronizada
+      if (isReEditingQuality || wasAlreadySynced) {
         updateData.synced_to_shopify = false;
         updateData.sync_attempt_count = 0;
         updateData.sync_error_message = null;
@@ -851,7 +855,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const qualityTotals = getQualityTotals();
   const discrepancies = getDiscrepancies();
   const canEdit = canEditDeliveries && ['pending', 'in_quality'].includes(delivery.status);
-  const canProcessQuality = canEditDeliveries && (['pending', 'in_quality'].includes(delivery.status) || isReEditingQuality);
+  const canProcessQuality = canEditDeliveries && (['pending', 'in_quality', 'approved', 'partial_approved'].includes(delivery.status) || isReEditingQuality);
   const hasDiscrepancies = discrepancies.length > 0;
 
   // Get sorted delivery items
@@ -1149,7 +1153,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                             
                             {/* Botones de acciones por variante */}
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {canSaveVariant && (!item.synced_to_shopify || isReEditingQuality) && (
+                              {canSaveVariant && canEditDeliveries && (
                                 (() => {
                                   const isLast = isLastUnsavedVariant(item.id);
                                   const pendingSync = getPendingSyncVariants().length;
