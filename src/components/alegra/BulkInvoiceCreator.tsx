@@ -1330,27 +1330,9 @@ const BulkInvoiceCreator = () => {
     // Shopify prices include IVA (taxes_included: true), so divide by 1.19 and add tax: [{ id: 3 }] (19% IVA)
     const items: Array<{ id: string; price: number; quantity: number; discount?: number; tax: Array<{ id: number }> }> = [];
     
-    // Calcular el factor de descuento proporcional basado en descuentos a nivel de orden
-    // IMPORTANTE: Detectar si hay items eliminados (subtotal Shopify > suma de items activos)
-    // En ese caso NO aplicar factor, porque el subtotal viejo incluye items que ya no existen
-    const itemsTotalOriginal = order.line_items.reduce(
-      (sum, item) => sum + (Number(item.price) * item.quantity), 0
-    );
-    
-    // Detectar items eliminados: subtotal de Shopify mayor que suma de items activos
-    const hasDeletedItems = Number(order.subtotal_price) > itemsTotalOriginal + 100; // tolerancia 100 COP
-    
-    // Solo aplicar descuento si Shopify subtotal es MENOR que suma de items (descuento real tipo cupón)
-    // Si es mayor o igual, no hay descuento real - usar factor 1
-    const hasRealDiscount = Number(order.subtotal_price) < itemsTotalOriginal - 100;
-    const discountFactor = hasRealDiscount && itemsTotalOriginal > 0
-      ? Number(order.subtotal_price) / itemsTotalOriginal
-      : 1;
-    
-    if (hasDeletedItems) {
-      console.log(`⚠️ Items eliminados detectados. Subtotal Shopify ($${order.subtotal_price}) > Items activos ($${itemsTotalOriginal}). Usando factor=1`);
-    }
-    console.log(`📊 Cálculo de descuento: Original=$${itemsTotalOriginal}, Subtotal=$${order.subtotal_price}, Factor=${discountFactor.toFixed(4)}, hasDeletedItems=${hasDeletedItems}, hasRealDiscount=${hasRealDiscount}`);
+    // NO discountFactor - use ONLY item.total_discount to avoid double discounts
+    // The total_discount on each line item already contains ALL the discount
+    console.log(`📊 Procesando ${order.line_items.length} items para orden ${order.order_number}`);
     
     for (const item of order.line_items) {
       const productTitle = item.title;
@@ -1385,25 +1367,20 @@ const BulkInvoiceCreator = () => {
       }
       
       if (alegraItemId) {
-        // 1. Precio original del item (sin descuento)
+        // 1. Precio original del item
         const precioOriginal = Number(item.price);
         
-        // 2. Calcular descuento específico del line item
+        // 2. Calcular precio final usando SOLO el descuento del line item
+        // NO usar discountFactor - eso causaba doble descuento
         const itemDiscount = item.total_discount || 0;
-        const precioConDescuentoItem = itemDiscount > 0 
-          ? precioOriginal - (itemDiscount / item.quantity) 
-          : precioOriginal;
+        const precioFinal = precioOriginal - (itemDiscount / item.quantity);
         
-        // 3. Calcular descuento total combinado (item + orden)
-        // discountFactor ya incluye el descuento proporcional de la orden
-        const precioFinal = precioConDescuentoItem * discountFactor;
-        
-        // 4. Calcular porcentaje de descuento total para Alegra
-        const discountPercentage = precioOriginal > 0 
+        // 3. Calcular porcentaje de descuento para Alegra
+        const discountPercentage = precioOriginal > 0 && itemDiscount > 0
           ? Math.round((1 - (precioFinal / precioOriginal)) * 100 * 100) / 100 
           : 0;
         
-        // 5. Precio ORIGINAL sin IVA (Alegra aplicará el descuento)
+        // 4. Precio ORIGINAL sin IVA (Alegra aplicará el descuento)
         const precioOriginalSinIva = Math.round(precioOriginal / 1.19);
         
         console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (original: $${precioOriginal}, descuento: ${discountPercentage}%, sin IVA: $${precioOriginalSinIva})`);
@@ -1802,17 +1779,8 @@ const BulkInvoiceCreator = () => {
     // Build items - ALL items MUST have an Alegra catalog ID
     const items: Array<{ id: string; price: number; quantity: number; discount?: number; tax: Array<{ id: number }> }> = [];
     
-    // Calcular factor de descuento solo si usamos datos originales (no editados)
-    let discountFactor = 1;
-    if (!useEditedData) {
-      const itemsTotalOriginal = order.line_items.reduce(
-        (sum, item) => sum + (Number(item.price) * item.quantity), 0
-      );
-      discountFactor = itemsTotalOriginal > 0 
-        ? Number(order.subtotal_price) / itemsTotalOriginal 
-        : 1;
-      console.log(`📊 Cálculo de descuento: Original=$${itemsTotalOriginal}, Subtotal=$${order.subtotal_price}, Factor=${discountFactor.toFixed(4)}`);
-    }
+    // NO discountFactor - use ONLY item.total_discount to avoid double discounts
+    console.log(`📊 Procesando ${sourceItems.length} items para orden ${order.order_number} (editedData: ${useEditedData})`);
     
     for (const item of sourceItems) {
       // Check if it's an edited item (has 'title') or Shopify line item
@@ -1860,16 +1828,12 @@ const BulkInvoiceCreator = () => {
         let discountPercentage = 0;
         
         if (!useEditedData) {
-          // Datos originales: calcular descuento combinado (línea + orden)
+          // Datos originales: usar SOLO el descuento del line item (NO discountFactor)
           const itemDiscount = (item as any).total_discount || 0;
-          const precioConDescuentoItem = itemDiscount > 0 
-            ? precioOriginal - (itemDiscount / item.quantity) 
-            : precioOriginal;
-          const precioFinal = precioConDescuentoItem * discountFactor;
-          
-          discountPercentage = precioOriginal > 0 
-            ? Math.round((1 - (precioFinal / precioOriginal)) * 100 * 100) / 100 
-            : 0;
+          if (itemDiscount > 0 && precioOriginal > 0) {
+            const precioFinal = precioOriginal - (itemDiscount / item.quantity);
+            discountPercentage = Math.round((1 - (precioFinal / precioOriginal)) * 100 * 100) / 100;
+          }
         }
         // Si son datos editados, no hay descuento adicional (el usuario ya ajustó el precio)
         

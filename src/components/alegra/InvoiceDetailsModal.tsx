@@ -218,36 +218,21 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                                     email?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15) || 
                                     '';
 
-      // Calcular subtotal real de los line_items actuales
-      const itemsTotalFromLineItems = order.line_items.reduce(
-        (sum, item) => sum + (Number(item.price) * item.quantity), 0
-      );
-      
-      // Calcular factor de descuento SOLO si hay un descuento real
-      // Si subtotal_price > suma de line_items, hay artículos eliminados (no es descuento)
-      const hasRealDiscount = Number(order.subtotal_price) < itemsTotalFromLineItems - 100;
-      const discountFactor = hasRealDiscount && itemsTotalFromLineItems > 0 
-        ? Number(order.subtotal_price) / itemsTotalFromLineItems 
-        : 1;
-
-      // Create base line items with discounted prices
+      // Create base line items with ONLY the item-level discount
+      // NO discountFactor - that was causing double discounts
+      // The item.total_discount already contains ALL the discount for that item
       const baseItems = order.line_items.map(item => {
-        let precioFinal = Number(item.price);
+        const precioOriginal = Number(item.price);
         
-        // Aplicar descuento específico del line item (si existe)
+        // Apply ONLY the line item discount (total_discount is the total discount for all units)
         const itemDiscount = (item as any).total_discount || 0;
-        if (itemDiscount > 0) {
-          precioFinal = precioFinal - (itemDiscount / item.quantity);
-        }
-        
-        // Aplicar factor de descuento proporcional solo si hay descuento real
-        precioFinal = precioFinal * discountFactor;
+        const precioFinal = precioOriginal - (itemDiscount / item.quantity);
         
         return {
           id: item.id,
           title: `${item.title}${item.variant_title ? ' - ' + item.variant_title : ''}`,
           quantity: item.quantity,
-          price: Math.round(precioFinal), // Precio con descuento aplicado
+          price: Math.round(precioFinal), // Price with only item discount applied
           isShipping: false,
         };
       });
