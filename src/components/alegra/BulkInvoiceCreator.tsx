@@ -1631,8 +1631,8 @@ const BulkInvoiceCreator = () => {
         console.log(`🏷️ Agregando etiqueta FACTURADO a orden ${order.order_number}`);
         await addFacturadoTag(order.shopify_order_id);
         
-        // Registrar pago automáticamente si el pedido está pagado
-        if (order.financial_status === 'paid') {
+        // Registrar pago automáticamente si el pedido está pagado Y tenemos ID de factura
+        if (order.financial_status === 'paid' && stampedInvoice?.id) {
           try {
             console.log(`💰 Registrando pago para factura ${invoiceNumber}`);
             const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('alegra-api', {
@@ -1657,6 +1657,8 @@ const BulkInvoiceCreator = () => {
           } catch (paymentErr) {
             console.error('⚠️ Error al registrar pago:', paymentErr);
           }
+        } else if (order.financial_status === 'paid' && !stampedInvoice?.id) {
+          console.warn(`⚠️ No se pudo registrar pago: stampedInvoice sin ID`, JSON.stringify(stampedInvoice));
         }
         
         toast.success(`Factura ${invoiceNumber} emitida exitosamente`);
@@ -2095,8 +2097,8 @@ const BulkInvoiceCreator = () => {
                 
                 await addFacturadoTag(matchingItem.order.shopify_order_id);
                 
-                // Registrar pago automáticamente si el pedido está pagado
-                if (matchingItem.order.financial_status === 'paid') {
+                // Registrar pago automáticamente si el pedido está pagado Y tenemos ID de factura
+                if (matchingItem.order.financial_status === 'paid' && stampedInvoice?.id) {
                   try {
                     console.log(`💰 Registrando pago para factura ${invoiceNumber}`);
                     const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('alegra-api', {
@@ -2120,8 +2122,9 @@ const BulkInvoiceCreator = () => {
                     }
                   } catch (paymentErr) {
                     console.error('⚠️ Error al registrar pago:', paymentErr);
-                    // No bloquear el proceso, solo advertir
                   }
+                } else if (matchingItem.order.financial_status === 'paid' && !stampedInvoice?.id) {
+                  console.warn(`⚠️ No se pudo registrar pago: stampedInvoice sin ID`, JSON.stringify(stampedInvoice));
                 }
               }
             }
