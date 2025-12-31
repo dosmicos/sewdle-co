@@ -101,11 +101,12 @@ const extractKeywords = (name: string): string[] => {
 };
 
 // Calculate similarity score between two sets of keywords
+// keywords1 = Shopify, keywords2 = Alegra
 const calculateSimilarity = (keywords1: string[], keywords2: string[]): number => {
   if (keywords1.length === 0 || keywords2.length === 0) return 0;
   
-  const set1 = new Set(keywords1);
-  const set2 = new Set(keywords2);
+  const set1 = new Set(keywords1); // Shopify
+  const set2 = new Set(keywords2); // Alegra
   
   let matchCount = 0;
   for (const word of set1) {
@@ -123,17 +124,34 @@ const calculateSimilarity = (keywords1: string[], keywords2: string[]): number =
     }
   }
   
+  // PENALIZACIÓN: Palabras en Alegra que NO están en Shopify
+  // Esto evita matchear "Osito" con "Osito Balú" porque "Balú" no está en Shopify
+  let extraWordsPenalty = 0;
+  for (const word of set2) {
+    if (!set1.has(word) && word.length > 3) {
+      // Verificar que tampoco sea substring de alguna palabra de Shopify
+      const isPartialMatch = [...set1].some(w => w.includes(word) || word.includes(w));
+      if (!isPartialMatch) {
+        extraWordsPenalty += 0.25; // Penalizar por cada palabra extra significativa
+        console.log(`⚠️ Penalización por palabra extra en Alegra: "${word}"`);
+      }
+    }
+  }
+  
   // Jaccard-like score weighted by match quality
   const union = new Set([...set1, ...set2]).size;
-  return matchCount / union;
+  const rawScore = matchCount / union;
+  
+  // Aplicar penalización
+  return Math.max(0, rawScore - extraWordsPenalty);
 };
 
 // Find best matching Alegra item for a Shopify product
 const findBestAlegraMatch = (
   shopifyTitle: string, 
   allAlegraItems: AlegraItem[],
-  minScore: number = 0.3
-): AlegraItem | null => {
+  minScore: number = 0.5 // Aumentado de 0.3 a 0.5 para evitar matches incorrectos
+): { item: AlegraItem; score: number } | null => {
   const shopifyKeywords = extractKeywords(shopifyTitle);
   
   if (shopifyKeywords.length === 0) return null;
@@ -153,9 +171,10 @@ const findBestAlegraMatch = (
   
   if (bestMatch) {
     console.log(`🔍 Auto-match: "${shopifyTitle}" → "${bestMatch.name}" (score: ${bestScore.toFixed(2)})`);
+    return { item: bestMatch, score: bestScore };
   }
   
-  return bestMatch;
+  return null;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -675,13 +694,16 @@ const BulkInvoiceCreator = () => {
     // Build full title for matching
     const fullTitle = variantTitle ? `${productTitle} ${variantTitle}` : productTitle;
     
-    const match = findBestAlegraMatch(fullTitle, alegraItems);
-    if (!match) return null;
+    const matchResult = findBestAlegraMatch(fullTitle, alegraItems);
+    if (!matchResult) return null;
     
-    // Auto-save mapping for future use (ignore if already exists)
+    const { item: match, score: matchScore } = matchResult;
+    
+    // Auto-save mapping for future use SOLO si el score es alto (>0.80)
+    // Esto evita guardar mapeos incorrectos como "Osito" → "Osito Balú"
     try {
       const { data: orgData } = await supabase.rpc('get_current_organization_safe');
-      if (orgData) {
+      if (orgData && matchScore > 0.80) {
         // Check if mapping already exists
         const { data: existing } = await supabase
           .from('alegra_product_mapping')
@@ -700,8 +722,10 @@ const BulkInvoiceCreator = () => {
             alegra_item_id: match.id,
             alegra_item_name: match.name
           });
-          console.log(`💾 Auto-guardado mapeo: "${productTitle}" → "${match.name}"`);
+          console.log(`💾 Auto-guardado mapeo (score: ${matchScore.toFixed(2)}): "${productTitle}" → "${match.name}"`);
         }
+      } else if (orgData) {
+        console.log(`⚠️ Match con score bajo (${matchScore.toFixed(2)}), NO se guarda automáticamente: "${productTitle}" → "${match.name}"`);
       }
     } catch (err) {
       console.warn('No se pudo guardar mapeo automático:', err);
