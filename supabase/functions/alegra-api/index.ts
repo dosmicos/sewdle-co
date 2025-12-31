@@ -333,57 +333,109 @@ function normalizeAlegraCOAddress(address: unknown): {
   return out;
 }
 
+// Helper para pausas entre requests
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Códigos de error transitorios que ameritan reintento
+const TRANSIENT_STATUS_CODES = [429, 502, 503, 504];
+
 async function makeAlegraRequest(
   endpoint: string,
   method: string = "GET",
   body?: any,
+  maxRetries: number = 3,
 ) {
   const url = `${ALEGRA_API_URL}${endpoint}`;
+  let lastError: any = null;
 
-  console.log(`Making Alegra API request: ${method} ${url}`);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[Alegra] ${method} ${endpoint} (intento ${attempt}/${maxRetries})`);
 
-  const headers: Record<string, string> = {
-    Authorization: getAlegraAuthHeader(),
-    "Content-Type": "application/json",
-  };
+    const headers: Record<string, string> = {
+      Authorization: getAlegraAuthHeader(),
+      "Content-Type": "application/json",
+    };
 
-  const options: RequestInit = {
-    method,
-    headers,
-  };
+    const options: RequestInit = {
+      method,
+      headers,
+    };
 
-  if (body && method !== "GET") {
-    options.body = JSON.stringify(body);
-    console.log("Request body:", JSON.stringify(body));
+    if (body && method !== "GET") {
+      options.body = JSON.stringify(body);
+      if (attempt === 1) {
+        console.log("Request body:", JSON.stringify(body));
+      }
+    }
+
+    try {
+      const response = await fetch(url, options);
+
+      // Alegra casi siempre responde JSON, pero en errores puntuales puede no hacerlo.
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = await response.text();
+      }
+
+      // Si es error transitorio y no es el último intento, reintentar con backoff
+      if (TRANSIENT_STATUS_CODES.includes(response.status) && attempt < maxRetries) {
+        const retryAfter = response.headers.get('Retry-After');
+        const delayMs = retryAfter 
+          ? parseInt(retryAfter, 10) * 1000 
+          : Math.min(1000 * Math.pow(2, attempt - 1), 8000); // 1s, 2s, 4s, max 8s
+        
+        console.warn(`[Alegra] ${response.status} transitorio. Reintentando en ${delayMs}ms...`);
+        await sleep(delayMs);
+        continue;
+      }
+
+      if (!response.ok) {
+        console.error("Alegra API error:", data);
+
+        // Alegra often returns validation errors under `error: [{ message, code, ... }]`
+        const alegraDetail =
+          (data as any)?.message ||
+          (data as any)?.error?.[0]?.message ||
+          (data as any)?.error?.message ||
+          (typeof data === "string" ? data : undefined);
+
+        // Mensaje más amigable para 503
+        const errorMessage = response.status === 503
+          ? "Alegra no disponible temporalmente. Intenta en 1 minuto."
+          : (alegraDetail || `Error ${response.status} from Alegra API`);
+
+        const err = new Error(errorMessage);
+        (err as any).alegra = data;
+        (err as any).status = response.status;
+        throw err;
+      }
+
+      return data;
+    } catch (fetchError: any) {
+      lastError = fetchError;
+      
+      // Si es un error de red/timeout y no es el último intento, reintentar
+      if (fetchError.name === 'TypeError' && attempt < maxRetries) {
+        const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+        console.warn(`[Alegra] Error de red. Reintentando en ${delayMs}ms...`, fetchError.message);
+        await sleep(delayMs);
+        continue;
+      }
+      
+      // Si ya tiene status (es un error de Alegra), propagar
+      if (fetchError.status) {
+        throw fetchError;
+      }
+      
+      // Error de red en último intento
+      throw fetchError;
+    }
   }
 
-  const response = await fetch(url, options);
-
-  // Alegra casi siempre responde JSON, pero en errores puntuales puede no hacerlo.
-  let data: any = null;
-  try {
-    data = await response.json();
-  } catch {
-    data = await response.text();
-  }
-
-  if (!response.ok) {
-    console.error("Alegra API error:", data);
-
-    // Alegra often returns validation errors under `error: [{ message, code, ... }]`
-    const alegraDetail =
-      (data as any)?.message ||
-      (data as any)?.error?.[0]?.message ||
-      (data as any)?.error?.message ||
-      (typeof data === "string" ? data : undefined);
-
-    const err = new Error(alegraDetail || `Error ${response.status} from Alegra API`);
-    (err as any).alegra = data;
-    (err as any).status = response.status;
-    throw err;
-  }
-
-  return data;
+  // Si salimos del loop sin retornar, lanzar el último error
+  throw lastError || new Error("Error desconocido en Alegra API");
 }
 
 async function putMergedContact(contactId: string, patch: any) {
