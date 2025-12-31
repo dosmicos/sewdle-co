@@ -1304,7 +1304,7 @@ const BulkInvoiceCreator = () => {
     
     // Build items - ALL items MUST have an Alegra catalog ID
     // Shopify prices include IVA (taxes_included: true), so divide by 1.19 and add tax: [{ id: 3 }] (19% IVA)
-    const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
+    const items: Array<{ id: string; price: number; quantity: number; discount?: number; tax: Array<{ id: number }> }> = [];
     
     // Calcular el factor de descuento proporcional basado en descuentos a nivel de orden
     // IMPORTANTE: Detectar si hay items eliminados (subtotal Shopify > suma de items activos)
@@ -1361,26 +1361,33 @@ const BulkInvoiceCreator = () => {
       }
       
       if (alegraItemId) {
-        // 1. Precio original del item
-        let precioFinal = Number(item.price);
+        // 1. Precio original del item (sin descuento)
+        const precioOriginal = Number(item.price);
         
-        // 2. Aplicar descuento específico del line item (si existe)
+        // 2. Calcular descuento específico del line item
         const itemDiscount = item.total_discount || 0;
-        if (itemDiscount > 0) {
-          precioFinal = precioFinal - (itemDiscount / item.quantity);
-        }
+        const precioConDescuentoItem = itemDiscount > 0 
+          ? precioOriginal - (itemDiscount / item.quantity) 
+          : precioOriginal;
         
-        // 3. Aplicar factor de descuento proporcional de la orden
-        precioFinal = precioFinal * discountFactor;
+        // 3. Calcular descuento total combinado (item + orden)
+        // discountFactor ya incluye el descuento proporcional de la orden
+        const precioFinal = precioConDescuentoItem * discountFactor;
         
-        // 4. Dividir por 1.19 para obtener precio sin IVA
-        const precioSinIva = Math.round(precioFinal / 1.19);
+        // 4. Calcular porcentaje de descuento total para Alegra
+        const discountPercentage = precioOriginal > 0 
+          ? Math.round((1 - (precioFinal / precioOriginal)) * 100 * 100) / 100 
+          : 0;
         
-        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (original: $${item.price}, con descuento: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
+        // 5. Precio ORIGINAL sin IVA (Alegra aplicará el descuento)
+        const precioOriginalSinIva = Math.round(precioOriginal / 1.19);
+        
+        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (original: $${precioOriginal}, descuento: ${discountPercentage}%, sin IVA: $${precioOriginalSinIva})`);
         items.push({
           id: alegraItemId,
-          price: precioSinIva,
+          price: precioOriginalSinIva,
           quantity: item.quantity,
+          discount: discountPercentage, // Descuento explícito en %
           tax: [{ id: 3 }], // IVA 19% en Alegra Colombia
         });
       } else {
@@ -1769,7 +1776,7 @@ const BulkInvoiceCreator = () => {
     const missingItems: Array<{ title: string; variant: string | null; sku: string | null }> = [];
     
     // Build items - ALL items MUST have an Alegra catalog ID
-    const items: Array<{ id: string; price: number; quantity: number; tax: Array<{ id: number }> }> = [];
+    const items: Array<{ id: string; price: number; quantity: number; discount?: number; tax: Array<{ id: number }> }> = [];
     
     // Calcular factor de descuento solo si usamos datos originales (no editados)
     let discountFactor = 1;
@@ -1825,26 +1832,32 @@ const BulkInvoiceCreator = () => {
       }
       
       if (alegraItemId) {
-        let precioFinal = Number(item.price);
+        const precioOriginal = Number(item.price);
+        let discountPercentage = 0;
         
         if (!useEditedData) {
-          // Datos originales: aplicar descuento de línea y factor proporcional
+          // Datos originales: calcular descuento combinado (línea + orden)
           const itemDiscount = (item as any).total_discount || 0;
-          if (itemDiscount > 0) {
-            precioFinal = precioFinal - (itemDiscount / item.quantity);
-          }
-          precioFinal = precioFinal * discountFactor;
+          const precioConDescuentoItem = itemDiscount > 0 
+            ? precioOriginal - (itemDiscount / item.quantity) 
+            : precioOriginal;
+          const precioFinal = precioConDescuentoItem * discountFactor;
+          
+          discountPercentage = precioOriginal > 0 
+            ? Math.round((1 - (precioFinal / precioOriginal)) * 100 * 100) / 100 
+            : 0;
         }
-        // Si son datos editados, el precio ya viene correcto del modal
+        // Si son datos editados, no hay descuento adicional (el usuario ya ajustó el precio)
         
-        // Dividir por 1.19 para obtener precio sin IVA
-        const precioSinIva = Math.round(precioFinal / 1.19);
+        // Precio ORIGINAL sin IVA (Alegra aplicará el descuento)
+        const precioOriginalSinIva = Math.round(precioOriginal / 1.19);
         
-        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (precio final: $${precioFinal.toFixed(0)}, sin IVA: $${precioSinIva})`);
+        console.log(`🔗 Mapeo: "${productTitle}" → Alegra ID ${alegraItemId} (original: $${precioOriginal}, descuento: ${discountPercentage}%, sin IVA: $${precioOriginalSinIva})`);
         items.push({
           id: alegraItemId,
-          price: precioSinIva,
+          price: precioOriginalSinIva,
           quantity: item.quantity,
+          discount: discountPercentage, // Descuento explícito en %
           tax: [{ id: 3 }], // IVA 19% en Alegra Colombia
         });
       } else {
