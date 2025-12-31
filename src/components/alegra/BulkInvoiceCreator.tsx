@@ -15,6 +15,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   Receipt, 
   Loader2, 
@@ -192,7 +199,7 @@ const findBestAlegraMatch = (
   return null;
 };
 
-const ITEMS_PER_PAGE = 10;
+const DEFAULT_ITEMS_PER_PAGE = 10;
 
 // Helper function to generate page numbers with ellipsis
 const generatePageNumbers = (currentPage: number, totalPages: number): (number | '...')[] => {
@@ -630,6 +637,7 @@ const BulkInvoiceCreator = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'stamped'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
   
   // Modal state
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<ShopifyOrderForInvoice | null>(null);
@@ -1042,11 +1050,11 @@ const BulkInvoiceCreator = () => {
   }, [selectedOrders, orders]);
 
   // Pagination calculations
-  const totalPages = Math.ceil(getFilteredOrders.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(getFilteredOrders.length / itemsPerPage);
   const paginatedOrders = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return getFilteredOrders.slice(start, start + ITEMS_PER_PAGE);
-  }, [getFilteredOrders, currentPage]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return getFilteredOrders.slice(start, start + itemsPerPage);
+  }, [getFilteredOrders, currentPage, itemsPerPage]);
 
   const updateResult = (orderId: string, result: Partial<InvoiceResult>) => {
     setResults(prev => {
@@ -2699,9 +2707,30 @@ const BulkInvoiceCreator = () => {
                 </PaginationContent>
               </Pagination>
               
-              <p className="text-sm text-muted-foreground text-center">
-                Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, getFilteredOrders.length)} de {getFilteredOrders.length} pedidos
-              </p>
+              <div className="flex items-center justify-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Mostrar:</span>
+                  <Select 
+                    value={itemsPerPage.toString()} 
+                    onValueChange={(v) => {
+                      setItemsPerPage(Number(v));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-20 h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, getFilteredOrders.length)} de {getFilteredOrders.length} pedidos
+                </p>
+              </div>
             </div>
           )}
         </>
