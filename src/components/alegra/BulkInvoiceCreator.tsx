@@ -33,8 +33,23 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
+// Helper para detectar errores 503/rate limit
+const isServiceUnavailableError = (error: any, data: any): boolean => {
+  const errorStr = JSON.stringify({ error, data }).toLowerCase();
+  return errorStr.includes('503') || 
+         errorStr.includes('service unavailable') ||
+         errorStr.includes('no disponible') ||
+         errorStr.includes('rate limit') ||
+         errorStr.includes('too many requests');
+};
+
 // Helper para extraer mensaje de error completo de Edge Function responses
 const extractEdgeFunctionError = async (error: any, data: any, fallbackMessage: string): Promise<string> => {
+  // Detectar 503/rate limit y dar mensaje amigable
+  if (isServiceUnavailableError(error, data)) {
+    return 'Alegra no está disponible temporalmente (sobrecarga o mantenimiento). Espera 1-2 minutos y vuelve a intentar. Tip: emite de a 1-2 facturas por vez.';
+  }
+  
   // Si data tiene el error, usarlo directamente
   if (data?.error) {
     return data.error;
