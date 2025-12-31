@@ -41,6 +41,7 @@ const AlegraProductMapper = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMappings, setIsLoadingMappings] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [mappingSearchTerm, setMappingSearchTerm] = useState('');
   
   // Mapping dialog state
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
@@ -183,6 +184,17 @@ const AlegraProductMapper = () => {
     );
   }, [alegraItems, searchTerm]);
 
+  const filteredMappings = useMemo(() => {
+    if (!mappingSearchTerm) return mappings;
+    const term = mappingSearchTerm.toLowerCase();
+    return mappings.filter(m => 
+      m.shopify_product_title.toLowerCase().includes(term) ||
+      m.alegra_item_name?.toLowerCase().includes(term) ||
+      m.shopify_variant_title?.toLowerCase().includes(term) ||
+      m.shopify_sku?.toLowerCase().includes(term)
+    );
+  }, [mappings, mappingSearchTerm]);
+
   return (
     <div className="space-y-6">
       {/* Existing Mappings */}
@@ -196,7 +208,19 @@ const AlegraProductMapper = () => {
             Productos de Shopify vinculados al catálogo de Alegra
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {mappings.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar en mapeos existentes..."
+                value={mappingSearchTerm}
+                onChange={(e) => setMappingSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+          
           {isLoadingMappings ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -218,7 +242,7 @@ const AlegraProductMapper = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mappings.map(mapping => (
+                {filteredMappings.map(mapping => (
                   <TableRow key={mapping.id}>
                     <TableCell className="font-medium">{mapping.shopify_product_title}</TableCell>
                     <TableCell>{mapping.shopify_variant_title || '-'}</TableCell>
@@ -236,6 +260,7 @@ const AlegraProductMapper = () => {
                         variant="ghost"
                         size="icon"
                         onClick={() => deleteMapping(mapping.id)}
+                        title="Eliminar mapeo"
                       >
                         <Unlink className="h-4 w-4 text-destructive" />
                       </Button>
@@ -244,6 +269,12 @@ const AlegraProductMapper = () => {
                 ))}
               </TableBody>
             </Table>
+          )}
+          
+          {filteredMappings.length === 0 && mappings.length > 0 && mappingSearchTerm && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No se encontraron mapeos para "{mappingSearchTerm}"
+            </p>
           )}
         </CardContent>
       </Card>
