@@ -26,8 +26,10 @@ import {
   HelpCircle,
   UserCheck,
   AlertOctagon,
+  Copy,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useToast } from '@/hooks/use-toast';
 import type { ValidationResult } from '@/components/alegra/InvoiceValidationModal';
 
 export interface BulkValidationResult {
@@ -94,6 +96,16 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
   onManualDeliveryChange,
 }) => {
   const [expandedOrders, setExpandedOrders] = React.useState<Set<string>>(new Set());
+  const { toast } = useToast();
+
+  const copyOrderNumber = (orderNumber: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(orderNumber);
+    toast({
+      title: "Copiado",
+      description: `Número de pedido #${orderNumber} copiado`,
+    });
+  };
 
   // Helper to check if an order is valid (including manual confirmations)
   const isOrderValid = (result: BulkValidationResult) => {
@@ -262,7 +274,16 @@ const BulkValidationResultsModal: React.FC<BulkValidationResultsModalProps> = ({
                           <div className="flex items-center gap-3">
                             {getStatusIcon(result)}
                             <div className="text-left">
-                              <div className="font-medium">#{result.orderNumber}</div>
+                              <div className="flex items-center gap-1">
+                                <span className="font-medium">#{result.orderNumber}</span>
+                                <button
+                                  onClick={(e) => copyOrderNumber(result.orderNumber, e)}
+                                  className="p-1 rounded hover:bg-muted/80 transition-colors"
+                                  title="Copiar número de pedido"
+                                >
+                                  <Copy className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </div>
                               <div className="text-xs text-muted-foreground">
                                 {result.customerName}
                               </div>
