@@ -821,10 +821,17 @@ serve(async (req) => {
         break;
       }
 
-      case "get-invoice":
-        // Get specific invoice
-        result = await makeAlegraRequest(`/invoices/${data.invoiceId}`);
+      case "get-invoice": {
+        // Get specific invoice - supports both data.invoiceId and data.id
+        const invoiceIdForGet = data?.invoiceId || data?.id;
+        if (!invoiceIdForGet) {
+          throw new Error("ID de factura requerido para get-invoice");
+        }
+        console.log(`📄 Obteniendo detalles de factura ${invoiceIdForGet}...`);
+        result = await makeAlegraRequest(`/invoices/${invoiceIdForGet}`);
+        console.info("Alegra API get-invoice completed successfully");
         break;
+      }
 
       case "get-invoice-pdf":
         // Get invoice PDF
@@ -938,17 +945,7 @@ serve(async (req) => {
         break;
       }
 
-      case "get-invoice": {
-        // Get a single invoice by ID to check its current state (CUFE, stamp status, etc.)
-        const invoiceId = data?.id;
-        if (!invoiceId) {
-          throw new Error("ID de factura requerido para get-invoice");
-        }
-        console.log(`📄 Obteniendo detalles de factura ${invoiceId}...`);
-        result = await makeAlegraRequest(`/invoices/${invoiceId}`);
-        console.log(`✅ Factura ${invoiceId} obtenida. CUFE: ${result?.stamp?.cufe || 'N/A'}`);
-        break;
-      }
+      // Duplicate get-invoice case removed - consolidated above at line 824
 
       case "get-resolutions":
         // Get DIAN resolutions
