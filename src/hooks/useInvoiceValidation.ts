@@ -278,35 +278,39 @@ export const validateOrderForInvoice = async (
     }
   }
 
-  // 3. PRICE VALIDATION - Compare invoice total with calculated subtotal from active line_items
-  // Shopify doesn't update subtotal_price when items are deleted, so calculate from line_items
-  const calculatedSubtotal = order.line_items.reduce(
-    (sum, item) => sum + (item.price * item.quantity), 0
-  );
+  // 3. PRICE VALIDATION - Compare invoice total with Shopify expected total
+  // Calculate expected total from line items WITH their discounts applied
+  const calculatedSubtotal = order.line_items.reduce((sum, item) => {
+    const itemDiscount = (item as any).total_discount || 0;
+    const priceWithDiscount = item.price - (itemDiscount / item.quantity);
+    return sum + (priceWithDiscount * item.quantity);
+  }, 0);
   
-  // Use calculated subtotal as the source of truth (not order.subtotal_price)
-  // This handles cases where items were deleted from the order
-  const effectiveSubtotal = calculatedSubtotal;
-  
+  // Invoice total from edited data or from calculated subtotal
   const invoiceTotal = editedData
-    ? editedData.lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    ? editedData.lineItems
+        .filter((item: any) => !item.isShipping)
+        .reduce((sum, item) => sum + (item.price * item.quantity), 0)
     : calculatedSubtotal;
   
-  // Compare invoice total against calculated subtotal from active line_items
-  const priceDifference = Math.abs(invoiceTotal - effectiveSubtotal);
-  const priceMatch = priceDifference <= 100; // $100 COP tolerance for rounding
+  // Compare invoice total against calculated subtotal (with discounts applied)
+  const priceDifference = Math.abs(invoiceTotal - calculatedSubtotal);
+  
+  // Stricter tolerance: $1000 COP max difference, otherwise block
+  const priceMatch = priceDifference <= 1000;
 
   checks.priceCheck = {
     passed: priceMatch,
     invoiceTotal,
-    shopifyTotal: effectiveSubtotal,
+    shopifyTotal: calculatedSubtotal,
     message: priceMatch
-      ? `Total productos: $${effectiveSubtotal.toLocaleString('es-CO')}`
-      : `Diferencia de $${priceDifference.toLocaleString('es-CO')} (Factura: $${invoiceTotal.toLocaleString('es-CO')} vs Calculado: $${effectiveSubtotal.toLocaleString('es-CO')})`,
+      ? `Total productos: $${calculatedSubtotal.toLocaleString('es-CO')}`
+      : `Diferencia de $${priceDifference.toLocaleString('es-CO')} (Factura: $${invoiceTotal.toLocaleString('es-CO')} vs Calculado: $${calculatedSubtotal.toLocaleString('es-CO')})`,
   };
 
   if (!priceMatch) {
-    warnings.push(`El total de la factura ($${invoiceTotal.toLocaleString('es-CO')}) difiere del subtotal calculado ($${effectiveSubtotal.toLocaleString('es-CO')})`);
+    // BLOCK emission if difference is > $1000
+    errors.push(`El total de la factura ($${invoiceTotal.toLocaleString('es-CO')}) difiere significativamente del esperado ($${calculatedSubtotal.toLocaleString('es-CO')}). Diferencia: $${priceDifference.toLocaleString('es-CO')}`);
   }
 
   // 4. PAID ORDER VALIDATION
