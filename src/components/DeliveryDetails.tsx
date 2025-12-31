@@ -42,6 +42,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
   const [syncingVariants, setSyncingVariants] = useState<Set<string>>(new Set());
+  const [editingSyncedVariants, setEditingSyncedVariants] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleBack = (shouldRefresh?: boolean) => {
@@ -155,6 +156,30 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
         }
       }
     }));
+  };
+
+  // Función para detectar si una variante sincronizada tiene cambios pendientes
+  const hasVariantChanges = (itemId: string) => {
+    const item = delivery.delivery_items?.find((di: any) => di.id === itemId);
+    if (!item) return false;
+    
+    const currentData = qualityData.variants[itemId];
+    if (!currentData) return false;
+    
+    const dbApproved = item.quantity_approved || 0;
+    const dbDefective = item.quantity_defective || 0;
+    const dbNotes = item.quality_notes || '';
+    
+    return (
+      currentData.approved !== dbApproved ||
+      currentData.defective !== dbDefective ||
+      (currentData.reason || '') !== dbNotes
+    );
+  };
+
+  // Función para habilitar edición de variante sincronizada
+  const enableSyncedVariantEditing = (itemId: string) => {
+    setEditingSyncedVariants(prev => new Set(prev).add(itemId));
   };
 
   // Función para detectar si es la última variante sin guardar
@@ -1025,8 +1050,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                       <TableHead className="text-center font-semibold text-red-700">Defectuosas</TableHead>
                     </>
                   )}
-                  {canProcessQuality && !isEditing && (
-                    <TableHead className="font-semibold">Observaciones</TableHead>
+                  {((canProcessQuality && !isEditing) || (canEditDeliveries && totals.approved > 0)) && (
+                    <TableHead className="font-semibold">Acciones</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -1096,7 +1121,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                       {(canProcessQuality || totals.approved > 0 || totals.defective > 0) && (
                         <>
                           <TableCell className="text-center">
-                            {canProcessQuality && !isEditing ? (
+                            {(canProcessQuality && !isEditing) || (canEditDeliveries && item.synced_to_shopify && editingSyncedVariants.has(item.id)) ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -1115,7 +1140,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                           </TableCell>
 
                           <TableCell className="text-center">
-                            {canProcessQuality && !isEditing ? (
+                            {(canProcessQuality && !isEditing) || (canEditDeliveries && item.synced_to_shopify && editingSyncedVariants.has(item.id)) ? (
                               <Input
                                 type="number"
                                 min="0"
@@ -1135,7 +1160,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                         </>
                       )}
 
-                      {canProcessQuality && !isEditing && (
+                      {((canProcessQuality && !isEditing) || (canEditDeliveries && item.synced_to_shopify && editingSyncedVariants.has(item.id))) && (
                         <TableCell>
                           <div className="space-y-2">
                             <Textarea
@@ -1153,10 +1178,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                             
                             {/* Botones de acciones por variante */}
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {canSaveVariant && canEditDeliveries && (
+                              {/* Mostrar botón guardar solo si hay cambios o es variante nueva sin guardar */}
+                              {canEditDeliveries && (canSaveVariant || (item.synced_to_shopify && hasVariantChanges(item.id))) && (
                                 (() => {
                                   const isLast = isLastUnsavedVariant(item.id);
                                   const pendingSync = getPendingSyncVariants().length;
+                                  const showSave = !item.synced_to_shopify || hasVariantChanges(item.id);
+                                  
+                                  if (!showSave) return null;
                                   
                                   return (
                                     <Button
@@ -1194,6 +1223,22 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                                 </div>
                               )}
                             </div>
+                          </div>
+                        </TableCell>
+                      )}
+                      
+                      {/* Mostrar lápiz de edición para variantes sincronizadas que no están en modo edición */}
+                      {canEditDeliveries && item.synced_to_shopify && !editingSyncedVariants.has(item.id) && !canProcessQuality && (
+                        <TableCell>
+                          <div className="flex justify-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => enableSyncedVariantEditing(item.id)}
+                              className="text-xs"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       )}
