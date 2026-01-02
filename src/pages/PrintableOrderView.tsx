@@ -59,9 +59,15 @@ const PrintableOrderView = () => {
 
   const shippingAddress = order.raw_data?.shipping_address;
   const paymentGateways = order.raw_data?.payment_gateway_names || [];
-  const isCOD = paymentGateways.some((gateway: string) => 
+  // Check if there are non-COD payment methods (customer paid later with another method)
+  const hasNonCODPayment = paymentGateways.some((gateway: string) => 
+    gateway && !gateway.toLowerCase().includes('cash on delivery')
+  );
+  const hasCODMethod = paymentGateways.some((gateway: string) => 
     gateway && gateway.toLowerCase().includes('cash on delivery')
   );
+  // Only consider COD if has COD method AND no other payment methods
+  const isCOD = hasCODMethod && !hasNonCODPayment;
 
   const formatPaymentMethod = (gateway: string): string => {
     if (gateway.toLowerCase().includes('cash on delivery')) {
@@ -70,9 +76,12 @@ const PrintableOrderView = () => {
     return gateway;
   };
 
-  const paymentMethod = paymentGateways.length > 0 
-    ? formatPaymentMethod(paymentGateways[0]) 
-    : null;
+  // Show actual payment method (non-COD method if customer paid later)
+  const paymentMethod = hasNonCODPayment
+    ? formatPaymentMethod(paymentGateways.find((g: string) => !g.toLowerCase().includes('cash on delivery')) || paymentGateways[0])
+    : paymentGateways.length > 0 
+      ? formatPaymentMethod(paymentGateways[0]) 
+      : null;
 
   return (
     <div className="printable-order mx-auto p-2 bg-white">
