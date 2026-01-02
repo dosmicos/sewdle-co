@@ -922,7 +922,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const orderTags = effectiveOrder.shopify_order?.tags || '';
   const hasContraentregaTag = orderTags.toLowerCase().includes('contraentrega');
   const isPendingPayment = effectiveOrder.shopify_order?.financial_status === 'pending';
-  const isCODOrder = paymentMethod === 'Contraentrega' || isPendingPayment || hasContraentregaTag;
+  
+  // Check if there are any NON-COD payment methods (means customer paid later with another method)
+  const hasNonCODPayment = paymentGateways.some((gateway: string) => 
+    gateway && !gateway.toLowerCase().includes('cash on delivery')
+  );
+  
+  // Only consider it COD if:
+  // 1. Has COD payment method, pending status, or Contraentrega tag
+  // 2. AND does NOT have other payment methods (customer hasn't paid with another method)
+  const hasCODIndicator = paymentMethod === 'Contraentrega' || isPendingPayment || hasContraentregaTag;
+  const isCODOrder = hasCODIndicator && !hasNonCODPayment;
+  
+  // Determine actual payment method to display (show the non-COD method if paid later)
+  const actualPaymentMethod = hasNonCODPayment 
+    ? formatPaymentMethod(paymentGateways.find((g: string) => !g.toLowerCase().includes('cash on delivery')) || paymentGateways[0])
+    : paymentMethod;
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
@@ -973,9 +988,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       Pendiente
                     </Badge>
                   )}
-                  {paymentMethod && (
+                  {actualPaymentMethod && (
                     <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300 text-xs px-2 py-0.5">
-                      💳 {paymentMethod}
+                      💳 {actualPaymentMethod}
                     </Badge>
                   )}
                   {/* Shipping Type Badge - inline on mobile */}
