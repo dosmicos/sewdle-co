@@ -878,6 +878,34 @@ export const useDeliveries = () => {
     }
   };
 
+  const deleteDeliveryItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase
+        .from('delivery_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Variante eliminada",
+        description: "La variante fue eliminada de la entrega",
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting delivery item:', error);
+      toast({
+        title: "Error al eliminar",
+        description: error instanceof Error ? error.message : "No se pudo eliminar la variante",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   return {
     fetchDeliveries,
     fetchDeliveryById,
@@ -887,6 +915,7 @@ export const useDeliveries = () => {
     processQualityReview,
     updateDeliveryQuantities,
     deleteDelivery,
+    deleteDeliveryItem,
     loading
   };
 };

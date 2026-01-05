@@ -8,7 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown, Trash2, Check } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import DeliverySyncStatus from './DeliverySyncStatus';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
@@ -43,6 +54,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
   const [syncingVariants, setSyncingVariants] = useState<Set<string>>(new Set());
   const [editingSyncedVariants, setEditingSyncedVariants] = useState<Set<string>>(new Set());
+  const [editingDeliveredQuantity, setEditingDeliveredQuantity] = useState<string | null>(null);
+  const [tempDeliveredQuantity, setTempDeliveredQuantity] = useState<number>(0);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleBack = (shouldRefresh?: boolean) => {
@@ -53,7 +67,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }
   };
   
-  const { fetchDeliveryById, updateDeliveryQuantities, processQualityReview, loading } = useDeliveries();
+  const { fetchDeliveryById, updateDeliveryQuantities, processQualityReview, deleteDeliveryItem, loading } = useDeliveries();
   const { canEditDeliveries } = useUserContext();
   const { syncApprovedItemsToShopify } = useInventorySync();
   const { toast } = useToast();
@@ -180,6 +194,82 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   // Función para habilitar edición de variante sincronizada
   const enableSyncedVariantEditing = (itemId: string) => {
     setEditingSyncedVariants(prev => new Set(prev).add(itemId));
+  };
+
+  // Funciones para editar cantidad entregada inline
+  const startEditingDeliveredQuantity = (itemId: string, currentQuantity: number) => {
+    setEditingDeliveredQuantity(itemId);
+    setTempDeliveredQuantity(currentQuantity);
+  };
+
+  const cancelEditingDeliveredQuantity = () => {
+    setEditingDeliveredQuantity(null);
+    setTempDeliveredQuantity(0);
+  };
+
+  const saveDeliveredQuantity = async (itemId: string) => {
+    if (tempDeliveredQuantity < 0) {
+      toast({
+        title: "Error",
+        description: "La cantidad no puede ser negativa",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Actualizar cantidad entregada y resetear aprobadas/defectuosas
+      const { error } = await supabase
+        .from('delivery_items')
+        .update({
+          quantity_delivered: tempDeliveredQuantity,
+          quantity_approved: 0,
+          quantity_defective: 0,
+          synced_to_shopify: false,
+          sync_attempt_count: 0,
+          sync_error_message: null
+        })
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Cantidad actualizada",
+        description: "La cantidad entregada fue actualizada. Las cantidades aprobadas/defectuosas fueron reseteadas.",
+      });
+
+      setEditingDeliveredQuantity(null);
+      loadDelivery();
+      onDeliveryUpdated?.();
+    } catch (error) {
+      console.error('Error updating delivered quantity:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la cantidad",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Función para eliminar variante
+  const handleDeleteItem = async (itemId: string) => {
+    setDeletingItemId(itemId);
+    const success = await deleteDeliveryItem(itemId);
+    if (success) {
+      loadDelivery();
+      onDeliveryUpdated?.();
+    }
+    setDeletingItemId(null);
+  };
+
+  // Verificar si se puede eliminar una variante
+  const canDeleteItem = (itemId: string) => {
+    const totalItems = delivery.delivery_items?.length || 0;
+    if (totalItems <= 1) return false; // No eliminar si es la última
+    
+    const item = delivery.delivery_items?.find((di: any) => di.id === itemId);
+    // Solo permitir eliminar si NO está sincronizada con Shopify
+    return item && !item.synced_to_shopify;
   };
 
   // Función para detectar si es la última variante sin guardar
@@ -1111,9 +1201,77 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                             onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
                             className="w-20 mx-auto text-center"
                           />
+                        ) : editingDeliveredQuantity === item.id ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={tempDeliveredQuantity}
+                              onChange={(e) => setTempDeliveredQuantity(parseInt(e.target.value) || 0)}
+                              className="w-16 text-center text-sm"
+                              autoFocus
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              onClick={() => saveDeliveredQuantity(item.id)}
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={cancelEditingDeliveredQuantity}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
                         ) : (
-                          <div className="flex flex-col items-center">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-lg font-bold text-blue-600">{delivered}</span>
+                            {canEditDeliveries && !item.synced_to_shopify && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                onClick={() => startEditingDeliveredQuantity(item.id, delivered)}
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {canEditDeliveries && canDeleteItem(item.id) && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                    disabled={deletingItemId === item.id}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Eliminar variante?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción eliminará la variante "{item.order_items?.product_variants?.products?.name} - {item.order_items?.product_variants?.size}" de la entrega. Esta acción no se puede deshacer.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteItem(item.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </div>
                         )}
                       </TableCell>
