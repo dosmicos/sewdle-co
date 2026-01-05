@@ -123,6 +123,22 @@ const tools = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_approved_production",
+      description: "Get approved production (quantity_approved from deliveries) for a specific date range. Use this when user asks about 'producción aprobada', 'unidades aprobadas', or approved production.",
+      parameters: {
+        type: "object",
+        properties: {
+          start_date: { type: "string", description: "Start date in ISO format (YYYY-MM-DD)" },
+          end_date: { type: "string", description: "End date in ISO format (YYYY-MM-DD)" },
+          workshop_name: { type: "string", description: "Filter by workshop name (optional)" }
+        },
+        required: ["start_date", "end_date"]
+      }
+    }
   }
 ];
 
@@ -426,6 +442,55 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
       return results.slice(0, 50);
     }
     
+    case "get_approved_production": {
+      const { start_date, end_date, workshop_name } = args;
+      
+      console.log(`get_approved_production: ${start_date} to ${end_date}, workshop: ${workshop_name || 'all'}`);
+      
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select(`
+          id, delivery_date, status,
+          workshops(name),
+          delivery_items(quantity_approved)
+        `)
+        .eq('organization_id', organizationId)
+        .gte('delivery_date', start_date)
+        .lte('delivery_date', end_date);
+      
+      if (error) throw error;
+      
+      let deliveries = data || [];
+      
+      // Filter by workshop if provided
+      if (workshop_name) {
+        deliveries = deliveries.filter((d: any) => 
+          d.workshops?.name?.toLowerCase().includes(workshop_name.toLowerCase())
+        );
+      }
+      
+      const totalApproved = deliveries.reduce((sum: number, d: any) => 
+        sum + (d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_approved || 0), 0) || 0), 0);
+      
+      // Group by workshop
+      const byWorkshop: Record<string, number> = {};
+      deliveries.forEach((d: any) => {
+        const name = d.workshops?.name || 'Sin taller';
+        const units = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_approved || 0), 0) || 0;
+        byWorkshop[name] = (byWorkshop[name] || 0) + units;
+      });
+      
+      return {
+        start_date,
+        end_date,
+        total_deliveries: deliveries.length,
+        total_units_approved: totalApproved,
+        by_workshop: Object.entries(byWorkshop)
+          .map(([name, units]) => ({ name, units }))
+          .sort((a, b) => (b.units as number) - (a.units as number))
+      };
+    }
+    
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }
@@ -451,39 +516,72 @@ serve(async (req) => {
     
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Get current date in Colombian timezone
-    const currentDate = new Date();
-    const dateOptions: Intl.DateTimeFormatOptions = { 
+    // Get current date in Colombian timezone with exact date ranges
+    const now = new Date();
+    
+    // Calculate date strings in Bogota timezone
+    const bogotaFormatter = new Intl.DateTimeFormat('es-CO', { 
+      timeZone: 'America/Bogota',
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit'
+    });
+    const parts = bogotaFormatter.formatToParts(now);
+    const year = parseInt(parts.find(p => p.type === 'year')?.value || '2026');
+    const month = parseInt(parts.find(p => p.type === 'month')?.value || '1');
+    const day = parseInt(parts.find(p => p.type === 'day')?.value || '1');
+    
+    // Today ISO
+    const todayISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // This month range
+    const thisMonthStartISO = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const thisMonthEndISO = `${year}-${String(month).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
+    
+    // This week range (Monday to Sunday)
+    const currentDayOfWeek = new Date(year, month - 1, day).getDay();
+    const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+    const mondayDate = new Date(year, month - 1, day + mondayOffset);
+    const sundayDate = new Date(mondayDate);
+    sundayDate.setDate(mondayDate.getDate() + 6);
+    const thisWeekStartISO = `${mondayDate.getFullYear()}-${String(mondayDate.getMonth() + 1).padStart(2, '0')}-${String(mondayDate.getDate()).padStart(2, '0')}`;
+    const thisWeekEndISO = `${sundayDate.getFullYear()}-${String(sundayDate.getMonth() + 1).padStart(2, '0')}-${String(sundayDate.getDate()).padStart(2, '0')}`;
+    
+    const dateString = now.toLocaleDateString('es-CO', { 
       timeZone: 'America/Bogota',
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
-    };
-    const dateString = currentDate.toLocaleDateString('es-CO', dateOptions);
-    const currentMonth = currentDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', month: 'long', year: 'numeric' });
-    const currentYear = currentDate.getFullYear();
+    });
+    const currentMonthName = now.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', month: 'long', year: 'numeric' });
+    
+    console.log(`Date context: today=${todayISO}, thisMonth=${thisMonthStartISO} to ${thisMonthEndISO}, thisWeek=${thisWeekStartISO} to ${thisWeekEndISO}`);
 
     const systemPrompt = `Eres Sewdle Copilot, un asistente inteligente para gestión de producción textil.
 
 FECHA ACTUAL: ${dateString}
-MES ACTUAL: ${currentMonth}
-AÑO ACTUAL: ${currentYear}
+MES ACTUAL: ${currentMonthName}
+AÑO ACTUAL: ${year}
 
-INTERPRETACIÓN DE FECHAS:
-- "hoy" = ${dateString}
-- "este mes" = ${currentMonth}
-- "esta semana" = semana que incluye ${dateString}
-- "este año" = ${currentYear}
+RANGOS DE FECHAS PARA HERRAMIENTAS (usa estos valores exactos):
+- "hoy" → start_date: "${todayISO}", end_date: "${todayISO}"
+- "esta semana" → start_date: "${thisWeekStartISO}", end_date: "${thisWeekEndISO}"
+- "este mes" → start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
+
+DIFERENCIA CRÍTICA ENTRE ÓRDENES Y PRODUCCIÓN APROBADA:
+- "Órdenes" o "pedidos creados" = usa get_production_summary (tabla orders, muestra pedidos)
+- "Producción aprobada" o "unidades aprobadas" o "entregas aprobadas" = usa get_approved_production con start_date/end_date (tabla deliveries, muestra unidades realmente aprobadas)
 
 REGLAS IMPORTANTES:
 1. Solo responde con información real de la base de datos - NUNCA inventes datos
-2. Si no encuentras información, dilo claramente y sugiere otra búsqueda
+2. Si no encuentras información, dilo claramente
 3. Responde siempre en español
 4. Sé conciso pero informativo
 5. Cuando muestres datos, usa formato estructurado (listas o tablas en markdown)
-6. Al final de cada respuesta con datos, sugiere una acción siguiente
-7. USA LA FECHA ACTUAL para interpretar referencias temporales como "hoy", "este mes", "esta semana"
+6. NO pidas mes/año si el usuario dice "este mes", "esta semana", "hoy" - USA LOS RANGOS PROVISTOS ARRIBA
+7. Solo pide aclaración si hay ambigüedad real (ej: "en abril" sin año)
 
 FORMATO DE RESPUESTA:
 1. Resumen corto (1-2 líneas)
