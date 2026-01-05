@@ -139,6 +139,38 @@ const tools = [
         required: ["start_date", "end_date"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_shopify_sales_summary",
+      description: "Get Shopify sales summary for a date range. Use for 'ventas', 'cuánto vendimos', 'órdenes de Shopify', 'cuántas ventas', or any sales metrics questions.",
+      parameters: {
+        type: "object",
+        properties: {
+          start_date: { type: "string", description: "Start date in ISO format (YYYY-MM-DD)" },
+          end_date: { type: "string", description: "End date in ISO format (YYYY-MM-DD)" }
+        },
+        required: ["start_date", "end_date"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_top_selling_products",
+      description: "Get top selling products from Shopify sales. Use for 'producto más vendido', 'productos top', 'best sellers', 'qué producto se vende más', or ranking of products by sales.",
+      parameters: {
+        type: "object",
+        properties: {
+          start_date: { type: "string", description: "Start date in ISO format (YYYY-MM-DD)" },
+          end_date: { type: "string", description: "End date in ISO format (YYYY-MM-DD)" },
+          limit: { type: "number", description: "Number of products to return (default 10)" },
+          metric: { type: "string", description: "'units' (default) for quantity sold, or 'revenue' for total sales value" }
+        },
+        required: ["start_date", "end_date"]
+      }
+    }
   }
 ];
 
@@ -491,6 +523,143 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
       };
     }
     
+    case "get_shopify_sales_summary": {
+      const { start_date, end_date } = args;
+      
+      console.log(`get_shopify_sales_summary: ${start_date} to ${end_date}`);
+      
+      // Query shopify_orders excluding cancelled/refunded
+      const { data: orders, error } = await supabase
+        .from('shopify_orders')
+        .select(`
+          id, shopify_order_id, order_number, total_price, subtotal_price,
+          financial_status, fulfillment_status, created_at_shopify
+        `)
+        .eq('organization_id', organizationId)
+        .gte('created_at_shopify', `${start_date}T00:00:00`)
+        .lte('created_at_shopify', `${end_date}T23:59:59`)
+        .is('cancelled_at', null)
+        .not('financial_status', 'in', '("refunded","voided")');
+      
+      if (error) throw error;
+      
+      const ordersList = orders || [];
+      const totalRevenue = ordersList.reduce((sum: number, o: any) => sum + (parseFloat(o.total_price) || 0), 0);
+      const avgOrderValue = ordersList.length > 0 ? totalRevenue / ordersList.length : 0;
+      
+      // Group by financial status
+      const byStatus: Record<string, { count: number; revenue: number }> = {};
+      ordersList.forEach((o: any) => {
+        const status = o.financial_status || 'unknown';
+        if (!byStatus[status]) {
+          byStatus[status] = { count: 0, revenue: 0 };
+        }
+        byStatus[status].count++;
+        byStatus[status].revenue += parseFloat(o.total_price) || 0;
+      });
+      
+      return {
+        start_date,
+        end_date,
+        total_orders: ordersList.length,
+        total_revenue: Math.round(totalRevenue * 100) / 100,
+        avg_order_value: Math.round(avgOrderValue * 100) / 100,
+        by_financial_status: Object.entries(byStatus).map(([status, data]) => ({
+          status,
+          orders: data.count,
+          revenue: Math.round(data.revenue * 100) / 100
+        }))
+      };
+    }
+    
+    case "get_top_selling_products": {
+      const { start_date, end_date, limit = 10, metric = 'units' } = args;
+      
+      console.log(`get_top_selling_products: ${start_date} to ${end_date}, metric: ${metric}, limit: ${limit}`);
+      
+      // First get valid order IDs (non-cancelled, non-refunded)
+      const { data: validOrders, error: ordersError } = await supabase
+        .from('shopify_orders')
+        .select('id, shopify_order_id')
+        .eq('organization_id', organizationId)
+        .gte('created_at_shopify', `${start_date}T00:00:00`)
+        .lte('created_at_shopify', `${end_date}T23:59:59`)
+        .is('cancelled_at', null)
+        .not('financial_status', 'in', '("refunded","voided")');
+      
+      if (ordersError) throw ordersError;
+      
+      const validOrderIds = (validOrders || []).map((o: any) => o.shopify_order_id);
+      
+      if (validOrderIds.length === 0) {
+        return {
+          start_date,
+          end_date,
+          total_orders: 0,
+          products: [],
+          message: "No hay órdenes de venta en este período"
+        };
+      }
+      
+      // Get line items for valid orders
+      const { data: lineItems, error: itemsError } = await supabase
+        .from('shopify_order_line_items')
+        .select('title, variant_title, quantity, price, sku, shopify_order_id')
+        .in('shopify_order_id', validOrderIds);
+      
+      if (itemsError) throw itemsError;
+      
+      // Aggregate by product
+      const productMap: Record<string, { 
+        title: string; 
+        variant_title: string;
+        units: number; 
+        revenue: number; 
+        orders: Set<number>;
+      }> = {};
+      
+      (lineItems || []).forEach((item: any) => {
+        const key = item.title;
+        if (!productMap[key]) {
+          productMap[key] = { 
+            title: item.title,
+            variant_title: item.variant_title || '',
+            units: 0, 
+            revenue: 0,
+            orders: new Set()
+          };
+        }
+        productMap[key].units += item.quantity || 0;
+        productMap[key].revenue += (item.quantity || 0) * (parseFloat(item.price) || 0);
+        productMap[key].orders.add(item.shopify_order_id);
+      });
+      
+      // Convert to array and sort
+      let products = Object.values(productMap).map(p => ({
+        product: p.title,
+        units_sold: p.units,
+        revenue: Math.round(p.revenue * 100) / 100,
+        orders_count: p.orders.size
+      }));
+      
+      // Sort by metric
+      if (metric === 'revenue') {
+        products.sort((a, b) => b.revenue - a.revenue);
+      } else {
+        products.sort((a, b) => b.units_sold - a.units_sold);
+      }
+      
+      return {
+        start_date,
+        end_date,
+        metric,
+        total_orders: validOrderIds.length,
+        total_units_sold: products.reduce((sum, p) => sum + p.units_sold, 0),
+        total_revenue: Math.round(products.reduce((sum, p) => sum + p.revenue, 0) * 100) / 100,
+        products: products.slice(0, limit)
+      };
+    }
+    
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }
@@ -570,9 +739,14 @@ RANGOS DE FECHAS PARA HERRAMIENTAS (usa estos valores exactos):
 - "esta semana" → start_date: "${thisWeekStartISO}", end_date: "${thisWeekEndISO}"
 - "este mes" → start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
 
-DIFERENCIA CRÍTICA ENTRE ÓRDENES Y PRODUCCIÓN APROBADA:
-- "Órdenes" o "pedidos creados" = usa get_production_summary (tabla orders, muestra pedidos)
-- "Producción aprobada" o "unidades aprobadas" o "entregas aprobadas" = usa get_approved_production con start_date/end_date (tabla deliveries, muestra unidades realmente aprobadas)
+DIFERENCIA CRÍTICA - ELIGE LA HERRAMIENTA CORRECTA:
+1. VENTAS DE SHOPIFY (lo que se vendió a clientes):
+   - "Ventas", "cuánto vendimos", "órdenes de Shopify" → get_shopify_sales_summary
+   - "Producto más vendido", "qué se vendió más", "best sellers" → get_top_selling_products
+   
+2. PRODUCCIÓN (lo que fabrican los talleres):
+   - "Producción aprobada", "unidades aprobadas", "entregas" → get_approved_production
+   - "Órdenes de producción", "pedidos a talleres" → get_production_summary
 
 REGLAS IMPORTANTES:
 1. Solo responde con información real de la base de datos - NUNCA inventes datos

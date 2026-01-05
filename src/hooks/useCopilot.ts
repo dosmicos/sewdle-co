@@ -9,7 +9,7 @@ export interface CopilotMessage {
   timestamp: Date;
 }
 
-const STORAGE_KEY = 'sewdle-copilot-history-v2'; // v2: Reset to fix date interpretation issues
+const STORAGE_KEY = 'sewdle-copilot-history-v3'; // v3: Added Shopify sales tools
 const SUPABASE_URL = "https://ysdcsqsfnckeuafjyrbc.supabase.co";
 
 export function useCopilot() {
