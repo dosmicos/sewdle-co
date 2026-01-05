@@ -451,7 +451,30 @@ serve(async (req) => {
     
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
+    // Get current date in Colombian timezone
+    const currentDate = new Date();
+    const dateOptions: Intl.DateTimeFormatOptions = { 
+      timeZone: 'America/Bogota',
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    const dateString = currentDate.toLocaleDateString('es-CO', dateOptions);
+    const currentMonth = currentDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', month: 'long', year: 'numeric' });
+    const currentYear = currentDate.getFullYear();
+
     const systemPrompt = `Eres Sewdle Copilot, un asistente inteligente para gestión de producción textil.
+
+FECHA ACTUAL: ${dateString}
+MES ACTUAL: ${currentMonth}
+AÑO ACTUAL: ${currentYear}
+
+INTERPRETACIÓN DE FECHAS:
+- "hoy" = ${dateString}
+- "este mes" = ${currentMonth}
+- "esta semana" = semana que incluye ${dateString}
+- "este año" = ${currentYear}
 
 REGLAS IMPORTANTES:
 1. Solo responde con información real de la base de datos - NUNCA inventes datos
@@ -460,6 +483,7 @@ REGLAS IMPORTANTES:
 4. Sé conciso pero informativo
 5. Cuando muestres datos, usa formato estructurado (listas o tablas en markdown)
 6. Al final de cada respuesta con datos, sugiere una acción siguiente
+7. USA LA FECHA ACTUAL para interpretar referencias temporales como "hoy", "este mes", "esta semana"
 
 FORMATO DE RESPUESTA:
 1. Resumen corto (1-2 líneas)
