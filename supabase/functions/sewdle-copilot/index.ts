@@ -100,12 +100,14 @@ const tools = [
     type: "function",
     function: {
       name: "get_workshop_ranking",
-      description: "Get ranking of workshops by performance metric",
+      description: "Get ranking of workshops by performance metric. Use for 'taller que más produjo', 'ranking de talleres', 'taller con más producción'. Supports date filtering for period-specific queries.",
       parameters: {
         type: "object",
         properties: {
           metric: { type: "string", description: "Metric to rank by: 'delays', 'volume', 'quality' (default: volume)" },
-          limit: { type: "number", description: "Top N workshops to return (default 5)" }
+          limit: { type: "number", description: "Top N workshops to return (default 5)" },
+          start_date: { type: "string", description: "Start date YYYY-MM-DD for filtering deliveries (optional)" },
+          end_date: { type: "string", description: "End date YYYY-MM-DD for filtering deliveries (optional)" }
         }
       }
     }
@@ -398,36 +400,61 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
     case "get_workshop_ranking": {
       const metric = args.metric || 'volume';
       const limit = args.limit || 5;
+      const { start_date, end_date } = args;
       
-      const { data: workshops, error } = await supabase
-        .from('workshops')
+      // Build deliveries query with optional date filter
+      let deliveriesQuery = supabase
+        .from('deliveries')
         .select(`
-          id, name,
-          deliveries(
-            id, status, created_at,
-            delivery_items(quantity_delivered, quantity_approved, quantity_defective)
-          )
+          id, delivery_date,
+          workshops!inner(id, name),
+          delivery_items(quantity_delivered, quantity_approved, quantity_defective)
         `)
         .eq('organization_id', organizationId);
       
+      // Apply date filters if provided
+      if (start_date) {
+        deliveriesQuery = deliveriesQuery.gte('delivery_date', start_date);
+      }
+      if (end_date) {
+        deliveriesQuery = deliveriesQuery.lte('delivery_date', end_date);
+      }
+      
+      const { data: deliveries, error } = await deliveriesQuery;
       if (error) throw error;
       
-      const ranked = (workshops || []).map((w: any) => {
-        const deliveries = w.deliveries || [];
-        const totalDelivered = deliveries.reduce((sum: number, d: any) => 
-          sum + (d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_delivered || 0), 0) || 0), 0);
-        const totalDefective = deliveries.reduce((sum: number, d: any) => 
-          sum + (d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_defective || 0), 0) || 0), 0);
-        const qualityRate = totalDelivered > 0 ? ((totalDelivered - totalDefective) / totalDelivered * 100) : 100;
+      console.log(`get_workshop_ranking: period=${start_date || 'all'} to ${end_date || 'all'}, deliveries found: ${deliveries?.length || 0}`);
+      
+      // Group by workshop
+      const workshopStats: Record<string, any> = {};
+      (deliveries || []).forEach((d: any) => {
+        const workshopName = d.workshops?.name || 'Sin taller';
+        const workshopId = d.workshops?.id;
         
-        return {
-          name: w.name,
-          total_deliveries: deliveries.length,
-          total_units: totalDelivered,
-          defective_units: totalDefective,
-          quality_rate: Math.round(qualityRate * 10) / 10
-        };
+        if (!workshopStats[workshopId]) {
+          workshopStats[workshopId] = { 
+            name: workshopName, 
+            total_units: 0, 
+            defective_units: 0, 
+            total_deliveries: 0 
+          };
+        }
+        
+        const delivered = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_delivered || 0), 0) || 0;
+        const defective = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_defective || 0), 0) || 0;
+        
+        workshopStats[workshopId].total_units += delivered;
+        workshopStats[workshopId].defective_units += defective;
+        workshopStats[workshopId].total_deliveries++;
       });
+      
+      // Calculate quality rate and create ranked array
+      const ranked = Object.values(workshopStats).map((w: any) => ({
+        ...w,
+        quality_rate: w.total_units > 0 
+          ? Math.round(((w.total_units - w.defective_units) / w.total_units * 100) * 10) / 10 
+          : 100
+      }));
       
       // Sort by metric
       if (metric === 'volume') {
@@ -435,10 +462,14 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
       } else if (metric === 'quality') {
         ranked.sort((a, b) => b.quality_rate - a.quality_rate);
       } else if (metric === 'delays') {
-        ranked.sort((a, b) => a.total_deliveries - b.total_deliveries); // Less is worse
+        ranked.sort((a, b) => a.total_deliveries - b.total_deliveries);
       }
       
-      return ranked.slice(0, limit);
+      return {
+        period: start_date && end_date ? `${start_date} a ${end_date}` : 'histórico completo',
+        metric,
+        workshops: ranked.slice(0, limit)
+      };
     }
     
     case "get_inventory_status": {
@@ -763,6 +794,12 @@ DIFERENCIA CRÍTICA - ELIGE LA HERRAMIENTA CORRECTA:
 2. PRODUCCIÓN (lo que fabrican los talleres):
    - "Producción aprobada", "unidades aprobadas", "entregas" → get_approved_production
    - "Órdenes de producción", "pedidos a talleres" → get_production_summary
+
+RANKING DE TALLERES CON PERÍODO (IMPORTANTE):
+- "Taller que más produjo este mes" → get_workshop_ranking con start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
+- "Taller con más producción últimos 30 días" → get_workshop_ranking con start_date: "${last30DaysStartISO}", end_date: "${todayISO}"
+- "Ranking de talleres esta semana" → get_workshop_ranking con start_date: "${thisWeekStartISO}", end_date: "${thisWeekEndISO}"
+- "Ranking de talleres" (sin período) → get_workshop_ranking sin fechas (histórico completo)
 
 REGLAS IMPORTANTES:
 1. Solo responde con información real de la base de datos - NUNCA inventes datos
