@@ -717,6 +717,18 @@ serve(async (req) => {
     const thisWeekStartISO = `${mondayDate.getFullYear()}-${String(mondayDate.getMonth() + 1).padStart(2, '0')}-${String(mondayDate.getDate()).padStart(2, '0')}`;
     const thisWeekEndISO = `${sundayDate.getFullYear()}-${String(sundayDate.getMonth() + 1).padStart(2, '0')}-${String(sundayDate.getDate()).padStart(2, '0')}`;
     
+    // Last 7 days range
+    const last7DaysStart = new Date(year, month - 1, day - 7);
+    const last7DaysStartISO = `${last7DaysStart.getFullYear()}-${String(last7DaysStart.getMonth() + 1).padStart(2, '0')}-${String(last7DaysStart.getDate()).padStart(2, '0')}`;
+    
+    // Last 30 days range  
+    const last30DaysStart = new Date(year, month - 1, day - 30);
+    const last30DaysStartISO = `${last30DaysStart.getFullYear()}-${String(last30DaysStart.getMonth() + 1).padStart(2, '0')}-${String(last30DaysStart.getDate()).padStart(2, '0')}`;
+    
+    // Last 90 days range
+    const last90DaysStart = new Date(year, month - 1, day - 90);
+    const last90DaysStartISO = `${last90DaysStart.getFullYear()}-${String(last90DaysStart.getMonth() + 1).padStart(2, '0')}-${String(last90DaysStart.getDate()).padStart(2, '0')}`;
+    
     const dateString = now.toLocaleDateString('es-CO', { 
       timeZone: 'America/Bogota',
       weekday: 'long', 
@@ -726,18 +738,22 @@ serve(async (req) => {
     });
     const currentMonthName = now.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', month: 'long', year: 'numeric' });
     
-    console.log(`Date context: today=${todayISO}, thisMonth=${thisMonthStartISO} to ${thisMonthEndISO}, thisWeek=${thisWeekStartISO} to ${thisWeekEndISO}`);
+    console.log(`Date context: today=${todayISO}, thisMonth=${thisMonthStartISO} to ${thisMonthEndISO}, thisWeek=${thisWeekStartISO} to ${thisWeekEndISO}, last30Days=${last30DaysStartISO}`);
 
     const systemPrompt = `Eres Sewdle Copilot, un asistente inteligente para gestión de producción textil.
 
 FECHA ACTUAL: ${dateString}
 MES ACTUAL: ${currentMonthName}
 AÑO ACTUAL: ${year}
+HOY (ISO): ${todayISO}
 
-RANGOS DE FECHAS PARA HERRAMIENTAS (usa estos valores exactos):
+RANGOS DE FECHAS PARA HERRAMIENTAS (usa estos valores exactos - NO PIDAS FECHAS):
 - "hoy" → start_date: "${todayISO}", end_date: "${todayISO}"
 - "esta semana" → start_date: "${thisWeekStartISO}", end_date: "${thisWeekEndISO}"
 - "este mes" → start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
+- "últimos 7 días" / "última semana" → start_date: "${last7DaysStartISO}", end_date: "${todayISO}"
+- "últimos 30 días" / "último mes" → start_date: "${last30DaysStartISO}", end_date: "${todayISO}"
+- "últimos 90 días" / "últimos 3 meses" → start_date: "${last90DaysStartISO}", end_date: "${todayISO}"
 
 DIFERENCIA CRÍTICA - ELIGE LA HERRAMIENTA CORRECTA:
 1. VENTAS DE SHOPIFY (lo que se vendió a clientes):
@@ -754,8 +770,8 @@ REGLAS IMPORTANTES:
 3. Responde siempre en español
 4. Sé conciso pero informativo
 5. Cuando muestres datos, usa formato estructurado (listas o tablas en markdown)
-6. NO pidas mes/año si el usuario dice "este mes", "esta semana", "hoy" - USA LOS RANGOS PROVISTOS ARRIBA
-7. Solo pide aclaración si hay ambigüedad real (ej: "en abril" sin año)
+6. NUNCA pidas fechas si el usuario usa términos temporales como "hoy", "esta semana", "este mes", "últimos X días", "última semana", "último mes" - TÚ YA TIENES TODOS LOS RANGOS CALCULADOS ARRIBA
+7. Solo pide aclaración si hay ambigüedad real (ej: "en abril" sin especificar año)
 
 FORMATO DE RESPUESTA:
 1. Resumen corto (1-2 líneas)
