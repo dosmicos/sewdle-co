@@ -5,6 +5,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/AppSidebar';
 import { Outlet } from 'react-router-dom';
+import SewdleCopilot from '@/components/copilot/SewdleCopilot';
 
 const MainLayout = () => {
   const { user } = useAuth();
@@ -35,6 +36,7 @@ const MainLayout = () => {
             <Outlet />
           </div>
         </main>
+        <SewdleCopilot />
       </div>
     </SidebarProvider>
   );

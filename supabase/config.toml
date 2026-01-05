@@ -1,5 +1,8 @@
 project_id = "ysdcsqsfnckeuafjyrbc"
 
+[functions.sewdle-copilot]
+verify_jwt = false
+
 [functions.test-shopify-connection]
 verify_jwt = false
 
