@@ -136,13 +136,13 @@ export default function CopilotMessage({ message }: CopilotMessageProps) {
       </div>
       
       <div className={cn(
-        "flex-1 max-w-[85%] rounded-lg px-3 py-2",
+        "flex-1 max-w-[85%] rounded-lg px-3 py-2 border",
         isUser 
-          ? "bg-primary text-primary-foreground" 
-          : "bg-muted"
+          ? "bg-background border-border" 
+          : "bg-muted border-transparent"
       )}>
         {isUser ? (
-          <p className="text-sm">{message.content}</p>
+          <p className="text-sm text-foreground">{message.content}</p>
         ) : (
           <div className="prose prose-sm dark:prose-invert max-w-none">
             {message.content ? renderContent(message.content) : (
