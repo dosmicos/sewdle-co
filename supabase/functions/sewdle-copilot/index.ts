@@ -173,6 +173,23 @@ const tools = [
         required: ["start_date", "end_date"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_deliveries",
+      description: "Search deliveries by product name, status, workshop, or tracking number. Use for 'entregas en revisión', 'entregas pendientes', 'entregas con producto X', 'entregas del taller Y'. IMPORTANTE: Las entregas (deliveries) son los productos físicos que reciben de los talleres para control de calidad, NO las órdenes de producción.",
+      parameters: {
+        type: "object",
+        properties: {
+          product_name: { type: "string", description: "Product name to search for (partial match)" },
+          status: { type: "string", description: "Delivery status: 'pending', 'in_transit', 'in_quality' (en revisión), 'approved', 'completed'" },
+          workshop_name: { type: "string", description: "Workshop name filter" },
+          tracking_number: { type: "string", description: "Delivery tracking number (e.g., DEL-0366)" },
+          limit: { type: "number", description: "Max results (default 10)" }
+        }
+      }
+    }
   }
 ];
 
@@ -691,6 +708,109 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
       };
     }
     
+    case "search_deliveries": {
+      const { product_name, status, workshop_name, tracking_number, limit = 10 } = args;
+      
+      console.log(`search_deliveries: product=${product_name}, status=${status}, workshop=${workshop_name}, tracking=${tracking_number}`);
+      
+      let query = supabase
+        .from('deliveries')
+        .select(`
+          id, tracking_number, status, delivery_date, notes,
+          workshops(name),
+          delivery_items(
+            quantity_delivered, quantity_approved, quantity_defective,
+            order_items(
+              product_variants(
+                sku_variant, color, size,
+                products(name, sku)
+              )
+            )
+          )
+        `)
+        .eq('organization_id', organizationId)
+        .order('delivery_date', { ascending: false })
+        .limit(limit);
+      
+      // Map user-friendly status terms to actual status values
+      if (status) {
+        const statusMap: Record<string, string> = {
+          'en_revision': 'in_quality',
+          'en revisión': 'in_quality',
+          'revision': 'in_quality',
+          'calidad': 'in_quality',
+          'pendiente': 'pending',
+          'transito': 'in_transit',
+          'en_transito': 'in_transit',
+          'aprobada': 'approved',
+          'completada': 'completed'
+        };
+        const actualStatus = statusMap[status.toLowerCase()] || status;
+        query = query.eq('status', actualStatus);
+      }
+      
+      // Filter by tracking number
+      if (tracking_number) {
+        query = query.ilike('tracking_number', `%${tracking_number}%`);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      let deliveries = data || [];
+      
+      // Filter by workshop name if provided (post-query due to nested join)
+      if (workshop_name) {
+        deliveries = deliveries.filter((d: any) => 
+          d.workshops?.name?.toLowerCase().includes(workshop_name.toLowerCase())
+        );
+      }
+      
+      // Filter by product name if provided (post-query filter due to nested structure)
+      if (product_name) {
+        deliveries = deliveries.filter((d: any) => 
+          d.delivery_items?.some((item: any) => 
+            item.order_items?.product_variants?.products?.name?.toLowerCase()
+              .includes(product_name.toLowerCase())
+          )
+        );
+      }
+      
+      console.log(`search_deliveries: found ${deliveries.length} deliveries after filtering`);
+      
+      return deliveries.map((d: any) => {
+        const products = [...new Set(
+          d.delivery_items?.map((item: any) => 
+            item.order_items?.product_variants?.products?.name
+          ).filter(Boolean)
+        )];
+        
+        const totalDelivered = d.delivery_items?.reduce(
+          (s: number, i: any) => s + (i.quantity_delivered || 0), 0
+        ) || 0;
+        
+        const totalApproved = d.delivery_items?.reduce(
+          (s: number, i: any) => s + (i.quantity_approved || 0), 0
+        ) || 0;
+        
+        const totalDefective = d.delivery_items?.reduce(
+          (s: number, i: any) => s + (i.quantity_defective || 0), 0
+        ) || 0;
+        
+        return {
+          tracking_number: d.tracking_number,
+          status: d.status,
+          delivery_date: d.delivery_date,
+          workshop: d.workshops?.name,
+          products: products,
+          total_delivered: totalDelivered,
+          total_approved: totalApproved,
+          total_defective: totalDefective,
+          items_count: d.delivery_items?.length || 0
+        };
+      });
+    }
+    
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }
@@ -792,8 +912,25 @@ DIFERENCIA CRÍTICA - ELIGE LA HERRAMIENTA CORRECTA:
    - "Producto más vendido", "qué se vendió más", "best sellers" → get_top_selling_products
    
 2. PRODUCCIÓN (lo que fabrican los talleres):
-   - "Producción aprobada", "unidades aprobadas", "entregas" → get_approved_production
+   - "Producción aprobada", "unidades aprobadas" → get_approved_production
    - "Órdenes de producción", "pedidos a talleres" → get_production_summary
+
+3. ENTREGAS (productos físicos que llegan de los talleres para control de calidad):
+   - "Entregas en revisión", "entregas en control de calidad" → search_deliveries con status: "in_quality"
+   - "Entregas con producto X" → search_deliveries con product_name
+   - "Entregas del taller Y" → search_deliveries con workshop_name
+   - "Entrega DEL-0366" → search_deliveries con tracking_number
+
+IMPORTANTE - Diferencia entre ÓRDENES y ENTREGAS:
+- ÓRDENES (orders) = pedidos de producción asignados a talleres (usa search_orders)
+- ENTREGAS (deliveries) = productos físicos entregados por talleres para control de calidad (usa search_deliveries)
+
+Estados de entregas para search_deliveries:
+- "pending" = pendiente de envío
+- "in_transit" = en tránsito
+- "in_quality" / "en revisión" / "revision" = en control de calidad
+- "approved" = aprobada
+- "completed" = completada
 
 RANKING DE TALLERES CON PERÍODO (IMPORTANTE):
 - "Taller que más produjo este mes" → get_workshop_ranking con start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
