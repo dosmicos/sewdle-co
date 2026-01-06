@@ -16,7 +16,7 @@ const tools = [
     type: "function",
     function: {
       name: "search_orders",
-      description: "Search orders by product name, status, workshop, or date range. Use this to find specific orders or filter orders.",
+      description: "Search production orders (pedidos de producción). Use for 'órdenes de producción', 'pedidos a talleres'. NOT for deliveries.",
       parameters: {
         type: "object",
         properties: {
@@ -73,7 +73,7 @@ const tools = [
     type: "function",
     function: {
       name: "search_products",
-      description: "Search products by name or SKU",
+      description: "Search products by name or SKU. Returns product info with all variants (sizes, colors, stock).",
       parameters: {
         type: "object",
         properties: {
@@ -100,7 +100,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_workshop_ranking",
-      description: "Get ranking of workshops by performance metric. Use for 'taller que más produjo', 'ranking de talleres', 'taller con más producción'. Supports date filtering for period-specific queries.",
+      description: "Get ranking of workshops by performance metric. Use for 'taller que más produjo', 'ranking de talleres'. Supports date filtering.",
       parameters: {
         type: "object",
         properties: {
@@ -116,7 +116,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_inventory_status",
-      description: "Get inventory status - low stock alerts, stock levels",
+      description: "Get inventory status - low stock alerts, stock levels by variant (color/size)",
       parameters: {
         type: "object",
         properties: {
@@ -130,7 +130,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_approved_production",
-      description: "Get approved production (quantity_approved from deliveries) for a specific date range. Use this when user asks about 'producción aprobada', 'unidades aprobadas', or approved production.",
+      description: "Get approved production (quantity_approved from deliveries) for a date range. Use for 'producción aprobada', 'unidades aprobadas'.",
       parameters: {
         type: "object",
         properties: {
@@ -146,7 +146,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_shopify_sales_summary",
-      description: "Get Shopify sales summary for a date range. Use for 'ventas', 'cuánto vendimos', 'órdenes de Shopify', 'cuántas ventas', or any sales metrics questions.",
+      description: "Get Shopify sales summary for a date range. Use for 'ventas', 'cuánto vendimos', 'órdenes de Shopify'.",
       parameters: {
         type: "object",
         properties: {
@@ -161,7 +161,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_top_selling_products",
-      description: "Get top selling products from Shopify sales. Use for 'producto más vendido', 'productos top', 'best sellers', 'qué producto se vende más', or ranking of products by sales.",
+      description: "Get top selling products from Shopify sales. Use for 'producto más vendido', 'qué producto se vende más'.",
       parameters: {
         type: "object",
         properties: {
@@ -178,7 +178,7 @@ const tools = [
     type: "function",
     function: {
       name: "search_deliveries",
-      description: "Search deliveries by product name, status, workshop, or tracking number. Use for 'entregas en revisión', 'entregas pendientes', 'entregas con producto X', 'entregas del taller Y'. IMPORTANTE: Las entregas (deliveries) son los productos físicos que reciben de los talleres para control de calidad, NO las órdenes de producción.",
+      description: "Search deliveries (entregas físicas de talleres). Use for 'entregas en revisión', 'entregas con producto X', 'entregas del taller Y'. Returns detailed variants with sizes and colors.",
       parameters: {
         type: "object",
         properties: {
@@ -186,8 +186,41 @@ const tools = [
           status: { type: "string", description: "Delivery status: 'pending', 'in_transit', 'in_quality' (en revisión), 'approved', 'completed'" },
           workshop_name: { type: "string", description: "Workshop name filter" },
           tracking_number: { type: "string", description: "Delivery tracking number (e.g., DEL-0366)" },
+          size: { type: "string", description: "Filter by specific size (e.g., '6', '8', '3-4 años')" },
+          color: { type: "string", description: "Filter by specific color" },
           limit: { type: "number", description: "Max results (default 10)" }
         }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_delivery_variants",
+      description: "Get detailed variants (product, color, size, SKU, quantities) in a specific delivery. Use when user asks about specific variants in a delivery, like 'qué variantes tiene la entrega DEL-0366' or 'hay talla 6 en esa entrega'.",
+      parameters: {
+        type: "object",
+        properties: {
+          tracking_number: { type: "string", description: "Delivery tracking number (e.g., DEL-0366)" },
+          product_name: { type: "string", description: "Filter by product name (optional)" }
+        },
+        required: ["tracking_number"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_variant_location",
+      description: "Find where a specific variant (product + size/color) is located - in stock, in orders, in deliveries. Use for 'dónde está la talla 6 de X', 'ubicación de variante'.",
+      parameters: {
+        type: "object",
+        properties: {
+          product_name: { type: "string", description: "Product name to search for" },
+          size: { type: "string", description: "Size to look for (e.g., '6', '8', '3-4 años')" },
+          color: { type: "string", description: "Color to look for (optional)" }
+        },
+        required: ["product_name"]
       }
     }
   }
@@ -367,7 +400,13 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
         category: p.category,
         status: p.status,
         variants_count: p.product_variants?.length || 0,
-        total_stock: p.product_variants?.reduce((s: number, v: any) => s + (v.stock_quantity || 0), 0) || 0
+        total_stock: p.product_variants?.reduce((s: number, v: any) => s + (v.stock_quantity || 0), 0) || 0,
+        variants: p.product_variants?.map((v: any) => ({
+          sku_variant: v.sku_variant,
+          color: v.color,
+          size: v.size,
+          stock: v.stock_quantity || 0
+        })) || []
       }));
     }
     
@@ -510,6 +549,8 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
           product: p.name,
           sku: v.sku_variant,
           variant: `${v.color || ''} ${v.size || ''}`.trim() || 'Default',
+          color: v.color,
+          size: v.size,
           stock: v.stock_quantity || 0,
           low_stock: (v.stock_quantity || 0) < 10
         }))
@@ -709,9 +750,9 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
     }
     
     case "search_deliveries": {
-      const { product_name, status, workshop_name, tracking_number, limit = 10 } = args;
+      const { product_name, status, workshop_name, tracking_number, size, color, limit = 10 } = args;
       
-      console.log(`search_deliveries: product=${product_name}, status=${status}, workshop=${workshop_name}, tracking=${tracking_number}`);
+      console.log(`search_deliveries: product=${product_name}, status=${status}, workshop=${workshop_name}, tracking=${tracking_number}, size=${size}, color=${color}`);
       
       let query = supabase
         .from('deliveries')
@@ -776,14 +817,65 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
         );
       }
       
+      // Helper function to check if a size matches (handles different formats)
+      const sizeMatches = (variantSize: string | null, searchSize: string): boolean => {
+        if (!variantSize || !searchSize) return false;
+        const normalizedVariant = variantSize.toLowerCase().trim();
+        const normalizedSearch = searchSize.toLowerCase().trim();
+        
+        // Direct match
+        if (normalizedVariant === normalizedSearch) return true;
+        
+        // Check if variant contains the search term (e.g., "6 (3-4 años)" contains "6")
+        if (normalizedVariant.includes(normalizedSearch)) return true;
+        
+        // Check if search contains the variant
+        if (normalizedSearch.includes(normalizedVariant)) return true;
+        
+        // Extract just the number from sizes like "6 (3-4 años)"
+        const variantNumber = normalizedVariant.match(/^(\d+)/)?.[1];
+        const searchNumber = normalizedSearch.match(/^(\d+)/)?.[1];
+        if (variantNumber && searchNumber && variantNumber === searchNumber) return true;
+        
+        return false;
+      };
+      
+      // Filter by size if provided
+      if (size) {
+        deliveries = deliveries.filter((d: any) => 
+          d.delivery_items?.some((item: any) => 
+            sizeMatches(item.order_items?.product_variants?.size, size)
+          )
+        );
+      }
+      
+      // Filter by color if provided
+      if (color) {
+        deliveries = deliveries.filter((d: any) => 
+          d.delivery_items?.some((item: any) => 
+            item.order_items?.product_variants?.color?.toLowerCase().includes(color.toLowerCase())
+          )
+        );
+      }
+      
       console.log(`search_deliveries: found ${deliveries.length} deliveries after filtering`);
       
       return deliveries.map((d: any) => {
-        const products = [...new Set(
-          d.delivery_items?.map((item: any) => 
-            item.order_items?.product_variants?.products?.name
-          ).filter(Boolean)
-        )];
+        // Extract detailed variants
+        const variants = d.delivery_items?.map((item: any) => ({
+          product: item.order_items?.product_variants?.products?.name,
+          sku: item.order_items?.product_variants?.products?.sku,
+          color: item.order_items?.product_variants?.color,
+          size: item.order_items?.product_variants?.size,
+          sku_variant: item.order_items?.product_variants?.sku_variant,
+          quantity_delivered: item.quantity_delivered,
+          quantity_approved: item.quantity_approved,
+          quantity_defective: item.quantity_defective
+        })).filter((v: any) => v.product) || [];
+        
+        const uniqueProducts = [...new Set(variants.map((v: any) => v.product))];
+        const uniqueSizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))];
+        const uniqueColors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))];
         
         const totalDelivered = d.delivery_items?.reduce(
           (s: number, i: any) => s + (i.quantity_delivered || 0), 0
@@ -802,13 +894,239 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
           status: d.status,
           delivery_date: d.delivery_date,
           workshop: d.workshops?.name,
-          products: products,
+          products: uniqueProducts,
+          sizes_included: uniqueSizes,
+          colors_included: uniqueColors,
+          variants: variants,
           total_delivered: totalDelivered,
           total_approved: totalApproved,
           total_defective: totalDefective,
           items_count: d.delivery_items?.length || 0
         };
       });
+    }
+    
+    case "get_delivery_variants": {
+      const { tracking_number, product_name } = args;
+      
+      console.log(`get_delivery_variants: tracking=${tracking_number}, product=${product_name}`);
+      
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select(`
+          tracking_number, status, delivery_date,
+          workshops(name),
+          delivery_items(
+            quantity_delivered, quantity_approved, quantity_defective,
+            order_items(
+              quantity,
+              product_variants(
+                sku_variant, color, size,
+                products(name, sku)
+              )
+            )
+          )
+        `)
+        .eq('organization_id', organizationId)
+        .ilike('tracking_number', `%${tracking_number}%`)
+        .single();
+        
+      if (error) {
+        console.log(`get_delivery_variants error:`, error);
+        return { error: `No se encontró la entrega ${tracking_number}` };
+      }
+      
+      const variants = data?.delivery_items?.map((item: any) => ({
+        product: item.order_items?.product_variants?.products?.name,
+        sku: item.order_items?.product_variants?.products?.sku,
+        sku_variant: item.order_items?.product_variants?.sku_variant,
+        color: item.order_items?.product_variants?.color,
+        size: item.order_items?.product_variants?.size,
+        quantity_ordered: item.order_items?.quantity,
+        quantity_delivered: item.quantity_delivered,
+        quantity_approved: item.quantity_approved,
+        quantity_defective: item.quantity_defective
+      })).filter((v: any) => {
+        if (!v.product) return false;
+        if (product_name) {
+          return v.product.toLowerCase().includes(product_name.toLowerCase());
+        }
+        return true;
+      }) || [];
+      
+      const uniqueSizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))];
+      const uniqueColors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))];
+      const uniqueProducts = [...new Set(variants.map((v: any) => v.product).filter(Boolean))];
+      
+      return {
+        tracking_number: data?.tracking_number,
+        status: data?.status,
+        workshop: data?.workshops?.name,
+        delivery_date: data?.delivery_date,
+        variants: variants,
+        summary: {
+          total_variants: variants.length,
+          products: uniqueProducts,
+          sizes_included: uniqueSizes,
+          colors_included: uniqueColors,
+          total_delivered: variants.reduce((s: number, v: any) => s + (v.quantity_delivered || 0), 0),
+          total_approved: variants.reduce((s: number, v: any) => s + (v.quantity_approved || 0), 0)
+        }
+      };
+    }
+    
+    case "find_variant_location": {
+      const { product_name, size, color } = args;
+      
+      console.log(`find_variant_location: product=${product_name}, size=${size}, color=${color}`);
+      
+      // Helper function to check if a size matches
+      const sizeMatches = (variantSize: string | null, searchSize: string): boolean => {
+        if (!variantSize || !searchSize) return !searchSize;
+        const normalizedVariant = variantSize.toLowerCase().trim();
+        const normalizedSearch = searchSize.toLowerCase().trim();
+        if (normalizedVariant === normalizedSearch) return true;
+        if (normalizedVariant.includes(normalizedSearch)) return true;
+        const variantNumber = normalizedVariant.match(/^(\d+)/)?.[1];
+        const searchNumber = normalizedSearch.match(/^(\d+)/)?.[1];
+        if (variantNumber && searchNumber && variantNumber === searchNumber) return true;
+        return false;
+      };
+      
+      const colorMatches = (variantColor: string | null, searchColor: string): boolean => {
+        if (!searchColor) return true;
+        if (!variantColor) return false;
+        return variantColor.toLowerCase().includes(searchColor.toLowerCase());
+      };
+      
+      // 1. Check in inventory (product_variants)
+      const { data: products, error: productError } = await supabase
+        .from('products')
+        .select(`
+          name, sku,
+          product_variants(id, sku_variant, color, size, stock_quantity)
+        `)
+        .eq('organization_id', organizationId)
+        .ilike('name', `%${product_name}%`);
+      
+      if (productError) throw productError;
+      
+      const matchingVariants = (products || []).flatMap((p: any) => 
+        (p.product_variants || [])
+          .filter((v: any) => sizeMatches(v.size, size) && colorMatches(v.color, color))
+          .map((v: any) => ({
+            product: p.name,
+            sku_variant: v.sku_variant,
+            color: v.color,
+            size: v.size,
+            stock: v.stock_quantity || 0,
+            variant_id: v.id
+          }))
+      );
+      
+      // 2. Check in pending/in_progress orders
+      const { data: orders, error: orderError } = await supabase
+        .from('orders')
+        .select(`
+          order_number, status, due_date,
+          order_items(
+            quantity,
+            product_variants(
+              sku_variant, color, size,
+              products(name)
+            )
+          )
+        `)
+        .eq('organization_id', organizationId)
+        .in('status', ['pending', 'in_progress']);
+      
+      if (orderError) throw orderError;
+      
+      const inOrders = (orders || []).flatMap((o: any) => 
+        (o.order_items || [])
+          .filter((item: any) => {
+            const pn = item.product_variants?.products?.name;
+            if (!pn || !pn.toLowerCase().includes(product_name.toLowerCase())) return false;
+            return sizeMatches(item.product_variants?.size, size) && colorMatches(item.product_variants?.color, color);
+          })
+          .map((item: any) => ({
+            order_number: o.order_number,
+            status: o.status,
+            due_date: o.due_date,
+            product: item.product_variants?.products?.name,
+            size: item.product_variants?.size,
+            color: item.product_variants?.color,
+            quantity: item.quantity
+          }))
+      );
+      
+      // 3. Check in deliveries (pending, in_transit, in_quality)
+      const { data: deliveries, error: deliveryError } = await supabase
+        .from('deliveries')
+        .select(`
+          tracking_number, status, delivery_date,
+          workshops(name),
+          delivery_items(
+            quantity_delivered, quantity_approved,
+            order_items(
+              product_variants(
+                sku_variant, color, size,
+                products(name)
+              )
+            )
+          )
+        `)
+        .eq('organization_id', organizationId)
+        .in('status', ['pending', 'in_transit', 'in_quality', 'approved']);
+      
+      if (deliveryError) throw deliveryError;
+      
+      const inDeliveries = (deliveries || []).flatMap((d: any) => 
+        (d.delivery_items || [])
+          .filter((item: any) => {
+            const pn = item.order_items?.product_variants?.products?.name;
+            if (!pn || !pn.toLowerCase().includes(product_name.toLowerCase())) return false;
+            return sizeMatches(item.order_items?.product_variants?.size, size) && 
+                   colorMatches(item.order_items?.product_variants?.color, color);
+          })
+          .map((item: any) => ({
+            tracking_number: d.tracking_number,
+            delivery_status: d.status,
+            workshop: d.workshops?.name,
+            delivery_date: d.delivery_date,
+            product: item.order_items?.product_variants?.products?.name,
+            size: item.order_items?.product_variants?.size,
+            color: item.order_items?.product_variants?.color,
+            quantity_delivered: item.quantity_delivered,
+            quantity_approved: item.quantity_approved
+          }))
+      );
+      
+      return {
+        search_criteria: { product_name, size, color },
+        inventory: {
+          found: matchingVariants.length > 0,
+          variants: matchingVariants,
+          total_stock: matchingVariants.reduce((s: number, v: any) => s + (v.stock || 0), 0)
+        },
+        pending_orders: {
+          found: inOrders.length > 0,
+          items: inOrders,
+          total_quantity: inOrders.reduce((s: number, o: any) => s + (o.quantity || 0), 0)
+        },
+        deliveries: {
+          found: inDeliveries.length > 0,
+          items: inDeliveries,
+          total_delivered: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_delivered || 0), 0),
+          total_approved: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_approved || 0), 0)
+        },
+        summary: {
+          variant_exists: matchingVariants.length > 0,
+          available_stock: matchingVariants.reduce((s: number, v: any) => s + (v.stock || 0), 0),
+          in_production: inOrders.reduce((s: number, o: any) => s + (o.quantity || 0), 0),
+          in_deliveries: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_delivered || 0), 0)
+        }
+      };
     }
     
     default:
@@ -891,68 +1209,215 @@ serve(async (req) => {
     
     console.log(`Date context: today=${todayISO}, thisMonth=${thisMonthStartISO} to ${thisMonthEndISO}, thisWeek=${thisWeekStartISO} to ${thisWeekEndISO}, last30Days=${last30DaysStartISO}`);
 
-    const systemPrompt = `Eres Sewdle Copilot, un asistente inteligente para gestión de producción textil.
+    const systemPrompt = `Eres Sewdle Copilot, un asistente EXPERTO en gestión de producción textil. Tienes conocimiento profundo del modelo de datos y los flujos del negocio.
+
+═══════════════════════════════════════════════════════════════════
+                    📋 MANUAL DEL NEGOCIO SEWDLE
+═══════════════════════════════════════════════════════════════════
+
+🏢 MODELO DE DATOS Y RELACIONES:
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 📦 PRODUCTOS Y VARIANTES                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ products (Producto base)                                         │
+│   - name: nombre del producto (ej: "Ruana de Super Gatica Pink")│
+│   - sku: código único del producto                               │
+│   - category: categoría (ruanas, camisetas, etc.)               │
+│   - status: active, inactive                                     │
+│                                                                  │
+│   └── product_variants (Variantes = Color + Talla)               │
+│         - sku_variant: código único de variante                  │
+│         - color: color de la variante                            │
+│         - size: talla (ej: "6", "8", "6 (3-4 años)")            │
+│         - stock_quantity: inventario disponible actual           │
+│                                                                  │
+│ IMPORTANTE sobre TALLAS:                                         │
+│ - Las tallas pueden aparecer como "6" o "6 (3-4 años)"          │
+│ - Siempre busca coincidencias parciales                          │
+│ - La talla "6" coincide con "6 (3-4 años)"                      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 🏭 ÓRDENES DE PRODUCCIÓN                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ orders (Pedidos de producción asignados a talleres)              │
+│   - order_number: número de orden (ej: "ORD-0001")              │
+│   - status: pending, in_progress, completed, cancelled           │
+│   - due_date: fecha límite de entrega                            │
+│                                                                  │
+│   └── order_items (Líneas de la orden)                           │
+│         - product_variant_id → product_variants                  │
+│         - quantity: cantidad solicitada a fabricar               │
+│                                                                  │
+│   └── workshop_assignments (Asignación a taller)                 │
+│         - workshop_id → workshops                                │
+│         - assigned_date: fecha de asignación                     │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 📦 ENTREGAS (DIFERENTE DE ÓRDENES)                              │
+├─────────────────────────────────────────────────────────────────┤
+│ deliveries (Productos físicos entregados por talleres)           │
+│   - tracking_number: número de seguimiento (ej: "DEL-0366")     │
+│   - status: pending, in_transit, in_quality, approved, completed│
+│   - delivery_date: fecha de entrega                              │
+│   - workshop_id → workshops                                      │
+│                                                                  │
+│   └── delivery_items (Items de la entrega)                       │
+│         - order_item_id → order_items → product_variants        │
+│         - quantity_delivered: unidades físicas entregadas        │
+│         - quantity_approved: aprobadas en control calidad        │
+│         - quantity_defective: rechazadas por defectos           │
+│                                                                  │
+│ ESTADOS DE ENTREGAS:                                             │
+│   • pending = pendiente de envío desde taller                    │
+│   • in_transit = en camino hacia la empresa                      │
+│   • in_quality = EN REVISIÓN / control de calidad               │
+│   • approved = aprobada, lista para inventario                   │
+│   • completed = proceso completo                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 🛒 VENTAS SHOPIFY                                               │
+├─────────────────────────────────────────────────────────────────┤
+│ shopify_orders (Órdenes de clientes en tienda online)           │
+│   - order_number: #1001, #1002...                               │
+│   - total_price: valor total de la venta                         │
+│   - financial_status: paid, pending, refunded...                 │
+│   - fulfillment_status: fulfilled, unfulfilled                   │
+│                                                                  │
+│   └── shopify_order_line_items (Productos vendidos)              │
+│         - title: nombre del producto                             │
+│         - variant_title: variante (color/talla)                  │
+│         - quantity: unidades vendidas                            │
+│         - price: precio unitario                                 │
+│         - sku: código SKU                                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 🏪 TALLERES                                                     │
+├─────────────────────────────────────────────────────────────────┤
+│ workshops (Talleres de confección)                               │
+│   - name: nombre del taller                                      │
+│   - contact_name: nombre del contacto                            │
+│   - phone: teléfono                                              │
+│   - location: ubicación                                          │
+│                                                                  │
+│ workshop_pricing (Precios por producto/taller)                   │
+│   - precio que se paga al taller por unidad producida           │
+│                                                                  │
+│ delivery_payments (Pagos por entregas)                           │
+│   - payment_status: pending, paid                                │
+│   - net_amount: monto neto a pagar                               │
+│                                                                  │
+│ order_advances (Anticipos a talleres)                            │
+│   - amount: monto del anticipo                                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ 📊 MATERIALES E INVENTARIO                                      │
+├─────────────────────────────────────────────────────────────────┤
+│ materials (Materias primas)                                      │
+│   - name, sku, category, unit                                    │
+│   - current_stock: stock actual                                  │
+│                                                                  │
+│ material_inventory (Stock por ubicación)                         │
+│   - location_type: warehouse, workshop                           │
+│   - current_stock: cantidad en esa ubicación                     │
+│                                                                  │
+│ material_deliveries (Entregas de material a talleres)            │
+│   - quantity_delivered: material enviado                         │
+│   - quantity_remaining: material disponible en taller            │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+                    📅 CONTEXTO TEMPORAL
+═══════════════════════════════════════════════════════════════════
 
 FECHA ACTUAL: ${dateString}
 MES ACTUAL: ${currentMonthName}
 AÑO ACTUAL: ${year}
 HOY (ISO): ${todayISO}
 
-RANGOS DE FECHAS PARA HERRAMIENTAS (usa estos valores exactos - NO PIDAS FECHAS):
+RANGOS DE FECHAS PRECALCULADOS (USA ESTOS VALORES EXACTOS):
 - "hoy" → start_date: "${todayISO}", end_date: "${todayISO}"
 - "esta semana" → start_date: "${thisWeekStartISO}", end_date: "${thisWeekEndISO}"
 - "este mes" → start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
-- "últimos 7 días" / "última semana" → start_date: "${last7DaysStartISO}", end_date: "${todayISO}"
-- "últimos 30 días" / "último mes" → start_date: "${last30DaysStartISO}", end_date: "${todayISO}"
-- "últimos 90 días" / "últimos 3 meses" → start_date: "${last90DaysStartISO}", end_date: "${todayISO}"
+- "últimos 7 días" → start_date: "${last7DaysStartISO}", end_date: "${todayISO}"
+- "últimos 30 días" → start_date: "${last30DaysStartISO}", end_date: "${todayISO}"
+- "últimos 90 días" → start_date: "${last90DaysStartISO}", end_date: "${todayISO}"
 
-DIFERENCIA CRÍTICA - ELIGE LA HERRAMIENTA CORRECTA:
-1. VENTAS DE SHOPIFY (lo que se vendió a clientes):
-   - "Ventas", "cuánto vendimos", "órdenes de Shopify" → get_shopify_sales_summary
-   - "Producto más vendido", "qué se vendió más", "best sellers" → get_top_selling_products
+═══════════════════════════════════════════════════════════════════
+                    🔧 GUÍA DE HERRAMIENTAS
+═══════════════════════════════════════════════════════════════════
+
+📊 VENTAS (Shopify - lo que compran los clientes):
+   • "Ventas de hoy/esta semana/este mes" → get_shopify_sales_summary
+   • "Producto más vendido" → get_top_selling_products
+
+🏭 PRODUCCIÓN (lo que fabrican los talleres):
+   • "Producción aprobada" → get_approved_production
+   • "Órdenes de producción" → get_production_summary
+   • "Buscar orden ORD-001" → search_orders
+
+📦 ENTREGAS (productos físicos de talleres → control de calidad):
+   • "Entregas en revisión" → search_deliveries con status: "in_quality"
+   • "Entregas con producto X" → search_deliveries con product_name
+   • "Entregas del taller Y" → search_deliveries con workshop_name
+   • "Entrega DEL-0366" → search_deliveries con tracking_number
+   • "¿Hay talla 6 en entregas?" → search_deliveries con size: "6"
    
-2. PRODUCCIÓN (lo que fabrican los talleres):
-   - "Producción aprobada", "unidades aprobadas" → get_approved_production
-   - "Órdenes de producción", "pedidos a talleres" → get_production_summary
+📋 DETALLES DE VARIANTES EN ENTREGAS:
+   • "¿Qué variantes tiene DEL-0366?" → get_delivery_variants
+   • "Mostrar tallas en entrega X" → get_delivery_variants
+   
+🔍 UBICACIÓN DE VARIANTES:
+   • "¿Dónde está la talla 6 de X?" → find_variant_location
+   • "¿Hay talla 8 en stock/producción?" → find_variant_location
 
-3. ENTREGAS (productos físicos que llegan de los talleres para control de calidad):
-   - "Entregas en revisión", "entregas en control de calidad" → search_deliveries con status: "in_quality"
-   - "Entregas con producto X" → search_deliveries con product_name
-   - "Entregas del taller Y" → search_deliveries con workshop_name
-   - "Entrega DEL-0366" → search_deliveries con tracking_number
+🏪 TALLERES:
+   • "Ranking de talleres" → get_workshop_ranking
+   • "Estadísticas de taller X" → get_workshop_stats
 
-IMPORTANTE - Diferencia entre ÓRDENES y ENTREGAS:
-- ÓRDENES (orders) = pedidos de producción asignados a talleres (usa search_orders)
-- ENTREGAS (deliveries) = productos físicos entregados por talleres para control de calidad (usa search_deliveries)
+📦 INVENTARIO:
+   • "Stock de producto X" → get_inventory_status
+   • "Productos con bajo stock" → get_inventory_status con low_stock_only: true
 
-Estados de entregas para search_deliveries:
-- "pending" = pendiente de envío
-- "in_transit" = en tránsito
-- "in_quality" / "en revisión" / "revision" = en control de calidad
-- "approved" = aprobada
-- "completed" = completada
+═══════════════════════════════════════════════════════════════════
+                    🧠 INSTRUCCIONES DE RAZONAMIENTO
+═══════════════════════════════════════════════════════════════════
 
-RANKING DE TALLERES CON PERÍODO (IMPORTANTE):
-- "Taller que más produjo este mes" → get_workshop_ranking con start_date: "${thisMonthStartISO}", end_date: "${thisMonthEndISO}"
-- "Taller con más producción últimos 30 días" → get_workshop_ranking con start_date: "${last30DaysStartISO}", end_date: "${todayISO}"
-- "Ranking de talleres esta semana" → get_workshop_ranking con start_date: "${thisWeekStartISO}", end_date: "${thisWeekEndISO}"
-- "Ranking de talleres" (sin período) → get_workshop_ranking sin fechas (histórico completo)
+CUANDO BUSQUES VARIANTES ESPECÍFICAS (tallas, colores):
+1. PRIMERO usa search_deliveries con los filtros apropiados (product_name, status, size)
+2. Si la búsqueda devuelve resultados vacíos, usa get_delivery_variants para ver qué variantes SÍ existen
+3. Usa find_variant_location para dar una respuesta completa sobre dónde está la variante
 
-REGLAS IMPORTANTES:
-1. Solo responde con información real de la base de datos - NUNCA inventes datos
-2. Si no encuentras información, dilo claramente
-3. Responde siempre en español
-4. Sé conciso pero informativo
-5. Cuando muestres datos, usa formato estructurado (listas o tablas en markdown)
-6. NUNCA pidas fechas si el usuario usa términos temporales como "hoy", "esta semana", "este mes", "últimos X días", "última semana", "último mes" - TÚ YA TIENES TODOS LOS RANGOS CALCULADOS ARRIBA
-7. Solo pide aclaración si hay ambigüedad real (ej: "en abril" sin especificar año)
+CUANDO NO ENCUENTRES ALGO:
+1. Confirma que buscaste en el lugar correcto
+2. Muestra qué variantes/tallas SÍ existen
+3. Sugiere alternativas si es posible
+
+DIFERENCIA CRÍTICA - NO CONFUNDIR:
+• ÓRDENES (orders) = pedidos de producción → search_orders
+• ENTREGAS (deliveries) = productos físicos recibidos → search_deliveries
+• VENTAS (shopify_orders) = compras de clientes → get_shopify_sales_summary
+
+═══════════════════════════════════════════════════════════════════
+                    📝 REGLAS DE RESPUESTA
+═══════════════════════════════════════════════════════════════════
+
+1. Solo usa información REAL de la base de datos - NUNCA inventes
+2. Responde siempre en español
+3. Sé conciso pero informativo
+4. Usa formato estructurado (tablas markdown o listas)
+5. NO pidas fechas si el usuario usa términos temporales (ya tienes los rangos)
+6. Cuando muestres variantes, incluye: producto, talla, color, cantidad
 
 FORMATO DE RESPUESTA:
 1. Resumen corto (1-2 líneas)
-2. Datos en formato claro (tabla markdown o lista)
-3. Sugerencia de acción (si aplica)
-
-CONTEXTO: Estás ayudando a gestionar órdenes de producción, talleres, entregas e inventario.`;
+2. Datos en formato claro (tabla markdown si hay múltiples items)
+3. Si no encontraste lo buscado, muestra qué SÍ existe`;
 
     const messages = [
       { role: "system", content: systemPrompt },
