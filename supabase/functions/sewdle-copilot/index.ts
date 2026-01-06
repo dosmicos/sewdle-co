@@ -1024,23 +1024,60 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
           }))
       );
       
-      // 2. Check in pending/in_progress orders
+      // 2. Check in active orders (pending, assigned, in_progress)
+      // IMPORTANTE: "assigned" es el estado más común - significa asignado a taller pero sin iniciar
       const { data: orders, error: orderError } = await supabase
         .from('orders')
         .select(`
-          order_number, status, due_date,
+          id, order_number, status, due_date,
           order_items(
-            quantity,
+            id, quantity,
             product_variants(
-              sku_variant, color, size,
+              id, sku_variant, color, size,
               products(name)
             )
           )
         `)
         .eq('organization_id', organizationId)
-        .in('status', ['pending', 'in_progress']);
+        .in('status', ['pending', 'assigned', 'in_progress']);
       
       if (orderError) throw orderError;
+      
+      // Get all order_item_ids that match our criteria
+      const orderItemIds: string[] = [];
+      const orderItemQuantities: { [key: string]: number } = {};
+      
+      (orders || []).forEach((o: any) => {
+        (o.order_items || []).forEach((item: any) => {
+          const pn = item.product_variants?.products?.name;
+          if (pn && pn.toLowerCase().includes(product_name.toLowerCase())) {
+            if (sizeMatches(item.product_variants?.size, size) && colorMatches(item.product_variants?.color, color)) {
+              orderItemIds.push(item.id);
+              orderItemQuantities[item.id] = item.quantity;
+            }
+          }
+        });
+      });
+      
+      // Get delivered quantities for these order items
+      let deliveredByOrderItem: { [key: string]: number } = {};
+      if (orderItemIds.length > 0) {
+        const { data: deliveryItems } = await supabase
+          .from('delivery_items')
+          .select('order_item_id, quantity_delivered')
+          .in('order_item_id', orderItemIds);
+        
+        (deliveryItems || []).forEach((di: any) => {
+          deliveredByOrderItem[di.order_item_id] = (deliveredByOrderItem[di.order_item_id] || 0) + di.quantity_delivered;
+        });
+      }
+      
+      // Build order results with pending quantities
+      const statusLabels: { [key: string]: string } = {
+        'pending': 'Pendiente de asignar',
+        'assigned': 'Asignado a taller',
+        'in_progress': 'En producción activa'
+      };
       
       const inOrders = (orders || []).flatMap((o: any) => 
         (o.order_items || [])
@@ -1049,15 +1086,24 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
             if (!pn || !pn.toLowerCase().includes(product_name.toLowerCase())) return false;
             return sizeMatches(item.product_variants?.size, size) && colorMatches(item.product_variants?.color, color);
           })
-          .map((item: any) => ({
-            order_number: o.order_number,
-            status: o.status,
-            due_date: o.due_date,
-            product: item.product_variants?.products?.name,
-            size: item.product_variants?.size,
-            color: item.product_variants?.color,
-            quantity: item.quantity
-          }))
+          .map((item: any) => {
+            const ordered = item.quantity || 0;
+            const delivered = deliveredByOrderItem[item.id] || 0;
+            const pending = ordered - delivered;
+            return {
+              order_number: o.order_number,
+              status: o.status,
+              status_label: statusLabels[o.status] || o.status,
+              due_date: o.due_date,
+              product: item.product_variants?.products?.name,
+              size: item.product_variants?.size,
+              color: item.product_variants?.color,
+              quantity_ordered: ordered,
+              quantity_delivered: delivered,
+              quantity_pending: pending
+            };
+          })
+          .filter((item: any) => item.quantity_pending > 0) // Only show if there's pending quantity
       );
       
       // 3. Check in deliveries (pending, in_transit, in_quality)
@@ -1109,10 +1155,12 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
           variants: matchingVariants,
           total_stock: matchingVariants.reduce((s: number, v: any) => s + (v.stock || 0), 0)
         },
-        pending_orders: {
+        production_orders: {
           found: inOrders.length > 0,
           items: inOrders,
-          total_quantity: inOrders.reduce((s: number, o: any) => s + (o.quantity || 0), 0)
+          total_ordered: inOrders.reduce((s: number, o: any) => s + (o.quantity_ordered || 0), 0),
+          total_delivered: inOrders.reduce((s: number, o: any) => s + (o.quantity_delivered || 0), 0),
+          total_pending: inOrders.reduce((s: number, o: any) => s + (o.quantity_pending || 0), 0)
         },
         deliveries: {
           found: inDeliveries.length > 0,
@@ -1123,7 +1171,7 @@ async function executeTool(supabase: any, toolName: string, args: any, organizat
         summary: {
           variant_exists: matchingVariants.length > 0,
           available_stock: matchingVariants.reduce((s: number, v: any) => s + (v.stock || 0), 0),
-          in_production: inOrders.reduce((s: number, o: any) => s + (o.quantity || 0), 0),
+          pending_in_production: inOrders.reduce((s: number, o: any) => s + (o.quantity_pending || 0), 0),
           in_deliveries: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_delivered || 0), 0)
         }
       };
@@ -1243,8 +1291,17 @@ serve(async (req) => {
 ├─────────────────────────────────────────────────────────────────┤
 │ orders (Pedidos de producción asignados a talleres)              │
 │   - order_number: número de orden (ej: "ORD-0001")              │
-│   - status: pending, in_progress, completed, cancelled           │
 │   - due_date: fecha límite de entrega                            │
+│                                                                  │
+│ ESTADOS DE ÓRDENES (MUY IMPORTANTE):                              │
+│   • "pending" = Orden creada, sin asignar a taller               │
+│   • "assigned" = ASIGNADO a taller, pendiente de producir        │
+│   • "in_progress" = En producción activa                          │
+│   • "completed" = Producción completada                           │
+│   • "cancelled" = Orden cancelada                                 │
+│                                                                  │
+│ 💡 ÓRDENES "ACTIVAS" incluyen: pending, assigned, in_progress    │
+│    El status MÁS COMÚN es "assigned" - NO ignorarlo!             │
 │                                                                  │
 │   └── order_items (Líneas de la orden)                           │
 │         - product_variant_id → product_variants                  │
