@@ -1,5 +1,5 @@
 import React from 'react';
-import { Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, GraduationCap, Brain, Megaphone, BarChart3 } from 'lucide-react';
+import { Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, GraduationCap, Brain, Megaphone, BarChart3, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -43,8 +43,8 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Header with collapse button */}
-      <div className="flex items-center justify-between p-4 border-b border-emerald-800">
+      {/* Header with collapse button and back button */}
+      <div className="flex items-center justify-between p-4 border-b border-emerald-800 flex-shrink-0">
         {!collapsed && (
           <span className="font-semibold text-sm text-emerald-200">Bandeja</span>
         )}
@@ -60,8 +60,19 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
         </button>
       </div>
 
-      {/* Navigation items */}
-      <nav className="flex-1 py-4">
+      {/* Back to Sewdle button */}
+      <div className="px-2 py-3 border-b border-emerald-800 flex-shrink-0">
+        <a
+          href="/dashboard"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5 flex-shrink-0" />
+          {!collapsed && <span className="text-sm font-medium">Volver a Sewdle</span>}
+        </a>
+      </div>
+
+      {/* Scrollable Navigation items */}
+      <nav className="flex-1 py-4 overflow-y-auto">
         <ul className="space-y-1 px-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -146,7 +157,7 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
       </div>
 
       {/* Footer with config and catalog */}
-      <div className="border-t border-emerald-800 py-4 px-2 space-y-1">
+      <div className="border-t border-emerald-800 py-4 px-2 space-y-1 flex-shrink-0">
         <button
           onClick={() => onNavigate('config')}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
