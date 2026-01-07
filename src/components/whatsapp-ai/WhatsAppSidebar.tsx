@@ -1,5 +1,5 @@
 import React from 'react';
-import { Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, GraduationCap, Brain, Megaphone } from 'lucide-react';
+import { Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, GraduationCap, Brain, Megaphone, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -7,7 +7,7 @@ type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
 interface WhatsAppSidebarProps {
   activeFilter: FilterType;
   onFilterChange: (filter: FilterType) => void;
-  onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns') => void;
+  onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats') => void;
   counts: {
     total: number;
     pending: number;
@@ -102,6 +102,17 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
             );
           })}
         </ul>
+        
+        {/* Stats button */}
+        <div className="mt-4 px-2">
+          <button
+            onClick={() => onNavigate('stats')}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
+          >
+            <BarChart3 className="h-5 w-5 flex-shrink-0" />
+            {!collapsed && <span className="text-sm font-medium">Estadísticas</span>}
+          </button>
+        </div>
       </nav>
 
       {/* AI Training section */}
