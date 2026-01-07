@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Settings, Package, Bot } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { ConversationsList } from '@/components/whatsapp-ai/ConversationsList';
 import { ConversationThread } from '@/components/whatsapp-ai/ConversationThread';
 import { AIConfigPanel } from '@/components/whatsapp-ai/AIConfigPanel';
 import { ProductCatalogConnection } from '@/components/whatsapp-ai/ProductCatalogConnection';
 import { WhatsAppStats } from '@/components/whatsapp-ai/WhatsAppStats';
+import { WhatsAppSidebar } from '@/components/whatsapp-ai/WhatsAppSidebar';
 
-// Mock data for conversations
+type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
+type ViewType = 'conversations' | 'config' | 'catalog';
+
+// Mock data for conversations with varied statuses
 const mockConversations = [
   { 
     id: '1', 
@@ -16,7 +19,7 @@ const mockConversations = [
     name: 'María García', 
     lastMessage: '¿Tienen ruanas disponibles?', 
     unread: 2,
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 5), // 5 min ago
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 5),
     status: 'active' as const
   },
   { 
@@ -25,7 +28,7 @@ const mockConversations = [
     name: 'Carlos López', 
     lastMessage: '¿Cuál es el precio de la ruana azul?', 
     unread: 0,
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 30), // 30 min ago
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 30),
     status: 'resolved' as const
   },
   { 
@@ -34,7 +37,7 @@ const mockConversations = [
     name: 'Ana Martínez', 
     lastMessage: 'Gracias por la información', 
     unread: 0,
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 2),
     status: 'resolved' as const
   },
   { 
@@ -43,7 +46,34 @@ const mockConversations = [
     name: 'Pedro Sánchez', 
     lastMessage: '¿Hacen envíos a Bogotá?', 
     unread: 1,
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 15), // 15 min ago
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 15),
+    status: 'pending' as const
+  },
+  { 
+    id: '5', 
+    phone: '+57 318 111 2222', 
+    name: 'Laura Gómez', 
+    lastMessage: 'No entendí bien el proceso de pago', 
+    unread: 3,
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 8),
+    status: 'pending' as const
+  },
+  { 
+    id: '6', 
+    phone: '+57 319 333 4444', 
+    name: 'Diego Fernández', 
+    lastMessage: 'Perfecto, gracias por todo', 
+    unread: 0,
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 4),
+    status: 'resolved' as const
+  },
+  { 
+    id: '7', 
+    phone: '+57 320 555 6666', 
+    name: 'Sofía Rodríguez', 
+    lastMessage: '¿Tienen servicio de personalización?', 
+    unread: 1,
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 25),
     status: 'pending' as const
   },
 ];
@@ -69,89 +99,134 @@ const mockMessages: Record<string, Array<{ role: 'user' | 'assistant'; content: 
   '4': [
     { role: 'user', content: '¿Hacen envíos a Bogotá?', timestamp: new Date(Date.now() - 1000 * 60 * 15) },
   ],
+  '5': [
+    { role: 'user', content: 'Hola, quiero comprar una ruana', timestamp: new Date(Date.now() - 1000 * 60 * 20) },
+    { role: 'assistant', content: '¡Hola Laura! Con gusto te ayudo. ¿Qué tipo de ruana te interesa?', timestamp: new Date(Date.now() - 1000 * 60 * 18) },
+    { role: 'user', content: 'Una de lana, pero no entendí bien el proceso de pago', timestamp: new Date(Date.now() - 1000 * 60 * 8) },
+  ],
+  '6': [
+    { role: 'user', content: '¿Ya fue enviado mi pedido?', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5) },
+    { role: 'assistant', content: '¡Hola Diego! Sí, tu pedido #2847 fue enviado ayer. El número de seguimiento es: CO789456123. Puedes rastrearlo en la página de Servientrega.', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4.5) },
+    { role: 'user', content: 'Perfecto, gracias por todo', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4) },
+    { role: 'assistant', content: '¡Con gusto! Cualquier otra consulta, aquí estamos. 🙌', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4) },
+  ],
+  '7': [
+    { role: 'user', content: '¿Tienen servicio de personalización?', timestamp: new Date(Date.now() - 1000 * 60 * 25) },
+  ],
 };
 
 const WhatsAppAIPage = () => {
   const [selectedConversation, setSelectedConversation] = useState<string | null>('1');
-  const [activeTab, setActiveTab] = useState('conversations');
+  const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
+  const [activeView, setActiveView] = useState<ViewType>('conversations');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Calculate counts for each filter
+  const counts = useMemo(() => ({
+    total: mockConversations.length,
+    pending: mockConversations.filter(c => c.status === 'pending' || c.status === 'active').length,
+    resolved: mockConversations.filter(c => c.status === 'resolved').length,
+  }), []);
+
+  // Filter conversations based on active filter
+  const filteredConversations = useMemo(() => {
+    switch (activeFilter) {
+      case 'inbox':
+        return mockConversations;
+      case 'needs-help':
+        return mockConversations.filter(c => c.status === 'pending' || c.status === 'active');
+      case 'ai-managed':
+        return mockConversations.filter(c => c.status === 'resolved');
+      default:
+        return mockConversations;
+    }
+  }, [activeFilter]);
 
   const currentMessages = selectedConversation ? mockMessages[selectedConversation] || [] : [];
   const currentConversation = mockConversations.find(c => c.id === selectedConversation);
 
+  const handleNavigate = (section: 'config' | 'catalog') => {
+    setActiveView(section);
+  };
+
+  const handleFilterChange = (filter: FilterType) => {
+    setActiveFilter(filter);
+    setActiveView('conversations');
+    setSelectedConversation(null);
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <WhatsAppSidebar
+        activeFilter={activeFilter}
+        onFilterChange={handleFilterChange}
+        onNavigate={handleNavigate}
+        counts={counts}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 p-6 border-b bg-background">
           <div className="p-2 rounded-lg bg-green-100">
             <Bot className="h-6 w-6 text-green-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: '#1f2937' }}>WhatsApp IA</h1>
-            <p className="text-sm" style={{ color: '#6b7280' }}>
+            <h1 className="text-2xl font-bold text-foreground">WhatsApp IA</h1>
+            <p className="text-sm text-muted-foreground">
               Gestiona respuestas automáticas inteligentes para tus clientes
             </p>
           </div>
         </div>
+
+        {/* Content area */}
+        <div className="flex-1 overflow-auto p-6 space-y-6">
+          {activeView === 'conversations' && (
+            <>
+              {/* Stats */}
+              <WhatsAppStats />
+
+              {/* Conversations grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[600px]">
+                {/* Conversations List */}
+                <Card className="lg:col-span-1 overflow-hidden">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg">
+                      {activeFilter === 'inbox' && 'Todos los chats'}
+                      {activeFilter === 'needs-help' && 'Necesita ayuda'}
+                      {activeFilter === 'ai-managed' && 'IA gestionada'}
+                    </CardTitle>
+                    <CardDescription>
+                      {filteredConversations.filter(c => c.unread > 0).length} conversaciones sin leer
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <ConversationsList 
+                      conversations={filteredConversations}
+                      selectedId={selectedConversation}
+                      onSelect={setSelectedConversation}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Conversation Thread */}
+                <Card className="lg:col-span-2 overflow-hidden flex flex-col">
+                  <ConversationThread 
+                    conversation={currentConversation}
+                    messages={currentMessages}
+                  />
+                </Card>
+              </div>
+            </>
+          )}
+
+          {activeView === 'config' && <AIConfigPanel />}
+          {activeView === 'catalog' && <ProductCatalogConnection />}
+        </div>
       </div>
-
-      {/* Stats */}
-      <WhatsAppStats />
-
-      {/* Main Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="conversations" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Conversaciones
-          </TabsTrigger>
-          <TabsTrigger value="config" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Configuración
-          </TabsTrigger>
-          <TabsTrigger value="catalog" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Catálogo
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="conversations" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[600px]">
-            {/* Conversations List */}
-            <Card className="lg:col-span-1 overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Chats</CardTitle>
-                <CardDescription>
-                  {mockConversations.filter(c => c.unread > 0).length} conversaciones sin leer
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ConversationsList 
-                  conversations={mockConversations}
-                  selectedId={selectedConversation}
-                  onSelect={setSelectedConversation}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Conversation Thread */}
-            <Card className="lg:col-span-2 overflow-hidden flex flex-col">
-              <ConversationThread 
-                conversation={currentConversation}
-                messages={currentMessages}
-              />
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="config">
-          <AIConfigPanel />
-        </TabsContent>
-
-        <TabsContent value="catalog">
-          <ProductCatalogConnection />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 };
