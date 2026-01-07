@@ -35,7 +35,7 @@ const AppSidebar = () => {
     { title: 'Reclutamiento', url: '/prospects', icon: UserPlus },
     { title: 'Finanzas', url: '/financial', icon: DollarSign },
     { title: 'Alegra', url: '/alegra', icon: Receipt },
-    { title: 'WhatsApp IA', url: '/whatsapp-ai', icon: MessageSquare },
+    { title: 'Mensajería IA', url: '/whatsapp-ai', icon: MessageSquare },
     { title: 'Usuarios & Roles', url: '/users-roles', icon: Users }
   ];
   
@@ -58,7 +58,7 @@ const AppSidebar = () => {
     { title: 'Reclutamiento', url: '/prospects', icon: UserPlus },
     { title: 'Finanzas', url: '/financial', icon: DollarSign },
     { title: 'Shopify', url: '/shopify', icon: ShoppingCart },
-    { title: 'WhatsApp IA', url: '/whatsapp-ai', icon: MessageSquare }
+    { title: 'Mensajería IA', url: '/whatsapp-ai', icon: MessageSquare }
   ];
 
   const qcLeaderMenuItems = [
