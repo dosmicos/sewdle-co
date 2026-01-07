@@ -116,6 +116,11 @@ const AppSidebar = () => {
   }
   
   const handleNavigation = (url: string) => {
+    // Abrir en nueva pestaña para rutas independientes
+    if (url === '/whatsapp-ai' || url === '/picking-packing') {
+      window.open(url, '_blank');
+      return;
+    }
     navigate(url);
   };
   
