@@ -227,13 +227,16 @@ const AppContent = () => {
             <AlegraPage />
           </AdminRoute>
         } />
-        
-        <Route path="whatsapp-ai" element={
+      </Route>
+      
+      {/* WhatsApp IA - Layout independiente sin sidebar */}
+      <Route path="whatsapp-ai" element={
+        <ProtectedRoute>
           <AdminRoute>
             <WhatsAppAIPage />
           </AdminRoute>
-        } />
-      </Route>
+        </ProtectedRoute>
+      } />
       
       {/* Picking & Packing - Layout independiente sin sidebar */}
       <Route path="picking-packing" element={
