@@ -156,7 +156,7 @@ const WhatsAppAIPage = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <WhatsAppSidebar
         activeFilter={activeFilter}

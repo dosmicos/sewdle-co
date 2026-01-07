@@ -39,7 +39,7 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full bg-emerald-900 text-white transition-all duration-300",
+        "flex flex-col h-screen min-h-screen bg-emerald-900 text-white transition-all duration-300 flex-shrink-0",
         collapsed ? "w-16" : "w-64"
       )}
     >
