@@ -9,7 +9,7 @@ import { WhatsAppStats } from '@/components/whatsapp-ai/WhatsAppStats';
 import { WhatsAppSidebar } from '@/components/whatsapp-ai/WhatsAppSidebar';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
-type ViewType = 'conversations' | 'config' | 'catalog';
+type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns';
 
 // Mock data for conversations with varied statuses
 const mockConversations = [
@@ -145,7 +145,7 @@ const WhatsAppAIPage = () => {
   const currentMessages = selectedConversation ? mockMessages[selectedConversation] || [] : [];
   const currentConversation = mockConversations.find(c => c.id === selectedConversation);
 
-  const handleNavigate = (section: 'config' | 'catalog') => {
+  const handleNavigate = (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns') => {
     setActiveView(section);
   };
 
@@ -225,6 +225,42 @@ const WhatsAppAIPage = () => {
 
           {activeView === 'config' && <AIConfigPanel />}
           {activeView === 'catalog' && <ProductCatalogConnection />}
+          
+          {activeView === 'train' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Entrenar IA</CardTitle>
+                <CardDescription>Agrega conocimiento y prueba el funcionamiento de tu asistente</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Próximamente: Herramientas de entrenamiento y chat de prueba</p>
+              </CardContent>
+            </Card>
+          )}
+          
+          {activeView === 'knowledge' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Conocimiento</CardTitle>
+                <CardDescription>Gestiona la información que conoce tu IA</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Próximamente: Editor de base de conocimiento</p>
+              </CardContent>
+            </Card>
+          )}
+          
+          {activeView === 'campaigns' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Campañas</CardTitle>
+                <CardDescription>Gestiona tus campañas de mensajes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Próximamente: Herramientas de campañas</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
