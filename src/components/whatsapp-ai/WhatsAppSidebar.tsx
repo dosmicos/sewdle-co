@@ -39,23 +39,23 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full bg-slate-800 text-white transition-all duration-300",
+        "flex flex-col h-full bg-emerald-900 text-white transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Header with collapse button */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-700">
+      <div className="flex items-center justify-between p-4 border-b border-emerald-800">
         {!collapsed && (
-          <span className="font-semibold text-sm text-slate-300">Bandeja</span>
+          <span className="font-semibold text-sm text-emerald-200">Bandeja</span>
         )}
         <button
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-lg hover:bg-slate-700 transition-colors ml-auto"
+          className="p-1.5 rounded-lg hover:bg-emerald-800 transition-colors ml-auto"
         >
           {collapsed ? (
-            <ChevronRight className="h-4 w-4 text-slate-400" />
+            <ChevronRight className="h-4 w-4 text-emerald-300" />
           ) : (
-            <ChevronLeft className="h-4 w-4 text-slate-400" />
+            <ChevronLeft className="h-4 w-4 text-emerald-300" />
           )}
         </button>
       </div>
@@ -75,8 +75,8 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
                     isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                      ? "bg-emerald-600 text-white"
+                      : "text-emerald-100 hover:bg-emerald-800 hover:text-white"
                   )}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
@@ -89,8 +89,8 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
                         className={cn(
                           "text-xs font-semibold px-2 py-0.5 rounded-full",
                           isActive
-                            ? "bg-blue-500 text-white"
-                            : "bg-slate-600 text-slate-300"
+                            ? "bg-emerald-500 text-white"
+                            : "bg-emerald-700 text-emerald-200"
                         )}
                       >
                         {count}
@@ -105,29 +105,29 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
       </nav>
 
       {/* AI Training section */}
-      <div className="border-t border-slate-700 py-4 px-2 space-y-1">
+      <div className="border-t border-emerald-800 py-4 px-2 space-y-1">
         {!collapsed && (
-          <span className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <span className="px-3 text-xs font-semibold text-emerald-400 uppercase tracking-wider">
             Entrenamiento
           </span>
         )}
         <button
           onClick={() => onNavigate('train')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
         >
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
           {!collapsed && <span className="text-sm font-medium">Entrenar IA</span>}
         </button>
         <button
           onClick={() => onNavigate('knowledge')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
         >
           <Brain className="h-5 w-5 flex-shrink-0" />
           {!collapsed && <span className="text-sm font-medium">Conocimiento</span>}
         </button>
         <button
           onClick={() => onNavigate('campaigns')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
         >
           <Megaphone className="h-5 w-5 flex-shrink-0" />
           {!collapsed && <span className="text-sm font-medium">Campañas</span>}
@@ -135,17 +135,17 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
       </div>
 
       {/* Footer with config and catalog */}
-      <div className="border-t border-slate-700 py-4 px-2 space-y-1">
+      <div className="border-t border-emerald-800 py-4 px-2 space-y-1">
         <button
           onClick={() => onNavigate('config')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
         >
           <Settings className="h-5 w-5 flex-shrink-0" />
           {!collapsed && <span className="text-sm font-medium">Configuración</span>}
         </button>
         <button
           onClick={() => onNavigate('catalog')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-100 hover:bg-emerald-800 hover:text-white transition-colors"
         >
           <Package className="h-5 w-5 flex-shrink-0" />
           {!collapsed && <span className="text-sm font-medium">Catálogo</span>}
