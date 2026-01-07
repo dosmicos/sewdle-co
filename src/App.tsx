@@ -25,7 +25,7 @@ import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import BillingPage from "@/pages/BillingPage";
 import OKRsPage from "@/pages/OKRsPage";
 import AlegraPage from "@/pages/AlegraPage";
-import WhatsAppAIPage from "@/pages/WhatsAppAIPage";
+import MessagingAIPage from "@/pages/MessagingAIPage";
 
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
@@ -229,11 +229,11 @@ const AppContent = () => {
         } />
       </Route>
       
-      {/* WhatsApp IA - Layout independiente sin sidebar */}
+      {/* Mensajería IA - Layout independiente sin sidebar */}
       <Route path="whatsapp-ai" element={
         <ProtectedRoute>
           <AdminRoute>
-            <WhatsAppAIPage />
+            <MessagingAIPage />
           </AdminRoute>
         </ProtectedRoute>
       } />
