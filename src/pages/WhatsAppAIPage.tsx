@@ -9,7 +9,7 @@ import { WhatsAppStats } from '@/components/whatsapp-ai/WhatsAppStats';
 import { WhatsAppSidebar } from '@/components/whatsapp-ai/WhatsAppSidebar';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
-type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns';
+type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats';
 
 // Mock data for conversations with varied statuses
 const mockConversations = [
@@ -145,7 +145,7 @@ const WhatsAppAIPage = () => {
   const currentMessages = selectedConversation ? mockMessages[selectedConversation] || [] : [];
   const currentConversation = mockConversations.find(c => c.id === selectedConversation);
 
-  const handleNavigate = (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns') => {
+  const handleNavigate = (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats') => {
     setActiveView(section);
   };
 
@@ -186,9 +186,6 @@ const WhatsAppAIPage = () => {
         <div className="flex-1 overflow-auto p-6 space-y-6">
           {activeView === 'conversations' && (
             <>
-              {/* Stats */}
-              <WhatsAppStats />
-
               {/* Conversations grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[600px]">
                 {/* Conversations List */}
@@ -261,6 +258,8 @@ const WhatsAppAIPage = () => {
               </CardContent>
             </Card>
           )}
+          
+          {activeView === 'stats' && <WhatsAppStats />}
         </div>
       </div>
     </div>
