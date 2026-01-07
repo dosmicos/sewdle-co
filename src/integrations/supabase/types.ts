@@ -837,6 +837,209 @@ export type Database = {
           },
         ]
       }
+      messaging_channels: {
+        Row: {
+          ai_config: Json | null
+          ai_enabled: boolean | null
+          channel_identifier: string | null
+          channel_name: string | null
+          channel_type: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          meta_account_id: string | null
+          meta_page_id: string | null
+          meta_phone_number_id: string | null
+          organization_id: string
+          updated_at: string | null
+          webhook_verified: boolean | null
+        }
+        Insert: {
+          ai_config?: Json | null
+          ai_enabled?: boolean | null
+          channel_identifier?: string | null
+          channel_name?: string | null
+          channel_type: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          meta_account_id?: string | null
+          meta_page_id?: string | null
+          meta_phone_number_id?: string | null
+          organization_id: string
+          updated_at?: string | null
+          webhook_verified?: boolean | null
+        }
+        Update: {
+          ai_config?: Json | null
+          ai_enabled?: boolean | null
+          channel_identifier?: string | null
+          channel_name?: string | null
+          channel_type?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          meta_account_id?: string | null
+          meta_page_id?: string | null
+          meta_phone_number_id?: string | null
+          organization_id?: string
+          updated_at?: string | null
+          webhook_verified?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_channels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messaging_conversations: {
+        Row: {
+          ai_managed: boolean | null
+          channel_id: string
+          channel_type: string
+          created_at: string | null
+          external_user_id: string
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          metadata: Json | null
+          organization_id: string
+          profile_pic_url: string | null
+          status: string | null
+          unread_count: number | null
+          updated_at: string | null
+          user_identifier: string | null
+          user_name: string | null
+        }
+        Insert: {
+          ai_managed?: boolean | null
+          channel_id: string
+          channel_type: string
+          created_at?: string | null
+          external_user_id: string
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          metadata?: Json | null
+          organization_id: string
+          profile_pic_url?: string | null
+          status?: string | null
+          unread_count?: number | null
+          updated_at?: string | null
+          user_identifier?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          ai_managed?: boolean | null
+          channel_id?: string
+          channel_type?: string
+          created_at?: string | null
+          external_user_id?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          metadata?: Json | null
+          organization_id?: string
+          profile_pic_url?: string | null
+          status?: string | null
+          unread_count?: number | null
+          updated_at?: string | null
+          user_identifier?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_conversations_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messaging_messages: {
+        Row: {
+          channel_type: string
+          content: string | null
+          conversation_id: string
+          delivered_at: string | null
+          direction: string
+          error_message: string | null
+          external_message_id: string | null
+          id: string
+          media_mime_type: string | null
+          media_url: string | null
+          message_type: string | null
+          metadata: Json | null
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_type: string
+          sent_at: string | null
+        }
+        Insert: {
+          channel_type: string
+          content?: string | null
+          conversation_id: string
+          delivered_at?: string | null
+          direction: string
+          error_message?: string | null
+          external_message_id?: string | null
+          id?: string
+          media_mime_type?: string | null
+          media_url?: string | null
+          message_type?: string | null
+          metadata?: Json | null
+          read_at?: string | null
+          reply_to_message_id?: string | null
+          sender_type: string
+          sent_at?: string | null
+        }
+        Update: {
+          channel_type?: string
+          content?: string | null
+          conversation_id?: string
+          delivered_at?: string | null
+          direction?: string
+          error_message?: string | null
+          external_message_id?: string | null
+          id?: string
+          media_mime_type?: string | null
+          media_url?: string | null
+          message_type?: string | null
+          metadata?: Json | null
+          read_at?: string | null
+          reply_to_message_id?: string | null
+          sender_type?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_alignment: {
         Row: {
           child_objective_id: string
