@@ -25,6 +25,7 @@ import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import BillingPage from "@/pages/BillingPage";
 import OKRsPage from "@/pages/OKRsPage";
 import AlegraPage from "@/pages/AlegraPage";
+import WhatsAppAIPage from "@/pages/WhatsAppAIPage";
 
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
@@ -224,6 +225,12 @@ const AppContent = () => {
         <Route path="alegra" element={
           <AdminRoute>
             <AlegraPage />
+          </AdminRoute>
+        } />
+        
+        <Route path="whatsapp-ai" element={
+          <AdminRoute>
+            <WhatsAppAIPage />
           </AdminRoute>
         } />
       </Route>
