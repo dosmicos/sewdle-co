@@ -25,7 +25,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
           *,
           channel:messaging_channels(id, channel_type, channel_name)
         `)
-        .order('last_message_at', { ascending: false });
+        .order('last_message_at', { ascending: false, nullsFirst: false });
 
       const { data, error } = await query;
       

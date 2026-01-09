@@ -122,7 +122,7 @@ serve(async (req) => {
           external_message_id: result.messages?.[0]?.id,
           channel_type: channelType,
           direction: 'outbound',
-          sender_type: 'assistant',
+          sender_type: 'agent', // Valid values: 'user' | 'ai' | 'agent'
           content: message,
           message_type: 'text',
           metadata: result,
