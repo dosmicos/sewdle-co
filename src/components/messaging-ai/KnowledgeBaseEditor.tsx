@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Plus, 
   Trash2, 
@@ -13,13 +13,11 @@ import {
   Loader2, 
   BookOpen, 
   Search,
-  Tag,
-  HelpCircle,
+  Info,
+  Image,
   Package,
-  Clock,
-  MapPin,
-  CreditCard,
-  Truck
+  Star,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,18 +26,15 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 interface KnowledgeItem {
   id: string;
   category: string;
-  question: string;
-  answer: string;
-  keywords: string[];
+  title: string;
+  content: string;
 }
 
 const CATEGORIES = [
-  { value: 'products', label: 'Productos', icon: Package },
-  { value: 'pricing', label: 'Precios', icon: CreditCard },
-  { value: 'shipping', label: 'Envíos', icon: Truck },
-  { value: 'hours', label: 'Horarios', icon: Clock },
-  { value: 'location', label: 'Ubicación', icon: MapPin },
-  { value: 'faq', label: 'Preguntas frecuentes', icon: HelpCircle },
+  { value: 'general', label: 'Información general', icon: Info, description: 'Horarios, políticas, contacto, etc.' },
+  { value: 'visual', label: 'Información visual', icon: Image, description: 'Imágenes, videos, guías visuales' },
+  { value: 'product', label: 'Información del producto', icon: Package, description: 'Detalles, características, precios' },
+  { value: 'recommendation', label: 'Recomendación del producto', icon: Star, description: 'Sugerencias, combos, ofertas' },
 ];
 
 export const KnowledgeBaseEditor = () => {
@@ -47,18 +42,15 @@ export const KnowledgeBaseEditor = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [channelId, setChannelId] = useState<string | null>(null);
   
   const [items, setItems] = useState<KnowledgeItem[]>([]);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState<Partial<KnowledgeItem>>({
-    category: 'faq',
-    question: '',
-    answer: '',
-    keywords: [],
+    title: '',
+    content: '',
   });
-  const [newKeyword, setNewKeyword] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
 
   // Load knowledge base from channel ai_config
   useEffect(() => {
@@ -110,7 +102,6 @@ export const KnowledgeBaseEditor = () => {
     try {
       let effectiveChannelId = channelId;
 
-      // If there is no WhatsApp channel yet, create a placeholder so we can persist knowledge.
       if (!effectiveChannelId) {
         const { data: created, error: createError } = await supabase
           .from('messaging_channels')
@@ -127,7 +118,6 @@ export const KnowledgeBaseEditor = () => {
         setChannelId(created.id);
       }
 
-      // Get current config
       const { data: channel, error: channelError } = await supabase
         .from('messaging_channels')
         .select('ai_config')
@@ -138,7 +128,6 @@ export const KnowledgeBaseEditor = () => {
 
       const currentConfig = (channel?.ai_config as any) || {};
 
-      // Update with new knowledge base
       const { error } = await supabase
         .from('messaging_channels')
         .update({
@@ -160,24 +149,34 @@ export const KnowledgeBaseEditor = () => {
     }
   };
 
+  const handleCategorySelect = (category: string) => {
+    setSelectedCategory(category);
+    setNewItem({ title: '', content: '' });
+    setShowCategoryModal(false);
+  };
+
   const addItem = () => {
-    if (!newItem.question || !newItem.answer) {
-      toast.error('Completa la pregunta y respuesta');
+    if (!newItem.title || !newItem.content || !selectedCategory) {
+      toast.error('Completa el título y contenido');
       return;
     }
 
     const item: KnowledgeItem = {
       id: Date.now().toString(),
-      category: newItem.category || 'faq',
-      question: newItem.question,
-      answer: newItem.answer,
-      keywords: newItem.keywords || [],
+      category: selectedCategory,
+      title: newItem.title,
+      content: newItem.content,
     };
 
     setItems(prev => [...prev, item]);
-    setNewItem({ category: 'faq', question: '', answer: '', keywords: [] });
-    setIsAdding(false);
+    setNewItem({ title: '', content: '' });
+    setSelectedCategory(null);
     toast.success('Conocimiento agregado');
+  };
+
+  const cancelAdd = () => {
+    setSelectedCategory(null);
+    setNewItem({ title: '', content: '' });
   };
 
   const removeItem = (id: string) => {
@@ -185,32 +184,15 @@ export const KnowledgeBaseEditor = () => {
     toast.success('Conocimiento eliminado');
   };
 
-  const addKeyword = () => {
-    if (newKeyword.trim() && !newItem.keywords?.includes(newKeyword.trim())) {
-      setNewItem(prev => ({
-        ...prev,
-        keywords: [...(prev.keywords || []), newKeyword.trim()],
-      }));
-      setNewKeyword('');
-    }
-  };
-
-  const removeKeyword = (keyword: string) => {
-    setNewItem(prev => ({
-      ...prev,
-      keywords: prev.keywords?.filter(k => k !== keyword) || [],
-    }));
-  };
-
-  // Filter items
   const filteredItems = items.filter(item => {
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchesSearch = !searchQuery || 
-      item.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.keywords.some(k => k.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesSearch;
+    if (!searchQuery) return true;
+    return item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.content.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  const getCategoryInfo = (value: string) => {
+    return CATEGORIES.find(c => c.value === value) || CATEGORIES[0];
+  };
 
   if (isLoading) {
     return (
@@ -239,8 +221,8 @@ export const KnowledgeBaseEditor = () => {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            onClick={() => setIsAdding(true)}
-            disabled={isAdding}
+            onClick={() => setShowCategoryModal(true)}
+            disabled={!!selectedCategory}
           >
             <Plus className="h-4 w-4 mr-2" />
             Agregar conocimiento
@@ -259,110 +241,54 @@ export const KnowledgeBaseEditor = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar en la base de conocimiento..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Categoría" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las categorías</SelectItem>
-            {CATEGORIES.map(cat => (
-              <SelectItem key={cat.value} value={cat.value}>
-                {cat.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar en la base de conocimiento..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
       {/* Add New Item Form */}
-      {isAdding && (
+      {selectedCategory && (
         <Card className="border-dashed border-2 border-primary/50">
-          <CardHeader>
-            <CardTitle className="text-lg">Nuevo conocimiento</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Categoría</Label>
-                <Select 
-                  value={newItem.category} 
-                  onValueChange={(value) => setNewItem(prev => ({ ...prev, category: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(cat => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="gap-1">
+                  {React.createElement(getCategoryInfo(selectedCategory).icon, { className: "h-3 w-3" })}
+                  {getCategoryInfo(selectedCategory).label}
+                </Badge>
               </div>
-              
-              <div className="space-y-2">
-                <Label>Palabras clave</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Agregar palabra clave..."
-                    value={newKeyword}
-                    onChange={(e) => setNewKeyword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addKeyword())}
-                  />
-                  <Button variant="outline" size="icon" onClick={addKeyword}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                {newItem.keywords && newItem.keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {newItem.keywords.map(keyword => (
-                      <Badge key={keyword} variant="secondary" className="gap-1">
-                        <Tag className="h-3 w-3" />
-                        {keyword}
-                        <button onClick={() => removeKeyword(keyword)} className="hover:text-destructive">
-                          <span className="sr-only">Eliminar</span>
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Button variant="ghost" size="icon" onClick={cancelAdd}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
 
             <div className="space-y-2">
-              <Label>Pregunta / Tema</Label>
+              <Label>Título / Tema</Label>
               <Input
-                placeholder="¿Cuáles son los métodos de pago?"
-                value={newItem.question}
-                onChange={(e) => setNewItem(prev => ({ ...prev, question: e.target.value }))}
+                placeholder="Ej: Métodos de pago disponibles"
+                value={newItem.title}
+                onChange={(e) => setNewItem(prev => ({ ...prev, title: e.target.value }))}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Respuesta</Label>
+              <Label>Contenido</Label>
               <Textarea
-                placeholder="Aceptamos pagos con tarjeta de crédito, débito, transferencia bancaria y pago contra entrega..."
-                value={newItem.answer}
-                onChange={(e) => setNewItem(prev => ({ ...prev, answer: e.target.value }))}
-                className="min-h-[100px]"
+                placeholder="Escribe la información que la IA debe conocer..."
+                value={newItem.content}
+                onChange={(e) => setNewItem(prev => ({ ...prev, content: e.target.value }))}
+                className="min-h-[120px]"
               />
             </div>
 
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setIsAdding(false)}>
+              <Button variant="outline" onClick={cancelAdd}>
                 Cancelar
               </Button>
               <Button onClick={addItem}>
@@ -375,7 +301,7 @@ export const KnowledgeBaseEditor = () => {
       )}
 
       {/* Knowledge Items */}
-      {filteredItems.length === 0 ? (
+      {filteredItems.length === 0 && !selectedCategory ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <BookOpen className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -388,7 +314,7 @@ export const KnowledgeBaseEditor = () => {
               <Button 
                 variant="outline" 
                 className="mt-4"
-                onClick={() => setIsAdding(true)}
+                onClick={() => setShowCategoryModal(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Agregar primer conocimiento
@@ -399,28 +325,21 @@ export const KnowledgeBaseEditor = () => {
       ) : (
         <div className="grid gap-4">
           {filteredItems.map(item => {
-            const categoryInfo = CATEGORIES.find(c => c.value === item.category);
-            const Icon = categoryInfo?.icon || HelpCircle;
+            const categoryInfo = getCategoryInfo(item.category);
+            const Icon = categoryInfo.icon;
             
             return (
               <Card key={item.id}>
                 <CardContent className="pt-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="gap-1">
-                          <Icon className="h-3 w-3" />
-                          {categoryInfo?.label || item.category}
-                        </Badge>
-                        {item.keywords.map(keyword => (
-                          <Badge key={keyword} variant="secondary" className="text-xs">
-                            {keyword}
-                          </Badge>
-                        ))}
-                      </div>
-                      <p className="font-medium">{item.question}</p>
+                      <Badge variant="outline" className="gap-1">
+                        <Icon className="h-3 w-3" />
+                        {categoryInfo.label}
+                      </Badge>
+                      <p className="font-medium">{item.title}</p>
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                        {item.answer}
+                        {item.content}
                       </p>
                     </div>
                     <Button
@@ -439,9 +358,9 @@ export const KnowledgeBaseEditor = () => {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats by Category */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {CATEGORIES.slice(0, 4).map(cat => {
+        {CATEGORIES.map(cat => {
           const count = items.filter(i => i.category === cat.value).length;
           const Icon = cat.icon;
           return (
@@ -461,6 +380,34 @@ export const KnowledgeBaseEditor = () => {
           );
         })}
       </div>
+
+      {/* Category Selection Modal */}
+      <Dialog open={showCategoryModal} onOpenChange={setShowCategoryModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">Añadir conocimiento</DialogTitle>
+            <p className="text-center text-sm text-muted-foreground">
+              ¿Qué tipo de información quieres añadir?
+            </p>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 pt-4">
+            {CATEGORIES.map(cat => {
+              const Icon = cat.icon;
+              return (
+                <Button
+                  key={cat.value}
+                  variant="outline"
+                  className="h-auto py-4 px-4 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5"
+                  onClick={() => handleCategorySelect(cat.value)}
+                >
+                  <Icon className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium text-center">{cat.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
