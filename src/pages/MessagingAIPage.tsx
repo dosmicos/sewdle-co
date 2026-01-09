@@ -172,7 +172,7 @@ const MessagingAIPage = () => {
           {activeView === 'conversations' && (
             <>
               {/* Conversations grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[600px]">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px] h-[calc(100vh-220px)]">
                 {/* Conversations List */}
                 <Card className="lg:col-span-1 overflow-hidden">
                   <CardHeader className="pb-2">

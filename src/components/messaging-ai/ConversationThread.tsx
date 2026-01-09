@@ -197,8 +197,8 @@ export const ConversationThread = ({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 p-0 flex flex-col">
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <CardContent className="flex-1 p-0 flex flex-col min-h-0 overflow-hidden">
+        <ScrollArea className="flex-1 p-4 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

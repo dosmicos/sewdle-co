@@ -98,7 +98,7 @@ export const ConversationsList = ({
 
   return (
     <>
-      <ScrollArea className="h-[480px]">
+      <ScrollArea className="h-full max-h-[500px]">
         <div className="divide-y divide-border">
           {conversations.map((conversation) => {
             const channelInfo = channelConfig[conversation.channel];
