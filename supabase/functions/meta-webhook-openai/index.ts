@@ -53,7 +53,13 @@ REGLAS DE COMUNICACIÓN:
 - Responde siempre en español
 - Pregunta la edad del bebé para recomendar la talla correcta
 - Pregunta la ciudad del cliente para recomendar el TOG adecuado
-- Sé conciso pero completo en tus respuestas`,
+- Sé conciso pero completo en tus respuestas
+
+IMPORTANTE - ENVÍO DE IMÁGENES:
+Cuando menciones un producto específico, SIEMPRE incluye al final de tu respuesta una línea con el formato:
+[PRODUCT_IMAGE:nombre_exacto_del_producto]
+Esto enviará automáticamente la imagen del producto al cliente.
+Solo usa este formato cuando estés recomendando o hablando de un producto específico.`,
 
   tone: 'friendly',
   autoReply: true,
@@ -61,6 +67,175 @@ REGLAS DE COMUNICACIÓN:
   
   greetingMessage: '¡Hola! 👋 Bienvenido a Dosmicos 🐄✨ Soy tu asistente virtual. ¿En qué puedo ayudarte hoy? Tenemos sleeping bags, ruanas y cobijas para bebés y niños.',
 };
+
+// Interface for product with Shopify data
+interface ProductWithImage {
+  name: string;
+  shopify_product_id: number | null;
+  image_url: string | null;
+}
+
+// Fetch product image from Shopify
+async function fetchProductImageFromShopify(productId: number): Promise<string | null> {
+  const storeDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+  const accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+  
+  if (!storeDomain || !accessToken) {
+    console.log('Shopify credentials not configured');
+    return null;
+  }
+
+  try {
+    const cleanDomain = storeDomain.replace('.myshopify.com', '');
+    const url = `https://${cleanDomain}.myshopify.com/admin/api/2023-10/products/${productId}.json`;
+    
+    console.log(`Fetching Shopify product image for ID: ${productId}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Shopify API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const imageUrl = data.product?.image?.src || data.product?.images?.[0]?.src;
+    
+    if (imageUrl) {
+      console.log(`Found Shopify image for product ${productId}`);
+      return imageUrl;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching Shopify product image:', error);
+    return null;
+  }
+}
+
+// Find product and its image by name
+async function findProductImage(productName: string, organizationId: string, supabase: any): Promise<string | null> {
+  try {
+    // Search in product_variants for shopify_product_id
+    const { data: variants, error } = await supabase
+      .from('product_variants')
+      .select(`
+        shopify_product_id,
+        product:products!inner(name, organization_id)
+      `)
+      .eq('product.organization_id', organizationId)
+      .not('shopify_product_id', 'is', null)
+      .limit(100);
+
+    if (error) {
+      console.error('Error searching products:', error);
+      return null;
+    }
+
+    // Normalize search term
+    const searchTerm = productName.toLowerCase().trim();
+    
+    // Find matching product
+    const matchingVariant = variants?.find((v: any) => {
+      const name = v.product?.name?.toLowerCase() || '';
+      return name.includes(searchTerm) || searchTerm.includes(name.split(' ').slice(0, 2).join(' '));
+    });
+
+    if (matchingVariant?.shopify_product_id) {
+      console.log(`Found matching product with Shopify ID: ${matchingVariant.shopify_product_id}`);
+      return await fetchProductImageFromShopify(matchingVariant.shopify_product_id);
+    }
+
+    // Fallback: search products directly with image_url
+    const { data: products } = await supabase
+      .from('products')
+      .select('name, image_url')
+      .eq('organization_id', organizationId)
+      .ilike('name', `%${searchTerm.split(' ')[0]}%`)
+      .limit(5);
+
+    const matchingProduct = products?.find((p: any) => 
+      p.name?.toLowerCase().includes(searchTerm) || searchTerm.includes(p.name?.toLowerCase().split(' ').slice(0, 2).join(' '))
+    );
+
+    if (matchingProduct?.image_url) {
+      console.log(`Found product with local image: ${matchingProduct.name}`);
+      return matchingProduct.image_url;
+    }
+
+    console.log(`No product image found for: ${productName}`);
+    return null;
+  } catch (error) {
+    console.error('Error finding product image:', error);
+    return null;
+  }
+}
+
+// Extract product name from AI response
+function extractProductFromResponse(aiResponse: string): string | null {
+  const match = aiResponse.match(/\[PRODUCT_IMAGE:(.+?)\]/);
+  if (match) {
+    return match[1].trim();
+  }
+  return null;
+}
+
+// Remove product image tag from response
+function cleanAIResponse(aiResponse: string): string {
+  return aiResponse.replace(/\[PRODUCT_IMAGE:.+?\]/g, '').trim();
+}
+
+// Send WhatsApp image message via Meta API
+async function sendWhatsAppImage(phoneNumber: string, imageUrl: string, caption: string, phoneNumberId: string): Promise<boolean> {
+  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
+  
+  if (!accessToken) {
+    console.error('META_WHATSAPP_TOKEN not configured');
+    return false;
+  }
+
+  try {
+    const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
+    
+    console.log(`Sending WhatsApp image to ${phoneNumber}`);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: phoneNumber,
+        type: 'image',
+        image: {
+          link: imageUrl,
+          caption: caption || ''
+        }
+      }),
+    });
+
+    const responseData = await response.json();
+    
+    if (!response.ok) {
+      console.error('WhatsApp image send error:', response.status, JSON.stringify(responseData));
+      return false;
+    }
+
+    console.log('WhatsApp image sent successfully:', responseData.messages?.[0]?.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending WhatsApp image:', error);
+    return false;
+  }
+}
 
 // Generate AI response using OpenAI GPT-4o-mini
 async function generateAIResponse(
@@ -78,7 +253,7 @@ async function generateAIResponse(
   }
 
   try {
-    // Load active products for context
+    // Load active products for context with Shopify IDs
     let productCatalog = '';
     const { data: products, error: productsError } = await supabase
       .from('products')
@@ -88,7 +263,7 @@ async function generateAIResponse(
         base_price, 
         category,
         description,
-        product_variants (size, color, stock_quantity, sku_variant)
+        product_variants (size, color, stock_quantity, sku_variant, shopify_product_id)
       `)
       .eq('organization_id', organizationId)
       .eq('status', 'active')
@@ -463,10 +638,14 @@ serve(async (req) => {
                 );
 
                 if (aiResponse) {
-                  // Send the AI response via WhatsApp
+                  // Check if AI mentioned a product and wants to send image
+                  const productToShow = extractProductFromResponse(aiResponse);
+                  const cleanedResponse = cleanAIResponse(aiResponse);
+                  
+                  // Send the text response via WhatsApp
                   const sent = await sendWhatsAppMessage(
                     senderPhone, 
-                    aiResponse, 
+                    cleanedResponse, 
                     channel.meta_phone_number_id || phoneNumberId
                   );
 
@@ -479,7 +658,7 @@ serve(async (req) => {
                         channel_type: 'whatsapp',
                         direction: 'outbound',
                         sender_type: 'ai',
-                        content: aiResponse,
+                        content: cleanedResponse,
                         message_type: 'text',
                         sent_at: new Date().toISOString(),
                       });
@@ -489,11 +668,48 @@ serve(async (req) => {
                       .from('messaging_conversations')
                       .update({
                         last_message_at: new Date().toISOString(),
-                        last_message_preview: aiResponse.substring(0, 100),
+                        last_message_preview: cleanedResponse.substring(0, 100),
                       })
                       .eq('id', conversation.id);
 
                     console.log('AI response sent and saved');
+                    
+                    // If product was mentioned, send the product image
+                    if (productToShow) {
+                      console.log(`AI mentioned product: ${productToShow}, fetching image...`);
+                      
+                      const imageUrl = await findProductImage(productToShow, channel.organization_id, supabase);
+                      
+                      if (imageUrl) {
+                        // Send product image
+                        const imageSent = await sendWhatsAppImage(
+                          senderPhone,
+                          imageUrl,
+                          `📸 ${productToShow}`,
+                          channel.meta_phone_number_id || phoneNumberId
+                        );
+                        
+                        if (imageSent) {
+                          // Save image message to database
+                          await supabase
+                            .from('messaging_messages')
+                            .insert({
+                              conversation_id: conversation.id,
+                              channel_type: 'whatsapp',
+                              direction: 'outbound',
+                              sender_type: 'ai',
+                              content: `📸 Imagen: ${productToShow}`,
+                              message_type: 'image',
+                              media_url: imageUrl,
+                              sent_at: new Date().toISOString(),
+                            });
+                          
+                          console.log(`Product image sent for: ${productToShow}`);
+                        }
+                      } else {
+                        console.log(`No image found for product: ${productToShow}`);
+                      }
+                    }
                   }
                 } else {
                   console.log('No AI response generated');
