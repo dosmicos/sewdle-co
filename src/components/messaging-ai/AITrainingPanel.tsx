@@ -218,7 +218,9 @@ export const AITrainingPanel = () => {
       }
 
       const aiResponse = data?.response || 'Lo siento, no pude generar una respuesta.';
+      const productImageUrl = data?.product_image_url;
       
+      // Add text response
       setMessages(prev => [
         ...prev,
         {
@@ -228,6 +230,21 @@ export const AITrainingPanel = () => {
           timestamp: new Date(),
         }
       ]);
+
+      // If product image was found, add it as a separate message
+      if (productImageUrl) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: Date.now().toString() + '-ai-img',
+            role: 'assistant',
+            content: '📸 Imagen del producto',
+            timestamp: new Date(),
+            mediaUrl: productImageUrl,
+            mediaType: 'image',
+          }
+        ]);
+      }
     } catch (err: any) {
       console.error('Error generating response:', err);
       

@@ -32,62 +32,76 @@ GUÍA DE TALLAS SLEEPING BAGS:
 - Tallas mayores: Consultar disponibilidad
 
 GUÍA TOG (nivel de abrigo):
-- TOG 0.5: Clima cálido (20-24°C) - Material: Algodón ligero - Ideal para ciudades cálidas o verano
-- TOG 1.0-1.5: Temperatura intermedia (16-20°C) - Material mixto - Bueno para primavera/otoño
-- TOG 2.0-2.5: Clima frío (12-16°C) - Material: Fleece térmico - Perfecto para Bogotá, ciudades frías
-
-DIFERENCIA SLEEPING BAG vs SLEEPING WALKER:
-- Sleeping Bag: Tipo saco cerrado, ideal para bebés que aún no caminan. Máxima seguridad.
-- Sleeping Walker: Tiene piernas separadas, perfecto para niños que ya caminan. Permite movilidad.
-
-BENEFICIOS DE LOS SLEEPING BAGS:
-- Evitan que el bebé se destape durante la noche
-- Mejoran la calidad del sueño
-- Más seguros que las cobijas sueltas
-- Fáciles de lavar en lavadora
+- TOG 0.5: Clima cálido (20-24°C) - Material: Algodón ligero
+- TOG 1.0-1.5: Temperatura intermedia (16-20°C) - Material mixto
+- TOG 2.0-2.5: Clima frío (12-16°C) - Material: Fleece térmico
 
 REGLAS DE COMUNICACIÓN:
 - Siempre saluda cordialmente al iniciar una conversación
 - Usa emojis ocasionalmente para ser más amigable (👋🐄✨👶🌙)
 - Si no tienes información específica, ofrece conectar con un asesor humano
 - Responde siempre en español
-- Pregunta la edad del bebé para recomendar la talla correcta
-- Pregunta la ciudad del cliente para recomendar el TOG adecuado
 - Sé conciso pero completo en tus respuestas
 
-IMPORTANTE - ENVÍO DE IMÁGENES:
-Cuando menciones un producto específico, SIEMPRE incluye al final de tu respuesta una línea con el formato:
-[PRODUCT_IMAGE:nombre_exacto_del_producto]
-Esto enviará automáticamente la imagen del producto al cliente.
-Solo usa este formato cuando estés recomendando o hablando de un producto específico.`,
+🖼️ ENVÍO DE IMÁGENES - MUY IMPORTANTE:
+SÍ puedes y DEBES enviar fotos de productos. Cuando recomiendes un producto específico o el cliente pida ver una foto, SIEMPRE incluye al final de tu respuesta:
+[PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO]
+donde ID es el número que aparece en paréntesis junto al nombre del producto en el catálogo.
+NUNCA digas que no puedes mostrar imágenes.`,
 
   tone: 'friendly',
   autoReply: true,
   responseDelay: 2,
-  
-  greetingMessage: '¡Hola! 👋 Bienvenido a Dosmicos 🐄✨ Soy tu asistente virtual. ¿En qué puedo ayudarte hoy? Tenemos sleeping bags, ruanas y cobijas para bebés y niños.',
+  greetingMessage: '¡Hola! 👋 Bienvenido a Dosmicos 🐄✨ Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?',
 };
 
-// Interface for product with Shopify data
-interface ProductWithImage {
-  name: string;
-  shopify_product_id: number | null;
-  image_url: string | null;
+// Extract product ID from AI response
+function extractProductIdFromResponse(aiResponse: string): number | null {
+  const match = aiResponse.match(/\[PRODUCT_IMAGE_ID:(\d+)\]/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
 }
 
-// Fetch product image from Shopify
-async function fetchProductImageFromShopify(productId: number): Promise<string | null> {
-  const storeDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-  const accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
-  
+// Legacy: Extract product name (fallback)
+function extractProductNameFromResponse(aiResponse: string): string | null {
+  const match = aiResponse.match(/\[PRODUCT_IMAGE:(.+?)\]/);
+  if (match) {
+    return match[1].trim();
+  }
+  return null;
+}
+
+// Remove product image tags from response
+function cleanAIResponse(aiResponse: string): string {
+  return aiResponse
+    .replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '')
+    .replace(/\[PRODUCT_IMAGE:.+?\]/g, '')
+    .trim();
+}
+
+// Fetch product image from Shopify using organization credentials
+async function fetchShopifyProductImage(
+  productId: number, 
+  shopifyCredentials: any
+): Promise<string | null> {
+  if (!shopifyCredentials) {
+    console.log('No Shopify credentials provided');
+    return null;
+  }
+
+  const storeDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
+  const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
+
   if (!storeDomain || !accessToken) {
-    console.log('Shopify credentials not configured');
+    console.log('Incomplete Shopify credentials');
     return null;
   }
 
   try {
     const cleanDomain = storeDomain.replace('.myshopify.com', '');
-    const url = `https://${cleanDomain}.myshopify.com/admin/api/2023-10/products/${productId}.json`;
+    const url = `https://${cleanDomain}.myshopify.com/admin/api/2024-01/products/${productId}.json`;
     
     console.log(`Fetching Shopify product image for ID: ${productId}`);
     
@@ -118,50 +132,28 @@ async function fetchProductImageFromShopify(productId: number): Promise<string |
   }
 }
 
-// Find product and its image by name
-async function findProductImage(productName: string, organizationId: string, supabase: any): Promise<string | null> {
+// Find product image by name (legacy fallback)
+async function findProductImageByName(
+  productName: string, 
+  organizationId: string, 
+  supabase: any,
+  shopifyCredentials: any
+): Promise<string | null> {
   try {
-    // Search in product_variants for shopify_product_id
-    const { data: variants, error } = await supabase
-      .from('product_variants')
-      .select(`
-        shopify_product_id,
-        product:products!inner(name, organization_id)
-      `)
-      .eq('product.organization_id', organizationId)
-      .not('shopify_product_id', 'is', null)
-      .limit(100);
-
-    if (error) {
-      console.error('Error searching products:', error);
-      return null;
-    }
-
     // Normalize search term
     const searchTerm = productName.toLowerCase().trim();
     
-    // Find matching product
-    const matchingVariant = variants?.find((v: any) => {
-      const name = v.product?.name?.toLowerCase() || '';
-      return name.includes(searchTerm) || searchTerm.includes(name.split(' ').slice(0, 2).join(' '));
-    });
-
-    if (matchingVariant?.shopify_product_id) {
-      console.log(`Found matching product with Shopify ID: ${matchingVariant.shopify_product_id}`);
-      return await fetchProductImageFromShopify(matchingVariant.shopify_product_id);
-    }
-
-    // Fallback: search products directly with image_url
+    // Search products directly
     const { data: products } = await supabase
       .from('products')
       .select('name, image_url')
       .eq('organization_id', organizationId)
-      .ilike('name', `%${searchTerm.split(' ')[0]}%`)
-      .limit(5);
+      .limit(50);
 
-    const matchingProduct = products?.find((p: any) => 
-      p.name?.toLowerCase().includes(searchTerm) || searchTerm.includes(p.name?.toLowerCase().split(' ').slice(0, 2).join(' '))
-    );
+    const matchingProduct = products?.find((p: any) => {
+      const name = p.name?.toLowerCase() || '';
+      return name.includes(searchTerm) || searchTerm.includes(name.split(' ').slice(0, 2).join(' '));
+    });
 
     if (matchingProduct?.image_url) {
       console.log(`Found product with local image: ${matchingProduct.name}`);
@@ -174,20 +166,6 @@ async function findProductImage(productName: string, organizationId: string, sup
     console.error('Error finding product image:', error);
     return null;
   }
-}
-
-// Extract product name from AI response
-function extractProductFromResponse(aiResponse: string): string | null {
-  const match = aiResponse.match(/\[PRODUCT_IMAGE:(.+?)\]/);
-  if (match) {
-    return match[1].trim();
-  }
-  return null;
-}
-
-// Remove product image tag from response
-function cleanAIResponse(aiResponse: string): string {
-  return aiResponse.replace(/\[PRODUCT_IMAGE:.+?\]/g, '').trim();
 }
 
 // Send WhatsApp image message via Meta API
@@ -243,76 +221,123 @@ async function generateAIResponse(
   conversationHistory: any[],
   aiConfig: any,
   organizationId: string,
-  supabase: any
-): Promise<string> {
+  supabase: any,
+  shopifyCredentials: any
+): Promise<{ text: string; productId: number | null; productImageUrl: string | null }> {
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
   
   if (!openaiApiKey) {
     console.log('OPENAI_API_KEY not configured, skipping AI response');
-    return '';
+    return { text: '', productId: null, productImageUrl: null };
   }
 
   try {
-    // Load active products for context with Shopify IDs
+    // Build product catalog with IDs
     let productCatalog = '';
-    const { data: products, error: productsError } = await supabase
-      .from('products')
-      .select(`
-        name, 
-        sku, 
-        base_price, 
-        category,
-        description,
-        product_variants (size, color, stock_quantity, sku_variant, shopify_product_id)
-      `)
-      .eq('organization_id', organizationId)
-      .eq('status', 'active')
-      .limit(50);
+    let productImageMap: Record<number, string> = {};
+    
+    // Try to get Shopify products with real-time inventory
+    if (shopifyCredentials) {
+      const storeDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
+      const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
+      
+      if (storeDomain && accessToken) {
+        try {
+          console.log("Fetching Shopify products for AI context...");
+          
+          const shopifyResponse = await fetch(
+            `https://${storeDomain}/admin/api/2024-01/products.json?status=active&limit=100`,
+            {
+              headers: {
+                'X-Shopify-Access-Token': accessToken,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          
+          if (shopifyResponse.ok) {
+            const shopifyData = await shopifyResponse.json();
+            const products = shopifyData.products || [];
+            
+            if (products.length > 0) {
+              productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
+              productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n\n';
+              
+              products.forEach((product: any) => {
+                const variants = product.variants || [];
+                const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
+                
+                // Store image URL
+                const imageUrl = product.image?.src || product.images?.[0]?.src;
+                if (imageUrl) {
+                  productImageMap[product.id] = imageUrl;
+                }
+                
+                if (totalStock === 0) {
+                  productCatalog += `• ${product.title} (ID:${product.id}): ❌ AGOTADO\n`;
+                  return;
+                }
+                
+                const price = variants[0]?.price 
+                  ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP` 
+                  : 'Consultar';
+                
+                const variantInfo = variants
+                  .slice(0, 5)
+                  .map((v: any) => {
+                    const stock = v.inventory_quantity || 0;
+                    return `${v.title}: ${stock > 0 ? `✅${stock}` : '❌'}`;
+                  })
+                  .join(' | ');
+                
+                productCatalog += `\n• ${product.title} (ID:${product.id})`;
+                productCatalog += `\n  💰 ${price} | ${variantInfo}\n`;
+              });
+              
+              console.log(`Loaded ${products.length} Shopify products for AI context`);
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching Shopify products:", err);
+        }
+      }
+    }
 
-    if (productsError) {
-      console.error('Error loading products for AI context:', productsError);
-    } else if (products && products.length > 0) {
-      productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES (precios y stock en tiempo real):\n';
-      
-      products.forEach((p: any) => {
-        const price = p.base_price 
-          ? `$${Number(p.base_price).toLocaleString('es-CO')} COP` 
-          : 'Precio: Consultar';
+    // Fallback: load from local products table
+    if (!productCatalog) {
+      const { data: products } = await supabase
+        .from('products')
+        .select(`
+          name, sku, base_price, category, description,
+          product_variants (size, color, stock_quantity)
+        `)
+        .eq('organization_id', organizationId)
+        .eq('status', 'active')
+        .limit(50);
+
+      if (products && products.length > 0) {
+        productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS:\n';
         
-        const availableVariants = p.product_variants
-          ?.filter((v: any) => (v.stock_quantity || 0) > 0)
-          ?.map((v: any) => {
-            const size = v.size || '';
-            const stock = v.stock_quantity || 0;
-            return `${size} (${stock} disponibles)`;
-          })
-          .join(', ');
+        products.forEach((p: any) => {
+          const price = p.base_price 
+            ? `$${Number(p.base_price).toLocaleString('es-CO')} COP` 
+            : 'Consultar';
+          
+          const availableVariants = p.product_variants
+            ?.filter((v: any) => (v.stock_quantity || 0) > 0)
+            ?.map((v: any) => `${v.size} (${v.stock_quantity})`)
+            .join(', ');
+          
+          productCatalog += `\n• ${p.name}`;
+          productCatalog += `\n  💰 ${price}`;
+          if (availableVariants) {
+            productCatalog += ` | ✅ ${availableVariants}`;
+          }
+          productCatalog += '\n';
+        });
         
-        const outOfStockVariants = p.product_variants
-          ?.filter((v: any) => (v.stock_quantity || 0) === 0)
-          ?.map((v: any) => v.size)
-          .join(', ');
-        
-        // Clean HTML from description
-        const cleanDescription = p.description 
-          ? p.description.replace(/<[^>]*>/g, '').substring(0, 120) 
-          : '';
-        
-        productCatalog += `\n• ${p.name}`;
-        productCatalog += `\n  💰 Precio: ${price}`;
-        if (availableVariants) {
-          productCatalog += `\n  ✅ Tallas disponibles: ${availableVariants}`;
-        }
-        if (outOfStockVariants) {
-          productCatalog += `\n  ❌ Agotadas: ${outOfStockVariants}`;
-        }
-        if (cleanDescription) {
-          productCatalog += `\n  📝 ${cleanDescription}`;
-        }
-        productCatalog += '\n';
-      });
-      
-      console.log(`Loaded ${products.length} products for AI context`);
+        console.log(`Loaded ${products.length} local products for AI context`);
+      }
     }
 
     // Build system prompt from config
@@ -328,7 +353,7 @@ async function generateAIResponse(
     };
     
     if (config.tone && toneMap[config.tone]) {
-      systemPrompt += `\n\nTONO DE COMUNICACIÓN: ${toneMap[config.tone]}`;
+      systemPrompt += `\n\nTONO: ${toneMap[config.tone]}`;
     }
 
     // Add special rules
@@ -336,14 +361,14 @@ async function generateAIResponse(
       systemPrompt += '\n\nREGLAS ESPECIALES:';
       config.rules.forEach((rule: any) => {
         if (rule.condition && rule.response) {
-          systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
+          systemPrompt += `\n- Cuando mencionen "${rule.condition}": ${rule.response}`;
         }
       });
     }
 
     // Add knowledge base
     if (config.knowledgeBase?.length > 0) {
-      systemPrompt += '\n\nBASE DE CONOCIMIENTO (usa esta información para responder):';
+      systemPrompt += '\n\nBASE DE CONOCIMIENTO:';
       config.knowledgeBase.forEach((item: any) => {
         if (item.question && item.answer) {
           systemPrompt += `\n\nP: ${item.question}\nR: ${item.answer}`;
@@ -383,18 +408,47 @@ async function generateAIResponse(
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenAI API error:', response.status, errorText);
-      return '';
+      return { text: '', productId: null, productImageUrl: null };
     }
 
     const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || '';
+    const rawAiResponse = data.choices?.[0]?.message?.content || '';
     
-    console.log('OpenAI response generated:', aiResponse.substring(0, 100) + '...');
+    console.log('OpenAI raw response:', rawAiResponse.substring(0, 100) + '...');
     
-    return aiResponse;
+    // Extract product ID
+    const productId = extractProductIdFromResponse(rawAiResponse);
+    let productImageUrl: string | null = null;
+    
+    if (productId) {
+      console.log(`AI mentioned product ID: ${productId}`);
+      // First check cache
+      if (productImageMap[productId]) {
+        productImageUrl = productImageMap[productId];
+        console.log(`Found image in cache for product ${productId}`);
+      } else {
+        // Fetch from Shopify
+        productImageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
+      }
+    } else {
+      // Legacy: check for name-based tag
+      const productName = extractProductNameFromResponse(rawAiResponse);
+      if (productName) {
+        console.log(`AI mentioned product by name: ${productName}`);
+        productImageUrl = await findProductImageByName(productName, organizationId, supabase, shopifyCredentials);
+      }
+    }
+    
+    const cleanedResponse = cleanAIResponse(rawAiResponse);
+    
+    return { 
+      text: cleanedResponse, 
+      productId, 
+      productImageUrl 
+    };
   } catch (error) {
     console.error('Error generating AI response:', error);
-    return '';
+    return { text: '', productId: null, productImageUrl: null };
   }
 }
 
@@ -526,7 +580,7 @@ serve(async (req) => {
                 console.log(`Channel not found for phone_number_id ${phoneNumberId}, trying default org`);
                 
                 // Fallback to Dosmicos organization
-                const dosmicoOrgId = '91997e35-f5a5-4bb6-8c04-5tried4e6d67';
+                const dosmicoOrgId = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
                 const { data: defaultChannel } = await supabase
                   .from('messaging_channels')
                   .select('*')
@@ -543,6 +597,16 @@ serve(async (req) => {
                   continue;
                 }
               }
+
+              // Get organization's Shopify credentials
+              const { data: org } = await supabase
+                .from('organizations')
+                .select('shopify_credentials')
+                .eq('id', channel.organization_id)
+                .single();
+              
+              const shopifyCredentials = org?.shopify_credentials;
+              console.log(`Shopify credentials available: ${!!shopifyCredentials}`);
 
               // Find or create conversation
               let { data: conversation } = await supabase
@@ -628,24 +692,21 @@ serve(async (req) => {
                   .order('sent_at', { ascending: false })
                   .limit(10);
 
-                // Generate AI response
-                const aiResponse = await generateAIResponse(
+                // Generate AI response with product image support
+                const aiResult = await generateAIResponse(
                   content,
                   (historyMessages || []).reverse(),
                   channel.ai_config,
                   channel.organization_id,
-                  supabase
+                  supabase,
+                  shopifyCredentials
                 );
 
-                if (aiResponse) {
-                  // Check if AI mentioned a product and wants to send image
-                  const productToShow = extractProductFromResponse(aiResponse);
-                  const cleanedResponse = cleanAIResponse(aiResponse);
-                  
+                if (aiResult.text) {
                   // Send the text response via WhatsApp
                   const sent = await sendWhatsAppMessage(
                     senderPhone, 
-                    cleanedResponse, 
+                    aiResult.text, 
                     channel.meta_phone_number_id || phoneNumberId
                   );
 
@@ -658,7 +719,7 @@ serve(async (req) => {
                         channel_type: 'whatsapp',
                         direction: 'outbound',
                         sender_type: 'ai',
-                        content: cleanedResponse,
+                        content: aiResult.text,
                         message_type: 'text',
                         sent_at: new Date().toISOString(),
                       });
@@ -668,46 +729,41 @@ serve(async (req) => {
                       .from('messaging_conversations')
                       .update({
                         last_message_at: new Date().toISOString(),
-                        last_message_preview: cleanedResponse.substring(0, 100),
+                        last_message_preview: aiResult.text.substring(0, 100),
                       })
                       .eq('id', conversation.id);
 
                     console.log('AI response sent and saved');
                     
-                    // If product was mentioned, send the product image
-                    if (productToShow) {
-                      console.log(`AI mentioned product: ${productToShow}, fetching image...`);
+                    // If product image was found, send it
+                    if (aiResult.productImageUrl) {
+                      console.log(`Sending product image: ${aiResult.productImageUrl.substring(0, 50)}...`);
                       
-                      const imageUrl = await findProductImage(productToShow, channel.organization_id, supabase);
+                      const imageSent = await sendWhatsAppImage(
+                        senderPhone,
+                        aiResult.productImageUrl,
+                        '📸 Aquí tienes la foto del producto',
+                        channel.meta_phone_number_id || phoneNumberId
+                      );
                       
-                      if (imageUrl) {
-                        // Send product image
-                        const imageSent = await sendWhatsAppImage(
-                          senderPhone,
-                          imageUrl,
-                          `📸 ${productToShow}`,
-                          channel.meta_phone_number_id || phoneNumberId
-                        );
+                      if (imageSent) {
+                        // Save image message to database
+                        await supabase
+                          .from('messaging_messages')
+                          .insert({
+                            conversation_id: conversation.id,
+                            channel_type: 'whatsapp',
+                            direction: 'outbound',
+                            sender_type: 'ai',
+                            content: '📸 Imagen del producto',
+                            message_type: 'image',
+                            media_url: aiResult.productImageUrl,
+                            sent_at: new Date().toISOString(),
+                          });
                         
-                        if (imageSent) {
-                          // Save image message to database
-                          await supabase
-                            .from('messaging_messages')
-                            .insert({
-                              conversation_id: conversation.id,
-                              channel_type: 'whatsapp',
-                              direction: 'outbound',
-                              sender_type: 'ai',
-                              content: `📸 Imagen: ${productToShow}`,
-                              message_type: 'image',
-                              media_url: imageUrl,
-                              sent_at: new Date().toISOString(),
-                            });
-                          
-                          console.log(`Product image sent for: ${productToShow}`);
-                        }
+                        console.log('Product image sent successfully');
                       } else {
-                        console.log(`No image found for product: ${productToShow}`);
+                        console.error('Failed to send product image');
                       }
                     }
                   }
