@@ -53,7 +53,7 @@ export const NewConversationModal = ({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MessageCircle className="h-5 w-5 text-emerald-500" />
+            <MessageCircle className="h-5 w-5 text-primary" />
             Nueva conversación
           </DialogTitle>
           <DialogDescription>
@@ -111,7 +111,6 @@ export const NewConversationModal = ({
             <Button
               type="submit"
               disabled={!phone.trim() || !message.trim() || isLoading}
-              className="bg-emerald-500 hover:bg-emerald-600"
             >
               {isLoading ? (
                 <>

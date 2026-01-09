@@ -144,14 +144,29 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
         conversationId = newConv.id;
       }
 
-      // Send the message via edge function
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
-        body: { conversation_id: conversationId, message }
-      });
+       // Send the message via edge function
+       const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
+         body: { conversation_id: conversationId, message }
+       });
 
-      if (error) throw error;
+       if (error) {
+         const anyError: any = error;
+         let messageText = error.message || 'Error enviando mensaje';
+         const resp: Response | undefined = anyError?.context?.response;
 
-      return { conversationId, ...data };
+         if (resp) {
+           try {
+             const body = await resp.clone().json();
+             messageText = body?.details || body?.error || messageText;
+           } catch {
+             // ignore JSON parsing errors
+           }
+         }
+
+         throw new Error(messageText);
+       }
+
+       return { conversationId, ...data };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
