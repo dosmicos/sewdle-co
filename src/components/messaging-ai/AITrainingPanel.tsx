@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   Send, 
   Bot, 
@@ -13,7 +15,11 @@ import {
   Sparkles,
   MessageSquare,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Save,
+  ChevronDown,
+  ChevronUp,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +39,10 @@ export const AITrainingPanel = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiConfig, setAiConfig] = useState<any>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  const [channelId, setChannelId] = useState<string | null>(null);
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isPromptOpen, setIsPromptOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load AI config
@@ -44,7 +54,7 @@ export const AITrainingPanel = () => {
       try {
         const { data: channel, error } = await supabase
           .from('messaging_channels')
-          .select('ai_config, ai_enabled, is_active, created_at')
+          .select('id, ai_config, ai_enabled, is_active, created_at')
           .eq('organization_id', currentOrganization.id)
           .eq('channel_type', 'whatsapp')
           .order('is_active', { ascending: false })
@@ -55,7 +65,9 @@ export const AITrainingPanel = () => {
         if (error) throw error;
 
         if (channel) {
+          setChannelId(channel.id);
           setAiConfig(channel.ai_config);
+          setSystemPrompt((channel.ai_config as any)?.systemPrompt || '');
         }
       } catch (err) {
         console.error('Error loading config:', err);
@@ -66,6 +78,67 @@ export const AITrainingPanel = () => {
 
     loadConfig();
   }, [currentOrganization?.id]);
+
+  // Save system prompt
+  const handleSavePrompt = async () => {
+    if (!currentOrganization?.id) {
+      toast.error('No hay una organización activa');
+      return;
+    }
+
+    setIsSavingPrompt(true);
+    try {
+      let effectiveChannelId = channelId;
+
+      // If no channel exists, create one
+      if (!effectiveChannelId) {
+        const { data: created, error: createError } = await supabase
+          .from('messaging_channels')
+          .insert({
+            organization_id: currentOrganization.id,
+            channel_type: 'whatsapp',
+            is_active: false,
+            ai_enabled: true,
+          } as any)
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        effectiveChannelId = created.id;
+        setChannelId(created.id);
+      }
+
+      // Merge with existing config
+      const { data: current } = await supabase
+        .from('messaging_channels')
+        .select('ai_config')
+        .eq('id', effectiveChannelId)
+        .maybeSingle();
+
+      const currentConfig = (current?.ai_config as any) || {};
+
+      const { error } = await supabase
+        .from('messaging_channels')
+        .update({
+          ai_config: {
+            ...currentConfig,
+            systemPrompt: systemPrompt,
+          },
+        })
+        .eq('id', effectiveChannelId);
+
+      if (error) throw error;
+
+      // Update local state
+      setAiConfig((prev: any) => ({ ...prev, systemPrompt }));
+      toast.success('Prompt guardado correctamente');
+    } catch (err) {
+      console.error('Error saving prompt:', err);
+      toast.error('Error al guardar el prompt');
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -210,24 +283,93 @@ export const AITrainingPanel = () => {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      {/* Chat Test Area */}
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-500" />
-              <CardTitle>Probar IA</CardTitle>
+    <div className="space-y-6">
+      {/* System Prompt Section */}
+      <Card>
+        <Collapsible open={isPromptOpen} onOpenChange={setIsPromptOpen}>
+          <CardHeader className="pb-3">
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-purple-500" />
+                  <CardTitle className="text-lg">Prompt del Sistema</CardTitle>
+                  {systemPrompt ? (
+                    <Badge variant="default" className="gap-1 ml-2">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Configurado
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="gap-1 ml-2">
+                      <AlertCircle className="h-3 w-3" />
+                      Pendiente
+                    </Badge>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm">
+                  {isPromptOpen ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Define las instrucciones base que la IA usará para todas las respuestas
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
+              <Textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder={`Ejemplo: Eres el asistente virtual de [Tu Tienda]. Tu rol es:
+- Ayudar a los clientes con información de productos
+- Proporcionar precios y disponibilidad
+- Responder siempre en español
+- Usar un tono amigable con emojis ocasionales`}
+                className="min-h-[200px] font-mono text-sm"
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Este prompt se usará como base para todas las respuestas de la IA
+                </p>
+                <Button 
+                  onClick={handleSavePrompt} 
+                  disabled={isSavingPrompt}
+                  className="gap-2"
+                >
+                  {isSavingPrompt ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Guardar Prompt
+                </Button>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Chat Test Area */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-500" />
+                <CardTitle>Probar IA</CardTitle>
+              </div>
+              <Button variant="outline" size="sm" onClick={clearChat}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Limpiar
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={clearChat}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Limpiar
-            </Button>
-          </div>
-          <CardDescription>
-            Prueba cómo responderá la IA a los mensajes de tus clientes
-          </CardDescription>
-        </CardHeader>
+            <CardDescription>
+              Prueba cómo responderá la IA a los mensajes de tus clientes
+            </CardDescription>
+          </CardHeader>
         <CardContent className="p-0">
           {/* Messages */}
           <ScrollArea className="h-[400px] p-4" ref={scrollRef}>
@@ -404,6 +546,7 @@ export const AITrainingPanel = () => {
           </CardContent>
         </Card>
       </div>
+    </div>
     </div>
   );
 };
