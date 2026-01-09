@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -28,6 +28,9 @@ interface Conversation {
 interface ConversationThreadProps {
   conversation?: Conversation;
   messages: Message[];
+  onSendMessage?: (message: string) => void;
+  isSending?: boolean;
+  isLoading?: boolean;
 }
 
 const channelConfig: Record<ChannelType, { 
@@ -64,10 +67,37 @@ const channelConfig: Record<ChannelType, {
   },
 };
 
-export const ConversationThread = ({ conversation, messages }: ConversationThreadProps) => {
+export const ConversationThread = ({ 
+  conversation, 
+  messages, 
+  onSendMessage,
+  isSending = false,
+  isLoading = false
+}: ConversationThreadProps) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSendMessage = () => {
+    if (!inputMessage.trim() || !onSendMessage) return;
+    onSendMessage(inputMessage.trim());
+    setInputMessage('');
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   const handleGenerateResponse = () => {
     setIsGenerating(true);
@@ -127,65 +157,78 @@ export const ConversationThread = ({ conversation, messages }: ConversationThrea
       </CardHeader>
 
       <CardContent className="flex-1 p-0 flex flex-col">
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}
-              >
+        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <MessageCircle className="h-12 w-12 mb-4 opacity-50" />
+              <p>No hay mensajes en esta conversación</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages.map((message, index) => (
                 <div
-                  className={cn(
-                    "max-w-[80%] rounded-lg p-3 relative group",
-                    message.role === 'user'
-                      ? 'bg-muted'
-                      : channelInfo.bubbleColor
-                  )}
+                  key={index}
+                  className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}
                 >
-                  <div className="flex items-start gap-2">
-                    {message.role === 'assistant' && (
-                      <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-lg p-3 relative group",
+                      message.role === 'user'
+                        ? 'bg-muted'
+                        : channelInfo.bubbleColor
                     )}
-                    <div className="flex-1">
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      <p 
-                        className={cn(
-                          "text-xs mt-1",
-                          message.role === 'user' ? 'text-muted-foreground' : 'opacity-70'
-                        )}
+                  >
+                    <div className="flex items-start gap-2">
+                      {message.role === 'assistant' && (
+                        <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        <p 
+                          className={cn(
+                            "text-xs mt-1",
+                            message.role === 'user' ? 'text-muted-foreground' : 'opacity-70'
+                          )}
+                        >
+                          {format(message.timestamp, 'HH:mm', { locale: es })}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {message.role === 'assistant' && (
+                      <button
+                        onClick={() => handleCopyMessage(message.content, index)}
+                        className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
                       >
-                        {format(message.timestamp, 'HH:mm', { locale: es })}
-                      </p>
+                        {copiedIndex === index ? (
+                          <Check className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {(isGenerating || isSending) && (
+                <div className="flex justify-end">
+                  <div className={cn("rounded-lg p-3 max-w-[80%]", channelInfo.bubbleColor)}>
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">
+                        {isSending ? 'Enviando...' : 'Generando respuesta...'}
+                      </span>
                     </div>
                   </div>
-                  
-                  {message.role === 'assistant' && (
-                    <button
-                      onClick={() => handleCopyMessage(message.content, index)}
-                      className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
-                    >
-                      {copiedIndex === index ? (
-                        <Check className="h-4 w-4 text-emerald-500" />
-                      ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  )}
                 </div>
-              </div>
-            ))}
-
-            {isGenerating && (
-              <div className="flex justify-end">
-                <div className={cn("rounded-lg p-3 max-w-[80%]", channelInfo.bubbleColor)}>
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 animate-pulse" />
-                    <span className="text-sm">Generando respuesta...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </ScrollArea>
 
         {/* Input area */}
@@ -195,7 +238,7 @@ export const ConversationThread = ({ conversation, messages }: ConversationThrea
               variant="outline" 
               size="sm"
               onClick={handleGenerateResponse}
-              disabled={isGenerating}
+              disabled={isGenerating || isSending}
               className="flex items-center gap-1"
             >
               <Sparkles className="h-4 w-4" />
@@ -205,10 +248,21 @@ export const ConversationThread = ({ conversation, messages }: ConversationThrea
               placeholder="Escribe un mensaje o genera con IA..."
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
               className="flex-1"
+              disabled={isSending}
             />
-            <Button size="icon" className={channelInfo.buttonColor}>
-              <Send className="h-4 w-4" />
+            <Button 
+              size="icon" 
+              className={channelInfo.buttonColor}
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim() || isSending}
+            >
+              {isSending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
           <p className="text-xs mt-2 text-muted-foreground">
