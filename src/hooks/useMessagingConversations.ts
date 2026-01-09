@@ -133,7 +133,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
             external_user_id: cleanPhone,
             user_identifier: phone,
             user_name: name || phone,
-            status: 'open',
+            status: 'active',
             ai_managed: false,
             unread_count: 0
           })
