@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ShopifyVariant {
   id: number;
@@ -28,10 +29,15 @@ interface ShopifyProduct {
   image?: { src: string };
 }
 
+type StatusFilter = 'all' | 'active' | 'draft';
+type StockFilter = 'all' | 'in-stock' | 'out-of-stock';
+
 export const ProductCatalogConnection = () => {
   const { currentOrganization } = useOrganization();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('all');
+  const [stockFilter, setStockFilter] = React.useState<StockFilter>('all');
 
   // Fetch products directly from Shopify
   const { data: shopifyData, isLoading: loading, refetch } = useQuery({
@@ -67,15 +73,33 @@ export const ProductCatalogConnection = () => {
 
   const products = shopifyData?.products || [];
 
-  const filteredProducts = products.filter(product =>
-    product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.variants.some(v => v.sku?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
   // Calculate total stock per product
   const getProductStock = (product: ShopifyProduct) => {
     return product.variants.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0);
   };
+
+  // Apply filters
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      // Text search
+      const matchesSearch = 
+        product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.variants.some(v => v.sku?.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      // Status filter
+      const matchesStatus = 
+        statusFilter === 'all' || product.status === statusFilter;
+      
+      // Stock filter
+      const totalStock = getProductStock(product);
+      const matchesStock = 
+        stockFilter === 'all' ||
+        (stockFilter === 'in-stock' && totalStock > 0) ||
+        (stockFilter === 'out-of-stock' && totalStock === 0);
+      
+      return matchesSearch && matchesStatus && matchesStock;
+    });
+  }, [products, searchTerm, statusFilter, stockFilter]);
 
   // Mutation to toggle product connection
   const toggleMutation = useMutation({
@@ -245,6 +269,40 @@ export const ProductCatalogConnection = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
             />
+          </div>
+          <div className="flex flex-wrap gap-3 mt-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Estado:</span>
+              <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-xs px-3 h-7">
+                    Todos ({products.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="active" className="text-xs px-3 h-7">
+                    Activos ({products.filter(p => p.status === 'active').length})
+                  </TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs px-3 h-7">
+                    Borrador ({products.filter(p => p.status === 'draft').length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Stock:</span>
+              <Tabs value={stockFilter} onValueChange={(v) => setStockFilter(v as StockFilter)}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-xs px-3 h-7">
+                    Todos
+                  </TabsTrigger>
+                  <TabsTrigger value="in-stock" className="text-xs px-3 h-7">
+                    Con stock ({products.filter(p => getProductStock(p) > 0).length})
+                  </TabsTrigger>
+                  <TabsTrigger value="out-of-stock" className="text-xs px-3 h-7">
+                    Sin stock ({products.filter(p => getProductStock(p) === 0).length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
