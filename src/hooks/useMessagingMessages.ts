@@ -64,8 +64,8 @@ export const useMessagingMessages = (conversationId: string | null) => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messaging-messages', conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['messaging-messages', conversationId], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['messaging-conversations'], exact: false, refetchType: 'all' });
       toast.success('Mensaje enviado');
     },
     onError: (error: any) => {
