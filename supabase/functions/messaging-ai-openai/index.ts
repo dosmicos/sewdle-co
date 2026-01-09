@@ -106,10 +106,65 @@ serve(async (req) => {
       }
     }
 
-    // Load products if organizationId is provided
+    // Load products with Shopify inventory if organizationId is provided
     let productCatalog = '';
     if (organizationId) {
       try {
+        // Get organization's Shopify credentials
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('shopify_credentials')
+          .eq('id', organizationId)
+          .single();
+
+        let shopifyInventory: Map<string, number> = new Map();
+        
+        // Fetch real-time inventory from Shopify if credentials exist
+        if (org?.shopify_credentials) {
+          const creds = org.shopify_credentials as any;
+          const shopifyDomain = creds.store_domain || creds.shopDomain;
+          const accessToken = creds.access_token || creds.accessToken;
+          
+          if (shopifyDomain && accessToken) {
+            try {
+              console.log("Fetching Shopify inventory...");
+              
+              // Fetch products with inventory from Shopify
+              const shopifyResponse = await fetch(
+                `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250&fields=id,title,variants`,
+                {
+                  headers: {
+                    'X-Shopify-Access-Token': accessToken,
+                    'Content-Type': 'application/json',
+                  },
+                }
+              );
+              
+              if (shopifyResponse.ok) {
+                const shopifyData = await shopifyResponse.json();
+                
+                // Build inventory map: variant_id -> inventory_quantity
+                shopifyData.products?.forEach((product: any) => {
+                  product.variants?.forEach((variant: any) => {
+                    if (variant.sku) {
+                      shopifyInventory.set(variant.sku, variant.inventory_quantity || 0);
+                    }
+                    // Also map by variant ID
+                    shopifyInventory.set(`variant_${variant.id}`, variant.inventory_quantity || 0);
+                  });
+                });
+                
+                console.log(`Loaded Shopify inventory for ${shopifyInventory.size} variants`);
+              } else {
+                console.error("Shopify API error:", shopifyResponse.status);
+              }
+            } catch (shopifyErr) {
+              console.error("Error fetching Shopify inventory:", shopifyErr);
+            }
+          }
+        }
+
+        // Load products from database
         const { data: products, error: productsError } = await supabase
           .from('products')
           .select(`
@@ -118,30 +173,41 @@ serve(async (req) => {
             base_price, 
             category,
             description,
-            product_variants (size, color, stock_quantity, sku_variant)
+            shopify_variant_id,
+            product_variants (id, size, color, stock_quantity, sku_variant, shopify_variant_id)
           `)
           .eq('organization_id', organizationId)
           .eq('status', 'active')
-          .limit(30);
+          .limit(50);
 
         if (productsError) {
           console.error("Error loading products:", productsError);
         } else if (products && products.length > 0) {
           productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
+          productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n';
+          
           products.forEach((p: any) => {
             const price = p.base_price 
               ? `$${Number(p.base_price).toLocaleString('es-CO')} COP` 
               : 'Precio: Consultar';
             
             const variants = p.product_variants
-              ?.filter((v: any) => (v.stock_quantity || 0) > 0)
               ?.map((v: any) => {
                 const size = v.size || '';
                 const color = v.color || '';
-                const stock = v.stock_quantity || 0;
-                return `${size}${color ? ` ${color}` : ''} (Stock: ${stock})`;
+                
+                // Try to get stock from Shopify first, fallback to local
+                let stock = v.stock_quantity || 0;
+                if (v.sku_variant && shopifyInventory.has(v.sku_variant)) {
+                  stock = shopifyInventory.get(v.sku_variant) || 0;
+                } else if (v.shopify_variant_id && shopifyInventory.has(`variant_${v.shopify_variant_id}`)) {
+                  stock = shopifyInventory.get(`variant_${v.shopify_variant_id}`) || 0;
+                }
+                
+                const stockStatus = stock > 0 ? `✅ ${stock} unidades` : '❌ Agotado';
+                return `${size}${color ? ` ${color}` : ''}: ${stockStatus}`;
               })
-              .join(', ') || 'Sin stock disponible';
+              .join(' | ') || 'Sin variantes';
             
             // Clean HTML from description
             const cleanDescription = p.description 
@@ -150,14 +216,14 @@ serve(async (req) => {
             
             productCatalog += `\n• ${p.name}`;
             productCatalog += `\n  Precio: ${price}`;
-            productCatalog += `\n  Tallas/Variantes disponibles: ${variants}`;
+            productCatalog += `\n  Disponibilidad: ${variants}`;
             if (cleanDescription) {
               productCatalog += `\n  ${cleanDescription}`;
             }
             productCatalog += '\n';
           });
           
-          console.log(`Loaded ${products.length} products for context`);
+          console.log(`Loaded ${products.length} products with inventory for context`);
         }
       } catch (err) {
         console.error("Error loading products:", err);
