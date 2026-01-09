@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquareMore, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MessageSquareMore, Loader2, Plus } from 'lucide-react';
 import { ConversationsList, Conversation, ChannelType } from '@/components/messaging-ai/ConversationsList';
 import { ConversationThread } from '@/components/messaging-ai/ConversationThread';
+import { NewConversationModal } from '@/components/messaging-ai/NewConversationModal';
 import { AIConfigPanel } from '@/components/whatsapp-ai/AIConfigPanel';
 import { ProductCatalogConnection } from '@/components/whatsapp-ai/ProductCatalogConnection';
 import { MessagingStats } from '@/components/messaging-ai/MessagingStats';
@@ -19,8 +21,15 @@ const MessagingAIPage = () => {
   const [activeChannel, setActiveChannel] = useState<ChannelType | 'all'>('all');
   const [activeView, setActiveView] = useState<ViewType>('conversations');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showNewConversation, setShowNewConversation] = useState(false);
 
-  const { conversations, isLoading: isLoadingConversations, markAsRead } = useMessagingConversations(activeChannel);
+  const { 
+    conversations, 
+    isLoading: isLoadingConversations, 
+    markAsRead,
+    createConversation,
+    isCreatingConversation
+  } = useMessagingConversations(activeChannel);
   const { messages, isLoading: isLoadingMessages, sendMessage, isSending } = useMessagingMessages(selectedConversation);
 
   // Transform DB conversations to UI format
@@ -101,6 +110,18 @@ const MessagingAIPage = () => {
     sendMessage({ message });
   };
 
+  const handleCreateConversation = async (phone: string, name: string, message: string) => {
+    try {
+      const result = await createConversation({ phone, name, message });
+      setShowNewConversation(false);
+      if (result?.conversationId) {
+        setSelectedConversation(result.conversationId);
+      }
+    } catch (error) {
+      // Error is handled in the hook
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
@@ -118,16 +139,28 @@ const MessagingAIPage = () => {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-3 p-6 border-b bg-background">
-          <div className="p-2 rounded-lg bg-indigo-100">
-            <MessageSquareMore className="h-6 w-6 text-indigo-600" />
+        <div className="flex items-center justify-between p-6 border-b bg-background">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-100">
+              <MessageSquareMore className="h-6 w-6 text-indigo-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Mensajería IA</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestiona conversaciones de WhatsApp, Instagram y Messenger con IA
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Mensajería IA</h1>
-            <p className="text-sm text-muted-foreground">
-              Gestiona conversaciones de WhatsApp, Instagram y Messenger con IA
-            </p>
-          </div>
+          
+          {activeView === 'conversations' && (
+            <Button 
+              onClick={() => setShowNewConversation(true)}
+              className="bg-emerald-500 hover:bg-emerald-600"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nuevo chat
+            </Button>
+          )}
         </div>
 
         {/* Content area */}
@@ -165,7 +198,15 @@ const MessagingAIPage = () => {
                       <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                         <MessageSquareMore className="h-12 w-12 mb-4 opacity-50" />
                         <p>No hay conversaciones</p>
-                        <p className="text-sm">Los mensajes entrantes aparecerán aquí</p>
+                        <p className="text-sm text-center px-4">Los mensajes entrantes aparecerán aquí</p>
+                        <Button 
+                          variant="outline" 
+                          className="mt-4"
+                          onClick={() => setShowNewConversation(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Iniciar nuevo chat
+                        </Button>
                       </div>
                     ) : (
                       <ConversationsList 
@@ -233,6 +274,14 @@ const MessagingAIPage = () => {
           {activeView === 'stats' && <MessagingStats />}
         </div>
       </div>
+
+      {/* New Conversation Modal */}
+      <NewConversationModal
+        open={showNewConversation}
+        onOpenChange={setShowNewConversation}
+        onCreateConversation={handleCreateConversation}
+        isLoading={isCreatingConversation}
+      />
     </div>
   );
 };
