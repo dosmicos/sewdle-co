@@ -7,18 +7,80 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Extract product ID from AI response
-function extractProductIdFromResponse(aiResponse: string): number | null {
-  const match = aiResponse.match(/\[PRODUCT_IMAGE_ID:(\d+)\]/);
-  if (match) {
-    return parseInt(match[1], 10);
+// Extract ALL product IDs from AI response (up to 10)
+function extractProductIdsFromResponse(aiResponse: string): number[] {
+  const regex = /\[PRODUCT_IMAGE_ID:(\d+)\]/g;
+  const ids: number[] = [];
+  let match;
+  while ((match = regex.exec(aiResponse)) !== null) {
+    const id = parseInt(match[1], 10);
+    if (!ids.includes(id)) ids.push(id);
   }
-  return null;
+  return ids.slice(0, 10); // Limit to 10 products max
 }
 
-// Remove product image tag from response
+// Remove product image tags from response
 function cleanAIResponse(aiResponse: string): string {
   return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').trim();
+}
+
+// Cache external image to Supabase Storage and return public URL
+async function cacheImageToStorage(
+  imageUrl: string,
+  productId: number,
+  organizationId: string,
+  supabase: any
+): Promise<string | null> {
+  try {
+    console.log(`Caching image for product ${productId}...`);
+    
+    // Fetch image from Shopify
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.error(`Failed to fetch image: ${response.status}`);
+      return null;
+    }
+    
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    // Check file size (max 10MB)
+    if (uint8Array.length > 10 * 1024 * 1024) {
+      console.error('Image too large, skipping cache');
+      return imageUrl; // Return original URL as fallback
+    }
+    
+    // Determine extension
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+    const path = `products/${organizationId}/${productId}.${ext}`;
+    
+    // Upload to Supabase Storage with upsert
+    const { error: uploadError } = await supabase.storage
+      .from('messaging-media')
+      .upload(path, uint8Array, {
+        contentType,
+        upsert: true
+      });
+    
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      return imageUrl; // Return original URL as fallback
+    }
+    
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('messaging-media')
+      .getPublicUrl(path);
+    
+    const publicUrl = publicUrlData?.publicUrl;
+    console.log(`Image cached successfully: ${publicUrl?.substring(0, 50)}...`);
+    
+    return publicUrl || imageUrl;
+  } catch (err) {
+    console.error('Error caching image:', err);
+    return imageUrl; // Return original URL as fallback
+  }
 }
 
 // Fetch product image from Shopify using organization credentials
@@ -174,7 +236,7 @@ serve(async (req) => {
     // Load products with Shopify inventory if organizationId is provided
     let productCatalog = '';
     let shopifyCredentials: any = null;
-    let productImageMap: Record<number, string> = {}; // Map Shopify ID -> image URL
+    let productImageMap: Record<number, { url: string; title: string }> = {}; // Map Shopify ID -> image URL + title
     
     if (organizationId) {
       try {
@@ -248,16 +310,21 @@ serve(async (req) => {
                 if (connectedProducts.length > 0) {
                   productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
                   productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
-                  productCatalog += '🖼️ INSTRUCCIÓN DE IMÁGENES: PUEDES Y DEBES mostrar fotos de productos. Cuando recomiendes o el cliente pida ver un producto específico, agrega al final de tu respuesta: [PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO] donde ID es el número que aparece en paréntesis junto al nombre.\n\n';
+                  productCatalog += '🖼️ INSTRUCCIÓN DE IMÁGENES MÚLTIPLES:\n';
+                  productCatalog += 'PUEDES Y DEBES mostrar fotos de productos. Cuando recomiendes productos o el cliente pida ver fotos:\n';
+                  productCatalog += '- Agrega UN tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones o recomiendes\n';
+                  productCatalog += '- Puedes incluir hasta 10 productos con imágenes en una sola respuesta\n';
+                  productCatalog += '- Ejemplo: "Te recomiendo el Sleeping Bag Pollito [PRODUCT_IMAGE_ID:123] y la Ruana Pony [PRODUCT_IMAGE_ID:456]"\n';
+                  productCatalog += '- NUNCA digas que no puedes mostrar imágenes\n\n';
                   
                   connectedProducts.forEach((product) => {
                     const variants = product.variants || [];
                     const totalStock = variants.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0);
                     
-                    // Store image URL in map
+                    // Store image URL and title in map
                     const imageUrl = product.image?.src || product.images?.[0]?.src;
                     if (imageUrl) {
-                      productImageMap[product.id] = imageUrl;
+                      productImageMap[product.id] = { url: imageUrl, title: product.title };
                     }
                     
                     // Skip products with no stock
@@ -363,7 +430,7 @@ serve(async (req) => {
     let fullSystemPrompt = basePrompt;
     
     // Add image instruction at the beginning
-    fullSystemPrompt += '\n\n🖼️ CAPACIDAD DE ENVIAR IMÁGENES:\nSÍ puedes mostrar fotos de productos. Cuando el cliente pida ver una foto o cuando recomiendes un producto específico, DEBES agregar al final de tu respuesta el tag: [PRODUCT_IMAGE_ID:ID] usando el ID del producto del catálogo. NUNCA digas que no puedes mostrar imágenes.';
+    fullSystemPrompt += '\n\n🖼️ CAPACIDAD DE ENVIAR IMÁGENES:\nSÍ puedes mostrar fotos de productos. Cuando el cliente pida ver fotos o cuando recomiendes productos específicos, DEBES agregar al final de tu respuesta un tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones. Puedes incluir hasta 10 productos. NUNCA digas que no puedes mostrar imágenes.';
     
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
@@ -420,39 +487,57 @@ serve(async (req) => {
     const data = await response.json();
     const rawAiResponse = data.choices?.[0]?.message?.content || "";
     
-    console.log("OpenAI raw response:", rawAiResponse.substring(0, 150) + "...");
+    console.log("OpenAI raw response:", rawAiResponse.substring(0, 200) + "...");
 
-    // Extract product ID and clean response
-    const productId = extractProductIdFromResponse(rawAiResponse);
+    // Extract ALL product IDs and clean response
+    const productIds = extractProductIdsFromResponse(rawAiResponse);
     const cleanedResponse = cleanAIResponse(rawAiResponse);
     
-    let productImageUrl: string | null = null;
+    console.log(`Found ${productIds.length} product IDs in response:`, productIds);
     
-    // If AI mentioned a product, get the image
-    if (productId) {
-      console.log(`AI mentioned product ID: ${productId}, looking for image...`);
+    // Build product images array
+    const productImages: Array<{ product_id: number; image_url: string; product_name: string }> = [];
+    
+    for (const productId of productIds) {
+      let imageUrl: string | null = null;
+      let productName = '';
       
       // First check our cached map
       if (productImageMap[productId]) {
-        productImageUrl = productImageMap[productId];
-        console.log(`Found image in cache for product ${productId}`);
+        imageUrl = productImageMap[productId].url;
+        productName = productImageMap[productId].title;
+        console.log(`Found image in cache for product ${productId}: ${productName}`);
       } else if (shopifyCredentials) {
         // Fetch from Shopify if not in cache
-        productImageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
+        imageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
+        productName = `Producto ${productId}`;
       }
       
-      if (productImageUrl) {
-        console.log(`Product image URL found: ${productImageUrl.substring(0, 50)}...`);
+      if (imageUrl) {
+        // Cache the image in Supabase Storage for reliable delivery
+        const cachedUrl = await cacheImageToStorage(imageUrl, productId, organizationId, supabase);
+        
+        productImages.push({
+          product_id: productId,
+          image_url: cachedUrl || imageUrl,
+          product_name: productName
+        });
+        
+        console.log(`Added image for product ${productId}: ${productName}`);
       } else {
         console.log(`No image found for product ${productId}`);
       }
     }
+    
+    console.log(`Returning ${productImages.length} product images`);
 
     return new Response(
       JSON.stringify({ 
         response: cleanedResponse,
-        product_image_url: productImageUrl,
-        product_id: productId
+        product_images: productImages,
+        // Keep legacy fields for backwards compatibility
+        product_image_url: productImages[0]?.image_url || null,
+        product_id: productIds[0] || null
       }), 
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -44,10 +44,11 @@ REGLAS DE COMUNICACIÓN:
 - Sé conciso pero completo en tus respuestas
 
 🖼️ ENVÍO DE IMÁGENES - MUY IMPORTANTE:
-SÍ puedes y DEBES enviar fotos de productos. Cuando recomiendes un producto específico o el cliente pida ver una foto, SIEMPRE incluye al final de tu respuesta:
-[PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO]
-donde ID es el número que aparece en paréntesis junto al nombre del producto en el catálogo.
-NUNCA digas que no puedes mostrar imágenes.`,
+SÍ puedes y DEBES enviar fotos de productos. Cuando recomiendes productos o el cliente pida ver fotos:
+- Incluye UN tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones
+- Puedes incluir hasta 10 productos con imágenes
+- Ejemplo: "Te recomiendo el Sleeping Bag Pollito [PRODUCT_IMAGE_ID:123] y la Ruana Pony [PRODUCT_IMAGE_ID:456]"
+- NUNCA digas que no puedes mostrar imágenes.`,
 
   tone: 'friendly',
   autoReply: true,
@@ -55,20 +56,23 @@ NUNCA digas que no puedes mostrar imágenes.`,
   greetingMessage: '¡Hola! 👋 Bienvenido a Dosmicos 🐄✨ Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?',
 };
 
-// Extract product ID from AI response
-function extractProductIdFromResponse(aiResponse: string): number | null {
-  const match = aiResponse.match(/\[PRODUCT_IMAGE_ID:(\d+)\]/);
-  if (match) {
-    return parseInt(match[1], 10);
+// Extract ALL product IDs from AI response (up to 10)
+function extractProductIdsFromResponse(aiResponse: string): number[] {
+  const regex = /\[PRODUCT_IMAGE_ID:(\d+)\]/g;
+  const ids: number[] = [];
+  let match;
+  while ((match = regex.exec(aiResponse)) !== null) {
+    const id = parseInt(match[1], 10);
+    if (!ids.includes(id)) ids.push(id);
   }
-  return null;
+  return ids.slice(0, 10); // Limit to 10 products max
 }
 
 // Legacy: Extract product name (fallback)
 function extractProductNameFromResponse(aiResponse: string): string | null {
-  const match = aiResponse.match(/\[PRODUCT_IMAGE:(.+?)\]/);
+  const match = aiResponse.match(/\[PRODUCT_IMAGE:.+?\]/);
   if (match) {
-    return match[1].trim();
+    return match[1]?.trim() || null;
   }
   return null;
 }
@@ -79,6 +83,65 @@ function cleanAIResponse(aiResponse: string): string {
     .replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '')
     .replace(/\[PRODUCT_IMAGE:.+?\]/g, '')
     .trim();
+}
+
+// Cache external image to Supabase Storage and return public URL
+async function cacheImageToStorage(
+  imageUrl: string,
+  productId: number,
+  organizationId: string,
+  supabase: any
+): Promise<string | null> {
+  try {
+    console.log(`Caching image for product ${productId}...`);
+    
+    // Fetch image from Shopify
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.error(`Failed to fetch image: ${response.status}`);
+      return null;
+    }
+    
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    // Check file size (max 10MB)
+    if (uint8Array.length > 10 * 1024 * 1024) {
+      console.error('Image too large, skipping cache');
+      return imageUrl; // Return original URL as fallback
+    }
+    
+    // Determine extension
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+    const path = `products/${organizationId}/${productId}.${ext}`;
+    
+    // Upload to Supabase Storage with upsert
+    const { error: uploadError } = await supabase.storage
+      .from('messaging-media')
+      .upload(path, uint8Array, {
+        contentType,
+        upsert: true
+      });
+    
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      return imageUrl; // Return original URL as fallback
+    }
+    
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('messaging-media')
+      .getPublicUrl(path);
+    
+    const publicUrl = publicUrlData?.publicUrl;
+    console.log(`Image cached successfully: ${publicUrl?.substring(0, 50)}...`);
+    
+    return publicUrl || imageUrl;
+  } catch (err) {
+    console.error('Error caching image:', err);
+    return imageUrl; // Return original URL as fallback
+  }
 }
 
 // Fetch product image from Shopify using organization credentials
@@ -180,7 +243,7 @@ async function sendWhatsAppImage(phoneNumber: string, imageUrl: string, caption:
   try {
     const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
     
-    console.log(`Sending WhatsApp image to ${phoneNumber}`);
+    console.log(`Sending WhatsApp image to ${phoneNumber}: ${imageUrl.substring(0, 50)}...`);
     
     const response = await fetch(url, {
       method: 'POST',
@@ -223,18 +286,18 @@ async function generateAIResponse(
   organizationId: string,
   supabase: any,
   shopifyCredentials: any
-): Promise<{ text: string; productId: number | null; productImageUrl: string | null }> {
+): Promise<{ text: string; productImages: Array<{ product_id: number; image_url: string; product_name: string }> }> {
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
   
   if (!openaiApiKey) {
     console.log('OPENAI_API_KEY not configured, skipping AI response');
-    return { text: '', productId: null, productImageUrl: null };
+    return { text: '', productImages: [] };
   }
 
   try {
     // Build product catalog with IDs
     let productCatalog = '';
-    let productImageMap: Record<number, string> = {};
+    let productImageMap: Record<number, { url: string; title: string }> = {};
     
     // Try to get Shopify products with real-time inventory
     if (shopifyCredentials) {
@@ -261,16 +324,17 @@ async function generateAIResponse(
             
             if (products.length > 0) {
               productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-              productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n\n';
+              productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n';
+              productCatalog += '🖼️ INSTRUCCIÓN: Incluye [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones (hasta 10).\n\n';
               
               products.forEach((product: any) => {
                 const variants = product.variants || [];
                 const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
                 
-                // Store image URL
+                // Store image URL and title
                 const imageUrl = product.image?.src || product.images?.[0]?.src;
                 if (imageUrl) {
-                  productImageMap[product.id] = imageUrl;
+                  productImageMap[product.id] = { url: imageUrl, title: product.title };
                 }
                 
                 if (totalStock === 0) {
@@ -408,34 +472,47 @@ async function generateAIResponse(
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenAI API error:', response.status, errorText);
-      return { text: '', productId: null, productImageUrl: null };
+      return { text: '', productImages: [] };
     }
 
     const data = await response.json();
     const rawAiResponse = data.choices?.[0]?.message?.content || '';
     
-    console.log('OpenAI raw response:', rawAiResponse.substring(0, 100) + '...');
+    console.log('OpenAI raw response:', rawAiResponse.substring(0, 150) + '...');
     
-    // Extract product ID
-    const productId = extractProductIdFromResponse(rawAiResponse);
-    let productImageUrl: string | null = null;
+    // Extract ALL product IDs
+    const productIds = extractProductIdsFromResponse(rawAiResponse);
+    console.log(`Found ${productIds.length} product IDs in response:`, productIds);
     
-    if (productId) {
-      console.log(`AI mentioned product ID: ${productId}`);
+    // Build product images array
+    const productImages: Array<{ product_id: number; image_url: string; product_name: string }> = [];
+    
+    for (const productId of productIds) {
+      let imageUrl: string | null = null;
+      let productName = '';
+      
       // First check cache
       if (productImageMap[productId]) {
-        productImageUrl = productImageMap[productId];
-        console.log(`Found image in cache for product ${productId}`);
+        imageUrl = productImageMap[productId].url;
+        productName = productImageMap[productId].title;
+        console.log(`Found image in cache for product ${productId}: ${productName}`);
       } else {
         // Fetch from Shopify
-        productImageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
+        imageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
+        productName = `Producto ${productId}`;
       }
-    } else {
-      // Legacy: check for name-based tag
-      const productName = extractProductNameFromResponse(rawAiResponse);
-      if (productName) {
-        console.log(`AI mentioned product by name: ${productName}`);
-        productImageUrl = await findProductImageByName(productName, organizationId, supabase, shopifyCredentials);
+      
+      if (imageUrl) {
+        // Cache the image in Supabase Storage
+        const cachedUrl = await cacheImageToStorage(imageUrl, productId, organizationId, supabase);
+        
+        productImages.push({
+          product_id: productId,
+          image_url: cachedUrl || imageUrl,
+          product_name: productName
+        });
+        
+        console.log(`Added image for product ${productId}: ${productName}`);
       }
     }
     
@@ -443,12 +520,11 @@ async function generateAIResponse(
     
     return { 
       text: cleanedResponse, 
-      productId, 
-      productImageUrl 
+      productImages 
     };
   } catch (error) {
     console.error('Error generating AI response:', error);
-    return { text: '', productId: null, productImageUrl: null };
+    return { text: '', productImages: [] };
   }
 }
 
@@ -692,7 +768,7 @@ serve(async (req) => {
                   .order('sent_at', { ascending: false })
                   .limit(10);
 
-                // Generate AI response with product image support
+                // Generate AI response with multiple product image support
                 const aiResult = await generateAIResponse(
                   content,
                   (historyMessages || []).reverse(),
@@ -735,36 +811,45 @@ serve(async (req) => {
 
                     console.log('AI response sent and saved');
                     
-                    // If product image was found, send it
-                    if (aiResult.productImageUrl) {
-                      console.log(`Sending product image: ${aiResult.productImageUrl.substring(0, 50)}...`);
+                    // Send ALL product images (up to 10)
+                    if (aiResult.productImages && aiResult.productImages.length > 0) {
+                      console.log(`Sending ${aiResult.productImages.length} product images...`);
                       
-                      const imageSent = await sendWhatsAppImage(
-                        senderPhone,
-                        aiResult.productImageUrl,
-                        '📸 Aquí tienes la foto del producto',
-                        channel.meta_phone_number_id || phoneNumberId
-                      );
-                      
-                      if (imageSent) {
-                        // Save image message to database
-                        await supabase
-                          .from('messaging_messages')
-                          .insert({
-                            conversation_id: conversation.id,
-                            channel_type: 'whatsapp',
-                            direction: 'outbound',
-                            sender_type: 'ai',
-                            content: '📸 Imagen del producto',
-                            message_type: 'image',
-                            media_url: aiResult.productImageUrl,
-                            sent_at: new Date().toISOString(),
-                          });
+                      for (const img of aiResult.productImages) {
+                        console.log(`Sending image for product ${img.product_id}: ${img.product_name}`);
                         
-                        console.log('Product image sent successfully');
-                      } else {
-                        console.error('Failed to send product image');
+                        const imageSent = await sendWhatsAppImage(
+                          senderPhone,
+                          img.image_url,
+                          `📸 ${img.product_name}`,
+                          channel.meta_phone_number_id || phoneNumberId
+                        );
+                        
+                        if (imageSent) {
+                          // Save image message to database
+                          await supabase
+                            .from('messaging_messages')
+                            .insert({
+                              conversation_id: conversation.id,
+                              channel_type: 'whatsapp',
+                              direction: 'outbound',
+                              sender_type: 'ai',
+                              content: `📸 ${img.product_name}`,
+                              message_type: 'image',
+                              media_url: img.image_url,
+                              sent_at: new Date().toISOString(),
+                            });
+                          
+                          console.log(`Product image sent: ${img.product_name}`);
+                        } else {
+                          console.error(`Failed to send product image: ${img.product_name}`);
+                        }
+                        
+                        // Small delay between images to avoid rate limiting
+                        await new Promise(resolve => setTimeout(resolve, 500));
                       }
+                      
+                      console.log(`All ${aiResult.productImages.length} product images processed`);
                     }
                   }
                 } else {
