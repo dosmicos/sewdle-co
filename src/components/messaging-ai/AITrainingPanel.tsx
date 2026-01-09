@@ -42,14 +42,17 @@ export const AITrainingPanel = () => {
       
       setIsLoadingConfig(true);
       try {
-        const { data: channel } = await supabase
+        const { data: channel, error } = await supabase
           .from('messaging_channels')
-          .select('ai_config, ai_enabled')
+          .select('ai_config, ai_enabled, is_active, created_at')
           .eq('organization_id', currentOrganization.id)
           .eq('channel_type', 'whatsapp')
-          .eq('is_active', true)
+          .order('is_active', { ascending: false })
+          .order('created_at', { ascending: true })
           .limit(1)
-          .single();
+          .maybeSingle();
+
+        if (error) throw error;
 
         if (channel) {
           setAiConfig(channel.ai_config);
