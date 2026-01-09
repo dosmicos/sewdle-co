@@ -69,14 +69,15 @@ export const KnowledgeBaseEditor = () => {
       try {
         const { data: channel, error } = await supabase
           .from('messaging_channels')
-          .select('id, ai_config')
+          .select('id, ai_config, is_active, created_at')
           .eq('organization_id', currentOrganization.id)
           .eq('channel_type', 'whatsapp')
-          .eq('is_active', true)
+          .order('is_active', { ascending: false })
+          .order('created_at', { ascending: true })
           .limit(1)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('Error loading knowledge:', error);
           return;
         }
@@ -100,19 +101,40 @@ export const KnowledgeBaseEditor = () => {
   }, [currentOrganization?.id]);
 
   const handleSave = async () => {
-    if (!channelId) {
-      toast.error('No hay un canal de WhatsApp configurado');
+    if (!currentOrganization?.id) {
+      toast.error('No hay una organización activa');
       return;
     }
 
     setIsSaving(true);
     try {
+      let effectiveChannelId = channelId;
+
+      // If there is no WhatsApp channel yet, create a placeholder so we can persist knowledge.
+      if (!effectiveChannelId) {
+        const { data: created, error: createError } = await supabase
+          .from('messaging_channels')
+          .insert({
+            organization_id: currentOrganization.id,
+            channel_type: 'whatsapp',
+            is_active: false,
+          } as any)
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        effectiveChannelId = created.id;
+        setChannelId(created.id);
+      }
+
       // Get current config
-      const { data: channel } = await supabase
+      const { data: channel, error: channelError } = await supabase
         .from('messaging_channels')
         .select('ai_config')
-        .eq('id', channelId)
-        .single();
+        .eq('id', effectiveChannelId)
+        .maybeSingle();
+
+      if (channelError) throw channelError;
 
       const currentConfig = (channel?.ai_config as any) || {};
 
@@ -125,7 +147,7 @@ export const KnowledgeBaseEditor = () => {
             knowledgeBase: items,
           },
         })
-        .eq('id', channelId);
+        .eq('id', effectiveChannelId);
 
       if (error) throw error;
 
@@ -225,7 +247,7 @@ export const KnowledgeBaseEditor = () => {
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={isSaving || !channelId}
+            disabled={isSaving || !currentOrganization?.id}
           >
             {isSaving ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -72,14 +72,15 @@ Reglas importantes:
       try {
         const { data: channel, error } = await supabase
           .from('messaging_channels')
-          .select('id, ai_config, ai_enabled')
+          .select('id, ai_config, ai_enabled, is_active, created_at')
           .eq('organization_id', currentOrganization.id)
           .eq('channel_type', 'whatsapp')
-          .eq('is_active', true)
+          .order('is_active', { ascending: false })
+          .order('created_at', { ascending: true })
           .limit(1)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('Error loading AI config:', error);
           return;
         }
@@ -112,13 +113,33 @@ Reglas importantes:
   }, [currentOrganization?.id]);
 
   const handleSave = async () => {
-    if (!channelId) {
-      toast.error('No hay un canal de WhatsApp configurado');
+    if (!currentOrganization?.id) {
+      toast.error('No hay una organización activa');
       return;
     }
 
     setIsSaving(true);
     try {
+      let effectiveChannelId = channelId;
+
+      // If there is no WhatsApp channel yet, create a placeholder so we can persist config.
+      if (!effectiveChannelId) {
+        const { data: created, error: createError } = await supabase
+          .from('messaging_channels')
+          .insert({
+            organization_id: currentOrganization.id,
+            channel_type: 'whatsapp',
+            is_active: false,
+            ai_enabled: config.autoReply,
+          } as any)
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        effectiveChannelId = created.id;
+        setChannelId(created.id);
+      }
+
       // Build the config object as a plain object for JSON compatibility
       const configToSave = {
         systemPrompt: config.systemPrompt,
@@ -131,13 +152,27 @@ Reglas importantes:
         rules: config.rules.map(r => ({ id: r.id, condition: r.condition, response: r.response })),
       };
 
+      // Merge with existing ai_config to avoid overwriting knowledgeBase or other keys.
+      const { data: current, error: currentError } = await supabase
+        .from('messaging_channels')
+        .select('ai_config')
+        .eq('id', effectiveChannelId)
+        .maybeSingle();
+
+      if (currentError) throw currentError;
+
+      const currentConfig = (current?.ai_config as any) || {};
+
       const { error } = await supabase
         .from('messaging_channels')
         .update({
-          ai_config: configToSave,
+          ai_config: {
+            ...currentConfig,
+            ...configToSave,
+          },
           ai_enabled: config.autoReply,
         } as any)
-        .eq('id', channelId);
+        .eq('id', effectiveChannelId);
 
       if (error) throw error;
 
@@ -368,7 +403,7 @@ Reglas importantes:
         <Button 
           onClick={handleSave} 
           className="flex items-center gap-2"
-          disabled={isSaving || !channelId}
+          disabled={isSaving || !currentOrganization?.id}
         >
           {isSaving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
