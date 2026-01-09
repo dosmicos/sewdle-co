@@ -22,12 +22,11 @@ serve(async (req) => {
     }
 
     const whatsappToken = Deno.env.get('META_WHATSAPP_TOKEN');
-    const phoneNumberId = Deno.env.get('META_PHONE_NUMBER_ID');
     
-    if (!whatsappToken || !phoneNumberId) {
-      console.error('Missing WhatsApp configuration');
+    if (!whatsappToken) {
+      console.error('Missing META_WHATSAPP_TOKEN');
       return new Response(
-        JSON.stringify({ error: 'WhatsApp configuration missing' }),
+        JSON.stringify({ error: 'WhatsApp token not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -36,19 +35,29 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get phone number from conversation if not provided
+    // Get phone number and phone_number_id from conversation/channel
     let recipientPhone = phone_number;
     let conversationId = conversation_id;
     let channelType = 'whatsapp';
+    let phoneNumberId: string | null = null;
     
-    if (conversation_id && !phone_number) {
+    if (conversation_id) {
+      // Get conversation with channel info
       const { data: conversation, error: convError } = await supabase
         .from('messaging_conversations')
-        .select('external_user_id, channel_type')
+        .select(`
+          external_user_id, 
+          channel_type,
+          channel_id,
+          messaging_channels!inner (
+            meta_phone_number_id
+          )
+        `)
         .eq('id', conversation_id)
         .single();
       
       if (convError || !conversation) {
+        console.error('Conversation not found:', convError);
         return new Response(
           JSON.stringify({ error: 'Conversation not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -57,6 +66,17 @@ serve(async (req) => {
       
       recipientPhone = conversation.external_user_id;
       channelType = conversation.channel_type;
+      
+      // Get phone_number_id from the channel
+      const channel = conversation.messaging_channels as any;
+      phoneNumberId = channel?.meta_phone_number_id;
+      
+      console.log('Resolved from conversation:', {
+        recipientPhone,
+        channelType,
+        phoneNumberId,
+        channelId: conversation.channel_id
+      });
     }
 
     if (!recipientPhone) {
@@ -66,10 +86,28 @@ serve(async (req) => {
       );
     }
 
+    // Fallback to secret if channel doesn't have phone_number_id
+    if (!phoneNumberId) {
+      phoneNumberId = Deno.env.get('META_PHONE_NUMBER_ID') || null;
+      console.log('Using fallback phone_number_id from secret:', phoneNumberId);
+    }
+
+    if (!phoneNumberId) {
+      console.error('No phone_number_id available');
+      return new Response(
+        JSON.stringify({ error: 'WhatsApp phone number ID not configured. Please set up the messaging channel correctly.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Clean phone number (remove + and spaces)
     const cleanPhone = recipientPhone.replace(/[\s+]/g, '');
 
-    console.log('Sending WhatsApp message to:', cleanPhone);
+    console.log('Sending WhatsApp message:', {
+      to: cleanPhone,
+      phoneNumberId,
+      messageLength: message.length
+    });
 
     // Send message via WhatsApp Cloud API (v21.0 - latest)
     const response = await fetch(

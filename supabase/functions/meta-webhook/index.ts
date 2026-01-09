@@ -444,62 +444,96 @@ Reglas importantes:
                     
                     // Generate AI response if AI is enabled (AUTO-RESPONDER)
                     const aiConfig = channel.ai_config as any;
-                    const shouldAutoReply = channel.ai_enabled || conversation.ai_managed;
+                    const autoReplyEnabled = aiConfig?.autoReply !== false; // Default to true
+                    const shouldAutoReply = (channel.ai_enabled || conversation.ai_managed) && autoReplyEnabled;
                     
-                    console.log('AI enabled:', channel.ai_enabled, 'ai_managed:', conversation.ai_managed, 'will auto-reply:', shouldAutoReply);
+                    console.log('AI config:', {
+                      channelAiEnabled: channel.ai_enabled,
+                      conversationAiManaged: conversation.ai_managed,
+                      autoReplyEnabled,
+                      shouldAutoReply
+                    });
                     
                     if (shouldAutoReply) {
-                      console.log('Generating AI response...');
-                      
-                      // Get recent conversation history
-                      const { data: historyMessages } = await supabase
-                        .from('messaging_messages')
-                        .select('content, direction')
-                        .eq('conversation_id', conversation.id)
-                        .order('sent_at', { ascending: false })
-                        .limit(10);
-                      
-                      const aiResponse = await generateAIResponse(
-                        content, 
-                        (historyMessages || []).reverse(),
-                        aiConfig
-                      );
-                      
-                      if (aiResponse) {
-                        console.log('AI response:', aiResponse.substring(0, 100) + '...');
+                      // Check business hours if configured
+                      let withinBusinessHours = true;
+                      if (aiConfig?.businessHours === true) {
+                        // Check Colombia time (UTC-5)
+                        const now = new Date();
+                        const colombiaOffset = -5 * 60; // UTC-5 in minutes
+                        const colombiaTime = new Date(now.getTime() + (colombiaOffset - now.getTimezoneOffset()) * 60000);
+                        const hour = colombiaTime.getHours();
+                        const dayOfWeek = colombiaTime.getDay();
                         
-                        // Send via WhatsApp
-                        const sendResult = await sendWhatsAppMessage(phoneNumberId, contactPhone, aiResponse);
+                        // Business hours: Mon-Sat 9am-6pm
+                        withinBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 6 && hour >= 9 && hour < 18;
+                        console.log('Business hours check:', { hour, dayOfWeek, withinBusinessHours });
                         
-                        if (sendResult) {
-                          // Save AI response to database
-                          const { error: aiMsgError } = await supabase
-                            .from('messaging_messages')
-                            .insert({
-                              conversation_id: conversation.id,
-                              external_message_id: sendResult.messages?.[0]?.id,
-                              channel_type: 'whatsapp',
-                              direction: 'outbound',
-                              sender_type: 'ai',
-                              content: aiResponse,
-                              message_type: 'text',
-                              sent_at: new Date().toISOString()
-                            });
+                        if (!withinBusinessHours) {
+                          console.log('Outside business hours, skipping AI response');
+                        }
+                      }
+                      
+                      if (withinBusinessHours) {
+                        // Apply response delay if configured
+                        const responseDelay = parseInt(aiConfig?.responseDelay) || 0;
+                        if (responseDelay > 0) {
+                          console.log(`Applying response delay of ${responseDelay} seconds`);
+                          await new Promise(resolve => setTimeout(resolve, responseDelay * 1000));
+                        }
+                        
+                        console.log('Generating AI response...');
+                        
+                        // Get recent conversation history
+                        const { data: historyMessages } = await supabase
+                          .from('messaging_messages')
+                          .select('content, direction')
+                          .eq('conversation_id', conversation.id)
+                          .order('sent_at', { ascending: false })
+                          .limit(10);
+                        
+                        const aiResponse = await generateAIResponse(
+                          content, 
+                          (historyMessages || []).reverse(),
+                          aiConfig
+                        );
+                        
+                        if (aiResponse) {
+                          console.log('AI response:', aiResponse.substring(0, 100) + '...');
                           
-                          if (aiMsgError) {
-                            console.error('Error saving AI response:', aiMsgError);
-                          } else {
-                            console.log('AI response saved successfully');
+                          // Send via WhatsApp
+                          const sendResult = await sendWhatsAppMessage(phoneNumberId, contactPhone, aiResponse);
+                          
+                          if (sendResult) {
+                            // Save AI response to database
+                            const { error: aiMsgError } = await supabase
+                              .from('messaging_messages')
+                              .insert({
+                                conversation_id: conversation.id,
+                                external_message_id: sendResult.messages?.[0]?.id,
+                                channel_type: 'whatsapp',
+                                direction: 'outbound',
+                                sender_type: 'ai',
+                                content: aiResponse,
+                                message_type: 'text',
+                                sent_at: new Date().toISOString()
+                              });
                             
-                            // Update conversation with AI response
-                            await supabase
-                              .from('messaging_conversations')
-                              .update({
-                                last_message_preview: aiResponse.substring(0, 100),
-                                last_message_at: new Date().toISOString(),
-                                ai_managed: true
-                              })
-                              .eq('id', conversation.id);
+                            if (aiMsgError) {
+                              console.error('Error saving AI response:', aiMsgError);
+                            } else {
+                              console.log('AI response saved successfully');
+                              
+                              // Update conversation with AI response
+                              await supabase
+                                .from('messaging_conversations')
+                                .update({
+                                  last_message_preview: aiResponse.substring(0, 100),
+                                  last_message_at: new Date().toISOString(),
+                                  ai_managed: true
+                                })
+                                .eq('id', conversation.id);
+                            }
                           }
                         }
                       }
