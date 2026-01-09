@@ -25,11 +25,19 @@ import {
   Image as ImageIcon,
   Mic,
   X,
-  FileIcon
+  FileIcon,
+  ExternalLink,
+  ImageOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+
+interface ProductImage {
+  product_id: number;
+  image_url: string;
+  product_name: string;
+}
 
 interface TestMessage {
   id: string;
@@ -38,6 +46,8 @@ interface TestMessage {
   timestamp: Date;
   mediaUrl?: string;
   mediaType?: 'image' | 'audio' | 'document';
+  productName?: string;
+  imageError?: boolean;
 }
 
 export const AITrainingPanel = () => {
@@ -218,7 +228,7 @@ export const AITrainingPanel = () => {
       }
 
       const aiResponse = data?.response || 'Lo siento, no pude generar una respuesta.';
-      const productImageUrl = data?.product_image_url;
+      const productImages: ProductImage[] = data?.product_images || [];
       
       // Add text response
       setMessages(prev => [
@@ -231,19 +241,24 @@ export const AITrainingPanel = () => {
         }
       ]);
 
-      // If product image was found, add it as a separate message
-      if (productImageUrl) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: Date.now().toString() + '-ai-img',
-            role: 'assistant',
-            content: '📸 Imagen del producto',
-            timestamp: new Date(),
-            mediaUrl: productImageUrl,
-            mediaType: 'image',
-          }
-        ]);
+      // Add each product image as a separate message
+      if (productImages.length > 0) {
+        console.log(`Received ${productImages.length} product images`);
+        
+        productImages.forEach((img, index) => {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: Date.now().toString() + `-img-${index}`,
+              role: 'assistant',
+              content: `📸 ${img.product_name}`,
+              timestamp: new Date(),
+              mediaUrl: img.image_url,
+              mediaType: 'image',
+              productName: img.product_name,
+            }
+          ]);
+        });
       }
     } catch (err: any) {
       console.error('Error generating response:', err);
@@ -404,12 +419,22 @@ export const AITrainingPanel = () => {
     return 'document';
   };
 
+  // Handle image load error
+  const handleImageError = (messageId: string, imageUrl: string) => {
+    console.error('Image failed to load:', imageUrl);
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId ? { ...msg, imageError: true } : msg
+    ));
+  };
+
   const suggestedMessages = [
     '¿Qué productos tienen disponibles?',
     '¿Cuánto cuesta el envío?',
     '¿Tienen descuentos?',
     '¿Cuál es el horario de atención?',
     '¿Aceptan pagos con tarjeta?',
+    'Muéstrame los sleeping bags que tienen',
+    '¿Qué productos tienen para bebé de 6 meses?',
   ];
 
   if (isLoadingConfig) {
@@ -505,7 +530,7 @@ export const AITrainingPanel = () => {
               </Button>
             </div>
             <CardDescription>
-              Prueba cómo responderá la IA a los mensajes de tus clientes
+              Prueba cómo responderá la IA a los mensajes de tus clientes (incluye fotos de productos)
             </CardDescription>
           </CardHeader>
         <CardContent className="p-0">
@@ -551,12 +576,39 @@ export const AITrainingPanel = () => {
                       }`}
                     >
                       {/* Media preview */}
-                      {message.mediaUrl && message.mediaType === 'image' && (
-                        <img 
-                          src={message.mediaUrl} 
-                          alt="Imagen enviada" 
-                          className="max-w-[200px] rounded-lg mb-2"
-                        />
+                      {message.mediaUrl && message.mediaType === 'image' && !message.imageError && (
+                        <div className="relative group">
+                          <img 
+                            src={message.mediaUrl} 
+                            alt={message.productName || "Imagen enviada"}
+                            className="max-w-[200px] rounded-lg mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(message.mediaUrl, '_blank')}
+                            onError={() => handleImageError(message.id, message.mediaUrl!)}
+                          />
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => window.open(message.mediaUrl, '_blank')}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      {message.mediaUrl && message.mediaType === 'image' && message.imageError && (
+                        <div className="flex flex-col items-center gap-2 p-4 bg-background/50 rounded-lg mb-2">
+                          <ImageOff className="h-8 w-8 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground text-center">No se pudo cargar la imagen</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs gap-1"
+                            onClick={() => window.open(message.mediaUrl, '_blank')}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Abrir enlace
+                          </Button>
+                        </div>
                       )}
                       {message.mediaUrl && message.mediaType === 'audio' && (
                         <audio 
@@ -740,7 +792,7 @@ export const AITrainingPanel = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Mensajes sugeridos</CardTitle>
-            <CardDescription>Prueba estos escenarios comunes</CardDescription>
+            <CardDescription>Prueba estos escenarios (incluye productos)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -767,8 +819,8 @@ export const AITrainingPanel = () => {
               <div className="text-sm text-amber-800 dark:text-amber-200">
                 <p className="font-medium mb-1">Tip de entrenamiento</p>
                 <p>
-                  Prueba diferentes escenarios: preguntas sobre precios, disponibilidad, 
-                  quejas y saludos. Ajusta el prompt según las respuestas que observes.
+                  Prueba preguntas como "¿Qué productos tienen para bebé?" o "Muéstrame los sleeping bags". 
+                  La IA ahora puede mostrar fotos de todos los productos que mencione (hasta 10).
                 </p>
               </div>
             </div>
