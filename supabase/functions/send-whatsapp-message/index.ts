@@ -6,6 +6,167 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// --- Product image helpers (WhatsApp) ---
+function extractProductIdsFromText(text: string): number[] {
+  const regex = /\[PRODUCT_IMAGE_ID:(\d+)\]/g;
+  const ids: number[] = [];
+  let match;
+  while ((match = regex.exec(text || '')) !== null) {
+    const id = parseInt(match[1], 10);
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids.slice(0, 10);
+}
+
+function extractImageNameHints(text: string): string[] {
+  const hints: string[] = [];
+  const regex = /\[(?:IMAGE|PRODUCT_IMAGE)\s*:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = regex.exec(text || '')) !== null) {
+    const name = (match[1] || '').trim();
+    if (name && !hints.includes(name)) hints.push(name);
+  }
+  return hints.slice(0, 10);
+}
+
+function cleanOutgoingText(text: string): string {
+  return (text || '')
+    .replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '')
+    .replace(/\[(?:IMAGE|PRODUCT_IMAGE)\s*:[^\]]+\]/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function inferProductIdsFromMentionedTitles(
+  text: string,
+  productImageMap: Record<number, { url: string; title: string }>
+): number[] {
+  const lower = (text || '').toLowerCase();
+  const matches: Array<{ id: number; index: number; length: number }> = [];
+
+  for (const [idStr, meta] of Object.entries(productImageMap)) {
+    const id = Number(idStr);
+    const title = (meta?.title || '').trim();
+    if (!title) continue;
+
+    const idx = lower.indexOf(title.toLowerCase());
+    if (idx >= 0) matches.push({ id, index: idx, length: title.length });
+  }
+
+  matches.sort((a, b) => (a.index - b.index) || (b.length - a.length));
+
+  const ordered: number[] = [];
+  for (const m of matches) {
+    if (!ordered.includes(m.id)) ordered.push(m.id);
+    if (ordered.length >= 10) break;
+  }
+
+  return ordered;
+}
+
+async function fetchShopifyProductImage(
+  productId: number,
+  shopifyCredentials: any
+): Promise<{ url: string; title: string } | null> {
+  const storeDomain = shopifyCredentials?.store_domain || shopifyCredentials?.shopDomain;
+  const accessToken = shopifyCredentials?.access_token || shopifyCredentials?.accessToken;
+
+  if (!storeDomain || !accessToken) return null;
+
+  try {
+    const url = `https://${String(storeDomain).replace('.myshopify.com', '')}.myshopify.com/admin/api/2024-01/products/${productId}.json`;
+    const resp = await fetch(url, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const title = data?.product?.title || `Producto ${productId}`;
+    const imageUrl = data?.product?.image?.src || data?.product?.images?.[0]?.src;
+    if (!imageUrl) return null;
+
+    return { url: imageUrl, title };
+  } catch (e) {
+    console.error('Error fetching Shopify product image:', e);
+    return null;
+  }
+}
+
+async function cacheImageToStorage(
+  supabase: any,
+  imageUrl: string,
+  organizationId: string,
+  productId: number
+): Promise<string> {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) return imageUrl;
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Keep conservative here; bucket supports 20MB but don't upload huge files.
+    if (bytes.length > 12 * 1024 * 1024) return imageUrl;
+
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+    const path = `products/${organizationId}/${productId}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from('messaging-media')
+      .upload(path, bytes, { contentType, upsert: true });
+
+    if (error) {
+      console.error('Storage upload error:', error);
+      return imageUrl;
+    }
+
+    const { data } = supabase.storage.from('messaging-media').getPublicUrl(path);
+    return data?.publicUrl || imageUrl;
+  } catch (e) {
+    console.error('Error caching image:', e);
+    return imageUrl;
+  }
+}
+
+async function sendWhatsAppImageByLink(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  imageUrl: string,
+  caption?: string
+): Promise<{ ok: boolean; messageId?: string; error?: any }> {
+  try {
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'image',
+        image: {
+          link: imageUrl,
+          caption: caption || '',
+        },
+      }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) return { ok: false, error: data };
+    return { ok: true, messageId: data?.messages?.[0]?.id };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
