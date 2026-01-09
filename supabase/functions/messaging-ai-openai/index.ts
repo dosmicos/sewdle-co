@@ -7,6 +7,71 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Extract product ID from AI response
+function extractProductIdFromResponse(aiResponse: string): number | null {
+  const match = aiResponse.match(/\[PRODUCT_IMAGE_ID:(\d+)\]/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+// Remove product image tag from response
+function cleanAIResponse(aiResponse: string): string {
+  return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').trim();
+}
+
+// Fetch product image from Shopify using organization credentials
+async function fetchShopifyProductImage(
+  productId: number, 
+  shopifyCredentials: any
+): Promise<string | null> {
+  if (!shopifyCredentials) {
+    console.log('No Shopify credentials provided');
+    return null;
+  }
+
+  const storeDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
+  const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
+
+  if (!storeDomain || !accessToken) {
+    console.log('Incomplete Shopify credentials');
+    return null;
+  }
+
+  try {
+    const cleanDomain = storeDomain.replace('.myshopify.com', '');
+    const url = `https://${cleanDomain}.myshopify.com/admin/api/2024-01/products/${productId}.json`;
+    
+    console.log(`Fetching Shopify product image for ID: ${productId}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Shopify API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const imageUrl = data.product?.image?.src || data.product?.images?.[0]?.src;
+    
+    if (imageUrl) {
+      console.log(`Found Shopify image for product ${productId}`);
+      return imageUrl;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching Shopify product image:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -108,6 +173,9 @@ serve(async (req) => {
 
     // Load products with Shopify inventory if organizationId is provided
     let productCatalog = '';
+    let shopifyCredentials: any = null;
+    let productImageMap: Record<number, string> = {}; // Map Shopify ID -> image URL
+    
     if (organizationId) {
       try {
         // First, get connected product IDs from ai_catalog_connections
@@ -127,6 +195,8 @@ serve(async (req) => {
           .eq('id', organizationId)
           .single();
 
+        shopifyCredentials = org?.shopify_credentials;
+
         interface ShopifyVariant {
           id: number;
           sku: string;
@@ -141,11 +211,13 @@ serve(async (req) => {
           body_html?: string;
           product_type?: string;
           variants: ShopifyVariant[];
+          image?: { src: string };
+          images?: { src: string }[];
         }
         
         // Fetch real-time inventory from Shopify if credentials exist
-        if (org?.shopify_credentials) {
-          const creds = org.shopify_credentials as any;
+        if (shopifyCredentials) {
+          const creds = shopifyCredentials as any;
           const shopifyDomain = creds.store_domain || creds.shopDomain;
           const accessToken = creds.access_token || creds.accessToken;
           
@@ -175,15 +247,22 @@ serve(async (req) => {
                 
                 if (connectedProducts.length > 0) {
                   productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-                  productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n';
+                  productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
+                  productCatalog += '🖼️ INSTRUCCIÓN DE IMÁGENES: PUEDES Y DEBES mostrar fotos de productos. Cuando recomiendes o el cliente pida ver un producto específico, agrega al final de tu respuesta: [PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO] donde ID es el número que aparece en paréntesis junto al nombre.\n\n';
                   
                   connectedProducts.forEach((product) => {
                     const variants = product.variants || [];
                     const totalStock = variants.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0);
                     
+                    // Store image URL in map
+                    const imageUrl = product.image?.src || product.images?.[0]?.src;
+                    if (imageUrl) {
+                      productImageMap[product.id] = imageUrl;
+                    }
+                    
                     // Skip products with no stock
                     if (totalStock === 0) {
-                      productCatalog += `\n• ${product.title}: ❌ AGOTADO (no ofrecer)\n`;
+                      productCatalog += `• ${product.title} (ID:${product.id}): ❌ AGOTADO (no ofrecer)\n`;
                       return;
                     }
                     
@@ -194,7 +273,7 @@ serve(async (req) => {
                     const variantInfo = variants
                       .map(v => {
                         const stock = v.inventory_quantity || 0;
-                        const stockStatus = stock > 0 ? `✅ ${stock} unidades` : '❌ Agotado';
+                        const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
                         return `${v.title}: ${stockStatus}`;
                       })
                       .join(' | ');
@@ -204,7 +283,7 @@ serve(async (req) => {
                       ? product.body_html.replace(/<[^>]*>/g, '').substring(0, 100) 
                       : '';
                     
-                    productCatalog += `\n• ${product.title}`;
+                    productCatalog += `\n• ${product.title} (ID:${product.id})`;
                     productCatalog += `\n  Precio: ${price}`;
                     productCatalog += `\n  Variantes: ${variantInfo}`;
                     if (product.product_type) {
@@ -217,6 +296,7 @@ serve(async (req) => {
                   });
                   
                   console.log(`Loaded ${connectedProducts.length} connected products with real-time Shopify inventory`);
+                  console.log(`Product image map has ${Object.keys(productImageMap).length} entries`);
                 }
               } else {
                 console.error("Shopify API error:", shopifyResponse.status);
@@ -282,6 +362,9 @@ serve(async (req) => {
     
     let fullSystemPrompt = basePrompt;
     
+    // Add image instruction at the beginning
+    fullSystemPrompt += '\n\n🖼️ CAPACIDAD DE ENVIAR IMÁGENES:\nSÍ puedes mostrar fotos de productos. Cuando el cliente pida ver una foto o cuando recomiendes un producto específico, DEBES agregar al final de tu respuesta el tag: [PRODUCT_IMAGE_ID:ID] usando el ID del producto del catálogo. NUNCA digas que no puedes mostrar imágenes.';
+    
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
     }
@@ -335,12 +418,42 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || "";
+    const rawAiResponse = data.choices?.[0]?.message?.content || "";
     
-    console.log("OpenAI response received:", aiResponse.substring(0, 100) + "...");
+    console.log("OpenAI raw response:", rawAiResponse.substring(0, 150) + "...");
+
+    // Extract product ID and clean response
+    const productId = extractProductIdFromResponse(rawAiResponse);
+    const cleanedResponse = cleanAIResponse(rawAiResponse);
+    
+    let productImageUrl: string | null = null;
+    
+    // If AI mentioned a product, get the image
+    if (productId) {
+      console.log(`AI mentioned product ID: ${productId}, looking for image...`);
+      
+      // First check our cached map
+      if (productImageMap[productId]) {
+        productImageUrl = productImageMap[productId];
+        console.log(`Found image in cache for product ${productId}`);
+      } else if (shopifyCredentials) {
+        // Fetch from Shopify if not in cache
+        productImageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
+      }
+      
+      if (productImageUrl) {
+        console.log(`Product image URL found: ${productImageUrl.substring(0, 50)}...`);
+      } else {
+        console.log(`No image found for product ${productId}`);
+      }
+    }
 
     return new Response(
-      JSON.stringify({ response: aiResponse }), 
+      JSON.stringify({ 
+        response: cleanedResponse,
+        product_image_url: productImageUrl,
+        product_id: productId
+      }), 
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
