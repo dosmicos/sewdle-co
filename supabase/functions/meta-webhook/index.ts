@@ -145,7 +145,8 @@ serve(async (req) => {
                       last_message_preview: content,
                       last_message_at: timestamp.toISOString(),
                       unread_count: 1,
-                      status: 'open',
+                      // Importante: el status tiene constraint en DB; usar solo valores válidos
+                      status: 'active',
                       ai_managed: false
                     })
                     .select()
@@ -157,7 +158,7 @@ serve(async (req) => {
                   }
                   conversation = newConv;
                 } else {
-                  // Update existing conversation
+                  // Update existing conversation (no sobreescribir status para no romper flujos como "closed")
                   const { error: updateError } = await supabase
                     .from('messaging_conversations')
                     .update({
@@ -165,7 +166,6 @@ serve(async (req) => {
                       last_message_at: timestamp.toISOString(),
                       unread_count: (conversation.unread_count || 0) + 1,
                       user_name: contactName,
-                      status: 'open'
                     })
                     .eq('id', conversation.id);
 
