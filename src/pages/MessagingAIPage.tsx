@@ -28,7 +28,9 @@ const MessagingAIPage = () => {
     isLoading: isLoadingConversations, 
     markAsRead,
     createConversation,
-    isCreatingConversation
+    isCreatingConversation,
+    deleteConversation,
+    isDeletingConversation
   } = useMessagingConversations(activeChannel);
   const { messages, isLoading: isLoadingMessages, sendMessage, isSending } = useMessagingMessages(selectedConversation);
 
@@ -213,6 +215,13 @@ const MessagingAIPage = () => {
                         conversations={filteredConversations}
                         selectedId={selectedConversation}
                         onSelect={setSelectedConversation}
+                        onDelete={(id) => {
+                          deleteConversation(id);
+                          if (selectedConversation === id) {
+                            setSelectedConversation(null);
+                          }
+                        }}
+                        isDeleting={isDeletingConversation}
                       />
                     )}
                   </CardContent>
