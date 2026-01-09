@@ -98,8 +98,17 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('WhatsApp API error:', result);
+
+      const apiError = result?.error;
+      const details = apiError?.error_data?.details || apiError?.message;
+
       return new Response(
-        JSON.stringify({ error: result.error?.message || 'Failed to send message' }),
+        JSON.stringify({
+          error: apiError?.message || 'Failed to send message',
+          details,
+          code: apiError?.code,
+          fbtrace_id: apiError?.fbtrace_id,
+        }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
