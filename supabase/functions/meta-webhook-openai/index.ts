@@ -68,20 +68,43 @@ function extractProductIdsFromResponse(aiResponse: string): number[] {
   return ids.slice(0, 10); // Limit to 10 products max
 }
 
-// Legacy: Extract product name (fallback)
-function extractProductNameFromResponse(aiResponse: string): string | null {
-  const match = aiResponse.match(/\[PRODUCT_IMAGE:.+?\]/);
-  if (match) {
-    return match[1]?.trim() || null;
+// Fallback: infer product IDs by matching product titles in the response text
+function inferProductIdsFromMentionedNames(
+  aiResponse: string,
+  productImageMap: Record<number, { url: string; title: string }>
+): number[] {
+  const text = (aiResponse || '').toLowerCase();
+
+  const candidates: Array<{ id: number; index: number; length: number }> = [];
+
+  for (const [idStr, meta] of Object.entries(productImageMap)) {
+    const id = Number(idStr);
+    const title = (meta?.title || '').trim();
+    if (!title) continue;
+
+    const idx = text.indexOf(title.toLowerCase());
+    if (idx >= 0) {
+      candidates.push({ id, index: idx, length: title.length });
+    }
   }
-  return null;
+
+  candidates.sort((a, b) => (a.index - b.index) || (b.length - a.length));
+
+  const orderedUnique: number[] = [];
+  for (const c of candidates) {
+    if (!orderedUnique.includes(c.id)) orderedUnique.push(c.id);
+    if (orderedUnique.length >= 10) break;
+  }
+
+  return orderedUnique;
 }
 
 // Remove product image tags from response
 function cleanAIResponse(aiResponse: string): string {
-  return aiResponse
+  return (aiResponse || '')
     .replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '')
     .replace(/\[PRODUCT_IMAGE:.+?\]/g, '')
+    .replace(/\[IMAGE:.+?\]/gi, '')
     .trim();
 }
 
@@ -487,8 +510,17 @@ async function generateAIResponse(
     
     console.log('OpenAI raw response:', rawAiResponse.substring(0, 150) + '...');
     
-    // Extract ALL product IDs
-    const productIds = extractProductIdsFromResponse(rawAiResponse);
+    // Extract product IDs from explicit tags, and fallback to matching titles
+    let productIds = extractProductIdsFromResponse(rawAiResponse);
+
+    if (productIds.length === 0) {
+      const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
+      if (inferred.length > 0) {
+        console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
+        productIds = inferred;
+      }
+    }
+
     console.log(`Found ${productIds.length} product IDs in response:`, productIds);
     
     // Build product images array
