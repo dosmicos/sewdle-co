@@ -5,10 +5,12 @@ import { MessageSquareMore, Loader2, Plus } from 'lucide-react';
 import { ConversationsList, Conversation, ChannelType } from '@/components/messaging-ai/ConversationsList';
 import { ConversationThread } from '@/components/messaging-ai/ConversationThread';
 import { NewConversationModal } from '@/components/messaging-ai/NewConversationModal';
-import { AIConfigPanel } from '@/components/whatsapp-ai/AIConfigPanel';
+import { AIConfigPanel } from '@/components/messaging-ai/AIConfigPanel';
 import { ProductCatalogConnection } from '@/components/whatsapp-ai/ProductCatalogConnection';
 import { MessagingStats } from '@/components/messaging-ai/MessagingStats';
 import { MessagingSidebar } from '@/components/messaging-ai/MessagingSidebar';
+import { KnowledgeBaseEditor } from '@/components/messaging-ai/KnowledgeBaseEditor';
+import { AITrainingPanel } from '@/components/messaging-ai/AITrainingPanel';
 import { useMessagingConversations } from '@/hooks/useMessagingConversations';
 import { useMessagingMessages } from '@/hooks/useMessagingMessages';
 
@@ -244,29 +246,9 @@ const MessagingAIPage = () => {
           {activeView === 'config' && <AIConfigPanel />}
           {activeView === 'catalog' && <ProductCatalogConnection />}
           
-          {activeView === 'train' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Entrenar IA</CardTitle>
-                <CardDescription>Agrega conocimiento y prueba el funcionamiento de tu asistente</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Próximamente: Herramientas de entrenamiento y chat de prueba</p>
-              </CardContent>
-            </Card>
-          )}
+          {activeView === 'train' && <AITrainingPanel />}
           
-          {activeView === 'knowledge' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Conocimiento</CardTitle>
-                <CardDescription>Gestiona la información que conoce tu IA</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Próximamente: Editor de base de conocimiento</p>
-              </CardContent>
-            </Card>
-          )}
+          {activeView === 'knowledge' && <KnowledgeBaseEditor />}
           
           {activeView === 'campaigns' && (
             <Card>
