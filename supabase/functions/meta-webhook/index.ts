@@ -103,12 +103,6 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
     return '';
   }
 }
-    return aiResponse;
-  } catch (error) {
-    console.error('Error generating AI response:', error);
-    return '';
-  }
-}
 
 // Send WhatsApp message via Meta API
 async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string, message: string): Promise<any> {
