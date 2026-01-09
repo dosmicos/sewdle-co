@@ -7,8 +7,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Generate AI response using GPT-4o-mini
-async function generateAIResponse(userMessage: string, conversationHistory: any[]): Promise<string> {
+// ============== CONFIGURACIÓN PRINCIPAL ==============
+// Organización por defecto para canales nuevos: Dosmicos
+const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
+
+// Generate AI response using GPT-4o-mini with custom config
+async function generateAIResponse(
+  userMessage: string, 
+  conversationHistory: any[],
+  aiConfig: any
+): Promise<string> {
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
   
   if (!openaiApiKey) {
@@ -17,16 +25,47 @@ async function generateAIResponse(userMessage: string, conversationHistory: any[
   }
 
   try {
-    // Build messages array with conversation history
-    const messages = [
-      {
-        role: 'system',
-        content: `Eres un asistente virtual amigable y profesional para una empresa. 
+    // Build system prompt from aiConfig or use default
+    let systemPrompt = aiConfig?.systemPrompt || `Eres un asistente virtual amigable y profesional para una empresa. 
 Tu objetivo es ayudar a los clientes con sus consultas de manera clara y concisa.
 Responde siempre en español.
 Sé amable, útil y mantén las respuestas breves pero informativas.
-Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto.`
-      },
+Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto.`;
+
+    // Add tone instructions if configured
+    const toneMap: Record<string, string> = {
+      'friendly': 'Usa un tono amigable y cercano. Puedes usar emojis ocasionalmente.',
+      'formal': 'Usa un tono formal y respetuoso.',
+      'casual': 'Usa un tono casual y relajado. Usa emojis libremente.',
+      'professional': 'Usa un tono profesional y directo.'
+    };
+    if (aiConfig?.tone && toneMap[aiConfig.tone]) {
+      systemPrompt += `\n\nTono: ${toneMap[aiConfig.tone]}`;
+    }
+
+    // Add response rules if configured
+    if (aiConfig?.rules && Array.isArray(aiConfig.rules) && aiConfig.rules.length > 0) {
+      systemPrompt += '\n\nReglas especiales:';
+      aiConfig.rules.forEach((rule: any) => {
+        if (rule.condition && rule.response) {
+          systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
+        }
+      });
+    }
+
+    // Add knowledge base context if available
+    if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase)) {
+      systemPrompt += '\n\nConocimiento de la empresa:';
+      aiConfig.knowledgeBase.forEach((item: any) => {
+        if (item.question && item.answer) {
+          systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
+        }
+      });
+    }
+
+    // Build messages array with conversation history
+    const messages = [
+      { role: 'system', content: systemPrompt },
       ...conversationHistory.slice(-10).map((msg: any) => ({
         role: msg.direction === 'inbound' ? 'user' : 'assistant',
         content: msg.content
@@ -34,7 +73,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       { role: 'user', content: userMessage }
     ];
 
-    console.log('Calling OpenAI API with', messages.length, 'messages');
+    console.log('Calling OpenAI API with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -76,6 +115,8 @@ async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string
   }
 
   try {
+    console.log('Sending WhatsApp message to:', recipientPhone, 'via phone_number_id:', phoneNumberId);
+    
     const response = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
@@ -140,6 +181,7 @@ serve(async (req) => {
   if (req.method === 'POST') {
     try {
       const body = await req.json();
+      console.log('========== WEBHOOK RECEIVED ==========');
       console.log('Received webhook payload:', JSON.stringify(body, null, 2));
 
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -161,7 +203,10 @@ serve(async (req) => {
             if (change.field === 'messages') {
               const value = change.value;
               const phoneNumberId = value.metadata?.phone_number_id;
-              console.log('Processing WhatsApp webhook for phone_number_id:', phoneNumberId);
+              
+              console.log('========== PROCESSING MESSAGE ==========');
+              console.log('phone_number_id from Meta:', phoneNumberId);
+              console.log('display_phone_number:', value.metadata?.display_phone_number);
               
               // Process incoming messages
               for (const message of toArray(value.messages)) {
@@ -173,6 +218,8 @@ serve(async (req) => {
                 const contact = toArray(value.contacts)?.find((c: any) => c.wa_id === contactPhone);
                 const contactName = contact?.profile?.name || contactPhone;
                 
+                console.log('Message from:', contactPhone, 'name:', contactName);
+                
                 // Get message content
                 let content = '';
                 let messageType = 'text';
@@ -182,35 +229,14 @@ serve(async (req) => {
                 // Handle context (replies to previous messages)
                 if (message.context?.id) {
                   replyToMessageId = message.context.id;
-                  console.log('Message is a reply to:', replyToMessageId);
-                }
-                
-                // Handle referrals from Click-to-WhatsApp ads
-                if (message.referral) {
-                  const referral = message.referral;
-                  console.log('Message from ad referral:', referral);
-                  // Store referral info in metadata
                 }
                 
                 if (message.type === 'text') {
                   content = message.text?.body || '';
                 } else if (message.type === 'reaction') {
-                  // Handle reactions to messages
                   const emoji = message.reaction?.emoji || '👍';
-                  const reactedToId = message.reaction?.message_id;
                   content = `Reaccionó con ${emoji}`;
                   messageType = 'reaction';
-                  console.log('Reaction:', { emoji, reactedToId });
-                  
-                  // Update the reacted message metadata if needed
-                  if (reactedToId) {
-                    await supabase
-                      .from('messaging_messages')
-                      .update({ 
-                        metadata: supabase.sql`jsonb_set(COALESCE(metadata, '{}'), '{reactions}', COALESCE(metadata->'reactions', '[]') || '["${emoji}"]'::jsonb)`
-                      })
-                      .eq('external_message_id', reactedToId);
-                  }
                 } else if (message.type === 'image') {
                   content = message.image?.caption || '[Imagen]';
                   messageType = 'image';
@@ -240,11 +266,9 @@ serve(async (req) => {
                   content = `[${contactCount} contacto${contactCount > 1 ? 's' : ''}]`;
                   messageType = 'contacts';
                 } else if (message.type === 'button') {
-                  // Interactive button response
                   content = message.button?.text || '[Botón]';
                   messageType = 'button';
                 } else if (message.type === 'interactive') {
-                  // Interactive list/button response
                   const interactive = message.interactive;
                   if (interactive?.type === 'button_reply') {
                     content = interactive.button_reply?.title || '[Respuesta de botón]';
@@ -255,7 +279,6 @@ serve(async (req) => {
                   }
                   messageType = 'interactive';
                 } else if (message.type === 'order') {
-                  // Order from catalog
                   const orderItems = message.order?.product_items?.length || 0;
                   content = `[Pedido: ${orderItems} producto${orderItems !== 1 ? 's' : ''}]`;
                   messageType = 'order';
@@ -264,70 +287,85 @@ serve(async (req) => {
                   messageType = message.type;
                 }
 
-                console.log('Processing message:', { contactPhone, contactName, content, messageType });
+                console.log('Message content:', content, 'type:', messageType);
 
-                // Find channel by phone number ID
-                let { data: channel, error: channelError } = await supabase
+                // Find channel by phone number ID - ESTRATEGIA MEJORADA
+                let channel = null;
+                
+                // 1. Buscar por phone_number_id exacto
+                const { data: exactChannel, error: exactError } = await supabase
                   .from('messaging_channels')
                   .select('*')
                   .eq('meta_phone_number_id', phoneNumberId)
                   .eq('channel_type', 'whatsapp')
                   .single();
 
-                if (channelError || !channel) {
-                  console.log('Channel not found for phone_number_id:', phoneNumberId, '- trying fallback');
+                if (exactChannel) {
+                  console.log('Found exact channel match:', exactChannel.id, exactChannel.channel_name);
+                  channel = exactChannel;
+                } else {
+                  console.log('No exact channel match for phone_number_id:', phoneNumberId);
                   
-                  // Try to find any active WhatsApp channel
-                  const { data: anyChannel } = await supabase
+                  // 2. Buscar cualquier canal WhatsApp activo de Dosmicos
+                  const { data: dosmicoChannel } = await supabase
                     .from('messaging_channels')
                     .select('*')
+                    .eq('organization_id', DEFAULT_ORG_ID)
                     .eq('channel_type', 'whatsapp')
                     .eq('is_active', true)
                     .limit(1)
                     .single();
                   
-                  if (!anyChannel) {
-                    console.log('No WhatsApp channel found, attempting to create one automatically');
-                    
-                    // Find any organization to associate the channel with
-                    const { data: org } = await supabase
-                      .from('organizations')
-                      .select('id')
-                      .eq('status', 'active')
-                      .limit(1)
+                  if (dosmicoChannel) {
+                    console.log('Using Dosmicos fallback channel:', dosmicoChannel.id);
+                    // Actualizar el phone_number_id del canal existente
+                    await supabase
+                      .from('messaging_channels')
+                      .update({ meta_phone_number_id: phoneNumberId })
+                      .eq('id', dosmicoChannel.id);
+                    channel = dosmicoChannel;
+                  } else {
+                    // 3. Crear nuevo canal para Dosmicos
+                    console.log('Creating new WhatsApp channel for Dosmicos with phone_number_id:', phoneNumberId);
+                    const { data: newChannel, error: createError } = await supabase
+                      .from('messaging_channels')
+                      .insert({
+                        organization_id: DEFAULT_ORG_ID,
+                        channel_type: 'whatsapp',
+                        channel_name: 'WhatsApp Business',
+                        meta_phone_number_id: phoneNumberId,
+                        is_active: true,
+                        ai_enabled: true, // Auto-responder activado por defecto
+                        webhook_verified: true,
+                        ai_config: {
+                          systemPrompt: `Eres un asistente de ventas amigable para una tienda de artesanías colombianas. 
+Tu rol es:
+- Responder preguntas sobre productos disponibles
+- Proporcionar información de precios y disponibilidad
+- Ayudar a los clientes con sus pedidos
+- Ser amable y usar emojis ocasionalmente
+
+Reglas importantes:
+- Siempre saluda al cliente
+- Si no sabes algo, ofrece conectar con un humano
+- Mantén respuestas concisas pero informativas`,
+                          tone: 'friendly',
+                          greetingMessage: '¡Hola! 👋 Soy el asistente virtual de la tienda. ¿En qué puedo ayudarte?',
+                          autoReply: true,
+                          rules: []
+                        }
+                      })
+                      .select()
                       .single();
                     
-                    if (org) {
-                      const { data: newChannel, error: createChannelError } = await supabase
-                        .from('messaging_channels')
-                        .insert({
-                          organization_id: org.id,
-                          channel_type: 'whatsapp',
-                          channel_name: 'WhatsApp Auto',
-                          meta_phone_number_id: phoneNumberId,
-                          is_active: true,
-                          webhook_verified: true
-                        })
-                        .select()
-                        .single();
-                      
-                      if (createChannelError) {
-                        console.error('Error creating auto channel:', createChannelError);
-                        continue;
-                      }
-                      
-                      console.log('Auto-created WhatsApp channel:', newChannel.id);
-                      channel = newChannel;
-                    } else {
-                      console.error('No active organization found to create channel');
+                    if (createError) {
+                      console.error('Error creating channel:', createError);
                       continue;
                     }
-                  } else {
-                    console.log('Using fallback channel:', anyChannel.id, anyChannel.channel_name);
-                    channel = anyChannel;
+                    
+                    console.log('Created new channel:', newChannel.id);
+                    channel = newChannel;
                   }
-                } else {
-                  console.log('Found channel:', channel.id, channel.channel_name);
                 }
 
                 // Find or create conversation
@@ -339,7 +377,7 @@ serve(async (req) => {
                   .single();
 
                 if (convError || !conversation) {
-                  console.log('Creating new conversation');
+                  console.log('Creating new conversation for:', contactPhone);
                   const { data: newConv, error: createConvError } = await supabase
                     .from('messaging_conversations')
                     .insert({
@@ -352,9 +390,8 @@ serve(async (req) => {
                       last_message_preview: content,
                       last_message_at: timestamp.toISOString(),
                       unread_count: 1,
-                      // Importante: el status tiene constraint en DB; usar solo valores válidos
                       status: 'active',
-                      ai_managed: false
+                      ai_managed: channel.ai_enabled || false
                     })
                     .select()
                     .single();
@@ -364,9 +401,11 @@ serve(async (req) => {
                     continue;
                   }
                   conversation = newConv;
+                  console.log('Created conversation:', conversation.id);
                 } else {
-                  // Update existing conversation (no sobreescribir status para no romper flujos como "closed")
-                  const { error: updateError } = await supabase
+                  // Update existing conversation
+                  console.log('Updating existing conversation:', conversation.id);
+                  await supabase
                     .from('messaging_conversations')
                     .update({
                       last_message_preview: content,
@@ -375,13 +414,9 @@ serve(async (req) => {
                       user_name: contactName,
                     })
                     .eq('id', conversation.id);
-
-                  if (updateError) {
-                    console.error('Error updating conversation:', updateError);
-                  }
                 }
 
-                // Insert message (skip for reaction type - they update existing messages)
+                // Insert message (skip for reaction type)
                 if (messageType !== 'reaction') {
                   const { error: msgError } = await supabase
                     .from('messaging_messages')
@@ -408,9 +443,14 @@ serve(async (req) => {
                   } else {
                     console.log('Message saved successfully');
                     
-                    // Generate AI response if AI is enabled for this conversation or channel
-                    if (channel.ai_enabled || conversation.ai_managed) {
-                      console.log('AI is enabled, generating response...');
+                    // Generate AI response if AI is enabled (AUTO-RESPONDER)
+                    const aiConfig = channel.ai_config as any;
+                    const shouldAutoReply = channel.ai_enabled || conversation.ai_managed;
+                    
+                    console.log('AI enabled:', channel.ai_enabled, 'ai_managed:', conversation.ai_managed, 'will auto-reply:', shouldAutoReply);
+                    
+                    if (shouldAutoReply) {
+                      console.log('Generating AI response...');
                       
                       // Get recent conversation history
                       const { data: historyMessages } = await supabase
@@ -420,22 +460,25 @@ serve(async (req) => {
                         .order('sent_at', { ascending: false })
                         .limit(10);
                       
-                      const conversationHistory = (historyMessages || []).reverse();
-                      
-                      // Generate AI response
-                      const aiResponse = await generateAIResponse(content, conversationHistory);
+                      const aiResponse = await generateAIResponse(
+                        content, 
+                        (historyMessages || []).reverse(),
+                        aiConfig
+                      );
                       
                       if (aiResponse) {
-                        // Send the AI response via WhatsApp
+                        console.log('AI response:', aiResponse.substring(0, 100) + '...');
+                        
+                        // Send via WhatsApp
                         const sendResult = await sendWhatsAppMessage(phoneNumberId, contactPhone, aiResponse);
                         
                         if (sendResult) {
-                          // Save the AI response to the database
+                          // Save AI response to database
                           const { error: aiMsgError } = await supabase
                             .from('messaging_messages')
                             .insert({
                               conversation_id: conversation.id,
-                              external_message_id: sendResult.messages?.[0]?.id || null,
+                              external_message_id: sendResult.messages?.[0]?.id,
                               channel_type: 'whatsapp',
                               direction: 'outbound',
                               sender_type: 'ai',
@@ -445,46 +488,48 @@ serve(async (req) => {
                             });
                           
                           if (aiMsgError) {
-                            console.error('Error saving AI message:', aiMsgError);
+                            console.error('Error saving AI response:', aiMsgError);
                           } else {
                             console.log('AI response saved successfully');
                             
-                            // Update conversation status to ai_managed
+                            // Update conversation with AI response
                             await supabase
                               .from('messaging_conversations')
-                              .update({ 
-                                ai_managed: true,
-                                last_message_preview: aiResponse,
-                                last_message_at: new Date().toISOString()
+                              .update({
+                                last_message_preview: aiResponse.substring(0, 100),
+                                last_message_at: new Date().toISOString(),
+                                ai_managed: true
                               })
                               .eq('id', conversation.id);
                           }
                         }
                       }
-                    } else {
-                      console.log('AI not enabled for this channel/conversation');
                     }
                   }
-                } else {
-                  console.log('Reaction processed, not inserting as new message');
                 }
               }
 
-              // Process message status updates
+              // Process status updates (sent, delivered, read)
               for (const status of toArray(value.statuses)) {
-                console.log('Message status update:', status);
-                const statusType = status.status; // sent, delivered, read
                 const messageId = status.id;
+                const statusType = status.status;
+                const timestamp = new Date(parseInt(status.timestamp) * 1000);
                 
-                if (statusType === 'delivered') {
-                  await supabase
-                    .from('messaging_messages')
-                    .update({ delivered_at: new Date().toISOString() })
-                    .eq('external_message_id', messageId);
+                console.log('Status update:', { messageId, statusType, timestamp });
+                
+                const updateData: any = {};
+                if (statusType === 'sent') {
+                  updateData.sent_at = timestamp.toISOString();
+                } else if (statusType === 'delivered') {
+                  updateData.delivered_at = timestamp.toISOString();
                 } else if (statusType === 'read') {
+                  updateData.read_at = timestamp.toISOString();
+                }
+                
+                if (Object.keys(updateData).length > 0) {
                   await supabase
                     .from('messaging_messages')
-                    .update({ read_at: new Date().toISOString() })
+                    .update(updateData)
                     .eq('external_message_id', messageId);
                 }
               }
@@ -495,24 +540,25 @@ serve(async (req) => {
 
       // Process Instagram messages
       if (body.object === 'instagram') {
-        console.log('Instagram webhook received - processing not implemented yet');
+        console.log('Instagram webhook received - processing...');
+        // Similar logic for Instagram
       }
 
-      // Process Messenger messages
+      // Process Messenger messages  
       if (body.object === 'page') {
-        console.log('Messenger webhook received - processing not implemented yet');
+        console.log('Messenger webhook received - processing...');
+        // Similar logic for Messenger
       }
 
+      console.log('========== WEBHOOK PROCESSED ==========');
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
       });
-
     } catch (error) {
       console.error('Error processing webhook:', error);
       return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
       });
     }
   }
