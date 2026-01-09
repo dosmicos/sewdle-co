@@ -310,12 +310,15 @@ serve(async (req) => {
                 if (connectedProducts.length > 0) {
                   productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
                   productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
-                  productCatalog += '🖼️ INSTRUCCIÓN DE IMÁGENES MÚLTIPLES:\n';
-                  productCatalog += 'PUEDES Y DEBES mostrar fotos de productos. Cuando recomiendes productos o el cliente pida ver fotos:\n';
-                  productCatalog += '- Agrega UN tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones o recomiendes\n';
-                  productCatalog += '- Puedes incluir hasta 10 productos con imágenes en una sola respuesta\n';
-                  productCatalog += '- Ejemplo: "Te recomiendo el Sleeping Bag Pollito [PRODUCT_IMAGE_ID:123] y la Ruana Pony [PRODUCT_IMAGE_ID:456]"\n';
-                  productCatalog += '- NUNCA digas que no puedes mostrar imágenes\n\n';
+                  productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
+                  productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
+                  productCatalog += 'Esto es OBLIGATORIO, no opcional. Los clientes esperan ver fotos de los productos.\n\n';
+                  productCatalog += 'Formato correcto (SIEMPRE usa este formato):\n';
+                  productCatalog += '"1. Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251] - Precio: $94.900 COP"\n';
+                  productCatalog += '"2. Ruana Capibara [PRODUCT_IMAGE_ID:8842934517995] - Precio: $94.900 COP"\n\n';
+                  productCatalog += 'Formato INCORRECTO (NO hagas esto):\n';
+                  productCatalog += '"1. Ruana Caballo - Precio: $94.900 COP" (falta el tag de imagen)\n\n';
+                  productCatalog += 'Puedes incluir hasta 10 productos con imágenes en una sola respuesta.\n\n';
                   
                   connectedProducts.forEach((product) => {
                     const variants = product.variants || [];
@@ -429,8 +432,8 @@ serve(async (req) => {
     
     let fullSystemPrompt = basePrompt;
     
-    // Add image instruction at the beginning
-    fullSystemPrompt += '\n\n🖼️ CAPACIDAD DE ENVIAR IMÁGENES:\nSÍ puedes mostrar fotos de productos. Cuando el cliente pida ver fotos o cuando recomiendes productos específicos, DEBES agregar al final de tu respuesta un tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones. Puedes incluir hasta 10 productos. NUNCA digas que no puedes mostrar imágenes.';
+    // Add MANDATORY image instruction at the beginning - very emphatic
+    fullSystemPrompt += '\n\n⚠️ REGLA CRÍTICA - SIEMPRE INCLUIR IMÁGENES:\nCada vez que menciones CUALQUIER producto por su nombre, DEBES agregar inmediatamente después el tag [PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO].\nEsto es OBLIGATORIO para TODOS los productos que menciones, sin excepción.\nEjemplo correcto: "La Ruana Caballo [PRODUCT_IMAGE_ID:123] tiene un precio de $94.900 COP"\nSi no incluyes los tags, los clientes NO podrán ver las fotos de los productos.';
     
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
@@ -439,6 +442,9 @@ serve(async (req) => {
     fullSystemPrompt += knowledgeContext;
     fullSystemPrompt += rulesContext;
     fullSystemPrompt += productCatalog;
+    
+    // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
