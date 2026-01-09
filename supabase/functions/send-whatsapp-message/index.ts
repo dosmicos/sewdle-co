@@ -71,9 +71,9 @@ serve(async (req) => {
 
     console.log('Sending WhatsApp message to:', cleanPhone);
 
-    // Send message via WhatsApp Cloud API
+    // Send message via WhatsApp Cloud API (v21.0 - latest)
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
         method: 'POST',
         headers: {
