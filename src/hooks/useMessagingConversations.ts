@@ -91,6 +91,35 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     },
   });
 
+  // Delete a conversation and its messages
+  const deleteConversation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      // First delete all messages in the conversation
+      const { error: msgError } = await supabase
+        .from('messaging_messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+      
+      if (msgError) throw msgError;
+      
+      // Then delete the conversation
+      const { error } = await supabase
+        .from('messaging_conversations')
+        .delete()
+        .eq('id', conversationId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+      toast.success('Conversación eliminada');
+    },
+    onError: (error: any) => {
+      console.error('Error deleting conversation:', error);
+      toast.error(`Error al eliminar: ${error.message}`);
+    },
+  });
+
   // Create new conversation and send first message
   const createConversation = useMutation({
     mutationFn: async ({ phone, name, message }: { phone: string; name: string; message: string }) => {
@@ -185,6 +214,8 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     error,
     markAsRead: markAsRead.mutate,
     updateStatus: updateStatus.mutate,
+    deleteConversation: deleteConversation.mutate,
+    isDeletingConversation: deleteConversation.isPending,
     createConversation: createConversation.mutateAsync,
     isCreatingConversation: createConversation.isPending,
   };

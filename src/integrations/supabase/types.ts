@@ -3962,6 +3962,7 @@ export type Database = {
         Returns: Json
       }
       migrate_sleeping_walker_tigres_variants: { Args: never; Returns: Json }
+      normalize_phone_number: { Args: { phone: string }; Returns: string }
       process_material_transfer: {
         Args: { p_transfer_id: string }
         Returns: boolean
