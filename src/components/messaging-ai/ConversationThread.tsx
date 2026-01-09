@@ -9,6 +9,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { ChannelType } from './ConversationsList';
 
 interface Message {
@@ -74,6 +76,7 @@ export const ConversationThread = ({
   isSending = false,
   isLoading = false
 }: ConversationThreadProps) => {
+  const { currentOrganization } = useOrganization();
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -99,12 +102,50 @@ export const ConversationThread = ({
     }
   };
 
-  const handleGenerateResponse = () => {
+  const handleGenerateResponse = async () => {
+    if (!conversation || messages.length === 0) {
+      toast.error('No hay mensajes para generar respuesta');
+      return;
+    }
+
     setIsGenerating(true);
-    setTimeout(() => {
+    
+    try {
+      // Get the last user message to respond to
+      const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+      if (!lastUserMessage) {
+        toast.error('No hay mensaje del usuario para responder');
+        setIsGenerating(false);
+        return;
+      }
+
+      // Call OpenAI GPT-4o-mini via edge function
+      const { data, error } = await supabase.functions.invoke('messaging-ai-openai', {
+        body: {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          systemPrompt: 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',
+          organizationId: currentOrganization?.id,
+        }
+      });
+
+      if (error) {
+        console.error('AI generation error:', error);
+        toast.error('Error al generar respuesta con IA');
+        return;
+      }
+
+      if (data?.response && onSendMessage) {
+        onSendMessage(data.response);
+        toast.success('Respuesta generada por IA');
+      } else if (data?.error) {
+        toast.error(data.error);
+      }
+    } catch (err) {
+      console.error('Error generating AI response:', err);
+      toast.error('Error al conectar con la IA');
+    } finally {
       setIsGenerating(false);
-      toast.success('Respuesta generada por IA');
-    }, 1500);
+    }
   };
 
   const handleCopyMessage = (content: string, index: number) => {
