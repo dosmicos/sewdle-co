@@ -107,11 +107,12 @@ export const AITrainingPanel = () => {
         });
       }
 
-      // Call Lovable AI Gateway via edge function
-      const { data, error } = await supabase.functions.invoke('messaging-ai-chat', {
+      // Call OpenAI GPT-4o-mini via edge function
+      const { data, error } = await supabase.functions.invoke('messaging-ai-openai', {
         body: {
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          messages: [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMessage }],
           systemPrompt: systemPrompt,
+          organizationId: currentOrganization?.id,
         }
       });
 
