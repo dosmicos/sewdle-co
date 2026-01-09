@@ -119,21 +119,24 @@ Reglas importantes:
 
     setIsSaving(true);
     try {
+      // Build the config object as a plain object for JSON compatibility
+      const configToSave = {
+        systemPrompt: config.systemPrompt,
+        tone: config.tone,
+        includeCatalog: config.includeCatalog,
+        autoReply: config.autoReply,
+        responseDelay: config.responseDelay,
+        businessHours: config.businessHours,
+        greetingMessage: config.greetingMessage,
+        rules: config.rules.map(r => ({ id: r.id, condition: r.condition, response: r.response })),
+      };
+
       const { error } = await supabase
         .from('messaging_channels')
         .update({
-          ai_config: {
-            systemPrompt: config.systemPrompt,
-            tone: config.tone,
-            includeCatalog: config.includeCatalog,
-            autoReply: config.autoReply,
-            responseDelay: config.responseDelay,
-            businessHours: config.businessHours,
-            greetingMessage: config.greetingMessage,
-            rules: config.rules.map(r => ({ id: r.id, condition: r.condition, response: r.response })),
-          } as Record<string, unknown>,
+          ai_config: configToSave,
           ai_enabled: config.autoReply,
-        })
+        } as any)
         .eq('id', channelId);
 
       if (error) throw error;

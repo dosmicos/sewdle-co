@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.send-whatsapp-message]
 verify_jwt = false
+
+[functions.messaging-ai-chat]
+verify_jwt = false

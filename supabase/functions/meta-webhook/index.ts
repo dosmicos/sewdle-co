@@ -11,16 +11,16 @@ const corsHeaders = {
 // Organización por defecto para canales nuevos: Dosmicos
 const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
 
-// Generate AI response using GPT-4o-mini with custom config
+// Generate AI response using Lovable AI Gateway (Gemini)
 async function generateAIResponse(
   userMessage: string, 
   conversationHistory: any[],
   aiConfig: any
 ): Promise<string> {
-  const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
   
-  if (!openaiApiKey) {
-    console.log('OPENAI_API_KEY not configured, skipping AI response');
+  if (!lovableApiKey) {
+    console.log('LOVABLE_API_KEY not configured, skipping AI response');
     return '';
   }
 
@@ -73,31 +73,36 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       { role: 'user', content: userMessage }
     ];
 
-    console.log('Calling OpenAI API with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
+    console.log('Calling Lovable AI Gateway with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
+        'Authorization': `Bearer ${lovableApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'google/gemini-3-flash-preview',
         messages,
         max_tokens: 500,
-        temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI API error:', response.status, errorText);
+      console.error('Lovable AI Gateway error:', response.status, errorText);
       return '';
     }
 
     const data = await response.json();
     const aiResponse = data.choices?.[0]?.message?.content || '';
     console.log('AI response generated:', aiResponse.substring(0, 100) + '...');
+    return aiResponse;
+  } catch (error) {
+    console.error('Error generating AI response:', error);
+    return '';
+  }
+}
     return aiResponse;
   } catch (error) {
     console.error('Error generating AI response:', error);

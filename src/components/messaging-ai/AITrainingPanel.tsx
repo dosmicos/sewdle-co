@@ -107,19 +107,22 @@ export const AITrainingPanel = () => {
         });
       }
 
-      // Call OpenAI via edge function
-      const { data, error } = await supabase.functions.invoke('sewdle-copilot', {
+      // Call Lovable AI Gateway via edge function
+      const { data, error } = await supabase.functions.invoke('messaging-ai-chat', {
         body: {
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages.map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content: userMessage }
-          ],
-          maxTokens: 500,
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          systemPrompt: systemPrompt,
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Error en la función');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       const aiResponse = data?.response || 'Lo siento, no pude generar una respuesta.';
       
@@ -132,16 +135,24 @@ export const AITrainingPanel = () => {
           timestamp: new Date(),
         }
       ]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating response:', err);
-      toast.error('Error al generar respuesta');
+      
+      let errorMessage = 'Error: No se pudo conectar con la IA.';
+      if (err.message?.includes('429') || err.message?.includes('Límite')) {
+        errorMessage = 'Demasiadas solicitudes. Espera unos segundos e intenta de nuevo.';
+      } else if (err.message?.includes('402') || err.message?.includes('créditos')) {
+        errorMessage = 'Se requieren créditos adicionales para usar la IA.';
+      }
+      
+      toast.error(errorMessage);
       
       setMessages(prev => [
         ...prev,
         {
           id: Date.now().toString() + '-error',
           role: 'assistant',
-          content: 'Error: No se pudo conectar con la IA. Verifica que la API key esté configurada.',
+          content: errorMessage,
           timestamp: new Date(),
         }
       ]);
