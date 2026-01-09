@@ -125,12 +125,12 @@ export const ProductCatalogConnection = () => {
     }
   });
 
-  // Mutation to connect/disconnect all
+  // Mutation to connect/disconnect filtered products only
   const bulkMutation = useMutation({
-    mutationFn: async ({ connect }: { connect: boolean }) => {
-      const upserts = products.map(p => ({
+    mutationFn: async ({ connect, productIds }: { connect: boolean; productIds: number[] }) => {
+      const upserts = productIds.map(id => ({
         organization_id: currentOrganization!.id,
-        shopify_product_id: p.id,
+        shopify_product_id: id,
         connected: connect,
         updated_at: new Date().toISOString()
       }));
@@ -142,9 +142,12 @@ export const ProductCatalogConnection = () => {
         });
       if (error) throw error;
     },
-    onSuccess: (_, { connect }) => {
+    onSuccess: (_, { connect, productIds }) => {
       queryClient.invalidateQueries({ queryKey: ['ai-catalog-connections'] });
-      toast.success(connect ? 'Todos los productos conectados' : 'Todos los productos desconectados');
+      toast.success(connect 
+        ? `${productIds.length} productos conectados` 
+        : `${productIds.length} productos desconectados`
+      );
     },
     onError: (error) => {
       console.error('Error in bulk operation:', error);
@@ -158,11 +161,13 @@ export const ProductCatalogConnection = () => {
   };
 
   const handleConnectAll = () => {
-    bulkMutation.mutate({ connect: true });
+    const productIds = filteredProducts.map(p => p.id);
+    bulkMutation.mutate({ connect: true, productIds });
   };
 
   const handleDisconnectAll = () => {
-    bulkMutation.mutate({ connect: false });
+    const productIds = filteredProducts.map(p => p.id);
+    bulkMutation.mutate({ connect: false, productIds });
   };
 
   const handleSync = async () => {
@@ -247,17 +252,17 @@ export const ProductCatalogConnection = () => {
                 variant="outline" 
                 size="sm" 
                 onClick={handleConnectAll}
-                disabled={bulkMutation.isPending}
+                disabled={bulkMutation.isPending || filteredProducts.length === 0}
               >
-                Conectar todos
+                Conectar filtrados ({filteredProducts.length})
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handleDisconnectAll}
-                disabled={bulkMutation.isPending}
+                disabled={bulkMutation.isPending || filteredProducts.length === 0}
               >
-                Desconectar todos
+                Desconectar filtrados
               </Button>
             </div>
           </div>
