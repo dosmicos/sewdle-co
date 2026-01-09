@@ -43,22 +43,30 @@ serve(async (req) => {
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
+      // Helper to normalize Meta's payload (can be array or object with numeric keys)
+      const toArray = (obj: any): any[] => {
+        if (!obj) return [];
+        if (Array.isArray(obj)) return obj;
+        // Meta sometimes sends objects like { "0": {...}, "1": {...} }
+        return Object.values(obj);
+      };
+
       // Process WhatsApp messages
       if (body.object === 'whatsapp_business_account') {
-        for (const entry of body.entry || []) {
-          for (const change of entry.changes || []) {
+        for (const entry of toArray(body.entry)) {
+          for (const change of toArray(entry.changes)) {
             if (change.field === 'messages') {
               const value = change.value;
               const phoneNumberId = value.metadata?.phone_number_id;
               
               // Process incoming messages
-              for (const message of value.messages || []) {
+              for (const message of toArray(value.messages)) {
                 const contactPhone = message.from;
                 const externalMessageId = message.id;
                 const timestamp = new Date(parseInt(message.timestamp) * 1000);
                 
                 // Get contact name
-                const contact = value.contacts?.find((c: any) => c.wa_id === contactPhone);
+                const contact = toArray(value.contacts)?.find((c: any) => c.wa_id === contactPhone);
                 const contactName = contact?.profile?.name || contactPhone;
                 
                 // Get message content
@@ -198,7 +206,7 @@ serve(async (req) => {
               }
 
               // Process message status updates
-              for (const status of value.statuses || []) {
+              for (const status of toArray(value.statuses)) {
                 console.log('Message status update:', status);
                 const statusType = status.status; // sent, delivered, read
                 const messageId = status.id;
