@@ -324,8 +324,12 @@ async function generateAIResponse(
             
             if (products.length > 0) {
               productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-              productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n';
-              productCatalog += '🖼️ INSTRUCCIÓN: Incluye [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones (hasta 10).\n\n';
+              productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n\n';
+              productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
+              productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
+              productCatalog += 'Esto es OBLIGATORIO, no opcional. Los clientes esperan ver fotos de los productos.\n\n';
+              productCatalog += 'Formato correcto: "1. Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251] - Precio: $94.900 COP"\n';
+              productCatalog += 'Formato INCORRECTO: "1. Ruana Caballo - Precio: $94.900 COP" (falta el tag)\n\n';
               
               products.forEach((product: any) => {
                 const variants = product.variants || [];
@@ -442,6 +446,9 @@ async function generateAIResponse(
 
     // Add product catalog
     systemPrompt += productCatalog;
+    
+    // Add final reminder at the end of prompt
+    systemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
 
     // Build conversation history for context
     const historyMessages = conversationHistory.slice(-10).map((msg: any) => ({
