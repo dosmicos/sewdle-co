@@ -53,11 +53,39 @@ export const useMessagingMessages = (conversationId: string | null) => {
   }, [conversationId, queryClient]);
 
   const sendMessage = useMutation({
-    mutationFn: async ({ message }: { message: string }) => {
+    mutationFn: async ({ message, mediaFile, mediaType }: { message: string; mediaFile?: File; mediaType?: string }) => {
       if (!conversationId) throw new Error('No conversation selected');
       
+      let body: Record<string, any> = { 
+        conversation_id: conversationId, 
+        message 
+      };
+
+      // If there's a media file, convert to base64
+      if (mediaFile && mediaType) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Remove the data URL prefix
+            const base64Data = result.split(',')[1];
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(mediaFile);
+        });
+
+        body = {
+          ...body,
+          media_base64: base64,
+          media_type: mediaType,
+          media_mime_type: mediaFile.type,
+          media_filename: mediaFile.name
+        };
+      }
+      
       const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
-        body: { conversation_id: conversationId, message }
+        body
       });
       
       if (error) throw error;

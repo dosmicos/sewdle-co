@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -12,11 +12,19 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { ChannelType } from './ConversationsList';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'audio' | 'document';
 }
 
 interface Conversation {
@@ -30,7 +38,7 @@ interface Conversation {
 interface ConversationThreadProps {
   conversation?: Conversation;
   messages: Message[];
-  onSendMessage?: (message: string) => void;
+  onSendMessage?: (message: string, mediaFile?: File, mediaType?: string) => void;
   isSending?: boolean;
   isLoading?: boolean;
 }
@@ -80,7 +88,13 @@ export const ConversationThread = ({
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -90,8 +104,19 @@ export const ConversationThread = ({
   }, [messages]);
 
   const handleSendMessage = () => {
-    if (!inputMessage.trim() || !onSendMessage) return;
-    onSendMessage(inputMessage.trim());
+    if ((!inputMessage.trim() && !selectedFile) || !onSendMessage) return;
+    
+    if (selectedFile) {
+      const mediaType = selectedFile.type.startsWith('image/') 
+        ? 'image' 
+        : selectedFile.type.startsWith('audio/') 
+          ? 'audio' 
+          : 'document';
+      onSendMessage(inputMessage.trim(), selectedFile, mediaType);
+      clearSelectedFile();
+    } else {
+      onSendMessage(inputMessage.trim());
+    }
     setInputMessage('');
   };
 
@@ -99,6 +124,68 @@ export const ConversationThread = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 16MB for WhatsApp)
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('El archivo es muy grande. Máximo 16MB');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Create preview for images
+    if (type === 'image') {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+        setSelectedFile(file);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      toast.info('Grabando audio...');
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      toast.error('No se pudo acceder al micrófono');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+      toast.success('Audio grabado');
     }
   };
 
@@ -228,7 +315,39 @@ export const ConversationThread = ({
                         <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       )}
                       <div className="flex-1">
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        {/* Media content */}
+                        {message.mediaUrl && message.mediaType === 'image' && (
+                          <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer">
+                            <img 
+                              src={message.mediaUrl} 
+                              alt="Imagen" 
+                              className="max-w-full max-h-64 rounded-lg mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                            />
+                          </a>
+                        )}
+                        {message.mediaUrl && message.mediaType === 'audio' && (
+                          <audio 
+                            controls 
+                            src={message.mediaUrl} 
+                            className="max-w-full mb-2"
+                          />
+                        )}
+                        {message.mediaUrl && message.mediaType === 'document' && (
+                          <a 
+                            href={message.mediaUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-2 bg-background/10 rounded mb-2 hover:bg-background/20 transition-colors"
+                          >
+                            <FileText className="h-5 w-5" />
+                            <span className="text-sm underline">Documento adjunto</span>
+                          </a>
+                        )}
+                        
+                        {/* Text content */}
+                        {message.content && (
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        )}
                         <p 
                           className={cn(
                             "text-xs mt-1",
@@ -274,6 +393,48 @@ export const ConversationThread = ({
 
         {/* Input area */}
         <div className="p-4 border-t border-border">
+          {/* File preview */}
+          {selectedFile && (
+            <div className="mb-3 p-3 bg-muted rounded-lg flex items-center gap-3">
+              {filePreview ? (
+                <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded" />
+              ) : selectedFile.type.startsWith('audio/') ? (
+                <div className="w-16 h-16 bg-primary/10 rounded flex items-center justify-center">
+                  <Mic className="h-8 w-8 text-primary" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 bg-primary/10 rounded flex items-center justify-center">
+                  <FileText className="h-8 w-8 text-primary" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(selectedFile.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={clearSelectedFile}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
+          {/* Hidden file inputs */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleFileSelect(e, 'image')}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+            className="hidden"
+            onChange={(e) => handleFileSelect(e, 'document')}
+          />
+
           <div className="flex gap-2">
             <Button 
               variant="outline" 
@@ -285,6 +446,36 @@ export const ConversationThread = ({
               <Sparkles className="h-4 w-4" />
               Generar con IA
             </Button>
+
+            {/* Attachment dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" disabled={isSending}>
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
+                  <Image className="h-4 w-4 mr-2" />
+                  Imagen
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Documento
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Audio recording button */}
+            <Button 
+              variant={isRecording ? "destructive" : "outline"} 
+              size="icon"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isSending}
+            >
+              <Mic className={cn("h-4 w-4", isRecording && "animate-pulse")} />
+            </Button>
+
             <Input
               placeholder="Escribe un mensaje o genera con IA..."
               value={inputMessage}
@@ -297,7 +488,7 @@ export const ConversationThread = ({
               size="icon" 
               className={channelInfo.buttonColor}
               onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isSending}
+              disabled={(!inputMessage.trim() && !selectedFile) || isSending}
             >
               {isSending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
