@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_catalog_connections: {
+        Row: {
+          connected: boolean
+          created_at: string
+          id: string
+          organization_id: string
+          shopify_product_id: number
+          updated_at: string
+        }
+        Insert: {
+          connected?: boolean
+          created_at?: string
+          id?: string
+          organization_id: string
+          shopify_product_id: number
+          updated_at?: string
+        }
+        Update: {
+          connected?: boolean
+          created_at?: string
+          id?: string
+          organization_id?: string
+          shopify_product_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_catalog_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alegra_invoices: {
         Row: {
           alegra_invoice_id: number
