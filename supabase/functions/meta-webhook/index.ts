@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -5,6 +6,108 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Generate AI response using GPT-4o-mini
+async function generateAIResponse(userMessage: string, conversationHistory: any[]): Promise<string> {
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  
+  if (!openaiApiKey) {
+    console.log('OPENAI_API_KEY not configured, skipping AI response');
+    return '';
+  }
+
+  try {
+    // Build messages array with conversation history
+    const messages = [
+      {
+        role: 'system',
+        content: `Eres un asistente virtual amigable y profesional para una empresa. 
+Tu objetivo es ayudar a los clientes con sus consultas de manera clara y concisa.
+Responde siempre en español.
+Sé amable, útil y mantén las respuestas breves pero informativas.
+Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto.`
+      },
+      ...conversationHistory.slice(-10).map((msg: any) => ({
+        role: msg.direction === 'inbound' ? 'user' : 'assistant',
+        content: msg.content
+      })),
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log('Calling OpenAI API with', messages.length, 'messages');
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages,
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error:', response.status, errorText);
+      return '';
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content || '';
+    console.log('AI response generated:', aiResponse.substring(0, 100) + '...');
+    return aiResponse;
+  } catch (error) {
+    console.error('Error generating AI response:', error);
+    return '';
+  }
+}
+
+// Send WhatsApp message via Meta API
+async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string, message: string): Promise<any> {
+  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
+  
+  if (!accessToken) {
+    console.error('META_WHATSAPP_TOKEN not configured');
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: recipientPhone,
+          type: 'text',
+          text: { body: message }
+        }),
+      }
+    );
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('WhatsApp API error:', data);
+      return null;
+    }
+
+    console.log('WhatsApp message sent successfully:', data);
+    return data;
+  } catch (error) {
+    console.error('Error sending WhatsApp message:', error);
+    return null;
+  }
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -304,6 +407,63 @@ serve(async (req) => {
                     console.error('Error inserting message:', msgError);
                   } else {
                     console.log('Message saved successfully');
+                    
+                    // Generate AI response if AI is enabled for this conversation or channel
+                    if (channel.ai_enabled || conversation.ai_managed) {
+                      console.log('AI is enabled, generating response...');
+                      
+                      // Get recent conversation history
+                      const { data: historyMessages } = await supabase
+                        .from('messaging_messages')
+                        .select('content, direction')
+                        .eq('conversation_id', conversation.id)
+                        .order('sent_at', { ascending: false })
+                        .limit(10);
+                      
+                      const conversationHistory = (historyMessages || []).reverse();
+                      
+                      // Generate AI response
+                      const aiResponse = await generateAIResponse(content, conversationHistory);
+                      
+                      if (aiResponse) {
+                        // Send the AI response via WhatsApp
+                        const sendResult = await sendWhatsAppMessage(phoneNumberId, contactPhone, aiResponse);
+                        
+                        if (sendResult) {
+                          // Save the AI response to the database
+                          const { error: aiMsgError } = await supabase
+                            .from('messaging_messages')
+                            .insert({
+                              conversation_id: conversation.id,
+                              external_message_id: sendResult.messages?.[0]?.id || null,
+                              channel_type: 'whatsapp',
+                              direction: 'outbound',
+                              sender_type: 'ai',
+                              content: aiResponse,
+                              message_type: 'text',
+                              sent_at: new Date().toISOString()
+                            });
+                          
+                          if (aiMsgError) {
+                            console.error('Error saving AI message:', aiMsgError);
+                          } else {
+                            console.log('AI response saved successfully');
+                            
+                            // Update conversation status to ai_managed
+                            await supabase
+                              .from('messaging_conversations')
+                              .update({ 
+                                ai_managed: true,
+                                last_message_preview: aiResponse,
+                                last_message_at: new Date().toISOString()
+                              })
+                              .eq('id', conversation.id);
+                          }
+                        }
+                      }
+                    } else {
+                      console.log('AI not enabled for this channel/conversation');
+                    }
                   }
                 } else {
                   console.log('Reaction processed, not inserting as new message');
