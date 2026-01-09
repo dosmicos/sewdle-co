@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   Send, 
   Bot, 
@@ -19,7 +20,12 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
-  FileText
+  FileText,
+  Paperclip,
+  Image as ImageIcon,
+  Mic,
+  X,
+  FileIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +36,8 @@ interface TestMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'audio' | 'document';
 }
 
 export const AITrainingPanel = () => {
@@ -44,6 +52,14 @@ export const AITrainingPanel = () => {
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isPromptOpen, setIsPromptOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Media state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Load AI config
   useEffect(() => {
@@ -239,19 +255,52 @@ export const AITrainingPanel = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isGenerating) return;
+    if ((!inputMessage.trim() && !selectedFile) || isGenerating) return;
+
+    let mediaUrl: string | undefined;
+    let mediaType: 'image' | 'audio' | 'document' | undefined;
+
+    // Handle file upload for preview
+    if (selectedFile) {
+      mediaType = getMediaType(selectedFile);
+      if (filePreview) {
+        mediaUrl = filePreview;
+      } else {
+        // Create object URL for document
+        mediaUrl = URL.createObjectURL(selectedFile);
+      }
+    }
+
+    const messageContent = inputMessage.trim() || (mediaType === 'image' ? '📷 Imagen' : mediaType === 'audio' ? '🎵 Audio' : '📎 Archivo');
 
     const userMessage: TestMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputMessage.trim(),
+      content: messageContent,
       timestamp: new Date(),
+      mediaUrl,
+      mediaType,
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
+    clearSelectedFile();
 
-    await generateTestResponse(userMessage.content);
+    // Only generate AI response for text messages (not media-only)
+    if (inputMessage.trim()) {
+      await generateTestResponse(userMessage.content);
+    } else {
+      // For media-only messages, show a simple acknowledgment
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now().toString() + '-ai',
+          role: 'assistant',
+          content: '¡Gracias por compartir! En una conversación real, podré analizar este contenido.',
+          timestamp: new Date(),
+        }
+      ]);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -263,7 +312,79 @@ export const AITrainingPanel = () => {
 
   const clearChat = () => {
     setMessages([]);
+    setSelectedFile(null);
+    setFilePreview(null);
     toast.success('Chat limpiado');
+  };
+
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 16MB)
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('El archivo es muy grande (máx. 16MB)');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    if (type === 'image') {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  // Audio recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
+        setSelectedFile(file);
+        const url = URL.createObjectURL(blob);
+        setFilePreview(url);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      toast.info('Grabando audio...');
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      toast.error('No se pudo acceder al micrófono');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const getMediaType = (file: File): 'image' | 'audio' | 'document' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('audio/')) return 'audio';
+    return 'document';
   };
 
   const suggestedMessages = [
@@ -412,6 +533,27 @@ export const AITrainingPanel = () => {
                           : 'bg-muted'
                       }`}
                     >
+                      {/* Media preview */}
+                      {message.mediaUrl && message.mediaType === 'image' && (
+                        <img 
+                          src={message.mediaUrl} 
+                          alt="Imagen enviada" 
+                          className="max-w-[200px] rounded-lg mb-2"
+                        />
+                      )}
+                      {message.mediaUrl && message.mediaType === 'audio' && (
+                        <audio 
+                          src={message.mediaUrl} 
+                          controls 
+                          className="max-w-[200px] mb-2"
+                        />
+                      )}
+                      {message.mediaUrl && message.mediaType === 'document' && (
+                        <div className="flex items-center gap-2 p-2 bg-background/50 rounded-lg mb-2">
+                          <FileIcon className="h-5 w-5" />
+                          <span className="text-sm">Documento</span>
+                        </div>
+                      )}
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                       <p className="text-xs opacity-70 mt-1">
                         {message.timestamp.toLocaleTimeString('es-CO', { 
@@ -446,18 +588,88 @@ export const AITrainingPanel = () => {
           </ScrollArea>
 
           {/* Input Area */}
-          <div className="p-4 border-t">
+          <div className="p-4 border-t space-y-3">
+            {/* File preview */}
+            {selectedFile && (
+              <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                {filePreview && selectedFile.type.startsWith('image/') ? (
+                  <img src={filePreview} alt="Preview" className="h-12 w-12 object-cover rounded" />
+                ) : filePreview && selectedFile.type.startsWith('audio/') ? (
+                  <audio src={filePreview} controls className="h-10 max-w-[200px]" />
+                ) : (
+                  <div className="h-12 w-12 bg-background rounded flex items-center justify-center">
+                    <FileIcon className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(selectedFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={clearSelectedFile}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Hidden file inputs */}
+            <input
+              type="file"
+              ref={imageInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => handleFileSelect(e, 'image')}
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+              onChange={(e) => handleFileSelect(e, 'document')}
+            />
+
             <div className="flex gap-2">
+              {/* Attachment dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" disabled={isGenerating}>
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Imagen
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Documento
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Audio recording button */}
+              <Button 
+                variant={isRecording ? 'destructive' : 'outline'} 
+                size="icon"
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isGenerating}
+              >
+                <Mic className={`h-4 w-4 ${isRecording ? 'animate-pulse' : ''}`} />
+              </Button>
+
               <Input
                 placeholder="Escribe un mensaje de prueba..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={handleKeyPress}
                 disabled={isGenerating}
+                className="flex-1"
               />
               <Button 
                 onClick={handleSendMessage} 
-                disabled={!inputMessage.trim() || isGenerating}
+                disabled={(!inputMessage.trim() && !selectedFile) || isGenerating}
               >
                 {isGenerating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
