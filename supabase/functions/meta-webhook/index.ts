@@ -73,11 +73,42 @@ serve(async (req) => {
                 let content = '';
                 let messageType = 'text';
                 let mediaUrl = null;
+                let replyToMessageId = null;
+                
+                // Handle context (replies to previous messages)
+                if (message.context?.id) {
+                  replyToMessageId = message.context.id;
+                  console.log('Message is a reply to:', replyToMessageId);
+                }
+                
+                // Handle referrals from Click-to-WhatsApp ads
+                if (message.referral) {
+                  const referral = message.referral;
+                  console.log('Message from ad referral:', referral);
+                  // Store referral info in metadata
+                }
                 
                 if (message.type === 'text') {
                   content = message.text?.body || '';
+                } else if (message.type === 'reaction') {
+                  // Handle reactions to messages
+                  const emoji = message.reaction?.emoji || '👍';
+                  const reactedToId = message.reaction?.message_id;
+                  content = `Reaccionó con ${emoji}`;
+                  messageType = 'reaction';
+                  console.log('Reaction:', { emoji, reactedToId });
+                  
+                  // Update the reacted message metadata if needed
+                  if (reactedToId) {
+                    await supabase
+                      .from('messaging_messages')
+                      .update({ 
+                        metadata: supabase.sql`jsonb_set(COALESCE(metadata, '{}'), '{reactions}', COALESCE(metadata->'reactions', '[]') || '["${emoji}"]'::jsonb)`
+                      })
+                      .eq('external_message_id', reactedToId);
+                  }
                 } else if (message.type === 'image') {
-                  content = '[Imagen]';
+                  content = message.image?.caption || '[Imagen]';
                   messageType = 'image';
                   mediaUrl = message.image?.id;
                 } else if (message.type === 'audio') {
@@ -85,19 +116,45 @@ serve(async (req) => {
                   messageType = 'audio';
                   mediaUrl = message.audio?.id;
                 } else if (message.type === 'video') {
-                  content = '[Video]';
+                  content = message.video?.caption || '[Video]';
                   messageType = 'video';
                   mediaUrl = message.video?.id;
                 } else if (message.type === 'document') {
-                  content = '[Documento]';
+                  content = message.document?.filename || '[Documento]';
                   messageType = 'document';
                   mediaUrl = message.document?.id;
                 } else if (message.type === 'sticker') {
                   content = '[Sticker]';
                   messageType = 'sticker';
+                  mediaUrl = message.sticker?.id;
                 } else if (message.type === 'location') {
-                  content = '[Ubicación]';
+                  const loc = message.location;
+                  content = loc?.name || loc?.address || `[Ubicación: ${loc?.latitude}, ${loc?.longitude}]`;
                   messageType = 'location';
+                } else if (message.type === 'contacts') {
+                  const contactCount = message.contacts?.length || 1;
+                  content = `[${contactCount} contacto${contactCount > 1 ? 's' : ''}]`;
+                  messageType = 'contacts';
+                } else if (message.type === 'button') {
+                  // Interactive button response
+                  content = message.button?.text || '[Botón]';
+                  messageType = 'button';
+                } else if (message.type === 'interactive') {
+                  // Interactive list/button response
+                  const interactive = message.interactive;
+                  if (interactive?.type === 'button_reply') {
+                    content = interactive.button_reply?.title || '[Respuesta de botón]';
+                  } else if (interactive?.type === 'list_reply') {
+                    content = interactive.list_reply?.title || '[Selección de lista]';
+                  } else {
+                    content = '[Interactivo]';
+                  }
+                  messageType = 'interactive';
+                } else if (message.type === 'order') {
+                  // Order from catalog
+                  const orderItems = message.order?.product_items?.length || 0;
+                  content = `[Pedido: ${orderItems} producto${orderItems !== 1 ? 's' : ''}]`;
+                  messageType = 'order';
                 } else {
                   content = `[${message.type}]`;
                   messageType = message.type;
@@ -182,21 +239,36 @@ serve(async (req) => {
                   }
                 }
 
-                // Insert message
-                const { error: msgError } = await supabase
-                  .from('messaging_messages')
-                  .insert({
-                    conversation_id: conversation.id,
-                    external_message_id: externalMessageId,
-                    channel_type: 'whatsapp',
-                    direction: 'inbound',
-                    sender_type: 'user',
-                    content: content,
-                    message_type: messageType,
-                    media_url: mediaUrl,
-                    metadata: message,
-                    sent_at: timestamp.toISOString()
-                  });
+                // Insert message (skip for reaction type - they update existing messages)
+                if (messageType !== 'reaction') {
+                  const { error: msgError } = await supabase
+                    .from('messaging_messages')
+                    .insert({
+                      conversation_id: conversation.id,
+                      external_message_id: externalMessageId,
+                      channel_type: 'whatsapp',
+                      direction: 'inbound',
+                      sender_type: 'user',
+                      content: content,
+                      message_type: messageType,
+                      media_url: mediaUrl,
+                      reply_to_message_id: replyToMessageId,
+                      metadata: {
+                        ...message,
+                        referral: message.referral || null,
+                        context: message.context || null
+                      },
+                      sent_at: timestamp.toISOString()
+                    });
+
+                  if (msgError) {
+                    console.error('Error inserting message:', msgError);
+                  } else {
+                    console.log('Message saved successfully');
+                  }
+                } else {
+                  console.log('Reaction processed, not inserting as new message');
+                }
 
                 if (msgError) {
                   console.error('Error inserting message:', msgError);
