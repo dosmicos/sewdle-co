@@ -82,6 +82,10 @@ const MessagingAIPage = () => {
       role: (msg.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
       content: msg.content || '',
       timestamp: msg.sent_at ? new Date(msg.sent_at) : new Date(),
+      mediaUrl: msg.media_url || undefined,
+      mediaType: (msg.message_type === 'image' ? 'image' : 
+                 msg.message_type === 'audio' ? 'audio' : 
+                 msg.message_type === 'document' ? 'document' : undefined) as 'image' | 'audio' | 'document' | undefined,
     }));
   }, [messages]);
 
@@ -110,8 +114,8 @@ const MessagingAIPage = () => {
     setSelectedConversation(null);
   };
 
-  const handleSendMessage = (message: string) => {
-    sendMessage({ message });
+  const handleSendMessage = (message: string, mediaFile?: File, mediaType?: string) => {
+    sendMessage({ message, mediaFile, mediaType });
   };
 
   const handleCreateConversation = async (phone: string, name: string, message: string) => {

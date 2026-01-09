@@ -12,11 +12,20 @@ serve(async (req) => {
   }
 
   try {
-    const { conversation_id, message, phone_number } = await req.json();
+    const { 
+      conversation_id, 
+      message, 
+      phone_number,
+      media_base64,
+      media_type,
+      media_mime_type,
+      media_filename
+    } = await req.json();
     
-    if (!message) {
+    // Either message or media is required
+    if (!message && !media_base64) {
       return new Response(
-        JSON.stringify({ error: 'Message is required' }),
+        JSON.stringify({ error: 'Message or media is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -103,52 +112,112 @@ serve(async (req) => {
     // Clean phone number (remove + and spaces)
     const cleanPhone = recipientPhone.replace(/[\s+]/g, '');
 
-    console.log('Sending WhatsApp message:', {
-      to: cleanPhone,
-      phoneNumberId,
-      messageLength: message.length
-    });
+    let result: any;
+    let savedMediaUrl: string | null = null;
+    let messageTypeForDb = 'text';
 
-    // Send message via WhatsApp Cloud API (v21.0 - latest)
-    const response = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${whatsappToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: cleanPhone,
-          type: 'text',
-          text: {
-            preview_url: true,
-            body: message
-          }
-        })
-      }
-    );
-
-    const result = await response.json();
-    console.log('WhatsApp API response:', result);
-
-    if (!response.ok) {
-      console.error('WhatsApp API error:', result);
-
-      const apiError = result?.error;
-      const details = apiError?.error_data?.details || apiError?.message;
-
-      return new Response(
-        JSON.stringify({
-          error: apiError?.message || 'Failed to send message',
-          details,
-          code: apiError?.code,
-          fbtrace_id: apiError?.fbtrace_id,
-        }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // Handle media upload if present
+    if (media_base64 && media_type) {
+      console.log('Processing media upload:', { media_type, media_mime_type, media_filename });
+      
+      // First upload media to WhatsApp
+      const mediaUploadResponse = await uploadMediaToWhatsApp(
+        phoneNumberId, 
+        whatsappToken, 
+        media_base64, 
+        media_mime_type
       );
+
+      if (!mediaUploadResponse.success) {
+        return new Response(
+          JSON.stringify({ error: mediaUploadResponse.error }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const mediaId = mediaUploadResponse.media_id;
+      console.log('Media uploaded to WhatsApp, ID:', mediaId);
+
+      // Send message with media
+      const messagePayload = buildMediaMessagePayload(cleanPhone, media_type, mediaId, message);
+      messageTypeForDb = media_type;
+
+      console.log('Sending media message:', JSON.stringify(messagePayload));
+
+      const response = await fetch(
+        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${whatsappToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(messagePayload)
+        }
+      );
+
+      result = await response.json();
+      console.log('WhatsApp API response:', result);
+
+      if (!response.ok) {
+        console.error('WhatsApp API error:', result);
+        return new Response(
+          JSON.stringify({
+            error: result?.error?.message || 'Failed to send media message',
+            details: result?.error?.error_data?.details,
+            code: result?.error?.code,
+          }),
+          { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      // Send text-only message
+      console.log('Sending WhatsApp text message:', {
+        to: cleanPhone,
+        phoneNumberId,
+        messageLength: message?.length || 0
+      });
+
+      const response = await fetch(
+        `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${whatsappToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'text',
+            text: {
+              preview_url: true,
+              body: message
+            }
+          })
+        }
+      );
+
+      result = await response.json();
+      console.log('WhatsApp API response:', result);
+
+      if (!response.ok) {
+        console.error('WhatsApp API error:', result);
+
+        const apiError = result?.error;
+        const details = apiError?.error_data?.details || apiError?.message;
+
+        return new Response(
+          JSON.stringify({
+            error: apiError?.message || 'Failed to send message',
+            details,
+            code: apiError?.code,
+            fbtrace_id: apiError?.fbtrace_id,
+          }),
+          { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Save message to database
@@ -160,9 +229,11 @@ serve(async (req) => {
           external_message_id: result.messages?.[0]?.id,
           channel_type: channelType,
           direction: 'outbound',
-          sender_type: 'agent', // Valid values: 'user' | 'ai' | 'agent'
-          content: message,
-          message_type: 'text',
+          sender_type: 'agent',
+          content: message || `[${media_type?.toUpperCase()}]`,
+          message_type: messageTypeForDb,
+          media_url: savedMediaUrl,
+          media_mime_type: media_mime_type,
           metadata: result,
           sent_at: new Date().toISOString()
         });
@@ -175,7 +246,7 @@ serve(async (req) => {
       const { error: updateError } = await supabase
         .from('messaging_conversations')
         .update({
-          last_message_preview: message,
+          last_message_preview: message || `📎 ${media_type === 'image' ? 'Imagen' : media_type === 'audio' ? 'Audio' : 'Documento'}`,
           last_message_at: new Date().toISOString(),
           ai_managed: true
         })
@@ -202,3 +273,97 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to upload media to WhatsApp
+async function uploadMediaToWhatsApp(
+  phoneNumberId: string, 
+  token: string, 
+  base64Data: string, 
+  mimeType: string
+): Promise<{ success: boolean; media_id?: string; error?: string }> {
+  try {
+    // Convert base64 to binary
+    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    
+    // Create form data
+    const formData = new FormData();
+    const blob = new Blob([binaryData], { type: mimeType });
+    formData.append('file', blob, `file.${getExtensionFromMime(mimeType)}`);
+    formData.append('type', mimeType);
+    formData.append('messaging_product', 'whatsapp');
+
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData
+      }
+    );
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      console.error('Media upload error:', result);
+      return { success: false, error: result?.error?.message || 'Failed to upload media' };
+    }
+
+    return { success: true, media_id: result.id };
+  } catch (error) {
+    console.error('Error uploading media:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to build media message payload
+function buildMediaMessagePayload(
+  to: string, 
+  mediaType: string, 
+  mediaId: string, 
+  caption?: string
+): Record<string, any> {
+  const payload: Record<string, any> = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: mediaType,
+  };
+
+  const mediaObject: Record<string, any> = {
+    id: mediaId,
+  };
+
+  // Only image and document support captions
+  if (caption && (mediaType === 'image' || mediaType === 'document')) {
+    mediaObject.caption = caption;
+  }
+
+  payload[mediaType] = mediaObject;
+
+  return payload;
+}
+
+// Helper function to get file extension from MIME type
+function getExtensionFromMime(mimeType: string): string {
+  const mimeMap: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'audio/webm': 'webm',
+    'audio/mp3': 'mp3',
+    'audio/mpeg': 'mp3',
+    'audio/ogg': 'ogg',
+    'audio/wav': 'wav',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'text/plain': 'txt',
+  };
+  
+  return mimeMap[mimeType] || 'bin';
+}
