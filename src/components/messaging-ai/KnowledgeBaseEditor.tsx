@@ -17,7 +17,9 @@ import {
   Image,
   Package,
   Star,
-  X
+  X,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,6 +50,11 @@ export const KnowledgeBaseEditor = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState<Partial<KnowledgeItem>>({
+    title: '',
+    content: '',
+  });
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<Partial<KnowledgeItem>>({
     title: '',
     content: '',
   });
@@ -182,6 +189,35 @@ export const KnowledgeBaseEditor = () => {
   const removeItem = (id: string) => {
     setItems(prev => prev.filter(item => item.id !== id));
     toast.success('Conocimiento eliminado');
+  };
+
+  const startEditing = (item: KnowledgeItem) => {
+    setEditingItemId(item.id);
+    setEditingItem({
+      title: item.title,
+      content: item.content,
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingItemId(null);
+    setEditingItem({ title: '', content: '' });
+  };
+
+  const saveEditing = (id: string) => {
+    if (!editingItem.title || !editingItem.content) {
+      toast.error('Completa el título y contenido');
+      return;
+    }
+
+    setItems(prev => prev.map(item => 
+      item.id === id 
+        ? { ...item, title: editingItem.title!, content: editingItem.content! }
+        : item
+    ));
+    setEditingItemId(null);
+    setEditingItem({ title: '', content: '' });
+    toast.success('Conocimiento actualizado');
   };
 
   const filteredItems = items.filter(item => {
@@ -327,30 +363,81 @@ export const KnowledgeBaseEditor = () => {
           {filteredItems.map(item => {
             const categoryInfo = getCategoryInfo(item.category);
             const Icon = categoryInfo.icon;
+            const isEditing = editingItemId === item.id;
             
             return (
-              <Card key={item.id}>
+              <Card key={item.id} className={isEditing ? 'border-primary' : ''}>
                 <CardContent className="pt-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-2">
-                      <Badge variant="outline" className="gap-1">
-                        <Icon className="h-3 w-3" />
-                        {categoryInfo.label}
-                      </Badge>
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                        {item.content}
-                      </p>
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="gap-1">
+                          <Icon className="h-3 w-3" />
+                          {categoryInfo.label}
+                        </Badge>
+                        <Button variant="ghost" size="icon" onClick={cancelEditing}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Título / Tema</Label>
+                        <Input
+                          value={editingItem.title}
+                          onChange={(e) => setEditingItem(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="Título del conocimiento"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contenido</Label>
+                        <Textarea
+                          value={editingItem.content}
+                          onChange={(e) => setEditingItem(prev => ({ ...prev, content: e.target.value }))}
+                          className="min-h-[120px]"
+                          placeholder="Contenido del conocimiento"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={cancelEditing}>
+                          Cancelar
+                        </Button>
+                        <Button onClick={() => saveEditing(item.id)}>
+                          <Check className="h-4 w-4 mr-2" />
+                          Guardar cambios
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeItem(item.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <Badge variant="outline" className="gap-1">
+                          <Icon className="h-3 w-3" />
+                          {categoryInfo.label}
+                        </Badge>
+                        <p className="font-medium">{item.title}</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {item.content}
+                        </p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary"
+                          onClick={() => startEditing(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => removeItem(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
