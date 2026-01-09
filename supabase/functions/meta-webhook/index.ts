@@ -58,6 +58,7 @@ serve(async (req) => {
             if (change.field === 'messages') {
               const value = change.value;
               const phoneNumberId = value.metadata?.phone_number_id;
+              console.log('Processing WhatsApp webhook for phone_number_id:', phoneNumberId);
               
               // Process incoming messages
               for (const message of toArray(value.messages)) {
@@ -171,7 +172,8 @@ serve(async (req) => {
                   .single();
 
                 if (channelError || !channel) {
-                  console.log('Channel not found for phone_number_id:', phoneNumberId);
+                  console.log('Channel not found for phone_number_id:', phoneNumberId, '- trying fallback');
+                  
                   // Try to find any active WhatsApp channel
                   const { data: anyChannel } = await supabase
                     .from('messaging_channels')
@@ -182,10 +184,47 @@ serve(async (req) => {
                     .single();
                   
                   if (!anyChannel) {
-                    console.error('No WhatsApp channel configured');
-                    continue;
+                    console.log('No WhatsApp channel found, attempting to create one automatically');
+                    
+                    // Find any organization to associate the channel with
+                    const { data: org } = await supabase
+                      .from('organizations')
+                      .select('id')
+                      .eq('status', 'active')
+                      .limit(1)
+                      .single();
+                    
+                    if (org) {
+                      const { data: newChannel, error: createChannelError } = await supabase
+                        .from('messaging_channels')
+                        .insert({
+                          organization_id: org.id,
+                          channel_type: 'whatsapp',
+                          channel_name: 'WhatsApp Auto',
+                          meta_phone_number_id: phoneNumberId,
+                          is_active: true,
+                          webhook_verified: true
+                        })
+                        .select()
+                        .single();
+                      
+                      if (createChannelError) {
+                        console.error('Error creating auto channel:', createChannelError);
+                        continue;
+                      }
+                      
+                      console.log('Auto-created WhatsApp channel:', newChannel.id);
+                      channel = newChannel;
+                    } else {
+                      console.error('No active organization found to create channel');
+                      continue;
+                    }
+                  } else {
+                    console.log('Using fallback channel:', anyChannel.id, anyChannel.channel_name);
+                    channel = anyChannel;
                   }
-                  channel = anyChannel;
+                } else {
+                  console.log('Found channel:', channel.id, channel.channel_name);
                 }
 
                 // Find or create conversation
@@ -268,12 +307,6 @@ serve(async (req) => {
                   }
                 } else {
                   console.log('Reaction processed, not inserting as new message');
-                }
-
-                if (msgError) {
-                  console.error('Error inserting message:', msgError);
-                } else {
-                  console.log('Message saved successfully');
                 }
               }
 
