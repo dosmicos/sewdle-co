@@ -104,6 +104,93 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
   }
 }
 
+// Fetch media URL from WhatsApp API using media ID
+async function fetchMediaUrl(mediaId: string): Promise<string | null> {
+  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
+  
+  if (!accessToken || !mediaId) {
+    return null;
+  }
+
+  try {
+    console.log('Fetching media URL for ID:', mediaId);
+    
+    // First, get the media URL from the media ID
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/${mediaId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Error fetching media info:', await response.text());
+      return null;
+    }
+
+    const mediaInfo = await response.json();
+    console.log('Media info:', mediaInfo);
+    
+    // The URL from WhatsApp requires authentication to download
+    // We'll return a special format that includes both the download URL and the media ID
+    // The frontend can use this to display the image
+    if (mediaInfo.url) {
+      // Download the media and upload to Supabase Storage for permanent access
+      const mediaResponse = await fetch(mediaInfo.url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (mediaResponse.ok) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        const arrayBuffer = await mediaResponse.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        // Determine file extension from mime type
+        const mimeType = mediaInfo.mime_type || 'application/octet-stream';
+        const ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+        const fileName = `whatsapp-media/${Date.now()}_${mediaId}.${ext}`;
+        
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('messaging-media')
+          .upload(fileName, uint8Array, {
+            contentType: mimeType,
+            cacheControl: '31536000',
+          });
+
+        if (uploadError) {
+          console.error('Error uploading to Supabase Storage:', uploadError);
+          // Return the original WhatsApp URL as fallback (might expire)
+          return mediaInfo.url;
+        }
+
+        // Get public URL
+        const { data: publicUrlData } = supabase
+          .storage
+          .from('messaging-media')
+          .getPublicUrl(fileName);
+
+        console.log('Media uploaded to Supabase Storage:', publicUrlData.publicUrl);
+        return publicUrlData.publicUrl;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching media URL:', error);
+    return null;
+  }
+}
+
 // Send WhatsApp message via Meta API
 async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string, message: string): Promise<any> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
@@ -222,7 +309,8 @@ serve(async (req) => {
                 // Get message content
                 let content = '';
                 let messageType = 'text';
-                let mediaUrl = null;
+                let mediaId: string | null = null;
+                let mediaMimeType: string | null = null;
                 let replyToMessageId = null;
                 
                 // Handle context (replies to previous messages)
@@ -237,25 +325,30 @@ serve(async (req) => {
                   content = `Reaccionó con ${emoji}`;
                   messageType = 'reaction';
                 } else if (message.type === 'image') {
-                  content = message.image?.caption || '[Imagen]';
+                  content = message.image?.caption || '';
                   messageType = 'image';
-                  mediaUrl = message.image?.id;
+                  mediaId = message.image?.id;
+                  mediaMimeType = message.image?.mime_type;
                 } else if (message.type === 'audio') {
-                  content = '[Audio]';
+                  content = '';
                   messageType = 'audio';
-                  mediaUrl = message.audio?.id;
+                  mediaId = message.audio?.id;
+                  mediaMimeType = message.audio?.mime_type;
                 } else if (message.type === 'video') {
-                  content = message.video?.caption || '[Video]';
+                  content = message.video?.caption || '';
                   messageType = 'video';
-                  mediaUrl = message.video?.id;
+                  mediaId = message.video?.id;
+                  mediaMimeType = message.video?.mime_type;
                 } else if (message.type === 'document') {
-                  content = message.document?.filename || '[Documento]';
+                  content = message.document?.filename || '';
                   messageType = 'document';
-                  mediaUrl = message.document?.id;
+                  mediaId = message.document?.id;
+                  mediaMimeType = message.document?.mime_type;
                 } else if (message.type === 'sticker') {
-                  content = '[Sticker]';
+                  content = '';
                   messageType = 'sticker';
-                  mediaUrl = message.sticker?.id;
+                  mediaId = message.sticker?.id;
+                  mediaMimeType = message.sticker?.mime_type;
                 } else if (message.type === 'location') {
                   const loc = message.location;
                   content = loc?.name || loc?.address || `[Ubicación: ${loc?.latitude}, ${loc?.longitude}]`;
@@ -284,6 +377,14 @@ serve(async (req) => {
                 } else {
                   content = `[${message.type}]`;
                   messageType = message.type;
+                }
+
+                // Fetch real media URL if there's a media ID
+                let mediaUrl: string | null = null;
+                if (mediaId) {
+                  console.log('Fetching media URL for ID:', mediaId);
+                  mediaUrl = await fetchMediaUrl(mediaId);
+                  console.log('Resolved media URL:', mediaUrl);
                 }
 
                 console.log('Message content:', content, 'type:', messageType);
@@ -402,12 +503,20 @@ Reglas importantes:
                   conversation = newConv;
                   console.log('Created conversation:', conversation.id);
                 } else {
-                  // Update existing conversation
+                  // Update existing conversation with preview that includes media info
                   console.log('Updating existing conversation:', conversation.id);
+                  const previewText = mediaId 
+                    ? (messageType === 'image' ? '📷 Imagen' : 
+                       messageType === 'audio' ? '🎵 Audio' : 
+                       messageType === 'video' ? '🎬 Video' : 
+                       messageType === 'document' ? '📄 Documento' : 
+                       messageType === 'sticker' ? '🎭 Sticker' : content || `[${messageType}]`)
+                    : content;
+                  
                   await supabase
                     .from('messaging_conversations')
                     .update({
-                      last_message_preview: content,
+                      last_message_preview: previewText,
                       last_message_at: timestamp.toISOString(),
                       unread_count: (conversation.unread_count || 0) + 1,
                       user_name: contactName,
@@ -425,12 +534,14 @@ Reglas importantes:
                       channel_type: 'whatsapp',
                       direction: 'inbound',
                       sender_type: 'user',
-                      content: content,
+                      content: content || null,
                       message_type: messageType,
                       media_url: mediaUrl,
+                      media_mime_type: mediaMimeType,
                       reply_to_message_id: replyToMessageId,
                       metadata: {
                         ...message,
+                        original_media_id: mediaId,
                         referral: message.referral || null,
                         context: message.context || null
                       },
