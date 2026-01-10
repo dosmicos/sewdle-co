@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -18,6 +20,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -33,6 +41,7 @@ interface Conversation {
   name: string;
   status: 'active' | 'pending' | 'resolved';
   channel: ChannelType;
+  ai_managed?: boolean;
 }
 
 interface ConversationThreadProps {
@@ -41,6 +50,8 @@ interface ConversationThreadProps {
   onSendMessage?: (message: string, mediaFile?: File, mediaType?: string) => void;
   isSending?: boolean;
   isLoading?: boolean;
+  onToggleAiManaged?: (aiManaged: boolean) => void;
+  isTogglingAiManaged?: boolean;
 }
 
 const channelConfig: Record<ChannelType, { 
@@ -82,7 +93,9 @@ export const ConversationThread = ({
   messages, 
   onSendMessage,
   isSending = false,
-  isLoading = false
+  isLoading = false,
+  onToggleAiManaged,
+  isTogglingAiManaged = false,
 }: ConversationThreadProps) => {
   const { currentOrganization } = useOrganization();
   const [inputMessage, setInputMessage] = useState('');
@@ -275,12 +288,46 @@ export const ConversationThread = ({
               <p className="text-sm text-muted-foreground">{conversation.phone}</p>
             </div>
           </div>
-          <Badge 
-            variant={conversation.status === 'active' ? 'default' : 'secondary'}
-            className={conversation.status === 'active' ? 'bg-emerald-500' : ''}
-          >
-            {conversation.status === 'active' ? 'Activo' : conversation.status === 'pending' ? 'Pendiente' : 'Resuelto'}
-          </Badge>
+          <div className="flex items-center gap-3">
+            {/* AI Managed Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <UserCog className={cn(
+                      "h-4 w-4 transition-colors",
+                      conversation.ai_managed === false ? "text-primary" : "text-muted-foreground"
+                    )} />
+                    <Switch
+                      id="ai-managed-toggle"
+                      checked={conversation.ai_managed !== false}
+                      onCheckedChange={(checked) => onToggleAiManaged?.(!checked ? false : true)}
+                      disabled={isTogglingAiManaged}
+                      className="data-[state=checked]:bg-emerald-500"
+                    />
+                    <Bot className={cn(
+                      "h-4 w-4 transition-colors",
+                      conversation.ai_managed !== false ? "text-emerald-500" : "text-muted-foreground"
+                    )} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">
+                    {conversation.ai_managed !== false 
+                      ? "IA activa: Responde automáticamente" 
+                      : "Control manual: Solo tú respondes"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <Badge 
+              variant={conversation.status === 'active' ? 'default' : 'secondary'}
+              className={conversation.status === 'active' ? 'bg-emerald-500' : ''}
+            >
+              {conversation.status === 'active' ? 'Activo' : conversation.status === 'pending' ? 'Pendiente' : 'Resuelto'}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
 

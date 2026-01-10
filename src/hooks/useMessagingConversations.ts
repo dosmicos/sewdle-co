@@ -91,6 +91,28 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     },
   });
 
+  // Toggle AI managed status
+  const toggleAiManaged = useMutation({
+    mutationFn: async ({ conversationId, aiManaged }: { conversationId: string; aiManaged: boolean }) => {
+      const { error } = await supabase
+        .from('messaging_conversations')
+        .update({ ai_managed: aiManaged })
+        .eq('id', conversationId);
+      
+      if (error) throw error;
+    },
+    onSuccess: (_, { aiManaged }) => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+      toast.success(aiManaged 
+        ? 'IA activada: Responderá automáticamente' 
+        : 'Control manual activado: Solo tú responderás');
+    },
+    onError: (error: any) => {
+      console.error('Error toggling AI managed:', error);
+      toast.error('Error al cambiar el control de la conversación');
+    },
+  });
+
   // Delete a conversation and its messages
   const deleteConversation = useMutation({
     mutationFn: async (conversationId: string) => {
@@ -218,5 +240,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     isDeletingConversation: deleteConversation.isPending,
     createConversation: createConversation.mutateAsync,
     isCreatingConversation: createConversation.isPending,
+    toggleAiManaged: toggleAiManaged.mutate,
+    isTogglingAiManaged: toggleAiManaged.isPending,
   };
 };
