@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -105,19 +105,54 @@ export const ConversationThread = ({
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive - smooth scroll
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth'
+  // Function to scroll to bottom
+  const scrollToBottom = (behavior: 'instant' | 'smooth' = 'smooth') => {
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (viewport) {
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior
       });
     }
+  };
+
+  // Instant scroll when conversation changes
+  useEffect(() => {
+    if (conversation?.id && messages.length > 0) {
+      // Small delay to ensure content is rendered
+      const timer = setTimeout(() => scrollToBottom('instant'), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [conversation?.id]);
+
+  // Smooth scroll when new messages arrive
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom('smooth');
+    }
   }, [messages.length]);
+
+  // Detect scroll position to show/hide button
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
+      setShowScrollButton(!isNearBottom);
+    };
+
+    viewport.addEventListener('scroll', handleScroll);
+    // Initial check
+    handleScroll();
+
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [conversation?.id, messages.length]);
 
   const handleSendMessage = () => {
     if ((!inputMessage.trim() && !selectedFile) || !onSendMessage) return;
@@ -338,7 +373,8 @@ export const ConversationThread = ({
       </CardHeader>
 
       <CardContent className="flex-1 p-0 flex flex-col min-h-0 overflow-hidden">
-        <ScrollArea className="flex-1 p-4 min-h-0">
+        <div className="flex-1 relative min-h-0" ref={scrollAreaRef}>
+          <ScrollArea className="h-full p-4">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -349,7 +385,7 @@ export const ConversationThread = ({
               <p>No hay mensajes en esta conversación</p>
             </div>
           ) : (
-            <div className="space-y-4" ref={scrollRef}>
+            <div className="space-y-4">
               {messages.map((message, index) => (
                 <div
                   key={index}
@@ -446,7 +482,18 @@ export const ConversationThread = ({
               )}
             </div>
           )}
-        </ScrollArea>
+          </ScrollArea>
+
+          {/* Scroll to bottom button */}
+          {showScrollButton && (
+            <button
+              onClick={() => scrollToBottom('smooth')}
+              className="absolute bottom-4 right-6 z-10 p-2 rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600 transition-all animate-in fade-in slide-in-from-bottom-2"
+            >
+              <ArrowDown className="h-5 w-5" />
+            </button>
+          )}
+        </div>
 
         {/* Input area */}
         <div className="p-4 border-t border-border">
