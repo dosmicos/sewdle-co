@@ -11,6 +11,7 @@ import { Save, Plus, X, Sparkles, AlertCircle, Loader2, MessageSquareText, Penci
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AIRule {
   id: string;
@@ -38,6 +39,7 @@ interface AIConfig {
 
 export const AIConfigPanel = () => {
   const { currentOrganization } = useOrganization();
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [channelId, setChannelId] = useState<string | null>(null);
@@ -220,35 +222,97 @@ Reglas importantes:
     toast.success('Regla eliminada');
   };
 
-  const addQuickReply = () => {
+  // Auto-save quick replies to database
+  const saveQuickRepliesToDB = async (quickReplies: QuickReply[]) => {
+    if (!currentOrganization?.id) return;
+    
+    try {
+      let effectiveChannelId = channelId;
+
+      // Create channel if it doesn't exist
+      if (!effectiveChannelId) {
+        const { data: created, error: createError } = await supabase
+          .from('messaging_channels')
+          .insert({
+            organization_id: currentOrganization.id,
+            channel_type: 'whatsapp',
+            is_active: false,
+            ai_enabled: false,
+          } as any)
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        effectiveChannelId = created.id;
+        setChannelId(created.id);
+      }
+
+      // Get current config to merge
+      const { data: current } = await supabase
+        .from('messaging_channels')
+        .select('ai_config')
+        .eq('id', effectiveChannelId)
+        .maybeSingle();
+
+      const currentConfig = (current?.ai_config as any) || {};
+
+      // Update with new quick replies
+      await supabase
+        .from('messaging_channels')
+        .update({
+          ai_config: {
+            ...currentConfig,
+            quickReplies: quickReplies.map(q => ({
+              id: q.id,
+              title: q.title,
+              content: q.content
+            })),
+          },
+        } as any)
+        .eq('id', effectiveChannelId);
+
+      // Invalidate cache so ConversationThread gets updated data
+      queryClient.invalidateQueries({ queryKey: ['quick-replies', currentOrganization.id] });
+    } catch (err) {
+      console.error('Error saving quick replies:', err);
+    }
+  };
+
+  const addQuickReply = async () => {
     if (newQuickReply.title && newQuickReply.content) {
+      const newReplies = [...config.quickReplies, { id: Date.now().toString(), ...newQuickReply }];
       setConfig(prev => ({
         ...prev,
-        quickReplies: [...prev.quickReplies, { id: Date.now().toString(), ...newQuickReply }]
+        quickReplies: newReplies
       }));
       setNewQuickReply({ title: '', content: '' });
+      await saveQuickRepliesToDB(newReplies);
       toast.success('Respuesta rápida agregada');
     }
   };
 
-  const updateQuickReply = () => {
+  const updateQuickReply = async () => {
     if (editingQuickReply) {
+      const newReplies = config.quickReplies.map(q => 
+        q.id === editingQuickReply.id ? editingQuickReply : q
+      );
       setConfig(prev => ({
         ...prev,
-        quickReplies: prev.quickReplies.map(q => 
-          q.id === editingQuickReply.id ? editingQuickReply : q
-        )
+        quickReplies: newReplies
       }));
       setEditingQuickReply(null);
+      await saveQuickRepliesToDB(newReplies);
       toast.success('Respuesta rápida actualizada');
     }
   };
 
-  const removeQuickReply = (id: string) => {
+  const removeQuickReply = async (id: string) => {
+    const newReplies = config.quickReplies.filter(q => q.id !== id);
     setConfig(prev => ({
       ...prev,
-      quickReplies: prev.quickReplies.filter(q => q.id !== id)
+      quickReplies: newReplies
     }));
+    await saveQuickRepliesToDB(newReplies);
     toast.success('Respuesta rápida eliminada');
   };
 
