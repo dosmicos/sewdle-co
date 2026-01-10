@@ -259,32 +259,45 @@ export const ConversationThread = ({
     // Quick replies should PREPARE the message (and optional image) for review,
     // not send automatically.
     setInputMessage(reply.content);
-    inputRef.current?.focus();
 
-    // Replace any previous attachment when selecting a quick reply
-    clearSelectedFile();
+    // Clear any previous attachment first
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
 
     if (reply.imageUrl) {
       try {
+        console.log('Fetching quick reply image:', reply.imageUrl);
         const response = await fetch(reply.imageUrl);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
+        console.log('Blob received:', blob.size, blob.type);
 
         const inferredExt = blob.type?.split('/')?.[1] || 'jpg';
         const fileName = `quick-reply-${Date.now()}.${inferredExt}`;
         const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
 
-        setSelectedFile(file);
-
-        // Create preview (same style as manual image attachments)
+        // Create preview first (before setting file to ensure both update together)
         const reader = new FileReader();
-        reader.onload = (e) => setFilePreview(e.target?.result as string);
+        reader.onload = (e) => {
+          console.log('Image preview loaded');
+          setFilePreview(e.target?.result as string);
+          setSelectedFile(file);
+        };
+        reader.onerror = () => {
+          console.error('FileReader error');
+          toast.error('Error al cargar vista previa de imagen');
+        };
         reader.readAsDataURL(file);
       } catch (err) {
         console.error('Error fetching quick reply image:', err);
         toast.error('No se pudo cargar la imagen de la respuesta rápida');
       }
     }
+
+    // Focus after async operations complete
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const openQuickRepliesPanel = () => {
