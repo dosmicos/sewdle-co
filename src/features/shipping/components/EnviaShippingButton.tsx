@@ -186,6 +186,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Jamundí, Valle del Cauca → Coordinadora
+      if ((dept.includes('valle') || dept === 'val') && city.includes('jamundi')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       const MAIN_CITIES = [
         'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
