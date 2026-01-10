@@ -180,7 +180,8 @@ serve(async (req) => {
       media_base64,
       media_type,
       media_mime_type,
-      media_filename
+      media_filename,
+      reply_to_message_id  // UUID interno del mensaje al que se responde
     } = await req.json();
     
     // Either message or media is required
@@ -270,6 +271,26 @@ serve(async (req) => {
       );
     }
 
+    // Si hay reply_to_message_id, buscar el external_message_id (WAMID) del mensaje original
+    let replyToExternalId: string | null = null;
+    if (reply_to_message_id) {
+      const { data: originalMessage, error: replyError } = await supabase
+        .from('messaging_messages')
+        .select('external_message_id')
+        .eq('id', reply_to_message_id)
+        .single();
+      
+      if (originalMessage?.external_message_id) {
+        replyToExternalId = originalMessage.external_message_id;
+        console.log('Reply context found:', { 
+          internal_id: reply_to_message_id, 
+          external_wamid: replyToExternalId 
+        });
+      } else {
+        console.warn('Could not find external_message_id for reply:', reply_to_message_id, replyError);
+      }
+    }
+
     // Clean phone number (remove + and spaces)
     const cleanPhone = recipientPhone.replace(/[\s+]/g, '');
 
@@ -299,8 +320,8 @@ serve(async (req) => {
       const mediaId = mediaUploadResponse.media_id;
       console.log('Media uploaded to WhatsApp, ID:', mediaId);
 
-      // Send message with media
-      const messagePayload = buildMediaMessagePayload(cleanPhone, media_type, mediaId, message);
+      // Send message with media (incluyendo context si es respuesta)
+      const messagePayload = buildMediaMessagePayload(cleanPhone, media_type, mediaId, message, replyToExternalId);
       messageTypeForDb = media_type;
 
       console.log('Sending media message:', JSON.stringify(messagePayload));
@@ -336,8 +357,29 @@ serve(async (req) => {
       console.log('Sending WhatsApp text message:', {
         to: cleanPhone,
         phoneNumberId,
-        messageLength: message?.length || 0
+        messageLength: message?.length || 0,
+        replyTo: replyToExternalId || 'none'
       });
+
+      // Construir el payload del mensaje
+      const messagePayload: Record<string, any> = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: 'text',
+        text: {
+          preview_url: true,
+          body: message
+        }
+      };
+
+      // Agregar context si es una respuesta a otro mensaje (según documentación de Meta)
+      if (replyToExternalId) {
+        messagePayload.context = {
+          message_id: replyToExternalId
+        };
+        console.log('Adding reply context to message:', messagePayload.context);
+      }
 
       const response = await fetch(
         `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
@@ -347,16 +389,7 @@ serve(async (req) => {
             'Authorization': `Bearer ${whatsappToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            recipient_type: 'individual',
-            to: cleanPhone,
-            type: 'text',
-            text: {
-              preview_url: true,
-              body: message
-            }
-          })
+          body: JSON.stringify(messagePayload)
         }
       );
 
@@ -395,6 +428,7 @@ serve(async (req) => {
           message_type: messageTypeForDb,
           media_url: savedMediaUrl,
           media_mime_type: media_mime_type,
+          reply_to_message_id: reply_to_message_id || null,  // Guardar referencia al mensaje original
           metadata: result,
           sent_at: new Date().toISOString()
         });
@@ -482,7 +516,8 @@ function buildMediaMessagePayload(
   to: string, 
   mediaType: string, 
   mediaId: string, 
-  caption?: string
+  caption?: string,
+  replyToExternalId?: string | null  // WAMID del mensaje al que se responde
 ): Record<string, any> {
   const payload: Record<string, any> = {
     messaging_product: 'whatsapp',
@@ -490,6 +525,13 @@ function buildMediaMessagePayload(
     to,
     type: mediaType,
   };
+
+  // Agregar context si es una respuesta a otro mensaje
+  if (replyToExternalId) {
+    payload.context = {
+      message_id: replyToExternalId
+    };
+  }
 
   const mediaObject: Record<string, any> = {
     id: mediaId,
