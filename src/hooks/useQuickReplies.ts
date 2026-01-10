@@ -5,6 +5,7 @@ export interface QuickReply {
   id: string;
   title: string;
   content: string;
+  imageUrl?: string;
 }
 
 // Default quick replies when none are configured

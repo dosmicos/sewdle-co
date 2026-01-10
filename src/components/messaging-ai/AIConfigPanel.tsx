@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Save, Plus, X, Sparkles, AlertCircle, Loader2, MessageSquareText, Pencil, Trash2 } from 'lucide-react';
+import { Save, Plus, X, Sparkles, AlertCircle, Loader2, MessageSquareText, Pencil, Trash2, Image, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -23,6 +23,7 @@ interface QuickReply {
   id: string;
   title: string;
   content: string;
+  imageUrl?: string;
 }
 
 interface AIConfig {
@@ -80,8 +81,12 @@ Reglas importantes:
   });
 
   const [newRule, setNewRule] = useState({ condition: '', response: '' });
-  const [newQuickReply, setNewQuickReply] = useState({ title: '', content: '' });
+  const [newQuickReply, setNewQuickReply] = useState({ title: '', content: '', imageUrl: '' });
   const [editingQuickReply, setEditingQuickReply] = useState<QuickReply | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
+  const newImageInputRef = useRef<HTMLInputElement>(null);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-save quick replies to database (moved up for use in loadConfig)
   const saveQuickRepliesToDB = useCallback(async (quickReplies: QuickReply[], existingChannelId?: string | null) => {
@@ -126,7 +131,8 @@ Reglas importantes:
             quickReplies: quickReplies.map(q => ({
               id: q.id,
               title: q.title,
-              content: q.content
+              content: q.content,
+              imageUrl: q.imageUrl || undefined
             })),
           },
         } as any)
@@ -301,14 +307,92 @@ Reglas importantes:
 
   const addQuickReply = async () => {
     if (newQuickReply.title && newQuickReply.content) {
-      const newReplies = [...config.quickReplies, { id: Date.now().toString(), ...newQuickReply }];
+      const replyToAdd: QuickReply = {
+        id: Date.now().toString(),
+        title: newQuickReply.title,
+        content: newQuickReply.content,
+        imageUrl: newQuickReply.imageUrl || undefined
+      };
+      const newReplies = [...config.quickReplies, replyToAdd];
       setConfig(prev => ({
         ...prev,
         quickReplies: newReplies
       }));
-      setNewQuickReply({ title: '', content: '' });
+      setNewQuickReply({ title: '', content: '', imageUrl: '' });
       await saveQuickRepliesToDB(newReplies);
       toast.success('Respuesta rápida agregada');
+    }
+  };
+
+  // Handle image upload for new quick reply
+  const handleNewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentOrganization?.id) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen es muy grande. Máximo 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `quick-replies/${currentOrganization.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('messaging-media')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('messaging-media')
+        .getPublicUrl(fileName);
+
+      setNewQuickReply(prev => ({ ...prev, imageUrl: urlData.publicUrl }));
+      toast.success('Imagen subida');
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      toast.error('Error al subir imagen');
+    } finally {
+      setIsUploadingImage(false);
+      if (newImageInputRef.current) newImageInputRef.current.value = '';
+    }
+  };
+
+  // Handle image upload for editing quick reply
+  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentOrganization?.id || !editingQuickReply) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen es muy grande. Máximo 5MB');
+      return;
+    }
+
+    setIsUploadingEditImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `quick-replies/${currentOrganization.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('messaging-media')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('messaging-media')
+        .getPublicUrl(fileName);
+
+      setEditingQuickReply(prev => prev ? { ...prev, imageUrl: urlData.publicUrl } : null);
+      toast.success('Imagen subida');
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      toast.error('Error al subir imagen');
+    } finally {
+      setIsUploadingEditImage(false);
+      if (editImageInputRef.current) editImageInputRef.current.value = '';
     }
   };
 
@@ -564,6 +648,46 @@ Reglas importantes:
                       placeholder="Contenido..."
                       className="text-sm min-h-[80px]"
                     />
+                    {/* Image upload for editing */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={editImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleEditImageUpload}
+                      />
+                      {editingQuickReply.imageUrl ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <img 
+                            src={editingQuickReply.imageUrl} 
+                            alt="Preview" 
+                            className="h-12 w-12 object-cover rounded border"
+                          />
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => setEditingQuickReply({ ...editingQuickReply, imageUrl: undefined })}
+                          >
+                            <X className="h-3 w-3 mr-1" /> Quitar
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => editImageInputRef.current?.click()}
+                          disabled={isUploadingEditImage}
+                        >
+                          {isUploadingEditImage ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <Image className="h-3 w-3 mr-1" />
+                          )}
+                          Agregar imagen
+                        </Button>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={updateQuickReply}>
                         Guardar
@@ -575,9 +699,18 @@ Reglas importantes:
                   </div>
                 ) : (
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{reply.title}</p>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{reply.content}</p>
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
+                      {reply.imageUrl && (
+                        <img 
+                          src={reply.imageUrl} 
+                          alt="" 
+                          className="h-10 w-10 object-cover rounded border flex-shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{reply.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{reply.content}</p>
+                      </div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                       <Button 
@@ -616,6 +749,48 @@ Reglas importantes:
               onChange={(e) => setNewQuickReply({ ...newQuickReply, content: e.target.value })}
               className="min-h-[80px]"
             />
+            {/* Image upload for new quick reply */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={newImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleNewImageUpload}
+              />
+              {newQuickReply.imageUrl ? (
+                <div className="flex items-center gap-2 flex-1">
+                  <img 
+                    src={newQuickReply.imageUrl} 
+                    alt="Preview" 
+                    className="h-12 w-12 object-cover rounded border"
+                  />
+                  <span className="text-xs text-muted-foreground flex-1">Imagen adjunta</span>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => setNewQuickReply(prev => ({ ...prev, imageUrl: '' }))}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => newImageInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="w-full"
+                >
+                  {isUploadingImage ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Image className="h-4 w-4 mr-2" />
+                  )}
+                  {isUploadingImage ? 'Subiendo...' : 'Agregar imagen (opcional)'}
+                </Button>
+              )}
+            </div>
             <Button 
               onClick={addQuickReply} 
               variant="outline" 
