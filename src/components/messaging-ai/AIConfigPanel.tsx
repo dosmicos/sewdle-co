@@ -248,7 +248,7 @@ Reglas importantes:
         businessHours: config.businessHours,
         greetingMessage: config.greetingMessage,
         rules: config.rules.map(r => ({ id: r.id, condition: r.condition, response: r.response })),
-        quickReplies: config.quickReplies.map(q => ({ id: q.id, title: q.title, content: q.content })),
+        quickReplies: config.quickReplies.map(q => ({ id: q.id, title: q.title, content: q.content, imageUrl: q.imageUrl || undefined })),
       };
 
       // Merge with existing ai_config to avoid overwriting knowledgeBase or other keys.
