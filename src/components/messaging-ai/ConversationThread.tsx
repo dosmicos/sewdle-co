@@ -109,12 +109,15 @@ export const ConversationThread = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive - smooth scroll
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
-  }, [messages]);
+  }, [messages.length]);
 
   const handleSendMessage = () => {
     if ((!inputMessage.trim() && !selectedFile) || !onSendMessage) return;
@@ -343,15 +346,19 @@ export const ConversationThread = ({
               <p>No hay mensajes en esta conversación</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4" ref={scrollRef}>
               {messages.map((message, index) => (
                 <div
                   key={index}
-                  className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}
+                  className={cn(
+                    "flex animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                    message.role === 'user' ? 'justify-start' : 'justify-end'
+                  )}
+                  style={{ animationDelay: `${Math.min(index * 20, 100)}ms` }}
                 >
                   <div
                     className={cn(
-                      "max-w-[80%] rounded-lg p-3 relative group",
+                      "max-w-[80%] rounded-lg p-3 relative group transition-all",
                       message.role === 'user'
                         ? 'bg-muted'
                         : channelInfo.bubbleColor
