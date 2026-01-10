@@ -299,13 +299,13 @@ export const ConversationThread = ({
                   <div className="flex items-center gap-2">
                     <UserCog className={cn(
                       "h-4 w-4 transition-colors",
-                      conversation.ai_managed !== true ? "text-primary" : "text-muted-foreground"
+                      conversation.ai_managed === false ? "text-primary" : "text-muted-foreground"
                     )} />
                     <Switch
                       id="ai-managed-toggle"
-                      checked={conversation.ai_managed === true}
+                      checked={conversation.ai_managed !== false}
                       onCheckedChange={(checked) => {
-                        console.log('Switch toggled, new ai_managed value:', checked);
+                        console.log('Switch toggled, setting ai_managed to:', checked);
                         onToggleAiManaged?.(checked);
                       }}
                       disabled={isTogglingAiManaged}
@@ -313,13 +313,13 @@ export const ConversationThread = ({
                     />
                     <Bot className={cn(
                       "h-4 w-4 transition-colors",
-                      conversation.ai_managed === true ? "text-emerald-500" : "text-muted-foreground"
+                      conversation.ai_managed !== false ? "text-emerald-500" : "text-muted-foreground"
                     )} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   <p className="text-xs">
-                    {conversation.ai_managed === true 
+                    {conversation.ai_managed !== false 
                       ? "IA activa: Responde automáticamente" 
                       : "Control manual: Solo tú respondes"}
                   </p>

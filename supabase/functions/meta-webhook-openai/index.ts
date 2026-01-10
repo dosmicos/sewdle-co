@@ -748,7 +748,7 @@ serve(async (req) => {
                     last_message_at: timestamp.toISOString(),
                     last_message_preview: content.substring(0, 100),
                     unread_count: 1,
-                    ai_managed: channel.ai_enabled ?? true,
+                    ai_managed: true, // AI enabled by default for all new conversations
                   })
                   .select()
                   .single();
