@@ -797,7 +797,10 @@ serve(async (req) => {
 
               // Generate and send AI response if enabled (check both channel and conversation level)
               const aiEnabledOnChannel = channel.ai_enabled !== false;
+              // ai_managed: true = AI responds, false = manual control, null = default to channel setting
               const aiEnabledOnConversation = conversation.ai_managed !== false;
+              
+              console.log(`AI status check - Channel: ${aiEnabledOnChannel}, Conversation ai_managed: ${conversation.ai_managed}, Will respond: ${aiEnabledOnChannel && aiEnabledOnConversation}`);
               
               if (aiEnabledOnChannel && aiEnabledOnConversation && content && messageType === 'text') {
                 console.log('AI is enabled (channel + conversation), generating response...');

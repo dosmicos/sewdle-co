@@ -129,24 +129,53 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     },
   });
 
-  // Toggle AI managed status
+  // Toggle AI managed status with optimistic update
   const toggleAiManaged = useMutation({
     mutationFn: async ({ conversationId, aiManaged }: { conversationId: string; aiManaged: boolean }) => {
+      console.log(`Toggling ai_managed to ${aiManaged} for conversation ${conversationId}`);
+      
       const { error } = await supabase
         .from('messaging_conversations')
         .update({ ai_managed: aiManaged })
         .eq('id', conversationId);
       
       if (error) throw error;
+      return { conversationId, aiManaged };
+    },
+    // Optimistic update - immediately update cache before server confirms
+    onMutate: async ({ conversationId, aiManaged }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['messaging-conversations'] });
+      
+      // Snapshot previous value
+      const previousConversations = queryClient.getQueryData(['messaging-conversations', channelFilter]);
+      
+      // Optimistically update cache
+      queryClient.setQueryData(
+        ['messaging-conversations', channelFilter],
+        (old: MessagingConversation[] | undefined) => {
+          if (!old) return old;
+          return old.map(c => 
+            c.id === conversationId 
+              ? { ...c, ai_managed: aiManaged } 
+              : c
+          );
+        }
+      );
+      
+      return { previousConversations };
     },
     onSuccess: (_, { aiManaged }) => {
-      queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
       toast.success(aiManaged 
         ? 'IA activada: Responderá automáticamente' 
         : 'Control manual activado: Solo tú responderás');
     },
-    onError: (error: any) => {
+    onError: (error: any, _, context) => {
       console.error('Error toggling AI managed:', error);
+      // Rollback on error
+      if (context?.previousConversations) {
+        queryClient.setQueryData(['messaging-conversations', channelFilter], context.previousConversations);
+      }
       toast.error('Error al cambiar el control de la conversación');
     },
   });
