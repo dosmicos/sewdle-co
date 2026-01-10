@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverAnchor,
+} from "@/components/ui/popover";
 
 interface Message {
   id?: string;
@@ -112,9 +125,23 @@ export const ConversationThread = ({
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showQuickRepliesPopover, setShowQuickRepliesPopover] = useState(false);
+  const [quickReplySearch, setQuickReplySearch] = useState('');
+  const [selectedQuickReplyIndex, setSelectedQuickReplyIndex] = useState(0);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Filter quick replies based on search after "/"
+  const filteredQuickReplies = useMemo(() => {
+    if (!quickReplySearch) return quickReplies;
+    const search = quickReplySearch.toLowerCase();
+    return quickReplies.filter(reply => 
+      reply.title.toLowerCase().includes(search) || 
+      reply.content.toLowerCase().includes(search)
+    );
+  }, [quickReplies, quickReplySearch]);
 
   // Function to scroll to bottom
   const scrollToBottom = (behavior: 'instant' | 'smooth' = 'smooth') => {
@@ -178,11 +205,71 @@ export const ConversationThread = ({
     setReplyingTo(null);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // If quick replies popover is open, handle navigation
+    if (showQuickRepliesPopover && filteredQuickReplies.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedQuickReplyIndex(prev => 
+          prev < filteredQuickReplies.length - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedQuickReplyIndex(prev => 
+          prev > 0 ? prev - 1 : filteredQuickReplies.length - 1
+        );
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const selectedReply = filteredQuickReplies[selectedQuickReplyIndex];
+        if (selectedReply) {
+          setInputMessage(selectedReply.content);
+          setShowQuickRepliesPopover(false);
+          setQuickReplySearch('');
+          setSelectedQuickReplyIndex(0);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowQuickRepliesPopover(false);
+        setQuickReplySearch('');
+        setSelectedQuickReplyIndex(0);
+        return;
+      }
+    }
+
+    // Normal enter to send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputMessage(value);
+    
+    // Detect "/" at start of input or after space to trigger quick replies
+    if (value.startsWith('/')) {
+      setShowQuickRepliesPopover(true);
+      setQuickReplySearch(value.slice(1)); // Remove the "/" for search
+      setSelectedQuickReplyIndex(0);
+    } else {
+      setShowQuickRepliesPopover(false);
+      setQuickReplySearch('');
+    }
+  };
+
+  const handleQuickReplySelect = (reply: { title: string; content: string }) => {
+    setInputMessage(reply.content);
+    setShowQuickRepliesPopover(false);
+    setQuickReplySearch('');
+    setSelectedQuickReplyIndex(0);
+    inputRef.current?.focus();
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document') => {
@@ -304,8 +391,10 @@ export const ConversationThread = ({
     setReplyingTo(message);
   };
 
+  // This is now only used by the dropdown menu button (kept for backwards compatibility)
   const handleSelectQuickReply = (content: string) => {
     setInputMessage(content);
+    inputRef.current?.focus();
   };
 
   if (!conversation) {
@@ -660,14 +749,65 @@ export const ConversationThread = ({
               <Mic className={cn("h-4 w-4", isRecording && "animate-pulse")} />
             </Button>
 
-            <Input
-              placeholder="Escribe un mensaje o genera con IA..."
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="flex-1"
-              disabled={isSending}
-            />
+            {/* Input with quick replies popover */}
+            <div className="flex-1 relative">
+              <Popover open={showQuickRepliesPopover && quickReplies.length > 0} onOpenChange={setShowQuickRepliesPopover}>
+                <PopoverAnchor asChild>
+                  <Input
+                    ref={inputRef}
+                    placeholder="Escribe / para respuestas rápidas..."
+                    value={inputMessage}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyPress}
+                    className="w-full"
+                    disabled={isSending}
+                  />
+                </PopoverAnchor>
+                <PopoverContent 
+                  className="w-[var(--radix-popover-trigger-width)] p-0 bg-popover border border-border shadow-lg z-50" 
+                  align="start"
+                  side="top"
+                  sideOffset={8}
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                  <div className="p-2 border-b border-border">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Respuestas rápidas {quickReplySearch && `• "${quickReplySearch}"`}
+                    </p>
+                  </div>
+                  <ScrollArea className="max-h-48">
+                    {filteredQuickReplies.length === 0 ? (
+                      <div className="p-3 text-center text-sm text-muted-foreground">
+                        No se encontraron respuestas
+                      </div>
+                    ) : (
+                      <div className="p-1">
+                        {filteredQuickReplies.map((reply, index) => (
+                          <button
+                            key={reply.id}
+                            onClick={() => handleQuickReplySelect(reply)}
+                            className={cn(
+                              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+                              index === selectedQuickReplyIndex 
+                                ? "bg-accent text-accent-foreground" 
+                                : "hover:bg-muted"
+                            )}
+                          >
+                            <span className="font-medium block">{reply.title}</span>
+                            <span className="text-xs text-muted-foreground line-clamp-1">{reply.content}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  <div className="p-2 border-t border-border">
+                    <p className="text-xs text-muted-foreground">
+                      ↑↓ para navegar • Enter para seleccionar • Esc para cerrar
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
             <Button 
               size="icon" 
               className={channelInfo.buttonColor}
