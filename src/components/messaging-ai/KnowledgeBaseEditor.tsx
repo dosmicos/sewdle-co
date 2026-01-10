@@ -14,9 +14,7 @@ import {
   BookOpen, 
   Search,
   Info,
-  Image,
   Package,
-  Star,
   X,
   Pencil,
   Check
@@ -28,17 +26,18 @@ import { KnowledgeImageUpload } from './KnowledgeImageUpload';
 
 interface KnowledgeItem {
   id: string;
-  category: string;
+  category: 'general' | 'product';
   title: string;
   content: string;
   images?: string[];
+  // Product-specific fields
+  productName?: string;
+  recommendWhen?: string;
 }
 
 const CATEGORIES = [
-  { value: 'general', label: 'Información general', icon: Info, description: 'Horarios, políticas, contacto, etc.' },
-  { value: 'visual', label: 'Información visual', icon: Image, description: 'Imágenes, videos, guías visuales' },
-  { value: 'product', label: 'Información del producto', icon: Package, description: 'Detalles, características, precios' },
-  { value: 'recommendation', label: 'Recomendación del producto', icon: Star, description: 'Sugerencias, combos, ofertas' },
+  { value: 'general', label: 'Información general', icon: Info, description: 'Horarios, políticas, envíos, pagos, contacto, etc.' },
+  { value: 'product', label: 'Información del producto', icon: Package, description: 'Detalles de un producto y cuándo recomendarlo' },
 ];
 
 export const KnowledgeBaseEditor = () => {
@@ -55,12 +54,16 @@ export const KnowledgeBaseEditor = () => {
     title: '',
     content: '',
     images: [],
+    productName: '',
+    recommendWhen: '',
   });
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Partial<KnowledgeItem>>({
     title: '',
     content: '',
     images: [],
+    productName: '',
+    recommendWhen: '',
   });
 
   // Load knowledge base from channel ai_config
@@ -162,33 +165,48 @@ export const KnowledgeBaseEditor = () => {
 
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
-    setNewItem({ title: '', content: '', images: [] });
+    setNewItem({ title: '', content: '', images: [], productName: '', recommendWhen: '' });
     setShowCategoryModal(false);
   };
 
   const addItem = () => {
-    if (!newItem.title || !newItem.content || !selectedCategory) {
-      toast.error('Completa el título y contenido');
-      return;
+    const isProduct = selectedCategory === 'product';
+    
+    if (isProduct) {
+      if (!newItem.productName || !newItem.content) {
+        toast.error('Completa el nombre del producto y los detalles');
+        return;
+      }
+    } else {
+      if (!newItem.title || !newItem.content) {
+        toast.error('Completa el título y contenido');
+        return;
+      }
     }
+
+    if (!selectedCategory) return;
 
     const item: KnowledgeItem = {
       id: Date.now().toString(),
-      category: selectedCategory,
-      title: newItem.title,
-      content: newItem.content,
+      category: selectedCategory as 'general' | 'product',
+      title: isProduct ? newItem.productName! : newItem.title!,
+      content: newItem.content!,
       images: newItem.images || [],
+      ...(isProduct && {
+        productName: newItem.productName,
+        recommendWhen: newItem.recommendWhen,
+      }),
     };
 
     setItems(prev => [...prev, item]);
-    setNewItem({ title: '', content: '', images: [] });
+    setNewItem({ title: '', content: '', images: [], productName: '', recommendWhen: '' });
     setSelectedCategory(null);
     toast.success('Conocimiento agregado');
   };
 
   const cancelAdd = () => {
     setSelectedCategory(null);
-    setNewItem({ title: '', content: '', images: [] });
+    setNewItem({ title: '', content: '', images: [], productName: '', recommendWhen: '' });
   };
 
   const removeItem = (id: string) => {
@@ -202,32 +220,48 @@ export const KnowledgeBaseEditor = () => {
       title: item.title,
       content: item.content,
       images: item.images || [],
+      productName: item.productName || '',
+      recommendWhen: item.recommendWhen || '',
     });
   };
 
   const cancelEditing = () => {
     setEditingItemId(null);
-    setEditingItem({ title: '', content: '', images: [] });
+    setEditingItem({ title: '', content: '', images: [], productName: '', recommendWhen: '' });
   };
 
   const saveEditing = (id: string) => {
-    if (!editingItem.title || !editingItem.content) {
-      toast.error('Completa el título y contenido');
-      return;
+    const item = items.find(i => i.id === id);
+    const isProduct = item?.category === 'product';
+    
+    if (isProduct) {
+      if (!editingItem.productName || !editingItem.content) {
+        toast.error('Completa el nombre del producto y los detalles');
+        return;
+      }
+    } else {
+      if (!editingItem.title || !editingItem.content) {
+        toast.error('Completa el título y contenido');
+        return;
+      }
     }
 
-    setItems(prev => prev.map(item => 
-      item.id === id 
+    setItems(prev => prev.map(i => 
+      i.id === id 
         ? { 
-            ...item, 
-            title: editingItem.title!, 
+            ...i, 
+            title: isProduct ? editingItem.productName! : editingItem.title!,
             content: editingItem.content!,
-            images: editingItem.images || []
+            images: editingItem.images || [],
+            ...(isProduct && {
+              productName: editingItem.productName,
+              recommendWhen: editingItem.recommendWhen,
+            }),
           }
-        : item
+        : i
     ));
     setEditingItemId(null);
-    setEditingItem({ title: '', content: '', images: [] });
+    setEditingItem({ title: '', content: '', images: [], productName: '', recommendWhen: '' });
     toast.success('Conocimiento actualizado');
   };
 
@@ -315,24 +349,61 @@ export const KnowledgeBaseEditor = () => {
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <Label>Título / Tema</Label>
-              <Input
-                placeholder="Ej: Métodos de pago disponibles"
-                value={newItem.title}
-                onChange={(e) => setNewItem(prev => ({ ...prev, title: e.target.value }))}
-              />
-            </div>
+            {selectedCategory === 'general' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Título / Tema</Label>
+                  <Input
+                    placeholder="Ej: Métodos de pago disponibles"
+                    value={newItem.title}
+                    onChange={(e) => setNewItem(prev => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label>Contenido</Label>
-              <Textarea
-                placeholder="Escribe la información que la IA debe conocer..."
-                value={newItem.content}
-                onChange={(e) => setNewItem(prev => ({ ...prev, content: e.target.value }))}
-                className="min-h-[120px]"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label>Contenido</Label>
+                  <Textarea
+                    placeholder="Escribe la información que la IA debe conocer..."
+                    value={newItem.content}
+                    onChange={(e) => setNewItem(prev => ({ ...prev, content: e.target.value }))}
+                    className="min-h-[120px]"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Nombre del producto</Label>
+                  <Input
+                    placeholder="Ej: Camiseta básica blanca"
+                    value={newItem.productName}
+                    onChange={(e) => setNewItem(prev => ({ ...prev, productName: e.target.value }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>¿Cuándo recomendar este producto?</Label>
+                  <Input
+                    placeholder="Ej: Cuando pregunte por ropa casual, básicos, outfit diario"
+                    value={newItem.recommendWhen}
+                    onChange={(e) => setNewItem(prev => ({ ...prev, recommendWhen: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Palabras clave o situaciones en las que la IA debería sugerir este producto
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Detalles del producto</Label>
+                  <Textarea
+                    placeholder="Características, tallas disponibles, precio, materiales, cuidados, etc."
+                    value={newItem.content}
+                    onChange={(e) => setNewItem(prev => ({ ...prev, content: e.target.value }))}
+                    className="min-h-[120px]"
+                  />
+                </div>
+              </>
+            )}
 
             {currentOrganization?.id && (
               <KnowledgeImageUpload
@@ -398,23 +469,57 @@ export const KnowledgeBaseEditor = () => {
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Título / Tema</Label>
-                        <Input
-                          value={editingItem.title}
-                          onChange={(e) => setEditingItem(prev => ({ ...prev, title: e.target.value }))}
-                          placeholder="Título del conocimiento"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Contenido</Label>
-                        <Textarea
-                          value={editingItem.content}
-                          onChange={(e) => setEditingItem(prev => ({ ...prev, content: e.target.value }))}
-                          className="min-h-[120px]"
-                          placeholder="Contenido del conocimiento"
-                        />
-                      </div>
+                      
+                      {item.category === 'general' ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Título / Tema</Label>
+                            <Input
+                              value={editingItem.title}
+                              onChange={(e) => setEditingItem(prev => ({ ...prev, title: e.target.value }))}
+                              placeholder="Título del conocimiento"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Contenido</Label>
+                            <Textarea
+                              value={editingItem.content}
+                              onChange={(e) => setEditingItem(prev => ({ ...prev, content: e.target.value }))}
+                              className="min-h-[120px]"
+                              placeholder="Contenido del conocimiento"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Nombre del producto</Label>
+                            <Input
+                              value={editingItem.productName}
+                              onChange={(e) => setEditingItem(prev => ({ ...prev, productName: e.target.value }))}
+                              placeholder="Nombre del producto"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>¿Cuándo recomendar este producto?</Label>
+                            <Input
+                              value={editingItem.recommendWhen}
+                              onChange={(e) => setEditingItem(prev => ({ ...prev, recommendWhen: e.target.value }))}
+                              placeholder="Ej: Cuando pregunte por ropa casual"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Detalles del producto</Label>
+                            <Textarea
+                              value={editingItem.content}
+                              onChange={(e) => setEditingItem(prev => ({ ...prev, content: e.target.value }))}
+                              className="min-h-[120px]"
+                              placeholder="Características, tallas, precio, etc."
+                            />
+                          </div>
+                        </>
+                      )}
+                      
                       {currentOrganization?.id && (
                         <KnowledgeImageUpload
                           images={editingItem.images || []}
@@ -439,7 +544,12 @@ export const KnowledgeBaseEditor = () => {
                           <Icon className="h-3 w-3" />
                           {categoryInfo.label}
                         </Badge>
-                        <p className="font-medium">{item.title}</p>
+                        <p className="font-medium">{item.category === 'product' ? item.productName || item.title : item.title}</p>
+                        {item.category === 'product' && item.recommendWhen && (
+                          <p className="text-xs text-primary/80 bg-primary/5 px-2 py-1 rounded-md inline-block">
+                            📌 Recomendar: {item.recommendWhen}
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                           {item.content}
                         </p>
@@ -492,7 +602,7 @@ export const KnowledgeBaseEditor = () => {
       )}
 
       {/* Stats by Category */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {CATEGORIES.map(cat => {
           const count = items.filter(i => i.category === cat.value).length;
           const Icon = cat.icon;
