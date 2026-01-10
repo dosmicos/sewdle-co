@@ -403,13 +403,12 @@ serve(async (req) => {
         console.error('Error saving message:', msgError);
       }
 
-      // Update conversation
+      // Update conversation (IMPORTANT: do NOT change ai_managed here; only the user toggles it)
       const { error: updateError } = await supabase
         .from('messaging_conversations')
         .update({
           last_message_preview: message || `📎 ${media_type === 'image' ? 'Imagen' : media_type === 'audio' ? 'Audio' : 'Documento'}`,
           last_message_at: new Date().toISOString(),
-          ai_managed: true
         })
         .eq('id', conversationId);
 
