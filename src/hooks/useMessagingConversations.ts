@@ -40,7 +40,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     return conv.channel_type === channelFilter;
   }) || [];
 
-  // Subscribe to realtime updates
+  // Subscribe to realtime updates - optimistic cache update without flickering
   useEffect(() => {
     const channel = supabase
       .channel('messaging-conversations-changes')
@@ -52,8 +52,46 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
           table: 'messaging_conversations'
         },
         (payload) => {
-          console.log('Conversation update:', payload);
-          queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+          if (payload.eventType === 'INSERT') {
+            // New conversation - add to cache at the top
+            queryClient.setQueryData(
+              ['messaging-conversations', channelFilter],
+              (old: MessagingConversation[] | undefined) => {
+                if (!old) return [payload.new as MessagingConversation];
+                const exists = old.some(c => c.id === (payload.new as any).id);
+                if (exists) return old;
+                return [payload.new as MessagingConversation, ...old];
+              }
+            );
+          } else if (payload.eventType === 'UPDATE') {
+            // Update existing conversation in cache and re-sort by last_message_at
+            queryClient.setQueryData(
+              ['messaging-conversations', channelFilter],
+              (old: MessagingConversation[] | undefined) => {
+                if (!old) return old;
+                const updated = old.map(c => 
+                  c.id === (payload.new as any).id 
+                    ? { ...c, ...(payload.new as MessagingConversation) } 
+                    : c
+                );
+                // Re-sort by last_message_at descending
+                return updated.sort((a, b) => {
+                  const dateA = new Date(a.last_message_at || 0).getTime();
+                  const dateB = new Date(b.last_message_at || 0).getTime();
+                  return dateB - dateA;
+                });
+              }
+            );
+          } else if (payload.eventType === 'DELETE') {
+            // Remove from cache
+            queryClient.setQueryData(
+              ['messaging-conversations', channelFilter],
+              (old: MessagingConversation[] | undefined) => {
+                if (!old) return old;
+                return old.filter(c => c.id !== (payload.old as any).id);
+              }
+            );
+          }
         }
       )
       .subscribe();
@@ -61,7 +99,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, channelFilter]);
 
   const markAsRead = useMutation({
     mutationFn: async (conversationId: string) => {

@@ -100,7 +100,7 @@ export const ConversationsList = ({
     <>
       <ScrollArea className="h-full max-h-[500px]">
         <div className="divide-y divide-border">
-          {conversations.map((conversation) => {
+          {conversations.map((conversation, index) => {
             const channelInfo = channelConfig[conversation.channel];
             const ChannelIcon = channelInfo.icon;
             
@@ -109,9 +109,10 @@ export const ConversationsList = ({
                 key={conversation.id}
                 onClick={() => onSelect(conversation.id)}
                 className={cn(
-                  "p-4 cursor-pointer transition-colors hover:bg-muted/50 group relative",
+                  "p-4 cursor-pointer transition-all duration-200 hover:bg-muted/50 group relative animate-in fade-in-0 slide-in-from-top-1",
                   selectedId === conversation.id && "bg-muted border-l-4 border-l-primary"
                 )}
+                style={{ animationDelay: `${Math.min(index * 30, 150)}ms` }}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">

@@ -26,7 +26,7 @@ export const useMessagingMessages = (conversationId: string | null) => {
     enabled: !!conversationId,
   });
 
-  // Subscribe to realtime updates for messages
+  // Subscribe to realtime updates for messages - optimistic cache update
   useEffect(() => {
     if (!conversationId) return;
 
@@ -41,8 +41,21 @@ export const useMessagingMessages = (conversationId: string | null) => {
           filter: `conversation_id=eq.${conversationId}`
         },
         (payload) => {
-          console.log('New message:', payload);
-          queryClient.invalidateQueries({ queryKey: ['messaging-messages', conversationId] });
+          const newMessage = payload.new as MessagingMessage;
+          
+          // Optimistically update cache without refetch - no flickering
+          queryClient.setQueryData(
+            ['messaging-messages', conversationId],
+            (oldMessages: MessagingMessage[] | undefined) => {
+              if (!oldMessages) return [newMessage];
+              
+              // Avoid duplicates
+              const exists = oldMessages.some(m => m.id === newMessage.id);
+              if (exists) return oldMessages;
+              
+              return [...oldMessages, newMessage];
+            }
+          );
         }
       )
       .subscribe();
