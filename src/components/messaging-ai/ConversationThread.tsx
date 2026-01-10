@@ -256,30 +256,34 @@ export const ConversationThread = ({
     setQuickReplySearch('');
     setSelectedQuickReplyIndex(0);
 
-    // If quick reply has an image, send it directly
-    if (reply.imageUrl && onSendMessage) {
+    // Quick replies should PREPARE the message (and optional image) for review,
+    // not send automatically.
+    setInputMessage(reply.content);
+    inputRef.current?.focus();
+
+    // Replace any previous attachment when selecting a quick reply
+    clearSelectedFile();
+
+    if (reply.imageUrl) {
       try {
-        // Fetch the image and create a File object
         const response = await fetch(reply.imageUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
-        const fileName = `quick-reply-${Date.now()}.jpg`;
+
+        const inferredExt = blob.type?.split('/')?.[1] || 'jpg';
+        const fileName = `quick-reply-${Date.now()}.${inferredExt}`;
         const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
-        
-        // Send message with image
-        onSendMessage(reply.content, file, 'image', replyingTo?.id);
-        setReplyingTo(null);
-        toast.success('Respuesta rápida enviada con imagen');
+
+        setSelectedFile(file);
+
+        // Create preview (same style as manual image attachments)
+        const reader = new FileReader();
+        reader.onload = (e) => setFilePreview(e.target?.result as string);
+        reader.readAsDataURL(file);
       } catch (err) {
         console.error('Error fetching quick reply image:', err);
-        // Fallback: just send the text
-        setInputMessage(reply.content);
-        inputRef.current?.focus();
-        toast.error('Error al cargar imagen, mensaje copiado al input');
+        toast.error('No se pudo cargar la imagen de la respuesta rápida');
       }
-    } else {
-      // No image, just set the input message
-      setInputMessage(reply.content);
-      inputRef.current?.focus();
     }
   };
 
