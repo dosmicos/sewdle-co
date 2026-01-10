@@ -38,7 +38,7 @@ import {
 import {
   Popover,
   PopoverContent,
-  PopoverAnchor,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 
 interface Message {
@@ -125,23 +125,29 @@ export const ConversationThread = ({
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [showQuickRepliesPopover, setShowQuickRepliesPopover] = useState(false);
+  const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
   const [quickReplySearch, setQuickReplySearch] = useState('');
   const [selectedQuickReplyIndex, setSelectedQuickReplyIndex] = useState(0);
+  const quickReplySearchInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Filter quick replies based on search after "/"
+  // Filter quick replies based on search
   const filteredQuickReplies = useMemo(() => {
-    if (!quickReplySearch) return quickReplies;
-    const search = quickReplySearch.toLowerCase();
+    if (!quickReplySearch.trim()) return quickReplies;
+    const search = quickReplySearch.toLowerCase().trim();
     return quickReplies.filter(reply => 
       reply.title.toLowerCase().includes(search) || 
       reply.content.toLowerCase().includes(search)
     );
   }, [quickReplies, quickReplySearch]);
+
+  // Reset selection when filtered results change
+  useEffect(() => {
+    setSelectedQuickReplyIndex(0);
+  }, [filteredQuickReplies.length]);
 
   // Function to scroll to bottom
   const scrollToBottom = (behavior: 'instant' | 'smooth' = 'smooth') => {
@@ -206,42 +212,6 @@ export const ConversationThread = ({
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // If quick replies popover is open, handle navigation
-    if (showQuickRepliesPopover && filteredQuickReplies.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedQuickReplyIndex(prev => 
-          prev < filteredQuickReplies.length - 1 ? prev + 1 : 0
-        );
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedQuickReplyIndex(prev => 
-          prev > 0 ? prev - 1 : filteredQuickReplies.length - 1
-        );
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const selectedReply = filteredQuickReplies[selectedQuickReplyIndex];
-        if (selectedReply) {
-          setInputMessage(selectedReply.content);
-          setShowQuickRepliesPopover(false);
-          setQuickReplySearch('');
-          setSelectedQuickReplyIndex(0);
-        }
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowQuickRepliesPopover(false);
-        setQuickReplySearch('');
-        setSelectedQuickReplyIndex(0);
-        return;
-      }
-    }
-
     // Normal enter to send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -249,27 +219,52 @@ export const ConversationThread = ({
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInputMessage(value);
-    
-    // Detect "/" at start of input or after space to trigger quick replies
-    if (value.startsWith('/')) {
-      setShowQuickRepliesPopover(true);
-      setQuickReplySearch(value.slice(1)); // Remove the "/" for search
-      setSelectedQuickReplyIndex(0);
-    } else {
-      setShowQuickRepliesPopover(false);
+  // Handle keyboard navigation in quick replies panel
+  const handleQuickReplyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (filteredQuickReplies.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedQuickReplyIndex(prev => 
+        prev < filteredQuickReplies.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedQuickReplyIndex(prev => 
+        prev > 0 ? prev - 1 : filteredQuickReplies.length - 1
+      );
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selectedReply = filteredQuickReplies[selectedQuickReplyIndex];
+      if (selectedReply) {
+        handleQuickReplySelect(selectedReply);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowQuickRepliesPanel(false);
       setQuickReplySearch('');
+      inputRef.current?.focus();
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputMessage(e.target.value);
   };
 
   const handleQuickReplySelect = (reply: { title: string; content: string }) => {
     setInputMessage(reply.content);
-    setShowQuickRepliesPopover(false);
+    setShowQuickRepliesPanel(false);
     setQuickReplySearch('');
     setSelectedQuickReplyIndex(0);
     inputRef.current?.focus();
+  };
+
+  const openQuickRepliesPanel = () => {
+    setShowQuickRepliesPanel(true);
+    setQuickReplySearch('');
+    setSelectedQuickReplyIndex(0);
+    // Focus search input after panel opens
+    setTimeout(() => quickReplySearchInputRef.current?.focus(), 100);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document') => {
@@ -390,13 +385,6 @@ export const ConversationThread = ({
   const handleReply = (message: Message) => {
     setReplyingTo(message);
   };
-
-  // This is now only used by the dropdown menu button (kept for backwards compatibility)
-  const handleSelectQuickReply = (content: string) => {
-    setInputMessage(content);
-    inputRef.current?.focus();
-  };
-
   if (!conversation) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -716,28 +704,96 @@ export const ConversationThread = ({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Quick replies dropdown */}
-            {quickReplies.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" disabled={isSending}>
-                    <MessageSquareText className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  {quickReplies.map((reply) => (
-                    <DropdownMenuItem 
-                      key={reply.id}
-                      onClick={() => handleSelectQuickReply(reply.content)}
-                      className="flex flex-col items-start gap-1"
+            {/* Quick replies button with popover panel */}
+            <Popover open={showQuickRepliesPanel} onOpenChange={setShowQuickRepliesPanel}>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      disabled={isSending}
+                      onClick={openQuickRepliesPanel}
                     >
-                      <span className="font-medium text-sm">{reply.title}</span>
-                      <span className="text-xs text-muted-foreground line-clamp-1">{reply.content}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                      <MessageSquareText className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p className="text-xs">Respuestas rápidas</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <PopoverContent 
+                className="w-80 p-0 bg-popover border border-border shadow-xl z-[60]" 
+                align="start"
+                side="top"
+                sideOffset={8}
+              >
+                <div className="p-3 border-b border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-sm">Respuestas rápidas</h4>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6"
+                      onClick={() => setShowQuickRepliesPanel(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Input
+                    ref={quickReplySearchInputRef}
+                    placeholder="Buscar por nombre..."
+                    value={quickReplySearch}
+                    onChange={(e) => setQuickReplySearch(e.target.value)}
+                    onKeyDown={handleQuickReplyKeyDown}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <ScrollArea className="max-h-64">
+                  {quickReplies.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <MessageSquareText className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                      <p className="text-sm text-muted-foreground">
+                        No hay respuestas rápidas configuradas
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Ve a Configuración para agregarlas
+                      </p>
+                    </div>
+                  ) : filteredQuickReplies.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No se encontraron respuestas para "{quickReplySearch}"
+                    </div>
+                  ) : (
+                    <div className="p-1">
+                      {filteredQuickReplies.map((reply, index) => (
+                        <button
+                          key={reply.id}
+                          onClick={() => handleQuickReplySelect(reply)}
+                          className={cn(
+                            "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+                            index === selectedQuickReplyIndex 
+                              ? "bg-accent text-accent-foreground" 
+                              : "hover:bg-muted"
+                          )}
+                        >
+                          <span className="font-medium block">{reply.title}</span>
+                          <span className="text-xs text-muted-foreground line-clamp-2">{reply.content}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+                {quickReplies.length > 0 && (
+                  <div className="p-2 border-t border-border bg-muted/30">
+                    <p className="text-xs text-muted-foreground text-center">
+                      ↑↓ navegar • Enter seleccionar • Esc cerrar
+                    </p>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
 
             {/* Audio recording button */}
             <Button 
@@ -749,64 +805,17 @@ export const ConversationThread = ({
               <Mic className={cn("h-4 w-4", isRecording && "animate-pulse")} />
             </Button>
 
-            {/* Input with quick replies popover */}
-            <div className="flex-1 relative">
-              <Popover open={showQuickRepliesPopover && quickReplies.length > 0} onOpenChange={setShowQuickRepliesPopover}>
-                <PopoverAnchor asChild>
-                  <Input
-                    ref={inputRef}
-                    placeholder="Escribe / para respuestas rápidas..."
-                    value={inputMessage}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyPress}
-                    className="w-full"
-                    disabled={isSending}
-                  />
-                </PopoverAnchor>
-                <PopoverContent 
-                  className="w-[var(--radix-popover-trigger-width)] p-0 bg-popover border border-border shadow-lg z-50" 
-                  align="start"
-                  side="top"
-                  sideOffset={8}
-                  onOpenAutoFocus={(e) => e.preventDefault()}
-                >
-                  <div className="p-2 border-b border-border">
-                    <p className="text-xs text-muted-foreground font-medium">
-                      Respuestas rápidas {quickReplySearch && `• "${quickReplySearch}"`}
-                    </p>
-                  </div>
-                  <ScrollArea className="max-h-48">
-                    {filteredQuickReplies.length === 0 ? (
-                      <div className="p-3 text-center text-sm text-muted-foreground">
-                        No se encontraron respuestas
-                      </div>
-                    ) : (
-                      <div className="p-1">
-                        {filteredQuickReplies.map((reply, index) => (
-                          <button
-                            key={reply.id}
-                            onClick={() => handleQuickReplySelect(reply)}
-                            className={cn(
-                              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
-                              index === selectedQuickReplyIndex 
-                                ? "bg-accent text-accent-foreground" 
-                                : "hover:bg-muted"
-                            )}
-                          >
-                            <span className="font-medium block">{reply.title}</span>
-                            <span className="text-xs text-muted-foreground line-clamp-1">{reply.content}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-                  <div className="p-2 border-t border-border">
-                    <p className="text-xs text-muted-foreground">
-                      ↑↓ para navegar • Enter para seleccionar • Esc para cerrar
-                    </p>
-                  </div>
-                </PopoverContent>
-              </Popover>
+            {/* Input field */}
+            <div className="flex-1">
+              <Input
+                ref={inputRef}
+                placeholder="Escribe un mensaje..."
+                value={inputMessage}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyPress}
+                className="w-full"
+                disabled={isSending}
+              />
             </div>
             <Button 
               size="icon" 
