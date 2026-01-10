@@ -706,23 +706,16 @@ export const ConversationThread = ({
 
             {/* Quick replies button with popover panel */}
             <Popover open={showQuickRepliesPanel} onOpenChange={setShowQuickRepliesPanel}>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      disabled={isSending}
-                      onClick={openQuickRepliesPanel}
-                    >
-                      <MessageSquareText className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">Respuestas rápidas</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  disabled={isSending}
+                  onClick={openQuickRepliesPanel}
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
               <PopoverContent 
                 className="w-80 p-0 bg-popover border border-border shadow-xl z-[60]" 
                 align="start"
