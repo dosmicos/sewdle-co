@@ -322,8 +322,21 @@ async function generateAIResponse(
     let productCatalog = '';
     let productImageMap: Record<number, { url: string; title: string }> = {};
     
+    // Get connected products from ai_catalog_connections table
+    const { data: connectedProducts } = await supabase
+      .from('ai_catalog_connections')
+      .select('shopify_product_id')
+      .eq('organization_id', organizationId)
+      .eq('connected', true);
+    
+    const connectedProductIds = new Set(
+      (connectedProducts || []).map((p: any) => Number(p.shopify_product_id))
+    );
+    
+    console.log(`Found ${connectedProductIds.size} connected products in ai_catalog_connections`);
+    
     // Try to get Shopify products with real-time inventory
-    if (shopifyCredentials) {
+    if (shopifyCredentials && connectedProductIds.size > 0) {
       const storeDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
       const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
       
@@ -332,7 +345,7 @@ async function generateAIResponse(
           console.log("Fetching Shopify products for AI context...");
           
           const shopifyResponse = await fetch(
-            `https://${storeDomain}/admin/api/2024-01/products.json?status=active&limit=100`,
+            `https://${storeDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
             {
               headers: {
                 'X-Shopify-Access-Token': accessToken,
@@ -343,10 +356,16 @@ async function generateAIResponse(
           
           if (shopifyResponse.ok) {
             const shopifyData = await shopifyResponse.json();
-            const products = shopifyData.products || [];
+            const allProducts = shopifyData.products || [];
+            
+            // IMPORTANT: Filter ONLY products that are connected in the catalog
+            const products = allProducts.filter((p: any) => connectedProductIds.has(Number(p.id)));
+            
+            console.log(`Filtered to ${products.length} connected products (out of ${allProducts.length} total)`);
             
             if (products.length > 0) {
               productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
+              productCatalog += '⚠️ IMPORTANTE: Solo puedes ofrecer los productos listados aquí. NO inventes productos ni menciones artículos que no estén en esta lista.\n';
               productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n\n';
               productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
               productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
@@ -385,13 +404,18 @@ async function generateAIResponse(
                 productCatalog += `\n  💰 ${price} | ${variantInfo}\n`;
               });
               
-              console.log(`Loaded ${products.length} Shopify products for AI context`);
+              console.log(`Loaded ${products.length} connected Shopify products for AI context`);
+            } else {
+              productCatalog = '\n\n⚠️ No hay productos conectados al catálogo de IA. Indica al cliente que pronto tendrás información disponible.\n';
             }
           }
         } catch (err) {
           console.error("Error fetching Shopify products:", err);
         }
       }
+    } else if (connectedProductIds.size === 0) {
+      console.log("No products connected in ai_catalog_connections, skipping Shopify fetch");
+      productCatalog = '\n\n⚠️ No hay productos conectados al catálogo de IA. Indica al cliente que pronto tendrás información disponible.\n';
     }
 
     // Fallback: load from local products table
