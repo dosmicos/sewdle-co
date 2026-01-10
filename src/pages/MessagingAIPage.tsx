@@ -79,17 +79,29 @@ const MessagingAIPage = () => {
     return result;
   }, [activeFilter, transformedConversations]);
 
-  // Transform messages to UI format
+  // Transform messages to UI format with reply info
   const transformedMessages = useMemo(() => {
-    return messages.map(msg => ({
-      role: (msg.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: msg.content || '',
-      timestamp: msg.sent_at ? new Date(msg.sent_at) : new Date(),
-      mediaUrl: msg.media_url || undefined,
-      mediaType: (msg.message_type === 'image' ? 'image' : 
-                 msg.message_type === 'audio' ? 'audio' : 
-                 msg.message_type === 'document' ? 'document' : undefined) as 'image' | 'audio' | 'document' | undefined,
-    }));
+    return messages.map(msg => {
+      // Find replied message content if exists
+      let replyToContent: string | undefined;
+      if (msg.reply_to_message_id) {
+        const repliedMsg = messages.find(m => m.id === msg.reply_to_message_id);
+        replyToContent = repliedMsg?.content || undefined;
+      }
+      
+      return {
+        id: msg.id,
+        role: (msg.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: msg.content || '',
+        timestamp: msg.sent_at ? new Date(msg.sent_at) : new Date(),
+        mediaUrl: msg.media_url || undefined,
+        mediaType: (msg.message_type === 'image' ? 'image' : 
+                   msg.message_type === 'audio' ? 'audio' : 
+                   msg.message_type === 'document' ? 'document' : undefined) as 'image' | 'audio' | 'document' | undefined,
+        replyToMessageId: msg.reply_to_message_id || undefined,
+        replyToContent,
+      };
+    });
   }, [messages]);
 
   const currentConversation = transformedConversations.find(c => c.id === selectedConversation);
@@ -117,8 +129,8 @@ const MessagingAIPage = () => {
     setSelectedConversation(null);
   };
 
-  const handleSendMessage = (message: string, mediaFile?: File, mediaType?: string) => {
-    sendMessage({ message, mediaFile, mediaType });
+  const handleSendMessage = (message: string, mediaFile?: File, mediaType?: string, replyToMessageId?: string) => {
+    sendMessage({ message, mediaFile, mediaType, replyToMessageId });
   };
 
   const handleCreateConversation = async (phone: string, name: string, message: string) => {

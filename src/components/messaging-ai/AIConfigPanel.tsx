@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Save, Plus, X, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, Plus, X, Sparkles, AlertCircle, Loader2, MessageSquareText, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -16,6 +16,12 @@ interface AIRule {
   id: string;
   condition: string;
   response: string;
+}
+
+interface QuickReply {
+  id: string;
+  title: string;
+  content: string;
 }
 
 interface AIConfig {
@@ -27,6 +33,7 @@ interface AIConfig {
   businessHours: boolean;
   greetingMessage: string;
   rules: AIRule[];
+  quickReplies: QuickReply[];
 }
 
 export const AIConfigPanel = () => {
@@ -59,9 +66,16 @@ Reglas importantes:
       { id: '2', condition: 'envío', response: 'Informar sobre políticas de envío' },
       { id: '3', condition: 'disponible', response: 'Verificar inventario en tiempo real' },
     ],
+    quickReplies: [
+      { id: '1', title: '👋 Saludo', content: '¡Hola! Gracias por comunicarte con nosotros. ¿En qué puedo ayudarte?' },
+      { id: '2', title: '📦 Envíos', content: 'Hacemos envíos a todo el país. El tiempo de entrega es de 3-5 días hábiles.' },
+      { id: '3', title: '💳 Pagos', content: 'Aceptamos transferencia, Nequi, Daviplata y pago contra entrega en algunas ciudades.' },
+    ],
   });
 
   const [newRule, setNewRule] = useState({ condition: '', response: '' });
+  const [newQuickReply, setNewQuickReply] = useState({ title: '', content: '' });
+  const [editingQuickReply, setEditingQuickReply] = useState<QuickReply | null>(null);
 
   // Load config from database
   useEffect(() => {
@@ -99,6 +113,7 @@ Reglas importantes:
               businessHours: savedConfig.businessHours ?? prev.businessHours,
               greetingMessage: savedConfig.greetingMessage || prev.greetingMessage,
               rules: savedConfig.rules || prev.rules,
+              quickReplies: savedConfig.quickReplies || prev.quickReplies,
             }));
           }
         }
@@ -150,6 +165,7 @@ Reglas importantes:
         businessHours: config.businessHours,
         greetingMessage: config.greetingMessage,
         rules: config.rules.map(r => ({ id: r.id, condition: r.condition, response: r.response })),
+        quickReplies: config.quickReplies.map(q => ({ id: q.id, title: q.title, content: q.content })),
       };
 
       // Merge with existing ai_config to avoid overwriting knowledgeBase or other keys.
@@ -202,6 +218,38 @@ Reglas importantes:
       rules: prev.rules.filter(r => r.id !== id)
     }));
     toast.success('Regla eliminada');
+  };
+
+  const addQuickReply = () => {
+    if (newQuickReply.title && newQuickReply.content) {
+      setConfig(prev => ({
+        ...prev,
+        quickReplies: [...prev.quickReplies, { id: Date.now().toString(), ...newQuickReply }]
+      }));
+      setNewQuickReply({ title: '', content: '' });
+      toast.success('Respuesta rápida agregada');
+    }
+  };
+
+  const updateQuickReply = () => {
+    if (editingQuickReply) {
+      setConfig(prev => ({
+        ...prev,
+        quickReplies: prev.quickReplies.map(q => 
+          q.id === editingQuickReply.id ? editingQuickReply : q
+        )
+      }));
+      setEditingQuickReply(null);
+      toast.success('Respuesta rápida actualizada');
+    }
+  };
+
+  const removeQuickReply = (id: string) => {
+    setConfig(prev => ({
+      ...prev,
+      quickReplies: prev.quickReplies.filter(q => q.id !== id)
+    }));
+    toast.success('Respuesta rápida eliminada');
   };
 
   if (isLoading) {
@@ -350,7 +398,7 @@ Reglas importantes:
       </Card>
 
       {/* Response Rules */}
-      <Card className="md:col-span-2">
+      <Card>
         <CardHeader>
           <CardTitle>Reglas de Respuesta</CardTitle>
           <CardDescription>
@@ -393,6 +441,104 @@ Reglas importantes:
             />
             <Button onClick={addRule} variant="outline" size="icon">
               <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Replies */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MessageSquareText className="h-5 w-5 text-emerald-500" />
+            <CardTitle>Respuestas Rápidas</CardTitle>
+          </div>
+          <CardDescription>
+            Mensajes predefinidos para intervención humana
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* List of quick replies */}
+          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            {config.quickReplies.map((reply) => (
+              <div 
+                key={reply.id} 
+                className="p-3 border rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+              >
+                {editingQuickReply?.id === reply.id ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={editingQuickReply.title}
+                      onChange={(e) => setEditingQuickReply({ ...editingQuickReply, title: e.target.value })}
+                      placeholder="Título..."
+                      className="text-sm"
+                    />
+                    <Textarea
+                      value={editingQuickReply.content}
+                      onChange={(e) => setEditingQuickReply({ ...editingQuickReply, content: e.target.value })}
+                      placeholder="Contenido..."
+                      className="text-sm min-h-[80px]"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={updateQuickReply}>
+                        Guardar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingQuickReply(null)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">{reply.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{reply.content}</p>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-7 w-7"
+                        onClick={() => setEditingQuickReply(reply)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-7 w-7 hover:text-destructive"
+                        onClick={() => removeQuickReply(reply.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add new quick reply */}
+          <div className="pt-3 border-t space-y-2">
+            <Input
+              placeholder="Título (ej: 👋 Saludo)"
+              value={newQuickReply.title}
+              onChange={(e) => setNewQuickReply({ ...newQuickReply, title: e.target.value })}
+            />
+            <Textarea
+              placeholder="Contenido del mensaje..."
+              value={newQuickReply.content}
+              onChange={(e) => setNewQuickReply({ ...newQuickReply, content: e.target.value })}
+              className="min-h-[80px]"
+            />
+            <Button 
+              onClick={addQuickReply} 
+              variant="outline" 
+              className="w-full"
+              disabled={!newQuickReply.title || !newQuickReply.content}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar respuesta rápida
             </Button>
           </div>
         </CardContent>

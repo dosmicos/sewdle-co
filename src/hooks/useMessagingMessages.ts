@@ -66,12 +66,13 @@ export const useMessagingMessages = (conversationId: string | null) => {
   }, [conversationId, queryClient]);
 
   const sendMessage = useMutation({
-    mutationFn: async ({ message, mediaFile, mediaType }: { message: string; mediaFile?: File; mediaType?: string }) => {
+    mutationFn: async ({ message, mediaFile, mediaType, replyToMessageId }: { message: string; mediaFile?: File; mediaType?: string; replyToMessageId?: string }) => {
       if (!conversationId) throw new Error('No conversation selected');
       
       let body: Record<string, any> = { 
         conversation_id: conversationId, 
-        message 
+        message,
+        reply_to_message_id: replyToMessageId || null
       };
 
       // If there's a media file, convert to base64

@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, Reply, MessageSquareText } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { ChannelType } from './ConversationsList';
+import { useQuickReplies } from '@/hooks/useQuickReplies';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,11 +29,14 @@ import {
 } from "@/components/ui/tooltip";
 
 interface Message {
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   mediaUrl?: string;
   mediaType?: 'image' | 'audio' | 'document';
+  replyToMessageId?: string;
+  replyToContent?: string;
 }
 
 interface Conversation {
@@ -47,7 +51,7 @@ interface Conversation {
 interface ConversationThreadProps {
   conversation?: Conversation;
   messages: Message[];
-  onSendMessage?: (message: string, mediaFile?: File, mediaType?: string) => void;
+  onSendMessage?: (message: string, mediaFile?: File, mediaType?: string, replyToMessageId?: string) => void;
   isSending?: boolean;
   isLoading?: boolean;
   onToggleAiManaged?: (aiManaged: boolean) => void;
@@ -98,6 +102,7 @@ export const ConversationThread = ({
   isTogglingAiManaged = false,
 }: ConversationThreadProps) => {
   const { currentOrganization } = useOrganization();
+  const { quickReplies } = useQuickReplies(currentOrganization?.id);
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -106,6 +111,7 @@ export const ConversationThread = ({
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -163,12 +169,13 @@ export const ConversationThread = ({
         : selectedFile.type.startsWith('audio/') 
           ? 'audio' 
           : 'document';
-      onSendMessage(inputMessage.trim(), selectedFile, mediaType);
+      onSendMessage(inputMessage.trim(), selectedFile, mediaType, replyingTo?.id);
       clearSelectedFile();
     } else {
-      onSendMessage(inputMessage.trim());
+      onSendMessage(inputMessage.trim(), undefined, undefined, replyingTo?.id);
     }
     setInputMessage('');
+    setReplyingTo(null);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -293,6 +300,14 @@ export const ConversationThread = ({
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  const handleReply = (message: Message) => {
+    setReplyingTo(message);
+  };
+
+  const handleSelectQuickReply = (content: string) => {
+    setInputMessage(content);
+  };
+
   if (!conversation) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -403,6 +418,18 @@ export const ConversationThread = ({
                         : channelInfo.bubbleColor
                     )}
                   >
+                    {/* Reply preview if this message is replying to another */}
+                    {message.replyToContent && (
+                      <div className={cn(
+                        "text-xs mb-2 p-2 rounded border-l-2",
+                        message.role === 'user' 
+                          ? 'bg-background/50 border-muted-foreground/30' 
+                          : 'bg-white/10 border-white/30'
+                      )}>
+                        <p className="opacity-70 line-clamp-2">{message.replyToContent}</p>
+                      </div>
+                    )}
+                    
                     <div className="flex items-start gap-2">
                       {message.role === 'assistant' && (
                         <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -452,18 +479,32 @@ export const ConversationThread = ({
                       </div>
                     </div>
                     
-                    {message.role === 'assistant' && (
+                    {/* Action buttons on hover */}
+                    <div className={cn(
+                      "absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1",
+                      message.role === 'user' ? '-right-16' : '-left-16'
+                    )}>
                       <button
-                        onClick={() => handleCopyMessage(message.content, index)}
-                        className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+                        onClick={() => handleReply(message)}
+                        className="p-1 rounded hover:bg-muted transition-colors"
+                        title="Responder"
                       >
-                        {copiedIndex === index ? (
-                          <Check className="h-4 w-4 text-emerald-500" />
-                        ) : (
-                          <Copy className="h-4 w-4 text-muted-foreground" />
-                        )}
+                        <Reply className="h-4 w-4 text-muted-foreground" />
                       </button>
-                    )}
+                      {message.role === 'assistant' && (
+                        <button
+                          onClick={() => handleCopyMessage(message.content, index)}
+                          className="p-1 rounded hover:bg-muted transition-colors"
+                          title="Copiar"
+                        >
+                          {copiedIndex === index ? (
+                            <Check className="h-4 w-4 text-emerald-500" />
+                          ) : (
+                            <Copy className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -497,6 +538,22 @@ export const ConversationThread = ({
 
         {/* Input area */}
         <div className="p-4 border-t border-border">
+          {/* Reply preview */}
+          {replyingTo && (
+            <div className="mb-3 p-3 bg-muted/50 rounded-lg border-l-4 border-emerald-500 flex items-start gap-3">
+              <Reply className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-1">
+                  Respondiendo a {replyingTo.role === 'user' ? 'cliente' : 'ti'}
+                </p>
+                <p className="text-sm line-clamp-2">{replyingTo.content}</p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyingTo(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
           {/* File preview */}
           {selectedFile && (
             <div className="mb-3 p-3 bg-muted rounded-lg flex items-center gap-3">
@@ -569,6 +626,29 @@ export const ConversationThread = ({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Quick replies dropdown */}
+            {quickReplies.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" disabled={isSending}>
+                    <MessageSquareText className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  {quickReplies.map((reply) => (
+                    <DropdownMenuItem 
+                      key={reply.id}
+                      onClick={() => handleSelectQuickReply(reply.content)}
+                      className="flex flex-col items-start gap-1"
+                    >
+                      <span className="font-medium text-sm">{reply.title}</span>
+                      <span className="text-xs text-muted-foreground line-clamp-1">{reply.content}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             {/* Audio recording button */}
             <Button 
