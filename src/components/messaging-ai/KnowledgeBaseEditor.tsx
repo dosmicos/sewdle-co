@@ -24,12 +24,14 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { KnowledgeImageUpload } from './KnowledgeImageUpload';
 
 interface KnowledgeItem {
   id: string;
   category: string;
   title: string;
   content: string;
+  images?: string[];
 }
 
 const CATEGORIES = [
@@ -52,11 +54,13 @@ export const KnowledgeBaseEditor = () => {
   const [newItem, setNewItem] = useState<Partial<KnowledgeItem>>({
     title: '',
     content: '',
+    images: [],
   });
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Partial<KnowledgeItem>>({
     title: '',
     content: '',
+    images: [],
   });
 
   // Load knowledge base from channel ai_config
@@ -158,7 +162,7 @@ export const KnowledgeBaseEditor = () => {
 
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
-    setNewItem({ title: '', content: '' });
+    setNewItem({ title: '', content: '', images: [] });
     setShowCategoryModal(false);
   };
 
@@ -173,17 +177,18 @@ export const KnowledgeBaseEditor = () => {
       category: selectedCategory,
       title: newItem.title,
       content: newItem.content,
+      images: newItem.images || [],
     };
 
     setItems(prev => [...prev, item]);
-    setNewItem({ title: '', content: '' });
+    setNewItem({ title: '', content: '', images: [] });
     setSelectedCategory(null);
     toast.success('Conocimiento agregado');
   };
 
   const cancelAdd = () => {
     setSelectedCategory(null);
-    setNewItem({ title: '', content: '' });
+    setNewItem({ title: '', content: '', images: [] });
   };
 
   const removeItem = (id: string) => {
@@ -196,12 +201,13 @@ export const KnowledgeBaseEditor = () => {
     setEditingItem({
       title: item.title,
       content: item.content,
+      images: item.images || [],
     });
   };
 
   const cancelEditing = () => {
     setEditingItemId(null);
-    setEditingItem({ title: '', content: '' });
+    setEditingItem({ title: '', content: '', images: [] });
   };
 
   const saveEditing = (id: string) => {
@@ -212,11 +218,16 @@ export const KnowledgeBaseEditor = () => {
 
     setItems(prev => prev.map(item => 
       item.id === id 
-        ? { ...item, title: editingItem.title!, content: editingItem.content! }
+        ? { 
+            ...item, 
+            title: editingItem.title!, 
+            content: editingItem.content!,
+            images: editingItem.images || []
+          }
         : item
     ));
     setEditingItemId(null);
-    setEditingItem({ title: '', content: '' });
+    setEditingItem({ title: '', content: '', images: [] });
     toast.success('Conocimiento actualizado');
   };
 
@@ -323,6 +334,14 @@ export const KnowledgeBaseEditor = () => {
               />
             </div>
 
+            {currentOrganization?.id && (
+              <KnowledgeImageUpload
+                images={newItem.images || []}
+                onImagesChange={(images) => setNewItem(prev => ({ ...prev, images }))}
+                organizationId={currentOrganization.id}
+              />
+            )}
+
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={cancelAdd}>
                 Cancelar
@@ -396,6 +415,13 @@ export const KnowledgeBaseEditor = () => {
                           placeholder="Contenido del conocimiento"
                         />
                       </div>
+                      {currentOrganization?.id && (
+                        <KnowledgeImageUpload
+                          images={editingItem.images || []}
+                          onImagesChange={(images) => setEditingItem(prev => ({ ...prev, images }))}
+                          organizationId={currentOrganization.id}
+                        />
+                      )}
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" onClick={cancelEditing}>
                           Cancelar
@@ -417,6 +443,26 @@ export const KnowledgeBaseEditor = () => {
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                           {item.content}
                         </p>
+                        {/* Display images */}
+                        {item.images && item.images.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {item.images.map((url, imgIndex) => (
+                              <a
+                                key={imgIndex}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block w-16 h-16 rounded-lg overflow-hidden border border-border hover:opacity-80 transition-opacity"
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Imagen ${imgIndex + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-1 shrink-0">
                         <Button
