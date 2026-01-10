@@ -491,7 +491,9 @@ Reglas importantes:
                       last_message_at: timestamp.toISOString(),
                       unread_count: 1,
                       status: 'active',
-                      ai_managed: channel.ai_enabled || false
+                      // ai_managed: true = IA responde, false = control manual, null = por defecto (canal)
+                      // Para este webhook, lo dejamos ON por defecto (igual que el canal; null cuenta como true)
+                      ai_managed: channel.ai_enabled !== false,
                     })
                     .select()
                     .single();
@@ -556,13 +558,23 @@ Reglas importantes:
                     // Generate AI response if AI is enabled (AUTO-RESPONDER)
                     const aiConfig = channel.ai_config as any;
                     const autoReplyEnabled = aiConfig?.autoReply !== false; // Default to true
-                    const shouldAutoReply = (channel.ai_enabled || conversation.ai_managed) && autoReplyEnabled;
-                    
+
+                    // Releer el estado de la conversación para respetar el switch (evita carreras)
+                    const { data: freshConv } = await supabase
+                      .from('messaging_conversations')
+                      .select('ai_managed')
+                      .eq('id', conversation.id)
+                      .single();
+
+                    const aiEnabledOnChannel = channel.ai_enabled !== false; // null => true
+                    const aiEnabledOnConversation = (freshConv?.ai_managed ?? conversation.ai_managed) !== false; // null => true
+                    const shouldAutoReply = aiEnabledOnChannel && aiEnabledOnConversation && autoReplyEnabled;
+
                     console.log('AI config:', {
                       channelAiEnabled: channel.ai_enabled,
-                      conversationAiManaged: conversation.ai_managed,
+                      conversationAiManaged: freshConv?.ai_managed ?? conversation.ai_managed,
                       autoReplyEnabled,
-                      shouldAutoReply
+                      shouldAutoReply,
                     });
                     
                     if (shouldAutoReply) {
@@ -635,13 +647,12 @@ Reglas importantes:
                             } else {
                               console.log('AI response saved successfully');
                               
-                              // Update conversation with AI response
+                              // Update conversation preview/time (NO tocar ai_managed: es control del usuario)
                               await supabase
                                 .from('messaging_conversations')
                                 .update({
                                   last_message_preview: aiResponse.substring(0, 100),
                                   last_message_at: new Date().toISOString(),
-                                  ai_managed: true
                                 })
                                 .eq('id', conversation.id);
                             }
