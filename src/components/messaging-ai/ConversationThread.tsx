@@ -251,12 +251,36 @@ export const ConversationThread = ({
     setInputMessage(e.target.value);
   };
 
-  const handleQuickReplySelect = (reply: { title: string; content: string }) => {
-    setInputMessage(reply.content);
+  const handleQuickReplySelect = async (reply: { title: string; content: string; imageUrl?: string }) => {
     setShowQuickRepliesPanel(false);
     setQuickReplySearch('');
     setSelectedQuickReplyIndex(0);
-    inputRef.current?.focus();
+
+    // If quick reply has an image, send it directly
+    if (reply.imageUrl && onSendMessage) {
+      try {
+        // Fetch the image and create a File object
+        const response = await fetch(reply.imageUrl);
+        const blob = await response.blob();
+        const fileName = `quick-reply-${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+        
+        // Send message with image
+        onSendMessage(reply.content, file, 'image', replyingTo?.id);
+        setReplyingTo(null);
+        toast.success('Respuesta rápida enviada con imagen');
+      } catch (err) {
+        console.error('Error fetching quick reply image:', err);
+        // Fallback: just send the text
+        setInputMessage(reply.content);
+        inputRef.current?.focus();
+        toast.error('Error al cargar imagen, mensaje copiado al input');
+      }
+    } else {
+      // No image, just set the input message
+      setInputMessage(reply.content);
+      inputRef.current?.focus();
+    }
   };
 
   const openQuickRepliesPanel = () => {
@@ -765,14 +789,26 @@ export const ConversationThread = ({
                           key={reply.id}
                           onClick={() => handleQuickReplySelect(reply)}
                           className={cn(
-                            "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+                            "w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-start gap-2",
                             index === selectedQuickReplyIndex 
                               ? "bg-accent text-accent-foreground" 
                               : "hover:bg-muted"
                           )}
                         >
-                          <span className="font-medium block">{reply.title}</span>
-                          <span className="text-xs text-muted-foreground line-clamp-2">{reply.content}</span>
+                          {reply.imageUrl && (
+                            <img 
+                              src={reply.imageUrl} 
+                              alt="" 
+                              className="h-8 w-8 object-cover rounded flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium block">{reply.title}</span>
+                            <span className="text-xs text-muted-foreground line-clamp-2">{reply.content}</span>
+                            {reply.imageUrl && (
+                              <span className="text-xs text-emerald-600 mt-0.5 block">📷 Incluye imagen</span>
+                            )}
+                          </div>
                         </button>
                       ))}
                     </div>
