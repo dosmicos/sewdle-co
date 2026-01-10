@@ -252,7 +252,8 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
             user_identifier: phone,
             user_name: name || phone,
             status: 'active',
-            ai_managed: false,
+            // Por defecto: IA activa en chats nuevos (puedes apagarla por conversación con el switch)
+            ai_managed: true,
             unread_count: 0
           })
           .select('id')
