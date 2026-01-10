@@ -303,7 +303,7 @@ export const AITrainingPanel = () => {
       }
     }
 
-    const messageContent = inputMessage.trim() || (mediaType === 'image' ? '📷 Imagen' : mediaType === 'audio' ? '🎵 Audio' : '📎 Archivo');
+    const messageContent = inputMessage.trim() || (mediaType === 'image' ? '📷 Imagen enviada' : mediaType === 'audio' ? '🎵 Audio enviado' : '📎 Archivo enviado');
 
     const userMessage: TestMessage = {
       id: Date.now().toString(),
@@ -318,21 +318,21 @@ export const AITrainingPanel = () => {
     setInputMessage('');
     clearSelectedFile();
 
-    // Only generate AI response for text messages (not media-only)
-    if (inputMessage.trim()) {
-      await generateTestResponse(userMessage.content);
-    } else {
-      // For media-only messages, show a simple acknowledgment
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now().toString() + '-ai',
-          role: 'assistant',
-          content: '¡Gracias por compartir! En una conversación real, podré analizar este contenido.',
-          timestamp: new Date(),
-        }
-      ]);
+    // Generate AI response for all messages (text and media)
+    // For media-only, provide context about what was sent
+    let aiPrompt = inputMessage.trim();
+    if (!aiPrompt && selectedFile) {
+      // Build context for media-only messages
+      if (mediaType === 'image') {
+        aiPrompt = 'El cliente envió una imagen. Responde de manera amigable, agradece y pregunta cómo puedes ayudarle.';
+      } else if (mediaType === 'audio') {
+        aiPrompt = 'El cliente envió un audio. Responde de manera amigable indicando que recibiste el audio y pregunta cómo puedes ayudarle.';
+      } else {
+        aiPrompt = 'El cliente envió un archivo. Responde de manera amigable indicando que recibiste el archivo y pregunta cómo puedes ayudarle.';
+      }
     }
+    
+    await generateTestResponse(aiPrompt);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
