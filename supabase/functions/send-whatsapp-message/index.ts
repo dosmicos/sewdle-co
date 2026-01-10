@@ -302,7 +302,34 @@ serve(async (req) => {
     if (media_base64 && media_type) {
       console.log('Processing media upload:', { media_type, media_mime_type, media_filename });
       
-      // First upload media to WhatsApp
+      // First save to Supabase Storage for persistent URL (so UI can display it)
+      try {
+        const binaryData = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
+        const ext = getExtensionFromMime(media_mime_type || 'image/jpeg');
+        const storagePath = `outbound/${conversationId || 'unknown'}/${Date.now()}.${ext}`;
+        
+        console.log('Saving media to Supabase Storage:', storagePath);
+        
+        const { error: uploadError } = await supabase.storage
+          .from('messaging-media')
+          .upload(storagePath, binaryData, { 
+            contentType: media_mime_type || 'image/jpeg', 
+            upsert: true 
+          });
+        
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from('messaging-media').getPublicUrl(storagePath);
+          savedMediaUrl = urlData?.publicUrl || null;
+          console.log('Media saved to storage successfully:', savedMediaUrl);
+        } else {
+          console.error('Error saving media to storage:', uploadError);
+        }
+      } catch (storageError) {
+        console.error('Exception saving media to storage:', storageError);
+        // Continue anyway - WhatsApp send is more important than storage
+      }
+      
+      // Then upload media to WhatsApp
       const mediaUploadResponse = await uploadMediaToWhatsApp(
         phoneNumberId, 
         whatsappToken, 
