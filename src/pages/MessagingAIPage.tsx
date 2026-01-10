@@ -32,7 +32,9 @@ const MessagingAIPage = () => {
     createConversation,
     isCreatingConversation,
     deleteConversation,
-    isDeletingConversation
+    isDeletingConversation,
+    toggleAiManaged,
+    isTogglingAiManaged,
   } = useMessagingConversations(activeChannel);
   const { messages, isLoading: isLoadingMessages, sendMessage, isSending } = useMessagingMessages(selectedConversation);
 
@@ -47,6 +49,7 @@ const MessagingAIPage = () => {
       lastMessageTime: conv.last_message_at ? new Date(conv.last_message_at) : new Date(conv.created_at || new Date()),
       status: conv.status === 'open' ? 'active' : conv.ai_managed ? 'resolved' : 'pending',
       channel: (conv.channel_type || 'whatsapp') as ChannelType,
+      ai_managed: conv.ai_managed ?? true,
     }));
   }, [conversations]);
 
@@ -241,6 +244,12 @@ const MessagingAIPage = () => {
                     onSendMessage={handleSendMessage}
                     isSending={isSending}
                     isLoading={isLoadingMessages}
+                    onToggleAiManaged={(aiManaged) => {
+                      if (selectedConversation) {
+                        toggleAiManaged({ conversationId: selectedConversation, aiManaged });
+                      }
+                    }}
+                    isTogglingAiManaged={isTogglingAiManaged}
                   />
                 </Card>
               </div>

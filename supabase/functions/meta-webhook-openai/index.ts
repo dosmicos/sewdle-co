@@ -795,9 +795,12 @@ serve(async (req) => {
                 console.log('Message saved to database');
               }
 
-              // Generate and send AI response if enabled
-              if (channel.ai_enabled !== false && content && messageType === 'text') {
-                console.log('AI is enabled, generating response...');
+              // Generate and send AI response if enabled (check both channel and conversation level)
+              const aiEnabledOnChannel = channel.ai_enabled !== false;
+              const aiEnabledOnConversation = conversation.ai_managed !== false;
+              
+              if (aiEnabledOnChannel && aiEnabledOnConversation && content && messageType === 'text') {
+                console.log('AI is enabled (channel + conversation), generating response...');
                 
                 // Get conversation history for context
                 const { data: historyMessages } = await supabase
