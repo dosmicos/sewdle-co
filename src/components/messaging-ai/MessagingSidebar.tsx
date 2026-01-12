@@ -2,9 +2,10 @@ import React from 'react';
 import { 
   Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, 
   GraduationCap, Brain, Megaphone, BarChart3, ArrowLeft,
-  MessageSquare, Instagram, Facebook
+  MessageSquare, Instagram, Facebook, Tag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MessagingTag } from '@/hooks/useMessagingTags';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
 type ChannelType = 'all' | 'whatsapp' | 'instagram' | 'messenger';
@@ -12,9 +13,11 @@ type ChannelType = 'all' | 'whatsapp' | 'instagram' | 'messenger';
 interface MessagingSidebarProps {
   activeFilter: FilterType;
   activeChannel: ChannelType;
+  activeTagId?: string | null;
   onFilterChange: (filter: FilterType) => void;
   onChannelChange: (channel: ChannelType) => void;
-  onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats') => void;
+  onTagChange?: (tagId: string | null) => void;
+  onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags') => void;
   counts: {
     total: number;
     pending: number;
@@ -23,6 +26,8 @@ interface MessagingSidebarProps {
     instagram: number;
     messenger: number;
   };
+  tags?: MessagingTag[];
+  tagCounts?: Record<string, number>;
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -75,10 +80,14 @@ const channelItems: Array<{
 export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
   activeFilter,
   activeChannel,
+  activeTagId,
   onFilterChange,
   onChannelChange,
+  onTagChange,
   onNavigate,
   counts,
+  tags = [],
+  tagCounts = {},
   collapsed,
   onToggleCollapse,
 }) => {
@@ -227,6 +236,60 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
             </button>
           </div>
         </nav>
+
+        {/* Tags section */}
+        {tags.length > 0 && (
+          <div className="border-t border-slate-700 py-4 px-2">
+            {!collapsed && (
+              <div className="flex items-center justify-between px-3 mb-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Etiquetas
+                </span>
+                <button
+                  onClick={() => onNavigate('tags')}
+                  className="text-xs text-slate-400 hover:text-white transition-colors"
+                >
+                  Gestionar
+                </button>
+              </div>
+            )}
+            <ul className="space-y-1">
+              {tags.map((tag) => {
+                const count = tagCounts[tag.id] || 0;
+                const isActive = activeTagId === tag.id;
+
+                return (
+                  <li key={tag.id}>
+                    <button
+                      onClick={() => onTagChange?.(isActive ? null : tag.id)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                        isActive
+                          ? "bg-slate-700 text-white"
+                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      )}
+                    >
+                      <span 
+                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1 text-left text-sm font-medium truncate">
+                            {tag.name}
+                          </span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                            {count}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* AI Training section */}
         <div className="border-t border-slate-700 py-4 px-2 space-y-1">

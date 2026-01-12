@@ -19,6 +19,12 @@ import { cn } from '@/lib/utils';
 
 export type ChannelType = 'whatsapp' | 'instagram' | 'messenger';
 
+export interface ConversationTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Conversation {
   id: string;
   phone: string;
@@ -28,6 +34,7 @@ export interface Conversation {
   lastMessageTime: Date;
   status: 'active' | 'pending' | 'resolved';
   channel: ChannelType;
+  tags?: ConversationTag[];
 }
 
 interface ConversationsListProps {
@@ -163,6 +170,30 @@ export const ConversationsList = ({
                 >
                   {conversation.lastMessage}
                 </p>
+                {/* Tags display */}
+                {conversation.tags && conversation.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {conversation.tags.slice(0, 3).map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant="secondary"
+                        className="text-[10px] px-1.5 py-0 h-4"
+                        style={{ 
+                          backgroundColor: `${tag.color}20`,
+                          color: tag.color,
+                          borderColor: `${tag.color}40`,
+                        }}
+                      >
+                        {tag.name}
+                      </Badge>
+                    ))}
+                    {conversation.tags.length > 3 && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                        +{conversation.tags.length - 3}
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

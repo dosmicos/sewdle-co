@@ -11,19 +11,24 @@ import { MessagingStats } from '@/components/messaging-ai/MessagingStats';
 import { MessagingSidebar } from '@/components/messaging-ai/MessagingSidebar';
 import { KnowledgeBaseEditor } from '@/components/messaging-ai/KnowledgeBaseEditor';
 import { AITrainingPanel } from '@/components/messaging-ai/AITrainingPanel';
+import { TagsSettingsPanel } from '@/components/messaging-ai/TagsSettingsPanel';
 import { useMessagingConversations } from '@/hooks/useMessagingConversations';
 import { useMessagingMessages } from '@/hooks/useMessagingMessages';
+import { useMessagingTags } from '@/hooks/useMessagingTags';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
-type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats';
+type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags';
 
 const MessagingAIPage = () => {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
   const [activeChannel, setActiveChannel] = useState<ChannelType | 'all'>('all');
+  const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewType>('conversations');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+
+  const { tags, tagCounts, useConversationTags } = useMessagingTags();
 
   const { 
     conversations, 
@@ -50,6 +55,7 @@ const MessagingAIPage = () => {
       status: conv.status === 'open' ? 'active' : conv.ai_managed ? 'resolved' : 'pending',
       channel: (conv.channel_type || 'whatsapp') as ChannelType,
       ai_managed: conv.ai_managed ?? true,
+      tags: conv.tags || [],
     }));
   }, [conversations]);
 
@@ -63,7 +69,7 @@ const MessagingAIPage = () => {
     messenger: transformedConversations.filter(c => c.channel === 'messenger').length,
   }), [transformedConversations]);
 
-  // Filter conversations based on active filter
+  // Filter conversations based on active filter and tag
   const filteredConversations = useMemo(() => {
     let result = transformedConversations;
     
@@ -76,8 +82,13 @@ const MessagingAIPage = () => {
         break;
     }
     
+    // Filter by tag if selected
+    if (activeTagId) {
+      result = result.filter(c => c.tags?.some(t => t.id === activeTagId));
+    }
+    
     return result;
-  }, [activeFilter, transformedConversations]);
+  }, [activeFilter, activeTagId, transformedConversations]);
 
   // Transform messages to UI format with reply info
   const transformedMessages = useMemo(() => {
@@ -113,18 +124,25 @@ const MessagingAIPage = () => {
     }
   }, [selectedConversation, markAsRead]);
 
-  const handleNavigate = (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats') => {
+  const handleNavigate = (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags') => {
     setActiveView(section);
   };
 
   const handleFilterChange = (filter: FilterType) => {
     setActiveFilter(filter);
+    setActiveTagId(null); // Clear tag filter when changing main filter
     setActiveView('conversations');
     setSelectedConversation(null);
   };
 
   const handleChannelChange = (channel: ChannelType | 'all') => {
     setActiveChannel(channel === activeChannel ? 'all' : channel);
+    setActiveView('conversations');
+    setSelectedConversation(null);
+  };
+
+  const handleTagChange = (tagId: string | null) => {
+    setActiveTagId(tagId);
     setActiveView('conversations');
     setSelectedConversation(null);
   };
@@ -151,10 +169,14 @@ const MessagingAIPage = () => {
       <MessagingSidebar
         activeFilter={activeFilter}
         activeChannel={activeChannel}
+        activeTagId={activeTagId}
         onFilterChange={handleFilterChange}
         onChannelChange={handleChannelChange}
+        onTagChange={handleTagChange}
         onNavigate={handleNavigate}
         counts={counts}
+        tags={tags}
+        tagCounts={tagCounts}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
@@ -288,6 +310,8 @@ const MessagingAIPage = () => {
           )}
           
           {activeView === 'stats' && <MessagingStats />}
+          
+          {activeView === 'tags' && <TagsSettingsPanel />}
         </div>
       </div>
 
