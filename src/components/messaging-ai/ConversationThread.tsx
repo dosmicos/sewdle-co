@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { ChannelType } from './ConversationsList';
 import { useQuickReplies } from '@/hooks/useQuickReplies';
+import { ChatTagsManager } from './ChatTagsManager';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -458,6 +459,8 @@ export const ConversationThread = ({
               </div>
               <p className="text-sm text-muted-foreground">{conversation.phone}</p>
             </div>
+            {/* Tags Manager */}
+            <ChatTagsManager conversationId={conversation.id} />
           </div>
           <div className="flex items-center gap-3">
             {/* AI Managed Toggle */}

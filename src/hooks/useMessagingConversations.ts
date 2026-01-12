@@ -5,12 +5,19 @@ import { toast } from 'sonner';
 import { ChannelType } from '@/components/messaging-ai/ConversationsList';
 import { Tables } from '@/integrations/supabase/types';
 
+export interface ConversationTagInfo {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export type MessagingConversation = Tables<'messaging_conversations'> & {
   channel?: {
     id: string;
     channel_type: string;
     channel_name: string | null;
   };
+  tags?: ConversationTagInfo[];
 };
 
 export const useMessagingConversations = (channelFilter?: ChannelType | 'all') => {
@@ -19,7 +26,8 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
   const { data: conversations, isLoading, error } = useQuery({
     queryKey: ['messaging-conversations', channelFilter],
     queryFn: async () => {
-      let query = supabase
+      // Fetch conversations
+      const { data: convData, error: convError } = await supabase
         .from('messaging_conversations')
         .select(`
           *,
@@ -27,10 +35,45 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
         `)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
-      const { data, error } = await query;
+      if (convError) throw convError;
       
-      if (error) throw error;
-      return data as MessagingConversation[];
+      // Fetch all tag assignments with their tags
+      const { data: assignmentsData, error: assignError } = await supabase
+        .from('messaging_conversation_tag_assignments')
+        .select(`
+          conversation_id,
+          tag:messaging_conversation_tags(id, name, color)
+        `);
+      
+      if (assignError) {
+        console.error('Error fetching tag assignments:', assignError);
+        // Continue without tags if there's an error
+        return convData as MessagingConversation[];
+      }
+      
+      // Group tags by conversation ID
+      const tagsByConversation: Record<string, ConversationTagInfo[]> = {};
+      assignmentsData?.forEach(assignment => {
+        const convId = assignment.conversation_id;
+        if (!tagsByConversation[convId]) {
+          tagsByConversation[convId] = [];
+        }
+        if (assignment.tag) {
+          tagsByConversation[convId].push({
+            id: (assignment.tag as any).id,
+            name: (assignment.tag as any).name,
+            color: (assignment.tag as any).color,
+          });
+        }
+      });
+      
+      // Attach tags to conversations
+      const conversationsWithTags = convData?.map(conv => ({
+        ...conv,
+        tags: tagsByConversation[conv.id] || [],
+      })) as MessagingConversation[];
+      
+      return conversationsWithTags;
     },
   });
 
