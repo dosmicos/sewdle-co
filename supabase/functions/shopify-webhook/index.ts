@@ -365,30 +365,19 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     });
   }
 
-  // ANTES de insertar, eliminar cualquier line item existente para este pedido
-  // (protección contra múltiples webhooks orders/create)
-  console.log(`🗑️ Limpiando line items previos de orden ${order.order_number}...`);
-  const { data: deletedItems, error: deleteError } = await supabase
-    .from('shopify_order_line_items')
-    .delete()
-    .eq('shopify_order_id', order.id)
-    .eq('organization_id', organizationId)
-    .select();
-
-  if (deleteError) {
-    console.error('⚠️ Error eliminando line items previos:', deleteError);
-  } else if (deletedItems && deletedItems.length > 0) {
-    console.log(`⚠️ Se eliminaron ${deletedItems.length} line items duplicados previos`);
-  }
-
+  // UPSERT line items (atómico - previene duplicados por webhooks simultáneos)
   if (lineItemsToInsert.length > 0) {
+    console.log(`📦 Upserting ${lineItemsToInsert.length} line items para orden ${order.order_number}...`);
     const { error: lineItemsError } = await supabase
       .from('shopify_order_line_items')
-      .insert(lineItemsToInsert);
+      .upsert(lineItemsToInsert, {
+        onConflict: 'shopify_order_id,shopify_line_item_id',
+        ignoreDuplicates: false
+      });
 
     if (lineItemsError) {
-      console.error('❌ Error insertando line items:', lineItemsError);
-      throw new Error(`Error al insertar line items: ${lineItemsError.message}`);
+      console.error('❌ Error upserting line items:', lineItemsError);
+      throw new Error(`Error al upsert line items: ${lineItemsError.message}`);
     }
     
     console.log(`✅ ${lineItemsToInsert.length} line items almacenados correctamente`);
@@ -567,21 +556,6 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     }
   }
 
-  // Update line items - delete old ones and insert updated ones
-  console.log(`🗑️ Eliminando line items antiguos de orden ${order.order_number}...`);
-  const { data: deletedItems, error: deleteError } = await supabase
-    .from('shopify_order_line_items')
-    .delete()
-    .eq('shopify_order_id', order.id)
-    .eq('organization_id', organizationId)
-    .select();
-
-  if (deleteError) {
-    console.error('⚠️ Error eliminando line items antiguos:', deleteError);
-  } else {
-    console.log(`✅ ${deletedItems?.length || 0} line items eliminados correctamente`);
-  }
-
   // Build SKU to image_url map from product_variants
   console.log('🖼️ Building SKU to image map for updated line items...');
   const skusInOrder = order.line_items.map((item: any) => item.sku).filter(Boolean);
@@ -607,23 +581,23 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     }
   }
 
-  // Insert updated line items
-  const lineItemsToInsert = [];
+  // Build line items to upsert (skip removed items with quantity 0)
+  const lineItemsToUpsert = [];
+  const removedLineItemIds: number[] = [];
   
   for (const item of order.line_items) {
-    // Skip items that have been removed from the order
     // current_quantity reflects actual quantity after refunds/cancellations
-    // If not present, fall back to quantity field
     const effectiveQuantity = item.current_quantity ?? item.quantity;
     
     if (effectiveQuantity === 0) {
       console.log(`⏭️ Skipping removed line item: ${item.title} (ID: ${item.id})`);
+      removedLineItemIds.push(item.id);
       continue;
     }
     
     const imageUrl = item.image?.src || item.featured_image || (item.sku ? skuToImageMap.get(item.sku) : null) || null;
     
-    lineItemsToInsert.push({
+    lineItemsToUpsert.push({
       shopify_order_id: order.id,
       shopify_line_item_id: item.id,
       product_id: item.product_id,
@@ -647,17 +621,36 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     });
   }
 
-  if (lineItemsToInsert.length > 0) {
+  // Delete removed line items (quantity 0)
+  if (removedLineItemIds.length > 0) {
+    console.log(`🗑️ Eliminando ${removedLineItemIds.length} line items removidos...`);
+    const { error: deleteError } = await supabase
+      .from('shopify_order_line_items')
+      .delete()
+      .eq('shopify_order_id', order.id)
+      .in('shopify_line_item_id', removedLineItemIds);
+
+    if (deleteError) {
+      console.error('⚠️ Error eliminando line items removidos:', deleteError);
+    }
+  }
+
+  // UPSERT line items (atómico - previene duplicados por webhooks simultáneos)
+  if (lineItemsToUpsert.length > 0) {
+    console.log(`📦 Upserting ${lineItemsToUpsert.length} line items para orden ${order.order_number}...`);
     const { error: lineItemsError } = await supabase
       .from('shopify_order_line_items')
-      .insert(lineItemsToInsert);
+      .upsert(lineItemsToUpsert, {
+        onConflict: 'shopify_order_id,shopify_line_item_id',
+        ignoreDuplicates: false
+      });
 
     if (lineItemsError) {
-      console.error('❌ Error insertando line items actualizados:', lineItemsError);
-      throw new Error(`Error al insertar line items: ${lineItemsError.message}`);
+      console.error('❌ Error upserting line items:', lineItemsError);
+      throw new Error(`Error al upsert line items: ${lineItemsError.message}`);
     }
     
-    console.log(`✅ ${lineItemsToInsert.length} line items actualizados correctamente`);
+    console.log(`✅ ${lineItemsToUpsert.length} line items actualizados correctamente`);
   }
 
   // Sincronizar picking_packing_order_items
