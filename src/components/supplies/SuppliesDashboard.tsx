@@ -17,6 +17,11 @@ import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import WorkshopInventoryTable from './WorkshopInventoryTable';
 
+// Helper para formatear números y evitar errores de punto flotante
+const formatNumber = (value: number, decimals: number = 2): string => {
+  return Number(value.toFixed(decimals)).toLocaleString();
+};
+
 const SuppliesDashboard = () => {
   const { isAdmin, isDesigner, currentUser } = useUserContext();
   const isMountedRef = useRef(true);
@@ -397,7 +402,7 @@ const SuppliesDashboard = () => {
             <CheckCircle className="h-4 w-4 text-gray-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black">{consumptionStats.totalConsumed}</div>
+            <div className="text-2xl font-bold text-black">{formatNumber(consumptionStats.totalConsumed)}</div>
             <p className="text-xs text-gray-600">Unidades consumidas</p>
           </CardContent>
         </Card>
@@ -434,7 +439,7 @@ const SuppliesDashboard = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-indigo-900">
-                      {(stock as number).toLocaleString()}
+                      {formatNumber(stock as number)}
                     </div>
                     <p className="text-xs text-indigo-700">Unidades disponibles</p>
                   </CardContent>
