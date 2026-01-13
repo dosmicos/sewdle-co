@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, ArrowRight, Package } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Package, Loader2 } from 'lucide-react';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useWarehouses } from '@/hooks/useWarehouses';
 import { useWorkshops } from '@/hooks/useWorkshops';
@@ -33,16 +33,42 @@ const MaterialTransferForm: React.FC<MaterialTransferFormProps> = ({
     notes: ''
   });
 
+  const [availableStock, setAvailableStock] = useState(0);
+  const [loadingStock, setLoadingStock] = useState(false);
+
   const { materials } = useMaterials();
-  const { warehouses, centralWarehouse } = useWarehouses();
+  const { warehouses } = useWarehouses();
   const { workshops } = useWorkshops();
-  const { getAvailableStock } = useMaterialInventory();
+  const { getAvailableStockAsync } = useMaterialInventory();
   const { createTransfer, loading } = useMaterialTransfers();
 
   const selectedMaterial = materials.find(m => m.id === formData.material_id);
-  const availableStock = formData.from_location_id && formData.from_location_type 
-    ? getAvailableStock(formData.material_id, formData.from_location_id, formData.from_location_type)
-    : 0;
+
+  // Cargar stock disponible cuando cambie el material o la ubicación de origen
+  useEffect(() => {
+    const loadStock = async () => {
+      if (formData.material_id && formData.from_location_id && formData.from_location_type) {
+        setLoadingStock(true);
+        try {
+          const stock = await getAvailableStockAsync(
+            formData.material_id,
+            formData.from_location_id,
+            formData.from_location_type as 'warehouse' | 'workshop'
+          );
+          setAvailableStock(stock);
+        } catch (error) {
+          console.error('Error loading stock:', error);
+          setAvailableStock(0);
+        } finally {
+          setLoadingStock(false);
+        }
+      } else {
+        setAvailableStock(0);
+      }
+    };
+
+    loadStock();
+  }, [formData.material_id, formData.from_location_id, formData.from_location_type, getAvailableStockAsync]);
 
   const getLocationOptions = (type: 'warehouse' | 'workshop') => {
     if (type === 'warehouse') {
@@ -86,6 +112,7 @@ const MaterialTransferForm: React.FC<MaterialTransferFormProps> = ({
         quantity: '',
         notes: ''
       });
+      setAvailableStock(0);
 
       onSuccess?.();
     } catch (error) {
@@ -102,7 +129,8 @@ const MaterialTransferForm: React.FC<MaterialTransferFormProps> = ({
            formData.to_location_id &&
            formData.from_location_id !== formData.to_location_id &&
            quantity > 0 && 
-           quantity <= availableStock;
+           quantity <= availableStock &&
+           !loadingStock;
   };
 
   return (
@@ -255,8 +283,17 @@ const MaterialTransferForm: React.FC<MaterialTransferFormProps> = ({
             
             {formData.material_id && formData.from_location_id && formData.from_location_type && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Package className="h-4 w-4" />
-                <span>Stock disponible: {availableStock} {selectedMaterial?.unit}</span>
+                {loadingStock ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Calculando stock disponible...</span>
+                  </>
+                ) : (
+                  <>
+                    <Package className="h-4 w-4" />
+                    <span>Stock disponible: {availableStock} {selectedMaterial?.unit}</span>
+                  </>
+                )}
               </div>
             )}
           </div>
