@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -97,6 +97,49 @@ export const useMaterialInventory = (locationId?: string, locationType?: 'wareho
     }
   };
 
+  // Función asíncrona para obtener stock disponible desde material_deliveries
+  const getAvailableStockAsync = useCallback(async (
+    materialId: string, 
+    locationId: string, 
+    locationType: 'warehouse' | 'workshop'
+  ): Promise<number> => {
+    if (!materialId || !locationId || !locationType) {
+      return 0;
+    }
+
+    try {
+      if (locationType === 'workshop') {
+        // Para talleres, calcular desde material_deliveries usando quantity_remaining
+        const { data, error } = await supabase
+          .from('material_deliveries')
+          .select('quantity_remaining')
+          .eq('material_id', materialId)
+          .eq('workshop_id', locationId)
+          .gt('quantity_remaining', 0);
+
+        if (error) {
+          console.error('Error fetching workshop stock:', error);
+          return 0;
+        }
+
+        const totalStock = (data || []).reduce((sum, delivery) => sum + (delivery.quantity_remaining || 0), 0);
+        return totalStock;
+      } else {
+        // Para bodegas, usar material_inventory (si hay datos)
+        const item = inventory.find(i => 
+          i.material_id === materialId && 
+          i.location_id === locationId && 
+          i.location_type === locationType
+        );
+        return item ? Math.max(0, item.current_stock - item.reserved_stock) : 0;
+      }
+    } catch (error) {
+      console.error('Error getting available stock:', error);
+      return 0;
+    }
+  }, [inventory]);
+
+  // Mantener función síncrona para compatibilidad (usa inventario cacheado)
   const getAvailableStock = (materialId: string, locationId: string, locationType: 'warehouse' | 'workshop') => {
     const item = inventory.find(i => 
       i.material_id === materialId && 
@@ -114,6 +157,7 @@ export const useMaterialInventory = (locationId?: string, locationType?: 'wareho
     inventory,
     loading,
     getAvailableStock,
+    getAvailableStockAsync,
     refetch: fetchInventory
   };
 };
