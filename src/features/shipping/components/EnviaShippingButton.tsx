@@ -198,6 +198,13 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Calima (El Darién), Valle del Cauca → Interrapidísimo Domicilio
+      if ((dept.includes('valle') || dept === 'val') && 
+          (city.includes('calima') || city.includes('darien'))) {
+        setRecommendedCarrier('interrapidisimo_domicilio');
+        return;
+      }
+
       const MAIN_CITIES = [
         'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
