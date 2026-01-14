@@ -192,8 +192,14 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Cali, Valle del Cauca → Coordinadora
+      if ((dept.includes('valle') || dept === 'val') && city.includes('cali')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       const MAIN_CITIES = [
-        'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
+        'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
         'armenia', 'popayan', 'sincelejo', 'valledupar', 'tunja', 
         'florencia', 'riohacha'
