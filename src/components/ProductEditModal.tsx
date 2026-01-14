@@ -247,12 +247,13 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         console.log(`📋 Variante referenciada en ${orderItems.length} order_items:`, orderNumbers);
       }
 
-      // Verificar en inventory_replenishment (solo activas)
+      // Verificar en inventory_replenishment (solo activas con sugerencias reales)
       const { data: inventoryReplenishment, error: replenishmentError } = await supabase
         .from('inventory_replenishment')
-        .select('id, status, calculated_at')
+        .select('id, status, calculated_at, suggested_quantity')
         .eq('variant_id', variantId)
-        .eq('status', 'pending'); // Solo verificar registros activos
+        .eq('status', 'pending')
+        .gt('suggested_quantity', 0); // Solo bloquear si hay sugerencias reales de reposición
 
       if (replenishmentError) {
         console.error('❌ Error verificando referencias en inventory_replenishment:', replenishmentError);
