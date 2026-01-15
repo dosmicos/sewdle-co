@@ -223,6 +223,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Dosquebradas, Risaralda → Coordinadora (COD y Sin COD)
+      if (dept.includes('risaralda') && city.includes('dosquebradas')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       const MAIN_CITIES = [
         'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
