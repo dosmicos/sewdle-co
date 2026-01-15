@@ -205,6 +205,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Floridablanca, Santander → Coordinadora (COD y Sin COD)
+      if (dept.includes('santander') && city.includes('floridablanca')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       const MAIN_CITIES = [
         'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
