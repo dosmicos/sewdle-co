@@ -216,8 +216,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
       if (isMainCity && !isCOD) {
         setRecommendedCarrier('deprisa');
+      } else if (isMainCity && isCOD) {
+        setRecommendedCarrier('coordinadora');  // COD en ciudades principales → Coordinadora
       } else {
-        setRecommendedCarrier('interrapidisimo');
+        setRecommendedCarrier('interrapidisimo');  // Resto del país
       }
     };
 
