@@ -211,6 +211,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Girón, Santander → Coordinadora (COD y Sin COD)
+      if (dept.includes('santander') && city.includes('giron')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       const MAIN_CITIES = [
         'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
