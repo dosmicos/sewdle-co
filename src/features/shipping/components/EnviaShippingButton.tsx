@@ -229,6 +229,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // La Ceja, Antioquia → Coordinadora (COD y Sin COD)
+      if (dept.includes('antioquia') && city.includes('la ceja')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       const MAIN_CITIES = [
         'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
         'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
