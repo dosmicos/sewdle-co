@@ -6,10 +6,41 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRoles } from '@/hooks/useRoles';
 import { useWorkshops } from '@/hooks/useWorkshops';
+
+const CopyablePassword = ({ password }: { password: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Error copying password:', err);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <p className="text-lg font-mono font-bold text-yellow-900 break-all flex-1">{password}</p>
+      <button
+        onClick={handleCopy}
+        className="p-1.5 rounded hover:bg-yellow-200 transition-colors flex-shrink-0"
+        title="Copiar contraseña"
+      >
+        {copied ? (
+          <Check className="w-4 h-4 text-green-600" />
+        ) : (
+          <Copy className="w-4 h-4 text-yellow-700" />
+        )}
+      </button>
+    </div>
+  );
+};
 
 interface UserFormData {
   name: string;
@@ -110,12 +141,12 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {
               <p>Usuario {formData.email} creado correctamente.</p>
               <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
                 <p className="text-sm font-semibold text-yellow-800">Contraseña temporal:</p>
-                <p className="text-lg font-mono font-bold text-yellow-900 break-all">{result.tempPassword}</p>
+                <CopyablePassword password={result.tempPassword} />
                 <p className="text-xs text-yellow-700 mt-1">⚠️ Guarda esta contraseña, no se mostrará nuevamente</p>
               </div>
             </div>
           ),
-          duration: 15000, // 15 segundos para que el usuario pueda copiar la contraseña
+          duration: 30000, // 30 segundos para que el usuario pueda copiar la contraseña
         });
         onClose(); // Cerrar el modal después de mostrar la contraseña
         return;
