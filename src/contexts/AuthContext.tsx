@@ -118,16 +118,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
 
     try {
-      const { error } = await supabase.rpc('mark_password_changed', {
+      // 1. Actualizar user_metadata en Supabase Auth
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { requires_password_change: false }
+      });
+
+      if (authError) {
+        console.error('Error updating user metadata:', authError);
+        throw authError;
+      }
+
+      // 2. Actualizar tabla profiles (mantener sincronizado)
+      const { error: rpcError } = await supabase.rpc('mark_password_changed', {
         user_uuid: user.id
       });
 
-      if (error) {
-        console.error('Error marking password as changed:', error);
-        throw error;
+      if (rpcError) {
+        console.error('Error marking password as changed:', rpcError);
+        throw rpcError;
       }
 
-      // Actualizar el estado local
+      // 3. Actualizar el estado local
       setUser(prev => prev ? { ...prev, requiresPasswordChange: false } : null);
     } catch (error) {
       console.error('Error in markPasswordChanged:', error);
