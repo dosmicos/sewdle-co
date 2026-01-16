@@ -34,6 +34,7 @@ import ProspectsPage from "@/pages/ProspectsPage";
 import NotFound from "@/pages/NotFound";
 import PickingPackingPage from "@/pages/PickingPackingPage";
 import PrintableOrderView from "@/pages/PrintableOrderView";
+import PasswordChangeGuard from "@/components/PasswordChangeGuard";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -289,6 +290,7 @@ const App = () => {
             />
             <ShadcnToaster />
             <BrowserRouter>
+              <PasswordChangeGuard />
               <AppContent />
             </BrowserRouter>
             </OrganizationProvider>
