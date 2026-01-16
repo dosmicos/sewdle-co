@@ -3922,6 +3922,7 @@ export type Database = {
           workshop_name: string
         }[]
       }
+      get_password_change_required: { Args: never; Returns: boolean }
       get_product_sales_analytics: {
         Args: { end_date?: string; start_date?: string }
         Returns: {

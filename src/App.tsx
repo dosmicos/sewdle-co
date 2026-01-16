@@ -12,6 +12,7 @@ import AuthPage from "@/pages/AuthPage";
 import LandingPage from "@/pages/LandingPage";
 import SignupPage from "@/pages/SignupPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import PasswordChangePage from "@/pages/PasswordChangePage";
 import MainLayout from "@/components/MainLayout";
 import DashboardPage from "@/pages/DashboardPage";
 import OrdersPage from "@/pages/OrdersPage";
@@ -34,7 +35,7 @@ import ProspectsPage from "@/pages/ProspectsPage";
 import NotFound from "@/pages/NotFound";
 import PickingPackingPage from "@/pages/PickingPackingPage";
 import PrintableOrderView from "@/pages/PrintableOrderView";
-import PasswordChangeGuard from "@/components/PasswordChangeGuard";
+import PasswordChangeRouteGuard from "@/components/PasswordChangeRouteGuard";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -45,24 +46,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-  
-  return <>{children}</>;
-};
 
 // Componente para rutas que requieren rol de administrador
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
@@ -132,17 +115,23 @@ const AppContent = () => {
 
   return (
     <Routes>
+      {/* Rutas públicas */}
       <Route path="/auth" element={!user ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
       <Route path="/signup" element={!user ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
       
+      {/* Ruta de cambio de contraseña obligatorio - NO protegida por PasswordChangeRouteGuard */}
+      <Route path="/password-change" element={
+        user ? <PasswordChangePage /> : <Navigate to="/auth" replace />
+      } />
       
+      {/* Rutas protegidas con enforcement de cambio de contraseña */}
       <Route path="/" element={
-        <ProtectedRoute>
+        <PasswordChangeRouteGuard>
           <MainLayout />
-        </ProtectedRoute>
+        </PasswordChangeRouteGuard>
       }>
         <Route path="dashboard" element={<DashboardPage />} />
         
@@ -152,11 +141,7 @@ const AppContent = () => {
           </PermissionRoute>
         } />
         
-        <Route path="orders/:orderId" element={
-          <ProtectedRoute>
-            <OrderDetailsPage />
-          </ProtectedRoute>
-        } />
+        <Route path="orders/:orderId" element={<OrderDetailsPage />} />
         
         <Route path="supplies" element={
           <PermissionRoute module="insumos" action="view">
@@ -230,30 +215,30 @@ const AppContent = () => {
         } />
       </Route>
       
-      {/* Mensajería IA - Layout independiente sin sidebar */}
+      {/* Mensajería IA - Layout independiente con guard */}
       <Route path="whatsapp-ai" element={
-        <ProtectedRoute>
+        <PasswordChangeRouteGuard>
           <AdminRoute>
             <MessagingAIPage />
           </AdminRoute>
-        </ProtectedRoute>
+        </PasswordChangeRouteGuard>
       } />
       
-      {/* Picking & Packing - Layout independiente sin sidebar */}
+      {/* Picking & Packing - Layout independiente con guard */}
       <Route path="picking-packing" element={
-        <ProtectedRoute>
+        <PasswordChangeRouteGuard>
           <PermissionRoute module="picking y packing" action="view">
             <PickingPackingPage />
           </PermissionRoute>
-        </ProtectedRoute>
+        </PasswordChangeRouteGuard>
       } />
       
       <Route path="picking-packing/print/:orderId" element={
-        <ProtectedRoute>
+        <PasswordChangeRouteGuard>
           <PermissionRoute module="picking y packing" action="view">
             <PrintableOrderView />
           </PermissionRoute>
-        </ProtectedRoute>
+        </PasswordChangeRouteGuard>
       } />
       
       <Route path="*" element={<NotFound />} />
@@ -290,7 +275,6 @@ const App = () => {
             />
             <ShadcnToaster />
             <BrowserRouter>
-              <PasswordChangeGuard />
               <AppContent />
             </BrowserRouter>
             </OrganizationProvider>
