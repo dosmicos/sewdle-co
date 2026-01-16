@@ -59,15 +59,6 @@ const PrintableOrderView = () => {
 
   const shippingAddress = order.raw_data?.shipping_address;
   const paymentGateways = order.raw_data?.payment_gateway_names || [];
-  // Check if there are non-COD payment methods (customer paid later with another method)
-  const hasNonCODPayment = paymentGateways.some((gateway: string) => 
-    gateway && !gateway.toLowerCase().includes('cash on delivery')
-  );
-  const hasCODMethod = paymentGateways.some((gateway: string) => 
-    gateway && gateway.toLowerCase().includes('cash on delivery')
-  );
-  // Only consider COD if has COD method AND no other payment methods
-  const isCOD = hasCODMethod && !hasNonCODPayment;
 
   const formatPaymentMethod = (gateway: string): string => {
     if (gateway.toLowerCase().includes('cash on delivery')) {
@@ -76,12 +67,13 @@ const PrintableOrderView = () => {
     return gateway;
   };
 
-  // Show actual payment method (non-COD method if customer paid later)
-  const paymentMethod = hasNonCODPayment
-    ? formatPaymentMethod(paymentGateways.find((g: string) => !g.toLowerCase().includes('cash on delivery')) || paymentGateways[0])
-    : paymentGateways.length > 0 
-      ? formatPaymentMethod(paymentGateways[0]) 
-      : null;
+  // El ÚLTIMO método de pago en el array es el efectivo (orden cronológico de Shopify)
+  const paymentMethod = paymentGateways.length > 0 
+    ? formatPaymentMethod(paymentGateways[paymentGateways.length - 1]) 
+    : null;
+
+  // isCOD is true if the LAST payment method is COD
+  const isCOD = paymentMethod === 'Contraentrega';
 
   return (
     <div className="printable-order mx-auto p-2 bg-white">
