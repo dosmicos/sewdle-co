@@ -40,7 +40,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const isProcessingAuth = useRef(false);
+  const lastProcessedUserIdRef = useRef<string | null>(null);
+  const lastProcessedAccessTokenRef = useRef<string | null>(null);
+  const isProcessingRef = useRef(false);
 
   const createUserProfile = useCallback(async (session: Session): Promise<UserProfile> => {
     // Primero intentar obtener de user_metadata
@@ -190,11 +192,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     
-    // SIGNED_OUT: Limpiar todo
+    // SIGNED_OUT: Limpiar todo y resetear refs
     if (event === 'SIGNED_OUT' || !newSession?.user) {
       setSession(null);
       setUser(null);
-      isProcessingAuth.current = false;
+      lastProcessedUserIdRef.current = null;
+      lastProcessedAccessTokenRef.current = null;
+      isProcessingRef.current = false;
       setLoading(false);
       return;
     }
@@ -207,16 +211,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Actualizar sesión siempre
     setSession(newSession);
     
-    // Si ya estamos procesando o ya tenemos usuario para este session ID, skip
-    if (isProcessingAuth.current) {
+    // Determinar si hay que reprocesar: usuario diferente O token diferente
+    const shouldReprocess = 
+      newSession.user.id !== lastProcessedUserIdRef.current ||
+      newSession.access_token !== lastProcessedAccessTokenRef.current;
+    
+    // Si no hay cambio o ya estamos procesando, skip
+    if (!shouldReprocess || isProcessingRef.current) {
       return;
     }
     
-    // Procesar solo si es INITIAL_SESSION o SIGNED_IN sin usuario actual
-    isProcessingAuth.current = true;
+    // Marcar que estamos procesando
+    isProcessingRef.current = true;
+    
     try {
       const userProfile = await createUserProfile(newSession);
+      
+      // Debug log en desarrollo
+      if (import.meta.env.DEV) {
+        console.log('[AuthContext] User profile created:', {
+          email: userProfile.email,
+          requiresPasswordChange: userProfile.requiresPasswordChange
+        });
+      }
+      
       setUser(userProfile);
+      
+      // Guardar referencias para evitar reprocesamiento innecesario
+      lastProcessedUserIdRef.current = newSession.user.id;
+      lastProcessedAccessTokenRef.current = newSession.access_token;
     } catch (error) {
       console.error('Error creating user profile:', error);
       setUser({
@@ -224,12 +247,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: newSession.user.email || '',
         role: 'Administrador',
         name: newSession.user.email,
-        requiresPasswordChange: false
+        requiresPasswordChange: newSession.user.user_metadata?.requires_password_change || false
       });
     } finally {
       setLoading(false);
-      // Mantener isProcessingAuth true para evitar re-procesamiento
-      // Solo resetear en SIGNED_OUT
+      isProcessingRef.current = false;
     }
   }, [createUserProfile]);
 
