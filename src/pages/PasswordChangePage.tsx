@@ -68,18 +68,17 @@ const PasswordChangePage = () => {
       await changePassword(currentPassword, newPassword);
       await markPasswordChanged();
       
-      // Invalidar la query del hook para que no redirija de nuevo
-      queryClient.invalidateQueries({ queryKey: ['password-change-required'] });
+      // Invalidar y refetch para asegurar que el guard tenga el estado correcto
+      await queryClient.invalidateQueries({ queryKey: ['password-change-required'] });
+      await queryClient.refetchQueries({ queryKey: ['password-change-required'] });
       
       toast({
         title: '¡Contraseña actualizada!',
         description: 'Tu contraseña ha sido cambiada exitosamente.',
       });
       
-      // Pequeño delay para que se procese la invalidación
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 100);
+      // Redirigir al dashboard con replace para evitar volver atrás
+      navigate('/dashboard', { replace: true });
       
     } catch (error: any) {
       console.error('Error changing password:', error);
