@@ -43,10 +43,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isProcessingAuth = useRef(false);
 
   const createUserProfile = useCallback(async (session: Session): Promise<UserProfile> => {
-    let requiresPasswordChange = session.user.user_metadata?.requires_password_change || false;
+    // Primero intentar obtener de user_metadata
+    let requiresPasswordChange = session.user.user_metadata?.requires_password_change;
     let profileName = session.user.user_metadata?.name || session.user.email;
     
     try {
+      // Consultar la tabla profiles para obtener datos actualizados (respaldo)
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('requires_password_change, name')
+        .eq('id', session.user.id)
+        .single();
+      
+      // Si el valor en profiles es true, usarlo (tiene prioridad)
+      // Esto asegura que usuarios reactivados vean el modal de cambio de contraseña
+      if (profileData) {
+        if (profileData.requires_password_change === true) {
+          requiresPasswordChange = true;
+        }
+        // Si el nombre no está en metadata, usar el de profiles
+        if (!session.user.user_metadata?.name && profileData.name) {
+          profileName = profileData.name;
+        }
+      }
+      
+      // Si aún no tenemos valor, default a false
+      if (requiresPasswordChange === undefined) {
+        requiresPasswordChange = false;
+      }
+
       // Obtener información del rol usando RPC (esto funciona con RLS)
       const { data: roleInfo } = await supabase
         .rpc('get_user_role_info', { user_uuid: session.user.id });
@@ -74,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: session.user.email || '',
         role: 'Administrador',
         name: profileName,
-        requiresPasswordChange
+        requiresPasswordChange: requiresPasswordChange || false
       };
     }
   }, []);
