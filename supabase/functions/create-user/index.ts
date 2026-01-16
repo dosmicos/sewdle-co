@@ -26,61 +26,169 @@ serve(async (req) => {
     
     const { name, email, role, workshopId, organizationId, requiresPasswordChange = true } = await req.json()
 
-    // Generate a cryptographically secure temporary password
-    const tempPassword = generateSecurePassword()
-    
-    // Create user in auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: {
-        name,
-        requires_password_change: requiresPasswordChange
+    // Check if user already exists in auth.users
+    const { data: existingUsers } = await supabase.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+
+    let userId: string
+    let tempPassword: string
+    let reactivated = false
+
+    if (existingUser) {
+      // User exists in auth - check organization status
+      const { data: orgUser } = await supabase
+        .from('organization_users')
+        .select('status')
+        .eq('user_id', existingUser.id)
+        .eq('organization_id', organizationId)
+        .single()
+
+      if (orgUser && orgUser.status === 'active') {
+        // User already active in organization
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Este usuario ya está activo en la organización',
+            code: 'user_active'
+          }),
+          { 
+            status: 409,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
-    })
 
-    if (authError) {
-      console.error('Auth error:', authError)
-      throw authError
-    }
+      // User exists but is inactive or not in org - reactivate
+      console.log('Reactivating existing user:', existingUser.id)
+      
+      tempPassword = generateSecurePassword()
+      userId = existingUser.id
+      reactivated = true
 
-    // Create or update profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert({
-        id: authData.user!.id,
-        name,
-        email,
-        organization_id: organizationId,
-        requires_password_change: requiresPasswordChange
+      // Update user password and metadata
+      const { error: updateAuthError } = await supabase.auth.admin.updateUserById(existingUser.id, {
+        password: tempPassword,
+        user_metadata: {
+          name,
+          requires_password_change: requiresPasswordChange
+        }
       })
 
-    if (profileError) {
-      console.error('Profile error:', profileError)
-      throw profileError
-    }
+      if (updateAuthError) {
+        console.error('Auth update error:', updateAuthError)
+        throw updateAuthError
+      }
 
-    // Add user to organization if organizationId is provided
-    if (organizationId) {
-      const { error: orgUserError } = await supabase
-        .from('organization_users')
+      // Update profile
+      const { error: profileError } = await supabase
+        .from('profiles')
         .upsert({
+          id: existingUser.id,
+          name,
+          email,
           organization_id: organizationId,
-          user_id: authData.user!.id,
-          role: 'member',
-          status: 'active'
+          requires_password_change: requiresPasswordChange
         })
 
-      if (orgUserError) {
-        console.error('Organization user error:', orgUserError)
-        throw orgUserError
+      if (profileError) {
+        console.error('Profile update error:', profileError)
+        throw profileError
+      }
+
+      // Reactivate or create organization_users entry
+      if (orgUser) {
+        // Update existing entry to active
+        const { error: orgUserError } = await supabase
+          .from('organization_users')
+          .update({ status: 'active', role: 'member' })
+          .eq('user_id', existingUser.id)
+          .eq('organization_id', organizationId)
+
+        if (orgUserError) {
+          console.error('Organization user update error:', orgUserError)
+          throw orgUserError
+        }
+      } else if (organizationId) {
+        // Create new organization_users entry
+        const { error: orgUserError } = await supabase
+          .from('organization_users')
+          .insert({
+            organization_id: organizationId,
+            user_id: existingUser.id,
+            role: 'member',
+            status: 'active'
+          })
+
+        if (orgUserError) {
+          console.error('Organization user insert error:', orgUserError)
+          throw orgUserError
+        }
+      }
+
+      // Delete existing user_roles for this org before reassigning
+      await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', existingUser.id)
+        .eq('organization_id', organizationId)
+
+    } else {
+      // User doesn't exist - create new
+      tempPassword = generateSecurePassword()
+      
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          name,
+          requires_password_change: requiresPasswordChange
+        }
+      })
+
+      if (authError) {
+        console.error('Auth error:', authError)
+        throw authError
+      }
+
+      userId = authData.user!.id
+
+      // Create profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          name,
+          email,
+          organization_id: organizationId,
+          requires_password_change: requiresPasswordChange
+        })
+
+      if (profileError) {
+        console.error('Profile error:', profileError)
+        throw profileError
+      }
+
+      // Add user to organization
+      if (organizationId) {
+        const { error: orgUserError } = await supabase
+          .from('organization_users')
+          .upsert({
+            organization_id: organizationId,
+            user_id: userId,
+            role: 'member',
+            status: 'active'
+          })
+
+        if (orgUserError) {
+          console.error('Organization user error:', orgUserError)
+          throw orgUserError
+        }
       }
     }
 
     // Assign role if provided
     if (role && role !== 'Sin Rol') {
-      // Get role ID
       const { data: roleData, error: roleError } = await supabase
         .from('roles')
         .select('id')
@@ -92,11 +200,10 @@ serve(async (req) => {
         throw roleError
       }
 
-      // Assign role to user
       const { error: userRoleError } = await supabase
         .from('user_roles')
         .insert({
-          user_id: authData.user!.id,
+          user_id: userId,
           role_id: roleData.id,
           workshop_id: workshopId || null,
           organization_id: organizationId
@@ -112,7 +219,8 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         tempPassword,
-        userId: authData.user!.id
+        userId,
+        reactivated
       }),
       { 
         headers: { 
