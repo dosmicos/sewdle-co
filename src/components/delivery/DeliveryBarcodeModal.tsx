@@ -1,7 +1,9 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, Package } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import BarcodeLabel from './BarcodeLabel';
 
 interface ApprovedItem {
@@ -26,22 +28,30 @@ interface DeliveryBarcodeModalProps {
   trackingNumber: string;
 }
 
+interface LabelData {
+  sku: string;
+  productName: string;
+  variant: string;
+  unitIndex: number;
+}
+
+interface GroupedLabels {
+  sku: string;
+  productName: string;
+  variant: string;
+  labels: LabelData[];
+}
+
 const DeliveryBarcodeModal = ({ 
   isOpen, 
   onClose, 
   deliveryItems,
   trackingNumber 
 }: DeliveryBarcodeModalProps) => {
-  const printRef = useRef<HTMLDivElement>(null);
 
   // Generate labels for each approved unit
   const labels = useMemo(() => {
-    const result: Array<{
-      sku: string;
-      productName: string;
-      variant: string;
-      unitIndex: number;
-    }> = [];
+    const result: LabelData[] = [];
 
     deliveryItems.forEach(item => {
       if (item.quantity_approved > 0 && item.order_items?.product_variants) {
@@ -65,23 +75,36 @@ const DeliveryBarcodeModal = ({
     return result;
   }, [deliveryItems]);
 
+  // Group labels by SKU for individual printing
+  const groupedLabels = useMemo(() => {
+    const groups: Record<string, GroupedLabels> = {};
+
+    labels.forEach(label => {
+      if (!groups[label.sku]) {
+        groups[label.sku] = {
+          sku: label.sku,
+          productName: label.productName,
+          variant: label.variant,
+          labels: []
+        };
+      }
+      groups[label.sku].labels.push(label);
+    });
+
+    return Object.values(groups);
+  }, [labels]);
+
   const totalApproved = labels.length;
-  const uniqueProducts = new Set(labels.map(l => l.sku)).size;
+  const uniqueProducts = groupedLabels.length;
 
-  const handlePrint = () => {
-    const printContent = printRef.current;
-    if (!printContent) return;
-
-    const printWindow = window.open('', '_blank', 'width=600,height=400');
-    if (!printWindow) return;
-
-    // Combinar nombre y variante para texto compacto
-    const labelsWithCompactText = labels.map(label => ({
+  // Generate print HTML for a set of labels
+  const generatePrintHtml = (labelsToPrint: LabelData[]) => {
+    const labelsWithCompactText = labelsToPrint.map(label => ({
       ...label,
       compactText: label.variant ? `${label.productName} - ${label.variant}` : label.productName
     }));
 
-    printWindow.document.write(`
+    return `
       <!DOCTYPE html>
       <html>
       <head>
@@ -184,8 +207,26 @@ const DeliveryBarcodeModal = ({
         </script>
       </body>
       </html>
-    `);
+    `;
+  };
+
+  const handlePrint = (labelsToPrint: LabelData[] = labels) => {
+    if (labelsToPrint.length === 0) return;
+
+    const printWindow = window.open('', '_blank', 'width=600,height=400');
+    if (!printWindow) return;
+
+    printWindow.document.write(generatePrintHtml(labelsToPrint));
     printWindow.document.close();
+  };
+
+  const handlePrintAll = () => {
+    handlePrint(labels);
+  };
+
+  const handlePrintBySku = (sku: string) => {
+    const skuLabels = labels.filter(l => l.sku === sku);
+    handlePrint(skuLabels);
   };
 
   return (
@@ -204,25 +245,60 @@ const DeliveryBarcodeModal = ({
             <span><strong>{totalApproved}</strong> etiquetas</span>
             <span><strong>{uniqueProducts}</strong> productos únicos</span>
           </div>
-          <Button onClick={handlePrint} className="gap-2">
+          <Button onClick={handlePrintAll} className="gap-2">
             <Printer className="w-4 h-4" />
             Imprimir Todo
           </Button>
         </div>
 
-        {/* Preview Grid */}
-        <div 
-          ref={printRef}
-          className="flex-1 overflow-y-auto p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
-        >
-          {labels.map((label, index) => (
-            <BarcodeLabel
-              key={`${label.sku}-${index}`}
-              sku={label.sku}
-              productName={label.productName}
-              variant={label.variant}
-              index={index}
-            />
+        {/* Grouped Preview */}
+        <div className="flex-1 overflow-y-auto space-y-3 p-2">
+          {groupedLabels.map((group) => (
+            <Collapsible key={group.sku} defaultOpen>
+              <div className="border rounded-lg overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between p-3 bg-muted/50 hover:bg-muted cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <ChevronDown className="w-4 h-4 transition-transform [&[data-state=open]]:rotate-180" />
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm">
+                          {group.productName}
+                          {group.variant && <span className="text-muted-foreground ml-1">- {group.variant}</span>}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          SKU: {group.sku} • {group.labels.length} {group.labels.length === 1 ? 'etiqueta' : 'etiquetas'}
+                        </span>
+                      </div>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="gap-1.5"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrintBySku(group.sku);
+                      }}
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Imprimir
+                    </Button>
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="p-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 border-t">
+                    {group.labels.map((label, index) => (
+                      <BarcodeLabel
+                        key={`${label.sku}-${label.unitIndex}`}
+                        sku={label.sku}
+                        productName={label.productName}
+                        variant={label.variant}
+                        index={index}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
           ))}
         </div>
 
