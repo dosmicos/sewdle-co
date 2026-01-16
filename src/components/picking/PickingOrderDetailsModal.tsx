@@ -906,38 +906,28 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     return gateway;
   };
   
-  const paymentMethod = paymentGateways.length > 0 
-    ? formatPaymentMethod(paymentGateways[0]) 
+  // El ÚLTIMO método de pago en el array es el efectivo (orden cronológico de Shopify)
+  const actualPaymentMethod = paymentGateways.length > 0 
+    ? formatPaymentMethod(paymentGateways[paymentGateways.length - 1]) 
     : null;
 
   console.log('🔍 DEBUG Payment Method:', {
     rawPaymentGateways,
     paymentGateways,
-    paymentMethod,
+    actualPaymentMethod,
+    effectivePaymentGateway: paymentGateways[paymentGateways.length - 1],
     order_number: effectiveOrder.shopify_order?.order_number,
     has_raw_data: !!effectiveOrder.shopify_order?.raw_data
   });
 
-  // Determine if order is COD (Contraentrega) based on multiple criteria
+  // Determine if order is COD (Contraentrega) based on the EFFECTIVE (last) payment method
   const orderTags = effectiveOrder.shopify_order?.tags || '';
   const hasContraentregaTag = orderTags.toLowerCase().includes('contraentrega');
   const isPendingPayment = effectiveOrder.shopify_order?.financial_status === 'pending';
   
-  // Check if there are any NON-COD payment methods (means customer paid later with another method)
-  const hasNonCODPayment = paymentGateways.some((gateway: string) => 
-    gateway && !gateway.toLowerCase().includes('cash on delivery')
-  );
-  
-  // Only consider it COD if:
-  // 1. Has COD payment method, pending status, or Contraentrega tag
-  // 2. AND does NOT have other payment methods (customer hasn't paid with another method)
-  const hasCODIndicator = paymentMethod === 'Contraentrega' || isPendingPayment || hasContraentregaTag;
-  const isCODOrder = hasCODIndicator && !hasNonCODPayment;
-  
-  // Determine actual payment method to display (show the non-COD method if paid later)
-  const actualPaymentMethod = hasNonCODPayment 
-    ? formatPaymentMethod(paymentGateways.find((g: string) => !g.toLowerCase().includes('cash on delivery')) || paymentGateways[0])
-    : paymentMethod;
+  // isCODOrder is true if the LAST payment method is COD, or has contraentrega tag with pending status
+  const isCODOrder = actualPaymentMethod === 'Contraentrega' || 
+    (isPendingPayment && hasContraentregaTag);
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
@@ -983,7 +973,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       🚚 Enviado
                     </Badge>
                   )}
-                  {effectiveOrder.shopify_order?.financial_status === 'pending' && paymentMethod !== 'Contraentrega' && (
+                  {effectiveOrder.shopify_order?.financial_status === 'pending' && actualPaymentMethod !== 'Contraentrega' && (
                     <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5">
                       Pendiente
                     </Badge>

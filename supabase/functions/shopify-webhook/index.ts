@@ -30,37 +30,40 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
 }
 
 // Function to determine automatic tags based on payment gateway and line items
+// IMPORTANTE: Usa el ÚLTIMO método de pago del array como el efectivo (orden cronológico de Shopify)
 function determineAutoTags(order: any): string[] {
   const tags: string[] = [];
   
-  // Payment gateway names comes as array
+  // Payment gateway names comes as array in chronological order
   const paymentGateways = order.payment_gateway_names || [];
   
+  // El ÚLTIMO método de pago es el efectivo (el cliente pudo intentar varios)
+  const effectivePaymentMethod = paymentGateways.length > 0
+    ? paymentGateways[paymentGateways.length - 1]
+    : null;
+  
   console.log('💳 Payment gateways detectados:', paymentGateways);
+  console.log('💳 Método de pago EFECTIVO (último):', effectivePaymentMethod);
   
-  // Payment gateway rules for "Confirmado" tag
-  if (paymentGateways.some((gw: string) => gw === 'Addi Payment')) {
+  // Payment gateway rules based on EFFECTIVE (last) payment method only
+  if (effectivePaymentMethod === 'Addi Payment') {
     tags.push('Confirmado');
-    console.log('  → Addi Payment detectado → Tag "Confirmado"');
-  }
-  if (paymentGateways.some((gw: string) => gw.toLowerCase().includes('bold'))) {
+    console.log('  → Addi Payment (efectivo) → Tag "Confirmado"');
+  } else if (effectivePaymentMethod?.toLowerCase().includes('bold')) {
     tags.push('Confirmado');
-    console.log('  → Bold detectado → Tag "Confirmado"');
-  }
-  if (paymentGateways.some((gw: string) => gw.toLowerCase().includes('mercado pago'))) {
+    console.log('  → Bold (efectivo) → Tag "Confirmado"');
+  } else if (effectivePaymentMethod?.toLowerCase().includes('mercado pago')) {
     tags.push('Confirmado');
-    console.log('  → Mercado Pago detectado → Tag "Confirmado"');
-  }
-  
-  // Payment gateway rule for "Contraentrega" tag
-  // ONLY apply if order is NOT already paid (prevents re-adding after manual removal when marked as paid)
-  const financialStatus = order.financial_status || '';
-  if (paymentGateways.some((gw: string) => gw === 'Cash on Delivery (COD)')) {
+    console.log('  → Mercado Pago (efectivo) → Tag "Confirmado"');
+  } else if (effectivePaymentMethod === 'Cash on Delivery (COD)') {
+    // Payment gateway rule for "Contraentrega" tag
+    // ONLY apply if order is NOT already paid
+    const financialStatus = order.financial_status || '';
     if (financialStatus !== 'paid') {
       tags.push('Contraentrega');
-      console.log('  → Cash on Delivery detectado (no pagado) → Tag "Contraentrega"');
+      console.log('  → Cash on Delivery (efectivo, no pagado) → Tag "Contraentrega"');
     } else {
-      console.log('  → Cash on Delivery detectado pero pedido ya pagado → NO aplicar "Contraentrega"');
+      console.log('  → Cash on Delivery (efectivo) pero pedido ya pagado → NO aplicar "Contraentrega"');
     }
   }
   
