@@ -211,8 +211,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Actualizar sesión siempre
     setSession(newSession);
     
-    // Determinar si hay que reprocesar: usuario diferente O token diferente
+    // Eventos que SIEMPRE deben reprocesar el perfil
+    const forceReprocessEvents = ['SIGNED_IN', 'INITIAL_SESSION', 'USER_UPDATED'];
+    const isForceReprocessEvent = forceReprocessEvents.includes(event);
+    
+    // Determinar si hay que reprocesar: evento forzado O usuario/token diferente
     const shouldReprocess = 
+      isForceReprocessEvent ||
       newSession.user.id !== lastProcessedUserIdRef.current ||
       newSession.access_token !== lastProcessedAccessTokenRef.current;
     
@@ -227,14 +232,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userProfile = await createUserProfile(newSession);
       
-      // Debug log en desarrollo
-      if (import.meta.env.DEV) {
-        console.log('[AuthContext] User profile created:', {
-          email: userProfile.email,
-          requiresPasswordChange: userProfile.requiresPasswordChange
-        });
-      }
-      
       setUser(userProfile);
       
       // Guardar referencias para evitar reprocesamiento innecesario
@@ -247,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: newSession.user.email || '',
         role: 'Administrador',
         name: newSession.user.email,
-        requiresPasswordChange: newSession.user.user_metadata?.requires_password_change || false
+        requiresPasswordChange: newSession.user.user_metadata?.requires_password_change === true
       });
     } finally {
       setLoading(false);
