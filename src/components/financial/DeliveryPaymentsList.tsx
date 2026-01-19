@@ -225,6 +225,14 @@ export const DeliveryPaymentsList = () => {
     }, 0);
   }, [selectedPayments, filteredPayments]);
 
+  // Calculate total billable units of selected payments
+  const selectedBillableUnits = useMemo(() => {
+    return selectedPayments.reduce((sum, paymentId) => {
+      const payment = filteredPayments.find(p => p.id === paymentId);
+      return sum + (payment?.billable_units || 0);
+    }, 0);
+  }, [selectedPayments, filteredPayments]);
+
   if (loading) {
     return (
       <Card>
@@ -338,9 +346,11 @@ export const DeliveryPaymentsList = () => {
           {selectedPayments.length > 0 && (
             <div className="mb-4 p-4 bg-muted rounded-lg">
               <div className="flex items-center justify-between">
-                <div className="text-sm">
+              <div className="text-sm">
                   <div>{selectedPayments.length} pago(s) seleccionado(s)</div>
-                  <div className="font-medium text-foreground">Total: {formatCurrency(selectedPaymentsTotal)}</div>
+                  <div className="font-medium text-foreground">
+                    Total Facturable: {selectedBillableUnits.toLocaleString('es-CO')} uds · {formatCurrency(selectedPaymentsTotal)}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button 
