@@ -65,31 +65,75 @@ function getStateCode(department: string): string {
 
 // Get DANE code from database - queries shipping_coverage table
 async function getDaneCodeFromDB(supabase: any, city: string, department?: string): Promise<string> {
+  const originalCity = city.trim();
   const normalizedCity = city.toLowerCase().trim()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
-  console.log(`🔍 Looking up DANE code for city: "${city}" (normalized: "${normalizedCity}")`);
+  console.log(`🔍 Looking up DANE code for city: "${originalCity}" (normalized: "${normalizedCity}")`);
   
-  // Try exact match first
-  let query = supabase
+  // Step 1: Try exact match with ORIGINAL name (preserves accents like "Fómeque")
+  let { data, error } = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
-    .ilike('municipality', normalizedCity)
+    .ilike('municipality', originalCity)
     .limit(1);
   
-  let { data, error } = await query;
-  
   if (data && data.length > 0) {
-    console.log(`✅ DANE code found (exact): "${city}" → "${data[0].dane_code}"`);
+    console.log(`✅ DANE code found (exact with accents): "${originalCity}" → "${data[0].dane_code}"`);
     return data[0].dane_code;
   }
   
-  // Try partial match
-  const { data: partialData, error: partialError } = await supabase
+  // Step 2: If department provided, get all municipalities from that department and do accent-insensitive comparison
+  if (department) {
+    const normalizedDept = department.toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
+    // Get all municipalities from database (for the department if possible)
+    const { data: allMunicipalities } = await supabase
+      .from('shipping_coverage')
+      .select('dane_code, municipality, department')
+      .limit(2000);
+    
+    if (allMunicipalities && allMunicipalities.length > 0) {
+      // Find match by normalizing both sides
+      const match = allMunicipalities.find((item: any) => {
+        const itemMunicipality = item.municipality.toLowerCase().trim()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const itemDept = item.department.toLowerCase().trim()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        // Match city AND department (accent-insensitive)
+        const cityMatches = itemMunicipality === normalizedCity;
+        const deptMatches = itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
+        
+        return cityMatches && deptMatches;
+      });
+      
+      if (match) {
+        console.log(`✅ DANE code found (accent-insensitive + dept): "${originalCity}, ${department}" → "${match.dane_code}" (${match.municipality})`);
+        return match.dane_code;
+      }
+      
+      // Try city match only (accent-insensitive)
+      const cityOnlyMatch = allMunicipalities.find((item: any) => {
+        const itemMunicipality = item.municipality.toLowerCase().trim()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return itemMunicipality === normalizedCity;
+      });
+      
+      if (cityOnlyMatch) {
+        console.log(`✅ DANE code found (accent-insensitive): "${originalCity}" → "${cityOnlyMatch.dane_code}" (${cityOnlyMatch.municipality})`);
+        return cityOnlyMatch.dane_code;
+      }
+    }
+  }
+  
+  // Step 3: Try partial match with both original and normalized
+  const { data: partialData } = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
-    .or(`municipality.ilike.%${normalizedCity}%,municipality.ilike.${normalizedCity}%`)
-    .limit(5);
+    .or(`municipality.ilike.%${originalCity}%,municipality.ilike.%${normalizedCity}%`)
+    .limit(10);
   
   if (partialData && partialData.length > 0) {
     // If department is provided, try to match it
@@ -104,18 +148,18 @@ async function getDaneCodeFromDB(supabase: any, city: string, department?: strin
       });
       
       if (deptMatch) {
-        console.log(`✅ DANE code found (dept match): "${city}, ${department}" → "${deptMatch.dane_code}"`);
+        console.log(`✅ DANE code found (partial + dept): "${originalCity}, ${department}" → "${deptMatch.dane_code}"`);
         return deptMatch.dane_code;
       }
     }
     
     // Return first partial match
-    console.log(`✅ DANE code found (partial): "${city}" → "${partialData[0].dane_code}" (${partialData[0].municipality})`);
+    console.log(`✅ DANE code found (partial): "${originalCity}" → "${partialData[0].dane_code}" (${partialData[0].municipality})`);
     return partialData[0].dane_code;
   }
   
   // Fallback to Bogotá
-  console.log(`⚠️ DANE code not found for "${city}", using Bogotá fallback (11001000)`);
+  console.log(`⚠️ DANE code not found for "${originalCity}", using Bogotá fallback (11001000)`);
   return '11001000';
 }
 
