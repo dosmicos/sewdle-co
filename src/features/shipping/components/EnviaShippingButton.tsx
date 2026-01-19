@@ -253,6 +253,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Labranzagrande, Boyacá → ServiEntrega Premier (COD y Sin COD)
+      if (dept.includes('boyaca') && city.includes('labranzagrande')) {
+        setRecommendedCarrier('servientrega');
+        return;
+      }
+
       // Dosquebradas, Risaralda → Coordinadora (COD y Sin COD)
       if (dept.includes('risaralda') && city.includes('dosquebradas')) {
         setRecommendedCarrier('coordinadora');
