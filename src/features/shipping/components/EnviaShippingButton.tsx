@@ -83,7 +83,8 @@ const CUNDINAMARCA_COORDINADORA_CITIES = [
 // Municipios del Valle de Aburrá (Antioquia) donde Coordinadora es preferido
 const VALLE_ABURRA_CITIES = [
   'medellin', 'bello', 'itagui', 'envigado', 'sabaneta',
-  'la estrella', 'caldas', 'copacabana', 'girardota', 'barbosa'
+  'la estrella', 'caldas', 'copacabana', 'girardota', 'barbosa',
+  'rionegro'
 ];
 
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
