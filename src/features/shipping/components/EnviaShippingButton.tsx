@@ -80,6 +80,12 @@ const CUNDINAMARCA_COORDINADORA_CITIES = [
   'girardot', 'villeta', 'choconta', 'suesca', 'guaduas'
 ];
 
+// Municipios del Valle de Aburrá (Antioquia) donde Coordinadora es preferido
+const VALLE_ABURRA_CITIES = [
+  'medellin', 'bello', 'itagui', 'envigado', 'sabaneta',
+  'la estrella', 'caldas', 'copacabana', 'girardota', 'barbosa'
+];
+
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   shopifyOrderId,
   orderNumber,
@@ -197,9 +203,17 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         // Municipios pequeños de Cundinamarca → default (Interrapidísimo)
       }
 
-      if ((dept.includes('antioquia') || dept === 'ant') && city.includes('medellin')) {
-        setRecommendedCarrier('coordinadora');
-        return;
+      // Valle de Aburrá (Antioquia) → Coordinadora
+      if (dept.includes('antioquia') || dept === 'ant') {
+        const isValleAburraCity = VALLE_ABURRA_CITIES.some(
+          valleCity => city.includes(valleCity) || city === valleCity
+        );
+        
+        if (isValleAburraCity) {
+          setRecommendedCarrier('coordinadora');
+          return;
+        }
+        // Otros municipios de Antioquia → default (Interrapidísimo)
       }
 
       // Jamundí, Valle del Cauca → Coordinadora
