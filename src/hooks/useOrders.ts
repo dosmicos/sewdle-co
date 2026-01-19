@@ -122,8 +122,25 @@ export const useOrders = () => {
       if (orderData.products.length > 0) {
         console.log('Creating order items for products:', orderData.products);
         
-        const orderItems = orderData.products.map(item => {
-          console.log('Processing product item:', item);
+        // Consolidar items por variantId para evitar duplicados
+        const consolidatedItems: Record<string, { variantId: string; quantity: number; unitPrice: number }> = {};
+        
+        orderData.products.forEach(item => {
+          if (consolidatedItems[item.variantId]) {
+            // Sumar cantidad si ya existe
+            consolidatedItems[item.variantId].quantity += item.quantity;
+            console.log(`Consolidating duplicate variant ${item.variantId}: new quantity = ${consolidatedItems[item.variantId].quantity}`);
+          } else {
+            consolidatedItems[item.variantId] = {
+              variantId: item.variantId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice
+            };
+          }
+        });
+
+        const orderItems = Object.values(consolidatedItems).map(item => {
+          console.log('Processing consolidated product item:', item);
           return {
             order_id: order.id,
             product_variant_id: item.variantId,
@@ -133,7 +150,7 @@ export const useOrders = () => {
           };
         });
 
-        console.log('Order items to insert:', orderItems);
+        console.log('Order items to insert (consolidated):', orderItems);
 
         const { error: itemsError } = await supabase
           .from('order_items')
