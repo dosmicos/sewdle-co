@@ -72,6 +72,14 @@ const formatDate = (dateString: string) => {
   });
 };
 
+// Municipios grandes de Cundinamarca donde Coordinadora es preferido
+const CUNDINAMARCA_COORDINADORA_CITIES = [
+  'bogota', 'soacha', 'chia', 'zipaquira', 'facatativa', 'subachoque',
+  'cajica', 'cota', 'funza', 'mosquera', 'madrid', 'tenjo', 'tabio',
+  'la calera', 'tocancipa', 'gachancipa', 'sibate', 'fusagasuga',
+  'girardot', 'villeta', 'choconta', 'suesca', 'guaduas'
+];
+
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   shopifyOrderId,
   orderNumber,
@@ -175,10 +183,18 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       const city = normalizeText(shippingAddress.city);
       const dept = normalizeText(shippingAddress.province);
 
+      // Cundinamarca: solo Coordinadora para Bogotá y municipios grandes
       if (dept.includes('cundinamarca') || dept.includes('bogota') || 
-          city.includes('bogota') || dept === 'dc' || dept === 'bog') {
-        setRecommendedCarrier('coordinadora');
-        return;
+          dept === 'dc' || dept === 'bog') {
+        const isBigCundinamarcaCity = CUNDINAMARCA_COORDINADORA_CITIES.some(
+          bigCity => city.includes(bigCity) || city === bigCity
+        );
+        
+        if (isBigCundinamarcaCity || city.includes('bogota')) {
+          setRecommendedCarrier('coordinadora');
+          return;
+        }
+        // Municipios pequeños de Cundinamarca → default (Interrapidísimo)
       }
 
       if ((dept.includes('antioquia') || dept === 'ant') && city.includes('medellin')) {
