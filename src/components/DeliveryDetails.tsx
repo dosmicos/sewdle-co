@@ -971,6 +971,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const discrepancies = getDiscrepancies();
   const canEdit = canEditDeliveries && ['pending', 'in_quality'].includes(delivery.status);
   const canProcessQuality = canEditDeliveries && (['pending', 'in_quality', 'approved', 'partial_approved'].includes(delivery.status) || isReEditingQuality);
+  const needsInitialQualityProcess = ['pending', 'in_quality'].includes(delivery.status);
   const hasDiscrepancies = discrepancies.length > 0;
 
   // Get sorted delivery items
@@ -1557,7 +1558,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                 </div>
               )}
 
-              {!isEditing && !isReEditingQuality && (
+              {!isEditing && !isReEditingQuality && needsInitialQualityProcess && (
                 <div className="flex justify-end">
                   <Button 
                     onClick={handleQualitySubmit} 
