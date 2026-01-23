@@ -139,13 +139,21 @@ async function findCoverageRowNormalized(
   }
   
   // Priority 2: Municipality contains city or vice versa
-  match = candidates.find((row: any) => {
+  // Find ALL partial matches, then pick the longest municipality name (most specific)
+  // This prevents "Pitalito" from matching "Pital" incorrectly
+  const partialMatches = candidates.filter((row: any) => {
     const normMunicipality = normalizeForComparison(row.municipality);
     return normMunicipality.includes(normalizedCity) || normalizedCity.includes(normMunicipality);
   });
-  
-  if (match) {
-    console.log(`✅ DANE found (partial norm match): "${city}" → "${match.dane_code}" (${match.municipality})`);
+
+  if (partialMatches.length > 0) {
+    // Sort by municipality name length descending - longest (most specific) wins
+    // "Pitalito" (8 chars) beats "Pital" (5 chars)
+    partialMatches.sort((a: any, b: any) => 
+      b.municipality.length - a.municipality.length
+    );
+    match = partialMatches[0];
+    console.log(`✅ DANE found (partial norm match, ${partialMatches.length} candidates, picked longest): "${city}" → "${match.dane_code}" (${match.municipality})`);
     return match;
   }
   
