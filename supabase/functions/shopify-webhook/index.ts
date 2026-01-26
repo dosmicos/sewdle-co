@@ -402,6 +402,12 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     console.log('ℹ️ No se detectaron tags automáticos para este pedido');
   }
 
+  // AUTO-INVOICING: Check if order qualifies for automatic Alegra invoice
+  if (await checkAutoInvoiceEligibility(order, supabase, organizationId)) {
+    console.log('🧾 Pedido elegible para facturación automática');
+    triggerAutoInvoice(order.id, organizationId);
+  }
+
   return { success: true, order_number: order.order_number };
 }
 
@@ -731,6 +737,12 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     console.log('ℹ️ No se detectaron tags automáticos para este pedido actualizado');
   }
 
+  // AUTO-INVOICING: Check if order now qualifies (e.g., payment confirmed)
+  if (await checkAutoInvoiceEligibility(order, supabase, organizationId)) {
+    console.log('🧾 Pedido actualizado elegible para facturación automática');
+    triggerAutoInvoice(order.id, organizationId);
+  }
+
   return { success: true, order_number: order.order_number, action: 'UPDATE' };
 }
 
@@ -826,6 +838,81 @@ async function processSalesMetrics(order: any, supabase: any) {
       }
     }
   }
+}
+
+// ============= AUTO-INVOICE ELIGIBILITY & TRIGGER =============
+
+// Check if order qualifies for automatic Alegra invoice
+async function checkAutoInvoiceEligibility(order: any, supabase: any, organizationId: string): Promise<boolean> {
+  // 1. Only PAID orders
+  if (order.financial_status !== 'paid') {
+    console.log('🧾 Elegibilidad: NO - no está pagado');
+    return false;
+  }
+  
+  // 2. Only web orders (not draft orders, POS, etc.)
+  if (order.source_name !== 'web') {
+    console.log(`🧾 Elegibilidad: NO - origen no es web (${order.source_name})`);
+    return false;
+  }
+  
+  // 3. No contraentrega orders
+  const tags = (order.tags || '').toLowerCase();
+  if (tags.includes('contraentrega')) {
+    console.log('🧾 Elegibilidad: NO - es contraentrega');
+    return false;
+  }
+  
+  // 4. Not already invoiced (by tag)
+  if (tags.includes('facturado')) {
+    console.log('🧾 Elegibilidad: NO - ya tiene tag FACTURADO');
+    return false;
+  }
+  
+  // 5. Not already invoiced (by DB)
+  const { data } = await supabase
+    .from('shopify_orders')
+    .select('alegra_stamped, alegra_invoice_id')
+    .eq('shopify_order_id', order.id)
+    .eq('organization_id', organizationId)
+    .single();
+  
+  if (data?.alegra_stamped || data?.alegra_invoice_id) {
+    console.log('🧾 Elegibilidad: NO - ya tiene factura en DB');
+    return false;
+  }
+  
+  console.log('🧾 Elegibilidad: SÍ - cumple todos los criterios');
+  return true;
+}
+
+// Trigger auto-invoice Edge Function (fire-and-forget)
+function triggerAutoInvoice(shopifyOrderId: number, organizationId: string): void {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('⚠️ Variables de entorno faltantes para auto-invoice');
+    return;
+  }
+  
+  // Fire-and-forget - don't await, don't block the webhook response
+  fetch(`${supabaseUrl}/functions/v1/auto-invoice-alegra`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseServiceKey}`
+    },
+    body: JSON.stringify({ shopifyOrderId, organizationId })
+  }).then(response => {
+    if (response.ok) {
+      console.log(`✅ Auto-invoice triggered for order ${shopifyOrderId}`);
+    } else {
+      console.error(`⚠️ Auto-invoice request failed: ${response.status}`);
+    }
+  }).catch(err => {
+    console.error('⚠️ Error calling auto-invoice-alegra:', err.message);
+  });
 }
 
 Deno.serve(async (req) => {
