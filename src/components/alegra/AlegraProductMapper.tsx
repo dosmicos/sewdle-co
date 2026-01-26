@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, Link2, Unlink, RefreshCw, Package, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Search, Link2, Unlink, RefreshCw, Package, Check, X, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import AlegraProductSyncModal from './AlegraProductSyncModal';
 
 interface AlegraItem {
   id: string;
@@ -54,6 +55,9 @@ const AlegraProductMapper = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMoreItems, setHasMoreItems] = useState(false);
+  
+  // Sync modal state
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
 
   const fetchAlegraItems = async (page = 0) => {
     setIsLoading(true);
@@ -304,6 +308,25 @@ const AlegraProductMapper = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Sync Products Card */}
+          <div className="p-4 bg-muted/50 rounded-lg border border-dashed">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Upload className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-medium text-sm">Sincronizar Productos Nuevos</h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Detecta productos vendidos en Shopify que no existen en Alegra y créalos automáticamente.
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setSyncModalOpen(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Sincronizar
+              </Button>
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -483,6 +506,15 @@ const AlegraProductMapper = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Sync Products Modal */}
+      <AlegraProductSyncModal 
+        open={syncModalOpen}
+        onOpenChange={setSyncModalOpen}
+        onSyncComplete={() => {
+          fetchAlegraItems(0);
+        }}
+      />
     </div>
   );
 };
