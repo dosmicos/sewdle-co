@@ -165,7 +165,7 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
-      const allShopifyProducts: Array<{title: string; variant_title: string | null; sku: string | null; price: number}> = [];
+      const allShopifyProducts: Array<{title: string; variant_title: string | null; sku: string | null; price: number; created_at: string}> = [];
       const pageSize = 1000;
       let from = 0;
       let hasMoreProducts = true;
@@ -173,10 +173,10 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       while (hasMoreProducts) {
         const { data: batch, error: shopifyError } = await supabase
           .from('shopify_order_line_items')
-          .select('title, variant_title, sku, price')
+          .select('title, variant_title, sku, price, created_at')
           .eq('organization_id', currentOrganization.id)
           .gte('created_at', sixMonthsAgo.toISOString())
-          .order('title')
+          .order('created_at', { ascending: false })
           .range(from, from + pageSize - 1);
         
         if (shopifyError) throw shopifyError;
