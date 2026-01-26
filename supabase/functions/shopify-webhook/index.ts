@@ -402,10 +402,9 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     console.log('ℹ️ No se detectaron tags automáticos para este pedido');
   }
 
-  // AUTO-INVOICING: Check if order qualifies for automatic Alegra invoice
+  // AUTO-INVOICING: Solo log - el cron batch procesará pedidos elegibles cada 2 minutos
   if (await checkAutoInvoiceEligibility(order, supabase, organizationId)) {
-    console.log('🧾 Pedido elegible para facturación automática');
-    triggerAutoInvoice(order.id, organizationId);
+    console.log('🧾 Pedido elegible para facturación automática (se procesará por cron batch)');
   }
 
   return { success: true, order_number: order.order_number };
@@ -886,34 +885,8 @@ async function checkAutoInvoiceEligibility(order: any, supabase: any, organizati
   return true;
 }
 
-// Trigger auto-invoice Edge Function (fire-and-forget)
-function triggerAutoInvoice(shopifyOrderId: number, organizationId: string): void {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('⚠️ Variables de entorno faltantes para auto-invoice');
-    return;
-  }
-  
-  // Fire-and-forget - don't await, don't block the webhook response
-  fetch(`${supabaseUrl}/functions/v1/auto-invoice-alegra`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${supabaseServiceKey}`
-    },
-    body: JSON.stringify({ shopifyOrderId, organizationId })
-  }).then(response => {
-    if (response.ok) {
-      console.log(`✅ Auto-invoice triggered for order ${shopifyOrderId}`);
-    } else {
-      console.error(`⚠️ Auto-invoice request failed: ${response.status}`);
-    }
-  }).catch(err => {
-    console.error('⚠️ Error calling auto-invoice-alegra:', err.message);
-  });
-}
+// DEPRECATED: triggerAutoInvoice removed - now using cron batch processing
+// El cron cada 2 minutos busca pedidos pendientes y los procesa secuencialmente
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
