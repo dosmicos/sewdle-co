@@ -143,7 +143,7 @@ const DeliveryDetailsPage = () => {
   }, [deliveryId, fetchDeliveryByTrackingNumber, canViewDeliveries, navigate, delivery?.tracking_number]);
 
   const handleBack = (shouldRefresh?: boolean) => {
-    navigate(-1);
+    navigate('/deliveries');
   };
 
   if (!canViewDeliveries) {
