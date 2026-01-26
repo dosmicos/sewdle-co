@@ -234,8 +234,12 @@ async function createContact(orderData: any): Promise<any> {
       department: addressNormalized.department,
       country: 'Colombia',
     },
-    // Formato estructurado requerido por Alegra API v1
-    identification: {
+    // Formato plano (requerido para creación)
+    identificationType: 'CC',
+    identificationNumber: String(identification).slice(0, 20),
+    identification: String(identification).slice(0, 20),
+    // Formato objeto (por compatibilidad)
+    identificationObject: {
       type: 'CC',
       number: String(identification).slice(0, 20),
     },
