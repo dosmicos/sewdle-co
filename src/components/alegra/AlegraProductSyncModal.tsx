@@ -161,22 +161,41 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
         }
       }
       
-      // 1. Get unique products from Shopify order line items (last 6 months)
+      // 1. Get ALL unique products from Shopify order line items (last 6 months) with pagination
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
-      const { data: shopifyProducts, error: shopifyError } = await supabase
-        .from('shopify_order_line_items')
-        .select('title, variant_title, sku, price')
-        .eq('organization_id', currentOrganization.id)
-        .gte('created_at', sixMonthsAgo.toISOString())
-        .order('title');
+      const allShopifyProducts: Array<{title: string; variant_title: string | null; sku: string | null; price: number}> = [];
+      const pageSize = 1000;
+      let from = 0;
+      let hasMoreProducts = true;
       
-      if (shopifyError) throw shopifyError;
+      while (hasMoreProducts) {
+        const { data: batch, error: shopifyError } = await supabase
+          .from('shopify_order_line_items')
+          .select('title, variant_title, sku, price')
+          .eq('organization_id', currentOrganization.id)
+          .gte('created_at', sixMonthsAgo.toISOString())
+          .order('title')
+          .range(from, from + pageSize - 1);
+        
+        if (shopifyError) throw shopifyError;
+        
+        if (batch && batch.length > 0) {
+          allShopifyProducts.push(...batch);
+          from += pageSize;
+          hasMoreProducts = batch.length === pageSize;
+        } else {
+          hasMoreProducts = false;
+        }
+        
+        // Safety limit to prevent infinite loops
+        if (from > 50000) break;
+      }
       
       // 2. Deduplicate by title + variant
       const uniqueProducts = new Map<string, { title: string; variant_title: string | null; sku: string | null; price: number }>();
-      for (const p of shopifyProducts || []) {
+      for (const p of allShopifyProducts) {
         const key = `${p.title}|${p.variant_title || ''}`;
         if (!uniqueProducts.has(key)) {
           uniqueProducts.set(key, p);
