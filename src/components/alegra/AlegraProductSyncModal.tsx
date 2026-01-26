@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 
 interface MissingProduct {
   name: string;
+  shopifyTitle: string;
+  shopifyVariantTitle: string | null;
   sku: string | null;
   priceWithTax: number;
   priceWithoutTax: number;
@@ -205,6 +207,8 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
         const priceWithTax = parseFloat(String(product.price)) || 0;
         missing.push({
           name: fullName,
+          shopifyTitle: product.title,
+          shopifyVariantTitle: product.variant_title || null,
           sku: product.sku,
           priceWithTax,
           priceWithoutTax: Math.round(priceWithTax / 1.19),
@@ -241,38 +245,58 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
     setSyncResults({ success: 0, failed: 0 });
     
     try {
-      // Prepare items for bulk creation
-      const itemsToCreate = selectedProducts.map(p => ({
-        name: p.name,
-        reference: p.sku || undefined,
-        price: p.priceWithoutTax,
-        description: 'Sincronizado desde Shopify'
-      }));
-      
       // Create in batches of 10 to show progress
       const batchSize = 10;
       let successCount = 0;
       let failedCount = 0;
       
-      for (let i = 0; i < itemsToCreate.length; i += batchSize) {
-        const batch = itemsToCreate.slice(i, i + batchSize);
+      for (let i = 0; i < selectedProducts.length; i += batchSize) {
+        const batchProducts = selectedProducts.slice(i, i + batchSize);
+        
+        // Prepare items for bulk creation
+        const itemsToCreate = batchProducts.map(p => ({
+          name: p.name,
+          reference: p.sku || undefined,
+          price: p.priceWithoutTax,
+          description: 'Sincronizado desde Shopify'
+        }));
         
         const { data, error } = await supabase.functions.invoke('alegra-api', {
           body: { 
             action: 'create-items-bulk',
-            data: { items: batch }
+            data: { items: itemsToCreate }
           }
         });
         
         if (error) throw error;
         
         if (data?.success && Array.isArray(data.data)) {
-          const batchResults = data.data as Array<{ success: boolean }>;
-          successCount += batchResults.filter(r => r.success).length;
-          failedCount += batchResults.filter(r => !r.success).length;
+          const batchResults = data.data as Array<{ success: boolean; item?: { id: string; name: string } }>;
+          
+          // Save mappings for successfully created items
+          for (let j = 0; j < batchResults.length; j++) {
+            const result = batchResults[j];
+            const originalProduct = batchProducts[j];
+            
+            if (result.success && result.item?.id) {
+              successCount++;
+              
+              // Save mapping to database
+              await supabase.from('alegra_product_mapping').insert({
+                organization_id: currentOrganization!.id,
+                shopify_product_title: originalProduct.shopifyTitle,
+                shopify_variant_title: originalProduct.shopifyVariantTitle,
+                shopify_sku: originalProduct.sku,
+                alegra_item_id: result.item.id,
+                alegra_item_name: result.item.name
+              });
+            } else {
+              failedCount++;
+            }
+          }
         }
         
-        const progress = Math.min(100, Math.round(((i + batch.length) / itemsToCreate.length) * 100));
+        const progress = Math.min(100, Math.round(((i + batchProducts.length) / selectedProducts.length) * 100));
         setSyncProgress(progress);
         setSyncResults({ success: successCount, failed: failedCount });
       }
