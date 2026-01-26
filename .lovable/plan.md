@@ -1,72 +1,95 @@
 
-## Plan: Corregir Facturación Automática Duplicada + Cobertura Completa
+## Plan: Cambiar a Facturación Automática por Cron (Polling)
 
-### Diagnóstico del Problema
+### Cambio de Arquitectura
 
-He confirmado los dos problemas principales:
-
-#### Problema 1: Facturas Duplicadas (4 facturas para pedido #68028)
-Los logs muestran que **el lock atómico no está funcionando correctamente**:
+| Antes (Webhook) | Después (Cron) |
+|-----------------|----------------|
+| Cada webhook dispara `auto-invoice-alegra` | Un cron cada 2 minutos busca pedidos pendientes |
+| Race conditions con múltiples webhooks | Proceso secuencial, sin concurrencia |
+| Necesita locks complejos | No necesita locks (1 solo proceso) |
+| Fire-and-forget desde webhook | Controlado y predecible |
 
 ```text
-20:05:35Z → Crea factura DM46058
-20:05:46Z → Crea factura DM46059  
-20:06:31Z → Crea factura DM46060
-20:06:42Z → Crea factura DM46061
+┌─────────────────────────────────────────────────────────────┐
+│                    FLUJO ACTUAL (Webhook)                   │
+├─────────────────────────────────────────────────────────────┤
+│  Shopify ──webhook──> shopify-webhook ──fire──> auto-invoice│
+│                       ↓                         ↓           │
+│                    (paralelo)              (paralelo)       │
+│                    webhook A               invoice A        │
+│                    webhook B               invoice B  ← DUP │
+│                    webhook C               invoice C  ← DUP │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    FLUJO NUEVO (Cron)                       │
+├─────────────────────────────────────────────────────────────┤
+│  Shopify ──webhook──> shopify-webhook (guarda pedido)       │
+│                                                             │
+│  pg_cron (cada 2 min) ──> auto-invoice-alegra               │
+│                           ↓                                 │
+│                      (secuencial)                           │
+│                      pedido 1 → factura 1                   │
+│                      pedido 2 → factura 2                   │
+│                      pedido 3 → factura 3                   │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-**Causa**: El lock verifica `alegra_invoice_id = null`, pero el código guarda `alegra_invoice_id` **DESPUÉS** de crear la factura (línea 742). Esto crea una ventana de 5-10 segundos donde múltiples webhooks pueden adquirir el lock porque `alegra_invoice_id` sigue siendo `null`.
-
-Flujo actual problemático:
-```text
-0ms:  Webhook A adquiere lock (.eq('alegra_invoice_id', null) → TRUE) ✅
-1ms:  Webhook B adquiere lock (.eq('alegra_invoice_id', null) → TRUE) ✅ ← El lock de A no cambió alegra_invoice_id
-...
-5000ms: Webhook A crea factura y guarda alegra_invoice_id
-5000ms: Webhook B crea factura (ya pasó la verificación)
-```
-
-#### Problema 2: Error DIAN "la ciudad no es válida"
-El pedido #68028 tiene:
-- Ciudad: "El Rosal"
-- Provincia: "Cundinamarca"
-
-Pero en `ALEGRA_CITY_NORMALIZATIONS` solo hay ~10 ciudades principales. "El Rosal" no está, y el código asigna por defecto "Bogotá D.C." como departamento, lo cual es incorrecto.
-
-#### Problema 3: Pedidos no facturados
-Los pedidos con `source_name='shopify_draft_order'` no se facturan porque el código actual solo procesa `source_name='web'`. Según tu selección, todos los pedidos pagados deben facturarse.
 
 ---
 
-### Solución Propuesta
+### Cambios Requeridos
 
-#### 1. Corregir el Lock Atómico (Prevenir Duplicados)
-
-**Cambio clave**: Separar el "lock para crear factura" del "lock para procesar". Usar una columna dedicada `auto_invoice_lock_id` para evitar race conditions.
+#### 1. Modificar `shopify-webhook/index.ts`
+**Eliminar** la llamada `triggerAutoInvoice()`. El webhook solo guarda el pedido, no dispara facturación.
 
 ```typescript
-// ANTES (problemático)
-.eq('auto_invoice_processing', false)
-.is('alegra_invoice_id', null)  // ← Sigue null durante 5+ segundos
+// ANTES (línea ~1050)
+if (isEligible) {
+  triggerAutoInvoice(order.id, organization.id);
+}
 
-// DESPUÉS (correcto)
-.eq('auto_invoice_processing', false)
-.is('auto_invoice_lock_id', null)  // ← Se marca inmediatamente
-
-// Al adquirir lock, también setear un UUID único
-auto_invoice_lock_id: crypto.randomUUID()
+// DESPUÉS
+if (isEligible) {
+  console.log(`🧾 Pedido ${order.order_number} elegible para auto-invoice (se procesará por cron)`);
+}
 ```
 
-Flujo corregido:
-```text
-0ms:   Webhook A → lock_id = "abc123" (UPDATE exitoso)
-1ms:   Webhook B → .is('auto_invoice_lock_id', null) → FALSE → Rechazado ✅
-5000ms: Webhook A → Crea factura → Guarda alegra_invoice_id
+#### 2. Modificar `auto-invoice-alegra/index.ts`
+Cambiar de recibir un solo `shopifyOrderId` a **buscar todos los pedidos pendientes**:
+
+```typescript
+// NUEVO: Función para buscar pedidos pendientes de facturación
+async function findPendingOrders(supabase: any): Promise<Array<{shopify_order_id: number, organization_id: string}>> {
+  // Buscar pedidos:
+  // - financial_status = 'paid'
+  // - alegra_invoice_id IS NULL
+  // - NO tiene tag 'FACTURADO' ni 'AUTO_INVOICE_FAILED'
+  // - source_name != 'pos'
+  // - NO es contraentrega
+  // - created_at en últimos 7 días (evitar procesar histórico)
+  
+  const { data } = await supabase
+    .from('shopify_orders')
+    .select('shopify_order_id, organization_id, tags, source_name')
+    .eq('financial_status', 'paid')
+    .is('alegra_invoice_id', null)
+    .is('alegra_stamped', null)  // No procesado
+    .neq('source_name', 'pos')
+    .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+    .order('created_at', { ascending: true })  // Más antiguo primero
+    .limit(10)  // Máximo 10 por ejecución
+  
+  return (data || []).filter(order => {
+    const tags = (order.tags || '').toLowerCase();
+    return !tags.includes('contraentrega') 
+        && !tags.includes('facturado')
+        && !tags.includes('auto_invoice_failed');
+  });
+}
 ```
 
-#### 2. Corregir Normalización de Ciudad/Departamento
-
-Usar la tabla `shipping_coverage` (1,102 municipios) para normalizar la ciudad correctamente:
+#### 3. Agregar Normalización de Ciudad desde `shipping_coverage`
 
 ```typescript
 async function normalizeAlegraCityFromDB(
@@ -75,71 +98,107 @@ async function normalizeAlegraCityFromDB(
   cityName: string,
   provinceName: string
 ): Promise<{ city: string; department: string }> {
-  // 1. Buscar municipio exacto
+  const normalizedCity = cityName.toLowerCase().trim();
+  
+  // 1. Buscar en shipping_coverage (tiene 1,100+ municipios)
   const { data: match } = await supabase
     .from('shipping_coverage')
     .select('municipality, department')
     .eq('organization_id', organizationId)
-    .ilike('municipality', cityName)
+    .ilike('municipality', normalizedCity)
     .limit(1)
-    .maybeSingle()
+    .maybeSingle();
 
   if (match) {
-    return { city: match.municipality, department: match.department }
+    console.log(`📍 Ciudad normalizada desde DB: ${cityName} → ${match.municipality}, ${match.department}`);
+    return { city: match.municipality, department: match.department };
   }
 
-  // 2. Usar provincia de Shopify como departamento
-  if (provinceName && provinceName.toLowerCase() !== 'bogotá') {
-    return { city: cityName, department: provinceName }
+  // 2. Usar provincia de Shopify como departamento (si disponible)
+  if (provinceName && !provinceName.toLowerCase().includes('bogot')) {
+    console.log(`📍 Usando provincia de Shopify: ${cityName}, ${provinceName}`);
+    return { city: cityName, department: provinceName };
   }
 
-  // 3. Fallback a diccionario estático
-  return ALEGRA_CITY_NORMALIZATIONS[cityName.toLowerCase()] || 
-         { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' }
+  // 3. Fallback a diccionario estático o Bogotá por defecto
+  const staticMatch = ALEGRA_CITY_NORMALIZATIONS[normalizedCity];
+  if (staticMatch) return staticMatch;
+
+  console.log(`⚠️ Ciudad no encontrada, usando Bogotá por defecto: ${cityName}`);
+  return { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' };
 }
 ```
 
-#### 3. Ampliar Pedidos Elegibles
-
-Cambiar la validación para incluir todos los pedidos pagados:
+#### 4. Nuevo Endpoint para Cron (Batch Processing)
 
 ```typescript
-// ANTES
-if (orderData.source_name !== 'web') {
-  return { success: false, error: 'No es pedido web' }
-}
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
 
-// DESPUÉS
-// Solo excluir POS
-if (orderData.source_name === 'pos') {
-  return { success: false, error: 'Pedido POS' }
-}
-```
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
 
-#### 4. Evitar Múltiples Facturas en Alegra por Error DIAN
-
-Si el stamp falla, no crear una factura nueva. Dejar la factura existente como "pendiente":
-
-```typescript
-try {
-  const stampedInvoice = await stampInvoice(invoice.id)
-  // ... éxito
-} catch (stampError: any) {
-  // NO re-lanzar el error (evita que el webhook reintente)
-  // Marcar pedido como "pendiente de revisión"
-  await supabase.from('shopify_orders').update({
-    alegra_invoice_id: invoice.id,
-    alegra_invoice_number: invoiceNumber,
-    alegra_stamped: false,  // No emitido
-    alegra_stamp_error: stampError.message,  // Guardar error
-  }).eq('shopify_order_id', shopifyOrderId)
+  const body = await req.json().catch(() => ({}));
   
-  return { 
-    success: false, 
-    invoiceId: invoice.id, 
-    error: `DIAN rechazó: ${stampError.message}` 
+  // Modo 1: Pedido específico (para reintento manual)
+  if (body.shopifyOrderId && body.organizationId) {
+    const result = await processAutoInvoice(body.shopifyOrderId, body.organizationId, supabase);
+    return new Response(JSON.stringify(result), { headers: corsHeaders });
   }
-}
+
+  // Modo 2: Batch automático (cron)
+  console.log('🔄 Iniciando procesamiento batch de facturas...');
+  const pendingOrders = await findPendingOrders(supabase);
+  
+  if (pendingOrders.length === 0) {
+    console.log('✅ No hay pedidos pendientes de facturación');
+    return new Response(JSON.stringify({ processed: 0, message: 'No pending orders' }), { headers: corsHeaders });
+  }
+
+  console.log(`📋 Encontrados ${pendingOrders.length} pedidos pendientes`);
+  
+  const results = [];
+  for (const order of pendingOrders) {
+    try {
+      console.log(`\n🧾 Procesando pedido ${order.shopify_order_id}...`);
+      const result = await processAutoInvoice(order.shopify_order_id, order.organization_id, supabase);
+      results.push({ orderId: order.shopify_order_id, ...result });
+      
+      // Esperar 2 segundos entre pedidos para no saturar Alegra
+      await sleep(2000);
+    } catch (err: any) {
+      results.push({ orderId: order.shopify_order_id, success: false, error: err.message });
+    }
+  }
+
+  return new Response(JSON.stringify({ 
+    processed: results.length,
+    success: results.filter(r => r.success).length,
+    failed: results.filter(r => !r.success).length,
+    results 
+  }), { headers: corsHeaders });
+});
+```
+
+#### 5. Configurar Cron Job (SQL)
+
+```sql
+-- Ejecutar auto-invoice cada 2 minutos
+SELECT cron.schedule(
+  'auto-invoice-batch',
+  '*/2 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/auto-invoice-alegra',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzZGNzcXNmbmNrZXVhZmp5cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NzQyODksImV4cCI6MjA2NTM1MDI4OX0.LA-Z6t1uSQrVvZsPimxy65uPSEAf3sOHzOQD_zdt-mI"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
 ```
 
 ---
@@ -148,62 +207,40 @@ try {
 
 | Archivo | Cambios |
 |---------|---------|
-| `supabase/functions/auto-invoice-alegra/index.ts` | 1) Usar `auto_invoice_lock_id` para lock atómico<br>2) Agregar `normalizeAlegraCityFromDB()` con consulta a `shipping_coverage`<br>3) Cambiar validación de `source_name` para incluir draft orders<br>4) Capturar error de stamp sin re-lanzar<br>5) Pasar `provinceName` de shipping_address para mejor normalización |
-
-### Migración de Base de Datos
-
-```sql
--- Columna para lock más robusto
-ALTER TABLE shopify_orders 
-ADD COLUMN IF NOT EXISTS auto_invoice_lock_id UUID;
-
--- Columna para guardar errores de stamp
-ALTER TABLE shopify_orders 
-ADD COLUMN IF NOT EXISTS alegra_stamp_error TEXT;
-
--- Índice para lock atómico
-CREATE INDEX IF NOT EXISTS idx_shopify_orders_auto_invoice_lock
-ON shopify_orders (organization_id, shopify_order_id) 
-WHERE auto_invoice_lock_id IS NULL AND alegra_invoice_id IS NULL;
-```
+| `supabase/functions/shopify-webhook/index.ts` | Eliminar llamada a `triggerAutoInvoice()` (líneas 889-916) |
+| `supabase/functions/auto-invoice-alegra/index.ts` | 1) Agregar `findPendingOrders()`<br>2) Agregar `normalizeAlegraCityFromDB()` con consulta a shipping_coverage<br>3) Modificar handler para soportar batch y single<br>4) Cambiar elegibilidad: todos pagados excepto POS/contraentrega<br>5) Manejar errores DIAN sin crear duplicados |
 
 ---
 
-### Resumen de Cambios Técnicos
+### Beneficios del Cambio
 
-1. **Lock Atómico Mejorado**:
-   - Agregar columna `auto_invoice_lock_id` (UUID)
-   - Marcar inmediatamente al intentar lock (no depende de `alegra_invoice_id`)
-   - Limpiar lock solo en `finally`
+1. **Sin duplicados**: Proceso secuencial, 1 pedido a la vez
+2. **Sin race conditions**: No hay concurrencia
+3. **Más control**: Fácil de pausar, reiniciar, debuggear
+4. **Menos carga**: No dispara en cada webhook
+5. **Mejor para lotes**: Puede procesar pedidos históricos
+6. **Tolerante a fallos**: Si falla, reintenta en 2 min
 
-2. **Normalización de Ciudad**:
-   - Consultar tabla `shipping_coverage` primero
-   - Usar `shipping_address.province` como fallback para departamento
-   - Mantener diccionario estático solo para casos comunes
+### Posibles Desventajas
 
-3. **Cobertura de Pedidos**:
-   - Eliminar filtro `source_name === 'web'`
-   - Solo excluir POS y contraentrega
-
-4. **Manejo de Errores DIAN**:
-   - Guardar factura creada aunque stamp falle
-   - No crear nuevas facturas (la existente queda "pendiente")
-   - Agregar columna `alegra_stamp_error` para debugging
+- **Latencia de 0-2 minutos**: La factura no se crea instantáneamente (pero para propósitos contables esto es aceptable)
 
 ---
 
-### Resultado Esperado
+### Configuración Adicional
 
-1. **Sin duplicados**: El lock atómico funciona correctamente
-2. **Ciudades correctas**: "El Rosal" → Cundinamarca (no Bogotá D.C.)
-3. **Todos los pagados**: Draft orders también se facturan
-4. **Errores manejables**: Una sola factura por pedido, se puede corregir y reintentar
+Para el cron job se requiere habilitar las extensiones `pg_cron` y `pg_net` en Supabase (si no están habilitadas).
 
 ---
 
-### Pedidos Afectados Actuales
+### Resumen de Implementación
 
-Después de implementar, necesitarás:
-1. **Anular facturas duplicadas** en Alegra (DM46058, DM46059, DM46060, DM46061 del pedido #68028)
-2. **Limpiar tags** `AUTO_INVOICE_FAILED` de pedidos que se reprocesarán
-3. **Reprocesar** pedidos fallidos manualmente o con un trigger
+1. **Migración SQL**: Crear cron job cada 2 minutos
+2. **Modificar webhook**: Eliminar trigger de auto-invoice
+3. **Modificar auto-invoice**: 
+   - Modo batch (sin parámetros) → busca pendientes
+   - Modo single (con orderId) → procesa uno específico
+   - Normalización de ciudad desde `shipping_coverage`
+   - Todos los pagados elegibles (no solo web)
+   - No duplicar facturas si DIAN rechaza
+4. **Desplegar ambas funciones**
