@@ -1,246 +1,204 @@
 
-## Plan: Cambiar a Facturación Automática por Cron (Polling)
+## Plan: Reprocesar Pedidos con `alegra_stamped = false`
 
-### Cambio de Arquitectura
+### Problema Actual
+La función `findPendingOrders` excluye pedidos donde `alegra_stamped = false`, dejando en "limbo" aquellos donde la factura se creó pero el stamping DIAN falló.
 
-| Antes (Webhook) | Después (Cron) |
-|-----------------|----------------|
-| Cada webhook dispara `auto-invoice-alegra` | Un cron cada 2 minutos busca pedidos pendientes |
-| Race conditions con múltiples webhooks | Proceso secuencial, sin concurrencia |
-| Necesita locks complejos | No necesita locks (1 solo proceso) |
-| Fire-and-forget desde webhook | Controlado y predecible |
+### Solución
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    FLUJO ACTUAL (Webhook)                   │
+│              FLUJO ACTUAL vs NUEVO                          │
 ├─────────────────────────────────────────────────────────────┤
-│  Shopify ──webhook──> shopify-webhook ──fire──> auto-invoice│
-│                       ↓                         ↓           │
-│                    (paralelo)              (paralelo)       │
-│                    webhook A               invoice A        │
-│                    webhook B               invoice B  ← DUP │
-│                    webhook C               invoice C  ← DUP │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                    FLUJO NUEVO (Cron)                       │
-├─────────────────────────────────────────────────────────────┤
-│  Shopify ──webhook──> shopify-webhook (guarda pedido)       │
+│  ANTES:                                                     │
+│  findPendingOrders → .is('alegra_stamped', null)            │
+│  Resultado: Solo pedidos NUNCA procesados                   │
 │                                                             │
-│  pg_cron (cada 2 min) ──> auto-invoice-alegra               │
-│                           ↓                                 │
-│                      (secuencial)                           │
-│                      pedido 1 → factura 1                   │
-│                      pedido 2 → factura 2                   │
-│                      pedido 3 → factura 3                   │
+│  DESPUÉS:                                                   │
+│  findPendingOrders → NULL o FALSE                           │
+│  + verificación en Alegra antes de crear factura            │
+│  Resultado: También reintenta los que fallaron en DIAN      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Cambios Requeridos
+### Cambios en `auto-invoice-alegra/index.ts`
 
-#### 1. Modificar `shopify-webhook/index.ts`
-**Eliminar** la llamada `triggerAutoInvoice()`. El webhook solo guarda el pedido, no dispara facturación.
+#### 1. Modificar `findPendingOrders()` (líneas 571-604)
 
-```typescript
-// ANTES (línea ~1050)
-if (isEligible) {
-  triggerAutoInvoice(order.id, organization.id);
-}
-
-// DESPUÉS
-if (isEligible) {
-  console.log(`🧾 Pedido ${order.order_number} elegible para auto-invoice (se procesará por cron)`);
-}
-```
-
-#### 2. Modificar `auto-invoice-alegra/index.ts`
-Cambiar de recibir un solo `shopifyOrderId` a **buscar todos los pedidos pendientes**:
+Cambiar la consulta para incluir pedidos con `alegra_stamped = false`:
 
 ```typescript
-// NUEVO: Función para buscar pedidos pendientes de facturación
-async function findPendingOrders(supabase: any): Promise<Array<{shopify_order_id: number, organization_id: string}>> {
-  // Buscar pedidos:
-  // - financial_status = 'paid'
-  // - alegra_invoice_id IS NULL
-  // - NO tiene tag 'FACTURADO' ni 'AUTO_INVOICE_FAILED'
-  // - source_name != 'pos'
-  // - NO es contraentrega
-  // - created_at en últimos 7 días (evitar procesar histórico)
+async function findPendingOrders(supabase: any): Promise<Array<{
+  shopify_order_id: number, 
+  organization_id: string, 
+  order_number: string,
+  alegra_invoice_id: number | null,  // NUEVO: para saber si ya tiene factura
+  alegra_stamped: boolean | null     // NUEVO: para saber el estado
+}>> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('shopify_orders')
-    .select('shopify_order_id, organization_id, tags, source_name')
+    .select('shopify_order_id, organization_id, order_number, tags, source_name, alegra_invoice_id, alegra_stamped')
     .eq('financial_status', 'paid')
-    .is('alegra_invoice_id', null)
-    .is('alegra_stamped', null)  // No procesado
+    // CAMBIO: Incluir NULL y FALSE (antes solo NULL)
+    .or('alegra_stamped.is.null,alegra_stamped.eq.false')
     .neq('source_name', 'pos')
-    .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-    .order('created_at', { ascending: true })  // Más antiguo primero
-    .limit(10)  // Máximo 10 por ejecución
+    .gte('created_at', sevenDaysAgo)
+    .order('created_at', { ascending: true })
+    .limit(10)
   
-  return (data || []).filter(order => {
-    const tags = (order.tags || '').toLowerCase();
-    return !tags.includes('contraentrega') 
-        && !tags.includes('facturado')
-        && !tags.includes('auto_invoice_failed');
-  });
+  // ... resto del filtrado igual
 }
 ```
 
-#### 3. Agregar Normalización de Ciudad desde `shipping_coverage`
+#### 2. Agregar función `verifyNoExistingInvoice()` (nueva función)
+
+Antes de crear una factura, verificar en Alegra que no exista una por número de pedido:
 
 ```typescript
-async function normalizeAlegraCityFromDB(
-  supabase: any,
-  organizationId: string,
-  cityName: string,
-  provinceName: string
-): Promise<{ city: string; department: string }> {
-  const normalizedCity = cityName.toLowerCase().trim();
-  
-  // 1. Buscar en shipping_coverage (tiene 1,100+ municipios)
-  const { data: match } = await supabase
-    .from('shipping_coverage')
-    .select('municipality, department')
-    .eq('organization_id', organizationId)
-    .ilike('municipality', normalizedCity)
-    .limit(1)
-    .maybeSingle();
-
-  if (match) {
-    console.log(`📍 Ciudad normalizada desde DB: ${cityName} → ${match.municipality}, ${match.department}`);
-    return { city: match.municipality, department: match.department };
-  }
-
-  // 2. Usar provincia de Shopify como departamento (si disponible)
-  if (provinceName && !provinceName.toLowerCase().includes('bogot')) {
-    console.log(`📍 Usando provincia de Shopify: ${cityName}, ${provinceName}`);
-    return { city: cityName, department: provinceName };
-  }
-
-  // 3. Fallback a diccionario estático o Bogotá por defecto
-  const staticMatch = ALEGRA_CITY_NORMALIZATIONS[normalizedCity];
-  if (staticMatch) return staticMatch;
-
-  console.log(`⚠️ Ciudad no encontrada, usando Bogotá por defecto: ${cityName}`);
-  return { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' };
-}
-```
-
-#### 4. Nuevo Endpoint para Cron (Batch Processing)
-
-```typescript
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  );
-
-  const body = await req.json().catch(() => ({}));
-  
-  // Modo 1: Pedido específico (para reintento manual)
-  if (body.shopifyOrderId && body.organizationId) {
-    const result = await processAutoInvoice(body.shopifyOrderId, body.organizationId, supabase);
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
-  }
-
-  // Modo 2: Batch automático (cron)
-  console.log('🔄 Iniciando procesamiento batch de facturas...');
-  const pendingOrders = await findPendingOrders(supabase);
-  
-  if (pendingOrders.length === 0) {
-    console.log('✅ No hay pedidos pendientes de facturación');
-    return new Response(JSON.stringify({ processed: 0, message: 'No pending orders' }), { headers: corsHeaders });
-  }
-
-  console.log(`📋 Encontrados ${pendingOrders.length} pedidos pendientes`);
-  
-  const results = [];
-  for (const order of pendingOrders) {
-    try {
-      console.log(`\n🧾 Procesando pedido ${order.shopify_order_id}...`);
-      const result = await processAutoInvoice(order.shopify_order_id, order.organization_id, supabase);
-      results.push({ orderId: order.shopify_order_id, ...result });
+async function verifyNoExistingInvoice(orderNumber: string): Promise<{ exists: boolean; invoiceId?: number; cufe?: string }> {
+  try {
+    // Buscar facturas que contengan el número de pedido en observaciones
+    const invoices = await makeAlegraRequest(
+      `/invoices?search=${encodeURIComponent(orderNumber)}&start=0&limit=5`
+    )
+    
+    if (Array.isArray(invoices) && invoices.length > 0) {
+      // Buscar coincidencia exacta en observaciones
+      const match = invoices.find((inv: any) => 
+        inv.observations?.includes(`#${orderNumber}`) || 
+        inv.observations?.includes(orderNumber)
+      )
       
-      // Esperar 2 segundos entre pedidos para no saturar Alegra
-      await sleep(2000);
-    } catch (err: any) {
-      results.push({ orderId: order.shopify_order_id, success: false, error: err.message });
+      if (match) {
+        console.log(`⚠️ Factura existente encontrada en Alegra: ${match.id}`)
+        return { 
+          exists: true, 
+          invoiceId: match.id,
+          cufe: match.stamp?.cufe 
+        }
+      }
+    }
+    
+    return { exists: false }
+  } catch (e: any) {
+    console.warn(`⚠️ No se pudo verificar facturas existentes: ${e.message}`)
+    // En caso de error, asumir que no existe para no bloquear
+    return { exists: false }
+  }
+}
+```
+
+#### 3. Modificar `processAutoInvoice()` (línea 607+)
+
+Agregar lógica para:
+- Si `alegra_stamped = false` y tiene `alegra_invoice_id`, solo intentar re-stamping
+- Si no tiene factura, verificar en Alegra antes de crear
+
+```typescript
+async function processAutoInvoice(...) {
+  // ... código existente hasta línea 666 ...
+
+  // NUEVO: Verificar si ya existe factura en Alegra (prevenir duplicados)
+  if (!orderData.alegra_invoice_id) {
+    console.log('🔍 Verificando si existe factura en Alegra...')
+    const existingInvoice = await verifyNoExistingInvoice(orderData.order_number)
+    
+    if (existingInvoice.exists && existingInvoice.invoiceId) {
+      console.log(`⚠️ Factura ya existe en Alegra: ${existingInvoice.invoiceId}`)
+      
+      // Sincronizar la factura encontrada
+      await supabase.from('shopify_orders').update({
+        alegra_invoice_id: existingInvoice.invoiceId,
+        alegra_stamped: !!existingInvoice.cufe,
+        alegra_cufe: existingInvoice.cufe || null,
+      }).eq('shopify_order_id', shopifyOrderId)
+        .eq('organization_id', organizationId)
+      
+      if (existingInvoice.cufe) {
+        // Ya está emitida, marcar como completada
+        await addFacturadoTag(shopifyOrderId, shopDomain)
+        return { success: true, invoiceId: existingInvoice.invoiceId, cufe: existingInvoice.cufe }
+      }
+      
+      // Existe pero sin CUFE - intentar stamping
+      // (continuar al paso de stamping con este ID)
+      orderData.alegra_invoice_id = existingInvoice.invoiceId
     }
   }
 
-  return new Response(JSON.stringify({ 
-    processed: results.length,
-    success: results.filter(r => r.success).length,
-    failed: results.filter(r => !r.success).length,
-    results 
-  }), { headers: corsHeaders });
-});
+  // NUEVO: Si ya tiene factura pero no está emitida, solo re-stamp
+  if (orderData.alegra_invoice_id && !orderData.alegra_stamped) {
+    console.log(`🔄 Re-intentando stamping de factura existente: ${orderData.alegra_invoice_id}`)
+    
+    try {
+      const stampedInvoice = await stampInvoice(orderData.alegra_invoice_id)
+      const cufe = stampedInvoice.stamp?.cufe
+      
+      // Actualizar BD con éxito
+      await supabase.from('shopify_orders').update({
+        alegra_stamped: true,
+        alegra_cufe: cufe || null,
+      }).eq('shopify_order_id', shopifyOrderId)
+        .eq('organization_id', organizationId)
+      
+      await addFacturadoTag(shopifyOrderId, shopDomain)
+      
+      return { success: true, invoiceId: orderData.alegra_invoice_id, cufe }
+    } catch (stampError: any) {
+      console.error(`❌ Re-stamp falló: ${stampError.message}`)
+      return { success: false, invoiceId: orderData.alegra_invoice_id, error: stampError.message }
+    }
+  }
+
+  // ... resto del código existente (crear factura nueva) ...
+}
 ```
 
-#### 5. Configurar Cron Job (SQL)
+---
 
-```sql
--- Ejecutar auto-invoice cada 2 minutos
-SELECT cron.schedule(
-  'auto-invoice-batch',
-  '*/2 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/auto-invoice-alegra',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzZGNzcXNmbmNrZXVhZmp5cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NzQyODksImV4cCI6MjA2NTM1MDI4OX0.LA-Z6t1uSQrVvZsPimxy65uPSEAf3sOHzOQD_zdt-mI"}'::jsonb,
-    body := '{}'::jsonb
-  ) AS request_id;
-  $$
-);
+### Flujo de Decisiones
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│               LÓGICA DE PROCESAMIENTO                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ¿Tiene alegra_invoice_id en BD?                            │
+│       │                                                     │
+│       ├── SÍ → ¿alegra_stamped = true?                      │
+│       │         ├── SÍ → SKIP (ya procesado)                │
+│       │         └── NO → RE-STAMP (solo emitir con DIAN)    │
+│       │                                                     │
+│       └── NO → ¿Existe factura en Alegra?                   │
+│                 (buscar por #order_number)                  │
+│                 ├── SÍ → Sincronizar + RE-STAMP si falta    │
+│                 └── NO → CREAR NUEVA FACTURA                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ### Archivos a Modificar
 
-| Archivo | Cambios |
-|---------|---------|
-| `supabase/functions/shopify-webhook/index.ts` | Eliminar llamada a `triggerAutoInvoice()` (líneas 889-916) |
-| `supabase/functions/auto-invoice-alegra/index.ts` | 1) Agregar `findPendingOrders()`<br>2) Agregar `normalizeAlegraCityFromDB()` con consulta a shipping_coverage<br>3) Modificar handler para soportar batch y single<br>4) Cambiar elegibilidad: todos pagados excepto POS/contraentrega<br>5) Manejar errores DIAN sin crear duplicados |
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/auto-invoice-alegra/index.ts` | 1. Modificar `findPendingOrders` (línea 580): cambiar `.is('alegra_stamped', null)` por `.or('alegra_stamped.is.null,alegra_stamped.eq.false')`<br>2. Agregar campos `alegra_invoice_id` y `alegra_stamped` al select<br>3. Agregar función `verifyNoExistingInvoice()`<br>4. Modificar `processAutoInvoice()` para manejar re-stamping y verificación previa |
 
 ---
 
-### Beneficios del Cambio
+### Beneficios
 
-1. **Sin duplicados**: Proceso secuencial, 1 pedido a la vez
-2. **Sin race conditions**: No hay concurrencia
-3. **Más control**: Fácil de pausar, reiniciar, debuggear
-4. **Menos carga**: No dispara en cada webhook
-5. **Mejor para lotes**: Puede procesar pedidos históricos
-6. **Tolerante a fallos**: Si falla, reintenta en 2 min
+1. **Recuperación automática**: Pedidos con stamping fallido se reintentan cada 2 minutos
+2. **Sin duplicados**: Verifica en Alegra antes de crear facturas nuevas
+3. **Eficiente**: Si ya existe factura, solo hace re-stamp (más rápido)
+4. **Seguro**: Si el re-stamp falla, mantiene el registro y reintentará después
 
-### Posibles Desventajas
+### Consideraciones
 
-- **Latencia de 0-2 minutos**: La factura no se crea instantáneamente (pero para propósitos contables esto es aceptable)
-
----
-
-### Configuración Adicional
-
-Para el cron job se requiere habilitar las extensiones `pg_cron` y `pg_net` en Supabase (si no están habilitadas).
-
----
-
-### Resumen de Implementación
-
-1. **Migración SQL**: Crear cron job cada 2 minutos
-2. **Modificar webhook**: Eliminar trigger de auto-invoice
-3. **Modificar auto-invoice**: 
-   - Modo batch (sin parámetros) → busca pendientes
-   - Modo single (con orderId) → procesa uno específico
-   - Normalización de ciudad desde `shipping_coverage`
-   - Todos los pagados elegibles (no solo web)
-   - No duplicar facturas si DIAN rechaza
-4. **Desplegar ambas funciones**
+- El tag `AUTO_INVOICE_FAILED` sigue excluyendo pedidos del batch (para casos donde el error es permanente, como productos sin mapeo)
+- El cron seguirá ejecutándose cada 2 minutos, pero ahora incluirá pedidos con `alegra_stamped = false`
