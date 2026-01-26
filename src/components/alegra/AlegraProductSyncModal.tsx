@@ -42,7 +42,7 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
   const [syncResults, setSyncResults] = useState<{ success: number; failed: number }>({ success: 0, failed: 0 });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fuzzy matching function to compare product names
+  // Fuzzy matching function to compare product names with penalty for extra words
   const calculateSimilarity = (str1: string, str2: string): number => {
     const s1 = str1.toLowerCase().trim();
     const s2 = str2.toLowerCase().trim();
@@ -59,7 +59,23 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       }
     }
     
-    return words1.length > 0 ? matches / words1.length : 0;
+    const baseScore = words1.length > 0 ? matches / words1.length : 0;
+    
+    // Penalizar si Alegra tiene palabras que NO están en Shopify
+    // Esto evita que "Espacial" coincida con "Osito"
+    let extraWordsInAlegra = 0;
+    for (const word of words2) {
+      const existsInShopify = words1.some(w => w.includes(word) || word.includes(w));
+      if (!existsInShopify) {
+        extraWordsInAlegra++;
+      }
+    }
+    
+    // Aplicar penalización del 10% por cada palabra extra
+    const penalty = extraWordsInAlegra * 0.1;
+    const finalScore = Math.max(0, baseScore - penalty);
+    
+    return finalScore;
   };
 
   // NEW: Find product by SKU match (exact match on reference field)
@@ -79,7 +95,8 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
     
     for (const item of alegraItems) {
       const score = calculateSimilarity(productName, item.name);
-      if (score > 0.6 && (!bestMatch || score > bestMatch.score)) {
+      // Umbral más estricto (0.85) para evitar falsos positivos
+      if (score > 0.85 && (!bestMatch || score > bestMatch.score)) {
         bestMatch = { item, score };
       }
     }
