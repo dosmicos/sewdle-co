@@ -1,11 +1,13 @@
 
-## Plan: Auto-empacar al completar verificación de artículos
+## Plan: Reemplazar botón "Empacado" con botón "Escanear" y modificar atajo Ctrl+.
 
 ### Resumen del comportamiento solicitado
 
-1. **Ocultar el botón "Marcar como Empacado"** hasta que se verifiquen todos los artículos
-2. **Auto-presionar el botón de empacado** cuando se escaneen todos los artículos
-3. **Mostrar el botón "Crear Guía"** inmediatamente después de que el pedido se marque como empacado
+1. **Reemplazar el botón flotante** de "Marcar como Empacado" por un botón "Escanear"
+2. **Modificar el atajo Ctrl+.** para que enfoque el input de escaneo en lugar de marcar como empacado
+3. **Al hacer clic en el botón "Escanear"** o usar Ctrl+., el usuario es llevado directamente al campo de escaneo y puede empezar a escanear inmediatamente
+
+> **Nota importante:** El auto-empacado al completar la verificación (implementado anteriormente) seguirá funcionando - el botón "Escanear" solo facilita el acceso rápido al campo de escaneo.
 
 ---
 
@@ -15,79 +17,145 @@
 
 ---
 
-### Cambio 1: Crear variable para verificar si todos los artículos están escaneados
+### Cambio 1: Agregar ref al input de escaneo
 
-**Ubicación:** Después de línea 414 (donde se calculan `totalVerifiedUnits` y `totalRequiredUnits`)
+**Ubicación:** Alrededor de línea 91 (después de los otros refs existentes)
 
 ```typescript
-// Determina si todos los artículos han sido verificados
-const allItemsVerified = totalRequiredUnits > 0 && totalVerifiedUnits === totalRequiredUnits;
+const skuInputRef = useRef<HTMLInputElement>(null);
 ```
 
 ---
 
-### Cambio 2: Auto-empacar cuando se completa la verificación
+### Cambio 2: Crear función para enfocar el input y hacer scroll
 
-**Ubicación:** Agregar un nuevo `useEffect` después de línea 415
+**Ubicación:** Después de línea 95 (con las otras funciones de utilidad)
 
 ```typescript
-// Auto-pack when all items are verified
-useEffect(() => {
-  if (allItemsVerified && 
-      effectiveOrder?.operational_status !== 'ready_to_ship' && 
-      effectiveOrder?.operational_status !== 'awaiting_pickup' && 
-      effectiveOrder?.operational_status !== 'shipped' &&
-      !effectiveOrder?.shopify_order?.cancelled_at &&
-      !updatingStatus) {
-    // Small delay to show the green verification before auto-packing
-    const timer = setTimeout(() => {
-      handleMarkAsPackedAndPrint();
-    }, 800);
-    
-    return () => clearTimeout(timer);
+// Focus SKU input and scroll to verification section
+const focusScanInput = useCallback(() => {
+  if (skuInputRef.current) {
+    skuInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Small delay to ensure scroll completes before focusing
+    setTimeout(() => {
+      skuInputRef.current?.focus();
+    }, 300);
   }
-}, [allItemsVerified, effectiveOrder?.operational_status, updatingStatus]);
+}, []);
 ```
 
 ---
 
-### Cambio 3: Ocultar botón "Marcar como Empacado" hasta verificación completa
+### Cambio 3: Modificar el atajo Ctrl+. para enfocar el input
 
-**Ubicación:** Líneas 1490-1512 (botón flotante de Empacado)
+**Ubicación:** Líneas 127-144
 
 **Antes:**
 ```typescript
-{!effectiveOrder.shopify_order?.cancelled_at && 
- effectiveOrder.operational_status !== 'ready_to_ship' && 
- effectiveOrder.operational_status !== 'awaiting_pickup' && 
- effectiveOrder.operational_status !== 'shipped' && (
+// Ctrl + . → Marcar como Empacado
+if (e.ctrlKey && e.key === '.') {
+  e.preventDefault();
+  // ... validaciones ...
+  if (localOrder?.operational_status !== 'ready_to_ship' && ...) {
+    handleMarkAsPackedAndPrintRef.current();
+  }
+  return;
+}
 ```
 
 **Después:**
 ```typescript
+// Ctrl + . → Enfocar campo de escaneo
+if (e.ctrlKey && e.key === '.') {
+  e.preventDefault();
+  // Solo enfocar si la orden no está empacada/enviada/cancelada
+  if (effectiveOrder?.operational_status !== 'ready_to_ship' && 
+      effectiveOrder?.operational_status !== 'awaiting_pickup' && 
+      effectiveOrder?.operational_status !== 'shipped' && 
+      !effectiveOrder?.shopify_order?.cancelled_at) {
+    focusScanInput();
+  }
+  return;
+}
+```
+
+---
+
+### Cambio 4: Agregar ref al Input de escaneo
+
+**Ubicación:** Línea 1180
+
+**Antes:**
+```typescript
+<Input
+  value={skuInput}
+  onChange={(e) => { ... }}
+  placeholder="🔍 Escanea o escribe el SKU..."
+  ...
+/>
+```
+
+**Después:**
+```typescript
+<Input
+  ref={skuInputRef}
+  value={skuInput}
+  onChange={(e) => { ... }}
+  placeholder="🔍 Escanea o escribe el SKU..."
+  ...
+/>
+```
+
+---
+
+### Cambio 5: Reemplazar botón "Empacado" por botón "Escanear"
+
+**Ubicación:** Líneas 1520-1543
+
+**Antes:**
+```typescript
+{/* Sticky Floating Action Button - "Marcar como Empacado" - solo visible cuando todos los artículos están verificados */}
 {!effectiveOrder.shopify_order?.cancelled_at && 
  effectiveOrder.operational_status !== 'ready_to_ship' && 
  effectiveOrder.operational_status !== 'awaiting_pickup' && 
  effectiveOrder.operational_status !== 'shipped' && 
  allItemsVerified && (
+  <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
+    <Button
+      onClick={handleMarkAsPackedAndPrint}
+      disabled={updatingStatus}
+      title="Ctrl + . para marcar rápidamente"
+      className="..."
+    >
+      {updatingStatus ? (
+        <Loader2 className="..." />
+      ) : (
+        <>
+          <Package className="..." />
+          <span className="hidden sm:inline">Marcar como</span> Empacado
+        </>
+      )}
+    </Button>
+  </div>
+)}
 ```
 
----
-
-### Cambio 4: Mensaje visual cuando se auto-empaca
-
-Para mejorar la experiencia, agregar feedback visual cuando todos los artículos están verificados.
-
-**Ubicación:** Dentro de la sección de verificación (después de línea 1230), agregar:
-
+**Después:**
 ```typescript
-{/* Success message when all items verified */}
-{allItemsVerified && effectiveOrder.operational_status !== 'ready_to_ship' && (
-  <div className="p-3 bg-green-100 border-2 border-green-400 rounded-lg animate-pulse">
-    <div className="flex items-center justify-center gap-2 text-green-700 font-bold">
-      <CheckCircle className="w-5 h-5" />
-      ¡Verificación completa! Marcando como empacado...
-    </div>
+{/* Sticky Floating Action Button - "Escanear" - visible cuando la orden no está empacada */}
+{!effectiveOrder.shopify_order?.cancelled_at && 
+ effectiveOrder.operational_status !== 'ready_to_ship' && 
+ effectiveOrder.operational_status !== 'awaiting_pickup' && 
+ effectiveOrder.operational_status !== 'shipped' && (
+  <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
+    <Button
+      onClick={focusScanInput}
+      title="Ctrl + . para escanear"
+      className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
+    >
+      <ScanLine className="w-4 h-4 md:w-5 md:h-5" />
+      Escanear
+    </Button>
   </div>
 )}
 ```
@@ -98,19 +166,24 @@ Para mejorar la experiencia, agregar feedback visual cuando todos los artículos
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Usuario escanea artículos (0/2, 1/2...)                 │
-│     - Botón "Empacado" está OCULTO                          │
+│  1. Usuario abre modal de orden (estado: "Por Procesar")    │
+│     - Botón flotante "Escanear" visible abajo a la derecha  │
 ├─────────────────────────────────────────────────────────────┤
-│  2. Usuario escanea último artículo (2/2)                   │
+│  2. Usuario presiona botón "Escanear" o Ctrl + .            │
+│     - Pantalla hace scroll al campo de escaneo              │
+│     - Campo de escaneo recibe foco automáticamente          │
+├─────────────────────────────────────────────────────────────┤
+│  3. Usuario escanea artículos con pistola de códigos        │
+│     - Cada escaneo verifica el SKU                          │
+│     - Contador se actualiza (1/2, 2/2...)                   │
+├─────────────────────────────────────────────────────────────┤
+│  4. Al completar todos los artículos (ej: 2/2)              │
 │     - Muestra mensaje "¡Verificación completa!"             │
-│     - Se auto-ejecuta handleMarkAsPackedAndPrint() en 800ms │
+│     - AUTO-EMPACA después de 800ms (implementado antes)     │
 ├─────────────────────────────────────────────────────────────┤
-│  3. Pedido marcado como Empacado                            │
-│     - Se abre diálogo de impresión automáticamente          │
-│     - Estado cambia a ready_to_ship                         │
-├─────────────────────────────────────────────────────────────┤
-│  4. Botón "Crear Guía" aparece automáticamente              │
-│     - El pedido ahora puede generar la guía de envío        │
+│  5. Después del empacado automático                         │
+│     - Botón "Escanear" desaparece (orden ya empacada)       │
+│     - Botón "Crear Guía" aparece automáticamente            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,17 +191,19 @@ Para mejorar la experiencia, agregar feedback visual cuando todos los artículos
 
 ### Detalles técnicos
 
-| Aspecto | Implementación |
-|---------|----------------|
-| Auto-pack delay | 800ms (da tiempo a ver el mensaje verde) |
-| Prevención de duplicados | `updatingStatus` evita doble ejecución |
-| Órdenes canceladas | No se auto-empaca si está cancelada |
-| Ya empacadas | No se dispara si ya está en `ready_to_ship` |
+| Aspecto | Valor |
+|---------|-------|
+| Atajo de teclado | `Ctrl + .` |
+| Scroll behavior | `smooth`, block: `center` |
+| Delay antes de focus | 300ms (para completar scroll) |
+| Icono del botón | `ScanLine` (ya importado) |
+| Condición de visibilidad | Orden no cancelada, no empacada, no enviada |
 
 ---
 
 ### Resultado esperado
 
-- El botón "Marcar como Empacado" permanece **oculto** hasta verificar todos los artículos
-- Al verificar el último artículo, se muestra mensaje y se **auto-empaca en 800ms**
-- Después del empacado, el botón "Crear Guía" aparece **inmediatamente** (esto ya funciona así)
+- El botón flotante ahora dice **"Escanear"** con ícono de escáner
+- Al hacer clic o usar **Ctrl+.**, el usuario va directo al campo de escaneo
+- El flujo de auto-empacado al completar verificación **sigue funcionando** igual
+- Experiencia más rápida para operarios de bodega
