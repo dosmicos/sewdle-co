@@ -567,17 +567,57 @@ async function addErrorTag(shopifyOrderId: number, shopDomain: string, errorMess
   }
 }
 
+// ============= VERIFY EXISTING INVOICE IN ALEGRA (prevent duplicates) =============
+async function verifyNoExistingInvoice(orderNumber: string): Promise<{ exists: boolean; invoiceId?: number; cufe?: string }> {
+  try {
+    // Buscar facturas que contengan el número de pedido en observaciones
+    const invoices = await makeAlegraRequest(
+      `/invoices?search=${encodeURIComponent(orderNumber)}&start=0&limit=5`
+    )
+    
+    if (Array.isArray(invoices) && invoices.length > 0) {
+      // Buscar coincidencia exacta en observaciones
+      const match = invoices.find((inv: any) => 
+        inv.observations?.includes(`#${orderNumber}`) || 
+        inv.observations?.includes(orderNumber)
+      )
+      
+      if (match) {
+        console.log(`⚠️ Factura existente encontrada en Alegra: ${match.id}`)
+        return { 
+          exists: true, 
+          invoiceId: match.id,
+          cufe: match.stamp?.cufe 
+        }
+      }
+    }
+    
+    return { exists: false }
+  } catch (e: any) {
+    console.warn(`⚠️ No se pudo verificar facturas existentes: ${e.message}`)
+    // En caso de error, asumir que no existe para no bloquear
+    return { exists: false }
+  }
+}
+
 // ============= BATCH PROCESSING: Find pending orders =============
-async function findPendingOrders(supabase: any): Promise<Array<{shopify_order_id: number, organization_id: string, order_number: string}>> {
+async function findPendingOrders(supabase: any): Promise<Array<{
+  shopify_order_id: number, 
+  organization_id: string, 
+  order_number: string,
+  alegra_invoice_id: number | null,
+  alegra_stamped: boolean | null
+}>> {
   // Buscar pedidos pendientes de facturación (últimos 7 días)
+  // INCLUYE: alegra_stamped = NULL (nunca procesado) o FALSE (stamping fallido)
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   
   const { data, error } = await supabase
     .from('shopify_orders')
-    .select('shopify_order_id, organization_id, order_number, tags, source_name')
+    .select('shopify_order_id, organization_id, order_number, tags, source_name, alegra_invoice_id, alegra_stamped')
     .eq('financial_status', 'paid')
-    .is('alegra_invoice_id', null)
-    .is('alegra_stamped', null)
+    // CAMBIO: Incluir NULL y FALSE (antes solo NULL)
+    .or('alegra_stamped.is.null,alegra_stamped.eq.false')
     .neq('source_name', 'pos')  // Excluir POS
     .gte('created_at', sevenDaysAgo)
     .order('created_at', { ascending: true })  // Más antiguo primero
@@ -599,7 +639,9 @@ async function findPendingOrders(supabase: any): Promise<Array<{shopify_order_id
   return filtered.map(o => ({
     shopify_order_id: o.shopify_order_id,
     organization_id: o.organization_id,
-    order_number: o.order_number
+    order_number: o.order_number,
+    alegra_invoice_id: o.alegra_invoice_id || null,
+    alegra_stamped: o.alegra_stamped ?? null
   }))
 }
 
@@ -659,9 +701,75 @@ async function processAutoInvoice(
       return { success: false, error: 'Ya facturado' }
     }
     
-    if (orderData.alegra_stamped || orderData.alegra_invoice_id) {
-      console.log('⏭️ Pedido ya tiene factura Alegra, saltando')
+    // CAMBIO: Solo saltamos si alegra_stamped = true (ya emitida con DIAN)
+    // Si alegra_stamped = false, intentaremos re-stamp
+    if (orderData.alegra_stamped === true) {
+      console.log('⏭️ Pedido ya tiene factura Alegra emitida, saltando')
       return { success: false, error: 'Ya tiene factura' }
+    }
+
+    // ============= NUEVO: Verificar si ya existe factura en Alegra (prevenir duplicados) =============
+    if (!orderData.alegra_invoice_id) {
+      console.log('🔍 Verificando si existe factura en Alegra...')
+      const existingInvoice = await verifyNoExistingInvoice(orderData.order_number)
+      
+      if (existingInvoice.exists && existingInvoice.invoiceId) {
+        console.log(`⚠️ Factura ya existe en Alegra: ${existingInvoice.invoiceId}`)
+        
+        // Sincronizar la factura encontrada
+        await supabase.from('shopify_orders').update({
+          alegra_invoice_id: existingInvoice.invoiceId,
+          alegra_stamped: !!existingInvoice.cufe,
+          alegra_cufe: existingInvoice.cufe || null,
+        }).eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId)
+        
+        if (existingInvoice.cufe) {
+          // Ya está emitida, marcar como completada
+          await addFacturadoTag(shopifyOrderId, shopDomain)
+          return { success: true, invoiceId: existingInvoice.invoiceId, cufe: existingInvoice.cufe }
+        }
+        
+        // Existe pero sin CUFE - continuar al paso de re-stamping
+        orderData.alegra_invoice_id = existingInvoice.invoiceId
+      }
+    }
+
+    // ============= NUEVO: Si ya tiene factura pero no está emitida, solo re-stamp =============
+    if (orderData.alegra_invoice_id && orderData.alegra_stamped === false) {
+      console.log(`🔄 Re-intentando stamping de factura existente: ${orderData.alegra_invoice_id}`)
+      
+      try {
+        const stampedInvoice = await stampInvoice(orderData.alegra_invoice_id)
+        const cufe = stampedInvoice.stamp?.cufe
+        const invoiceNumber = stampedInvoice.numberTemplate?.fullNumber || String(orderData.alegra_invoice_id)
+        
+        // Actualizar BD con éxito
+        await supabase.from('shopify_orders').update({
+          alegra_stamped: true,
+          alegra_cufe: cufe || null,
+          alegra_invoice_number: invoiceNumber,
+          alegra_synced_at: new Date().toISOString(),
+        }).eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId)
+        
+        // Actualizar alegra_invoices
+        await supabase.from('alegra_invoices').update({
+          stamped: true,
+          cufe: cufe || null,
+          stamped_at: new Date().toISOString(),
+        }).eq('organization_id', organizationId)
+          .eq('shopify_order_id', shopifyOrderId)
+          .eq('alegra_invoice_id', orderData.alegra_invoice_id)
+        
+        await addFacturadoTag(shopifyOrderId, shopDomain)
+        
+        console.log(`✅ Re-stamp exitoso: Factura ${invoiceNumber} emitida`)
+        return { success: true, invoiceId: orderData.alegra_invoice_id, cufe }
+      } catch (stampError: any) {
+        console.error(`❌ Re-stamp falló: ${stampError.message}`)
+        return { success: false, invoiceId: orderData.alegra_invoice_id, error: `Re-stamp DIAN falló: ${stampError.message}` }
+      }
     }
 
     // 4. Load line items
