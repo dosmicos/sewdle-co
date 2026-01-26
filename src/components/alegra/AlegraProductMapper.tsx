@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, Link2, Unlink, RefreshCw, Package, Check, X } from 'lucide-react';
+import { Loader2, Search, Link2, Unlink, RefreshCw, Package, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -50,21 +50,33 @@ const AlegraProductMapper = () => {
   const [shopifyVariantTitle, setShopifyVariantTitle] = useState('');
   const [shopifySku, setShopifySku] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMoreItems, setHasMoreItems] = useState(false);
 
-  const fetchAlegraItems = async () => {
+  const fetchAlegraItems = async (page = 0) => {
     setIsLoading(true);
     try {
+      const pageSize = 30;
       const { data, error } = await supabase.functions.invoke('alegra-api', {
         body: { 
           action: 'get-items',
-          data: { limit: 100, search: searchTerm || undefined }
+          data: { 
+            start: page * pageSize,
+            limit: pageSize, 
+            search: searchTerm || undefined 
+          }
         }
       });
 
       if (error) throw error;
       
       if (data?.success && Array.isArray(data.data)) {
-        setAlegraItems(data.data.filter((item: AlegraItem) => item.status === 'active'));
+        const items = data.data.filter((item: AlegraItem) => item.status === 'active');
+        setAlegraItems(items);
+        setHasMoreItems(items.length === pageSize);
+        setCurrentPage(page);
       } else {
         throw new Error(data?.error || 'Error al cargar productos');
       }
@@ -102,7 +114,8 @@ const AlegraProductMapper = () => {
   }, [currentOrganization?.id]);
 
   const handleSearch = () => {
-    fetchAlegraItems();
+    setCurrentPage(0);
+    fetchAlegraItems(0);
   };
 
   const openMappingDialog = (item: AlegraItem) => {
@@ -305,7 +318,7 @@ const AlegraProductMapper = () => {
             <Button onClick={handleSearch} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             </Button>
-            <Button variant="outline" onClick={fetchAlegraItems} disabled={isLoading}>
+            <Button variant="outline" onClick={() => fetchAlegraItems(currentPage)} disabled={isLoading}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -375,6 +388,38 @@ const AlegraProductMapper = () => {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          
+          {/* Pagination controls */}
+          {filteredItems.length > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <span className="text-sm text-muted-foreground">
+                Mostrando {currentPage * 30 + 1}-{currentPage * 30 + filteredItems.length} productos
+              </span>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => fetchAlegraItems(currentPage - 1)}
+                  disabled={currentPage === 0 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Anterior
+                </Button>
+                <span className="text-sm px-2 min-w-[80px] text-center">
+                  Página {currentPage + 1}
+                </span>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchAlegraItems(currentPage + 1)}
+                  disabled={!hasMoreItems || isLoading}
+                >
+                  Siguiente
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
