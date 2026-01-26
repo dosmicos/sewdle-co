@@ -413,6 +413,26 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     .filter(item => item.title?.toLowerCase() !== 'bordado personalizado')
     .reduce((sum, item) => sum + item.quantity, 0);
 
+  // Determina si todos los artículos han sido verificados
+  const allItemsVerified = totalRequiredUnits > 0 && totalVerifiedUnits === totalRequiredUnits;
+
+  // Auto-pack when all items are verified
+  useEffect(() => {
+    if (allItemsVerified && 
+        effectiveOrder?.operational_status !== 'ready_to_ship' && 
+        effectiveOrder?.operational_status !== 'awaiting_pickup' && 
+        effectiveOrder?.operational_status !== 'shipped' &&
+        !effectiveOrder?.shopify_order?.cancelled_at &&
+        !updatingStatus) {
+      // Small delay to show the green verification before auto-packing
+      const timer = setTimeout(() => {
+        handleMarkAsPackedAndPrint();
+      }, 800);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus]);
+
   // Fetch line items separately - with isCancelled check
   useEffect(() => {
     let isCancelled = false;
@@ -1229,6 +1249,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       })}
                     </div>
                   )}
+                  
+                  {/* Success message when all items verified */}
+                  {allItemsVerified && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'awaiting_pickup' && effectiveOrder.operational_status !== 'shipped' && (
+                    <div className="p-3 bg-green-100 border-2 border-green-400 rounded-lg animate-pulse">
+                      <div className="flex items-center justify-center gap-2 text-green-700 font-bold">
+                        <CheckCircle className="w-5 h-5" />
+                        ¡Verificación completa! Marcando como empacado...
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1487,11 +1517,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           </div>
         )}
 
-        {/* Sticky Floating Action Button - "Marcar como Empacado" */}
+        {/* Sticky Floating Action Button - "Marcar como Empacado" - solo visible cuando todos los artículos están verificados */}
         {!effectiveOrder.shopify_order?.cancelled_at && 
          effectiveOrder.operational_status !== 'ready_to_ship' && 
          effectiveOrder.operational_status !== 'awaiting_pickup' && 
-         effectiveOrder.operational_status !== 'shipped' && (
+         effectiveOrder.operational_status !== 'shipped' && 
+         allItemsVerified && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
               onClick={handleMarkAsPackedAndPrint}
