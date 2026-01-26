@@ -234,9 +234,11 @@ async function createContact(orderData: any): Promise<any> {
       department: addressNormalized.department,
       country: 'Colombia',
     },
-    identificationType: 'CC',
-    identificationNumber: String(identification).slice(0, 20),
-    identification: String(identification).slice(0, 20),
+    // Formato estructurado requerido por Alegra API v1
+    identification: {
+      type: 'CC',
+      number: String(identification).slice(0, 20),
+    },
     kindOfPerson: 'PERSON_ENTITY',
     type: ['client'],
   }
@@ -519,6 +521,62 @@ async function addErrorTag(shopifyOrderId: number, shopDomain: string, errorMess
   }
 }
 
+// ============= CONCURRENCY LOCK FUNCTIONS =============
+async function acquireInvoiceLock(
+  supabase: any,
+  shopifyOrderId: number,
+  organizationId: string
+): Promise<{ acquired: boolean; reason?: string }> {
+  // Timeout: liberar locks de más de 5 minutos (huérfanos)
+  const lockTimeout = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  
+  // Limpiar locks huérfanos
+  await supabase
+    .from('shopify_orders')
+    .update({ auto_invoice_processing: false })
+    .eq('organization_id', organizationId)
+    .eq('auto_invoice_processing', true)
+    .lt('auto_invoice_processing_at', lockTimeout)
+
+  // Intentar adquirir lock de forma atómica
+  // Solo se actualizará si: no está siendo procesado Y no tiene factura
+  const { data, error } = await supabase
+    .from('shopify_orders')
+    .update({
+      auto_invoice_processing: true,
+      auto_invoice_processing_at: new Date().toISOString(),
+    })
+    .eq('shopify_order_id', shopifyOrderId)
+    .eq('organization_id', organizationId)
+    .eq('auto_invoice_processing', false)
+    .is('alegra_invoice_id', null)
+    .select('shopify_order_id')
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error adquiriendo lock:', error.message)
+    return { acquired: false, reason: `Lock error: ${error.message}` }
+  }
+
+  if (!data) {
+    return { acquired: false, reason: 'Already processing or invoiced' }
+  }
+
+  return { acquired: true }
+}
+
+async function releaseInvoiceLock(
+  supabase: any,
+  shopifyOrderId: number,
+  organizationId: string
+): Promise<void> {
+  await supabase
+    .from('shopify_orders')
+    .update({ auto_invoice_processing: false })
+    .eq('shopify_order_id', shopifyOrderId)
+    .eq('organization_id', organizationId)
+}
+
 // ============= MAIN PROCESS =============
 async function processAutoInvoice(
   shopifyOrderId: number,
@@ -527,56 +585,66 @@ async function processAutoInvoice(
 ): Promise<{ success: boolean; invoiceId?: number; cufe?: string; error?: string }> {
   console.log(`\n🧾 ========== AUTO-INVOICE para pedido ${shopifyOrderId} ==========`)
 
-  // 1. Load order data
-  const { data: orderData, error: orderError } = await supabase
-    .from('shopify_orders')
-    .select('*')
-    .eq('shopify_order_id', shopifyOrderId)
-    .eq('organization_id', organizationId)
-    .single()
-
-  if (orderError || !orderData) {
-    throw new Error(`No se encontró el pedido ${shopifyOrderId}: ${orderError?.message}`)
+  // 0. NUEVO: Adquirir lock atómico antes de procesar (previene race conditions)
+  const lockResult = await acquireInvoiceLock(supabase, shopifyOrderId, organizationId)
+  if (!lockResult.acquired) {
+    console.log(`⏭️ Lock no adquirido: ${lockResult.reason}`)
+    return { success: false, error: lockResult.reason }
   }
 
-  console.log(`📦 Pedido: ${orderData.order_number} - Total: $${orderData.total_price}`)
+  console.log(`🔒 Lock adquirido para pedido ${shopifyOrderId}`)
 
-  // 2. Get organization for shop domain
-  const { data: orgData } = await supabase
-    .from('organizations')
-    .select('shopify_store_url')
-    .eq('id', organizationId)
-    .single()
+  try {
+    // 1. Load order data
+    const { data: orderData, error: orderError } = await supabase
+      .from('shopify_orders')
+      .select('*')
+      .eq('shopify_order_id', shopifyOrderId)
+      .eq('organization_id', organizationId)
+      .single()
 
-  const shopDomain = orgData?.shopify_store_url?.replace('https://', '') || ''
+    if (orderError || !orderData) {
+      throw new Error(`No se encontró el pedido ${shopifyOrderId}: ${orderError?.message}`)
+    }
 
-  // 3. Double-check eligibility
-  const tags = (orderData.tags || '').toLowerCase()
-  
-  if (orderData.financial_status !== 'paid') {
-    console.log('⏭️ Pedido no está pagado, saltando')
-    return { success: false, error: 'Pedido no pagado' }
-  }
-  
-  if (orderData.source_name !== 'web') {
-    console.log(`⏭️ Pedido no es web (${orderData.source_name}), saltando`)
-    return { success: false, error: 'No es pedido web' }
-  }
-  
-  if (tags.includes('contraentrega')) {
-    console.log('⏭️ Pedido es contraentrega, saltando')
-    return { success: false, error: 'Pedido contraentrega' }
-  }
-  
-  if (tags.includes('facturado')) {
-    console.log('⏭️ Pedido ya tiene tag FACTURADO, saltando')
-    return { success: false, error: 'Ya facturado' }
-  }
-  
-  if (orderData.alegra_stamped || orderData.alegra_invoice_id) {
-    console.log('⏭️ Pedido ya tiene factura Alegra, saltando')
-    return { success: false, error: 'Ya tiene factura' }
-  }
+    console.log(`📦 Pedido: ${orderData.order_number} - Total: $${orderData.total_price}`)
+
+    // 2. Get organization for shop domain
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('shopify_store_url')
+      .eq('id', organizationId)
+      .single()
+
+    const shopDomain = orgData?.shopify_store_url?.replace('https://', '') || ''
+
+    // 3. Double-check eligibility
+    const tags = (orderData.tags || '').toLowerCase()
+    
+    if (orderData.financial_status !== 'paid') {
+      console.log('⏭️ Pedido no está pagado, saltando')
+      return { success: false, error: 'Pedido no pagado' }
+    }
+    
+    if (orderData.source_name !== 'web') {
+      console.log(`⏭️ Pedido no es web (${orderData.source_name}), saltando`)
+      return { success: false, error: 'No es pedido web' }
+    }
+    
+    if (tags.includes('contraentrega')) {
+      console.log('⏭️ Pedido es contraentrega, saltando')
+      return { success: false, error: 'Pedido contraentrega' }
+    }
+    
+    if (tags.includes('facturado')) {
+      console.log('⏭️ Pedido ya tiene tag FACTURADO, saltando')
+      return { success: false, error: 'Ya facturado' }
+    }
+    
+    if (orderData.alegra_stamped || orderData.alegra_invoice_id) {
+      console.log('⏭️ Pedido ya tiene factura Alegra, saltando')
+      return { success: false, error: 'Ya tiene factura' }
+    }
 
   // 4. Load line items
   const { data: lineItems } = await supabase
@@ -692,12 +760,17 @@ async function processAutoInvoice(
     }
   }
 
-  console.log(`🎉 ========== FACTURACIÓN AUTOMÁTICA COMPLETADA ==========\n`)
+    console.log(`🎉 ========== FACTURACIÓN AUTOMÁTICA COMPLETADA ==========\n`)
 
-  return {
-    success: true,
-    invoiceId: invoice.id,
-    cufe: cufe || undefined,
+    return {
+      success: true,
+      invoiceId: invoice.id,
+      cufe: cufe || undefined,
+    }
+  } finally {
+    // SIEMPRE liberar el lock, incluso si hay error
+    await releaseInvoiceLock(supabase, shopifyOrderId, organizationId)
+    console.log(`🔓 Lock liberado para pedido ${shopifyOrderId}`)
   }
 }
 
