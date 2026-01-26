@@ -105,8 +105,15 @@ async function findCoverageRowNormalized(
     .select('dane_code, municipality, department')
     .eq('organization_id', organizationId);
   
-  // If department provided, filter by it (also accent-insensitive via ilike partial)
-  if (normalizedDept) {
+  // Special case: Bogotá can come with province "Cundinamarca" from Shopify 
+  // but is stored as department "Bogotá" in the database
+  const isBogota = normalizedCity.includes('bogota');
+
+  if (isBogota) {
+    console.log(`🏛️ Detected Bogotá - searching in both Bogotá and Cundinamarca departments`);
+    query = query.or('department.ilike.%bogot%,department.ilike.%cundi%');
+  } else if (normalizedDept) {
+    // Normal case: filter by provided department
     query = query.ilike('department', `%${normalizedDept.substring(0, 5)}%`);
   }
   
