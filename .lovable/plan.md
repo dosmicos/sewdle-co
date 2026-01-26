@@ -1,50 +1,47 @@
 
 
-## Plan: Mejorar Detección con Comparación por SKU
+## Plan: Evitar Duplicados Usando Mapeos Existentes
 
-### Problema Actual
+### Problema Identificado
 
-La lógica actual en `AlegraProductSyncModal.tsx` solo compara productos por nombre:
+Los productos en Alegra **no tienen SKU asignado** en el campo `reference`, por lo que la verificación por SKU no funciona. Además, muchos productos tienen **nombres diferentes** en Shopify vs Alegra (ej: "Ruana Grinch - Navidad" en Shopify = "Ruana Grinch" en Alegra).
 
-```typescript
-// Línea 67 - Solo compara nombres
-const score = calculateSimilarity(productName, item.name);
+Sin embargo, ya existe una tabla `alegra_product_mapping` con **mapeos manuales** que vinculan productos de Shopify con IDs de Alegra:
+
+```text
+Ejemplo de mapeo existente:
+┌─────────────────────────────────────────────────────────────────────┐
+│ shopify_product_title: "Ruana Grinch - Navidad"                     │
+│ shopify_sku:           "46996902150379"                             │
+│ alegra_item_id:        "494"                                        │
+│ alegra_item_name:      "Ruana Grinch"                               │
+└─────────────────────────────────────────────────────────────────────┘
 ```
-
-Esto causa que productos con el **mismo SKU pero diferente nombre** se marquen incorrectamente como faltantes y se intenten crear duplicados en Alegra.
 
 ---
 
 ### Solución Propuesta
 
-Agregar una verificación por SKU **antes** de la comparación por nombre. Si el SKU de Shopify coincide con el `reference` de Alegra, el producto ya existe y NO debe crearse.
-
----
-
-### Lógica de Comparación Mejorada
+Agregar una **tercera verificación** usando los mapeos existentes:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│  Para cada producto de Shopify:                              │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. ¿El producto tiene SKU?                                 │
-│     │                                                       │
-│     ├─ SÍ → ¿Existe en Alegra con ese SKU (reference)?      │
-│     │       │                                               │
-│     │       ├─ SÍ → ✓ Ya existe, NO crear                   │
-│     │       │                                               │
-│     │       └─ NO → Continuar a paso 2                      │
-│     │                                                       │
-│     └─ NO → Continuar a paso 2                              │
-│                                                             │
-│  2. Comparar por nombre (fuzzy matching)                    │
-│     │                                                       │
-│     ├─ Match > 60% → ✓ Ya existe, NO crear                  │
-│     │                                                       │
-│     └─ Sin match → ✗ Faltante, agregar a lista              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Para cada producto de Shopify:                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. ¿Tiene SKU que coincide en Alegra (reference)?                  │
+│     ├─ SÍ → Ya existe, NO crear                                     │
+│     └─ NO → Continuar                                               │
+│                                                                     │
+│  2. ¿Tiene nombre similar en Alegra (fuzzy matching)?               │
+│     ├─ SÍ → Ya existe, NO crear                                     │
+│     └─ NO → Continuar                                               │
+│                                                                     │
+│  3. ¿Tiene mapeo existente en alegra_product_mapping?  ← NUEVO      │
+│     ├─ SÍ → Ya está vinculado, NO crear                             │
+│     └─ NO → Producto faltante, agregar a lista                      │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -53,22 +50,38 @@ Agregar una verificación por SKU **antes** de la comparación por nombre. Si el
 
 #### Archivo: `src/components/alegra/AlegraProductSyncModal.tsx`
 
-**1. Nueva función para buscar por SKU:**
+**1. Cargar mapeos existentes al inicio de la detección:**
 
 ```typescript
-const findBySkuMatch = (sku: string | null, alegraItems: AlegraItem[]): AlegraItem | null => {
-  if (!sku || sku.trim() === '') return null;
+const detectMissingProducts = async () => {
+  // ... código existente ...
   
-  const normalizedSku = sku.toLowerCase().trim();
+  // NUEVO: Cargar mapeos existentes
+  const { data: existingMappings } = await supabase
+    .from('alegra_product_mapping')
+    .select('shopify_product_title, shopify_variant_title, shopify_sku')
+    .eq('organization_id', currentOrganization.id);
   
-  return alegraItems.find(item => {
-    if (!item.reference) return false;
-    return item.reference.toLowerCase().trim() === normalizedSku;
-  }) || null;
+  // Crear Set para búsqueda rápida
+  const mappedProducts = new Set<string>();
+  const mappedSkus = new Set<string>();
+  
+  for (const m of existingMappings || []) {
+    // Agregar combinación título+variante
+    const key = `${m.shopify_product_title}|${m.shopify_variant_title || ''}`;
+    mappedProducts.add(key.toLowerCase());
+    
+    // Agregar SKU si existe
+    if (m.shopify_sku) {
+      mappedSkus.add(m.shopify_sku.toLowerCase());
+    }
+  }
+  
+  // ... resto del código ...
 };
 ```
 
-**2. Modificar la lógica de detección (líneas 145-161):**
+**2. Agregar verificación por mapeo existente:**
 
 ```typescript
 for (const [, product] of uniqueProducts) {
@@ -76,27 +89,58 @@ for (const [, product] of uniqueProducts) {
     ? `${product.title} ${product.variant_title}` 
     : product.title;
   
-  // NUEVO: Primero verificar por SKU
+  // 1. Verificar por SKU en Alegra
   const skuMatch = findBySkuMatch(product.sku, alegraItems);
-  if (skuMatch) {
-    // Producto ya existe por SKU, no es faltante
+  if (skuMatch) continue;
+  
+  // 2. Verificar por nombre similar
+  const nameMatch = findBestMatch(fullName, alegraItems);
+  if (nameMatch) continue;
+  
+  // 3. NUEVO: Verificar si ya tiene mapeo existente
+  const productKey = `${product.title}|${product.variant_title || ''}`.toLowerCase();
+  if (mappedProducts.has(productKey)) {
+    // Ya tiene mapeo manual, no crear
     continue;
   }
   
-  // Si no hay match por SKU, buscar por nombre
-  const nameMatch = findBestMatch(fullName, alegraItems);
-  
-  if (!nameMatch) {
-    const priceWithTax = parseFloat(String(product.price)) || 0;
-    missing.push({
-      name: fullName,
-      sku: product.sku,
-      priceWithTax,
-      priceWithoutTax: Math.round(priceWithTax / 1.19),
-      selected: true
-    });
+  // 4. NUEVO: Verificar si el SKU ya está mapeado
+  if (product.sku && mappedSkus.has(product.sku.toLowerCase())) {
+    // SKU ya tiene mapeo, no crear
+    continue;
   }
+  
+  // Producto realmente faltante
+  missing.push({
+    name: fullName,
+    sku: product.sku,
+    priceWithTax: parseFloat(String(product.price)) || 0,
+    priceWithoutTax: Math.round((parseFloat(String(product.price)) || 0) / 1.19),
+    selected: true
+  });
 }
+```
+
+---
+
+### Flujo Visual Actualizado
+
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Producto de Shopify: "Ruana Grinch - Navidad"                            │
+│  SKU: 46996902150379                                                      │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ❌ No hay match por SKU en Alegra (reference vacío)                      │
+│                                                                          │
+│  ❌ No hay match por nombre ("Ruana Grinch - Navidad" ≠ "Ruana Grinch")   │
+│                                                                          │
+│  ✅ EXISTE mapeo en alegra_product_mapping                                │
+│     → shopify_product_title: "Ruana Grinch - Navidad"                    │
+│     → alegra_item_id: 494                                                │
+│                                                                          │
+│  RESULTADO: NO crear (ya está vinculado)                                  │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -105,17 +149,24 @@ for (const [, product] of uniqueProducts) {
 
 | Escenario | Antes | Después |
 |-----------|-------|---------|
-| Producto con mismo SKU en Alegra | Se marca como faltante | NO se marca (ya existe) |
-| Producto con mismo nombre | NO se marca | NO se marca |
-| Producto nuevo sin SKU | Se marca | Se marca |
-| Producto nuevo con SKU único | Se marca | Se marca |
+| SKU coincide en Alegra | No se crea | No se crea |
+| Nombre similar en Alegra | No se crea | No se crea |
+| Tiene mapeo manual existente | SE CREA (duplicado) | NO se crea |
+| SKU ya mapeado en tabla | SE CREA (duplicado) | NO se crea |
+| Producto realmente nuevo | Se crea | Se crea |
 
 ---
 
 ### Beneficios
 
-1. **Evita duplicados**: Productos con mismo SKU no se crean dos veces
-2. **Más preciso**: SKU es identificador único, más confiable que nombre
-3. **Prioriza SKU**: Verificación por SKU es más rápida que fuzzy matching
-4. **Compatible**: Sigue funcionando para productos sin SKU
+1. **Respeta mapeos manuales**: Si ya vinculaste "Ruana Grinch - Navidad" → "Ruana Grinch", no se duplica
+2. **Cubre nombres diferentes**: No depende de que los nombres coincidan
+3. **Verificación por SKU mapeado**: Si el SKU ya tiene mapeo, no se crea
+4. **Compatible con lógica existente**: Las verificaciones anteriores siguen funcionando
+
+---
+
+### Archivo a Modificar
+
+`src/components/alegra/AlegraProductSyncModal.tsx`
 
