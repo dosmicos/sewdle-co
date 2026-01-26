@@ -715,6 +715,99 @@ serve(async (req) => {
         break;
       }
 
+      case "create-item": {
+        // Create a new item/product in Alegra
+        const item = data?.item || {};
+        
+        if (!item.name) {
+          throw new Error("Nombre del producto requerido");
+        }
+        
+        // Build price array format required by Alegra
+        const priceValue = parseFloat(item.price) || 0;
+        const priceArray = [{
+          idPriceList: 1,
+          price: priceValue
+        }];
+        
+        const itemPayload: Record<string, any> = {
+          name: item.name,
+          price: priceArray,
+          tax: item.tax || [{ id: 3 }],  // ID 3 = IVA 19% en Alegra Colombia
+          inventory: { unit: "unit" },
+          type: "product"
+        };
+        
+        // Add optional fields if present
+        if (item.reference) {
+          itemPayload.reference = item.reference;
+        }
+        if (item.description) {
+          itemPayload.description = item.description;
+        }
+        
+        console.log("Creating item:", JSON.stringify(itemPayload, null, 2));
+        result = await makeAlegraRequest("/items", "POST", itemPayload);
+        console.log("Item created:", JSON.stringify(result, null, 2));
+        break;
+      }
+
+      case "create-items-bulk": {
+        // Create multiple items with delay to avoid rate limiting
+        const items = data?.items || [];
+        const results: Array<{ success: boolean; item?: any; name?: string; error?: string }> = [];
+        
+        console.log(`Creating ${items.length} items in bulk...`);
+        
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          try {
+            const priceValue = parseFloat(item.price) || 0;
+            const priceArray = [{
+              idPriceList: 1,
+              price: priceValue
+            }];
+            
+            const itemPayload: Record<string, any> = {
+              name: item.name,
+              price: priceArray,
+              tax: [{ id: 3 }],  // IVA 19%
+              inventory: { unit: "unit" },
+              type: "product"
+            };
+            
+            if (item.reference) {
+              itemPayload.reference = item.reference;
+            }
+            if (item.description) {
+              itemPayload.description = item.description;
+            }
+            
+            console.log(`[${i + 1}/${items.length}] Creating: ${item.name}`);
+            const created = await makeAlegraRequest("/items", "POST", itemPayload);
+            results.push({ success: true, item: created });
+            
+            // Small delay to avoid rate limiting
+            if (i < items.length - 1) {
+              await sleep(300);
+            }
+          } catch (err: any) {
+            console.error(`Error creating item "${item.name}":`, err.message);
+            results.push({ 
+              success: false, 
+              name: item.name, 
+              error: err?.message || "Error desconocido"
+            });
+          }
+        }
+        
+        const successCount = results.filter(r => r.success).length;
+        console.log(`Bulk creation complete: ${successCount}/${items.length} successful`);
+        
+        result = results;
+        break;
+      }
+
       case "create-invoice":
         // Create an invoice
         console.log("Creating invoice with data:", JSON.stringify(data.invoice, null, 2));
