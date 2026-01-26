@@ -2815,6 +2815,8 @@ export type Database = {
           alegra_invoice_status: string | null
           alegra_stamped: boolean | null
           alegra_synced_at: string | null
+          auto_invoice_processing: boolean | null
+          auto_invoice_processing_at: string | null
           billing_address: Json | null
           browser_ip: string | null
           cancelled_at: string | null
@@ -2865,6 +2867,8 @@ export type Database = {
           alegra_invoice_status?: string | null
           alegra_stamped?: boolean | null
           alegra_synced_at?: string | null
+          auto_invoice_processing?: boolean | null
+          auto_invoice_processing_at?: string | null
           billing_address?: Json | null
           browser_ip?: string | null
           cancelled_at?: string | null
@@ -2915,6 +2919,8 @@ export type Database = {
           alegra_invoice_status?: string | null
           alegra_stamped?: boolean | null
           alegra_synced_at?: string | null
+          auto_invoice_processing?: boolean | null
+          auto_invoice_processing_at?: string | null
           billing_address?: Json | null
           browser_ip?: string | null
           cancelled_at?: string | null
