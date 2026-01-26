@@ -1,121 +1,94 @@
 
-## Plan: Guardar Mapeo Automático al Crear Productos
 
-### Problema
-Cuando se sincronizan productos de Shopify a Alegra, se crean en Alegra pero **no se guarda el mapeo** en `alegra_product_mapping`. Esto causa que en la siguiente sincronización se detecten como "faltantes" nuevamente y se creen duplicados.
+## Plan: Mejorar Algoritmo de Similitud para Evitar Falsos Positivos
+
+### Problema Identificado
+
+El algoritmo actual de `calculateSimilarity` es demasiado permisivo. Productos como:
+- "Sleeping para Bebé **Espacial** TOG 2.5"  
+- "Sleeping para Bebé **Osito** TOG 2.5"
+
+Tienen un score de ~0.83 (5 de 6 palabras coinciden), por lo que el sistema piensa que son el mismo producto cuando **NO lo son**.
 
 ### Solución
-Modificar `AlegraProductSyncModal.tsx` para que al crear cada producto exitosamente en Alegra, también se guarde el mapeo correspondiente en la tabla `alegra_product_mapping`.
 
-### Flujo Actual vs Nuevo
-
-```text
-FLUJO ACTUAL (Problemático):
-┌─────────────────────────────────────────────────────────────┐
-│  1. Detectar productos faltantes                             │
-│  2. Crear en Alegra                                          │
-│  3. FIN (sin guardar mapeo)                                  │
-│                                                             │
-│  → Próxima sincronización: Se detectan de nuevo como        │
-│    faltantes porque no hay mapeo                            │
-└─────────────────────────────────────────────────────────────┘
-
-FLUJO NUEVO (Correcto):
-┌─────────────────────────────────────────────────────────────┐
-│  1. Detectar productos faltantes                             │
-│  2. Crear en Alegra                                          │
-│  3. GUARDAR MAPEO en alegra_product_mapping                  │
-│     → shopify_product_title                                  │
-│     → shopify_variant_title                                  │
-│     → shopify_sku                                            │
-│     → alegra_item_id (del producto recién creado)            │
-│     → alegra_item_name                                       │
-│                                                             │
-│  → Próxima sincronización: Se detecta el mapeo y            │
-│    NO se marca como faltante                                 │
-└─────────────────────────────────────────────────────────────┘
-```
+Modificar el algoritmo de similitud para:
+1. **Aumentar el umbral** de 0.6 a 0.85 para ser más estricto
+2. **Penalizar palabras extra** en Alegra que no están en Shopify (si Alegra tiene "Osito" y Shopify tiene "Espacial", penalizar)
+3. **Verificar palabras clave distintivas** que diferencian productos (ej: colores, diseños)
 
 ### Cambios Técnicos
 
 #### Archivo: `src/components/alegra/AlegraProductSyncModal.tsx`
 
-**1. Agregar información original de Shopify a los productos:**
-
-Actualmente `MissingProduct` solo guarda el nombre combinado. Necesitamos guardar también el título y variante originales para crear el mapeo correcto.
+**1. Mejorar función `calculateSimilarity`:**
 
 ```typescript
-interface MissingProduct {
-  name: string;                    // Nombre combinado (title + variant)
-  shopifyTitle: string;            // NUEVO: Título original de Shopify
-  shopifyVariantTitle: string | null; // NUEVO: Variante original
-  sku: string | null;
-  priceWithTax: number;
-  priceWithoutTax: number;
-  selected: boolean;
-}
-```
-
-**2. Modificar detección para guardar datos originales:**
-
-```typescript
-missing.push({
-  name: fullName,
-  shopifyTitle: product.title,        // NUEVO
-  shopifyVariantTitle: product.variant_title || null, // NUEVO
-  sku: product.sku,
-  priceWithTax,
-  priceWithoutTax: Math.round(priceWithTax / 1.19),
-  selected: true
-});
-```
-
-**3. Crear mapeo después de cada creación exitosa:**
-
-```typescript
-const { data, error } = await supabase.functions.invoke('alegra-api', {
-  body: { 
-    action: 'create-items-bulk',
-    data: { items: batch }
-  }
-});
-
-// Después de crear, guardar los mapeos
-if (data?.success && Array.isArray(data.data)) {
-  for (let j = 0; j < data.data.length; j++) {
-    const result = data.data[j];
-    const originalProduct = batch[j]; // El producto original con datos de Shopify
-    
-    if (result.success && result.item?.id) {
-      // Guardar mapeo en la base de datos
-      await supabase.from('alegra_product_mapping').insert({
-        organization_id: currentOrganization.id,
-        shopify_product_title: originalProduct.shopifyTitle,
-        shopify_variant_title: originalProduct.shopifyVariantTitle,
-        shopify_sku: originalProduct.sku,
-        alegra_item_id: result.item.id,
-        alegra_item_name: result.item.name
-      });
+const calculateSimilarity = (str1: string, str2: string): number => {
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+  
+  if (s1 === s2) return 1;
+  
+  const words1 = s1.split(/\s+/).filter(w => w.length > 2);
+  const words2 = s2.split(/\s+/).filter(w => w.length > 2);
+  
+  let matches = 0;
+  for (const word of words1) {
+    if (words2.some(w => w.includes(word) || word.includes(w))) {
+      matches++;
     }
   }
-}
+  
+  const baseScore = words1.length > 0 ? matches / words1.length : 0;
+  
+  // NUEVO: Penalizar si Alegra tiene palabras que NO están en Shopify
+  // Esto evita que "Espacial" coincida con "Osito"
+  let extraWordsInAlegra = 0;
+  for (const word of words2) {
+    const existsInShopify = words1.some(w => w.includes(word) || word.includes(w));
+    if (!existsInShopify) {
+      extraWordsInAlegra++;
+    }
+  }
+  
+  // Aplicar penalización del 10% por cada palabra extra
+  const penalty = extraWordsInAlegra * 0.1;
+  const finalScore = Math.max(0, baseScore - penalty);
+  
+  return finalScore;
+};
 ```
+
+**2. Aumentar umbral de coincidencia:**
+
+```typescript
+// Línea 82 - Cambiar de 0.6 a 0.85
+if (score > 0.85 && (!bestMatch || score > bestMatch.score)) {
+```
+
+### Ejemplo de Cálculo Nuevo
+
+**Antes (problemático):**
+- "Sleeping para Bebé Espacial TOG 2.5" vs "Sleeping para Bebé Osito TOG 2.5"
+- Score: 5/6 = 0.83 → **MATCH** (mayor que 0.6)
+
+**Después (corregido):**
+- Base score: 5/6 = 0.83
+- Palabras extra en Alegra: "Osito" (no está en Shopify) = 1
+- Penalización: 1 × 0.1 = 0.1
+- Score final: 0.83 - 0.1 = **0.73** → **NO MATCH** (menor que 0.85)
 
 ### Resultado Esperado
 
-| Escenario | Antes | Después |
-|-----------|-------|---------|
-| Crear 173 productos | 173 en Alegra, 0 mapeos | 173 en Alegra, 173 mapeos |
-| Siguiente sincronización | Detecta 173 "faltantes" | Detecta 0 "faltantes" |
-| Duplicados | Sí, posibles | No |
-
-### Consideración Adicional
-
-Para los 173 productos que ya se crearon, se recomienda:
-1. Verificar si realmente se crearon en Alegra
-2. Si se crearon, crear los mapeos manualmente o ejecutar una sincronización inversa
-3. Si hay duplicados, eliminarlos desde Alegra directamente
+| Comparación | Score Antes | Score Después | ¿Match? |
+|-------------|-------------|---------------|---------|
+| Espacial vs Osito | 0.83 | 0.73 | ❌ No |
+| Espacial vs Espacial | 1.0 | 1.0 | ✅ Sí |
+| Mapache vs Mapache | 1.0 | 1.0 | ✅ Sí |
+| Ruana Grinch vs Ruana | 0.75 | 0.65 | ❌ No |
 
 ### Archivos a Modificar
 
 - `src/components/alegra/AlegraProductSyncModal.tsx`
+
