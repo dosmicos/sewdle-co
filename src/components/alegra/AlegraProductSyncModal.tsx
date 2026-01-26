@@ -60,6 +60,18 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
     return words1.length > 0 ? matches / words1.length : 0;
   };
 
+  // NEW: Find product by SKU match (exact match on reference field)
+  const findBySkuMatch = (sku: string | null, alegraItems: AlegraItem[]): AlegraItem | null => {
+    if (!sku || sku.trim() === '') return null;
+    
+    const normalizedSku = sku.toLowerCase().trim();
+    
+    return alegraItems.find(item => {
+      if (!item.reference) return false;
+      return item.reference.toLowerCase().trim() === normalizedSku;
+    }) || null;
+  };
+
   const findBestMatch = (productName: string, alegraItems: AlegraItem[]): { item: AlegraItem; score: number } | null => {
     let bestMatch: { item: AlegraItem; score: number } | null = null;
     
@@ -147,9 +159,17 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
           ? `${product.title} ${product.variant_title}` 
           : product.title;
         
-        const match = findBestMatch(fullName, alegraItems);
+        // FIRST: Check by SKU (exact match - most reliable)
+        const skuMatch = findBySkuMatch(product.sku, alegraItems);
+        if (skuMatch) {
+          // Product already exists by SKU, skip it
+          continue;
+        }
         
-        if (!match) {
+        // SECOND: Check by name (fuzzy matching)
+        const nameMatch = findBestMatch(fullName, alegraItems);
+        
+        if (!nameMatch) {
           const priceWithTax = parseFloat(String(product.price)) || 0;
           missing.push({
             name: fullName,
