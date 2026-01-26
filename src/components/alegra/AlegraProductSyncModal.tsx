@@ -123,6 +123,25 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
     setStep('detecting');
     
     try {
+      // 0. Load existing mappings from alegra_product_mapping
+      const { data: existingMappings } = await supabase
+        .from('alegra_product_mapping')
+        .select('shopify_product_title, shopify_variant_title, shopify_sku')
+        .eq('organization_id', currentOrganization.id);
+      
+      // Create Sets for fast lookup
+      const mappedProducts = new Set<string>();
+      const mappedSkus = new Set<string>();
+      
+      for (const m of existingMappings || []) {
+        const key = `${m.shopify_product_title}|${m.shopify_variant_title || ''}`;
+        mappedProducts.add(key.toLowerCase());
+        
+        if (m.shopify_sku) {
+          mappedSkus.add(m.shopify_sku.toLowerCase());
+        }
+      }
+      
       // 1. Get unique products from Shopify order line items (last 6 months)
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -159,26 +178,38 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
           ? `${product.title} ${product.variant_title}` 
           : product.title;
         
-        // FIRST: Check by SKU (exact match - most reliable)
+        // CHECK 1: SKU match in Alegra (reference field)
         const skuMatch = findBySkuMatch(product.sku, alegraItems);
         if (skuMatch) {
-          // Product already exists by SKU, skip it
           continue;
         }
         
-        // SECOND: Check by name (fuzzy matching)
+        // CHECK 2: Name similarity in Alegra
         const nameMatch = findBestMatch(fullName, alegraItems);
-        
-        if (!nameMatch) {
-          const priceWithTax = parseFloat(String(product.price)) || 0;
-          missing.push({
-            name: fullName,
-            sku: product.sku,
-            priceWithTax,
-            priceWithoutTax: Math.round(priceWithTax / 1.19),
-            selected: true
-          });
+        if (nameMatch) {
+          continue;
         }
+        
+        // CHECK 3: Existing mapping by product title + variant
+        const productKey = `${product.title}|${product.variant_title || ''}`.toLowerCase();
+        if (mappedProducts.has(productKey)) {
+          continue;
+        }
+        
+        // CHECK 4: Existing mapping by SKU
+        if (product.sku && mappedSkus.has(product.sku.toLowerCase())) {
+          continue;
+        }
+        
+        // Product is truly missing
+        const priceWithTax = parseFloat(String(product.price)) || 0;
+        missing.push({
+          name: fullName,
+          sku: product.sku,
+          priceWithTax,
+          priceWithoutTax: Math.round(priceWithTax / 1.19),
+          selected: true
+        });
       }
       
       // Sort by name
