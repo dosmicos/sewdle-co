@@ -1,209 +1,329 @@
 
-## Plan: Reemplazar botón "Empacado" con botón "Escanear" y modificar atajo Ctrl+.
+## Plan: Impresión de códigos de barras por artículo y modal manual
 
-### Resumen del comportamiento solicitado
+### Resumen de los cambios solicitados
 
-1. **Reemplazar el botón flotante** de "Marcar como Empacado" por un botón "Escanear"
-2. **Modificar el atajo Ctrl+.** para que enfoque el input de escaneo en lugar de marcar como empacado
-3. **Al hacer clic en el botón "Escanear"** o usar Ctrl+., el usuario es llevado directamente al campo de escaneo y puede empezar a escanear inmediatamente
-
-> **Nota importante:** El auto-empacado al completar la verificación (implementado anteriormente) seguirá funcionando - el botón "Escanear" solo facilita el acceso rápido al campo de escaneo.
+1. **Botón de imprimir por artículo** - Agregar un botón de impresora al lado de cada artículo que aparezca solo después de guardar (cuando `quantity_approved > 0`)
+2. **Sin necesidad de sincronización** - El botón de imprimir debe estar disponible inmediatamente después de guardar, sin esperar la sincronización con Shopify
+3. **Botón superior manual** - Mantener el botón superior "Imprimir Códigos" pero convertirlo en una herramienta manual donde se pueda seleccionar el producto y la cantidad de códigos a imprimir
 
 ---
 
-### Archivo a modificar
+### Archivos a modificar
 
-`src/components/picking/PickingOrderDetailsModal.tsx`
-
----
-
-### Cambio 1: Agregar ref al input de escaneo
-
-**Ubicación:** Alrededor de línea 91 (después de los otros refs existentes)
-
-```typescript
-const skuInputRef = useRef<HTMLInputElement>(null);
-```
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/DeliveryDetails.tsx` | Agregar botón de impresión por artículo + estado y función para modal manual |
+| `src/components/DeliveryReviewSummary.tsx` | Convertir botón de impresión automático a botón que abre modal manual |
+| `src/components/delivery/DeliveryManualBarcodeModal.tsx` | **NUEVO** - Modal para impresión manual de códigos (seleccionar producto + cantidad) |
 
 ---
 
-### Cambio 2: Crear función para enfocar el input y hacer scroll
+### Cambio 1: Agregar botón de impresión por artículo en DeliveryDetails.tsx
 
-**Ubicación:** Después de línea 95 (con las otras funciones de utilidad)
+**Ubicación:** Dentro de la celda de acciones de cada fila de variante (líneas ~1339-1385)
 
+**Lógica del botón:**
+- Solo visible cuando `item.quantity_approved > 0` (artículo ya guardado con aprobados)
+- Al hacer clic, imprime etiquetas para esa variante específica según `quantity_approved`
+- Icono de impresora pequeño (`Printer` de lucide-react)
+
+**Código a agregar en la sección de acciones por variante:**
 ```typescript
-// Focus SKU input and scroll to verification section
-const focusScanInput = useCallback(() => {
-  if (skuInputRef.current) {
-    skuInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // Small delay to ensure scroll completes before focusing
-    setTimeout(() => {
-      skuInputRef.current?.focus();
-    }, 300);
-  }
-}, []);
-```
-
----
-
-### Cambio 3: Modificar el atajo Ctrl+. para enfocar el input
-
-**Ubicación:** Líneas 127-144
-
-**Antes:**
-```typescript
-// Ctrl + . → Marcar como Empacado
-if (e.ctrlKey && e.key === '.') {
-  e.preventDefault();
-  // ... validaciones ...
-  if (localOrder?.operational_status !== 'ready_to_ship' && ...) {
-    handleMarkAsPackedAndPrintRef.current();
-  }
-  return;
-}
-```
-
-**Después:**
-```typescript
-// Ctrl + . → Enfocar campo de escaneo
-if (e.ctrlKey && e.key === '.') {
-  e.preventDefault();
-  // Solo enfocar si la orden no está empacada/enviada/cancelada
-  if (effectiveOrder?.operational_status !== 'ready_to_ship' && 
-      effectiveOrder?.operational_status !== 'awaiting_pickup' && 
-      effectiveOrder?.operational_status !== 'shipped' && 
-      !effectiveOrder?.shopify_order?.cancelled_at) {
-    focusScanInput();
-  }
-  return;
-}
-```
-
----
-
-### Cambio 4: Agregar ref al Input de escaneo
-
-**Ubicación:** Línea 1180
-
-**Antes:**
-```typescript
-<Input
-  value={skuInput}
-  onChange={(e) => { ... }}
-  placeholder="🔍 Escanea o escribe el SKU..."
-  ...
-/>
-```
-
-**Después:**
-```typescript
-<Input
-  ref={skuInputRef}
-  value={skuInput}
-  onChange={(e) => { ... }}
-  placeholder="🔍 Escanea o escribe el SKU..."
-  ...
-/>
-```
-
----
-
-### Cambio 5: Reemplazar botón "Empacado" por botón "Escanear"
-
-**Ubicación:** Líneas 1520-1543
-
-**Antes:**
-```typescript
-{/* Sticky Floating Action Button - "Marcar como Empacado" - solo visible cuando todos los artículos están verificados */}
-{!effectiveOrder.shopify_order?.cancelled_at && 
- effectiveOrder.operational_status !== 'ready_to_ship' && 
- effectiveOrder.operational_status !== 'awaiting_pickup' && 
- effectiveOrder.operational_status !== 'shipped' && 
- allItemsVerified && (
-  <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
-    <Button
-      onClick={handleMarkAsPackedAndPrint}
-      disabled={updatingStatus}
-      title="Ctrl + . para marcar rápidamente"
-      className="..."
-    >
-      {updatingStatus ? (
-        <Loader2 className="..." />
-      ) : (
-        <>
-          <Package className="..." />
-          <span className="hidden sm:inline">Marcar como</span> Empacado
-        </>
-      )}
-    </Button>
-  </div>
+{/* Botón de imprimir códigos de barras - visible solo si hay aprobados */}
+{item.quantity_approved > 0 && (
+  <Button
+    size="sm"
+    variant="outline"
+    onClick={() => handlePrintItemBarcodes(item)}
+    className="text-xs gap-1"
+    title="Imprimir códigos de barras"
+  >
+    <Printer className="w-3 h-3" />
+    Imprimir ({item.quantity_approved})
+  </Button>
 )}
 ```
 
-**Después:**
+**Nueva función `handlePrintItemBarcodes`:**
 ```typescript
-{/* Sticky Floating Action Button - "Escanear" - visible cuando la orden no está empacada */}
-{!effectiveOrder.shopify_order?.cancelled_at && 
- effectiveOrder.operational_status !== 'ready_to_ship' && 
- effectiveOrder.operational_status !== 'awaiting_pickup' && 
- effectiveOrder.operational_status !== 'shipped' && (
-  <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
-    <Button
-      onClick={focusScanInput}
-      title="Ctrl + . para escanear"
-      className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
-    >
-      <ScanLine className="w-4 h-4 md:w-5 md:h-5" />
-      Escanear
-    </Button>
-  </div>
-)}
+const handlePrintItemBarcodes = (item: any) => {
+  const variant = item.order_items?.product_variants;
+  if (!variant) return;
+
+  const productName = variant.products?.name || 'Producto';
+  const variantText = [variant.size, variant.color].filter(Boolean).join(' - ');
+  const sku = variant.sku_variant || '';
+  const quantity = item.quantity_approved;
+
+  // Generar etiquetas
+  const labels = Array.from({ length: quantity }, (_, i) => ({
+    sku,
+    productName,
+    variant: variantText,
+    unitIndex: i + 1
+  }));
+
+  // Imprimir directamente
+  printBarcodeLabels(labels);
+};
+```
+
+**Nueva función `printBarcodeLabels` (reutilizable):**
+```typescript
+const printBarcodeLabels = (labels: Array<{sku: string; productName: string; variant: string; unitIndex: number}>) => {
+  if (labels.length === 0) return;
+
+  const labelsWithCompactText = labels.map(label => ({
+    ...label,
+    compactText: label.variant ? `${label.productName} - ${label.variant}` : label.productName
+  }));
+
+  const printWindow = window.open('', '_blank', 'width=600,height=400');
+  if (!printWindow) return;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title></title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+          width: 100mm;
+          margin: 0;
+          padding: 0;
+          font-family: Arial, sans-serif;
+        }
+        .page { 
+          display: grid;
+          grid-template-columns: repeat(2, 48mm);
+          column-gap: 4mm;
+          row-gap: 0;
+          padding: 0;
+          margin: 0;
+          justify-content: center;
+        }
+        .barcode-label {
+          width: 48mm;
+          height: 20mm;
+          padding: 1mm;
+          box-sizing: border-box;
+          text-align: center;
+          page-break-inside: avoid;
+          background: white;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          overflow: hidden;
+        }
+        .barcode-label svg {
+          max-width: 46mm;
+          height: auto;
+        }
+        .product-info {
+          font-size: 12px;
+          font-weight: 500;
+          margin-top: 1px;
+          line-height: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 46mm;
+          color: #333;
+        }
+        @media print {
+          @page { 
+            size: 100mm 20mm;
+            margin: 0 !important;
+          }
+          html, body { 
+            width: 100mm;
+            margin: 0 !important; 
+          }
+          .barcode-label { 
+            border: none;
+            width: 48mm;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        ${labelsWithCompactText.map(label => `
+          <div class="barcode-label">
+            <svg id="barcode-${label.sku.replace(/[^a-zA-Z0-9]/g, '')}-${label.unitIndex}"></svg>
+            <div class="product-info">${label.compactText}</div>
+          </div>
+        `).join('')}
+      </div>
+      <script>
+        ${labelsWithCompactText.map(label => `
+          JsBarcode("#barcode-${label.sku.replace(/[^a-zA-Z0-9]/g, '')}-${label.unitIndex}", "${label.sku}", {
+            format: "CODE128",
+            width: 2.5,
+            height: 70,
+            fontSize: 16,
+            margin: 0,
+            displayValue: true,
+            textMargin: 2
+          });
+        `).join('')}
+        setTimeout(() => { window.print(); window.close(); }, 500);
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
 ```
 
 ---
 
-### Flujo resultante
+### Cambio 2: Nuevo componente DeliveryManualBarcodeModal.tsx
+
+**Propósito:** Modal que permite seleccionar manualmente qué productos de la entrega imprimir y en qué cantidad.
+
+**Características:**
+- Lista todos los artículos de la entrega que tienen `quantity_approved > 0`
+- Permite modificar la cantidad de etiquetas a imprimir para cada uno
+- Input numérico para cada variante
+- Botón "Imprimir Selección" que genera las etiquetas
+
+**Estructura del componente:**
+```typescript
+interface DeliveryManualBarcodeModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  deliveryItems: any[];
+  trackingNumber: string;
+}
+
+const DeliveryManualBarcodeModal = ({ isOpen, onClose, deliveryItems, trackingNumber }) => {
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+
+  // Inicializar cantidades con quantity_approved
+  useEffect(() => {
+    const initial: Record<string, number> = {};
+    deliveryItems.forEach(item => {
+      if (item.quantity_approved > 0) {
+        initial[item.id] = item.quantity_approved;
+      }
+    });
+    setQuantities(initial);
+  }, [deliveryItems, isOpen]);
+
+  // Solo mostrar items con aprobados
+  const approvedItems = deliveryItems.filter(item => item.quantity_approved > 0);
+
+  const handleQuantityChange = (itemId: string, value: number) => {
+    setQuantities(prev => ({
+      ...prev,
+      [itemId]: Math.max(0, value)
+    }));
+  };
+
+  const handlePrint = () => {
+    const labels = [];
+    approvedItems.forEach(item => {
+      const qty = quantities[item.id] || 0;
+      if (qty > 0) {
+        const variant = item.order_items?.product_variants;
+        const productName = variant?.products?.name || 'Producto';
+        const variantText = [variant?.size, variant?.color].filter(Boolean).join(' - ');
+        const sku = variant?.sku_variant || '';
+        
+        for (let i = 0; i < qty; i++) {
+          labels.push({ sku, productName, variant: variantText, unitIndex: i + 1 });
+        }
+      }
+    });
+    // Usar la función de impresión
+    printLabels(labels);
+  };
+
+  // ... render con tabla de items y inputs de cantidad
+};
+```
+
+---
+
+### Cambio 3: Modificar DeliveryReviewSummary.tsx
+
+**Ubicación:** Líneas 125-147 (botón de códigos de barras)
+
+**Antes:**
+- Botón que abre `DeliveryBarcodeModal` (imprime automáticamente todos los aprobados)
+
+**Después:**
+- Botón que abre `DeliveryManualBarcodeModal` (permite seleccionar qué y cuántos imprimir)
+- Cambiar el texto del botón a "Imprimir Códigos de Barras (Manual)"
+- El modal ahora permite editar cantidades antes de imprimir
+
+---
+
+### Resumen del flujo de usuario
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Usuario abre modal de orden (estado: "Por Procesar")    │
-│     - Botón flotante "Escanear" visible abajo a la derecha  │
+│  FLUJO 1: Impresión rápida por artículo                     │
 ├─────────────────────────────────────────────────────────────┤
-│  2. Usuario presiona botón "Escanear" o Ctrl + .            │
-│     - Pantalla hace scroll al campo de escaneo              │
-│     - Campo de escaneo recibe foco automáticamente          │
+│  1. Usuario revisa calidad y pone Aprobadas: 5              │
+│  2. Usuario hace clic en "Guardar"                          │
+│  3. Aparece botón [🖨️ Imprimir (5)] al lado del artículo    │
+│  4. Clic → Imprime 5 etiquetas directamente                 │
+│     (Sin esperar sincronización)                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  FLUJO 2: Impresión manual (botón superior)                 │
 ├─────────────────────────────────────────────────────────────┤
-│  3. Usuario escanea artículos con pistola de códigos        │
-│     - Cada escaneo verifica el SKU                          │
-│     - Contador se actualiza (1/2, 2/2...)                   │
-├─────────────────────────────────────────────────────────────┤
-│  4. Al completar todos los artículos (ej: 2/2)              │
-│     - Muestra mensaje "¡Verificación completa!"             │
-│     - AUTO-EMPACA después de 800ms (implementado antes)     │
-├─────────────────────────────────────────────────────────────┤
-│  5. Después del empacado automático                         │
-│     - Botón "Escanear" desaparece (orden ya empacada)       │
-│     - Botón "Crear Guía" aparece automáticamente            │
+│  1. Usuario hace clic en "Imprimir Códigos de Barras"       │
+│  2. Se abre modal con lista de todos los artículos aprobados│
+│  3. Usuario puede modificar cantidad para cada uno:         │
+│     - Ruana Mapache 2 (3-12m): [5] ← editable               │
+│     - Ruana Mapache 4 (1-2a):  [3] ← editable               │
+│  4. Clic en "Imprimir Selección"                            │
+│  5. Imprime 8 etiquetas (5+3) según selección               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Detalles técnicos
+### Sección técnica
 
-| Aspecto | Valor |
-|---------|-------|
-| Atajo de teclado | `Ctrl + .` |
-| Scroll behavior | `smooth`, block: `center` |
-| Delay antes de focus | 300ms (para completar scroll) |
-| Icono del botón | `ScanLine` (ya importado) |
-| Condición de visibilidad | Orden no cancelada, no empacada, no enviada |
+**Imports necesarios en DeliveryDetails.tsx:**
+```typescript
+import { Printer } from 'lucide-react';
+```
+
+**Estado nuevo para modal manual:**
+```typescript
+const [showManualBarcodeModal, setShowManualBarcodeModal] = useState(false);
+```
+
+**Ubicación del botón por artículo:**
+- Dentro del bloque de acciones (líneas ~1339-1385)
+- Agregar después del bloque de "Guardar" y antes de "Sincronizar"
+- Solo visible si `item.quantity_approved > 0` (ya guardado)
+
+**Condición de visibilidad:**
+```typescript
+// Visible inmediatamente después de guardar (quantity_approved > 0)
+// NO depende de synced_to_shopify
+item.quantity_approved > 0
+```
 
 ---
 
 ### Resultado esperado
 
-- El botón flotante ahora dice **"Escanear"** con ícono de escáner
-- Al hacer clic o usar **Ctrl+.**, el usuario va directo al campo de escaneo
-- El flujo de auto-empacado al completar verificación **sigue funcionando** igual
-- Experiencia más rápida para operarios de bodega
+| Escenario | Antes | Después |
+|-----------|-------|---------|
+| Artículo guardado (no sincronizado) | Sin botón de imprimir | ✅ Botón "Imprimir (N)" visible |
+| Artículo sincronizado | Sin botón de imprimir | ✅ Botón "Imprimir (N)" visible |
+| Botón superior | Imprime todos automáticamente | Abre modal para seleccionar producto y cantidad |
+| Impresión individual | No existía | ✅ Clic directo imprime esa variante |
