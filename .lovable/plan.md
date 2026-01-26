@@ -1,122 +1,285 @@
 
 
-## Plan: Mejorar Búsqueda y Paginación del Catálogo de Alegra
+## Plan: Sincronizar Productos de Shopify a Alegra
 
 ### Problema Identificado
 
-El catálogo de productos de Alegra tiene dos limitaciones que impiden ver productos nuevos:
+Los productos nuevos vendidos en Shopify no existen en el catálogo de Alegra, lo que impide:
+1. Mapearlos correctamente para facturación
+2. Control de inventario en Alegra
+3. Contabilidad precisa
 
-1. **Límite de 30 productos**: La API de Alegra solo devuelve máximo 30 items por request
-2. **Sin paginación**: No hay botones "Anterior/Siguiente" para navegar
-3. **Búsqueda limitada**: El parámetro `name=` de Alegra puede no encontrar coincidencias parciales
-
-**Por eso los productos nuevos no aparecen** - si hay más de 30 productos, los nuevos quedan fuera del rango visible.
+La API de Alegra permite crear productos (`POST /items`), pero actualmente esta funcionalidad no está implementada.
 
 ---
 
 ### Solución Propuesta
 
-#### 1. Agregar paginación completa al catálogo
-
-Agregar controles de navegación para recorrer **todas** las páginas de productos:
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  Catálogo de Alegra                                          │
-├──────────────────────────────────────────────────────────────┤
-│  [Buscar por nombre...]                     [🔍] [🔄]         │
-├──────────────────────────────────────────────────────────────┤
-│  ID    Nombre                    Precio     Vinculado         │
-│  ─────────────────────────────────────────────────────────── │
-│  4     Abrigo Simple Furry       $31.849    ✕    [Vincular]  │
-│  282   Beisboleras Niña...       $53.697    ✕    [Vincular]  │
-│  ...   (30 productos por página)                              │
-├──────────────────────────────────────────────────────────────┤
-│  Mostrando 1-30 de productos                                  │
-│  [⬅️ Anterior]        Página 1         [Siguiente ➡️]          │
-└──────────────────────────────────────────────────────────────┘
-```
-
-#### 2. Mejorar la búsqueda con filtro local
-
-Además de la búsqueda en API, agregar un filtro local que busque en **todos** los productos cargados (ya que la API puede fallar en coincidencias parciales).
+Agregar un botón **"Sincronizar Productos"** en el módulo de Alegra que:
+1. Obtiene todos los productos únicos de Shopify (desde `shopify_order_line_items`)
+2. Compara con el catálogo actual de Alegra
+3. Crea los productos que faltan en Alegra con IVA 19%
+4. Muestra un resumen de sincronización
 
 ---
 
-### Cambios Técnicos
+### Arquitectura
 
-#### Archivo: `src/components/alegra/AlegraProductMapper.tsx`
+```text
+┌────────────────────────────────────────────────────────────────┐
+│  AlegraProductMapper.tsx                                        │
+├────────────────────────────────────────────────────────────────┤
+│  [🔄 Sincronizar Productos Nuevos]                              │
+│        │                                                        │
+│        ▼                                                        │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  1. Cargar productos únicos de Shopify                    │  │
+│  │     (SELECT DISTINCT title, variant_title, sku, price     │  │
+│  │      FROM shopify_order_line_items)                       │  │
+│  ├──────────────────────────────────────────────────────────┤  │
+│  │  2. Cargar catálogo completo de Alegra                    │  │
+│  │     (GET /items paginado)                                 │  │
+│  ├──────────────────────────────────────────────────────────┤  │
+│  │  3. Comparar por nombre (fuzzy matching)                  │  │
+│  │     → Identificar productos faltantes                     │  │
+│  ├──────────────────────────────────────────────────────────┤  │
+│  │  4. Crear productos en Alegra                             │  │
+│  │     (POST /items con IVA 19%)                             │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Interfaz de Usuario
+
+#### Nuevo botón en la sección "Catálogo de Alegra":
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  📦 Catálogo de Alegra                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Busca productos en tu catálogo de Alegra para vincularlos...   │
+│                                                                 │
+│  [Buscar...]                  [🔍] [🔄 Refrescar]               │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 💡 Sincronizar Productos Nuevos                            │  │
+│  │                                                            │  │
+│  │ Detecta productos vendidos en Shopify que no existen       │  │
+│  │ en Alegra y los crea automáticamente.                      │  │
+│  │                                                            │  │
+│  │ [🔄 Detectar y Sincronizar Productos]                      │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ID    Nombre                    Precio     Vinculado           │
+│  ───────────────────────────────────────────────────────────── │
+│  ...                                                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Modal de sincronización:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Sincronizar Productos a Alegra                            [X]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  📊 Análisis de Productos                                       │
+│  ───────────────────────────────────────────────────────────── │
+│  Productos en Shopify:         45                               │
+│  Ya existen en Alegra:         32                               │
+│  Faltantes por crear:          13                               │
+│                                                                 │
+│  Productos a crear:                                             │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ ☑️ Ruana Castor                     $89,900 + IVA         │  │
+│  │ ☑️ Chaleco Osito Bebé               $75,000 + IVA         │  │
+│  │ ☑️ Camiseta Clean Tee Niño          $24,900 + IVA         │  │
+│  │ ...                                                        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  [Cancelar]                       [Crear 13 Productos en Alegra]│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Archivos a Modificar
+
+#### 1. `supabase/functions/alegra-api/index.ts`
+
+Agregar nueva acción `create-item`:
+
+```typescript
+case "create-item": {
+  // Create a new item/product in Alegra
+  const item = data?.item || {};
+  
+  if (!item.name) {
+    throw new Error("Nombre del producto requerido");
+  }
+  
+  const itemPayload = {
+    name: item.name,
+    description: item.description || "",
+    reference: item.reference || null,  // SKU
+    price: item.price || 0,  // Precio sin IVA
+    tax: item.tax || [{ id: 3 }],  // ID 3 = IVA 19% en Alegra Colombia
+    category: item.category || null,
+    inventory: item.inventory || { unit: "unit" },
+    type: "product"
+  };
+  
+  console.log("Creating item:", JSON.stringify(itemPayload, null, 2));
+  result = await makeAlegraRequest("/items", "POST", itemPayload);
+  console.log("Item created:", JSON.stringify(result, null, 2));
+  break;
+}
+
+case "create-items-bulk": {
+  // Create multiple items
+  const items = data?.items || [];
+  const results = [];
+  
+  for (const item of items) {
+    try {
+      const itemPayload = {
+        name: item.name,
+        reference: item.reference || null,
+        price: item.price || 0,
+        tax: [{ id: 3 }],  // IVA 19%
+        inventory: { unit: "unit" },
+        type: "product"
+      };
+      
+      const created = await makeAlegraRequest("/items", "POST", itemPayload);
+      results.push({ success: true, item: created });
+      
+      // Small delay to avoid rate limiting
+      await sleep(200);
+    } catch (err) {
+      results.push({ 
+        success: false, 
+        name: item.name, 
+        error: (err as any)?.message 
+      });
+    }
+  }
+  
+  result = results;
+  break;
+}
+```
+
+#### 2. `src/components/alegra/AlegraProductMapper.tsx`
+
+Agregar componente de sincronización:
 
 **Nuevos estados:**
-```typescript
-const [currentPage, setCurrentPage] = useState(0);
-const [hasMoreItems, setHasMoreItems] = useState(false);
-```
+- `isSyncing`: Indica si está ejecutando la sincronización
+- `syncModalOpen`: Controla la visibilidad del modal
+- `shopifyProducts`: Lista de productos únicos de Shopify
+- `missingProducts`: Productos que no existen en Alegra
+- `syncProgress`: Progreso de la sincronización
 
-**Modificar `fetchAlegraItems`:**
-```typescript
-const fetchAlegraItems = async (page = 0) => {
-  setIsLoading(true);
-  try {
-    const pageSize = 30;
-    const { data, error } = await supabase.functions.invoke('alegra-api', {
-      body: { 
-        action: 'get-items',
-        data: { 
-          start: page * pageSize, 
-          limit: pageSize, 
-          search: searchTerm || undefined 
-        }
-      }
-    });
+**Nuevas funciones:**
+- `detectMissingProducts()`: Compara Shopify vs Alegra
+- `syncProductsToAlegra()`: Crea los productos faltantes
+- Reutilizar `findBestAlegraMatch()` del BulkInvoiceCreator
 
-    if (data?.success && Array.isArray(data.data)) {
-      const items = data.data.filter(item => item.status === 'active');
-      setAlegraItems(items);
-      setHasMoreItems(items.length === pageSize);
-      setCurrentPage(page);
+**Nueva UI:**
+- Card de sincronización con explicación
+- Botón "Detectar y Sincronizar"
+- Modal con lista de productos a crear
+- Checkboxes para seleccionar qué productos crear
+- Barra de progreso durante creación
+
+---
+
+### Lógica de Detección de Productos Faltantes
+
+```typescript
+async function detectMissingProducts() {
+  // 1. Obtener productos únicos de Shopify (últimos 6 meses)
+  const { data: shopifyProducts } = await supabase
+    .from('shopify_order_line_items')
+    .select('title, variant_title, sku, price')
+    .eq('organization_id', currentOrganization.id)
+    .gte('created_at', sixMonthsAgo)
+    .order('title');
+  
+  // 2. Deduplicar por título+variante
+  const uniqueProducts = new Map();
+  for (const p of shopifyProducts) {
+    const key = `${p.title}|${p.variant_title || ''}`;
+    if (!uniqueProducts.has(key)) {
+      uniqueProducts.set(key, p);
     }
-  } catch (error) {
-    // Error handling...
   }
-};
+  
+  // 3. Cargar catálogo completo de Alegra
+  const alegraItems = await loadAllAlegraItems();
+  
+  // 4. Comparar y encontrar faltantes
+  const missing = [];
+  for (const [key, product] of uniqueProducts) {
+    const fullName = product.variant_title 
+      ? `${product.title} ${product.variant_title}` 
+      : product.title;
+    
+    const match = findBestMatch(fullName, alegraItems);
+    if (!match || match.score < 0.6) {
+      missing.push({
+        name: fullName,
+        sku: product.sku,
+        priceWithTax: product.price,
+        priceWithoutTax: Math.round(product.price / 1.19)
+      });
+    }
+  }
+  
+  return missing;
+}
 ```
 
-**Nueva UI de paginación:**
-```typescript
-<div className="flex items-center justify-between mt-4 pt-4 border-t">
-  <span className="text-sm text-muted-foreground">
-    Mostrando {currentPage * 30 + 1}-{currentPage * 30 + alegraItems.length}
-  </span>
-  <div className="flex items-center gap-2">
-    <Button 
-      variant="outline" 
-      size="sm"
-      onClick={() => fetchAlegraItems(currentPage - 1)}
-      disabled={currentPage === 0 || isLoading}
-    >
-      <ChevronLeft className="h-4 w-4" /> Anterior
-    </Button>
-    <span className="text-sm px-2">Página {currentPage + 1}</span>
-    <Button 
-      variant="outline"
-      size="sm"
-      onClick={() => fetchAlegraItems(currentPage + 1)}
-      disabled={!hasMoreItems || isLoading}
-    >
-      Siguiente <ChevronRight className="h-4 w-4" />
-    </Button>
-  </div>
-</div>
+---
+
+### Formato de Creación de Productos en Alegra
+
+Según la documentación de Alegra (POST /items):
+
+```json
+{
+  "name": "Ruana Castor",
+  "description": "Producto sincronizado desde Shopify",
+  "reference": "SKU-123456",  // SKU de Shopify
+  "price": [
+    {
+      "idPriceList": 1,
+      "price": 75546.22  // Precio SIN IVA (÷ 1.19)
+    }
+  ],
+  "tax": [
+    { "id": 3 }  // IVA 19%
+  ],
+  "inventory": {
+    "unit": "unit"
+  },
+  "type": "product"
+}
 ```
 
-**Resetear página al buscar:**
-```typescript
-const handleSearch = () => {
-  setCurrentPage(0);
-  fetchAlegraItems(0);
-};
-```
+---
+
+### Manejo de Errores
+
+| Escenario | Acción |
+|-----------|--------|
+| Producto ya existe en Alegra | Omitir con log informativo |
+| Error de rate limit | Reintentar con backoff |
+| Error de validación | Mostrar en resumen |
+| Producto sin precio | Crear con precio $0 (editable en Alegra) |
 
 ---
 
@@ -124,13 +287,26 @@ const handleSearch = () => {
 
 | Antes | Después |
 |-------|---------|
-| Solo 30 productos visibles | Navegación por TODAS las páginas |
-| Productos nuevos no aparecen | Ir a última página para ver nuevos |
-| Búsqueda no encuentra productos | Paginación + búsqueda funcionando |
+| Productos nuevos no aparecen | Botón detecta y crea automáticamente |
+| Mapeo manual obligatorio | Productos ya existen para mapear |
+| Sin sincronización | Sincronización en un click |
 
 ---
 
-### Tip Temporal
+### Sección Técnica
 
-Mientras se implementa: Si necesitas encontrar un producto nuevo específico, intenta buscar por su **nombre exacto completo** o por su **ID de Alegra** (si lo conoces).
+**Archivos a modificar:**
+1. `supabase/functions/alegra-api/index.ts` - Agregar acciones `create-item` y `create-items-bulk`
+2. `src/components/alegra/AlegraProductMapper.tsx` - UI de sincronización
+
+**Dependencias reutilizadas:**
+- `makeAlegraRequest()` con retry/backoff
+- Tabla `shopify_order_line_items` para productos de Shopify
+- Lógica de matching de `BulkInvoiceCreator`
+
+**Consideraciones:**
+- IVA 19% aplicado automáticamente (ID de tax = 3 en Alegra Colombia)
+- Precio enviado sin IVA (el sistema de Alegra lo calcula)
+- SKU de Shopify usado como "reference" en Alegra
+- Delay de 200ms entre creaciones para evitar rate limiting
 
