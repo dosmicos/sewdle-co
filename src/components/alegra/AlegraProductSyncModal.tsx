@@ -193,12 +193,14 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
         if (from > 50000) break;
       }
       
-      // 2. Deduplicate by title + variant
-      const uniqueProducts = new Map<string, { title: string; variant_title: string | null; sku: string | null; price: number }>();
+      // 2. Deduplicate by title ONLY (without variants for Alegra)
+      const uniqueProducts = new Map<string, { title: string; sku: string | null; price: number }>();
       for (const p of allShopifyProducts) {
-        const key = `${p.title}|${p.variant_title || ''}`;
+        const key = p.title.toLowerCase().trim();
         if (!uniqueProducts.has(key)) {
-          uniqueProducts.set(key, p);
+          // Use the first occurrence's price and a representative SKU (without variant suffix if possible)
+          const baseSku = p.sku ? p.sku.split('-')[0] : null; // Get base SKU without variant suffix
+          uniqueProducts.set(key, { title: p.title, sku: baseSku, price: p.price });
         }
       }
       
@@ -208,13 +210,11 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       const alegraItems = await loadAllAlegraItems();
       setAlegraItemsCount(alegraItems.length);
       
-      // 4. Find products that don't exist in Alegra
+      // 4. Find products that don't exist in Alegra (base products only, no variants)
       const missing: MissingProduct[] = [];
       
       for (const [, product] of uniqueProducts) {
-        const fullName = product.variant_title 
-          ? `${product.title} ${product.variant_title}` 
-          : product.title;
+        const productName = product.title; // Only use base product name, no variants
         
         // CHECK 1: SKU match in Alegra (reference field)
         const skuMatch = findBySkuMatch(product.sku, alegraItems);
@@ -222,14 +222,14 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
           continue;
         }
         
-        // CHECK 2: Name similarity in Alegra
-        const nameMatch = findBestMatch(fullName, alegraItems);
+        // CHECK 2: Name similarity in Alegra (check base product name)
+        const nameMatch = findBestMatch(productName, alegraItems);
         if (nameMatch) {
           continue;
         }
         
-        // CHECK 3: Existing mapping by product title + variant
-        const productKey = `${product.title}|${product.variant_title || ''}`.toLowerCase();
+        // CHECK 3: Existing mapping by product title (without variant)
+        const productKey = `${product.title}|`.toLowerCase(); // Base product key
         if (mappedProducts.has(productKey)) {
           continue;
         }
@@ -242,9 +242,9 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
         // Product is truly missing
         const priceWithTax = parseFloat(String(product.price)) || 0;
         missing.push({
-          name: fullName,
+          name: productName, // Only product name, no variant
           shopifyTitle: product.title,
-          shopifyVariantTitle: product.variant_title || null,
+          shopifyVariantTitle: null, // Always null - we don't use variants
           sku: product.sku,
           priceWithTax,
           priceWithoutTax: Math.round(priceWithTax / 1.19),
