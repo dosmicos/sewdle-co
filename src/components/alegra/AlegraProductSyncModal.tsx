@@ -213,33 +213,41 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       // 4. Find products that don't exist in Alegra (base products only, no variants)
       const missing: MissingProduct[] = [];
       
+      // Debug: Log what products we're checking
+      console.log(`[AlegraSync] Checking ${uniqueProducts.size} unique products against ${alegraItems.length} Alegra items`);
+      
       for (const [, product] of uniqueProducts) {
         const productName = product.title; // Only use base product name, no variants
         
         // CHECK 1: SKU match in Alegra (reference field)
         const skuMatch = findBySkuMatch(product.sku, alegraItems);
         if (skuMatch) {
+          console.log(`[AlegraSync] "${productName}" - Matched by SKU: ${product.sku}`);
           continue;
         }
         
         // CHECK 2: Name similarity in Alegra (check base product name)
         const nameMatch = findBestMatch(productName, alegraItems);
         if (nameMatch) {
+          console.log(`[AlegraSync] "${productName}" - Matched by name similarity (${nameMatch.score.toFixed(2)}) with "${nameMatch.item.name}"`);
           continue;
         }
         
         // CHECK 3: Existing mapping by product title (without variant)
         const productKey = `${product.title}|`.toLowerCase(); // Base product key
         if (mappedProducts.has(productKey)) {
+          console.log(`[AlegraSync] "${productName}" - Matched by existing mapping (title)`);
           continue;
         }
         
         // CHECK 4: Existing mapping by SKU
         if (product.sku && mappedSkus.has(product.sku.toLowerCase())) {
+          console.log(`[AlegraSync] "${productName}" - Matched by existing mapping (SKU: ${product.sku})`);
           continue;
         }
         
         // Product is truly missing
+        console.log(`[AlegraSync] "${productName}" - NOT FOUND - Adding to missing list`);
         const priceWithTax = parseFloat(String(product.price)) || 0;
         missing.push({
           name: productName, // Only product name, no variant
