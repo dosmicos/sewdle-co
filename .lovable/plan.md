@@ -1,92 +1,98 @@
 
 
-## Plan: Mejorar Algoritmo de Similitud para Evitar Falsos Positivos
+## Plan: Corregir Carga de Productos Shopify con Paginación
 
 ### Problema Identificado
 
-El algoritmo actual de `calculateSimilarity` es demasiado permisivo. Productos como:
-- "Sleeping para Bebé **Espacial** TOG 2.5"  
-- "Sleeping para Bebé **Osito** TOG 2.5"
+El modal muestra solo **188 productos únicos** cuando en realidad hay **691** productos de Shopify diferentes. Esto ocurre porque:
 
-Tienen un score de ~0.83 (5 de 6 palabras coinciden), por lo que el sistema piensa que son el mismo producto cuando **NO lo son**.
+1. **Límite de Supabase**: La consulta actual devuelve máximo 1,000 filas
+2. **14,983 líneas de pedido** existen en los últimos 6 meses
+3. Solo se procesan las primeras 1,000 líneas → solo 188 productos únicos detectados
+4. Los 66 mapeos existentes no se aplican correctamente porque muchos productos nunca se cargan
 
 ### Solución
 
-Modificar el algoritmo de similitud para:
-1. **Aumentar el umbral** de 0.6 a 0.85 para ser más estricto
-2. **Penalizar palabras extra** en Alegra que no están en Shopify (si Alegra tiene "Osito" y Shopify tiene "Espacial", penalizar)
-3. **Verificar palabras clave distintivas** que diferencian productos (ej: colores, diseños)
+Modificar la función `detectMissingProducts` para usar paginación o agregación directa en la base de datos.
+
+**Opción elegida**: Consulta agregada que obtiene productos únicos directamente desde la base de datos (más eficiente).
 
 ### Cambios Técnicos
 
 #### Archivo: `src/components/alegra/AlegraProductSyncModal.tsx`
 
-**1. Mejorar función `calculateSimilarity`:**
+**Cambiar la consulta de productos de Shopify:**
 
 ```typescript
-const calculateSimilarity = (str1: string, str2: string): number => {
-  const s1 = str1.toLowerCase().trim();
-  const s2 = str2.toLowerCase().trim();
+// ANTES (problemático - límite de 1000 filas)
+const { data: shopifyProducts, error: shopifyError } = await supabase
+  .from('shopify_order_line_items')
+  .select('title, variant_title, sku, price')
+  .eq('organization_id', currentOrganization.id)
+  .gte('created_at', sixMonthsAgo.toISOString())
+  .order('title');
+
+// DESPUÉS (paginación para obtener TODOS los productos)
+const allShopifyProducts: Array<{title: string; variant_title: string | null; sku: string | null; price: number}> = [];
+const pageSize = 1000;
+let from = 0;
+let hasMore = true;
+
+while (hasMore) {
+  const { data: batch, error } = await supabase
+    .from('shopify_order_line_items')
+    .select('title, variant_title, sku, price')
+    .eq('organization_id', currentOrganization.id)
+    .gte('created_at', sixMonthsAgo.toISOString())
+    .order('title')
+    .range(from, from + pageSize - 1);
   
-  if (s1 === s2) return 1;
+  if (error) throw error;
   
-  const words1 = s1.split(/\s+/).filter(w => w.length > 2);
-  const words2 = s2.split(/\s+/).filter(w => w.length > 2);
-  
-  let matches = 0;
-  for (const word of words1) {
-    if (words2.some(w => w.includes(word) || word.includes(w))) {
-      matches++;
-    }
+  if (batch && batch.length > 0) {
+    allShopifyProducts.push(...batch);
+    from += pageSize;
+    hasMore = batch.length === pageSize;
+  } else {
+    hasMore = false;
   }
   
-  const baseScore = words1.length > 0 ? matches / words1.length : 0;
-  
-  // NUEVO: Penalizar si Alegra tiene palabras que NO están en Shopify
-  // Esto evita que "Espacial" coincida con "Osito"
-  let extraWordsInAlegra = 0;
-  for (const word of words2) {
-    const existsInShopify = words1.some(w => w.includes(word) || word.includes(w));
-    if (!existsInShopify) {
-      extraWordsInAlegra++;
-    }
-  }
-  
-  // Aplicar penalización del 10% por cada palabra extra
-  const penalty = extraWordsInAlegra * 0.1;
-  const finalScore = Math.max(0, baseScore - penalty);
-  
-  return finalScore;
-};
+  // Safety limit
+  if (from > 50000) break;
+}
 ```
 
-**2. Aumentar umbral de coincidencia:**
+### Flujo Corregido
 
-```typescript
-// Línea 82 - Cambiar de 0.6 a 0.85
-if (score > 0.85 && (!bestMatch || score > bestMatch.score)) {
+```text
+ANTES (Incorrecto):
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Cargar líneas de pedido (MÁXIMO 1000)                        │
+│  2. Deduplicar → 188 productos únicos                           │
+│  3. Comparar con 66 mapeos → Solo 4 coinciden                   │
+│  4. Resultado: 184 "faltantes" (incorrecto)                     │
+└─────────────────────────────────────────────────────────────────┘
+
+DESPUÉS (Correcto):
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Cargar TODAS las líneas de pedido (14,983)                  │
+│  2. Deduplicar → 691 productos únicos                           │
+│  3. Comparar con:                                               │
+│     - SKU en Alegra                                             │
+│     - Nombre similar en Alegra (28 items)                       │
+│     - 66 mapeos existentes                                      │
+│  4. Resultado: X "faltantes" (correcto)                         │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-### Ejemplo de Cálculo Nuevo
-
-**Antes (problemático):**
-- "Sleeping para Bebé Espacial TOG 2.5" vs "Sleeping para Bebé Osito TOG 2.5"
-- Score: 5/6 = 0.83 → **MATCH** (mayor que 0.6)
-
-**Después (corregido):**
-- Base score: 5/6 = 0.83
-- Palabras extra en Alegra: "Osito" (no está en Shopify) = 1
-- Penalización: 1 × 0.1 = 0.1
-- Score final: 0.83 - 0.1 = **0.73** → **NO MATCH** (menor que 0.85)
 
 ### Resultado Esperado
 
-| Comparación | Score Antes | Score Después | ¿Match? |
-|-------------|-------------|---------------|---------|
-| Espacial vs Osito | 0.83 | 0.73 | ❌ No |
-| Espacial vs Espacial | 1.0 | 1.0 | ✅ Sí |
-| Mapache vs Mapache | 1.0 | 1.0 | ✅ Sí |
-| Ruana Grinch vs Ruana | 0.75 | 0.65 | ❌ No |
+| Métrica | Antes | Después |
+|---------|-------|---------|
+| Líneas de pedido procesadas | 1,000 | 14,983 |
+| Productos únicos detectados | 188 | 691 |
+| Mapeos aplicados | ~4 | ~66 |
+| Faltantes estimados | 184 | ~620 |
 
 ### Archivos a Modificar
 
