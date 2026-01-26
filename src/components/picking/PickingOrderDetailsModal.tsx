@@ -1489,8 +1489,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             </div>
           </div>
 
-          {/* Shipping Label Section - At the very bottom of scrollable content */}
-          {effectiveOrder.shopify_order?.shopify_order_id && !effectiveOrder.shopify_order?.cancelled_at && (
+          {/* Shipping Label Section - Hidden for Express and Pickup orders */}
+          {effectiveOrder.shopify_order?.shopify_order_id && 
+           !effectiveOrder.shopify_order?.cancelled_at && 
+           shippingType?.label !== 'Recoger' && 
+           shippingType?.label !== 'Express' && (
             <div className="border-t pt-4 mt-6">
               <div className="flex items-center gap-2 mb-2">
                 <Truck className="w-4 h-4 text-muted-foreground" />
@@ -1586,6 +1589,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         {!effectiveOrder.shopify_order?.cancelled_at && 
          effectiveOrder.operational_status === 'ready_to_ship' && 
          shippingType?.label !== 'Recoger' &&
+         shippingType?.label !== 'Express' &&
          (!shippingLabel || shippingLabel.status === 'cancelled' || shippingLabel.status === 'error') && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
