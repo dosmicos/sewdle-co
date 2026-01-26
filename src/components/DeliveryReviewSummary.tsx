@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { CheckCircle, AlertTriangle, XCircle, Clock, RefreshCw, ArrowRight, Barcode } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import DeliveryBarcodeModal from './delivery/DeliveryBarcodeModal';
+import DeliveryManualBarcodeModal from './delivery/DeliveryManualBarcodeModal';
 
 interface DeliveryReviewSummaryProps {
   delivery: any;
@@ -122,8 +122,8 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
             </div>
           </div>
 
-          {/* Barcode Print Button */}
-          {totalApproved > 0 && (delivery.status === 'approved' || delivery.status === 'partial_approved') && (
+          {/* Barcode Print Button - Always visible when there are approved items */}
+          {totalApproved > 0 && (
             <div className="mt-6 pt-4 border-t">
               <Button 
                 onClick={() => setShowBarcodeModal(true)}
@@ -131,15 +131,15 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
                 className="w-full gap-2"
               >
                 <Barcode className="w-4 h-4" />
-                Imprimir Códigos de Barras ({totalApproved})
+                Imprimir Códigos de Barras (Manual)
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Barcode Modal */}
-      <DeliveryBarcodeModal
+      {/* Manual Barcode Modal */}
+      <DeliveryManualBarcodeModal
         isOpen={showBarcodeModal}
         onClose={() => setShowBarcodeModal(false)}
         deliveryItems={delivery.delivery_items || []}

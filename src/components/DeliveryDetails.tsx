@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown, Trash2, Check, Printer } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -621,6 +621,146 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
         return newSet;
       });
     }
+  };
+
+  // Función de impresión de códigos de barras para un artículo individual
+  const printBarcodeLabels = (labels: Array<{sku: string; productName: string; variant: string; unitIndex: number}>) => {
+    if (labels.length === 0) return;
+
+    const labelsWithCompactText = labels.map(label => ({
+      ...label,
+      compactText: label.variant ? `${label.productName} - ${label.variant}` : label.productName
+    }));
+
+    const printWindow = window.open('', '_blank', 'width=600,height=400');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title></title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body { 
+            width: 100mm;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .page { 
+            display: grid;
+            grid-template-columns: repeat(2, 48mm);
+            column-gap: 4mm;
+            row-gap: 0;
+            padding: 0;
+            margin: 0;
+            justify-content: center;
+          }
+          .barcode-label {
+            width: 48mm;
+            height: 20mm;
+            padding: 1mm;
+            box-sizing: border-box;
+            text-align: center;
+            page-break-inside: avoid;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+          }
+          .barcode-label svg {
+            max-width: 46mm;
+            height: auto;
+          }
+          .product-info {
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 1px;
+            line-height: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 46mm;
+            color: #333;
+          }
+          @media print {
+            @page { 
+              size: 100mm 20mm;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            html, body { 
+              width: 100mm;
+              margin: 0 !important; 
+              padding: 0 !important; 
+            }
+            .page {
+              column-gap: 4mm;
+              row-gap: 0;
+              justify-content: center;
+            }
+            .barcode-label { 
+              border: none;
+              width: 48mm;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          ${labelsWithCompactText.map(label => `
+            <div class="barcode-label">
+              <svg id="barcode-${label.sku.replace(/[^a-zA-Z0-9]/g, '')}-${label.unitIndex}"></svg>
+              <div class="product-info">${label.compactText}</div>
+            </div>
+          `).join('')}
+        </div>
+        <script>
+          ${labelsWithCompactText.map(label => `
+            JsBarcode("#barcode-${label.sku.replace(/[^a-zA-Z0-9]/g, '')}-${label.unitIndex}", "${label.sku}", {
+              format: "CODE128",
+              width: 2.5,
+              height: 70,
+              fontSize: 16,
+              margin: 0,
+              displayValue: true,
+              textMargin: 2
+            });
+          `).join('')}
+          setTimeout(() => { window.print(); window.close(); }, 500);
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handlePrintItemBarcodes = (item: any) => {
+    const variant = item.order_items?.product_variants;
+    if (!variant) return;
+
+    const productName = variant.products?.name || 'Producto';
+    const variantText = [variant.size, variant.color].filter(Boolean).join(' - ');
+    const sku = variant.sku_variant || '';
+    const quantity = item.quantity_approved;
+
+    if (quantity <= 0) return;
+
+    const labels = Array.from({ length: quantity }, (_, i) => ({
+      sku,
+      productName,
+      variant: variantText,
+      unitIndex: i + 1
+    }));
+
+    printBarcodeLabels(labels);
   };
 
   const handleEvidenceFilesSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1380,6 +1520,20 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                                 <div className="text-xs text-red-600">
                                   {item.sync_attempt_count} intento(s) fallidos
                                 </div>
+                              )}
+
+                              {/* Botón de imprimir códigos de barras - visible solo si hay aprobados guardados */}
+                              {item.quantity_approved > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handlePrintItemBarcodes(item)}
+                                  className="text-xs gap-1"
+                                  title="Imprimir códigos de barras"
+                                >
+                                  <Printer className="w-3 h-3" />
+                                  Imprimir ({item.quantity_approved})
+                                </Button>
                               )}
                             </div>
                           </div>
