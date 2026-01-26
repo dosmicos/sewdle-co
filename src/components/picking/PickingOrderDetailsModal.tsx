@@ -90,6 +90,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Scroll hint state
   const [showScrollHint, setShowScrollHint] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const skuInputRef = useRef<HTMLInputElement>(null);
   
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
@@ -114,6 +115,17 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
+  // Focus SKU input and scroll to verification section
+  const focusScanInput = useCallback(() => {
+    if (skuInputRef.current) {
+      skuInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Small delay to ensure scroll completes before focusing
+      setTimeout(() => {
+        skuInputRef.current?.focus();
+      }, 300);
+    }
+  }, []);
+
   // Keyboard navigation - J for previous, K for next, Ctrl+. for mark as packed
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -123,23 +135,15 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         return;
       }
       
-      // Ctrl + . → Marcar como Empacado
+      // Ctrl + . → Enfocar campo de escaneo
       if (e.ctrlKey && e.key === '.') {
         e.preventDefault();
-        // Block if loading or data not synced with current orderId
-        if (loadingOrder || localOrder?.id !== orderId) {
-          toast.info('Cargando orden, intenta de nuevo...', { duration: 2000 });
-          return;
-        }
-        // Block if already updating
-        if (updatingStatus) {
-          toast.info('Procesando, espera un momento...', { duration: 2000 });
-          return;
-        }
-        // Only trigger if order is not already packed/shipped and not cancelled
-        if (localOrder?.operational_status !== 'ready_to_ship' && localOrder?.operational_status !== 'shipped' && !localOrder?.shopify_order?.cancelled_at) {
-          // Use ref to get latest function without circular dependency
-          handleMarkAsPackedAndPrintRef.current();
+        // Solo enfocar si la orden no está empacada/enviada/cancelada
+        if (effectiveOrder?.operational_status !== 'ready_to_ship' && 
+            effectiveOrder?.operational_status !== 'awaiting_pickup' && 
+            effectiveOrder?.operational_status !== 'shipped' && 
+            !effectiveOrder?.shopify_order?.cancelled_at) {
+          focusScanInput();
         }
         return;
       }
@@ -1178,6 +1182,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 </CardHeader>
                 <CardContent className="p-3 md:p-4 pt-0 space-y-3">
                   <Input
+                    ref={skuInputRef}
                     value={skuInput}
                     onChange={(e) => {
                       setSkuInput(e.target.value);
@@ -1517,27 +1522,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           </div>
         )}
 
-        {/* Sticky Floating Action Button - "Marcar como Empacado" - solo visible cuando todos los artículos están verificados */}
+        {/* Sticky Floating Action Button - "Escanear" - visible cuando la orden no está empacada */}
         {!effectiveOrder.shopify_order?.cancelled_at && 
          effectiveOrder.operational_status !== 'ready_to_ship' && 
          effectiveOrder.operational_status !== 'awaiting_pickup' && 
-         effectiveOrder.operational_status !== 'shipped' && 
-         allItemsVerified && (
+         effectiveOrder.operational_status !== 'shipped' && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
-              onClick={handleMarkAsPackedAndPrint}
-              disabled={updatingStatus}
-              title="Ctrl + . para marcar rápidamente"
+              onClick={focusScanInput}
+              title="Ctrl + . para escanear"
               className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
             >
-              {updatingStatus ? (
-                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
-              ) : (
-                <>
-                  <Package className="w-4 h-4 md:w-5 md:h-5" />
-                  <span className="hidden sm:inline">Marcar como</span> Empacado
-                </>
-              )}
+              <ScanLine className="w-4 h-4 md:w-5 md:h-5" />
+              Escanear
             </Button>
           </div>
         )}
