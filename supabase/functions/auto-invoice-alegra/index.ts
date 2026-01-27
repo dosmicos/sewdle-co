@@ -606,7 +606,8 @@ async function findPendingOrders(supabase: any): Promise<Array<{
   organization_id: string, 
   order_number: string,
   alegra_invoice_id: number | null,
-  alegra_stamped: boolean | null
+  alegra_stamped: boolean | null,
+  auto_invoice_retries: number
 }>> {
   // Buscar pedidos pendientes de facturación (últimos 7 días)
   // INCLUYE: alegra_stamped = NULL (nunca procesado) o FALSE (stamping fallido)
@@ -614,11 +615,13 @@ async function findPendingOrders(supabase: any): Promise<Array<{
   
   const { data, error } = await supabase
     .from('shopify_orders')
-    .select('shopify_order_id, organization_id, order_number, tags, source_name, alegra_invoice_id, alegra_stamped')
+    .select('shopify_order_id, organization_id, order_number, tags, source_name, alegra_invoice_id, alegra_stamped, auto_invoice_retries')
     .eq('financial_status', 'paid')
     // CAMBIO: Incluir NULL y FALSE (antes solo NULL)
     .or('alegra_stamped.is.null,alegra_stamped.eq.false')
     .neq('source_name', 'pos')  // Excluir POS
+    // NUEVO: Excluir pedidos con demasiados reintentos (máximo 5)
+    .or('auto_invoice_retries.is.null,auto_invoice_retries.lt.5')
     .gte('created_at', sevenDaysAgo)
     .order('created_at', { ascending: true })  // Más antiguo primero
     .limit(10)  // Máximo 10 por ejecución para evitar timeouts
@@ -641,7 +644,8 @@ async function findPendingOrders(supabase: any): Promise<Array<{
     organization_id: o.organization_id,
     order_number: o.order_number,
     alegra_invoice_id: o.alegra_invoice_id || null,
-    alegra_stamped: o.alegra_stamped ?? null
+    alegra_stamped: o.alegra_stamped ?? null,
+    auto_invoice_retries: o.auto_invoice_retries || 0
   }))
 }
 
@@ -768,6 +772,26 @@ async function processAutoInvoice(
         return { success: true, invoiceId: orderData.alegra_invoice_id, cufe }
       } catch (stampError: any) {
         console.error(`❌ Re-stamp falló: ${stampError.message}`)
+        
+        // NUEVO: Incrementar contador de reintentos
+        const currentRetries = orderData.auto_invoice_retries || 0
+        const newRetries = currentRetries + 1
+        
+        const updateData: Record<string, any> = { auto_invoice_retries: newRetries }
+        
+        // Si alcanza el límite, marcar como fallido permanente
+        if (newRetries >= 5) {
+          console.warn(`⚠️ Pedido ${orderData.order_number} alcanzó límite de reintentos (${newRetries}), marcando como fallido`)
+          const currentTags = orderData.tags || ''
+          updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
+        } else {
+          console.log(`📊 Reintento ${newRetries}/5 para pedido ${orderData.order_number}`)
+        }
+        
+        await supabase.from('shopify_orders').update(updateData)
+          .eq('shopify_order_id', shopifyOrderId)
+          .eq('organization_id', organizationId)
+        
         return { success: false, invoiceId: orderData.alegra_invoice_id, error: `Re-stamp DIAN falló: ${stampError.message}` }
       }
     }
@@ -858,13 +882,28 @@ async function processAutoInvoice(
       // CAMBIO: Si el stamp falla, guardar factura sin emitir (no duplicar)
       console.error(`❌ Error emitiendo factura ${invoice.id}:`, stampError.message)
       
-      // Guardar factura como "pendiente de emisión" (no emitida)
-      invoiceNumber = invoice.numberTemplate?.fullNumber || String(invoice.id)
-      await supabase.from('shopify_orders').update({
+      // NUEVO: Incrementar contador de reintentos
+      const currentRetries = orderData.auto_invoice_retries || 0
+      const newRetries = currentRetries + 1
+      
+      const updateData: Record<string, any> = {
         alegra_invoice_id: invoice.id,
-        alegra_invoice_number: invoiceNumber,
+        alegra_invoice_number: invoice.numberTemplate?.fullNumber || String(invoice.id),
         alegra_stamped: false,  // No emitida
-      }).eq('shopify_order_id', shopifyOrderId)
+        auto_invoice_retries: newRetries,
+      }
+      
+      // Si alcanza el límite, marcar como fallido permanente
+      if (newRetries >= 5) {
+        console.warn(`⚠️ Pedido ${orderData.order_number} alcanzó límite de reintentos (${newRetries}), marcando como fallido`)
+        const currentTags = orderData.tags || ''
+        updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
+      } else {
+        console.log(`📊 Reintento ${newRetries}/5 para pedido ${orderData.order_number}`)
+      }
+      
+      await supabase.from('shopify_orders').update(updateData)
+        .eq('shopify_order_id', shopifyOrderId)
         .eq('organization_id', organizationId)
       
       // Marcar en alegra_invoices como no emitida
@@ -875,7 +914,7 @@ async function processAutoInvoice(
         .eq('alegra_invoice_id', invoice.id)
       
       // NO agregar tag de error ni lanzar excepción (la factura existe, solo falta emitirla)
-      console.log(`⚠️ Factura ${invoiceNumber} creada pero pendiente de emisión DIAN`)
+      console.log(`⚠️ Factura ${updateData.alegra_invoice_number} creada pero pendiente de emisión DIAN`)
       
       return {
         success: false,
