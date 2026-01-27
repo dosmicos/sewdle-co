@@ -617,11 +617,15 @@ async function findPendingOrders(supabase: any): Promise<Array<{
     .from('shopify_orders')
     .select('shopify_order_id, organization_id, order_number, tags, source_name, alegra_invoice_id, alegra_stamped, auto_invoice_retries')
     .eq('financial_status', 'paid')
-    // CAMBIO: Incluir NULL y FALSE (antes solo NULL)
+    // Incluir NULL y FALSE (nunca procesado o stamping fallido)
     .or('alegra_stamped.is.null,alegra_stamped.eq.false')
     .neq('source_name', 'pos')  // Excluir POS
-    // NUEVO: Excluir pedidos con demasiados reintentos (máximo 5)
+    // Excluir pedidos con demasiados reintentos (máximo 3)
     .or('auto_invoice_retries.is.null,auto_invoice_retries.lt.3')
+    // NUEVO: Filtrar tags en SQL (más eficiente que en JavaScript)
+    .not('tags', 'ilike', '%contraentrega%')
+    .not('tags', 'ilike', '%facturado%')
+    .not('tags', 'ilike', '%auto_invoice_failed%')
     .gte('created_at', sevenDaysAgo)
     .order('created_at', { ascending: true })  // Más antiguo primero
     .limit(10)  // Máximo 10 por ejecución para evitar timeouts
@@ -631,15 +635,8 @@ async function findPendingOrders(supabase: any): Promise<Array<{
     return []
   }
   
-  // Filtrar por tags (contraentrega, facturado, auto_invoice_failed)
-  const filtered = (data || []).filter(order => {
-    const tags = (order.tags || '').toLowerCase()
-    return !tags.includes('contraentrega') 
-        && !tags.includes('facturado')
-        && !tags.includes('auto_invoice_failed')
-  })
-  
-  return filtered.map(o => ({
+  // Ya no necesitamos filtrar en JavaScript - tags filtrados en SQL
+  return (data || []).map(o => ({
     shopify_order_id: o.shopify_order_id,
     organization_id: o.organization_id,
     order_number: o.order_number,
@@ -784,6 +781,12 @@ async function processAutoInvoice(
           console.warn(`⚠️ Pedido ${orderData.order_number} alcanzó límite de reintentos (${newRetries}), marcando como fallido`)
           const currentTags = orderData.tags || ''
           updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
+          
+          // NUEVO: Sincronizar tag a Shopify
+          if (shopDomain) {
+            console.log(`🏷️ Sincronizando AUTO_INVOICE_FAILED a Shopify para ${orderData.order_number}`)
+            await addErrorTag(shopifyOrderId, shopDomain, `Re-stamp DIAN falló después de ${newRetries} intentos`)
+          }
         } else {
           console.log(`📊 Reintento ${newRetries}/3 para pedido ${orderData.order_number}`)
         }
@@ -898,6 +901,12 @@ async function processAutoInvoice(
         console.warn(`⚠️ Pedido ${orderData.order_number} alcanzó límite de reintentos (${newRetries}), marcando como fallido`)
         const currentTags = orderData.tags || ''
         updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
+        
+        // NUEVO: Sincronizar tag a Shopify
+        if (shopDomain) {
+          console.log(`🏷️ Sincronizando AUTO_INVOICE_FAILED a Shopify para ${orderData.order_number}`)
+          await addErrorTag(shopifyOrderId, shopDomain, `Stamping DIAN falló después de ${newRetries} intentos`)
+        }
       } else {
         console.log(`📊 Reintento ${newRetries}/3 para pedido ${orderData.order_number}`)
       }
