@@ -621,7 +621,7 @@ async function findPendingOrders(supabase: any): Promise<Array<{
     .or('alegra_stamped.is.null,alegra_stamped.eq.false')
     .neq('source_name', 'pos')  // Excluir POS
     // NUEVO: Excluir pedidos con demasiados reintentos (máximo 5)
-    .or('auto_invoice_retries.is.null,auto_invoice_retries.lt.5')
+    .or('auto_invoice_retries.is.null,auto_invoice_retries.lt.3')
     .gte('created_at', sevenDaysAgo)
     .order('created_at', { ascending: true })  // Más antiguo primero
     .limit(10)  // Máximo 10 por ejecución para evitar timeouts
@@ -780,12 +780,12 @@ async function processAutoInvoice(
         const updateData: Record<string, any> = { auto_invoice_retries: newRetries }
         
         // Si alcanza el límite, marcar como fallido permanente
-        if (newRetries >= 5) {
+        if (newRetries >= 3) {
           console.warn(`⚠️ Pedido ${orderData.order_number} alcanzó límite de reintentos (${newRetries}), marcando como fallido`)
           const currentTags = orderData.tags || ''
           updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
         } else {
-          console.log(`📊 Reintento ${newRetries}/5 para pedido ${orderData.order_number}`)
+          console.log(`📊 Reintento ${newRetries}/3 para pedido ${orderData.order_number}`)
         }
         
         await supabase.from('shopify_orders').update(updateData)
@@ -894,12 +894,12 @@ async function processAutoInvoice(
       }
       
       // Si alcanza el límite, marcar como fallido permanente
-      if (newRetries >= 5) {
+      if (newRetries >= 3) {
         console.warn(`⚠️ Pedido ${orderData.order_number} alcanzó límite de reintentos (${newRetries}), marcando como fallido`)
         const currentTags = orderData.tags || ''
         updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
       } else {
-        console.log(`📊 Reintento ${newRetries}/5 para pedido ${orderData.order_number}`)
+        console.log(`📊 Reintento ${newRetries}/3 para pedido ${orderData.order_number}`)
       }
       
       await supabase.from('shopify_orders').update(updateData)
