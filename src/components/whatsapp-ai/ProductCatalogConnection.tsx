@@ -4,14 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Package, Check, RefreshCw, Search, Link2, ExternalLink, AlertCircle } from 'lucide-react';
+import { Package, Check, RefreshCw, Search, Link2, ExternalLink, AlertCircle, Sparkles, Clock, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
+import { useProductIndexing } from '@/hooks/useProductIndexing';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 interface ShopifyVariant {
   id: number;
   title: string;
@@ -447,6 +449,81 @@ export const ProductCatalogConnection = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Visual Indexing Panel - NEW */}
+      <IndexingPanel organizationId={currentOrganization?.id} />
     </div>
+  );
+};
+
+// Visual Indexing Panel Component
+const IndexingPanel = ({ organizationId }: { organizationId?: string }) => {
+  const { stats, isLoading, refetch } = useProductIndexing(organizationId);
+
+  if (!organizationId) return null;
+
+  return (
+    <Card className="md:col-span-3">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-purple-500" />
+            <CardTitle>Indexación Visual IA</CardTitle>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+        <CardDescription>
+          Productos indexados para búsqueda por imagen con embeddings
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-lg bg-purple-50 text-center">
+            <p className="text-xl font-bold text-purple-600">{stats.totalIndexed}</p>
+            <p className="text-xs text-purple-600">Indexados</p>
+          </div>
+          <div className="p-3 rounded-lg bg-amber-50 text-center">
+            <p className="text-xl font-bold text-amber-600">{stats.queueStats.pending}</p>
+            <p className="text-xs text-amber-600">Pendientes</p>
+          </div>
+          <div className="p-3 rounded-lg bg-blue-50 text-center">
+            <p className="text-xl font-bold text-blue-600">{stats.queueStats.processing}</p>
+            <p className="text-xs text-blue-600">Procesando</p>
+          </div>
+          <div className="p-3 rounded-lg bg-green-50 text-center">
+            <p className="text-xl font-bold text-green-600">{stats.queueStats.completed}</p>
+            <p className="text-xs text-green-600">Completados</p>
+          </div>
+        </div>
+
+        {stats.queueStats.failed > 0 && (
+          <div className="mt-3 p-2 rounded bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            {stats.queueStats.failed} productos fallidos - revisar cola
+          </div>
+        )}
+
+        {stats.lastIndexedAt && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            Última indexación: {formatDistanceToNow(stats.lastIndexedAt, { addSuffix: true, locale: es })}
+          </div>
+        )}
+
+        <div className="mt-4 p-3 rounded-lg bg-purple-50/50 border border-purple-100">
+          <div className="flex items-start gap-2">
+            <Search className="h-4 w-4 text-purple-500 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-purple-700">Búsqueda visual activa</p>
+              <p className="text-xs text-purple-600 mt-1">
+                Los clientes pueden enviar fotos de productos y la IA buscará automáticamente en tu catálogo usando visión por computadora.
+              </p>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
