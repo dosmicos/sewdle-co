@@ -105,7 +105,7 @@ export const ConversationsList = ({
 
   return (
     <>
-      <ScrollArea className="h-full max-h-[500px]">
+      <ScrollArea className="flex-1 h-[calc(100vh-280px)]">
         <div className="divide-y divide-border">
           {conversations.map((conversation, index) => {
             const channelInfo = channelConfig[conversation.channel];
@@ -116,47 +116,47 @@ export const ConversationsList = ({
                 key={conversation.id}
                 onClick={() => onSelect(conversation.id)}
                 className={cn(
-                  "p-4 cursor-pointer transition-all duration-200 hover:bg-muted/50 group relative animate-in fade-in-0 slide-in-from-top-1",
+                  "px-3 py-2 cursor-pointer transition-all duration-200 hover:bg-muted/50 group relative animate-in fade-in-0 slide-in-from-top-1",
                   selectedId === conversation.id && "bg-muted border-l-4 border-l-primary"
                 )}
                 style={{ animationDelay: `${Math.min(index * 30, 150)}ms` }}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-1.5">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <ChannelIcon className={cn("h-4 w-4 flex-shrink-0", channelInfo.color)} />
-                      <span className="font-medium truncate text-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <ChannelIcon className={cn("h-3.5 w-3.5 flex-shrink-0", channelInfo.color)} />
+                      <span className="text-sm font-medium truncate text-foreground">
                         {conversation.name}
                       </span>
-                      <span className={cn("w-2 h-2 rounded-full", getStatusColor(conversation.status))} />
+                      <span className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(conversation.status))} />
                     </div>
-                    <p className="text-sm truncate mt-0.5 text-muted-foreground">
+                    <p className="text-xs truncate mt-0.5 text-muted-foreground">
                       {conversation.phone}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex flex-col items-end gap-0.5">
                     <div className="flex items-center gap-1">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground">
                         {formatDistanceToNow(conversation.lastMessageTime, { addSuffix: true, locale: es })}
                       </span>
                       {onDelete && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                           onClick={(e) => handleDeleteClick(e, conversation.id)}
                           disabled={isDeleting}
                         >
                           {isDeleting && conversationToDelete === conversation.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <Loader2 className="h-3 w-3 animate-spin" />
                           ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3 w-3" />
                           )}
                         </Button>
                       )}
                     </div>
                     {conversation.unread > 0 && (
-                      <Badge className={cn("text-white text-xs px-1.5 py-0.5 min-w-[20px] flex items-center justify-center", channelInfo.bgColor)}>
+                      <Badge className={cn("text-white text-[10px] px-1 py-0 min-w-[18px] h-4 flex items-center justify-center", channelInfo.bgColor)}>
                         {conversation.unread}
                       </Badge>
                     )}
@@ -164,7 +164,7 @@ export const ConversationsList = ({
                 </div>
                 <p 
                   className={cn(
-                    "text-sm mt-2 truncate",
+                    "text-xs mt-1 truncate",
                     conversation.unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"
                   )}
                 >
