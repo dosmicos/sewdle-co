@@ -1,116 +1,126 @@
 
-# Plan: Corregir Etiquetado FACTURADO en Facturación Automática
+# Plan: Agregar Botón "Sincronizar Tags" en Página de Alegra
 
 ## Problema Identificado
 
-Las facturas se están creando correctamente en Alegra, pero el tag **FACTURADO** no se está agregando a los pedidos en Shopify. La razón:
+El botón **"Sincronizar CUFE"** actual solo procesa facturas en la tabla `alegra_invoices` que tienen `stamped = false`. Sin embargo, hay **muchos pedidos** (encontré 20+) que:
+- ✅ Ya tienen `alegra_stamped = true` en `shopify_orders`
+- ✅ Ya tienen `alegra_cufe` (CUFE válido)
+- ❌ **No tienen el tag FACTURADO** en Shopify
 
-1. La función `addFacturadoTag` en `auto-invoice-alegra` usa `Deno.env.get('SHOPIFY_ACCESS_TOKEN')` para obtener el token de Shopify
-2. Este secret **no está configurado** como variable de entorno del proyecto
-3. Las credenciales de Shopify están almacenadas en la tabla `organizations.shopify_credentials`
-4. Sin el token, la función retorna silenciosamente sin hacer nada
-
-**Evidencia**: Hay múltiples pedidos con `alegra_stamped = true` y CUFE pero sin el tag FACTURADO:
-- Pedido 68137 (DM46251) - Facturado pero sin tag
-- Pedido 68125 (DM46245) - Facturado pero sin tag  
-- Pedido 68116 (DM46238) - Facturado pero sin tag
+Estos pedidos fueron procesados por la facturación automática antes del fix que implementamos, por eso les falta el tag.
 
 ## Solución
 
-Modificar las funciones `addFacturadoTag` y `addErrorTag` en `auto-invoice-alegra` para que obtengan las credenciales de Shopify desde la base de datos cuando no estén en variables de entorno (mismo patrón usado en `update-shopify-order-note`).
+Agregar un nuevo botón **"Sincronizar Tags"** junto al botón "Sincronizar CUFE" que:
+1. Busque todos los pedidos con `alegra_stamped = true` y CUFE pero sin tag FACTURADO
+2. Agregue el tag FACTURADO a cada uno en Shopify
+3. Actualice los tags localmente en `shopify_orders`
+
+## Cambios en la UI
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  0 seleccionados  |  Desde 1 dic 2025  |                       │
+│                                                                 │
+│  [🔄 Actualizar]  [🔄 Sincronizar CUFE]  [🏷️ Sincronizar Tags]  │
+│                                                                 │
+│                            [Validar y Emitir X Facturas]        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Cambios Técnicos
 
-### Archivo: `supabase/functions/auto-invoice-alegra/index.ts`
+### Archivo: `src/components/alegra/BulkInvoiceCreator.tsx`
 
-Modificar las funciones `addFacturadoTag` y `addErrorTag` para:
-
-1. Recibir `supabase` y `organizationId` como parámetros adicionales
-2. Obtener las credenciales desde `organizations.shopify_credentials` si no están en env
-3. Usar el dominio correcto desde `organizations.shopify_store_url`
-
-**Cambios en la firma de las funciones:**
+**1. Nueva función `syncMissingTags`:**
 
 ```typescript
-// ANTES:
-async function addFacturadoTag(shopifyOrderId: number, shopDomain: string): Promise<void>
-
-// DESPUÉS:
-async function addFacturadoTag(
-  shopifyOrderId: number, 
-  supabase: any, 
-  organizationId: string
-): Promise<void>
-```
-
-**Nueva lógica para obtener credenciales:**
-
-```typescript
-async function getShopifyCredentials(supabase: any, organizationId: string): Promise<{
-  domain: string;
-  accessToken: string;
-} | null> {
-  // 1. Intentar variables de entorno
-  let shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-  let shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+const syncMissingTags = async () => {
+  console.log('🏷️ Sincronizando tags FACTURADO faltantes...');
   
-  // 2. Si no hay, obtener de la organización
-  if (!shopifyDomain || !shopifyToken) {
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('shopify_store_url, shopify_credentials')
-      .eq('id', organizationId)
-      .single();
+  try {
+    // Buscar pedidos con CUFE pero sin tag FACTURADO
+    const { data: ordersWithoutTag } = await supabase
+      .from('shopify_orders')
+      .select('shopify_order_id, order_number, tags')
+      .eq('alegra_stamped', true)
+      .not('alegra_cufe', 'is', null)
+      .or('tags.is.null,tags.not.ilike.%FACTURADO%');
     
-    if (org?.shopify_store_url && org?.shopify_credentials?.access_token) {
-      const url = new URL(org.shopify_store_url);
-      shopifyDomain = url.hostname;
-      shopifyToken = org.shopify_credentials.access_token;
+    if (!ordersWithoutTag?.length) {
+      toast.info('Todos los pedidos facturados ya tienen el tag FACTURADO');
+      return 0;
     }
+    
+    console.log(`📋 Encontrados ${ordersWithoutTag.length} pedidos sin tag FACTURADO`);
+    let syncedCount = 0;
+    
+    for (const order of ordersWithoutTag) {
+      try {
+        await addFacturadoTag(order.shopify_order_id);
+        syncedCount++;
+        
+        // Pequeña pausa para no saturar Shopify API
+        await new Promise(r => setTimeout(r, 300));
+      } catch (err) {
+        console.error(`Error agregando tag a pedido ${order.order_number}:`, err);
+      }
+    }
+    
+    if (syncedCount > 0) {
+      toast.success(`${syncedCount} pedido(s) etiquetado(s) como FACTURADO`);
+      await fetchShopifyOrders(); // Recargar lista
+    }
+    
+    return syncedCount;
+  } catch (err) {
+    console.error('Error en syncMissingTags:', err);
+    toast.error('Error sincronizando tags');
+    return 0;
   }
-  
-  if (!shopifyDomain || !shopifyToken) return null;
-  
-  // Normalizar dominio
-  const normalizedDomain = shopifyDomain.includes('.myshopify.com')
-    ? shopifyDomain
-    : `${shopifyDomain}.myshopify.com`;
-  
-  return { domain: normalizedDomain, accessToken: shopifyToken };
-}
+};
 ```
 
-**Actualizar llamadas a las funciones:**
+**2. Nuevo estado para loading:**
 
 ```typescript
-// En línea ~730 (después de sincronizar factura existente con CUFE)
-await addFacturadoTag(shopifyOrderId, supabase, organizationId);
+const [isSyncingTags, setIsSyncingTags] = useState(false);
+```
 
-// En línea ~766 (después de re-stamp exitoso)
-await addFacturadoTag(shopifyOrderId, supabase, organizationId);
+**3. Nuevo botón en la UI (junto a "Sincronizar CUFE"):**
 
-// En línea ~788 (cuando se alcanza límite de reintentos)
-await addErrorTag(shopifyOrderId, supabase, organizationId, `Re-stamp DIAN falló...`);
-
-// En línea ~908 (cuando stamp inicial falla y alcanza límite)
-await addErrorTag(shopifyOrderId, supabase, organizationId, `Stamping DIAN falló...`);
-
-// En línea ~959 (éxito completo)
-await addFacturadoTag(shopifyOrderId, supabase, organizationId);
+```typescript
+<Button
+  variant="outline"
+  size="sm"
+  onClick={async () => {
+    setIsSyncingTags(true);
+    await syncMissingTags();
+    setIsSyncingTags(false);
+  }}
+  disabled={isSyncingTags || loading}
+>
+  {isSyncingTags ? (
+    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+  ) : (
+    <Tag className="h-4 w-4 mr-2" />
+  )}
+  Sincronizar Tags
+</Button>
 ```
 
 ## Archivos a Modificar
 
 | Archivo | Cambios |
 |---------|---------|
-| `supabase/functions/auto-invoice-alegra/index.ts` | Nueva función `getShopifyCredentials`, modificar `addFacturadoTag` y `addErrorTag` |
+| `src/components/alegra/BulkInvoiceCreator.tsx` | Agregar función `syncMissingTags`, nuevo estado, nuevo botón en toolbar |
 
 ## Resultado Esperado
 
-1. Cuando se facture automáticamente un pedido, el tag FACTURADO se agregará correctamente a Shopify
-2. Cuando un pedido alcance el límite de reintentos, el tag AUTO_INVOICE_FAILED se sincronizará a Shopify
-3. Los pedidos que ya tienen factura pero no tienen tag podrán ser recuperados con una ejecución manual o mediante `syncPendingInvoices`
-
-## Solución de Datos Existentes
-
-Después de aplicar el fix, los pedidos existentes que tienen `alegra_stamped = true` pero no tienen el tag FACTURADO pueden ser corregidos ejecutando una consulta que los identifique y llame a la función de sincronización de tags. Esto se puede hacer desde el frontend con el botón "Sincronizar Facturas Pendientes" en la página de Alegra.
+1. Usuario hace clic en **"Sincronizar Tags"**
+2. Sistema busca todos los pedidos con CUFE pero sin tag FACTURADO
+3. Agrega el tag FACTURADO a cada pedido en Shopify
+4. Actualiza los tags localmente
+5. Muestra mensaje de éxito con cantidad de pedidos actualizados
+6. Los 20+ pedidos que están pendientes recibirán su tag FACTURADO
