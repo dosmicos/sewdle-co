@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, Reply, MessageSquareText } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, Reply, MessageSquareText, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -566,12 +566,15 @@ export const ConversationThread = ({
                             />
                           </a>
                         )}
-                        {/* Fallback for image messages without URL (legacy or failed download) */}
+                        {/* Fallback for image messages without URL - AI analyzed badge */}
                         {!message.mediaUrl && message.mediaType === 'image' && (
-                          <div className="max-w-[200px] h-32 rounded-lg mb-2 bg-muted/50 border border-dashed border-muted-foreground/30 flex items-center justify-center">
-                            <div className="text-center text-muted-foreground">
-                              <Image className="h-8 w-8 mx-auto mb-1 opacity-50" />
-                              <span className="text-xs">Imagen no disponible</span>
+                          <div className="max-w-[200px] rounded-lg mb-2 p-3 bg-emerald-50 border border-emerald-200">
+                            <div className="flex items-center gap-2 text-emerald-700">
+                              <Search className="h-5 w-5 flex-shrink-0" />
+                              <div>
+                                <p className="text-sm font-medium">Imagen analizada</p>
+                                <p className="text-xs opacity-70">Búsqueda por IA</p>
+                              </div>
                             </div>
                           </div>
                         )}
