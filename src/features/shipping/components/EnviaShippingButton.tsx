@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { CARRIER_NAMES, CarrierCode, ShippingLabel } from '../types/envia';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -117,7 +118,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     isLoadingQuotes,
     quotes,
     getQuotes,
-    clearQuotes
+    clearQuotes,
+    matchInfo,
+    clearMatchInfo
   } = useEnviaShipping();
   
   const [hasChecked, setHasChecked] = useState(false);
@@ -131,6 +134,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [isEditingCod, setIsEditingCod] = useState(false);
   const [quotesLoaded, setQuotesLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [correctedCity, setCorrectedCity] = useState<string | null>(null);
+  const [userRejectedSuggestion, setUserRejectedSuggestion] = useState(false);
 
   // Update COD amount when totalPrice changes
   useEffect(() => {
@@ -144,18 +149,21 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     if (currentOrganization?.id && shopifyOrderId) {
       clearLabel();
       clearQuotes();
+      clearMatchInfo();
       setHasChecked(false);
       setShowManualEntry(false);
       setManualTracking('');
       setSelectedCarrier('');
       setQuotesLoaded(false);
       setShowHistory(false);
+      setCorrectedCity(null);
+      setUserRejectedSuggestion(false);
       getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
         onLabelChange?.(label);
       });
     }
-  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, onLabelChange]);
+  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, clearMatchInfo, onLabelChange]);
 
   // Auto-load quotes when address is valid and no existing label
   useEffect(() => {
@@ -312,8 +320,32 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
   // Check if component is ready to create labels
   const isActiveLabel = existingLabel && existingLabel.status !== 'cancelled' && existingLabel.status !== 'error';
-  const canCreateLabel = shippingAddress?.city && shippingAddress?.address1;
+  
+  // City validation check - allow if exact match OR user accepted correction
+  const cityIsValid = matchInfo?.matchType === 'exact' || correctedCity !== null;
+  
+  // canCreateLabel now includes city validation
+  const canCreateLabel = shippingAddress?.city && 
+    shippingAddress?.address1 && 
+    !userRejectedSuggestion &&
+    (cityIsValid || !matchInfo); // Allow if no matchInfo yet (loading) or city is valid
+  
   const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
+
+  // Function to re-fetch quotes (for "Volver a verificar" button)
+  const handleRefreshQuotes = () => {
+    setUserRejectedSuggestion(false);
+    setCorrectedCity(null);
+    setQuotesLoaded(false);
+    if (shippingAddress?.city && shippingAddress?.province) {
+      getQuotes({
+        destination_city: shippingAddress.city,
+        destination_department: shippingAddress.province,
+        destination_postal_code: shippingAddress.zip,
+        declared_value: totalPrice || 100000
+      }).then(() => setQuotesLoaded(true));
+    }
+  };
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
@@ -328,7 +360,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const recipientName = shippingAddress.name || 'Cliente';
     const recipientPhone = shippingAddress.phone || customerPhone || '';
     const recipientEmail = customerEmail || '';
-    const city = shippingAddress.city || '';
+    // Use corrected city if available, otherwise original
+    const city = correctedCity || shippingAddress.city || '';
     const department = shippingAddress.province || '';
     const postalCode = shippingAddress.zip || '';
 
@@ -801,6 +834,96 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   // Show create button with carrier selector and manual entry option
   return (
     <div className="space-y-3">
+      {/* City Validation Alerts */}
+      {/* Fuzzy match - user must choose */}
+      {matchInfo && matchInfo.matchType === 'fuzzy' && 
+       matchInfo.suggestions.length > 0 && 
+       !correctedCity && 
+       !userRejectedSuggestion && (
+        <Alert className="border-amber-200 bg-amber-50">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-800">Ciudad no reconocida</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            <p className="mb-2">
+              "{matchInfo.inputCity}" no coincide exactamente con ningún municipio.
+            </p>
+            <p className="font-medium mb-3">
+              ¿Quisiste decir <strong>{matchInfo.suggestions[0].municipality}</strong>, {matchInfo.suggestions[0].department}?
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-green-300 hover:bg-green-50 text-green-700"
+                onClick={() => {
+                  setCorrectedCity(matchInfo.suggestions[0].municipality);
+                  toast.success(`Ciudad corregida a: ${matchInfo.suggestions[0].municipality}`);
+                }}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Sí, continuar con {matchInfo.suggestions[0].municipality}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-300 hover:bg-red-50 text-red-700"
+                onClick={() => {
+                  setUserRejectedSuggestion(true);
+                  toast.info("Corrige la ciudad en Shopify y vuelve a verificar");
+                }}
+              >
+                <X className="h-4 w-4 mr-2" />
+                No, corregir en Shopify
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* User accepted correction - show confirmation */}
+      {correctedCity && (
+        <Alert className="border-green-200 bg-green-50">
+          <Check className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-800">Ciudad corregida</AlertTitle>
+          <AlertDescription className="text-green-700">
+            Se usará <strong>{correctedCity}</strong> para crear la guía.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* User rejected suggestion - block until they fix it */}
+      {userRejectedSuggestion && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Corrección requerida</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">
+              Debes corregir la ciudad en Shopify antes de crear la guía.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 bg-background"
+              onClick={handleRefreshQuotes}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Volver a verificar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* No match found at all */}
+      {matchInfo && matchInfo.matchType === 'not_found' && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Ciudad no reconocida</AlertTitle>
+          <AlertDescription>
+            No se encontró "{matchInfo.inputCity}" en la base de datos y no hay municipios similares. Corrige la dirección en Shopify.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* COD Amount Editor - only show for COD orders */}
       {isCOD && (
         <div className="space-y-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -947,7 +1070,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         variant="outline" 
         className="w-full"
         onClick={handleCreateLabel}
-        disabled={disabled || isCreatingLabel}
+        disabled={disabled || isCreatingLabel || !canCreateLabel || userRejectedSuggestion || matchInfo?.matchType === 'not_found' || (matchInfo?.matchType === 'fuzzy' && !correctedCity)}
       >
         {isCreatingLabel ? (
           <>
