@@ -90,5 +90,8 @@ verify_jwt = false
 [functions.meta-webhook-openai]
 verify_jwt = false
 
+[functions.fulfill-express-order]
+verify_jwt = false
+
 [functions.auto-invoice-alegra]
 verify_jwt = false
