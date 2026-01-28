@@ -2065,6 +2065,97 @@ export type Database = {
           },
         ]
       }
+      product_embeddings: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          id: string
+          image_url: string | null
+          organization_id: string | null
+          product_handle: string | null
+          product_title: string
+          shopify_product_id: number
+          updated_at: string | null
+          variants: Json | null
+          visual_description: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          image_url?: string | null
+          organization_id?: string | null
+          product_handle?: string | null
+          product_title: string
+          shopify_product_id: number
+          updated_at?: string | null
+          variants?: Json | null
+          visual_description?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          image_url?: string | null
+          organization_id?: string | null
+          product_handle?: string | null
+          product_title?: string
+          shopify_product_id?: number
+          updated_at?: string | null
+          variants?: Json | null
+          visual_description?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_embeddings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_indexing_queue: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          organization_id: string | null
+          processed_at: string | null
+          shopify_product_id: number
+          status: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          organization_id?: string | null
+          processed_at?: string | null
+          shopify_product_id: number
+          status?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          organization_id?: string | null
+          processed_at?: string | null
+          shopify_product_id?: number
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_indexing_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_stock_history: {
         Row: {
           created_at: string
@@ -3932,6 +4023,14 @@ export type Database = {
         }[]
       }
       get_password_change_required: { Args: never; Returns: boolean }
+      get_pending_indexing: {
+        Args: { max_items?: number; org_id?: string }
+        Returns: {
+          id: string
+          organization_id: string
+          shopify_product_id: number
+        }[]
+      }
       get_product_sales_analytics: {
         Args: { end_date?: string; start_date?: string }
         Returns: {
@@ -4090,7 +4189,28 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: number
       }
+      mark_indexing_complete: {
+        Args: { error_msg?: string; queue_id: string; success: boolean }
+        Returns: undefined
+      }
       mark_password_changed: { Args: { user_uuid: string }; Returns: undefined }
+      match_products: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          product_handle: string
+          product_title: string
+          shopify_product_id: number
+          similarity: number
+          variants: Json
+          visual_description: string
+        }[]
+      }
       migrate_ruana_mapache_variants: { Args: never; Returns: Json }
       migrate_sleeping_walker_dinosaurios_variants: {
         Args: never

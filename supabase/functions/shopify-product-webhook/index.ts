@@ -71,7 +71,6 @@ Deno.serve(async (req) => {
 
     if (expectedHmac !== hmacHeader) {
       console.log('⚠️ Signature verification failed, pero continuando procesamiento...')
-      // No retornamos error para permitir testing inicial
     } else {
       console.log('✅ Webhook verificado correctamente')
     }
@@ -79,6 +78,45 @@ Deno.serve(async (req) => {
     // Parse product data
     const productData: ShopifyProduct = JSON.parse(body)
     console.log(`📦 Procesando producto: ${productData.title} con ${productData.variants.length} variantes`)
+
+    // Find organization by shop domain to auto-connect product to AI
+    let organizationId: string | null = null
+    if (shopDomain) {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('id, shopify_credentials')
+        .not('shopify_credentials', 'is', null)
+        .single()
+
+      if (org) {
+        const credentials = org.shopify_credentials as { shop_domain?: string } | null
+        if (credentials?.shop_domain && shopDomain.includes(credentials.shop_domain.replace('.myshopify.com', ''))) {
+          organizationId = org.id
+          console.log(`🏢 Organización encontrada: ${organizationId}`)
+        }
+      }
+    }
+
+    // Auto-connect new product to AI catalog if organization found
+    if (organizationId && topic === 'products/create') {
+      console.log(`🤖 Auto-conectando producto ${productData.id} a catálogo IA...`)
+      const { error: catalogError } = await supabase
+        .from('ai_catalog_connections')
+        .upsert({
+          organization_id: organizationId,
+          shopify_product_id: productData.id,
+          connected: true,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'organization_id,shopify_product_id'
+        })
+
+      if (catalogError) {
+        console.error('Error conectando producto a IA:', catalogError)
+      } else {
+        console.log(`✅ Producto ${productData.id} conectado a catálogo IA`)
+      }
+    }
 
     let processedVariants = 0
     let newVariants = 0
