@@ -76,6 +76,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [isCreatingShippingLabel, setIsCreatingShippingLabel] = useState(false);
   const [isProcessingPickup, setIsProcessingPickup] = useState(false);
   const [selectedCarrierName, setSelectedCarrierName] = useState<string | null>(null);
+  const [isProcessingExpressFulfillment, setIsProcessingExpressFulfillment] = useState(false);
   
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
@@ -420,22 +421,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Determina si todos los artículos han sido verificados
   const allItemsVerified = totalRequiredUnits > 0 && totalVerifiedUnits === totalRequiredUnits;
 
-  // Auto-pack when all items are verified
-  useEffect(() => {
-    if (allItemsVerified && 
-        effectiveOrder?.operational_status !== 'ready_to_ship' && 
-        effectiveOrder?.operational_status !== 'awaiting_pickup' && 
-        effectiveOrder?.operational_status !== 'shipped' &&
-        !effectiveOrder?.shopify_order?.cancelled_at &&
-        !updatingStatus) {
-      // Small delay to show the green verification before auto-packing
-      const timer = setTimeout(() => {
-        handleMarkAsPackedAndPrint();
-      }, 800);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus]);
+  // Detect Express shipping type for auto-pack logic
+  const shippingLinesForAutopack = effectiveOrder?.shopify_order?.raw_data?.shipping_lines || [];
+  const shippingMethodForAutopack = shippingLinesForAutopack[0]?.title || '';
+  const isExpressShipping = shippingMethodForAutopack.toLowerCase().includes('express');
+
+  // NOTE: Auto-pack useEffect moved after handler declarations to avoid reference errors
 
   // Fetch line items separately - with isCancelled check
   useEffect(() => {
@@ -742,10 +733,85 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [orderId, localOrder, handlePrint, handleStatusChange]);
 
+  // Handler for Express orders - auto-fulfill without shipping label
+  const handleMarkAsPackedExpress = useCallback(async () => {
+    if (!localOrder?.shopify_order?.shopify_order_id) {
+      toast.error('Error: ID de Shopify no disponible');
+      return;
+    }
+
+    console.log(`🚀 Procesando pedido Express #${localOrder.shopify_order.order_number}`);
+    
+    // Print FIRST for instant feedback
+    handlePrint();
+    
+    setIsProcessingExpressFulfillment(true);
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      
+      const { data, error } = await supabase.functions.invoke('fulfill-express-order', {
+        body: {
+          shopify_order_id: localOrder.shopify_order.shopify_order_id,
+          organization_id: localOrder.organization_id,
+          user_id: user?.id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success('Pedido Express enviado. Cliente notificado.');
+        
+        // Optimistic update
+        setLocalOrder(prev => prev ? {
+          ...prev,
+          operational_status: 'shipped' as OperationalStatus,
+          shipped_at: new Date().toISOString(),
+          shipped_by: user?.id,
+          packed_at: new Date().toISOString(),
+          packed_by: user?.id
+        } : prev);
+        
+        await refetchOrder(orderId);
+      } else {
+        throw new Error(data?.error || 'Error procesando pedido Express');
+      }
+    } catch (error: any) {
+      console.error('❌ Error procesando pedido Express:', error);
+      toast.error(error.message || 'Error procesando pedido Express');
+    } finally {
+      setIsProcessingExpressFulfillment(false);
+    }
+  }, [localOrder, orderId, handlePrint, refetchOrder]);
+
   // Keep ref updated with the latest function
   useEffect(() => {
     handleMarkAsPackedAndPrintRef.current = handleMarkAsPackedAndPrint;
   }, [handleMarkAsPackedAndPrint]);
+
+  // Auto-pack when all items are verified (moved here to access handler functions)
+  useEffect(() => {
+    if (allItemsVerified && 
+        effectiveOrder?.operational_status !== 'ready_to_ship' && 
+        effectiveOrder?.operational_status !== 'awaiting_pickup' && 
+        effectiveOrder?.operational_status !== 'shipped' &&
+        !effectiveOrder?.shopify_order?.cancelled_at &&
+        !updatingStatus &&
+        !isProcessingExpressFulfillment) {
+      // Small delay to show the green verification before auto-packing
+      const timer = setTimeout(() => {
+        if (isExpressShipping) {
+          // Express: auto-fulfill without shipping label
+          handleMarkAsPackedExpress();
+        } else {
+          // Standard: mark as ready_to_ship
+          handleMarkAsPackedAndPrint();
+        }
+      }, 800);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isExpressShipping, isProcessingExpressFulfillment, handleMarkAsPackedExpress, handleMarkAsPackedAndPrint]);
 
   // Handler for "Listo para Retiro" - creates fulfillment in Shopify and sets awaiting_pickup
   const handleReadyForPickup = useCallback(async () => {
