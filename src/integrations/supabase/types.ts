@@ -2070,6 +2070,7 @@ export type Database = {
           created_at: string | null
           embedding: string | null
           id: string
+          image_embedding: string | null
           image_url: string | null
           organization_id: string | null
           product_handle: string | null
@@ -2083,6 +2084,7 @@ export type Database = {
           created_at?: string | null
           embedding?: string | null
           id?: string
+          image_embedding?: string | null
           image_url?: string | null
           organization_id?: string | null
           product_handle?: string | null
@@ -2096,6 +2098,7 @@ export type Database = {
           created_at?: string | null
           embedding?: string | null
           id?: string
+          image_embedding?: string | null
           image_url?: string | null
           organization_id?: string | null
           product_handle?: string | null
@@ -2111,6 +2114,41 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_image_embeddings: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_embedding: string | null
+          image_index: number
+          image_url: string | null
+          product_embedding_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_embedding?: string | null
+          image_index: number
+          image_url?: string | null
+          product_embedding_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_embedding?: string | null
+          image_index?: number
+          image_url?: string | null
+          product_embedding_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_image_embeddings_product_embedding_id_fkey"
+            columns: ["product_embedding_id"]
+            isOneToOne: false
+            referencedRelation: "product_embeddings"
             referencedColumns: ["id"]
           },
         ]
@@ -4209,6 +4247,22 @@ export type Database = {
           similarity: number
           variants: Json
           visual_description: string
+        }[]
+      }
+      match_products_by_image: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          product_handle: string
+          product_title: string
+          shopify_product_id: number
+          similarity: number
+          variants: Json
         }[]
       }
       migrate_ruana_mapache_variants: { Args: never; Returns: Json }

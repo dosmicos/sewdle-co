@@ -6,6 +6,82 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Fetch media from WhatsApp and store in Supabase Storage
+async function fetchMediaUrl(mediaId: string, supabase: any): Promise<{ url: string | null; mimeType: string | null }> {
+  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
+  if (!accessToken || !mediaId) {
+    console.log('Missing access token or media ID for media fetch');
+    return { url: null, mimeType: null };
+  }
+
+  try {
+    console.log(`Fetching WhatsApp media: ${mediaId}`);
+    
+    // 1. Get media info from Meta
+    const infoResponse = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (!infoResponse.ok) {
+      const errorText = await infoResponse.text();
+      console.error(`Failed to get media info: ${infoResponse.status}`, errorText);
+      return { url: null, mimeType: null };
+    }
+    
+    const mediaInfo = await infoResponse.json();
+    console.log(`Media info received:`, { url: mediaInfo.url?.substring(0, 50), mime_type: mediaInfo.mime_type });
+    
+    if (!mediaInfo.url) {
+      console.error('No URL in media info response');
+      return { url: null, mimeType: null };
+    }
+
+    // 2. Download the media binary
+    const mediaResponse = await fetch(mediaInfo.url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (!mediaResponse.ok) {
+      const errorText = await mediaResponse.text();
+      console.error(`Failed to download media: ${mediaResponse.status}`, errorText);
+      return { url: null, mimeType: null };
+    }
+
+    // 3. Upload to Supabase Storage
+    const arrayBuffer = await mediaResponse.arrayBuffer();
+    const mimeType = mediaInfo.mime_type || 'image/jpeg';
+    const ext = mimeType.split('/')[1]?.split(';')[0] || 'jpg';
+    const fileName = `whatsapp-media/${Date.now()}_${mediaId}.${ext}`;
+
+    console.log(`Uploading media to storage: ${fileName} (${arrayBuffer.byteLength} bytes)`);
+
+    const { error: uploadError } = await supabase.storage
+      .from('messaging-media')
+      .upload(fileName, new Uint8Array(arrayBuffer), {
+        contentType: mimeType,
+        cacheControl: '31536000',
+      });
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      return { url: null, mimeType: null };
+    }
+
+    // 4. Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('messaging-media')
+      .getPublicUrl(fileName);
+
+    const publicUrl = publicUrlData?.publicUrl;
+    console.log(`Media cached successfully: ${publicUrl?.substring(0, 80)}...`);
+
+    return { url: publicUrl, mimeType };
+  } catch (error) {
+    console.error('Error fetching WhatsApp media:', error);
+    return { url: null, mimeType: null };
+  }
+}
+
 // Default AI configuration for Dosmicos
 const defaultAiConfig = {
   systemPrompt: `Eres el asistente virtual de DOSMICOS 🐄, una tienda colombiana especializada en productos para bebés y niños.
@@ -684,21 +760,70 @@ serve(async (req) => {
               const messageId = message.id;
               const timestamp = new Date(parseInt(message.timestamp) * 1000);
               
-              // Get message content
+              // Get message content and handle media
               let content = '';
               let messageType = 'text';
+              let mediaUrl: string | null = null;
+              let mediaMimeType: string | null = null;
               
               if (message.type === 'text') {
                 content = message.text?.body || '';
               } else if (message.type === 'image') {
-                content = '[Imagen recibida]';
+                // Extract and download image from WhatsApp
+                const mediaId = message.image?.id;
+                if (mediaId) {
+                  console.log(`Processing inbound image with media_id: ${mediaId}`);
+                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
+                  mediaUrl = mediaResult.url;
+                  mediaMimeType = mediaResult.mimeType;
+                  console.log(`Image processed - URL: ${mediaUrl ? 'saved' : 'failed'}`);
+                }
+                content = message.image?.caption || '';
                 messageType = 'image';
               } else if (message.type === 'audio') {
+                // Extract and download audio from WhatsApp
+                const mediaId = message.audio?.id;
+                if (mediaId) {
+                  console.log(`Processing inbound audio with media_id: ${mediaId}`);
+                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
+                  mediaUrl = mediaResult.url;
+                  mediaMimeType = mediaResult.mimeType;
+                }
                 content = '[Audio recibido]';
                 messageType = 'audio';
               } else if (message.type === 'document') {
-                content = '[Documento recibido]';
+                // Extract and download document from WhatsApp
+                const mediaId = message.document?.id;
+                if (mediaId) {
+                  console.log(`Processing inbound document with media_id: ${mediaId}`);
+                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
+                  mediaUrl = mediaResult.url;
+                  mediaMimeType = mediaResult.mimeType;
+                }
+                content = message.document?.filename || '[Documento recibido]';
                 messageType = 'document';
+              } else if (message.type === 'video') {
+                // Extract and download video from WhatsApp
+                const mediaId = message.video?.id;
+                if (mediaId) {
+                  console.log(`Processing inbound video with media_id: ${mediaId}`);
+                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
+                  mediaUrl = mediaResult.url;
+                  mediaMimeType = mediaResult.mimeType;
+                }
+                content = message.video?.caption || '';
+                messageType = 'video';
+              } else if (message.type === 'sticker') {
+                // Extract and download sticker from WhatsApp
+                const mediaId = message.sticker?.id;
+                if (mediaId) {
+                  console.log(`Processing inbound sticker with media_id: ${mediaId}`);
+                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
+                  mediaUrl = mediaResult.url;
+                  mediaMimeType = mediaResult.mimeType;
+                }
+                content = '';
+                messageType = 'sticker';
               } else {
                 content = `[${message.type} recibido]`;
                 messageType = message.type;
@@ -797,7 +922,7 @@ serve(async (req) => {
                   .eq('id', conversation.id);
               }
 
-              // Save incoming message
+              // Save incoming message with media URL if available
               const { error: msgError } = await supabase
                 .from('messaging_messages')
                 .insert({
@@ -810,6 +935,8 @@ serve(async (req) => {
                   external_message_id: messageId,
                   sent_at: timestamp.toISOString(),
                   delivered_at: new Date().toISOString(),
+                  media_url: mediaUrl,
+                  media_mime_type: mediaMimeType,
                   metadata: { original_message: message }
                 });
 
