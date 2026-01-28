@@ -153,6 +153,20 @@ export interface CarrierQuote {
   deliveryEstimate?: string;
 }
 
+// City match info for validation
+export interface CityMatchInfo {
+  matchType: 'exact' | 'fuzzy' | 'not_found';
+  inputCity: string;
+  matchedMunicipality: string | null;
+  matchedDepartment: string | null;
+  confidence: number;
+  suggestions: Array<{
+    municipality: string;
+    department: string;
+    similarity: number;
+  }>;
+}
+
 export interface QuoteResponse {
   success: boolean;
   quotes: CarrierQuote[];
@@ -162,7 +176,9 @@ export interface QuoteResponse {
     city: string;
     department: string;
     state_code: string;
+    dane_code?: string;
   };
+  matchInfo?: CityMatchInfo;
   error?: string;
 }
 

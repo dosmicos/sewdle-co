@@ -9,7 +9,8 @@ import {
   QuoteResponse,
   CarrierQuote,
   TrackingRequest,
-  TrackingResponse
+  TrackingResponse,
+  CityMatchInfo
 } from '../types/envia';
 import { toast } from 'sonner';
 
@@ -24,6 +25,7 @@ export const useEnviaShipping = () => {
   const [labelHistory, setLabelHistory] = useState<ShippingLabel[]>([]);
   const [quotes, setQuotes] = useState<CarrierQuote[]>([]);
   const [trackingInfo, setTrackingInfo] = useState<TrackingResponse | null>(null);
+  const [matchInfo, setMatchInfo] = useState<CityMatchInfo | null>(null);
 
   // Get all labels for an order (active + history)
   const getExistingLabel = useCallback(async (shopifyOrderId: number, organizationId: string): Promise<ShippingLabel | null> => {
@@ -159,6 +161,7 @@ export const useEnviaShipping = () => {
   const getQuotes = useCallback(async (request: QuoteRequest): Promise<QuoteResponse | null> => {
     setIsLoadingQuotes(true);
     setQuotes([]);
+    setMatchInfo(null);
     try {
       console.log('💰 Getting shipping quotes for:', request.destination_city);
 
@@ -178,8 +181,13 @@ export const useEnviaShipping = () => {
         return null;
       }
 
-      console.log('✅ Quotes received:', data.quotes?.length || 0);
+      console.log('✅ Quotes received:', data.quotes?.length || 0, 'Match:', data.matchInfo?.matchType);
       setQuotes(data.quotes || []);
+      
+      // Store matchInfo for city validation
+      if (data.matchInfo) {
+        setMatchInfo(data.matchInfo);
+      }
       
       return data as QuoteResponse;
     } catch (error: any) {
@@ -236,6 +244,7 @@ export const useEnviaShipping = () => {
   // Clear quotes
   const clearQuotes = useCallback(() => {
     setQuotes([]);
+    setMatchInfo(null);
   }, []);
 
   // Clear tracking info
@@ -338,6 +347,10 @@ export const useEnviaShipping = () => {
     quotes,
     getQuotes,
     clearQuotes,
+    
+    // City match info
+    matchInfo,
+    clearMatchInfo: () => setMatchInfo(null),
     
     // Tracking operations
     isLoadingTracking,
