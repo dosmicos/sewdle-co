@@ -474,20 +474,72 @@ async function registerPayment(invoiceId: number, amount: number, orderNumber: s
   }
 }
 
+// ============= SHOPIFY CREDENTIALS HELPER =============
+async function getShopifyCredentials(supabase: any, organizationId: string): Promise<{
+  domain: string;
+  accessToken: string;
+} | null> {
+  // 1. Intentar variables de entorno primero
+  let shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+  let shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+  
+  // 2. Si no hay en env, obtener de la organización
+  if (!shopifyDomain || !shopifyToken) {
+    console.log('🔍 Obteniendo credenciales Shopify desde la base de datos...')
+    
+    const { data: org, error } = await supabase
+      .from('organizations')
+      .select('shopify_store_url, shopify_credentials')
+      .eq('id', organizationId)
+      .single()
+    
+    if (error) {
+      console.error('❌ Error obteniendo organización:', error.message)
+      return null
+    }
+    
+    if (org?.shopify_store_url && org?.shopify_credentials?.access_token) {
+      try {
+        const url = new URL(org.shopify_store_url)
+        shopifyDomain = url.hostname
+        shopifyToken = org.shopify_credentials.access_token
+        console.log('✅ Credenciales Shopify obtenidas de la organización')
+      } catch (e: any) {
+        console.error('❌ Error parseando URL de Shopify:', e.message)
+        return null
+      }
+    }
+  } else {
+    console.log('✅ Usando credenciales Shopify de variables de entorno')
+  }
+  
+  if (!shopifyDomain || !shopifyToken) {
+    console.warn('⚠️ Credenciales de Shopify no disponibles')
+    return null
+  }
+  
+  // Normalizar dominio
+  const normalizedDomain = shopifyDomain.includes('.myshopify.com')
+    ? shopifyDomain
+    : `${shopifyDomain}.myshopify.com`
+  
+  return { domain: normalizedDomain, accessToken: shopifyToken }
+}
+
 // ============= SHOPIFY TAG UPDATE =============
-async function addFacturadoTag(shopifyOrderId: number, shopDomain: string): Promise<void> {
-  const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
-  if (!shopifyAccessToken) {
-    console.warn('⚠️ SHOPIFY_ACCESS_TOKEN no configurado')
+async function addFacturadoTag(shopifyOrderId: number, supabase: any, organizationId: string): Promise<void> {
+  const credentials = await getShopifyCredentials(supabase, organizationId)
+  if (!credentials) {
+    console.warn('⚠️ No se pudieron obtener credenciales de Shopify para agregar tag FACTURADO')
     return
   }
 
   try {
     // Get current tags
     const getResponse = await fetch(
-      `https://${shopDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
+      `https://${credentials.domain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
       {
-        headers: { 'X-Shopify-Access-Token': shopifyAccessToken },
+        headers: { 'X-Shopify-Access-Token': credentials.accessToken },
       }
     )
     
@@ -509,11 +561,11 @@ async function addFacturadoTag(shopifyOrderId: number, shopDomain: string): Prom
     const newTags = [...currentTags, 'FACTURADO'].join(', ')
     
     const updateResponse = await fetch(
-      `https://${shopDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
+      `https://${credentials.domain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
       {
         method: 'PUT',
         headers: {
-          'X-Shopify-Access-Token': shopifyAccessToken,
+          'X-Shopify-Access-Token': credentials.accessToken,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ order: { tags: newTags } }),
@@ -530,14 +582,14 @@ async function addFacturadoTag(shopifyOrderId: number, shopDomain: string): Prom
   }
 }
 
-async function addErrorTag(shopifyOrderId: number, shopDomain: string, errorMessage: string): Promise<void> {
-  const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
-  if (!shopifyAccessToken) return
+async function addErrorTag(shopifyOrderId: number, supabase: any, organizationId: string, errorMessage: string): Promise<void> {
+  const credentials = await getShopifyCredentials(supabase, organizationId)
+  if (!credentials) return
 
   try {
     const getResponse = await fetch(
-      `https://${shopDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
-      { headers: { 'X-Shopify-Access-Token': shopifyAccessToken } }
+      `https://${credentials.domain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
+      { headers: { 'X-Shopify-Access-Token': credentials.accessToken } }
     )
     
     if (!getResponse.ok) return
@@ -550,11 +602,11 @@ async function addErrorTag(shopifyOrderId: number, shopDomain: string, errorMess
       const newTags = [...currentTags, 'AUTO_INVOICE_FAILED'].join(', ')
       
       await fetch(
-        `https://${shopDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
+        `https://${credentials.domain}/admin/api/2024-01/orders/${shopifyOrderId}.json`,
         {
           method: 'PUT',
           headers: {
-            'X-Shopify-Access-Token': shopifyAccessToken,
+            'X-Shopify-Access-Token': credentials.accessToken,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ order: { tags: newTags } }),
@@ -727,7 +779,7 @@ async function processAutoInvoice(
         
         if (existingInvoice.cufe) {
           // Ya está emitida, marcar como completada
-          await addFacturadoTag(shopifyOrderId, shopDomain)
+          await addFacturadoTag(shopifyOrderId, supabase, organizationId)
           return { success: true, invoiceId: existingInvoice.invoiceId, cufe: existingInvoice.cufe }
         }
         
@@ -763,7 +815,7 @@ async function processAutoInvoice(
           .eq('shopify_order_id', shopifyOrderId)
           .eq('alegra_invoice_id', orderData.alegra_invoice_id)
         
-        await addFacturadoTag(shopifyOrderId, shopDomain)
+        await addFacturadoTag(shopifyOrderId, supabase, organizationId)
         
         console.log(`✅ Re-stamp exitoso: Factura ${invoiceNumber} emitida`)
         return { success: true, invoiceId: orderData.alegra_invoice_id, cufe }
@@ -782,11 +834,9 @@ async function processAutoInvoice(
           const currentTags = orderData.tags || ''
           updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
           
-          // NUEVO: Sincronizar tag a Shopify
-          if (shopDomain) {
-            console.log(`🏷️ Sincronizando AUTO_INVOICE_FAILED a Shopify para ${orderData.order_number}`)
-            await addErrorTag(shopifyOrderId, shopDomain, `Re-stamp DIAN falló después de ${newRetries} intentos`)
-          }
+          // Sincronizar tag a Shopify
+          console.log(`🏷️ Sincronizando AUTO_INVOICE_FAILED a Shopify para ${orderData.order_number}`)
+          await addErrorTag(shopifyOrderId, supabase, organizationId, `Re-stamp DIAN falló después de ${newRetries} intentos`)
         } else {
           console.log(`📊 Reintento ${newRetries}/3 para pedido ${orderData.order_number}`)
         }
@@ -902,11 +952,9 @@ async function processAutoInvoice(
         const currentTags = orderData.tags || ''
         updateData.tags = currentTags + ', AUTO_INVOICE_FAILED'
         
-        // NUEVO: Sincronizar tag a Shopify
-        if (shopDomain) {
-          console.log(`🏷️ Sincronizando AUTO_INVOICE_FAILED a Shopify para ${orderData.order_number}`)
-          await addErrorTag(shopifyOrderId, shopDomain, `Stamping DIAN falló después de ${newRetries} intentos`)
-        }
+        // Sincronizar tag a Shopify
+        console.log(`🏷️ Sincronizando AUTO_INVOICE_FAILED a Shopify para ${orderData.order_number}`)
+        await addErrorTag(shopifyOrderId, supabase, organizationId, `Stamping DIAN falló después de ${newRetries} intentos`)
       } else {
         console.log(`📊 Reintento ${newRetries}/3 para pedido ${orderData.order_number}`)
       }
@@ -955,17 +1003,15 @@ async function processAutoInvoice(
     await registerPayment(invoice.id, orderData.total_price, orderData.order_number)
 
     // 14. Add FACTURADO tag to Shopify
-    if (shopDomain) {
-      await addFacturadoTag(shopifyOrderId, shopDomain)
-      
-      // Update local tags
-      const currentTags = (orderData.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean)
-      if (!currentTags.some((t: string) => t.toUpperCase() === 'FACTURADO')) {
-        const newTags = [...currentTags, 'FACTURADO'].join(', ')
-        await supabase.from('shopify_orders').update({ tags: newTags })
-          .eq('shopify_order_id', shopifyOrderId)
-          .eq('organization_id', organizationId)
-      }
+    await addFacturadoTag(shopifyOrderId, supabase, organizationId)
+    
+    // Update local tags
+    const currentTags = (orderData.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean)
+    if (!currentTags.some((t: string) => t.toUpperCase() === 'FACTURADO')) {
+      const newTags = [...currentTags, 'FACTURADO'].join(', ')
+      await supabase.from('shopify_orders').update({ tags: newTags })
+        .eq('shopify_order_id', shopifyOrderId)
+        .eq('organization_id', organizationId)
     }
 
     console.log(`🎉 ========== FACTURACIÓN AUTOMÁTICA COMPLETADA ==========\n`)
@@ -1040,9 +1086,7 @@ Deno.serve(async (req) => {
         console.error('❌ Error en auto-invoice (single):', processError.message)
 
         // Add error tag to Shopify order
-        if (shopDomain) {
-          await addErrorTag(body.shopifyOrderId, shopDomain, processError.message)
-        }
+        await addErrorTag(body.shopifyOrderId, supabase, body.organizationId, processError.message)
 
         // Log error
         await supabase.from('sync_control_logs').insert({
@@ -1118,17 +1162,9 @@ Deno.serve(async (req) => {
           error: err.message 
         })
         
-        // Get shop domain for error tag
+        // Add error tag to Shopify - getShopifyCredentials maneja la obtención de credenciales
         try {
-          const { data: orgData } = await supabase
-            .from('organizations')
-            .select('shopify_store_url')
-            .eq('id', order.organization_id)
-            .single()
-          const shopDomain = orgData?.shopify_store_url?.replace('https://', '') || ''
-          if (shopDomain) {
-            await addErrorTag(order.shopify_order_id, shopDomain, err.message)
-          }
+          await addErrorTag(order.shopify_order_id, supabase, order.organization_id, err.message)
         } catch {}
         
         // Log error
