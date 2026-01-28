@@ -37,7 +37,8 @@ import {
   RefreshCw,
   Eye,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Tag
 } from 'lucide-react';
 
 // Helper para detectar errores 503/rate limit
@@ -652,6 +653,7 @@ const BulkInvoiceCreator = () => {
   
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingTags, setIsSyncingTags] = useState(false);
   
   // Alegra catalog cache
   const alegraItemsCache = useRef<AlegraItem[]>([]);
@@ -827,6 +829,66 @@ const BulkInvoiceCreator = () => {
       return syncedCount;
     } catch (err) {
       console.error('Error en syncPendingInvoices:', err);
+      return 0;
+    }
+  };
+
+  // Sync missing FACTURADO tags - for orders that have CUFE but no tag in Shopify
+  const syncMissingTags = async () => {
+    console.log('🏷️ Sincronizando tags FACTURADO faltantes...');
+    
+    try {
+      // Buscar pedidos con CUFE pero sin tag FACTURADO
+      const { data: ordersWithoutTag, error } = await supabase
+        .from('shopify_orders')
+        .select('shopify_order_id, order_number, tags')
+        .eq('alegra_stamped', true)
+        .not('alegra_cufe', 'is', null);
+      
+      if (error) {
+        console.error('Error buscando pedidos sin tag:', error);
+        toast.error('Error buscando pedidos');
+        return 0;
+      }
+      
+      // Filter locally for orders without FACTURADO tag
+      const ordersNeedingTag = (ordersWithoutTag || []).filter(order => {
+        if (!order.tags) return true;
+        const tagsArray = order.tags.split(',').map((t: string) => t.trim().toUpperCase());
+        return !tagsArray.includes('FACTURADO');
+      });
+      
+      if (!ordersNeedingTag.length) {
+        toast.info('Todos los pedidos facturados ya tienen el tag FACTURADO');
+        return 0;
+      }
+      
+      console.log(`📋 Encontrados ${ordersNeedingTag.length} pedidos sin tag FACTURADO`);
+      toast.info(`Sincronizando ${ordersNeedingTag.length} pedidos...`);
+      
+      let syncedCount = 0;
+      
+      for (const order of ordersNeedingTag) {
+        try {
+          await addFacturadoTag(order.shopify_order_id);
+          syncedCount++;
+          
+          // Pequeña pausa para no saturar Shopify API
+          await new Promise(r => setTimeout(r, 300));
+        } catch (err) {
+          console.error(`Error agregando tag a pedido ${order.order_number}:`, err);
+        }
+      }
+      
+      if (syncedCount > 0) {
+        toast.success(`${syncedCount} pedido(s) etiquetado(s) como FACTURADO`);
+        await fetchShopifyOrders(); // Recargar lista
+      }
+      
+      return syncedCount;
+    } catch (err) {
+      console.error('Error en syncMissingTags:', err);
+      toast.error('Error sincronizando tags');
       return 0;
     }
   };
@@ -2461,6 +2523,23 @@ const BulkInvoiceCreator = () => {
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
             {isSyncing ? 'Sincronizando...' : 'Sincronizar CUFE'}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={async () => {
+              setIsSyncingTags(true);
+              await syncMissingTags();
+              setIsSyncingTags(false);
+            }} 
+            disabled={isSyncingTags || isLoading}
+          >
+            {isSyncingTags ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Tag className="h-4 w-4 mr-1" />
+            )}
+            {isSyncingTags ? 'Sincronizando...' : 'Sincronizar Tags'}
           </Button>
         </div>
         
