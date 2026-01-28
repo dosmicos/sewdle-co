@@ -566,6 +566,15 @@ export const ConversationThread = ({
                             />
                           </a>
                         )}
+                        {/* Fallback for image messages without URL (legacy or failed download) */}
+                        {!message.mediaUrl && message.mediaType === 'image' && (
+                          <div className="max-w-[200px] h-32 rounded-lg mb-2 bg-muted/50 border border-dashed border-muted-foreground/30 flex items-center justify-center">
+                            <div className="text-center text-muted-foreground">
+                              <Image className="h-8 w-8 mx-auto mb-1 opacity-50" />
+                              <span className="text-xs">Imagen no disponible</span>
+                            </div>
+                          </div>
+                        )}
                         {message.mediaUrl && message.mediaType === 'audio' && (
                           <audio 
                             controls 
