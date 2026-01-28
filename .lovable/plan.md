@@ -1,247 +1,363 @@
 
 
-# Plan: Integrar tu `whatsapp-webhook` con Persistencia de Imágenes y Panel de Indexación
+# Plan: Validación de Municipios con Opciones "Sí, continuar" y "No"
 
-## Resumen del Problema
+## Resumen del Cambio
 
-Tu función `whatsapp-webhook` procesa imágenes correctamente para búsqueda por embeddings (GPT-4o describe → embedding → match), pero **no persiste las imágenes** en Supabase Storage. El resultado:
+Cuando la ciudad no coincide exactamente, se mostrarán dos opciones:
+- **"Sí, continuar con [Ciudad]"**: Acepta la sugerencia y permite crear la guía
+- **"No, corregir en Shopify"**: Rechaza la sugerencia y bloquea la creación hasta que se corrija manualmente
 
-| Lo que hace hoy | Lo que falta |
-|-----------------|--------------|
-| ✅ Descarga imagen de WhatsApp (línea 388) | ❌ No la sube a Storage |
-| ✅ GPT-4o describe la imagen (línea 473) | ❌ No guarda `media_url` en BD |
-| ✅ Busca productos similares por embedding | ❌ Frontend muestra "Imagen no disponible" |
-
-## Solución: 2 Cambios
-
-### 1. Modificar `whatsapp-webhook` para persistir imágenes
-
-Agregar función para subir la imagen a Supabase Storage y guardar la URL:
+## Flujo de Usuario
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  FLUJO ACTUAL (líneas 383-389)                                  │
+│  CASO 1: Ciudad correcta "Siachoque"                            │
 ├─────────────────────────────────────────────────────────────────┤
-│  message.image.id → downloadWhatsAppMedia() → base64            │
-│                                    ↓                            │
-│                              GPT-4o describe                    │
-│                                    ↓                            │
-│                              embedding → match                  │
+│  Match: exact                                                   │
+│  → No se muestra alerta                                         │
+│  → Botón "Crear Guía" habilitado normalmente                    │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│  FLUJO NUEVO (agregando persistencia)                           │
+│  CASO 2: Ciudad mal escrita "Siachique" - Usuario acepta       │
 ├─────────────────────────────────────────────────────────────────┤
-│  message.image.id → downloadWhatsAppMedia() → base64            │
-│                      ↓                   ↓                      │
-│              uploadToStorage()     GPT-4o describe              │
-│                      ↓                   ↓                      │
-│              media_url            embedding → match             │
-│                      ↓                                          │
-│              INSERT con media_url poblada                       │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ ⚠️ Ciudad no reconocida                                    │  │
+│  │                                                           │  │
+│  │ "Siachique" no coincide exactamente.                      │  │
+│  │ ¿Quisiste decir Siachoque, Boyacá?                        │  │
+│  │                                                           │  │
+│  │  [Sí, continuar con Siachoque]  [No, corregir en Shopify] │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  → Usuario hace clic en "Sí, continuar"                         │
+│  → Sistema usa "Siachoque" para crear la guía                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  CASO 3: Ciudad mal escrita "Siachique" - Usuario rechaza      │
+├─────────────────────────────────────────────────────────────────┤
+│  → Usuario hace clic en "No, corregir en Shopify"               │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ ❌ Corrección requerida                                    │  │
+│  │                                                           │  │
+│  │ Debes corregir la ciudad en Shopify antes de crear la     │  │
+│  │ guía. Luego recarga este pedido.                          │  │
+│  │                                                           │  │
+│  │                              [Volver a verificar]          │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  → Botón "Crear Guía" permanece DESHABILITADO                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  CASO 4: Ciudad inventada "XYZ123"                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Match: not_found                                               │
+│  → Mensaje: "Ciudad no reconocida. No hay municipios similares" │
+│  → Botón deshabilitado, sin opciones                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Mejorar UI para mostrar estado de imágenes analizadas
+## Cambios Técnicos
 
-Cuando una imagen fue procesada por IA pero no tiene URL persistida:
+### 1. Modificar Edge Function `envia-quote`
 
-| Antes | Después |
-|-------|---------|
-| "Imagen no disponible" (gris) | "🔍 Imagen analizada para búsqueda de productos" (badge verde) |
+**Archivo:** `supabase/functions/envia-quote/index.ts`
 
-### 3. Agregar panel de estado de indexación en ProductCatalogConnection
-
-Mostrar estadísticas de `product_embeddings` y `product_indexing_queue`:
-- Total de productos indexados
-- Productos pendientes en cola
-- Productos fallidos con opción de reintentar
-
----
-
-## Cambios Técnicos Detallados
-
-### Archivo 1: `supabase/functions/whatsapp-webhook/index.ts`
-
-Crear el archivo en el repositorio con tu código + las siguientes adiciones:
-
-**A. Nueva función `uploadMediaToStorage`** (después de línea 96):
+Agregar función de similitud Levenshtein y retornar `matchInfo` en la respuesta:
 
 ```typescript
-async function uploadMediaToStorage(
-  base64Data: string, 
-  mediaId: string, 
-  supabase: any,
-  mimeType: string = 'image/jpeg'
-): Promise<string | null> {
-  try {
-    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    const ext = mimeType.split('/')[1]?.split(';')[0] || 'jpg';
-    const fileName = `whatsapp-media/${Date.now()}_${mediaId}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('messaging-media')
-      .upload(fileName, binaryData, {
-        contentType: mimeType,
-        cacheControl: '31536000',
-      });
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      return null;
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('messaging-media')
-      .getPublicUrl(fileName);
-
-    console.log('✅ Image uploaded to storage:', publicUrlData.publicUrl);
-    return publicUrlData.publicUrl;
-  } catch (error) {
-    console.error('❌ Upload error:', error);
-    return null;
-  }
-}
-```
-
-**B. Modificar `processMessage`** para usar la nueva función:
-
-En línea ~379, agregar variable para media_url:
-```typescript
-let mediaUrl: string | null = null;
-```
-
-En línea ~388, después de descargar la imagen:
-```typescript
-if (message.image?.id) {
-  console.log('🖼️ Downloading image...');
-  imageBase64 = await downloadWhatsAppMedia(message.image.id);
+// Nueva función para calcular distancia Levenshtein
+function levenshteinDistance(s1: string, s2: string): number {
+  const m = s1.length, n = s2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
   
-  // NUEVO: Subir a Storage para persistencia
-  if (imageBase64) {
-    mediaUrl = await uploadMediaToStorage(
-      imageBase64, 
-      message.image.id, 
-      supabase,
-      'image/jpeg'
-    );
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = s1[i-1] === s2[j-1] 
+        ? dp[i-1][j-1] 
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const s2 = str2.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const maxLen = Math.max(s1.length, s2.length);
+  if (maxLen === 0) return 1;
+  return (maxLen - levenshteinDistance(s1, s2)) / maxLen;
+}
+```
+
+Modificar la función de búsqueda DANE para retornar información de match:
+
+```typescript
+async function getDaneCodeWithMatchInfo(supabase: any, city: string, department?: string): Promise<{
+  daneCode: string;
+  matchType: 'exact' | 'fuzzy' | 'not_found';
+  matchedMunicipality: string | null;
+  matchedDepartment: string | null;
+  suggestions: Array<{ municipality: string; department: string; similarity: number }>;
+}> {
+  // 1. Intentar match exacto primero
+  // 2. Si no hay exacto, buscar todos los municipios y calcular similitud
+  // 3. Filtrar los que tengan similitud > 0.7
+  // 4. Ordenar por similitud descendente
+  // 5. Retornar el mejor match como sugerencia
+}
+```
+
+Nueva estructura de respuesta del endpoint:
+
+```typescript
+{
+  success: true,
+  quotes: [...],
+  destination: {
+    city: "Siachoque",      // Ciudad que se usaría (la sugerida o la original)
+    department: "Boyacá",
+    state_code: "BY",
+    dane_code: "15740000"
+  },
+  matchInfo: {
+    matchType: 'fuzzy',           // 'exact' | 'fuzzy' | 'not_found'
+    inputCity: "Siachique",       // Lo que escribió el usuario
+    matchedMunicipality: "Siachoque",
+    matchedDepartment: "Boyacá",
+    confidence: 0.88,
+    suggestions: [
+      { municipality: "Siachoque", department: "Boyacá", similarity: 0.88 }
+    ]
   }
 }
 ```
 
-En línea ~451, modificar el INSERT para incluir media_url:
+### 2. Actualizar Tipos TypeScript
+
+**Archivo:** `src/features/shipping/types/envia.ts`
+
 ```typescript
-await supabase.from('messaging_messages').insert({
-  conversation_id: conversation.id,
-  channel_type: 'whatsapp',
-  direction: 'inbound',
-  sender_type: 'user',
-  content: content || '[Imagen]',
-  message_type: messageType,
-  external_message_id: messageId,
-  sent_at: timestamp.toISOString(),
-  media_url: mediaUrl,           // NUEVO
-  media_mime_type: 'image/jpeg', // NUEVO (cuando hay imagen)
-});
+export interface CityMatchInfo {
+  matchType: 'exact' | 'fuzzy' | 'not_found';
+  inputCity: string;
+  matchedMunicipality: string | null;
+  matchedDepartment: string | null;
+  confidence: number;
+  suggestions: Array<{
+    municipality: string;
+    department: string;
+    similarity: number;
+  }>;
+}
+
+export interface QuoteResponse {
+  success: boolean;
+  quotes: CarrierQuote[];
+  domicilio: CarrierQuote[];
+  oficina: CarrierQuote[];
+  destination: {
+    city: string;
+    department: string;
+    state_code: string;
+    dane_code?: string;
+  };
+  matchInfo?: CityMatchInfo;
+  error?: string;
+}
 ```
 
----
+### 3. Modificar Hook `useEnviaShipping`
 
-### Archivo 2: `src/components/messaging-ai/ConversationThread.tsx`
-
-Modificar el fallback de imágenes (líneas 569-577) para mostrar que fue analizada:
+**Archivo:** `src/features/shipping/hooks/useEnviaShipping.ts`
 
 ```typescript
-{/* Fallback for image messages without URL - show AI analysis badge */}
-{!message.mediaUrl && message.mediaType === 'image' && (
-  <div className="max-w-[200px] rounded-lg mb-2 p-3 bg-emerald-50 border border-emerald-200">
-    <div className="flex items-center gap-2 text-emerald-700">
-      <Search className="h-5 w-5" />
-      <div>
-        <p className="text-sm font-medium">Imagen analizada</p>
-        <p className="text-xs opacity-70">Búsqueda por IA</p>
+// Nuevo estado
+const [matchInfo, setMatchInfo] = useState<CityMatchInfo | null>(null);
+
+// En getQuotes, guardar matchInfo de la respuesta
+const getQuotes = useCallback(async (request: QuoteRequest): Promise<QuoteResponse | null> => {
+  // ... código existente ...
+  if (data.matchInfo) {
+    setMatchInfo(data.matchInfo);
+  }
+  return data as QuoteResponse;
+}, []);
+
+// Exponer en el return
+return {
+  // ... existente ...
+  matchInfo,
+  clearMatchInfo: () => setMatchInfo(null)
+};
+```
+
+### 4. Modificar Componente `EnviaShippingButton`
+
+**Archivo:** `src/features/shipping/components/EnviaShippingButton.tsx`
+
+**A. Nuevos estados:**
+```typescript
+const [correctedCity, setCorrectedCity] = useState<string | null>(null);
+const [userRejectedSuggestion, setUserRejectedSuggestion] = useState(false);
+```
+
+**B. UI con dos botones - Aceptar o Rechazar:**
+```typescript
+{/* Alerta cuando hay match fuzzy y usuario aún no ha decidido */}
+{matchInfo && matchInfo.matchType === 'fuzzy' && 
+ matchInfo.suggestions.length > 0 && 
+ !correctedCity && 
+ !userRejectedSuggestion && (
+  <Alert className="mb-3 border-amber-200 bg-amber-50">
+    <AlertCircle className="h-4 w-4 text-amber-600" />
+    <AlertTitle className="text-amber-800">Ciudad no reconocida</AlertTitle>
+    <AlertDescription className="text-amber-700">
+      <p className="mb-2">
+        "{matchInfo.inputCity}" no coincide exactamente con ningún municipio.
+      </p>
+      <p className="font-medium mb-3">
+        ¿Quisiste decir <strong>{matchInfo.suggestions[0].municipality}</strong>, 
+        {matchInfo.suggestions[0].department}?
+      </p>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-white border-green-300 hover:bg-green-50 text-green-700"
+          onClick={() => {
+            setCorrectedCity(matchInfo.suggestions[0].municipality);
+            toast.success(`Ciudad corregida a: ${matchInfo.suggestions[0].municipality}`);
+          }}
+        >
+          <Check className="h-4 w-4 mr-2" />
+          Sí, continuar con {matchInfo.suggestions[0].municipality}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-white border-red-300 hover:bg-red-50 text-red-700"
+          onClick={() => {
+            setUserRejectedSuggestion(true);
+            toast.info("Corrige la ciudad en Shopify y vuelve a verificar");
+          }}
+        >
+          <X className="h-4 w-4 mr-2" />
+          No, corregir en Shopify
+        </Button>
       </div>
-    </div>
-  </div>
+    </AlertDescription>
+  </Alert>
 )}
 ```
 
----
-
-### Archivo 3: `src/hooks/useProductIndexing.ts` (nuevo)
-
-Hook para consultar estadísticas de indexación:
-
+**C. Alerta cuando usuario rechazó la sugerencia:**
 ```typescript
-export const useProductIndexing = (organizationId?: string) => {
-  // Query product_embeddings count
-  // Query product_indexing_queue by status
-  // Return stats: { indexed, pending, processing, failed }
-  // Mutation to reindex a product
-}
+{/* Alerta cuando usuario rechazó - bloqueo total */}
+{userRejectedSuggestion && (
+  <Alert variant="destructive" className="mb-3">
+    <AlertCircle className="h-4 w-4" />
+    <AlertTitle>Corrección requerida</AlertTitle>
+    <AlertDescription>
+      <p className="mb-2">
+        Debes corregir la ciudad en Shopify antes de crear la guía.
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-2 bg-white"
+        onClick={() => {
+          setUserRejectedSuggestion(false);
+          setCorrectedCity(null);
+          // Volver a obtener quotes para re-verificar
+          handleGetQuotes();
+        }}
+      >
+        <RefreshCw className="h-4 w-4 mr-2" />
+        Volver a verificar
+      </Button>
+    </AlertDescription>
+  </Alert>
+)}
 ```
 
----
-
-### Archivo 4: `src/components/whatsapp-ai/ProductCatalogConnection.tsx`
-
-Agregar sección de estado de indexación después del panel de sincronización:
-
+**D. Alerta cuando no hay sugerencias:**
 ```typescript
-// Nueva sección: Panel de Indexación Visual
-<Card>
-  <CardHeader>
-    <CardTitle className="flex items-center gap-2">
-      <Sparkles className="h-5 w-5 text-purple-500" />
-      Indexación Visual IA
-    </CardTitle>
-    <CardDescription>
-      Productos indexados para búsqueda por imagen
-    </CardDescription>
-  </CardHeader>
-  <CardContent>
-    <div className="grid grid-cols-2 gap-3">
-      <div className="p-3 rounded-lg bg-purple-50 text-center">
-        <p className="text-xl font-bold text-purple-600">{stats.indexed}</p>
-        <p className="text-xs text-purple-600">Indexados</p>
-      </div>
-      <div className="p-3 rounded-lg bg-amber-50 text-center">
-        <p className="text-xl font-bold text-amber-600">{stats.pending}</p>
-        <p className="text-xs text-amber-600">Pendientes</p>
-      </div>
-    </div>
-    {stats.failed > 0 && (
-      <div className="mt-3 p-2 rounded bg-red-50 text-red-700 text-sm">
-        {stats.failed} productos fallidos - revisar cola
-      </div>
-    )}
-  </CardContent>
-</Card>
+{/* Alerta cuando no hay sugerencias posibles */}
+{matchInfo && matchInfo.matchType === 'not_found' && (
+  <Alert variant="destructive" className="mb-3">
+    <AlertCircle className="h-4 w-4" />
+    <AlertTitle>Ciudad no reconocida</AlertTitle>
+    <AlertDescription>
+      No se encontró "{matchInfo.inputCity}" en la base de datos y no hay 
+      municipios similares. Corrige la dirección en Shopify.
+    </AlertDescription>
+  </Alert>
+)}
 ```
 
----
+**E. Lógica de habilitación del botón:**
+```typescript
+// Permitir crear guía SOLO si:
+// 1. Match exacto, O
+// 2. Match fuzzy Y usuario aceptó corrección (correctedCity tiene valor)
+// NO permitir si: userRejectedSuggestion es true
+const canCreateLabel = 
+  shippingAddress?.city && 
+  shippingAddress?.address1 && 
+  !userRejectedSuggestion &&
+  (matchInfo?.matchType === 'exact' || correctedCity !== null);
+```
 
-## Archivos a Crear/Modificar
+**F. Usar ciudad corregida al crear guía:**
+```typescript
+const handleCreateLabel = async () => {
+  // Usar ciudad corregida si existe, sino la original
+  const city = correctedCity || shippingAddress.city || '';
+  
+  const result = await createLabel({
+    // ... otros campos ...
+    destination_city: city,
+    // ...
+  });
+};
+```
 
-| Archivo | Acción | Propósito |
-|---------|--------|-----------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Crear | Tu código + persistencia de imágenes |
-| `src/components/messaging-ai/ConversationThread.tsx` | Modificar | Mejor fallback para imágenes analizadas |
-| `src/hooks/useProductIndexing.ts` | Crear | Hook para estadísticas de indexación |
-| `src/components/whatsapp-ai/ProductCatalogConnection.tsx` | Modificar | Agregar panel de indexación visual |
+**G. Reset al cambiar de pedido:**
+```typescript
+useEffect(() => {
+  if (currentOrganization?.id && shopifyOrderId) {
+    setCorrectedCity(null);
+    setUserRejectedSuggestion(false);
+    clearMatchInfo();
+    // ... resto del código existente ...
+  }
+}, [shopifyOrderId, currentOrganization?.id]);
+```
 
----
+## Archivos a Modificar
 
-## Resultado Esperado
+| Archivo | Acción | Cambios Principales |
+|---------|--------|---------------------|
+| `supabase/functions/envia-quote/index.ts` | Modificar | Agregar Levenshtein, retornar `matchInfo` |
+| `src/features/shipping/types/envia.ts` | Modificar | Agregar tipo `CityMatchInfo` |
+| `src/features/shipping/hooks/useEnviaShipping.ts` | Modificar | Exponer `matchInfo` |
+| `src/features/shipping/components/EnviaShippingButton.tsx` | Modificar | UI con 2 botones, lógica de bloqueo |
 
-1. **Imágenes nuevas**: Se guardarán en Storage y se mostrarán en el chat
-2. **Imágenes antiguas (sin URL)**: Mostrarán badge "Imagen analizada para búsqueda"
-3. **Panel de catálogo**: Mostrará estadísticas de productos indexados para búsqueda visual
-4. **Tu función `index-products`**: Seguirá funcionando igual (no la tocamos)
+## Resumen de Estados
 
----
-
-## Nota Importante
-
-Al crear `supabase/functions/whatsapp-webhook/index.ts` en Lovable, se desplegará automáticamente y podrás actualizar el webhook en Meta para apuntar a esta versión con persistencia de imágenes.
+| Estado | Descripción | Botón "Crear Guía" |
+|--------|-------------|-------------------|
+| `matchType: 'exact'` | Ciudad coincide perfectamente | Habilitado |
+| `matchType: 'fuzzy'` + sin decisión | Usuario debe elegir | Deshabilitado |
+| `matchType: 'fuzzy'` + `correctedCity` | Usuario aceptó sugerencia | Habilitado |
+| `matchType: 'fuzzy'` + `userRejectedSuggestion` | Usuario rechazó | Deshabilitado |
+| `matchType: 'not_found'` | Sin coincidencias | Deshabilitado |
 
