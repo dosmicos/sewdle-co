@@ -157,7 +157,7 @@ export const useEnviaShipping = () => {
     }
   }, []);
 
-  // Get shipping quotes (optimized: no toast errors to avoid spam when API is down)
+  // Get shipping quotes
   const getQuotes = useCallback(async (request: QuoteRequest): Promise<QuoteResponse | null> => {
     setIsLoadingQuotes(true);
     setQuotes([]);
@@ -171,13 +171,13 @@ export const useEnviaShipping = () => {
 
       if (error) {
         console.error('Error getting quotes:', error);
-        // Solo log, NO toast para errores de conexión (evitar spam cuando API está caída)
+        toast.error('Error al obtener cotizaciones: ' + error.message);
         return null;
       }
 
       if (!data.success) {
         console.error('Quote request failed:', data.error);
-        // NO toast para errores de autenticación (API caída)
+        toast.error('Error al cotizar: ' + (data.error || 'Error desconocido'));
         return null;
       }
 
@@ -192,7 +192,7 @@ export const useEnviaShipping = () => {
       return data as QuoteResponse;
     } catch (error: any) {
       console.error('Error in getQuotes:', error);
-      // NO toast para errores de timeout o conexión
+      toast.error('Error al obtener cotizaciones: ' + error.message);
       return null;
     } finally {
       setIsLoadingQuotes(false);

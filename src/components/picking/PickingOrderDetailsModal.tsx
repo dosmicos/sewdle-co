@@ -486,62 +486,86 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         // Check again before making more async calls
         if (isCancelled) return;
         
-        // OPTIMIZACIÓN: Mostrar items con fallback inmediatamente, luego cargar Shopify en background
+        // ALWAYS fetch images from Shopify API for items with product_id and variant_id
+        // This ensures we get the correct variant-specific image
         const itemsWithShopifyIds = enrichedItems.filter(item => item.product_id && item.variant_id);
-        
-        // 1. Mostrar items con fallback inmediatamente - UI lista al instante
-        const itemsWithFallback = enrichedItems.map(item => ({
-          ...item,
-          image_url: (item as any).fallback_image_url || null
-        }));
-        
-        if (!isCancelled) {
-          setLineItems(itemsWithFallback);
-          setLoadingItems(false); // UI lista inmediatamente
+        if (itemsWithShopifyIds.length > 0) {
+          console.log(`🖼️ Fetching ${itemsWithShopifyIds.length} variant images from Shopify API...`);
+          
+          // Get images from Shopify in parallel
+          const imagePromises = itemsWithShopifyIds.map(async (item) => {
+            const shopifyImage = await fetchImageFromShopify(item.product_id!, item.variant_id!);
+            return { sku: item.sku, image_url: shopifyImage };
+          });
+          
+          const shopifyImages = await Promise.all(imagePromises);
+          
+          // Check again after parallel fetch
+          if (isCancelled) return;
+          
+          const skuToShopifyImageMap = new Map(
+            shopifyImages.map(img => [img.sku, img.image_url])
+          );
+          
+          // Apply Shopify API images (priority) or fallback to saved image
+          enrichedItems = enrichedItems.map(item => ({
+            ...item,
+            image_url: skuToShopifyImageMap.get(item.sku) || (item as any).fallback_image_url || null
+          }));
+        } else {
+          // No Shopify IDs available, use fallback images
+          enrichedItems = enrichedItems.map(item => ({
+            ...item,
+            image_url: (item as any).fallback_image_url || null
+          }));
         }
         
-        // 2. Cargar imágenes de Shopify en segundo plano (diferido 300ms para priorizar UI)
-        if (itemsWithShopifyIds.length > 0 && !isCancelled) {
-          setTimeout(async () => {
-            console.log(`🖼️ Loading ${itemsWithShopifyIds.length} variant images from Shopify API (background)...`);
-            
-            for (const item of itemsWithShopifyIds) {
-              if (isCancelled) break;
-              try {
-                const shopifyImage = await fetchImageFromShopify(item.product_id!, item.variant_id!);
-                if (shopifyImage && !isCancelled) {
-                  // Actualizar imagen individual sin bloquear
-                  setLineItems(prev => prev.map(li => 
-                    li.sku === item.sku ? { ...li, image_url: shopifyImage } : li
-                  ));
-                }
-              } catch (e) {
-                // Silenciosamente fallar - mantenemos el fallback
-                console.log(`⚠️ Failed to load Shopify image for ${item.sku}, using fallback`);
+        // Check before final async operation
+        if (isCancelled) return;
+        
+        // Final fallback: query product_variants (only if still no image)
+        const itemsStillWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
+        if (itemsStillWithoutImages.length > 0) {
+          console.log(`⚠️ ${itemsStillWithoutImages.length} items still without images, using local fallback...`);
+          const skus = itemsStillWithoutImages.map(item => item.sku).filter((sku): sku is string => Boolean(sku));
+          
+          const variantResult = await supabase
+            .from('product_variants')
+            .select('sku_variant, products(image_url)')
+            .in('sku_variant', skus);
+          
+          // Final check before setting state
+          if (isCancelled) return;
+          
+          const variantData = variantResult.data as Array<{ sku_variant: string; products: { image_url: string | null } | null }> | null;
+          
+          if (variantData) {
+            const skuToImageMap = new Map<string, string | null>();
+            variantData.forEach((v) => {
+              if (v.sku_variant) {
+                skuToImageMap.set(v.sku_variant, v.products?.image_url || null);
               }
-            }
+            });
             
-            // Final fallback: query product_variants for items still without images
-            if (!isCancelled) {
-              setLineItems(prev => {
-                const itemsStillWithoutImages = prev.filter(item => !item.image_url && item.sku);
-                if (itemsStillWithoutImages.length === 0) return prev;
-                
-                console.log(`⚠️ ${itemsStillWithoutImages.length} items still without images, will use local fallback...`);
-                return prev;
-              });
-            }
-          }, 300);
+            enrichedItems = enrichedItems.map(item => ({
+              ...item,
+              image_url: item.image_url || (item.sku ? skuToImageMap.get(item.sku) || null : null)
+            }));
+          }
         }
         
-        return; // Early return since we already set state above
-        
+        // Only set state if not cancelled
+        if (!isCancelled) {
+          setLineItems(enrichedItems);
+        }
       } catch (error) {
         if (!isCancelled) {
           console.error('Error fetching line items:', error);
           setLineItems([]);
-          setLoadingItems(false);
         }
+      }
+      if (!isCancelled) {
+        setLoadingItems(false);
       }
     };
 
