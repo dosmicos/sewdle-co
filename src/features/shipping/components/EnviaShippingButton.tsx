@@ -133,6 +133,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [codAmount, setCodAmount] = useState<number>(totalPrice || 0);
   const [isEditingCod, setIsEditingCod] = useState(false);
   const [quotesLoaded, setQuotesLoaded] = useState(false);
+  const [quotesError, setQuotesError] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [correctedCity, setCorrectedCity] = useState<string | null>(null);
   const [userRejectedSuggestion, setUserRejectedSuggestion] = useState(false);
@@ -155,6 +156,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setManualTracking('');
       setSelectedCarrier('');
       setQuotesLoaded(false);
+      setQuotesError(false);
       setShowHistory(false);
       setCorrectedCity(null);
       setUserRejectedSuggestion(false);
@@ -165,7 +167,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, clearMatchInfo, onLabelChange]);
 
-  // Auto-load quotes when address is valid and no existing label
+  // Auto-load quotes when address is valid and no existing label (with error handling to avoid infinite retries)
   useEffect(() => {
     if (
       currentOrganization?.id && 
@@ -173,16 +175,22 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       shippingAddress?.province && 
       !existingLabel && 
       !quotesLoaded &&
-      hasChecked
+      hasChecked &&
+      !quotesError  // No reintentar automáticamente si ya falló
     ) {
       getQuotes({
         destination_city: shippingAddress.city,
         destination_department: shippingAddress.province,
         destination_postal_code: shippingAddress.zip,
         declared_value: totalPrice || 100000
-      }).then(() => setQuotesLoaded(true));
+      }).then((result) => {
+        setQuotesLoaded(true);
+        if (!result) {
+          setQuotesError(true);
+        }
+      });
     }
-  }, [shippingAddress, currentOrganization?.id, existingLabel, quotesLoaded, hasChecked, totalPrice, getQuotes]);
+  }, [shippingAddress, currentOrganization?.id, existingLabel, quotesLoaded, hasChecked, totalPrice, getQuotes, quotesError]);
 
   // Determine recommended carrier based on business rules
   useEffect(() => {
@@ -332,8 +340,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   
   const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
 
-  // Function to re-fetch quotes (for "Volver a verificar" button)
+  // Function to re-fetch quotes (for "Volver a verificar" button and retry after error)
   const handleRefreshQuotes = () => {
+    setQuotesError(false);  // Limpiar error para permitir reintento
     setUserRejectedSuggestion(false);
     setCorrectedCity(null);
     setQuotesLoaded(false);
@@ -343,7 +352,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         destination_department: shippingAddress.province,
         destination_postal_code: shippingAddress.zip,
         declared_value: totalPrice || 100000
-      }).then(() => setQuotesLoaded(true));
+      }).then((result) => {
+        setQuotesLoaded(true);
+        if (!result) {
+          setQuotesError(true);
+        }
+      });
     }
   };
 
@@ -976,6 +990,31 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             </p>
           )}
         </div>
+      )}
+
+      {/* Quotes Error Alert - Mostrar cuando hay error de cotizaciones con botón reintentar */}
+      {quotesError && !existingLabel && (
+        <Alert variant="destructive" className="mb-3">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error al obtener cotizaciones</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-2 flex-wrap">
+            <span>No se pudieron cargar las tarifas de envío.</span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefreshQuotes}
+              disabled={isLoadingQuotes}
+              className="bg-background"
+            >
+              {isLoadingQuotes ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1" />
+              )}
+              Reintentar
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Carrier selector with quotes */}
