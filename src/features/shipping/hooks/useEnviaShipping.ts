@@ -157,7 +157,7 @@ export const useEnviaShipping = () => {
     }
   }, []);
 
-  // Get shipping quotes
+  // Get shipping quotes (single attempt - use getQuotesWithRetry for resilience)
   const getQuotes = useCallback(async (request: QuoteRequest): Promise<QuoteResponse | null> => {
     setIsLoadingQuotes(true);
     setQuotes([]);
@@ -171,13 +171,13 @@ export const useEnviaShipping = () => {
 
       if (error) {
         console.error('Error getting quotes:', error);
-        toast.error('Error al obtener cotizaciones: ' + error.message);
+        // Don't show toast - let caller handle errors
         return null;
       }
 
       if (!data.success) {
         console.error('Quote request failed:', data.error);
-        toast.error('Error al cotizar: ' + (data.error || 'Error desconocido'));
+        // Don't show toast - let caller handle errors
         return null;
       }
 
@@ -192,11 +192,99 @@ export const useEnviaShipping = () => {
       return data as QuoteResponse;
     } catch (error: any) {
       console.error('Error in getQuotes:', error);
-      toast.error('Error al obtener cotizaciones: ' + error.message);
+      // Don't show toast - let caller handle errors
       return null;
     } finally {
       setIsLoadingQuotes(false);
     }
+  }, []);
+
+  /**
+   * Get shipping quotes with retry logic and exponential backoff.
+   * Use this for resilient quote fetching that handles API failures gracefully.
+   * 
+   * @param request - Quote request parameters
+   * @param options - Retry options
+   * @returns QuoteResponse or null if all retries exhausted
+   */
+  const getQuotesWithRetry = useCallback(async (
+    request: QuoteRequest,
+    options?: {
+      maxRetries?: number;
+      onRetry?: (attempt: number, maxRetries: number) => void;
+      signal?: AbortSignal;
+      timeoutMs?: number;
+    }
+  ): Promise<QuoteResponse | null> => {
+    const maxRetries = options?.maxRetries ?? 3;
+    const delays = [2000, 4000, 8000]; // Exponential backoff
+    const timeoutMs = options?.timeoutMs ?? 8000;
+
+    setIsLoadingQuotes(true);
+    setQuotes([]);
+    setMatchInfo(null);
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // Check if aborted before each attempt
+      if (options?.signal?.aborted) {
+        console.log('🚫 Quote request aborted');
+        setIsLoadingQuotes(false);
+        return null;
+      }
+
+      try {
+        console.log(`💰 Getting quotes (attempt ${attempt + 1}/${maxRetries + 1}):`, request.destination_city);
+
+        // Create timeout controller for this attempt
+        const timeoutController = new AbortController();
+        const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+
+        const { data, error } = await supabase.functions.invoke('envia-quote', {
+          body: request
+        });
+
+        clearTimeout(timeoutId);
+
+        // Check if aborted after response
+        if (options?.signal?.aborted) {
+          console.log('🚫 Quote request aborted after response');
+          setIsLoadingQuotes(false);
+          return null;
+        }
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error || 'Error desconocido');
+
+        console.log('✅ Quotes received:', data.quotes?.length || 0, 'Match:', data.matchInfo?.matchType);
+        setQuotes(data.quotes || []);
+
+        if (data.matchInfo) {
+          setMatchInfo(data.matchInfo);
+        }
+
+        setIsLoadingQuotes(false);
+        return data as QuoteResponse;
+
+      } catch (error: any) {
+        console.log(`⚠️ Quote attempt ${attempt + 1}/${maxRetries + 1} failed:`, error.message);
+
+        if (attempt < maxRetries) {
+          // Notify caller about retry
+          options?.onRetry?.(attempt + 1, maxRetries);
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+        } else {
+          // All retries exhausted - don't show toast, return null for caller to handle
+          console.log('❌ All quote retries exhausted');
+          setIsLoadingQuotes(false);
+          return null;
+        }
+      }
+    }
+
+    setIsLoadingQuotes(false);
+    return null;
   }, []);
 
   // Track shipment
@@ -346,6 +434,7 @@ export const useEnviaShipping = () => {
     isLoadingQuotes,
     quotes,
     getQuotes,
+    getQuotesWithRetry,
     clearQuotes,
     
     // City match info

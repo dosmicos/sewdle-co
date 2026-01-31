@@ -8,6 +8,7 @@ import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, C
 import { Input } from '@/components/ui/input';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
+import { usePickingOrderDetails } from '@/hooks/usePickingOrderDetails';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -53,6 +54,9 @@ const statusLabels = {
   shipped: 'Enviado',
 };
 
+// Debounce delay for order switching (ms)
+const ORDER_SWITCH_DEBOUNCE_MS = 300;
+
 export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> = ({ 
   orderId, 
   onClose,
@@ -60,6 +64,18 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   onNavigate
 }) => {
   const { orders, updateOrderStatus, updateOrderNotes, updateShopifyNote } = usePickingOrders();
+  
+  // Debounced orderId for data fetching - prevents rapid fetches when navigating quickly
+  const [debouncedOrderId, setDebouncedOrderId] = useState<string>(orderId);
+  
+  // Use React Query cached order details
+  const { 
+    order: cachedOrder, 
+    isLoading: isCacheLoading, 
+    updateOrderOptimistically,
+    prefetchOrder
+  } = usePickingOrderDetails(debouncedOrderId);
+  
   const [notes, setNotes] = useState('');
   const [shopifyNote, setShopifyNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -96,8 +112,33 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
 
+  // Debounce orderId changes to prevent rapid fetches
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedOrderId(orderId);
+    }, ORDER_SWITCH_DEBOUNCE_MS);
+    
+    return () => clearTimeout(timeoutId);
+  }, [orderId]);
+
+  // Prefetch adjacent orders for faster navigation
+  useEffect(() => {
+    const currentIndex = allOrderIds.indexOf(orderId);
+    
+    // Prefetch previous order
+    if (currentIndex > 0) {
+      prefetchOrder(allOrderIds[currentIndex - 1]);
+    }
+    
+    // Prefetch next order
+    if (currentIndex < allOrderIds.length - 1) {
+      prefetchOrder(allOrderIds[currentIndex + 1]);
+    }
+  }, [orderId, allOrderIds, prefetchOrder]);
+
+  // Use cached order as base, fall back to list order
   const order = orders.find(o => o.id === orderId);
-  const effectiveOrder = localOrder || order;
+  const effectiveOrder = localOrder || cachedOrder || order;
 
   // Navigation logic
   const currentIndex = allOrderIds.indexOf(orderId);
@@ -192,6 +233,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     fetchPackedByName();
   }, [effectiveOrder?.packed_by]);
 
+  // Refetch order - now uses React Query refetch to update cache
   const refetchOrder = useCallback(async (targetOrderId: string) => {
     setLoadingOrder(true);
     try {
@@ -224,89 +266,40 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
       if (error) throw error;
       
-      setLocalOrder({
+      const updatedOrder = {
         ...data,
         line_items: []
-      } as PickingOrder);
+      } as PickingOrder;
+      
+      setLocalOrder(updatedOrder);
+      
+      // Also update React Query cache for consistency
+      updateOrderOptimistically(() => updatedOrder);
     } catch (error) {
       console.error('❌ Error fetching order:', error);
     } finally {
       setLoadingOrder(false);
     }
-  }, []);
+  }, [updateOrderOptimistically]);
 
-  // Always fetch order to get raw_data with financial details - with AbortController
+  // Sync localOrder from cached order when it changes
+  // This allows optimistic updates while still benefiting from React Query cache
   useEffect(() => {
-    if (!orderId) return;
-    
-    const abortController = new AbortController();
-    let isCancelled = false;
+    if (cachedOrder && cachedOrder.id === debouncedOrderId) {
+      setLocalOrder(cachedOrder);
+      setLoadingOrder(false);
+    }
+  }, [cachedOrder, debouncedOrderId]);
 
-    const fetchOrder = async () => {
-      setLoadingOrder(true);
-      try {
-        const { data, error } = await supabase
-          .from('picking_packing_orders')
-          .select(`
-            *,
-            shopify_order:shopify_orders(
-              id,
-              shopify_order_id,
-              order_number,
-              email,
-              created_at_shopify,
-              financial_status,
-              fulfillment_status,
-              customer_first_name,
-              customer_last_name,
-              customer_phone,
-              customer_email,
-              total_price,
-              currency,
-              note,
-              tags,
-              cancelled_at,
-              raw_data
-            )
-          `)
-          .eq('id', orderId)
-          .abortSignal(abortController.signal)
-          .single();
-
-        // Ignore if cancelled while waiting
-        if (isCancelled) {
-          console.log(`🚫 Ignorando respuesta obsoleta para orden ${orderId}`);
-          return;
-        }
-
-        if (error) throw error;
-        
-        setLocalOrder({
-          ...data,
-          line_items: []
-        } as PickingOrder);
-      } catch (error: any) {
-        // Ignore abort errors (expected)
-        if (error.name === 'AbortError' || isCancelled) {
-          console.log(`🚫 Solicitud cancelada para orden ${orderId}`);
-          return;
-        }
-        console.error('❌ Error fetching order:', error);
-      } finally {
-        if (!isCancelled) {
-          setLoadingOrder(false);
-        }
+  // Set loading state when orderId changes (before debounce settles)
+  useEffect(() => {
+    if (orderId !== debouncedOrderId) {
+      // Order is changing, show loading only if we don't have cached data
+      if (!cachedOrder || cachedOrder.id !== orderId) {
+        setLoadingOrder(true);
       }
-    };
-
-    fetchOrder();
-
-    // Cleanup: cancel request if orderId changes
-    return () => {
-      isCancelled = true;
-      abortController.abort();
-    };
-  }, [orderId]);
+    }
+  }, [orderId, debouncedOrderId, cachedOrder]);
 
   useEffect(() => {
     if (effectiveOrder?.internal_notes) {
