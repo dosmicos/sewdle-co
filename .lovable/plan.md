@@ -1,11 +1,13 @@
 
 # Plan: Optimización de Rendimiento y Resiliencia del Módulo Picking & Packing
 
+**ESTADO: ✅ IMPLEMENTADO**
+
 ## Resumen Ejecutivo
 
-Este plan resuelve dos problemas críticos identificados en el sistema de Picking & Packing:
-1. **Rendimiento lento** al cambiar entre pedidos
-2. **Loop infinito** cuando la API de Envia.com falla
+Este plan resolvió dos problemas críticos identificados en el sistema de Picking & Packing:
+1. **Rendimiento lento** al cambiar entre pedidos → **SOLUCIONADO** con React Query caching y debounce
+2. **Loop infinito** cuando la API de Envia.com falla → **SOLUCIONADO** con exponential backoff y UI de estados
 
 ---
 
@@ -298,14 +300,14 @@ useEffect(() => {
 
 ---
 
-## Archivos a Modificar
+## Archivos Modificados
 
-| Archivo | Cambios |
-|---------|---------|
-| `src/hooks/usePickingOrderDetails.ts` | **NUEVO** - Hook con React Query para caché de pedidos |
-| `src/features/shipping/hooks/useEnviaShipping.ts` | Agregar `getQuotesWithRetry` con exponential backoff y timeout |
-| `src/features/shipping/components/EnviaShippingButton.tsx` | Refactor completo de carga de cotizaciones con estados loading/error/success |
-| `src/components/picking/PickingOrderDetailsModal.tsx` | Integrar debounce de 300ms y usar nuevo hook de caché |
+| Archivo | Cambios | Estado |
+|---------|---------|--------|
+| `src/hooks/usePickingOrderDetails.ts` | **NUEVO** - Hook con React Query para caché de pedidos (30s staleTime, prefetch) | ✅ |
+| `src/features/shipping/hooks/useEnviaShipping.ts` | `getQuotesWithRetry` con exponential backoff (2s, 4s, 8s) y timeout 8s | ✅ |
+| `src/features/shipping/components/EnviaShippingButton.tsx` | Refactor con quoteState machine (idle/loading/success/error), lazy loading 500ms | ✅ |
+| `src/components/picking/PickingOrderDetailsModal.tsx` | Debounce 300ms, integración con usePickingOrderDetails, prefetch adyacentes | ✅ |
 
 ---
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
@@ -55,6 +55,13 @@ export interface EnviaShippingButtonRef {
   hasExistingLabel: boolean;
   selectedCarrierName: string | null;
 }
+
+// Quote loading state machine
+type QuoteLoadingState = {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  retryCount: number;
+  errorMessage?: string;
+};
 
 // Helper to get proxied label URL
 const getProxyLabelUrl = (labelUrl: string): string => {
@@ -117,7 +124,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     deleteFailedLabel,
     isLoadingQuotes,
     quotes,
-    getQuotes,
+    getQuotesWithRetry,
     clearQuotes,
     matchInfo,
     clearMatchInfo
@@ -132,10 +139,19 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [recommendedCarrier, setRecommendedCarrier] = useState<string>('coordinadora');
   const [codAmount, setCodAmount] = useState<number>(totalPrice || 0);
   const [isEditingCod, setIsEditingCod] = useState(false);
-  const [quotesLoaded, setQuotesLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [correctedCity, setCorrectedCity] = useState<string | null>(null);
   const [userRejectedSuggestion, setUserRejectedSuggestion] = useState(false);
+  
+  // Quote loading state machine - prevents infinite loops
+  const [quoteState, setQuoteState] = useState<QuoteLoadingState>({
+    status: 'idle',
+    retryCount: 0
+  });
+  
+  // Refs to prevent duplicate quote loading
+  const hasTriedQuotesRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Update COD amount when totalPrice changes
   useEffect(() => {
@@ -144,7 +160,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [totalPrice]);
 
-  // Check for existing label when component mounts or order changes
+  // Reset state when order changes
   useEffect(() => {
     if (currentOrganization?.id && shopifyOrderId) {
       clearLabel();
@@ -154,10 +170,16 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setShowManualEntry(false);
       setManualTracking('');
       setSelectedCarrier('');
-      setQuotesLoaded(false);
+      setQuoteState({ status: 'idle', retryCount: 0 });
       setShowHistory(false);
       setCorrectedCity(null);
       setUserRejectedSuggestion(false);
+      
+      // Reset quote loading guard
+      hasTriedQuotesRef.current = false;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      
       getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
         setHasChecked(true);
         onLabelChange?.(label);
@@ -165,24 +187,71 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, clearMatchInfo, onLabelChange]);
 
-  // Auto-load quotes when address is valid and no existing label
+  // Lazy load quotes with retry logic - only after order is loaded
   useEffect(() => {
-    if (
-      currentOrganization?.id && 
-      shippingAddress?.city && 
-      shippingAddress?.province && 
-      !existingLabel && 
-      !quotesLoaded &&
-      hasChecked
-    ) {
-      getQuotes({
-        destination_city: shippingAddress.city,
-        destination_department: shippingAddress.province,
-        destination_postal_code: shippingAddress.zip,
-        declared_value: totalPrice || 100000
-      }).then(() => setQuotesLoaded(true));
-    }
-  }, [shippingAddress, currentOrganization?.id, existingLabel, quotesLoaded, hasChecked, totalPrice, getQuotes]);
+    // Guards to prevent infinite loops
+    if (hasTriedQuotesRef.current) return;
+    if (!hasChecked) return;
+    if (existingLabel) return;
+    if (!currentOrganization?.id) return;
+    if (!shippingAddress?.city || !shippingAddress?.province) return;
+
+    hasTriedQuotesRef.current = true;
+    
+    // Cancel previous request if any
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    
+    const loadQuotes = async () => {
+      setQuoteState({ status: 'loading', retryCount: 0 });
+      
+      const result = await getQuotesWithRetry(
+        {
+          destination_city: shippingAddress.city!,
+          destination_department: shippingAddress.province!,
+          destination_postal_code: shippingAddress.zip,
+          declared_value: totalPrice || 100000
+        },
+        {
+          signal: abortControllerRef.current?.signal,
+          onRetry: (attempt, maxRetries) => {
+            setQuoteState(prev => ({ ...prev, retryCount: attempt }));
+          }
+        }
+      );
+      
+      if (result) {
+        setQuoteState({ status: 'success', retryCount: 0 });
+      } else if (abortControllerRef.current?.signal.aborted) {
+        // Was aborted, reset state
+        setQuoteState({ status: 'idle', retryCount: 0 });
+      } else {
+        // All retries exhausted
+        setQuoteState({ 
+          status: 'error', 
+          retryCount: 3,
+          errorMessage: 'El servicio de envíos no está disponible'
+        });
+      }
+    };
+    
+    // Lazy load: wait 500ms to prioritize order data display
+    const timer = setTimeout(loadQuotes, 500);
+    
+    return () => {
+      clearTimeout(timer);
+      // Don't abort here - we want the request to complete in background
+    };
+  }, [
+    hasChecked, 
+    existingLabel, 
+    currentOrganization?.id, 
+    shippingAddress?.city, 
+    shippingAddress?.province,
+    shippingAddress?.zip,
+    totalPrice,
+    getQuotesWithRetry
+  ]);
 
   // Determine recommended carrier based on business rules
   useEffect(() => {
@@ -332,20 +401,47 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   
   const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
 
-  // Function to re-fetch quotes (for "Volver a verificar" button)
-  const handleRefreshQuotes = () => {
+  // Function to re-fetch quotes (for "Volver a verificar" button or manual retry)
+  const handleRefreshQuotes = useCallback(async () => {
     setUserRejectedSuggestion(false);
     setCorrectedCity(null);
-    setQuotesLoaded(false);
-    if (shippingAddress?.city && shippingAddress?.province) {
-      getQuotes({
+    
+    if (!shippingAddress?.city || !shippingAddress?.province) return;
+    
+    // Reset guard to allow retry
+    hasTriedQuotesRef.current = true;
+    
+    // Cancel previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    
+    setQuoteState({ status: 'loading', retryCount: 0 });
+    
+    const result = await getQuotesWithRetry(
+      {
         destination_city: shippingAddress.city,
         destination_department: shippingAddress.province,
         destination_postal_code: shippingAddress.zip,
         declared_value: totalPrice || 100000
-      }).then(() => setQuotesLoaded(true));
+      },
+      {
+        signal: abortControllerRef.current?.signal,
+        onRetry: (attempt) => {
+          setQuoteState(prev => ({ ...prev, retryCount: attempt }));
+        }
+      }
+    );
+    
+    if (result) {
+      setQuoteState({ status: 'success', retryCount: 0 });
+    } else if (!abortControllerRef.current?.signal.aborted) {
+      setQuoteState({ 
+        status: 'error', 
+        retryCount: 3,
+        errorMessage: 'El servicio de envíos no está disponible'
+      });
     }
-  };
+  }, [shippingAddress, totalPrice, getQuotesWithRetry]);
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
@@ -978,19 +1074,46 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         </div>
       )}
 
-      {/* Carrier selector with quotes */}
+      {/* Carrier selector with quotes - Three state UI */}
       <div className="space-y-2">
         <label className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Truck className="h-3 w-3" />
           Transportadora
         </label>
         
-        {isLoadingQuotes ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+        {/* State: LOADING */}
+        {(quoteState.status === 'loading' || isLoadingQuotes) && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Obteniendo precios...
+            <span>
+              Obteniendo tarifas
+              {quoteState.retryCount > 0 ? ` (intento ${quoteState.retryCount + 1}/4)` : '...'}
+            </span>
           </div>
-        ) : quotes.length > 0 ? (
+        )}
+        
+        {/* State: ERROR */}
+        {quoteState.status === 'error' && (
+          <Alert variant="destructive" className="py-3">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Servicio no disponible</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p className="text-sm">No se pudo obtener cotización. El servicio de envíos no está disponible.</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRefreshQuotes}
+                className="mt-2 bg-background"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reintentar cotización
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {/* State: SUCCESS - Show carrier selector */}
+        {quoteState.status === 'success' && quotes.length > 0 && (
           <Select value={selectedCarrier} onValueChange={setSelectedCarrier}>
             <SelectTrigger className="w-full h-auto min-h-10 py-2">
               <SelectValue placeholder="Seleccionar transportadora y servicio">
@@ -1051,7 +1174,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
               })}
             </SelectContent>
           </Select>
-        ) : (
+        )}
+        
+        {/* Fallback: Show basic selector when idle or no quotes but not loading/error */}
+        {quoteState.status === 'idle' && !isLoadingQuotes && quotes.length === 0 && (
           <Select value={selectedCarrier || 'auto'} onValueChange={setSelectedCarrier}>
             <SelectTrigger className="w-full h-9 text-sm">
               <SelectValue placeholder="Seleccionar transportadora" />
