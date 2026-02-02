@@ -58,9 +58,10 @@ export const usePickingOrderDetails = (
         .single();
 
       if (error) {
-        // Ignore abort errors
+        // Treat aborts as real cancellations so we don't cache `null` as valid data
+        // (otherwise rapid navigation can leave an order "loaded" as null for 30s)
         if (error.message?.includes('aborted')) {
-          return null;
+          throw new DOMException('aborted', 'AbortError');
         }
         throw error;
       }
@@ -75,10 +76,12 @@ export const usePickingOrderDetails = (
     gcTime: 5 * 60_000, // 5 minutes - keep in memory for quick access
     retry: (failureCount, error: any) => {
       // Don't retry aborted requests
-      if (error?.message?.includes('aborted')) return false;
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) return false;
       return failureCount < 2;
     },
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: false,
+    // If a previous rapid navigation left cached data as null, force a refetch when mounted
+    refetchOnMount: (query) => query.state.data === null,
   });
 
   /**
