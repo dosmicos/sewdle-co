@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,9 +54,6 @@ const statusLabels = {
   shipped: 'Enviado',
 };
 
-// Debounce delay for order switching (ms)
-const ORDER_SWITCH_DEBOUNCE_MS = 300;
-
 export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> = ({ 
   orderId, 
   onClose,
@@ -65,16 +62,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 }) => {
   const { orders, updateOrderStatus, updateOrderNotes, updateShopifyNote } = usePickingOrders();
   
-  // Debounced orderId for data fetching - prevents rapid fetches when navigating quickly
-  const [debouncedOrderId, setDebouncedOrderId] = useState<string>(orderId);
-  
-  // Use React Query cached order details
+  // Use React Query cached order details - directly with orderId (no debounce needed, React Query handles caching)
   const { 
     order: cachedOrder, 
     isLoading: isCacheLoading, 
     updateOrderOptimistically,
     prefetchOrder
-  } = usePickingOrderDetails(debouncedOrderId);
+  } = usePickingOrderDetails(orderId);
   
   const [notes, setNotes] = useState('');
   const [shopifyNote, setShopifyNote] = useState('');
@@ -112,15 +106,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
 
-  // Debounce orderId changes to prevent rapid fetches
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedOrderId(orderId);
-    }, ORDER_SWITCH_DEBOUNCE_MS);
-    
-    return () => clearTimeout(timeoutId);
-  }, [orderId]);
-
   // Prefetch adjacent orders for faster navigation
   useEffect(() => {
     const currentIndex = allOrderIds.indexOf(orderId);
@@ -136,9 +121,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [orderId, allOrderIds, prefetchOrder]);
 
-  // Use cached order as base, fall back to list order
+  // Use cached order as base, fall back to list order - MUST match current orderId
   const order = orders.find(o => o.id === orderId);
-  const effectiveOrder = localOrder || cachedOrder || order;
+  const effectiveOrder = useMemo(() => {
+    // Priority: cachedOrder (if matches current), then localOrder (if matches), then list order
+    if (cachedOrder && cachedOrder.id === orderId) return cachedOrder;
+    if (localOrder && localOrder.id === orderId) return localOrder;
+    return order;
+  }, [cachedOrder, localOrder, order, orderId]);
 
   // Navigation logic
   const currentIndex = allOrderIds.indexOf(orderId);
@@ -285,21 +275,25 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Sync localOrder from cached order when it changes
   // This allows optimistic updates while still benefiting from React Query cache
   useEffect(() => {
-    if (cachedOrder && cachedOrder.id === debouncedOrderId) {
+    if (cachedOrder && cachedOrder.id === orderId) {
       setLocalOrder(cachedOrder);
       setLoadingOrder(false);
     }
-  }, [cachedOrder, debouncedOrderId]);
+  }, [cachedOrder, orderId]);
 
-  // Set loading state when orderId changes (before debounce settles)
+  // Set loading state only when we truly don't have data for current order
   useEffect(() => {
-    if (orderId !== debouncedOrderId) {
-      // Order is changing, show loading only if we don't have cached data
-      if (!cachedOrder || cachedOrder.id !== orderId) {
-        setLoadingOrder(true);
-      }
+    const hasDataForCurrentOrder = 
+      (cachedOrder && cachedOrder.id === orderId) ||
+      (localOrder && localOrder.id === orderId) ||
+      order;
+    
+    if (!hasDataForCurrentOrder) {
+      setLoadingOrder(true);
+    } else {
+      setLoadingOrder(false);
     }
-  }, [orderId, debouncedOrderId, cachedOrder]);
+  }, [orderId, cachedOrder, localOrder, order]);
 
   useEffect(() => {
     if (effectiveOrder?.internal_notes) {
@@ -312,18 +306,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [effectiveOrder]);
 
-  // Reset local state when orderId changes
+  // Reset verification states when orderId changes (but NOT localOrder - keep previous data visible during transition)
   useEffect(() => {
-    setLocalOrder(null);
+    // Reset verification and input states
     setNotes('');
     setShopifyNote('');
-    setLineItems([]);
-    setLoadingItems(true);
-    // Reset SKU verification states
     setSkuInput('');
     setVerificationResult(null);
     setVerifiedCounts(new Map());
     setShowScrollHint(false);
+    // Only reset line items - will be refetched for new order
+    setLineItems([]);
+    setLoadingItems(true);
+    // Note: localOrder is NOT reset here to prevent effectiveOrder from becoming null
   }, [orderId]);
 
   // Show scroll hint when lineItems load and there are 3 or more
