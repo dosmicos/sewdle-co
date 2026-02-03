@@ -187,7 +187,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, clearMatchInfo, onLabelChange]);
 
-  // Lazy load quotes with retry logic - only after order is loaded
+  // Lazy load quotes - SINGLE attempt only, no retries. If fails, show retry button.
   useEffect(() => {
     // Guards to prevent infinite loops
     if (hasTriedQuotesRef.current) return;
@@ -205,6 +205,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const loadQuotes = async () => {
       setQuoteState({ status: 'loading', retryCount: 0 });
       
+      // Single attempt with 8s timeout - NO automatic retries
       const result = await getQuotesWithRetry(
         {
           destination_city: shippingAddress.city!,
@@ -214,9 +215,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         },
         {
           signal: abortControllerRef.current?.signal,
-          onRetry: (attempt, maxRetries) => {
-            setQuoteState(prev => ({ ...prev, retryCount: attempt }));
-          }
+          maxRetries: 0, // NO automatic retries - single attempt only
+          timeoutMs: 8000
         }
       );
       
@@ -226,21 +226,20 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         // Was aborted, reset state
         setQuoteState({ status: 'idle', retryCount: 0 });
       } else {
-        // All retries exhausted
+        // Single attempt failed - show retry button
         setQuoteState({ 
           status: 'error', 
-          retryCount: 3,
-          errorMessage: 'El servicio de envíos no está disponible'
+          retryCount: 0,
+          errorMessage: 'No se pudo obtener tarifas de envío'
         });
       }
     };
     
-    // Lazy load: wait 500ms to prioritize order data display
-    const timer = setTimeout(loadQuotes, 500);
+    // Lazy load: wait 300ms to prioritize order data display
+    const timer = setTimeout(loadQuotes, 300);
     
     return () => {
       clearTimeout(timer);
-      // Don't abort here - we want the request to complete in background
     };
   }, [
     hasChecked, 
@@ -401,15 +400,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   
   const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
 
-  // Function to re-fetch quotes (for "Volver a verificar" button or manual retry)
+  // Function to re-fetch quotes (manual retry button) - single attempt
   const handleRefreshQuotes = useCallback(async () => {
     setUserRejectedSuggestion(false);
     setCorrectedCity(null);
     
     if (!shippingAddress?.city || !shippingAddress?.province) return;
-    
-    // Reset guard to allow retry
-    hasTriedQuotesRef.current = true;
     
     // Cancel previous request
     abortControllerRef.current?.abort();
@@ -417,6 +413,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     
     setQuoteState({ status: 'loading', retryCount: 0 });
     
+    // Single attempt with 8s timeout - user can retry again if needed
     const result = await getQuotesWithRetry(
       {
         destination_city: shippingAddress.city,
@@ -426,9 +423,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       },
       {
         signal: abortControllerRef.current?.signal,
-        onRetry: (attempt) => {
-          setQuoteState(prev => ({ ...prev, retryCount: attempt }));
-        }
+        maxRetries: 0, // Single attempt
+        timeoutMs: 8000
       }
     );
     
@@ -437,8 +433,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     } else if (!abortControllerRef.current?.signal.aborted) {
       setQuoteState({ 
         status: 'error', 
-        retryCount: 3,
-        errorMessage: 'El servicio de envíos no está disponible'
+        retryCount: 0,
+        errorMessage: 'No se pudo obtener tarifas de envío'
       });
     }
   }, [shippingAddress, totalPrice, getQuotesWithRetry]);
@@ -1085,28 +1081,27 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         {(quoteState.status === 'loading' || isLoadingQuotes) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>
-              Obteniendo tarifas
-              {quoteState.retryCount > 0 ? ` (intento ${quoteState.retryCount + 1}/4)` : '...'}
-            </span>
+            <span>Obteniendo tarifas...</span>
           </div>
         )}
         
-        {/* State: ERROR */}
+        {/* State: ERROR - Show retry button prominently */}
         {quoteState.status === 'error' && (
-          <Alert variant="destructive" className="py-3">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Servicio no disponible</AlertTitle>
-            <AlertDescription className="space-y-2">
-              <p className="text-sm">No se pudo obtener cotización. El servicio de envíos no está disponible.</p>
+          <Alert className="py-3 border-orange-200 bg-orange-50">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertTitle className="text-orange-800">Error al obtener tarifas</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p className="text-sm text-orange-700">
+                No se pudo conectar con el servicio de envíos. Intenta de nuevo.
+              </p>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handleRefreshQuotes}
-                className="mt-2 bg-background"
+                className="bg-white border-orange-300 text-orange-700 hover:bg-orange-100"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Reintentar cotización
+                Reintentar
               </Button>
             </AlertDescription>
           </Alert>

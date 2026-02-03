@@ -1,13 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+// Module-level cache to avoid redundant fetches across component mounts
+let cachedTags: string[] | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export const useShopifyTags = () => {
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [availableTags, setAvailableTags] = useState<string[]>(cachedTags || []);
+  const [loading, setLoading] = useState(cachedTags === null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch all unique tags from Shopify orders with pagination
-  const fetchAvailableTags = async () => {
+  const fetchAvailableTags = async (forceRefresh = false) => {
+    // Use cache if valid and not forcing refresh
+    const now = Date.now();
+    if (!forceRefresh && cachedTags !== null && (now - cacheTimestamp) < CACHE_TTL_MS) {
+      setAvailableTags(cachedTags);
+      setLoading(false);
+      return;
+    }
+
+    // Cancel any ongoing request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
     try {
       const tagsSet = new Set<string>();
@@ -43,13 +61,19 @@ export const useShopifyTags = () => {
       }
 
       const sortedTags = Array.from(tagsSet).sort((a, b) => a.localeCompare(b)).filter(Boolean);
+      
+      // Update cache
+      cachedTags = sortedTags;
+      cacheTimestamp = Date.now();
+      
       setAvailableTags(sortedTags);
       
       console.log(`✅ Loaded ${sortedTags.length} unique tags from Shopify (processed ${page} batches)`);
     } catch (error) {
+      // Silent error - don't show toast for background operations
       console.error('❌ Error fetching available tags:', error);
-      setAvailableTags([]);
-      toast.error('Error al cargar etiquetas disponibles');
+      // Use cached tags if available, otherwise empty
+      setAvailableTags(cachedTags || []);
     } finally {
       setLoading(false);
     }
