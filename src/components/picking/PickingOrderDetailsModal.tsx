@@ -306,18 +306,17 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [effectiveOrder]);
 
-  // Reset verification states when orderId changes (but NOT localOrder - keep previous data visible during transition)
+  // Reset verification states when orderId changes (but NOT localOrder or lineItems - keep previous data visible during transition)
   useEffect(() => {
-    // Reset verification and input states
+    // Reset verification and input states only
     setNotes('');
     setShopifyNote('');
     setSkuInput('');
     setVerificationResult(null);
     setVerifiedCounts(new Map());
     setShowScrollHint(false);
-    // Only reset line items - will be refetched for new order
-    setLineItems([]);
-    setLoadingItems(true);
+    // DON'T reset lineItems here - causes "0 unidades" flash
+    // They will be replaced when fetchLineItems completes for the new order
     // Note: localOrder is NOT reset here to prevent effectiveOrder from becoming null
   }, [orderId]);
 
@@ -1120,9 +1119,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       <Package className="w-4 h-4 md:w-5 md:h-5" />
                       Productos
                     </div>
-                    <Badge className="text-base md:text-xl font-bold bg-primary text-primary-foreground px-3 py-1">
-                      {totalRequiredUnits} {totalRequiredUnits === 1 ? 'unidad' : 'unidades'}
-                    </Badge>
+                    {loadingItems && lineItems.length === 0 ? (
+                      <Badge className="text-base md:text-xl font-bold bg-muted text-muted-foreground px-3 py-1 animate-pulse">
+                        <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                        Cargando...
+                      </Badge>
+                    ) : (
+                      <Badge className="text-base md:text-xl font-bold bg-primary text-primary-foreground px-3 py-1">
+                        {totalRequiredUnits} {totalRequiredUnits === 1 ? 'unidad' : 'unidades'}
+                      </Badge>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-3 md:p-6 pt-0 space-y-2 md:space-y-4">
