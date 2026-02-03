@@ -187,70 +187,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, clearMatchInfo, onLabelChange]);
 
-  // Lazy load quotes - SINGLE attempt only, no retries. If fails, show retry button.
-  useEffect(() => {
-    // Guards to prevent infinite loops
-    if (hasTriedQuotesRef.current) return;
-    if (!hasChecked) return;
-    if (existingLabel) return;
-    if (!currentOrganization?.id) return;
-    if (!shippingAddress?.city || !shippingAddress?.province) return;
-
-    hasTriedQuotesRef.current = true;
-    
-    // Cancel previous request if any
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
-    
-    const loadQuotes = async () => {
-      setQuoteState({ status: 'loading', retryCount: 0 });
-      
-      // Single attempt with 8s timeout - NO automatic retries
-      const result = await getQuotesWithRetry(
-        {
-          destination_city: shippingAddress.city!,
-          destination_department: shippingAddress.province!,
-          destination_postal_code: shippingAddress.zip,
-          declared_value: totalPrice || 100000
-        },
-        {
-          signal: abortControllerRef.current?.signal,
-          maxRetries: 0, // NO automatic retries - single attempt only
-          timeoutMs: 8000
-        }
-      );
-      
-      if (result) {
-        setQuoteState({ status: 'success', retryCount: 0 });
-      } else if (abortControllerRef.current?.signal.aborted) {
-        // Was aborted, reset state
-        setQuoteState({ status: 'idle', retryCount: 0 });
-      } else {
-        // Single attempt failed - show retry button
-        setQuoteState({ 
-          status: 'error', 
-          retryCount: 0,
-          errorMessage: 'No se pudo obtener tarifas de envío'
-        });
-      }
-    };
-    
-    // Lazy load: wait 300ms to prioritize order data display
-    const timer = setTimeout(loadQuotes, 300);
-    
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [
-    hasChecked, 
-    existingLabel, 
-    currentOrganization?.id, 
-    shippingAddress?.city, 
-    shippingAddress?.province,
-    shippingAddress?.zip,
-    totalPrice,
-    getQuotesWithRetry
-  ]);
+  // NO automatic quote loading - user must click "Cotizar" button
+  // This prevents excessive API calls and resource consumption
 
   // Determine recommended carrier based on business rules
   useEffect(() => {
@@ -1171,19 +1109,35 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           </Select>
         )}
         
-        {/* Fallback: Show basic selector when idle or no quotes but not loading/error */}
+        {/* Idle state: Show "Cotizar" button to manually trigger quote loading */}
         {quoteState.status === 'idle' && !isLoadingQuotes && quotes.length === 0 && (
-          <Select value={selectedCarrier || 'auto'} onValueChange={setSelectedCarrier}>
-            <SelectTrigger className="w-full h-9 text-sm">
-              <SelectValue placeholder="Seleccionar transportadora" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Automático ({CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora'})</SelectItem>
-              <SelectItem value="coordinadora">Coordinadora</SelectItem>
-              <SelectItem value="interrapidisimo">Inter Rapidísimo</SelectItem>
-              <SelectItem value="deprisa">Deprisa</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Cotiza para ver tarifas y seleccionar transportadora, o usa automático.
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="flex-1"
+                onClick={handleRefreshQuotes}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cotizar Envío
+              </Button>
+              <Select value={selectedCarrier || 'auto'} onValueChange={setSelectedCarrier}>
+                <SelectTrigger className="w-[140px] h-9 text-sm">
+                  <SelectValue placeholder="Automático" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto ({CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coord.'})</SelectItem>
+                  <SelectItem value="coordinadora">Coordinadora</SelectItem>
+                  <SelectItem value="interrapidisimo">Inter Rápido</SelectItem>
+                  <SelectItem value="deprisa">Deprisa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         )}
       </div>
 
