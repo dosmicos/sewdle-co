@@ -636,6 +636,7 @@ export const ConversationThread = ({
   // Render media content based on type
   const renderMediaContent = (message: Message) => {
     const { mediaUrl, mediaType, mediaMimeType, metadata } = message;
+    console.log(`🖼️ Renderizando mensaje tipo: ${mediaType}, media_url: ${mediaUrl || 'null'}`);
     const hasMediaError = !mediaUrl && metadata?.media_download_error;
 
     // Check multiple places for original_media_id (webhook may store in different locations)

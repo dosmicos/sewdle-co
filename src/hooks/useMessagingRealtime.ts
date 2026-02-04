@@ -10,12 +10,43 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 're
 interface UseMessagingRealtimeOptions {
   organizationId?: string;
   enabled?: boolean;
+  activeConversationId?: string | null;
 }
 
 const CONNECTION_TIMEOUT_MS = 10000; // 10 seconds timeout
 const POLLING_INTERVAL_MS = 10000; // 10 seconds polling fallback
 
-export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMessagingRealtimeOptions = {}) => {
+const isMessagingConversationsQuery = (queryKey: unknown): boolean => {
+  return Array.isArray(queryKey) && queryKey.length > 0 && queryKey[0] === 'messaging-conversations';
+};
+
+const isMessagingMessagesQuery = (queryKey: unknown): boolean => {
+  return Array.isArray(queryKey) && queryKey.length > 0 && queryKey[0] === 'messaging-messages';
+};
+
+const inferMessageType = (msg: MessagingMessage): string | null => {
+  if (msg.message_type) return msg.message_type;
+
+  const mime = msg.media_mime_type || '';
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime) return 'document';
+
+  const metadata = (typeof msg.metadata === 'object' && msg.metadata !== null)
+    ? (msg.metadata as Record<string, any>)
+    : undefined;
+
+  if (!metadata) return null;
+  if (metadata.image || metadata?.original_message?.image) return 'image';
+  if (metadata.audio || metadata?.original_message?.audio) return 'audio';
+  if (metadata.video || metadata?.original_message?.video) return 'video';
+  if (metadata.sticker || metadata?.original_message?.sticker) return 'sticker';
+  if (metadata.document || metadata?.original_message?.document) return 'document';
+  return null;
+};
+
+export const useMessagingRealtime = ({ organizationId, enabled = true, activeConversationId }: UseMessagingRealtimeOptions = {}) => {
   const queryClient = useQueryClient();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [lastConnectedAt, setLastConnectedAt] = useState<Date | null>(null);
@@ -25,6 +56,17 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isUnmountedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
+  const statusRef = useRef<ConnectionStatus>('connecting');
+  const activeConversationIdRef = useRef<string | null | undefined>(activeConversationId);
+  const inflightConversationFetchRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    statusRef.current = connectionStatus;
+  }, [connectionStatus]);
 
   // Clear all timers
   const clearTimers = useCallback(() => {
@@ -47,8 +89,9 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
     pollingIntervalRef.current = setInterval(() => {
       if (!isUnmountedRef.current) {
         console.log('🔄 [Realtime] Polling for new messages...');
-        queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
-        queryClient.invalidateQueries({ queryKey: ['messaging-messages'] });
+        queryClient.invalidateQueries({
+          predicate: (q) => isMessagingConversationsQuery(q.queryKey) || isMessagingMessagesQuery(q.queryKey),
+        });
       }
     }, POLLING_INTERVAL_MS);
   }, [queryClient]);
@@ -62,11 +105,81 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
     }
   }, []);
 
+  const markConnectedFromEvent = useCallback((source: string) => {
+    if (isUnmountedRef.current) return;
+    if (statusRef.current !== 'connected') {
+      console.log(`✅ [Realtime] Event received while status=${statusRef.current}. Marking connected (${source}).`);
+      clearTimers();
+      stopPolling();
+      reconnectAttemptsRef.current = 0;
+      setConnectionStatus('connected');
+      setLastConnectedAt(new Date());
+    }
+  }, [clearTimers, stopPolling]);
+
+  const upsertConversationAcrossCaches = useCallback((updater: (old: MessagingConversation[] | undefined) => MessagingConversation[] | undefined) => {
+    queryClient.setQueriesData<MessagingConversation[]>({
+      predicate: (q) => isMessagingConversationsQuery(q.queryKey),
+    }, updater);
+  }, [queryClient]);
+
+  const ensureConversationInCache = useCallback(async (conversationId: string) => {
+    if (inflightConversationFetchRef.current.has(conversationId)) return;
+    inflightConversationFetchRef.current.add(conversationId);
+
+    try {
+      console.log('🧲 [Realtime] Conversation missing in cache. Fetching:', conversationId);
+
+      const { data: convData, error: convError } = await supabase
+        .from('messaging_conversations')
+        .select(`
+          *,
+          channel:messaging_channels(id, channel_type, channel_name)
+        `)
+        .eq('id', conversationId)
+        .single();
+
+      if (convError || !convData) {
+        console.warn('🧲 [Realtime] Could not fetch conversation:', convError);
+        return;
+      }
+
+      // Fetch tags for that conversation (optional)
+      const { data: assignmentsData } = await supabase
+        .from('messaging_conversation_tag_assignments')
+        .select(`conversation_id, tag:messaging_conversation_tags(id, name, color)`)
+        .eq('conversation_id', conversationId);
+
+      const tags = (assignmentsData || [])
+        .map((a: any) => a.tag)
+        .filter(Boolean)
+        .map((t: any) => ({ id: t.id, name: t.name, color: t.color }));
+
+      const fullConversation: MessagingConversation = {
+        ...(convData as any),
+        tags,
+      };
+
+      upsertConversationAcrossCaches((old) => {
+        const list = old ? old.slice() : [];
+        const exists = list.some(c => c.id === conversationId);
+        if (exists) return old;
+        return [fullConversation, ...list];
+      });
+    } finally {
+      inflightConversationFetchRef.current.delete(conversationId);
+    }
+  }, [upsertConversationAcrossCaches]);
+
   const handleNewMessage = useCallback((payload: { new: MessagingMessage }) => {
     const newMessage = payload.new;
     const conversationId = newMessage.conversation_id;
 
+    markConnectedFromEvent('handleNewMessage');
+
     console.log('📨 [Realtime] New message received:', newMessage.id, 'for conversation:', conversationId);
+
+    const messageType = inferMessageType(newMessage);
 
     // Update messages cache for the specific conversation
     queryClient.setQueryData(
@@ -83,46 +196,58 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
     );
 
     // Update conversations list - update preview and move to top
-    queryClient.setQueriesData<MessagingConversation[]>(
-      { queryKey: ['messaging-conversations'] },
-      (oldConversations) => {
-        if (!oldConversations) return oldConversations;
-        
-        const updated = oldConversations.map(conv => {
-          if (conv.id !== conversationId) return conv;
-          
-          // Determine preview text based on message type
-          let preview = newMessage.content || '';
-          if (newMessage.message_type === 'image') preview = '📷 Imagen';
-          else if (newMessage.message_type === 'audio') preview = '🎵 Audio';
-          else if (newMessage.message_type === 'video') preview = '🎬 Video';
-          else if (newMessage.message_type === 'sticker') preview = '🏷️ Sticker';
-          else if (newMessage.message_type === 'document') preview = '📄 Documento';
-          
-          // Increment unread if incoming message
-          const isIncoming = newMessage.direction === 'inbound';
-          
-          return {
-            ...conv,
-            last_message_preview: preview,
-            last_message_at: newMessage.sent_at || new Date().toISOString(),
-            unread_count: isIncoming ? (conv.unread_count || 0) + 1 : conv.unread_count,
-          };
-        });
-        
-        // Sort by last_message_at descending
-        return updated.sort((a, b) => {
-          const dateA = new Date(a.last_message_at || 0).getTime();
-          const dateB = new Date(b.last_message_at || 0).getTime();
-          return dateB - dateA;
-        });
-      }
-    );
-  }, [queryClient]);
+    let foundInAnyCache = false;
+
+    upsertConversationAcrossCaches((oldConversations) => {
+      if (!oldConversations) return oldConversations;
+
+      const idx = oldConversations.findIndex(c => c.id === conversationId);
+      if (idx === -1) return oldConversations;
+
+      foundInAnyCache = true;
+
+      // Determine preview text based on message type
+      let preview = newMessage.content || '';
+      if (messageType === 'image') preview = '📷 Imagen';
+      else if (messageType === 'audio') preview = '🎵 Audio';
+      else if (messageType === 'video') preview = '🎬 Video';
+      else if (messageType === 'sticker') preview = '🏷️ Sticker';
+      else if (messageType === 'document') preview = '📄 Documento';
+
+      const isIncoming = newMessage.direction === 'inbound';
+      const isActive = activeConversationIdRef.current === conversationId;
+      const shouldIncrementUnread = isIncoming && !isActive;
+      const nowIso = new Date().toISOString();
+      const lastAt = newMessage.sent_at || newMessage.delivered_at || nowIso;
+
+      const updatedList = oldConversations.slice();
+      const existing = updatedList[idx];
+      const updatedConv: MessagingConversation = {
+        ...existing,
+        last_message_preview: preview,
+        last_message_at: lastAt,
+        unread_count: shouldIncrementUnread ? (existing.unread_count || 0) + 1 : existing.unread_count,
+      };
+
+      updatedList[idx] = updatedConv;
+
+      // Move to top
+      updatedList.splice(idx, 1);
+      updatedList.unshift(updatedConv);
+
+      return updatedList;
+    });
+
+    if (!foundInAnyCache) {
+      void ensureConversationInCache(conversationId);
+    }
+  }, [queryClient, markConnectedFromEvent, upsertConversationAcrossCaches, ensureConversationInCache]);
 
   const handleMessageUpdate = useCallback((payload: { new: MessagingMessage }) => {
     const updatedMessage = payload.new;
     const conversationId = updatedMessage.conversation_id;
+
+    markConnectedFromEvent('handleMessageUpdate');
 
     console.log('📝 [Realtime] Message updated:', updatedMessage.id);
 
@@ -140,48 +265,40 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
         return copy;
       }
     );
-  }, [queryClient]);
+  }, [queryClient, markConnectedFromEvent]);
 
   const handleConversationChange = useCallback((payload: { eventType: string; new?: MessagingConversation; old?: { id: string } }) => {
+    markConnectedFromEvent('handleConversationChange');
     console.log('💬 [Realtime] Conversation change:', payload.eventType);
 
     if (payload.eventType === 'INSERT' && payload.new) {
-      queryClient.setQueriesData<MessagingConversation[]>(
-        { queryKey: ['messaging-conversations'] },
-        (old) => {
-          if (!old) return [payload.new as MessagingConversation];
-          const exists = old.some(c => c.id === payload.new!.id);
-          if (exists) return old;
-          return [payload.new as MessagingConversation, ...old];
-        }
-      );
+      upsertConversationAcrossCaches((old) => {
+        if (!old) return [payload.new as MessagingConversation];
+        const exists = old.some(c => c.id === payload.new!.id);
+        if (exists) return old;
+        return [payload.new as MessagingConversation, ...old];
+      });
     } else if (payload.eventType === 'UPDATE' && payload.new) {
-      queryClient.setQueriesData<MessagingConversation[]>(
-        { queryKey: ['messaging-conversations'] },
-        (old) => {
-          if (!old) return old;
-          const updated = old.map(c => 
-            c.id === payload.new!.id 
-              ? { ...c, ...payload.new } 
-              : c
-          );
-          return updated.sort((a, b) => {
-            const dateA = new Date(a.last_message_at || 0).getTime();
-            const dateB = new Date(b.last_message_at || 0).getTime();
-            return dateB - dateA;
-          });
-        }
-      );
+      upsertConversationAcrossCaches((old) => {
+        if (!old) return old;
+        const updated = old.map(c =>
+          c.id === payload.new!.id
+            ? { ...c, ...payload.new }
+            : c
+        );
+        return updated.sort((a, b) => {
+          const dateA = new Date(a.last_message_at || 0).getTime();
+          const dateB = new Date(b.last_message_at || 0).getTime();
+          return dateB - dateA;
+        });
+      });
     } else if (payload.eventType === 'DELETE' && payload.old) {
-      queryClient.setQueriesData<MessagingConversation[]>(
-        { queryKey: ['messaging-conversations'] },
-        (old) => {
-          if (!old) return old;
-          return old.filter(c => c.id !== payload.old!.id);
-        }
-      );
+      upsertConversationAcrossCaches((old) => {
+        if (!old) return old;
+        return old.filter(c => c.id !== payload.old!.id);
+      });
     }
-  }, [queryClient]);
+  }, [markConnectedFromEvent, upsertConversationAcrossCaches]);
 
   const setupSubscription = useCallback(() => {
     if (!enabled || isUnmountedRef.current) return;
@@ -195,16 +312,19 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
 
     clearTimers();
     setConnectionStatus('connecting');
+    statusRef.current = 'connecting';
 
     const channelName = `messaging-realtime-${Date.now()}`;
 
-    console.log('🔌 [Realtime] Setting up subscription:', channelName);
+    console.log('🔌 Intentando conectar a Supabase Realtime...');
+    console.log('🔌 [Realtime] Setting up subscription:', channelName, { organizationId });
 
     // Set connection timeout
     timeoutRef.current = setTimeout(() => {
-      if (!isUnmountedRef.current && connectionStatus !== 'connected') {
+      if (!isUnmountedRef.current && statusRef.current !== 'connected') {
         console.log('⏰ [Realtime] Connection timeout after 10s');
         setConnectionStatus('disconnected');
+        statusRef.current = 'disconnected';
         startPolling();
       }
     }, CONNECTION_TIMEOUT_MS);
@@ -243,6 +363,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
         })
       )
       .subscribe((status, err) => {
+        console.log('📡 Estado de conexión Realtime:', status, err || '');
         console.log('📡 [Realtime] Subscription status:', status, err || '');
         
         if (isUnmountedRef.current) return;
@@ -252,11 +373,13 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
           clearTimers();
           stopPolling();
           setConnectionStatus('connected');
+          statusRef.current = 'connected';
           setLastConnectedAt(new Date());
           reconnectAttemptsRef.current = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.log('❌ [Realtime] Connection error:', status);
           setConnectionStatus('disconnected');
+          statusRef.current = 'disconnected';
           startPolling();
           
           // Schedule reconnection with exponential backoff
@@ -268,18 +391,20 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
           timeoutRef.current = setTimeout(() => {
             if (!isUnmountedRef.current) {
               setConnectionStatus('reconnecting');
+              statusRef.current = 'reconnecting';
               setupSubscription();
             }
           }, delay);
         } else if (status === 'CLOSED') {
           console.log('🔌 [Realtime] Channel closed');
           setConnectionStatus('disconnected');
+          statusRef.current = 'disconnected';
           startPolling();
         }
       });
 
     channelRef.current = channel;
-  }, [enabled, handleNewMessage, handleMessageUpdate, handleConversationChange, clearTimers, startPolling, stopPolling, connectionStatus]);
+  }, [enabled, handleNewMessage, handleMessageUpdate, handleConversationChange, clearTimers, startPolling, stopPolling, organizationId]);
 
   // Initial setup and cleanup
   useEffect(() => {
@@ -309,6 +434,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
     stopPolling();
     reconnectAttemptsRef.current = 0;
     setConnectionStatus('reconnecting');
+    statusRef.current = 'reconnecting';
     setupSubscription();
   }, [clearTimers, stopPolling, setupSubscription]);
 
@@ -319,8 +445,9 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
     console.log('📥 [Realtime] Fetching messages since:', lastConnectedAt);
     
     // Invalidate all messaging queries to get fresh data
-    await queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
-    await queryClient.invalidateQueries({ queryKey: ['messaging-messages'] });
+    await queryClient.invalidateQueries({
+      predicate: (q) => isMessagingConversationsQuery(q.queryKey) || isMessagingMessagesQuery(q.queryKey),
+    });
   }, [queryClient, lastConnectedAt]);
 
   // When reconnected, fetch missed messages
