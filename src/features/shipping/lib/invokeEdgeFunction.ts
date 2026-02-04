@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 
 export type InvokeEdgeFunctionOptions = {
   /** Abort from caller (e.g. when user switches order) */
@@ -18,12 +18,8 @@ export async function invokeEdgeFunction<T = any>(
   body?: unknown,
   options?: InvokeEdgeFunctionOptions
 ): Promise<T> {
-  const supabaseUrl = (supabase as any).supabaseUrl as string | undefined;
-  const supabaseKey = (supabase as any).supabaseKey as string | undefined;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase client missing URL/key');
-  }
+  const supabaseUrl = SUPABASE_URL;
+  const supabaseKey = SUPABASE_PUBLISHABLE_KEY;
 
   const timeoutMs = options?.timeoutMs ?? 10_000;
   const controller = new AbortController();
