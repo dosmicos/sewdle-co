@@ -4319,6 +4319,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      user_has_messaging_permission: {
+        Args: { org_id: string; permission_type: string }
+        Returns: boolean
+      }
       user_has_org_admin_role: { Args: never; Returns: boolean }
       user_has_role: {
         Args: { check_user_id: string; role_name: string }
