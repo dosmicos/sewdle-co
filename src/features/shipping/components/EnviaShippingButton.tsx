@@ -142,6 +142,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [correctedCity, setCorrectedCity] = useState<string | null>(null);
   const [userRejectedSuggestion, setUserRejectedSuggestion] = useState(false);
+  const [labelCheckError, setLabelCheckError] = useState<string | null>(null);
   
   // Quote loading state machine - prevents infinite loops
   const [quoteState, setQuoteState] = useState<QuoteLoadingState>({
@@ -152,6 +153,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   // Refs to prevent duplicate quote loading
   const hasTriedQuotesRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isQuoteRequestInProgressRef = useRef(false);
 
   // Update COD amount when totalPrice changes
   useEffect(() => {
@@ -171,6 +173,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setManualTracking('');
       setSelectedCarrier('');
       setQuoteState({ status: 'idle', retryCount: 0 });
+      setLabelCheckError(null);
       setShowHistory(false);
       setCorrectedCity(null);
       setUserRejectedSuggestion(false);
@@ -179,13 +182,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       hasTriedQuotesRef.current = false;
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
-      
-      getExistingLabel(shopifyOrderId, currentOrganization.id).then((label) => {
-        setHasChecked(true);
-        onLabelChange?.(label);
-      });
     }
-  }, [shopifyOrderId, currentOrganization?.id, getExistingLabel, clearLabel, clearQuotes, clearMatchInfo, onLabelChange]);
+  }, [shopifyOrderId, currentOrganization?.id, clearLabel, clearQuotes, clearMatchInfo]);
 
   // NO automatic quote loading - user must click "Cotizar" button
   // This prevents excessive API calls and resource consumption
@@ -336,14 +334,19 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     !userRejectedSuggestion &&
     (cityIsValid || !matchInfo); // Allow if no matchInfo yet (loading) or city is valid
   
-  const isReady = hasChecked && !isLoadingQuotes && canCreateLabel && !isActiveLabel;
+  const isReady = !isLoadingQuotes && canCreateLabel && !isActiveLabel;
 
-  // Function to re-fetch quotes (manual retry button) - single attempt
+  // Function to fetch quotes (manual) - 3 attempts max with exponential backoff handled in hook
   const handleRefreshQuotes = useCallback(async () => {
     setUserRejectedSuggestion(false);
     setCorrectedCity(null);
+    setLabelCheckError(null);
     
     if (!shippingAddress?.city || !shippingAddress?.province) return;
+
+    // Anti-double-click lock
+    if (isQuoteRequestInProgressRef.current) return;
+    isQuoteRequestInProgressRef.current = true;
     
     // Cancel previous request
     abortControllerRef.current?.abort();
@@ -351,29 +354,37 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     
     setQuoteState({ status: 'loading', retryCount: 0 });
     
-    // Single attempt with 8s timeout - user can retry again if needed
-    const result = await getQuotesWithRetry(
-      {
-        destination_city: shippingAddress.city,
-        destination_department: shippingAddress.province,
-        destination_postal_code: shippingAddress.zip,
-        declared_value: totalPrice || 100000
-      },
-      {
-        signal: abortControllerRef.current?.signal,
-        maxRetries: 0, // Single attempt
-        timeoutMs: 8000
+    try {
+      const result = await getQuotesWithRetry(
+        {
+          destination_city: shippingAddress.city,
+          destination_department: shippingAddress.province,
+          destination_postal_code: shippingAddress.zip,
+          declared_value: totalPrice || 100000,
+        },
+        {
+          signal: abortControllerRef.current?.signal,
+          maxRetries: 3,
+          timeoutMs: 10_000,
+          debugOrder: orderNumber,
+          onRetry: (attempt, maxAttempts) => {
+            // keep UI responsive (attempt is current attempt number)
+            setQuoteState({ status: 'loading', retryCount: attempt });
+          },
+        }
+      );
+
+      if (result) {
+        setQuoteState({ status: 'success', retryCount: 0 });
+      } else if (!abortControllerRef.current?.signal.aborted) {
+        setQuoteState({
+          status: 'error',
+          retryCount: 3,
+          errorMessage: 'Servicio de envío no disponible',
+        });
       }
-    );
-    
-    if (result) {
-      setQuoteState({ status: 'success', retryCount: 0 });
-    } else if (!abortControllerRef.current?.signal.aborted) {
-      setQuoteState({ 
-        status: 'error', 
-        retryCount: 0,
-        errorMessage: 'No se pudo obtener tarifas de envío'
-      });
+    } finally {
+      isQuoteRequestInProgressRef.current = false;
     }
   }, [shippingAddress, totalPrice, getQuotesWithRetry]);
 
@@ -603,8 +614,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         );
       }
       onLabelChange?.(null);
-      // Refresh to get updated history
-      await getExistingLabel(shopifyOrderId, currentOrganization.id);
+      // Refresh to get updated history (best-effort)
+      try {
+        await getExistingLabel(shopifyOrderId, currentOrganization.id);
+      } catch (e: any) {
+        console.warn('Error refreshing labels after cancel:', e?.message);
+      }
       setShowHistory(true);
     } else {
       toast.error('Error al cancelar: ' + (result.error || 'Error desconocido'));
@@ -675,14 +690,23 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const handleVerifyExistingLabel = useCallback(async () => {
     if (!currentOrganization?.id || !shopifyOrderId) return;
     setHasChecked(false);
-    const label = await getExistingLabel(shopifyOrderId, currentOrganization.id);
-    setHasChecked(true);
-    onLabelChange?.(label);
+    setLabelCheckError(null);
+    try {
+      const label = await getExistingLabel(shopifyOrderId, currentOrganization.id);
+      setHasChecked(true);
+      onLabelChange?.(label);
+    } catch (error: any) {
+      setHasChecked(true);
+      setLabelCheckError('Servicio de envío no disponible');
+      console.error('Error verificando guía:', error);
+    }
   }, [currentOrganization?.id, shopifyOrderId, getExistingLabel, onLabelChange]);
 
-  // Show IDLE state - user must click to verify/quote
-  // No longer shows loading on initial render - user triggers actions manually
-  if (!hasChecked && !isLoadingLabel) {
+  const isBusy = isLoadingLabel || quoteState.status === 'loading' || isLoadingQuotes;
+  const busyMode: 'verifying' | 'quoting' | null = isLoadingLabel ? 'verifying' : quoteState.status === 'loading' ? 'quoting' : null;
+
+  // Manual-only initial state (NO auto-fetch)
+  if (!showManualEntry && !isActiveLabel && quoteState.status === 'idle' && !hasChecked && !isBusy) {
     return (
       <div className="space-y-3">
         <div className="flex gap-2">
@@ -691,6 +715,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             size="sm"
             className="flex-1"
             onClick={handleVerifyExistingLabel}
+            disabled={disabled || isBusy}
           >
             <Truck className="h-4 w-4 mr-2" />
             Verificar Guía
@@ -700,9 +725,52 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             size="sm"
             className="flex-1"
             onClick={handleRefreshQuotes}
+            disabled={disabled || isBusy}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Cotizar Envío
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground text-center">
+          Presiona un botón para consultar el servicio de envío
+        </p>
+        <p className="text-xs text-muted-foreground text-center">
+          Puedes continuar preparando el pedido mientras tanto
+        </p>
+      </div>
+    );
+  }
+
+  // Manual loading state (both buttons disabled)
+  if (!showManualEntry && !isActiveLabel && isBusy && busyMode) {
+    return (
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" disabled>
+            {busyMode === 'verifying' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Verificando...
+              </>
+            ) : (
+              <>
+                <Truck className="h-4 w-4 mr-2" />
+                Verificar Guía
+              </>
+            )}
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" disabled>
+            {busyMode === 'quoting' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Cotizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cotizar Envío
+              </>
+            )}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground text-center">
@@ -712,13 +780,68 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     );
   }
 
-  // Show loading state while checking for existing label
-  if (isLoadingLabel) {
+  // Manual error state
+  if (!showManualEntry && !isActiveLabel && (labelCheckError || quoteState.status === 'error')) {
+    const message = labelCheckError || quoteState.errorMessage || 'Servicio de envío no disponible';
+    const retryLabel = quoteState.status === 'error' ? 'Reintentar cotización' : 'Reintentar verificación';
+    const retryFn = quoteState.status === 'error' ? handleRefreshQuotes : handleVerifyExistingLabel;
+
     return (
-      <Button variant="outline" disabled className="w-full">
-        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        Verificando guía...
-      </Button>
+      <div className="space-y-3">
+        <Alert className="border-destructive/50 bg-destructive/5">
+          <AlertCircle className="h-4 w-4 text-destructive" />
+          <AlertTitle className="text-destructive">Servicio de envío no disponible</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p className="text-sm text-muted-foreground">{message}</p>
+            <Button variant="outline" size="sm" className="gap-2" onClick={retryFn} disabled={disabled || isBusy}>
+              <RefreshCw className="h-4 w-4" />
+              {retryLabel}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Puedes continuar preparando el pedido mientras tanto
+            </p>
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={handleVerifyExistingLabel} disabled={disabled || isBusy}>
+            <Truck className="h-4 w-4 mr-2" />
+            Verificar Guía
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={handleRefreshQuotes} disabled={disabled || isBusy}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Cotizar Envío
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Verified and no label found: show non-blocking info + buttons
+  if (!showManualEntry && !isActiveLabel && hasChecked && !existingLabel && quoteState.status !== 'success') {
+    return (
+      <div className="space-y-3">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>No se encontró guía para este pedido</AlertTitle>
+          <AlertDescription className="text-xs text-muted-foreground">
+            Presiona un botón si necesitas consultar el servicio de envío.
+          </AlertDescription>
+        </Alert>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={handleVerifyExistingLabel} disabled={disabled || isBusy}>
+            <Truck className="h-4 w-4 mr-2" />
+            Verificar Guía
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={handleRefreshQuotes} disabled={disabled || isBusy}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Cotizar Envío
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground text-center">
+          Puedes continuar preparando el pedido mientras tanto
+        </p>
+      </div>
     );
   }
 

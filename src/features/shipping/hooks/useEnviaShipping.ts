@@ -13,6 +13,7 @@ import {
   CityMatchInfo
 } from '../types/envia';
 import { toast } from 'sonner';
+import { invokeEdgeFunction } from '../lib/invokeEdgeFunction';
 
 export const useEnviaShipping = () => {
   const [isCreatingLabel, setIsCreatingLabel] = useState(false);
@@ -41,7 +42,7 @@ export const useEnviaShipping = () => {
 
       if (error) {
         console.error('Error fetching labels:', error);
-        return null;
+        throw error;
       }
 
       const allLabels = (data || []) as ShippingLabel[];
@@ -56,7 +57,7 @@ export const useEnviaShipping = () => {
       return activeLabel;
     } catch (error) {
       console.error('Error in getExistingLabel:', error);
-      return null;
+      throw error;
     } finally {
       setIsLoadingLabel(false);
     }
@@ -95,12 +96,10 @@ export const useEnviaShipping = () => {
     try {
       console.log('📦 Creating shipping label for order:', request.order_number);
 
-      const { data, error } = await supabase.functions.invoke('create-envia-label', {
-        body: request
-      });
+      const data = await invokeEdgeFunction<any>('create-envia-label', request, { timeoutMs: 10_000 });
 
-      if (error) {
-        console.error('Error creating label:', error);
+      if (data?.error) {
+        console.error('Error creating label:', data);
         
         // Revisar si el body contiene nuestro código de error personalizado
         if (data?.errorCode === 'DIFFICULT_ACCESS_ZONE') {
@@ -109,10 +108,10 @@ export const useEnviaShipping = () => {
             { duration: 8000 }
           );
         } else {
-          toast.error('Error al crear la guía: ' + (data?.error || error.message));
+          toast.error('Error al crear la guía: ' + (data?.error || 'Error desconocido'));
         }
         
-        return { success: false, error: data?.error || error.message, errorCode: data?.errorCode };
+        return { success: false, error: data?.error || 'Error desconocido', errorCode: data?.errorCode };
       }
 
       if (!data.success) {
@@ -165,15 +164,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('💰 Getting shipping quotes for:', request.destination_city);
 
-      const { data, error } = await supabase.functions.invoke('envia-quote', {
-        body: request
-      });
-
-      if (error) {
-        console.error('Error getting quotes:', error);
-        // Don't show toast - let caller handle errors
-        return null;
-      }
+      const data = await invokeEdgeFunction<any>('envia-quote', request, { timeoutMs: 10_000 });
 
       if (!data.success) {
         console.error('Quote request failed:', data.error);
@@ -210,81 +201,64 @@ export const useEnviaShipping = () => {
   const getQuotesWithRetry = useCallback(async (
     request: QuoteRequest,
     options?: {
+      /** Total attempts (we log as Intento X/3). */
       maxRetries?: number;
       onRetry?: (attempt: number, maxRetries: number) => void;
       signal?: AbortSignal;
       timeoutMs?: number;
+      debugOrder?: string;
     }
   ): Promise<QuoteResponse | null> => {
-    const maxRetries = options?.maxRetries ?? 3;
+    const maxAttempts = options?.maxRetries ?? 3;
     const delays = [2000, 4000, 8000]; // Exponential backoff
-    const timeoutMs = options?.timeoutMs ?? 8000;
+    const timeoutMs = options?.timeoutMs ?? 10_000;
 
     setIsLoadingQuotes(true);
     setQuotes([]);
     setMatchInfo(null);
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      // Check if aborted before each attempt
-      if (options?.signal?.aborted) {
-        console.log('🚫 Quote request aborted');
-        setIsLoadingQuotes(false);
-        return null;
-      }
-
-      try {
-        console.log(`💰 Getting quotes (attempt ${attempt + 1}/${maxRetries + 1}):`, request.destination_city);
-
-        // Create timeout controller for this attempt
-        const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
-
-        const { data, error } = await supabase.functions.invoke('envia-quote', {
-          body: request
-        });
-
-        clearTimeout(timeoutId);
-
-        // Check if aborted after response
+    try {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         if (options?.signal?.aborted) {
-          console.log('🚫 Quote request aborted after response');
-          setIsLoadingQuotes(false);
+          console.log('🚫 Quote request aborted');
           return null;
         }
 
-        if (error) throw error;
-        if (!data.success) throw new Error(data.error || 'Error desconocido');
+        const orderLabel = options?.debugOrder ? ` para orden ${options.debugOrder}` : '';
+        console.log(`🔄 Intento ${attempt}/${maxAttempts} de cotización${orderLabel}`);
 
-        console.log('✅ Quotes received:', data.quotes?.length || 0, 'Match:', data.matchInfo?.matchType);
-        setQuotes(data.quotes || []);
+        try {
+          const data = await invokeEdgeFunction<any>('envia-quote', request, {
+            timeoutMs,
+            signal: options?.signal,
+          });
 
-        if (data.matchInfo) {
-          setMatchInfo(data.matchInfo);
-        }
+          if (!data?.success) {
+            throw new Error(data?.error || 'Error desconocido');
+          }
 
-        setIsLoadingQuotes(false);
-        return data as QuoteResponse;
+          console.log(`✅ Cotización exitosa${orderLabel}`);
+          setQuotes(data.quotes || []);
+          if (data.matchInfo) setMatchInfo(data.matchInfo);
+          return data as QuoteResponse;
+        } catch (error: any) {
+          console.log(`⚠️ Quote intento ${attempt}/${maxAttempts} falló:`, error?.message);
 
-      } catch (error: any) {
-        console.log(`⚠️ Quote attempt ${attempt + 1}/${maxRetries + 1} failed:`, error.message);
+          if (attempt < maxAttempts) {
+            options?.onRetry?.(attempt, maxAttempts);
+            await new Promise(resolve => setTimeout(resolve, delays[attempt - 1] ?? 8000));
+            continue;
+          }
 
-        if (attempt < maxRetries) {
-          // Notify caller about retry
-          options?.onRetry?.(attempt + 1, maxRetries);
-          
-          // Wait before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, delays[attempt]));
-        } else {
-          // All retries exhausted - don't show toast, return null for caller to handle
-          console.log('❌ All quote retries exhausted');
-          setIsLoadingQuotes(false);
+          console.log(`🛑 Cotización detenida después de ${maxAttempts} intentos${orderLabel}`);
           return null;
         }
       }
-    }
 
-    setIsLoadingQuotes(false);
-    return null;
+      return null;
+    } finally {
+      setIsLoadingQuotes(false);
+    }
   }, []);
 
   // Track shipment
@@ -294,15 +268,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('📍 Tracking shipment:', request.tracking_number);
 
-      const { data, error } = await supabase.functions.invoke('envia-track', {
-        body: request
-      });
-
-      if (error) {
-        console.error('Error tracking shipment:', error);
-        toast.error('Error al rastrear envío: ' + error.message);
-        return null;
-      }
+      const data = await invokeEdgeFunction<any>('envia-track', request, { timeoutMs: 10_000 });
 
       if (!data.success) {
         console.error('Tracking request failed:', data.error);
@@ -352,14 +318,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('🚫 Cancelling shipping label:', labelId);
 
-      const { data, error } = await supabase.functions.invoke('envia-cancel', {
-        body: { label_id: labelId }
-      });
-
-      if (error) {
-        console.error('Error cancelling label:', error);
-        return { success: false, error: error.message };
-      }
+      const data = await invokeEdgeFunction<any>('envia-cancel', { label_id: labelId }, { timeoutMs: 10_000 });
 
       if (!data.success) {
         console.error('Label cancellation failed:', data.error);
