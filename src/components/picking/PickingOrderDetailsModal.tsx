@@ -106,13 +106,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
+  
+  // Guards to prevent duplicate pack/print operations (StrictMode-safe, idempotent)
+  const packInFlightRef = useRef(false);
+  const autoPackTriggeredRef = useRef<string | null>(null);
+  const autoPrintTriggeredRef = useRef<string | null>(null);
 
   // Use cached order as base, fall back to list order - MUST match current orderId
   const order = orders.find(o => o.id === orderId);
   const effectiveOrder = useMemo(() => {
-    // Priority: cachedOrder (if matches current), then localOrder (if matches), then list order
-    if (cachedOrder && cachedOrder.id === orderId) return cachedOrder;
+    // Priority: localOrder (if matches current - for optimistic updates) → cachedOrder → list order
+    // This ensures UI reflects changes immediately after pack/status updates
     if (localOrder && localOrder.id === orderId) return localOrder;
+    if (cachedOrder && cachedOrder.id === orderId) return cachedOrder;
     return order;
   }, [cachedOrder, localOrder, order, orderId]);
 
@@ -351,6 +357,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setVerificationResult(null);
     setVerifiedCounts(new Map());
     setShowScrollHint(false);
+    
+    // Reset guards for new order (allow pack/print for the new order)
+    autoPackTriggeredRef.current = null;
+    autoPrintTriggeredRef.current = null;
+    packInFlightRef.current = false;
+    
     // DON'T reset lineItems here - causes "0 unidades" flash
     // They will be replaced when fetchLineItems completes for the new order
     // Note: localOrder is NOT reset here to prevent effectiveOrder from becoming null
@@ -517,7 +529,20 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       // Update in database and Shopify - pass shopify_order_id directly from localOrder
       await updateOrderStatus(orderId, newStatus, currentShopifyOrderId);
       
-      // SUCCESS: Keep the optimistic update (don't refetch)
+      // SUCCESS: Update React Query cache immediately for consistency
+      const updatedOrderForCache: PickingOrder = {
+        ...localOrder,
+        operational_status: newStatus,
+        ...(newStatus === 'ready_to_ship' ? {
+          packed_at: new Date().toISOString(),
+          packed_by: user?.id
+        } : {}),
+        shopify_order: localOrder.shopify_order ? {
+          ...localOrder.shopify_order,
+          tags: updatedTags
+        } : undefined
+      };
+      updateOrderOptimistically(() => updatedOrderForCache);
       
     } catch (error) {
       console.error('Error updating status:', error);
@@ -527,7 +552,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     } finally {
       setUpdatingStatus(false);
     }
-  }, [orderId, localOrder, updateOrderStatus, refetchOrder]);
+  }, [orderId, localOrder, updateOrderStatus, refetchOrder, updateOrderOptimistically]);
 
   const handleSaveNotes = async () => {
     setIsSaving(true);
@@ -572,6 +597,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
   const handleMarkAsPackedAndPrint = useCallback(async () => {
+    // Guard: prevent duplicate execution
+    if (packInFlightRef.current) {
+      console.log('⚠️ handleMarkAsPackedAndPrint: Already in flight, skipping');
+      return;
+    }
+    
+    // Guard: check if already packed/shipped
+    const currentStatus = localOrder?.operational_status;
+    if (currentStatus === 'ready_to_ship' || currentStatus === 'awaiting_pickup' || currentStatus === 'shipped') {
+      console.log(`⚠️ handleMarkAsPackedAndPrint: Order already ${currentStatus}, skipping`);
+      return;
+    }
+    
     // Validación robusta con mensajes específicos
     if (!localOrder) {
       console.warn('⚠️ handleMarkAsPackedAndPrint: No hay orden cargada');
@@ -591,10 +629,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       return;
     }
     
+    // Lock to prevent duplicate execution
+    packInFlightRef.current = true;
+    
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
     
-    // Imprimir PRIMERO para feedback instantáneo
-    handlePrint();
+    // Print only once per order
+    if (autoPrintTriggeredRef.current !== orderId) {
+      autoPrintTriggeredRef.current = orderId;
+      handlePrint();
+    }
     
     // Luego actualizar estado asincrónicamente
     try {
@@ -604,20 +648,41 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       toast.error('Error al aplicar etiqueta EMPACADO. Intenta de nuevo.', {
         duration: 5000,
       });
+    } finally {
+      packInFlightRef.current = false;
     }
   }, [orderId, localOrder, handlePrint, handleStatusChange]);
 
   // Handler for Express orders - auto-fulfill without shipping label
   const handleMarkAsPackedExpress = useCallback(async () => {
+    // Guard: prevent duplicate execution
+    if (packInFlightRef.current) {
+      console.log('⚠️ handleMarkAsPackedExpress: Already in flight, skipping');
+      return;
+    }
+    
+    // Guard: check if already packed/shipped
+    const currentStatus = localOrder?.operational_status;
+    if (currentStatus === 'ready_to_ship' || currentStatus === 'awaiting_pickup' || currentStatus === 'shipped') {
+      console.log(`⚠️ handleMarkAsPackedExpress: Order already ${currentStatus}, skipping`);
+      return;
+    }
+    
     if (!localOrder?.shopify_order?.shopify_order_id) {
       toast.error('Error: ID de Shopify no disponible');
       return;
     }
 
+    // Lock to prevent duplicate execution
+    packInFlightRef.current = true;
+
     console.log(`🚀 Procesando pedido Express #${localOrder.shopify_order.order_number}`);
     
-    // Print FIRST for instant feedback
-    handlePrint();
+    // Print only once per order
+    if (autoPrintTriggeredRef.current !== orderId) {
+      autoPrintTriggeredRef.current = orderId;
+      handlePrint();
+    }
     
     setIsProcessingExpressFulfillment(true);
     try {
@@ -637,14 +702,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         toast.success('Pedido Express enviado. Cliente notificado.');
         
         // Optimistic update
-        setLocalOrder(prev => prev ? {
-          ...prev,
+        const updatedOrder: PickingOrder = {
+          ...localOrder,
           operational_status: 'shipped' as OperationalStatus,
           shipped_at: new Date().toISOString(),
           shipped_by: user?.id,
           packed_at: new Date().toISOString(),
           packed_by: user?.id
-        } : prev);
+        };
+        setLocalOrder(updatedOrder);
+        updateOrderOptimistically(() => updatedOrder);
         
         await refetchOrder(orderId);
       } else {
@@ -655,8 +722,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       toast.error(error.message || 'Error procesando pedido Express');
     } finally {
       setIsProcessingExpressFulfillment(false);
+      packInFlightRef.current = false;
     }
-  }, [localOrder, orderId, handlePrint, refetchOrder]);
+  }, [localOrder, orderId, handlePrint, refetchOrder, updateOrderOptimistically]);
 
   // Keep ref updated with the latest function
   useEffect(() => {
@@ -664,14 +732,28 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [handleMarkAsPackedAndPrint]);
 
   // Auto-pack when all items are verified (moved here to access handler functions)
+  // Uses orderId-based guard to prevent double execution in React StrictMode
   useEffect(() => {
+    // Guard: already triggered for this specific order
+    if (autoPackTriggeredRef.current === orderId) {
+      return;
+    }
+    
+    // Guard: order already in terminal status
+    const currentStatus = effectiveOrder?.operational_status;
+    if (currentStatus === 'ready_to_ship' || currentStatus === 'awaiting_pickup' || currentStatus === 'shipped') {
+      return;
+    }
+    
     if (allItemsVerified && 
-        effectiveOrder?.operational_status !== 'ready_to_ship' && 
-        effectiveOrder?.operational_status !== 'awaiting_pickup' && 
-        effectiveOrder?.operational_status !== 'shipped' &&
         !effectiveOrder?.shopify_order?.cancelled_at &&
         !updatingStatus &&
-        !isProcessingExpressFulfillment) {
+        !isProcessingExpressFulfillment &&
+        !packInFlightRef.current) {
+      
+      // Mark as triggered BEFORE the timeout to prevent race conditions
+      autoPackTriggeredRef.current = orderId;
+      
       // Small delay to show the green verification before auto-packing
       const timer = setTimeout(() => {
         if (isExpressShipping) {
@@ -685,7 +767,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       
       return () => clearTimeout(timer);
     }
-  }, [allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isExpressShipping, isProcessingExpressFulfillment, handleMarkAsPackedExpress, handleMarkAsPackedAndPrint]);
+  }, [orderId, allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isExpressShipping, isProcessingExpressFulfillment, handleMarkAsPackedExpress, handleMarkAsPackedAndPrint]);
 
   // Handler for "Listo para Retiro" - creates fulfillment in Shopify and sets awaiting_pickup
   const handleReadyForPickup = useCallback(async () => {

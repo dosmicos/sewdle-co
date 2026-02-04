@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
@@ -9,6 +9,9 @@ const PrintableOrderView = () => {
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Guard to prevent double print in React StrictMode
+  const hasAutoPrintedRef = useRef(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -27,10 +30,13 @@ const PrintableOrderView = () => {
         if (error) throw error;
         setOrder(data);
 
-        // Auto print after a small delay
-        setTimeout(() => {
-          window.print();
-        }, 500);
+        // Auto print after a small delay - only once per mount
+        if (!hasAutoPrintedRef.current) {
+          hasAutoPrintedRef.current = true;
+          setTimeout(() => {
+            window.print();
+          }, 500);
+        }
       } catch (error) {
         console.error('Error fetching order:', error);
       } finally {
