@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, Reply, MessageSquareText, Search } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, Reply, MessageSquareText, Search, Play, Pause, AlertCircle, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -41,6 +41,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Message {
   id?: string;
@@ -48,9 +53,14 @@ interface Message {
   content: string;
   timestamp: Date;
   mediaUrl?: string;
-  mediaType?: 'image' | 'audio' | 'document';
+  mediaType?: 'image' | 'audio' | 'document' | 'video' | 'sticker';
+  mediaMimeType?: string;
   replyToMessageId?: string;
   replyToContent?: string;
+  metadata?: {
+    original_media_id?: string;
+    media_download_error?: string;
+  };
 }
 
 interface Conversation {
@@ -71,6 +81,150 @@ interface ConversationThreadProps {
   onToggleAiManaged?: (aiManaged: boolean) => void;
   isTogglingAiManaged?: boolean;
 }
+
+// Audio Player Component with WhatsApp-like styling
+const AudioPlayer = ({ src, className }: { src: string; className?: string }) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const formatTime = (time: number) => {
+    if (!isFinite(time) || isNaN(time)) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div className={cn("flex items-center gap-3 p-3 bg-background/20 rounded-lg min-w-[200px]", className)}>
+      <audio ref={audioRef} src={src} preload="metadata" />
+      
+      <button
+        onClick={togglePlay}
+        className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors flex-shrink-0"
+      >
+        {isPlaying ? (
+          <Pause className="h-5 w-5" />
+        ) : (
+          <Play className="h-5 w-5 ml-0.5" />
+        )}
+      </button>
+      
+      <div className="flex-1 min-w-0">
+        {/* Waveform placeholder */}
+        <div className="h-8 flex items-center gap-0.5">
+          {Array.from({ length: 30 }).map((_, i) => (
+            <div
+              key={i}
+              className={cn(
+                "w-1 rounded-full transition-all",
+                i < (progress / 100) * 30 ? "bg-white" : "bg-white/40"
+              )}
+              style={{ 
+                height: `${Math.sin(i * 0.5) * 50 + 50}%`,
+                minHeight: '4px'
+              }}
+            />
+          ))}
+        </div>
+        
+        <div className="flex justify-between text-xs opacity-70 mt-1">
+          <span>{formatTime(currentTime)}</span>
+          <span>{formatTime(duration)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Media Error Placeholder Component
+const MediaErrorPlaceholder = ({ 
+  type, 
+  onRetry,
+  isRetrying 
+}: { 
+  type: string; 
+  onRetry?: () => void;
+  isRetrying?: boolean;
+}) => {
+  const iconMap: Record<string, React.ReactNode> = {
+    image: <Image className="h-6 w-6" />,
+    audio: <Mic className="h-6 w-6" />,
+    video: <Play className="h-6 w-6" />,
+    sticker: <Image className="h-6 w-6" />,
+    document: <FileText className="h-6 w-6" />,
+  };
+
+  const labelMap: Record<string, string> = {
+    image: 'imagen',
+    audio: 'audio',
+    video: 'video',
+    sticker: 'sticker',
+    document: 'documento',
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center p-4 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30 min-w-[150px]">
+      <div className="flex items-center gap-2 text-muted-foreground mb-2">
+        <AlertCircle className="h-5 w-5" />
+        {iconMap[type] || <FileText className="h-6 w-6" />}
+      </div>
+      <p className="text-xs text-muted-foreground text-center">
+        No se pudo cargar {labelMap[type] || type}
+      </p>
+      {onRetry && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-2 text-xs h-7"
+          onClick={onRetry}
+          disabled={isRetrying}
+        >
+          {isRetrying ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3 mr-1" />
+          )}
+          Reintentar
+        </Button>
+      )}
+    </div>
+  );
+};
 
 const channelConfig: Record<ChannelType, { 
   icon: React.ElementType; 
@@ -129,6 +283,8 @@ export const ConversationThread = ({
   const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
   const [quickReplySearch, setQuickReplySearch] = useState('');
   const [selectedQuickReplyIndex, setSelectedQuickReplyIndex] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [retryingMedia, setRetryingMedia] = useState<string | null>(null);
   const quickReplySearchInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -164,7 +320,6 @@ export const ConversationThread = ({
   // Instant scroll when conversation changes
   useEffect(() => {
     if (conversation?.id && messages.length > 0) {
-      // Small delay to ensure content is rendered
       const timer = setTimeout(() => scrollToBottom('instant'), 50);
       return () => clearTimeout(timer);
     }
@@ -188,7 +343,6 @@ export const ConversationThread = ({
     };
 
     viewport.addEventListener('scroll', handleScroll);
-    // Initial check
     handleScroll();
 
     return () => viewport.removeEventListener('scroll', handleScroll);
@@ -213,14 +367,12 @@ export const ConversationThread = ({
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Normal enter to send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
   };
 
-  // Handle keyboard navigation in quick replies panel
   const handleQuickReplyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (filteredQuickReplies.length === 0) return;
 
@@ -257,11 +409,8 @@ export const ConversationThread = ({
     setQuickReplySearch('');
     setSelectedQuickReplyIndex(0);
 
-    // Quick replies should PREPARE the message (and optional image) for review,
-    // not send automatically.
     setInputMessage(reply.content);
 
-    // Clear any previous attachment first
     setSelectedFile(null);
     setFilePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -279,7 +428,6 @@ export const ConversationThread = ({
         const fileName = `quick-reply-${Date.now()}.${inferredExt}`;
         const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
 
-        // Create preview first (before setting file to ensure both update together)
         const reader = new FileReader();
         reader.onload = (e) => {
           console.log('Image preview loaded');
@@ -297,7 +445,6 @@ export const ConversationThread = ({
       }
     }
 
-    // Focus after async operations complete
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
@@ -305,7 +452,6 @@ export const ConversationThread = ({
     setShowQuickRepliesPanel(true);
     setQuickReplySearch('');
     setSelectedQuickReplyIndex(0);
-    // Focus search input after panel opens
     setTimeout(() => quickReplySearchInputRef.current?.focus(), 100);
   };
 
@@ -313,7 +459,6 @@ export const ConversationThread = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (max 16MB for WhatsApp)
     if (file.size > 16 * 1024 * 1024) {
       toast.error('El archivo es muy grande. Máximo 16MB');
       return;
@@ -321,7 +466,6 @@ export const ConversationThread = ({
 
     setSelectedFile(file);
 
-    // Create preview for images
     if (type === 'image') {
       const reader = new FileReader();
       reader.onload = (e) => setFilePreview(e.target?.result as string);
@@ -380,7 +524,6 @@ export const ConversationThread = ({
     setIsGenerating(true);
     
     try {
-      // Get the last user message to respond to
       const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
       if (!lastUserMessage) {
         toast.error('No hay mensaje del usuario para responder');
@@ -388,7 +531,6 @@ export const ConversationThread = ({
         return;
       }
 
-      // Call OpenAI GPT-4o-mini via edge function
       const { data, error } = await supabase.functions.invoke('messaging-ai-openai', {
         body: {
           messages: messages.map(m => ({ role: m.role, content: m.content })),
@@ -427,6 +569,165 @@ export const ConversationThread = ({
   const handleReply = (message: Message) => {
     setReplyingTo(message);
   };
+
+  // Retry media download - would need backend support
+  const handleRetryMedia = async (message: Message) => {
+    if (!message.metadata?.original_media_id) {
+      toast.error('No se puede reintentar: falta ID de media');
+      return;
+    }
+    
+    setRetryingMedia(message.id || null);
+    
+    // This would need a dedicated endpoint to retry media download
+    // For now, just show a message
+    toast.info('La funcionalidad de reintento está en desarrollo');
+    
+    setTimeout(() => setRetryingMedia(null), 2000);
+  };
+
+  // Render media content based on type
+  const renderMediaContent = (message: Message) => {
+    const { mediaUrl, mediaType, mediaMimeType, metadata } = message;
+    const hasMediaError = !mediaUrl && metadata?.media_download_error;
+
+    // Handle image
+    if (mediaType === 'image') {
+      if (mediaUrl) {
+        return (
+          <div 
+            className="cursor-pointer" 
+            onClick={() => setLightboxImage(mediaUrl)}
+          >
+            <img 
+              src={mediaUrl} 
+              alt="Imagen" 
+              className="max-w-full max-h-64 rounded-lg mb-2 hover:opacity-90 transition-opacity object-contain"
+              loading="lazy"
+            />
+          </div>
+        );
+      } else if (hasMediaError) {
+        return (
+          <MediaErrorPlaceholder 
+            type="image" 
+            onRetry={() => handleRetryMedia(message)}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      } else {
+        // Fallback - AI analyzed badge (only if we know AI processed it)
+        return (
+          <div className="max-w-[200px] rounded-lg mb-2 p-3 bg-emerald-50 border border-emerald-200">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <Search className="h-5 w-5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Imagen analizada</p>
+                <p className="text-xs opacity-70">Búsqueda por IA</p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Handle audio
+    if (mediaType === 'audio') {
+      if (mediaUrl) {
+        return (
+          <AudioPlayer src={mediaUrl} className="mb-2" />
+        );
+      } else if (hasMediaError) {
+        return (
+          <MediaErrorPlaceholder 
+            type="audio" 
+            onRetry={() => handleRetryMedia(message)}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      }
+    }
+
+    // Handle sticker
+    if (mediaType === 'sticker') {
+      if (mediaUrl) {
+        return (
+          <img 
+            src={mediaUrl} 
+            alt="Sticker" 
+            className="max-w-[150px] max-h-[150px] mb-2 object-contain"
+            loading="lazy"
+          />
+        );
+      } else if (hasMediaError) {
+        return (
+          <MediaErrorPlaceholder 
+            type="sticker" 
+            onRetry={() => handleRetryMedia(message)}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      }
+    }
+
+    // Handle video
+    if (mediaType === 'video') {
+      if (mediaUrl) {
+        return (
+          <video 
+            controls 
+            className="max-w-full max-h-64 rounded-lg mb-2"
+            preload="metadata"
+          >
+            <source src={mediaUrl} type={mediaMimeType || 'video/mp4'} />
+            Tu navegador no soporta video.
+          </video>
+        );
+      } else if (hasMediaError) {
+        return (
+          <MediaErrorPlaceholder 
+            type="video" 
+            onRetry={() => handleRetryMedia(message)}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      }
+    }
+
+    // Handle document
+    if (mediaType === 'document') {
+      if (mediaUrl) {
+        return (
+          <a 
+            href={mediaUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-3 bg-background/10 rounded-lg mb-2 hover:bg-background/20 transition-colors"
+          >
+            <FileText className="h-6 w-6 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium block truncate">
+                {message.content || 'Documento adjunto'}
+              </span>
+              <span className="text-xs opacity-70">Clic para descargar</span>
+            </div>
+            <Download className="h-4 w-4 opacity-70" />
+          </a>
+        );
+      } else if (hasMediaError) {
+        return (
+          <MediaErrorPlaceholder 
+            type="document" 
+            onRetry={() => handleRetryMedia(message)}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      }
+    }
+
+    return null;
+  };
+
   if (!conversation) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -459,11 +760,9 @@ export const ConversationThread = ({
               </div>
               <p className="text-sm text-muted-foreground">{conversation.phone}</p>
             </div>
-            {/* Tags Manager */}
             <ChatTagsManager conversationId={conversation.id} />
           </div>
           <div className="flex items-center gap-3">
-            {/* AI Managed Toggle */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -536,7 +835,9 @@ export const ConversationThread = ({
                       "max-w-[80%] rounded-lg p-3 relative group transition-all",
                       message.role === 'user'
                         ? 'bg-muted'
-                        : channelInfo.bubbleColor
+                        : channelInfo.bubbleColor,
+                      // Special styling for stickers - no bubble background
+                      message.mediaType === 'sticker' && message.mediaUrl && 'bg-transparent p-0'
                     )}
                   >
                     {/* Reply preview if this message is replying to another */}
@@ -556,46 +857,8 @@ export const ConversationThread = ({
                         <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       )}
                       <div className="flex-1">
-                        {/* Media content */}
-                        {message.mediaUrl && message.mediaType === 'image' && (
-                          <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer">
-                            <img 
-                              src={message.mediaUrl} 
-                              alt="Imagen" 
-                              className="max-w-full max-h-64 rounded-lg mb-2 cursor-pointer hover:opacity-90 transition-opacity"
-                            />
-                          </a>
-                        )}
-                        {/* Fallback for image messages without URL - AI analyzed badge */}
-                        {!message.mediaUrl && message.mediaType === 'image' && (
-                          <div className="max-w-[200px] rounded-lg mb-2 p-3 bg-emerald-50 border border-emerald-200">
-                            <div className="flex items-center gap-2 text-emerald-700">
-                              <Search className="h-5 w-5 flex-shrink-0" />
-                              <div>
-                                <p className="text-sm font-medium">Imagen analizada</p>
-                                <p className="text-xs opacity-70">Búsqueda por IA</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {message.mediaUrl && message.mediaType === 'audio' && (
-                          <audio 
-                            controls 
-                            src={message.mediaUrl} 
-                            className="max-w-full mb-2"
-                          />
-                        )}
-                        {message.mediaUrl && message.mediaType === 'document' && (
-                          <a 
-                            href={message.mediaUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 p-2 bg-background/10 rounded mb-2 hover:bg-background/20 transition-colors"
-                          >
-                            <FileText className="h-5 w-5" />
-                            <span className="text-sm underline">Documento adjunto</span>
-                          </a>
-                        )}
+                        {/* Render media content */}
+                        {message.mediaType && renderMediaContent(message)}
                         
                         {/* Text content */}
                         {message.content && (
@@ -896,6 +1159,20 @@ export const ConversationThread = ({
           </p>
         </div>
       </CardContent>
+
+      {/* Image Lightbox */}
+      <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Vista de imagen</DialogTitle>
+          {lightboxImage && (
+            <img 
+              src={lightboxImage} 
+              alt="Imagen ampliada" 
+              className="w-full h-full object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -100,17 +100,31 @@ const MessagingAIPage = () => {
         replyToContent = repliedMsg?.content || undefined;
       }
       
+      // Map message_type to mediaType
+      const mediaTypeMap: Record<string, 'image' | 'audio' | 'document' | 'video' | 'sticker' | undefined> = {
+        'image': 'image',
+        'audio': 'audio',
+        'document': 'document',
+        'video': 'video',
+        'sticker': 'sticker',
+      };
+      
+      // Parse metadata safely
+      const metadata = typeof msg.metadata === 'object' && msg.metadata !== null 
+        ? msg.metadata as { original_media_id?: string; media_download_error?: string }
+        : undefined;
+      
       return {
         id: msg.id,
         role: (msg.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
         content: msg.content || '',
         timestamp: msg.sent_at ? new Date(msg.sent_at) : new Date(),
         mediaUrl: msg.media_url || undefined,
-        mediaType: (msg.message_type === 'image' ? 'image' : 
-                   msg.message_type === 'audio' ? 'audio' : 
-                   msg.message_type === 'document' ? 'document' : undefined) as 'image' | 'audio' | 'document' | undefined,
+        mediaType: mediaTypeMap[msg.message_type || ''] || undefined,
+        mediaMimeType: msg.media_mime_type || undefined,
         replyToMessageId: msg.reply_to_message_id || undefined,
         replyToContent,
+        metadata,
       };
     });
   }, [messages]);

@@ -11,11 +11,15 @@ const corsHeaders = {
 // Organización por defecto para canales nuevos: Dosmicos
 const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
 
+// Maximum file size for media downloads (16MB - WhatsApp limit)
+const MAX_MEDIA_SIZE = 16 * 1024 * 1024;
+
 // Generate AI response using Lovable AI Gateway (Gemini)
 async function generateAIResponse(
   userMessage: string, 
   conversationHistory: any[],
-  aiConfig: any
+  aiConfig: any,
+  mediaContext?: { type: string; url?: string }
 ): Promise<string> {
   const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
   
@@ -63,15 +67,46 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       });
     }
 
+    // Build user message with media context
+    let finalUserMessage = userMessage;
+    if (mediaContext?.type === 'image' && mediaContext.url) {
+      finalUserMessage = userMessage || `[El cliente envió una imagen]`;
+      console.log(`🖼️ Enviando imagen a IA: ${mediaContext.url}`);
+    } else if (mediaContext?.type === 'audio') {
+      finalUserMessage = userMessage || `[El cliente envió un audio/nota de voz]`;
+    } else if (mediaContext?.type === 'sticker') {
+      // Don't analyze stickers, just acknowledge
+      return '¡Lindo sticker! 😊 ¿En qué puedo ayudarte?';
+    }
+
     // Build messages array with conversation history
-    const messages = [
+    const messages: any[] = [
       { role: 'system', content: systemPrompt },
       ...conversationHistory.slice(-10).map((msg: any) => ({
         role: msg.direction === 'inbound' ? 'user' : 'assistant',
         content: msg.content
       })),
-      { role: 'user', content: userMessage }
     ];
+
+    // Add the current message - with image if available
+    if (mediaContext?.type === 'image' && mediaContext.url) {
+      // Use vision capabilities with the permanent Supabase URL
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: finalUserMessage },
+          { 
+            type: 'image_url', 
+            image_url: { 
+              url: mediaContext.url,
+              detail: 'auto'
+            } 
+          }
+        ]
+      });
+    } else {
+      messages.push({ role: 'user', content: finalUserMessage });
+    }
 
     console.log('Calling Lovable AI Gateway with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
 
@@ -104,90 +139,220 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
   }
 }
 
-// Fetch media URL from WhatsApp API using media ID
-async function fetchMediaUrl(mediaId: string): Promise<string | null> {
-  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
-  
-  if (!accessToken || !mediaId) {
-    return null;
+// Determine file extension based on MIME type and message type
+function getFileExtension(mimeType: string, messageType: string): string {
+  // Handle common MIME types
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'audio/ogg': 'ogg',
+    'audio/mpeg': 'mp3',
+    'audio/mp4': 'mp4',
+    'audio/amr': 'amr',
+    'video/mp4': 'mp4',
+    'video/3gpp': '3gp',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  };
+
+  if (mimeType && mimeToExt[mimeType.toLowerCase()]) {
+    return mimeToExt[mimeType.toLowerCase()];
   }
 
+  // Fallback based on message type
+  const typeDefaults: Record<string, string> = {
+    'image': 'jpg',
+    'audio': 'ogg',
+    'video': 'mp4',
+    'sticker': 'webp',
+    'document': 'bin',
+  };
+
+  return typeDefaults[messageType] || 'bin';
+}
+
+// Get subfolder based on message type
+function getMediaSubfolder(messageType: string): string {
+  const folders: Record<string, string> = {
+    'image': 'images',
+    'audio': 'audios',
+    'video': 'videos',
+    'sticker': 'stickers',
+    'document': 'documents',
+  };
+  return folders[messageType] || 'misc';
+}
+
+// Fetch media URL from WhatsApp API using media ID with robust error handling
+async function fetchMediaUrl(
+  mediaId: string, 
+  messageType: string,
+  conversationId: string,
+  supabase: any
+): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
+  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
+  
+  if (!accessToken) {
+    console.error('❌ META_WHATSAPP_TOKEN not configured');
+    return { url: null, mimeType: null, error: 'Token not configured' };
+  }
+  
+  if (!mediaId) {
+    console.error('❌ No media ID provided');
+    return { url: null, mimeType: null, error: 'No media ID' };
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseClient = supabase || createClient(supabaseUrl, supabaseKey);
+
   try {
-    console.log('Fetching media URL for ID:', mediaId);
+    console.log(`📥 Fetching WhatsApp media: ${mediaId} (type: ${messageType})`);
     
-    // First, get the media URL from the media ID
-    const response = await fetch(
-      `https://graph.facebook.com/v21.0/${mediaId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.error('Error fetching media info:', await response.text());
-      return null;
-    }
-
-    const mediaInfo = await response.json();
-    console.log('Media info:', mediaInfo);
+    // Step 1: Get media info from Meta API (with 10s timeout)
+    const infoController = new AbortController();
+    const infoTimeoutId = setTimeout(() => infoController.abort(), 10000);
     
-    // The URL from WhatsApp requires authentication to download
-    // We'll return a special format that includes both the download URL and the media ID
-    // The frontend can use this to display the image
-    if (mediaInfo.url) {
-      // Download the media and upload to Supabase Storage for permanent access
-      const mediaResponse = await fetch(mediaInfo.url, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-
-      if (mediaResponse.ok) {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
-        
-        const arrayBuffer = await mediaResponse.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        
-        // Determine file extension from mime type
-        const mimeType = mediaInfo.mime_type || 'application/octet-stream';
-        const ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
-        const fileName = `whatsapp-media/${Date.now()}_${mediaId}.${ext}`;
-        
-        // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase
-          .storage
-          .from('messaging-media')
-          .upload(fileName, uint8Array, {
-            contentType: mimeType,
-            cacheControl: '31536000',
-          });
-
-        if (uploadError) {
-          console.error('Error uploading to Supabase Storage:', uploadError);
-          // Return the original WhatsApp URL as fallback (might expire)
-          return mediaInfo.url;
+    let infoResponse: Response;
+    try {
+      infoResponse = await fetch(
+        `https://graph.facebook.com/v21.0/${mediaId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          signal: infoController.signal,
         }
+      );
+    } finally {
+      clearTimeout(infoTimeoutId);
+    }
 
-        // Get public URL
-        const { data: publicUrlData } = supabase
-          .storage
-          .from('messaging-media')
-          .getPublicUrl(fileName);
+    if (!infoResponse.ok) {
+      const errorText = await infoResponse.text();
+      console.error(`❌ Failed to get media info (${infoResponse.status}):`, errorText);
+      return { url: null, mimeType: null, error: `Meta API error: ${infoResponse.status}` };
+    }
 
-        console.log('Media uploaded to Supabase Storage:', publicUrlData.publicUrl);
-        return publicUrlData.publicUrl;
+    const mediaInfo = await infoResponse.json();
+    console.log(`📋 Media info received:`, { 
+      url: mediaInfo.url?.substring(0, 50) + '...', 
+      mime_type: mediaInfo.mime_type,
+      file_size: mediaInfo.file_size 
+    });
+    
+    if (!mediaInfo.url) {
+      console.error('❌ No URL in media info response');
+      return { url: null, mimeType: null, error: 'No URL in response' };
+    }
+
+    // Check file size before downloading
+    if (mediaInfo.file_size && mediaInfo.file_size > MAX_MEDIA_SIZE) {
+      console.error(`❌ File too large: ${mediaInfo.file_size} bytes (max: ${MAX_MEDIA_SIZE})`);
+      return { url: null, mimeType: mediaInfo.mime_type, error: 'File too large' };
+    }
+
+    // Step 2: Download the media binary (with 30s timeout)
+    const downloadController = new AbortController();
+    const downloadTimeoutId = setTimeout(() => downloadController.abort(), 30000);
+    
+    let mediaResponse: Response;
+    try {
+      mediaResponse = await fetch(mediaInfo.url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        signal: downloadController.signal,
+      });
+    } finally {
+      clearTimeout(downloadTimeoutId);
+    }
+
+    if (!mediaResponse.ok) {
+      const errorText = await mediaResponse.text();
+      console.error(`❌ Failed to download media (${mediaResponse.status}):`, errorText.substring(0, 200));
+      return { url: null, mimeType: mediaInfo.mime_type, error: `Download failed: ${mediaResponse.status}` };
+    }
+
+    // Step 3: Read and validate the binary data
+    const arrayBuffer = await mediaResponse.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    if (uint8Array.length === 0) {
+      console.error('❌ Downloaded file is empty');
+      return { url: null, mimeType: mediaInfo.mime_type, error: 'Empty file' };
+    }
+
+    console.log(`📦 Downloaded ${uint8Array.length} bytes`);
+
+    // Step 4: Determine file path
+    const mimeType = mediaInfo.mime_type || 'application/octet-stream';
+    const ext = getFileExtension(mimeType, messageType);
+    const subfolder = getMediaSubfolder(messageType);
+    const timestamp = Date.now();
+    const fileName = `whatsapp-media/${subfolder}/${conversationId}/${timestamp}_${mediaId}.${ext}`;
+    
+    console.log(`📤 Uploading to Supabase Storage: ${fileName}`);
+
+    // Step 5: Upload to Supabase Storage (with retry)
+    let uploadSuccess = false;
+    let uploadAttempts = 0;
+    const maxUploadAttempts = 2;
+    
+    while (!uploadSuccess && uploadAttempts < maxUploadAttempts) {
+      uploadAttempts++;
+      const { error: uploadError } = await supabaseClient
+        .storage
+        .from('messaging-media')
+        .upload(fileName, uint8Array, {
+          contentType: mimeType,
+          cacheControl: '31536000',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error(`❌ Upload attempt ${uploadAttempts} failed:`, uploadError);
+        if (uploadAttempts < maxUploadAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } else {
+        uploadSuccess = true;
       }
     }
 
-    return null;
-  } catch (error) {
-    console.error('Error fetching media URL:', error);
-    return null;
+    if (!uploadSuccess) {
+      console.error('❌ All upload attempts failed');
+      return { url: null, mimeType, error: 'Upload failed after retries' };
+    }
+
+    // Step 6: Get public URL
+    const { data: publicUrlData } = supabaseClient
+      .storage
+      .from('messaging-media')
+      .getPublicUrl(fileName);
+
+    const publicUrl = publicUrlData?.publicUrl;
+    
+    if (!publicUrl) {
+      console.error('❌ Failed to get public URL');
+      return { url: null, mimeType, error: 'No public URL' };
+    }
+
+    console.log(`✅ Media cached successfully: ${publicUrl.substring(0, 80)}...`);
+    return { url: publicUrl, mimeType };
+    
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error('❌ Media fetch timed out');
+      return { url: null, mimeType: null, error: 'Timeout' };
+    }
+    console.error('❌ Error fetching WhatsApp media:', error);
+    return { url: null, mimeType: null, error: error.message || 'Unknown error' };
   }
 }
 
@@ -379,15 +544,7 @@ serve(async (req) => {
                   messageType = message.type;
                 }
 
-                // Fetch real media URL if there's a media ID
-                let mediaUrl: string | null = null;
-                if (mediaId) {
-                  console.log('Fetching media URL for ID:', mediaId);
-                  mediaUrl = await fetchMediaUrl(mediaId);
-                  console.log('Resolved media URL:', mediaUrl);
-                }
-
-                console.log('Message content:', content, 'type:', messageType);
+                console.log('Message content:', content, 'type:', messageType, 'mediaId:', mediaId);
 
                 // Find channel by phone number ID - ESTRATEGIA MEJORADA
                 let channel = null;
@@ -491,8 +648,6 @@ Reglas importantes:
                       last_message_at: timestamp.toISOString(),
                       unread_count: 1,
                       status: 'active',
-                      // ai_managed: true = IA responde, false = control manual, null = por defecto (canal)
-                      // Para este webhook, lo dejamos ON por defecto (igual que el canal; null cuenta como true)
                       ai_managed: channel.ai_enabled !== false,
                     })
                     .select()
@@ -526,6 +681,23 @@ Reglas importantes:
                     .eq('id', conversation.id);
                 }
 
+                // Fetch real media URL if there's a media ID (with improved error handling)
+                let mediaUrl: string | null = null;
+                let mediaError: string | undefined;
+                if (mediaId) {
+                  console.log(`📥 Processing media: ${mediaId} (type: ${messageType})`);
+                  const mediaResult = await fetchMediaUrl(mediaId, messageType, conversation.id, supabase);
+                  mediaUrl = mediaResult.url;
+                  mediaMimeType = mediaResult.mimeType || mediaMimeType;
+                  mediaError = mediaResult.error;
+                  
+                  if (mediaUrl) {
+                    console.log(`✅ Media URL resolved: ${mediaUrl.substring(0, 80)}...`);
+                  } else {
+                    console.log(`⚠️ Media download failed: ${mediaError}`);
+                  }
+                }
+
                 // Insert message (skip for reaction type)
                 if (messageType !== 'reaction') {
                   const { error: msgError } = await supabase
@@ -544,6 +716,7 @@ Reglas importantes:
                       metadata: {
                         ...message,
                         original_media_id: mediaId,
+                        media_download_error: mediaError,
                         referral: message.referral || null,
                         context: message.context || null
                       },
@@ -557,17 +730,17 @@ Reglas importantes:
                     
                     // Generate AI response if AI is enabled (AUTO-RESPONDER)
                     const aiConfig = channel.ai_config as any;
-                    const autoReplyEnabled = aiConfig?.autoReply !== false; // Default to true
+                    const autoReplyEnabled = aiConfig?.autoReply !== false;
 
-                    // Releer el estado de la conversación para respetar el switch (evita carreras)
+                    // Releer el estado de la conversación para respetar el switch
                     const { data: freshConv } = await supabase
                       .from('messaging_conversations')
                       .select('ai_managed')
                       .eq('id', conversation.id)
                       .single();
 
-                    const aiEnabledOnChannel = channel.ai_enabled !== false; // null => true
-                    const aiEnabledOnConversation = (freshConv?.ai_managed ?? conversation.ai_managed) !== false; // null => true
+                    const aiEnabledOnChannel = channel.ai_enabled !== false;
+                    const aiEnabledOnConversation = (freshConv?.ai_managed ?? conversation.ai_managed) !== false;
                     const shouldAutoReply = aiEnabledOnChannel && aiEnabledOnConversation && autoReplyEnabled;
 
                     console.log('AI config:', {
@@ -581,14 +754,12 @@ Reglas importantes:
                       // Check business hours if configured
                       let withinBusinessHours = true;
                       if (aiConfig?.businessHours === true) {
-                        // Check Colombia time (UTC-5)
                         const now = new Date();
-                        const colombiaOffset = -5 * 60; // UTC-5 in minutes
+                        const colombiaOffset = -5 * 60;
                         const colombiaTime = new Date(now.getTime() + (colombiaOffset - now.getTimezoneOffset()) * 60000);
                         const hour = colombiaTime.getHours();
                         const dayOfWeek = colombiaTime.getDay();
                         
-                        // Business hours: Mon-Sat 9am-6pm
                         withinBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 6 && hour >= 9 && hour < 18;
                         console.log('Business hours check:', { hour, dayOfWeek, withinBusinessHours });
                         
@@ -615,10 +786,26 @@ Reglas importantes:
                           .order('sent_at', { ascending: false })
                           .limit(10);
                         
+                        // Prepare media context for AI - ALWAYS use Supabase URL (permanent)
+                        const mediaContext = mediaId ? {
+                          type: messageType,
+                          url: mediaUrl || undefined, // Only pass if we have a permanent URL
+                        } : undefined;
+                        
+                        // Validate that image URL is from Supabase Storage before sending to AI
+                        if (mediaContext?.type === 'image' && mediaContext.url) {
+                          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+                          if (!mediaContext.url.includes(supabaseUrl) && !mediaContext.url.includes('supabase')) {
+                            console.warn('⚠️ Image URL is not from Supabase Storage, skipping image analysis');
+                            mediaContext.url = undefined;
+                          }
+                        }
+                        
                         const aiResponse = await generateAIResponse(
                           content, 
                           (historyMessages || []).reverse(),
-                          aiConfig
+                          aiConfig,
+                          mediaContext
                         );
                         
                         if (aiResponse) {
@@ -647,7 +834,7 @@ Reglas importantes:
                             } else {
                               console.log('AI response saved successfully');
                               
-                              // Update conversation preview/time (NO tocar ai_managed: es control del usuario)
+                              // Update conversation preview/time
                               await supabase
                                 .from('messaging_conversations')
                                 .update({
