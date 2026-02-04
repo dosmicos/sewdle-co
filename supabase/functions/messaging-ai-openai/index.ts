@@ -141,9 +141,53 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, systemPrompt, organizationId } = await req.json();
+    const body = await req.json();
+    const { action, messages, systemPrompt, organizationId } = body;
     
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    
+    // Handle test-connection action - just verify API key exists without making calls
+    if (action === 'test-connection') {
+      console.log("messaging-ai-openai: Testing connection for org:", organizationId);
+      
+      if (!OPENAI_API_KEY) {
+        return new Response(
+          JSON.stringify({ connected: false, error: "OPENAI_API_KEY is not configured" }), 
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Optionally verify the API key is valid by making a simple models list request
+      try {
+        const modelsResponse = await fetch("https://api.openai.com/v1/models", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+          },
+        });
+        
+        if (modelsResponse.ok) {
+          return new Response(
+            JSON.stringify({ connected: true, success: true }), 
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          const errorText = await modelsResponse.text();
+          console.error("OpenAI API key validation failed:", modelsResponse.status, errorText);
+          return new Response(
+            JSON.stringify({ connected: false, error: "API Key inválida" }), 
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } catch (fetchError) {
+        console.error("Error validating OpenAI API key:", fetchError);
+        return new Response(
+          JSON.stringify({ connected: false, error: "Error al validar API Key" }), 
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+    
     if (!OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY is not configured");
       return new Response(

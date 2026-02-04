@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, CheckCircle2, XCircle, Clock, Wifi, ShoppingCart, Truck, Receipt, MessageSquare, Database } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, Clock, Wifi, ShoppingCart, Truck, Receipt, MessageSquare, Database, Brain } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -18,6 +18,7 @@ type APIConfig = {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   checkFn: () => Promise<APIStatus>;
+  category: 'external' | 'ai';
 };
 
 const ApisStatusPage = () => {
@@ -123,7 +124,7 @@ const ApisStatusPage = () => {
     }
   }, [currentOrganization?.id]);
 
-  // WhatsApp/Meta API check
+  // WhatsApp/Meta API check - Fixed to check active channel instead of webhook_verified
   const checkWhatsAppAPI = useCallback(async (): Promise<APIStatus> => {
     if (!currentOrganization?.id) {
       return { status: 'error', error: 'Sin organización' };
@@ -134,7 +135,7 @@ const ApisStatusPage = () => {
       // Check if there's an active messaging channel
       const { data: channel, error } = await supabase
         .from('messaging_channels')
-        .select('id, is_active, webhook_verified')
+        .select('id, is_active, meta_phone_number_id, ai_enabled')
         .eq('organization_id', currentOrganization.id)
         .eq('channel_type', 'whatsapp')
         .maybeSingle();
@@ -149,11 +150,16 @@ const ApisStatusPage = () => {
         return { status: 'error', responseTime, error: 'Canal no configurado' };
       }
 
-      if (channel.is_active && channel.webhook_verified) {
+      // Consider connected if is_active is true and has phone number configured
+      if (channel.is_active && channel.meta_phone_number_id) {
         return { status: 'connected', responseTime };
       }
 
-      return { status: 'error', responseTime, error: 'Webhook no verificado' };
+      if (!channel.meta_phone_number_id) {
+        return { status: 'error', responseTime, error: 'Número de teléfono no configurado' };
+      }
+
+      return { status: 'error', responseTime, error: 'Canal inactivo' };
     } catch (err: any) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
@@ -182,43 +188,94 @@ const ApisStatusPage = () => {
     }
   }, []);
 
+  // OpenAI API check
+  const checkOpenAIAPI = useCallback(async (): Promise<APIStatus> => {
+    if (!currentOrganization?.id) {
+      return { status: 'error', error: 'Sin organización' };
+    }
+
+    const startTime = performance.now();
+    try {
+      const { data, error } = await supabase.functions.invoke('messaging-ai-openai', {
+        body: { 
+          action: 'test-connection',
+          organizationId: currentOrganization.id 
+        }
+      });
+
+      const responseTime = Math.round(performance.now() - startTime);
+
+      if (error) {
+        if (error.message?.includes('OPENAI_API_KEY')) {
+          return { status: 'error', responseTime, error: 'API Key no configurada' };
+        }
+        return { status: 'error', responseTime, error: error.message };
+      }
+
+      if (data?.connected || data?.success) {
+        return { status: 'connected', responseTime };
+      }
+
+      return { status: 'error', responseTime, error: data?.error || 'Sin conexión' };
+    } catch (err: any) {
+      const responseTime = Math.round(performance.now() - startTime);
+      return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
+    }
+  }, [currentOrganization?.id]);
+
   const apiConfigs: APIConfig[] = [
     {
       id: 'supabase',
       name: 'Supabase (Base de datos)',
       description: 'Conexión a la base de datos principal del sistema',
       icon: Database,
-      checkFn: checkSupabaseAPI
+      checkFn: checkSupabaseAPI,
+      category: 'external'
     },
     {
       id: 'shopify',
       name: 'Shopify',
       description: 'Sincronización de pedidos, productos e inventario',
       icon: ShoppingCart,
-      checkFn: checkShopifyAPI
+      checkFn: checkShopifyAPI,
+      category: 'external'
     },
     {
       id: 'envia',
       name: 'Envia.com',
       description: 'Cotización y generación de guías de envío',
       icon: Truck,
-      checkFn: checkEnviaAPI
+      checkFn: checkEnviaAPI,
+      category: 'external'
     },
     {
       id: 'alegra',
       name: 'Alegra',
       description: 'Facturación electrónica y contabilidad',
       icon: Receipt,
-      checkFn: checkAlegraAPI
+      checkFn: checkAlegraAPI,
+      category: 'external'
     },
     {
       id: 'whatsapp',
       name: 'WhatsApp / Meta',
       description: 'Mensajería automatizada con clientes',
       icon: MessageSquare,
-      checkFn: checkWhatsAppAPI
+      checkFn: checkWhatsAppAPI,
+      category: 'external'
+    },
+    {
+      id: 'openai',
+      name: 'OpenAI (GPT-4o-mini)',
+      description: 'Inteligencia artificial para respuestas automáticas',
+      icon: Brain,
+      checkFn: checkOpenAIAPI,
+      category: 'ai'
     }
   ];
+
+  const externalApis = apiConfigs.filter(api => api.category === 'external');
+  const aiApis = apiConfigs.filter(api => api.category === 'ai');
 
   const checkAllAPIs = useCallback(async () => {
     setIsChecking(true);
@@ -315,6 +372,55 @@ const ApisStatusPage = () => {
     );
   };
 
+  const renderAPICard = (api: APIConfig) => {
+    const status = apiStatuses[api.id];
+    const IconComponent = api.icon;
+    
+    return (
+      <Card key={api.id} className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-muted rounded-lg">
+                <IconComponent className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">{api.name}</CardTitle>
+                <CardDescription className="text-sm">
+                  {api.description}
+                </CardDescription>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => checkSingleAPI(api.id)}
+              disabled={status?.status === 'checking'}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCw className={`w-4 h-4 ${status?.status === 'checking' ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Estado:</span>
+              {renderStatusBadge(status)}
+            </div>
+            {renderResponseTime(status)}
+          </div>
+          
+          {status?.error && status.status === 'error' && (
+            <div className="mt-3 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <strong>Error:</strong> {status.error}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   const connectedCount = Object.values(apiStatuses).filter(s => s.status === 'connected').length;
   const errorCount = Object.values(apiStatuses).filter(s => s.status === 'error').length;
 
@@ -395,56 +501,26 @@ const ApisStatusPage = () => {
         </div>
       )}
 
-      {/* API Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {apiConfigs.map((api) => {
-          const status = apiStatuses[api.id];
-          const IconComponent = api.icon;
-          
-          return (
-            <Card key={api.id} className="overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-muted rounded-lg">
-                      <IconComponent className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{api.name}</CardTitle>
-                      <CardDescription className="text-sm">
-                        {api.description}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => checkSingleAPI(api.id)}
-                    disabled={status?.status === 'checking'}
-                    className="h-8 w-8 p-0"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${status?.status === 'checking' ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Estado:</span>
-                    {renderStatusBadge(status)}
-                  </div>
-                  {renderResponseTime(status)}
-                </div>
-                
-                {status?.error && status.status === 'error' && (
-                  <div className="mt-3 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                    <strong>Error:</strong> {status.error}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* External Integrations Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Database className="w-5 h-5" />
+          Integraciones Externas
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {externalApis.map(renderAPICard)}
+        </div>
+      </div>
+
+      {/* AI Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Brain className="w-5 h-5" />
+          Inteligencia Artificial
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {aiApis.map(renderAPICard)}
+        </div>
       </div>
     </div>
   );
