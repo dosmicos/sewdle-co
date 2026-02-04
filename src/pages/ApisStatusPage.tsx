@@ -223,6 +223,41 @@ const ApisStatusPage = () => {
     }
   }, [currentOrganization?.id]);
 
+  // Gemini/Lovable AI check
+  const checkGeminiAPI = useCallback(async (): Promise<APIStatus> => {
+    if (!currentOrganization?.id) {
+      return { status: 'error', error: 'Sin organización' };
+    }
+
+    const startTime = performance.now();
+    try {
+      const { data, error } = await supabase.functions.invoke('sewdle-copilot', {
+        body: { 
+          action: 'test-connection',
+          organizationId: currentOrganization.id 
+        }
+      });
+
+      const responseTime = Math.round(performance.now() - startTime);
+
+      if (error) {
+        if (error.message?.includes('LOVABLE_API_KEY') || error.message?.includes('GEMINI')) {
+          return { status: 'error', responseTime, error: 'API Key no configurada' };
+        }
+        return { status: 'error', responseTime, error: error.message };
+      }
+
+      if (data?.connected || data?.success) {
+        return { status: 'connected', responseTime };
+      }
+
+      return { status: 'error', responseTime, error: data?.error || 'Sin conexión' };
+    } catch (err: any) {
+      const responseTime = Math.round(performance.now() - startTime);
+      return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
+    }
+  }, [currentOrganization?.id]);
+
   const apiConfigs: APIConfig[] = [
     {
       id: 'supabase',
@@ -267,9 +302,17 @@ const ApisStatusPage = () => {
     {
       id: 'openai',
       name: 'OpenAI (GPT-4o-mini)',
-      description: 'Inteligencia artificial para respuestas automáticas',
+      description: 'IA para respuestas automáticas en Mensajería',
       icon: Brain,
       checkFn: checkOpenAIAPI,
+      category: 'ai'
+    },
+    {
+      id: 'gemini',
+      name: 'Google Gemini (Copilot)',
+      description: 'IA para asistente Copilot del sistema',
+      icon: Brain,
+      checkFn: checkGeminiAPI,
       category: 'ai'
     }
   ];
