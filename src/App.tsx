@@ -222,12 +222,12 @@ const AppContent = () => {
         } />
       </Route>
       
-      {/* Mensajería IA - Layout independiente con guard */}
+      {/* Mensajería IA - Layout independiente con guard de permisos */}
       <Route path="whatsapp-ai" element={
         <PasswordChangeRouteGuard>
-          <AdminRoute>
+          <PermissionRoute module="messaging" action="view">
             <MessagingAIPage />
-          </AdminRoute>
+          </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       
