@@ -31,23 +31,176 @@ function normalizeCOPhone(input: unknown): string {
   return digits.length > 10 ? digits.slice(-10) : digits
 }
 
-// ============= ALEGRA CITY NORMALIZATIONS FOR DIAN (fallback estático) =============
+// ============= ALEGRA CITY NORMALIZATIONS FOR DIAN (fallback estático mejorado) =============
 const ALEGRA_CITY_NORMALIZATIONS: Record<string, { city: string; department: string }> = {
+  // Bogotá - múltiples variaciones
   'bogota': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
   'bogotá': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
   'bogota dc': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogota d.c': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
   'bogota d.c.': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
   'bogotá dc': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
   'bogotá d.c.': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'santa fe de bogota': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'santafe de bogota': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogta': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogot': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  'bogtá': { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' },
+  
+  // Medellín
   'medellin': { city: 'Medellín', department: 'Antioquia' },
   'medellín': { city: 'Medellín', department: 'Antioquia' },
+  'medelln': { city: 'Medellín', department: 'Antioquia' },
+  'meedellín': { city: 'Medellín', department: 'Antioquia' },
+  'medelin': { city: 'Medellín', department: 'Antioquia' },
+  
+  // Cali
   'cali': { city: 'Cali', department: 'Valle del Cauca' },
+  'santiago de cali': { city: 'Cali', department: 'Valle del Cauca' },
+  
+  // Barranquilla
   'barranquilla': { city: 'Barranquilla', department: 'Atlántico' },
+  'b/quilla': { city: 'Barranquilla', department: 'Atlántico' },
+  'bquilla': { city: 'Barranquilla', department: 'Atlántico' },
+  
+  // Cartagena
   'cartagena': { city: 'Cartagena de Indias', department: 'Bolívar' },
+  'cartagena de indias': { city: 'Cartagena de Indias', department: 'Bolívar' },
+  
+  // Bucaramanga
   'bucaramanga': { city: 'Bucaramanga', department: 'Santander' },
+  'b/manga': { city: 'Bucaramanga', department: 'Santander' },
+  'bmanga': { city: 'Bucaramanga', department: 'Santander' },
+  
+  // Ciudades cercanas a Bogotá
   'soacha': { city: 'Soacha', department: 'Cundinamarca' },
   'chia': { city: 'Chía', department: 'Cundinamarca' },
   'chía': { city: 'Chía', department: 'Cundinamarca' },
+  'zipaquira': { city: 'Zipaquirá', department: 'Cundinamarca' },
+  'zipaquirá': { city: 'Zipaquirá', department: 'Cundinamarca' },
+  'funza': { city: 'Funza', department: 'Cundinamarca' },
+  'mosquera': { city: 'Mosquera', department: 'Cundinamarca' },
+  'madrid': { city: 'Madrid', department: 'Cundinamarca' },
+  'facatativa': { city: 'Facatativá', department: 'Cundinamarca' },
+  'facatativá': { city: 'Facatativá', department: 'Cundinamarca' },
+  'cajica': { city: 'Cajicá', department: 'Cundinamarca' },
+  'cajicá': { city: 'Cajicá', department: 'Cundinamarca' },
+  'cota': { city: 'Cota', department: 'Cundinamarca' },
+  'tenjo': { city: 'Tenjo', department: 'Cundinamarca' },
+  'tabio': { city: 'Tabio', department: 'Cundinamarca' },
+  'la calera': { city: 'La Calera', department: 'Cundinamarca' },
+  'el rosal': { city: 'El Rosal', department: 'Cundinamarca' },
+  'sibate': { city: 'Sibaté', department: 'Cundinamarca' },
+  'sibaté': { city: 'Sibaté', department: 'Cundinamarca' },
+  
+  // Capitales departamentales
+  'pereira': { city: 'Pereira', department: 'Risaralda' },
+  'cucuta': { city: 'Cúcuta', department: 'Norte de Santander' },
+  'cúcuta': { city: 'Cúcuta', department: 'Norte de Santander' },
+  'manizales': { city: 'Manizales', department: 'Caldas' },
+  'ibague': { city: 'Ibagué', department: 'Tolima' },
+  'ibagué': { city: 'Ibagué', department: 'Tolima' },
+  'santa marta': { city: 'Santa Marta', department: 'Magdalena' },
+  'villavicencio': { city: 'Villavicencio', department: 'Meta' },
+  'pasto': { city: 'Pasto', department: 'Nariño' },
+  'monteria': { city: 'Montería', department: 'Córdoba' },
+  'montería': { city: 'Montería', department: 'Córdoba' },
+  'neiva': { city: 'Neiva', department: 'Huila' },
+  'armenia': { city: 'Armenia', department: 'Quindío' },
+  'popayan': { city: 'Popayán', department: 'Cauca' },
+  'popayán': { city: 'Popayán', department: 'Cauca' },
+  'sincelejo': { city: 'Sincelejo', department: 'Sucre' },
+  'tunja': { city: 'Tunja', department: 'Boyacá' },
+  'florencia': { city: 'Florencia', department: 'Caquetá' },
+  'riohacha': { city: 'Riohacha', department: 'La Guajira' },
+  'quibdo': { city: 'Quibdó', department: 'Chocó' },
+  'quibdó': { city: 'Quibdó', department: 'Chocó' },
+  'yopal': { city: 'Yopal', department: 'Casanare' },
+  'valledupar': { city: 'Valledupar', department: 'Cesar' },
+  'leticia': { city: 'Leticia', department: 'Amazonas' },
+  'mocoa': { city: 'Mocoa', department: 'Putumayo' },
+  'san andres': { city: 'San Andrés', department: 'San Andrés y Providencia' },
+  'san andrés': { city: 'San Andrés', department: 'San Andrés y Providencia' },
+  'arauca': { city: 'Arauca', department: 'Arauca' },
+  'inirida': { city: 'Inírida', department: 'Guainía' },
+  'inírida': { city: 'Inírida', department: 'Guainía' },
+  'san jose del guaviare': { city: 'San José del Guaviare', department: 'Guaviare' },
+  'san josé del guaviare': { city: 'San José del Guaviare', department: 'Guaviare' },
+  'mitu': { city: 'Mitú', department: 'Vaupés' },
+  'mitú': { city: 'Mitú', department: 'Vaupés' },
+  'puerto carreno': { city: 'Puerto Carreño', department: 'Vichada' },
+  'puerto carreño': { city: 'Puerto Carreño', department: 'Vichada' },
+  
+  // Otras ciudades importantes
+  'envigado': { city: 'Envigado', department: 'Antioquia' },
+  'itagui': { city: 'Itagüí', department: 'Antioquia' },
+  'itagüí': { city: 'Itagüí', department: 'Antioquia' },
+  'bello': { city: 'Bello', department: 'Antioquia' },
+  'rionegro': { city: 'Rionegro', department: 'Antioquia' },
+  'palmira': { city: 'Palmira', department: 'Valle del Cauca' },
+  'tulua': { city: 'Tuluá', department: 'Valle del Cauca' },
+  'tuluá': { city: 'Tuluá', department: 'Valle del Cauca' },
+  'buenaventura': { city: 'Buenaventura', department: 'Valle del Cauca' },
+  'soledad': { city: 'Soledad', department: 'Atlántico' },
+  'floridablanca': { city: 'Floridablanca', department: 'Santander' },
+  'giron': { city: 'Girón', department: 'Santander' },
+  'girón': { city: 'Girón', department: 'Santander' },
+  'piedecuesta': { city: 'Piedecuesta', department: 'Santander' },
+  'dosquebradas': { city: 'Dosquebradas', department: 'Risaralda' },
+};
+
+// ============= LEVENSHTEIN DISTANCE PARA SIMILARIDAD DE CIUDADES =============
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+  const lenA = a.length;
+  const lenB = b.length;
+  
+  if (lenA === 0) return lenB;
+  if (lenB === 0) return lenA;
+  
+  for (let i = 0; i <= lenA; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= lenB; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= lenA; i++) {
+    for (let j = 1; j <= lenB; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,     // deletion
+        matrix[i][j - 1] + 1,     // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  
+  return matrix[lenA][lenB];
+}
+
+// Buscar la ciudad más similar en el diccionario con distancia <= 2
+function findSimilarCity(cityInput: string): { city: string; department: string } | null {
+  const normalized = cityInput.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.,]/g, '').trim();
+  
+  let bestMatch: { city: string; department: string } | null = null;
+  let bestDistance = 3; // Max distance allowed
+  
+  for (const [key, value] of Object.entries(ALEGRA_CITY_NORMALIZATIONS)) {
+    const keyNormalized = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const distance = levenshteinDistance(normalized, keyNormalized);
+    
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestMatch = value;
+    }
+  }
+  
+  if (bestMatch) {
+    console.log(`📍 Ciudad encontrada por similitud (distancia ${bestDistance}): ${cityInput} → ${bestMatch.city}`);
+  }
+  
+  return bestMatch;
 }
 
 // ============= NUEVA FUNCIÓN: Normalización de ciudad desde shipping_coverage =============
@@ -56,15 +209,26 @@ async function normalizeAlegraCityFromDB(
   organizationId: string,
   cityName: string,
   provinceName: string
-): Promise<{ city: string; department: string }> {
+): Promise<{ city: string; department: string; wasNormalized: boolean }> {
   const normalizedCity = cityName?.toLowerCase().trim()
   
   if (!normalizedCity) {
     console.log('⚠️ Ciudad vacía, usando Bogotá por defecto')
-    return { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' }
+    return { city: 'Bogotá, D.C.', department: 'Bogotá D.C.', wasNormalized: true }
   }
   
-  // 1. Buscar en shipping_coverage (tiene 1,100+ municipios colombianos)
+  // 1. Buscar exacto en diccionario estático primero (más rápido)
+  const cityKey = normalizedCity
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.,]/g, '').trim()
+  
+  const staticMatch = ALEGRA_CITY_NORMALIZATIONS[cityKey]
+  if (staticMatch) {
+    console.log(`📍 Ciudad encontrada en diccionario estático: ${cityName} → ${staticMatch.city}`)
+    return { ...staticMatch, wasNormalized: true }
+  }
+  
+  // 2. Buscar en shipping_coverage (tiene 1,100+ municipios colombianos)
   try {
     const { data: match } = await supabase
       .from('shipping_coverage')
@@ -76,36 +240,39 @@ async function normalizeAlegraCityFromDB(
 
     if (match) {
       console.log(`📍 Ciudad normalizada desde DB: ${cityName} → ${match.municipality}, ${match.department}`)
-      return { city: match.municipality, department: match.department }
+      return { city: match.municipality, department: match.department, wasNormalized: true }
     }
   } catch (e: any) {
     console.warn(`⚠️ Error consultando shipping_coverage: ${e.message}`)
   }
-
-  // 2. Usar provincia de Shopify como departamento (si disponible y no es Bogotá)
-  if (provinceName && !provinceName.toLowerCase().includes('bogot')) {
-    console.log(`📍 Usando provincia de Shopify: ${cityName}, ${provinceName}`)
-    return { city: cityName, department: provinceName }
-  }
-
-  // 3. Fallback a diccionario estático
-  const cityKey = normalizedCity
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[.,]/g, '').trim()
   
-  const staticMatch = ALEGRA_CITY_NORMALIZATIONS[cityKey]
-  if (staticMatch) {
-    console.log(`📍 Ciudad encontrada en diccionario estático: ${cityName} → ${staticMatch.city}`)
-    return staticMatch
+  // 3. Búsqueda parcial - si contiene alguna ciudad conocida
+  for (const [key, value] of Object.entries(ALEGRA_CITY_NORMALIZATIONS)) {
+    if (normalizedCity.includes(key) || key.includes(normalizedCity)) {
+      console.log(`📍 Ciudad encontrada por coincidencia parcial: ${cityName} → ${value.city}`)
+      return { ...value, wasNormalized: true }
+    }
+  }
+  
+  // 4. Buscar por similitud (Levenshtein)
+  const similarMatch = findSimilarCity(cityName)
+  if (similarMatch) {
+    return { ...similarMatch, wasNormalized: true }
   }
 
-  // 4. Bogotá fallback
-  if (/\bbogot[aá]\b/i.test(normalizedCity)) {
-    return { city: 'Bogotá, D.C.', department: 'Bogotá D.C.' }
+  // 5. Usar provincia de Shopify como departamento (si disponible y no es Bogotá)
+  if (provinceName && !provinceName.toLowerCase().includes('bogot')) {
+    console.log(`📍 Usando provincia de Shopify (sin normalizar): ${cityName}, ${provinceName}`)
+    return { city: cityName, department: provinceName, wasNormalized: false }
   }
 
-  console.log(`⚠️ Ciudad no encontrada, usando como está: ${cityName}`)
-  return { city: cityName, department: provinceName || 'Bogotá D.C.' }
+  // 6. Bogotá fallback
+  if (/\bbogot[aá]?\b/i.test(normalizedCity)) {
+    return { city: 'Bogotá, D.C.', department: 'Bogotá D.C.', wasNormalized: true }
+  }
+
+  console.log(`⚠️ Ciudad no encontrada, requiere revisión manual: ${cityName}`)
+  return { city: cityName, department: provinceName || 'Bogotá D.C.', wasNormalized: false }
 }
 
 function normalizeIdentificationType(type: unknown): string {
@@ -674,8 +841,13 @@ async function findPendingOrders(supabase: any): Promise<Array<{
     .neq('source_name', 'pos')  // Excluir POS
     // Excluir pedidos con demasiados reintentos (máximo 3)
     .or('auto_invoice_retries.is.null,auto_invoice_retries.lt.3')
-    // NUEVO: Filtrar tags en SQL (más eficiente que en JavaScript)
+    // Filtrar tags de contraentrega (múltiples patrones)
     .not('tags', 'ilike', '%contraentrega%')
+    .not('tags', 'ilike', '%cod%')
+    .not('tags', 'ilike', '%cash on delivery%')
+    .not('tags', 'ilike', '%pago contra entrega%')
+    .not('tags', 'ilike', '%contra entrega%')
+    // Filtrar tags de estado
     .not('tags', 'ilike', '%facturado%')
     .not('tags', 'ilike', '%auto_invoice_failed%')
     .gte('created_at', sevenDaysAgo)
@@ -732,6 +904,7 @@ async function processAutoInvoice(
 
     // 3. Double-check eligibility
     const tags = (orderData.tags || '').toLowerCase()
+    const rawData = orderData.raw_data || {}
     
     if (orderData.financial_status !== 'paid') {
       console.log('⏭️ Pedido no está pagado, saltando')
@@ -744,9 +917,25 @@ async function processAutoInvoice(
       return { success: false, error: 'Pedido POS' }
     }
     
-    if (tags.includes('contraentrega')) {
-      console.log('⏭️ Pedido es contraentrega, saltando')
-      return { success: false, error: 'Pedido contraentrega' }
+    // ============= VALIDACIÓN MEJORADA DE CONTRAENTREGA =============
+    // 1. Verificar tags (múltiples patrones)
+    const codTagPatterns = ['contraentrega', 'cod', 'cash on delivery', 'pago contra entrega', 'contra entrega']
+    const hasCODTag = codTagPatterns.some(pattern => tags.includes(pattern))
+    
+    // 2. Verificar gateway de pago
+    const paymentGateway = (rawData.gateway || rawData.payment_gateway_names?.[0] || '').toLowerCase()
+    const isCODGateway = codTagPatterns.some(pattern => paymentGateway.includes(pattern)) || paymentGateway === 'manual'
+    
+    // 3. Verificar shipping tag (algunos usan esto)
+    const shippingLines = rawData.shipping_lines || []
+    const shippingTitle = shippingLines.map((l: any) => (l.title || '').toLowerCase()).join(' ')
+    const hasCODShipping = codTagPatterns.some(pattern => shippingTitle.includes(pattern))
+    
+    // Si tiene cualquier indicador de contraentrega, saltar
+    // IMPORTANTE: Aunque el pedido esté pagado, si fue originalmente contraentrega NO se factura automáticamente
+    if (hasCODTag || hasCODShipping) {
+      console.log(`⏭️ Pedido #${orderData.order_number} omitido: es Contraentrega`)
+      return { success: false, error: 'Pedido contraentrega - no facturable automáticamente' }
     }
     
     if (tags.includes('facturado')) {
