@@ -1188,7 +1188,50 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationHistory, organizationId } = await req.json();
+    const body = await req.json();
+    const { action, message, conversationHistory, organizationId } = body;
+    
+    // Handle test-connection action - just verify API key exists
+    if (action === 'test-connection') {
+      console.log("sewdle-copilot: Testing connection for org:", organizationId);
+      
+      if (!LOVABLE_API_KEY) {
+        return new Response(
+          JSON.stringify({ connected: false, error: "LOVABLE_API_KEY is not configured" }), 
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Verify the API key is valid by making a simple models list request
+      try {
+        const modelsResponse = await fetch("https://ai.gateway.lovable.dev/v1/models", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          },
+        });
+        
+        if (modelsResponse.ok) {
+          return new Response(
+            JSON.stringify({ connected: true, success: true }), 
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          const errorText = await modelsResponse.text();
+          console.error("Lovable AI gateway validation failed:", modelsResponse.status, errorText);
+          return new Response(
+            JSON.stringify({ connected: false, error: "API Key inválida" }), 
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } catch (fetchError) {
+        console.error("Error validating Lovable AI key:", fetchError);
+        return new Response(
+          JSON.stringify({ connected: false, error: "Error al validar API Key" }), 
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
