@@ -109,9 +109,9 @@ const MessagingAIPage = () => {
         'sticker': 'sticker',
       };
       
-      // Parse metadata safely
-      const metadata = typeof msg.metadata === 'object' && msg.metadata !== null 
-        ? msg.metadata as { original_media_id?: string; media_download_error?: string }
+      // Parse metadata safely - keep all fields for media retry logic
+      const metadata = (typeof msg.metadata === 'object' && msg.metadata !== null)
+        ? (msg.metadata as Record<string, unknown>)
         : undefined;
       
       return {

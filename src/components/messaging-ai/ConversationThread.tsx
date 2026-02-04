@@ -47,6 +47,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+interface MessageMetadata {
+  original_media_id?: string;
+  media_download_error?: string;
+  // Meta webhook may embed the original message here
+  original_message?: Record<string, { id?: string } | undefined>;
+  // Or individual media objects
+  image?: { id?: string };
+  audio?: { id?: string };
+  video?: { id?: string };
+  sticker?: { id?: string };
+  document?: { id?: string };
+  [key: string]: unknown;
+}
+
 interface Message {
   id?: string;
   role: 'user' | 'assistant';
@@ -57,10 +71,7 @@ interface Message {
   mediaMimeType?: string;
   replyToMessageId?: string;
   replyToContent?: string;
-  metadata?: {
-    original_media_id?: string;
-    media_download_error?: string;
-  };
+  metadata?: MessageMetadata;
 }
 
 interface Conversation {
@@ -626,7 +637,17 @@ export const ConversationThread = ({
   const renderMediaContent = (message: Message) => {
     const { mediaUrl, mediaType, mediaMimeType, metadata } = message;
     const hasMediaError = !mediaUrl && metadata?.media_download_error;
-    const canRetry = !!message.id && !!metadata?.original_media_id;
+
+    // Check multiple places for original_media_id (webhook may store in different locations)
+    const originalMediaId = metadata?.original_media_id
+      || metadata?.image?.id
+      || metadata?.audio?.id
+      || metadata?.video?.id
+      || metadata?.sticker?.id
+      || metadata?.document?.id
+      || metadata?.original_message?.[mediaType || '']?.id
+      || null;
+    const canRetry = !!message.id && !!originalMediaId;
 
     // Handle image
     if (mediaType === 'image') {
