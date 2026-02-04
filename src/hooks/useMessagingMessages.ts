@@ -26,71 +26,8 @@ export const useMessagingMessages = (conversationId: string | null) => {
     enabled: !!conversationId,
   });
 
-  // Subscribe to realtime updates for messages - optimistic cache update
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const channel = supabase
-      .channel(`messaging-messages-${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messaging_messages',
-          filter: `conversation_id=eq.${conversationId}`
-        },
-        (payload) => {
-          const newMessage = payload.new as MessagingMessage;
-          
-          // Optimistically update cache without refetch - no flickering
-          queryClient.setQueryData(
-            ['messaging-messages', conversationId],
-            (oldMessages: MessagingMessage[] | undefined) => {
-              if (!oldMessages) return [newMessage];
-              
-              // Avoid duplicates
-              const exists = oldMessages.some(m => m.id === newMessage.id);
-              if (exists) return oldMessages;
-              
-              return [...oldMessages, newMessage];
-            }
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messaging_messages',
-          filter: `conversation_id=eq.${conversationId}`
-        },
-        (payload) => {
-          const updatedMessage = payload.new as MessagingMessage;
-
-          // Update cache in place (e.g. when media_url is filled after retry)
-          queryClient.setQueryData(
-            ['messaging-messages', conversationId],
-            (oldMessages: MessagingMessage[] | undefined) => {
-              if (!oldMessages) return [updatedMessage];
-
-              const idx = oldMessages.findIndex(m => m.id === updatedMessage.id);
-              if (idx === -1) return [...oldMessages, updatedMessage];
-
-              const copy = oldMessages.slice();
-              copy[idx] = { ...(copy[idx] as any), ...(updatedMessage as any) };
-              return copy;
-            }
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [conversationId, queryClient]);
+  // Realtime is now handled by useMessagingRealtime hook in MessagingAIPage
+  // This prevents duplicate subscriptions and centralizes connection management
 
   const sendMessage = useMutation({
     mutationFn: async ({ message, mediaFile, mediaType, replyToMessageId }: { message: string; mediaFile?: File; mediaType?: string; replyToMessageId?: string }) => {
