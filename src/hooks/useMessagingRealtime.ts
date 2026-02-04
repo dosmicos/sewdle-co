@@ -241,6 +241,14 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
     if (!foundInAnyCache) {
       void ensureConversationInCache(conversationId);
     }
+
+    // Safety net: also refetch conversations list (covers cases where local cache isn't mounted yet
+    // or server-side triggers update additional fields like tags/status).
+    queryClient.invalidateQueries({
+      queryKey: ['messaging-conversations'],
+      exact: false,
+      refetchType: 'active',
+    });
   }, [queryClient, markConnectedFromEvent, upsertConversationAcrossCaches, ensureConversationInCache]);
 
   const handleMessageUpdate = useCallback((payload: { new: MessagingMessage }) => {
@@ -302,6 +310,9 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
 
   const setupSubscription = useCallback(() => {
     if (!enabled || isUnmountedRef.current) return;
+    // Wait until we know the organization. Subscribing too early can lead to misleading TIMEOUT states
+    // while auth/org context is still initializing.
+    if (!organizationId) return;
 
     // Clean up existing channel
     if (channelRef.current) {
@@ -404,7 +415,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
       });
 
     channelRef.current = channel;
-  }, [enabled, handleNewMessage, handleMessageUpdate, handleConversationChange, clearTimers, startPolling, stopPolling, organizationId]);
+  }, [enabled, organizationId, handleNewMessage, handleMessageUpdate, handleConversationChange, clearTimers, startPolling, stopPolling]);
 
   // Initial setup and cleanup
   useEffect(() => {
@@ -425,7 +436,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
         channelRef.current = null;
       }
     };
-  }, [enabled]); // Only re-run when enabled changes
+  }, [enabled, organizationId, setupSubscription, clearTimers, stopPolling]);
 
   // Manual reconnect function
   const reconnect = useCallback(() => {

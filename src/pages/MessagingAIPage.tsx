@@ -35,7 +35,9 @@ const MessagingAIPage = () => {
   // Centralized realtime subscription for all messaging
   const { connectionStatus, reconnect } = useMessagingRealtime({
     organizationId: currentOrganization?.id,
-    enabled: activeView === 'conversations',
+    // Avoid subscribing before OrganizationContext resolves; early subscriptions can appear as TIMED_OUT
+    // and leave the UI in a misleading "Conexión perdida" state.
+    enabled: activeView === 'conversations' && !!currentOrganization?.id,
     activeConversationId: selectedConversation,
   });
 
@@ -266,7 +268,9 @@ const MessagingAIPage = () => {
         </div>
 
         {/* Connection status banner */}
-        <RealtimeConnectionBanner status={connectionStatus} onReconnect={reconnect} />
+        {activeView === 'conversations' && currentOrganization?.id && (
+          <RealtimeConnectionBanner status={connectionStatus} onReconnect={reconnect} />
+        )}
 
         {/* Content area */}
         <div className="flex-1 overflow-auto p-6 space-y-6">
