@@ -19,6 +19,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell, Tooltip } from 'recharts';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
 import ShopifyOrderStatsCard from '@/components/dashboard/ShopifyOrderStatsCard';
+import APIStatusCard from '@/components/APIStatusCard';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -93,6 +94,11 @@ const AdminDashboard = () => {
             <span>Actualizar</span>
           </Button>
         </div>
+      </div>
+
+      {/* API Status Card */}
+      <div className="max-w-md">
+        <APIStatusCard />
       </div>
 
       {/* Stats Cards */}
