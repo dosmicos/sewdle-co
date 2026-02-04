@@ -21,98 +21,76 @@ const AppSidebar = () => {
   // Verificar si es organización Dosmicos para mostrar OKRs
   const { isDosmicos } = useIsDosmicos();
   
-  const adminMenuItems = [
-    { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    ...(isDosmicos ? [{ title: 'OKRs', url: '/okrs', icon: Target }] : []),
-    { title: 'Órdenes', url: '/orders', icon: FileText },
-    { title: 'Insumos', url: '/supplies', icon: Package2 },
-    { title: 'Talleres', url: '/workshops', icon: Building2 },
-    { title: 'Productos', url: '/products', icon: Package },
-    { title: 'Entregas', url: '/deliveries', icon: Truck },
+  // Definir todos los items del menú con sus permisos requeridos
+  const allMenuItems = [
+    { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, module: 'dashboard', alwaysShow: true },
+    ...(isDosmicos ? [{ title: 'OKRs', url: '/okrs', icon: Target, module: 'okrs', alwaysShow: false }] : []),
+    { title: 'Órdenes', url: '/orders', icon: FileText, module: 'orders', alwaysShow: false },
+    { title: 'Insumos', url: '/supplies', icon: Package2, module: 'insumos', alwaysShow: false },
+    { title: 'Talleres', url: '/workshops', icon: Building2, module: 'workshops', alwaysShow: false },
+    { title: 'Productos', url: '/products', icon: Package, module: 'products', alwaysShow: false },
+    { title: 'Entregas', url: '/deliveries', icon: Truck, module: 'deliveries', alwaysShow: false },
+    { title: 'Picking & Packing', url: '/picking-packing', icon: PackageSearch, module: 'picking', alwaysShow: false },
+    { title: 'Shopify', url: '/shopify', icon: ShoppingCart, module: 'shopify', alwaysShow: false },
+    { title: 'Reposición IA', url: '/replenishment', icon: Brain, module: 'replenishment', alwaysShow: false },
+    { title: 'Reclutamiento', url: '/prospects', icon: UserPlus, module: 'recruitment', alwaysShow: false },
+    { title: 'Finanzas', url: '/financial', icon: DollarSign, module: 'finances', alwaysShow: false },
+    { title: 'Alegra', url: '/alegra', icon: Receipt, module: 'alegra', alwaysShow: false },
+    { title: 'Mensajería IA', url: '/whatsapp-ai', icon: MessageSquare, module: 'messaging', alwaysShow: false },
+    { title: 'APIs', url: '/apis', icon: Wifi, module: 'apis', alwaysShow: false },
+    { title: 'Usuarios & Roles', url: '/users-roles', icon: Users, module: 'users', alwaysShow: false }
+  ];
+
+  // Mapeo de módulos del menú a nombres de permisos en la DB (en minúsculas, como están en la DB)
+  const moduleToPermissionMap: Record<string, string> = {
+    'dashboard': 'dashboard',
+    'orders': 'orders',
+    'insumos': 'insumos',
+    'workshops': 'workshops',
+    'products': 'products',
+    'deliveries': 'deliveries',
+    'picking': 'picking y packing',
+    'shopify': 'shopify',
+    'replenishment': 'replenishment',
+    'recruitment': 'prospects',
+    'finances': 'finances',
+    'messaging': 'messaging',
+    'users': 'users',
+    'alegra': 'alegra',
+    'apis': 'apis'
+  };
+
+  // Función para verificar si el usuario tiene permiso para ver un módulo
+  const canViewModule = (module: string): boolean => {
+    // Admins ven todo
+    if (isAdmin()) return true;
     
-    { title: 'Shopify', url: '/shopify', icon: ShoppingCart },
-    { title: 'Reposición IA', url: '/replenishment', icon: Brain },
-    { title: 'Reclutamiento', url: '/prospects', icon: UserPlus },
-    { title: 'Finanzas', url: '/financial', icon: DollarSign },
-    { title: 'Alegra', url: '/alegra', icon: Receipt },
-    { title: 'Mensajería IA', url: '/whatsapp-ai', icon: MessageSquare },
-    { title: 'APIs', url: '/apis', icon: Wifi },
-    { title: 'Usuarios & Roles', url: '/users-roles', icon: Users }
-  ];
-  
-  const workshopMenuItems = [
-    { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'Mis Órdenes', url: '/orders', icon: FileText },
-    { title: 'Mis Insumos', url: '/supplies', icon: Package2 },
-    { title: 'Mis Entregas', url: '/deliveries', icon: Truck }
-  ];
+    // Buscar el nombre del permiso correspondiente
+    const permissionName = moduleToPermissionMap[module];
+    if (!permissionName) return false;
+    
+    return hasPermission(permissionName, 'view');
+  };
 
-  const designerMenuItems = [
-    { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    ...(isDosmicos ? [{ title: 'OKRs', url: '/okrs', icon: Target }] : []),
-    { title: 'Órdenes', url: '/orders', icon: FileText },
-    { title: 'Insumos', url: '/supplies', icon: Package2 },
-    { title: 'Productos', url: '/products', icon: Package },
-    { title: 'Talleres', url: '/workshops', icon: Building2 },
-    { title: 'Entregas', url: '/deliveries', icon: Truck },
-    { title: 'Reposición IA', url: '/replenishment', icon: Brain },
-    { title: 'Reclutamiento', url: '/prospects', icon: UserPlus },
-    { title: 'Finanzas', url: '/financial', icon: DollarSign },
-    { title: 'Shopify', url: '/shopify', icon: ShoppingCart },
-    { title: 'Mensajería IA', url: '/whatsapp-ai', icon: MessageSquare }
-  ];
-
-  const qcLeaderMenuItems = [
-    { title: 'Mi Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'Órdenes', url: '/orders', icon: FileText },
-    { title: 'Talleres', url: '/workshops', icon: Building2 },
-    { title: 'Entregas', url: '/deliveries', icon: Truck },
-    { title: 'Picking & Packing', url: '/picking-packing', icon: PackageSearch }
-  ];
-  
-  // Determinar qué menú mostrar según el rol
+  // Filtrar items del menú según permisos
   let menuItems = [];
   let userTypeLabel = '';
   let userIcon = Building2;
-  
+
   if (isAdmin()) {
-    menuItems = adminMenuItems;
+    // Administradores ven todo
+    menuItems = allMenuItems;
     userTypeLabel = 'Administrador';
     userIcon = Building2;
-  } else if (isDesigner()) {
-    menuItems = designerMenuItems.filter(item => {
-      // Filtrar elementos del menú según permisos específicos
-      switch (item.url) {
-        case '/orders':
-          return hasPermission('orders', 'view');
-        case '/supplies':
-          return hasPermission('insumos', 'view') && canAccessFeature('orders');
-        case '/products':
-          return hasPermission('products', 'view') && canAccessFeature('orders');
-        case '/workshops':
-          return hasPermission('workshops', 'view') && canAccessFeature('workshops');
-        case '/deliveries':
-          return hasPermission('deliveries', 'view') && canAccessFeature('orders');
-        case '/replenishment':
-          return hasPermission('replenishment', 'view') && canAccessFeature('advanced_analytics');
-        case '/financial':
-          return hasPermission('finances', 'view') && canAccessFeature('financial_reports');
-        case '/shopify':
-          return hasPermission('shopify', 'view') && canAccessFeature('shopify_integration');
-        default:
-          return true;
-      }
-    });
-    userTypeLabel = 'Diseñador';
-    userIcon = Palette;
-  } else if (isQCLeader()) {
-    menuItems = qcLeaderMenuItems;
-    userTypeLabel = 'Líder QC';
-    userIcon = Shield;
+  } else if (isDesigner() || isQCLeader()) {
+    // Diseñadores y Líderes QC usan permisos pero con menú completo filtrado
+    menuItems = allMenuItems.filter(item => item.alwaysShow || canViewModule(item.module));
+    userTypeLabel = isDesigner() ? 'Diseñador' : 'Líder QC';
+    userIcon = isDesigner() ? Palette : Shield;
   } else {
-    // Usuario tipo Taller
-    menuItems = workshopMenuItems;
-    userTypeLabel = 'Taller';
+    // Otros roles (Atención al Cliente, Calidad, etc.) usan permisos dinámicos
+    menuItems = allMenuItems.filter(item => item.alwaysShow || canViewModule(item.module));
+    userTypeLabel = user?.role || 'Usuario';
     userIcon = Building2;
   }
   
