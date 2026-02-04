@@ -355,6 +355,47 @@ const hasFacturadoTag = (order: ShopifyOrderForInvoice): boolean => {
   return tagsArray.includes('FACTURADO');
 };
 
+// Helper to check if order is Cash on Delivery (Contraentrega)
+const isContraentrega = (order: ShopifyOrderForInvoice): boolean => {
+  // Check tags for COD indicators
+  if (order.tags) {
+    const tagsLower = order.tags.toLowerCase();
+    if (
+      tagsLower.includes('contraentrega') ||
+      tagsLower.includes('cod') ||
+      tagsLower.includes('cash on delivery') ||
+      tagsLower.includes('pago contra entrega')
+    ) {
+      return true;
+    }
+  }
+  
+  // Check financial status
+  if (order.financial_status === 'pending') {
+    return true;
+  }
+  
+  // Check raw_data for payment gateway
+  const rawData = (order as any).raw_data;
+  if (rawData) {
+    const gateway = (rawData.gateway || rawData.payment_gateway_names?.[0] || '').toLowerCase();
+    if (
+      gateway.includes('contraentrega') ||
+      gateway.includes('cod') ||
+      gateway.includes('cash on delivery') ||
+      gateway.includes('pago contra entrega') ||
+      gateway === 'manual'
+    ) {
+      // Only if also pending payment
+      if (order.financial_status === 'pending') {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+};
+
 // Helper function to add FACTURADO tag to Shopify order after successful DIAN stamp
 // Uses add_tags action which merges using Shopify as source of truth
 const addFacturadoTag = async (shopifyOrderId: number): Promise<void> => {
@@ -636,7 +677,7 @@ const BulkInvoiceCreator = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<Map<string, InvoiceResult>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'stamped'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'stamped' | 'cod'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
   
@@ -654,6 +695,7 @@ const BulkInvoiceCreator = () => {
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingTags, setIsSyncingTags] = useState(false);
+  const [showCODOrders, setShowCODOrders] = useState(false); // Filter to show/hide COD orders
   
   // Alegra catalog cache
   const alegraItemsCache = useRef<AlegraItem[]>([]);
@@ -1080,6 +1122,11 @@ const BulkInvoiceCreator = () => {
   const getFilteredOrders = useMemo(() => {
     let filtered = orders;
     
+    // Filter out COD orders unless explicitly showing them
+    if (!showCODOrders) {
+      filtered = filtered.filter(o => !isContraentrega(o));
+    }
+    
     // Filter by status
     if (filterStatus === 'pending') {
       // Pending = no stamped AND no invoice number AND no FACTURADO tag
@@ -1087,6 +1134,9 @@ const BulkInvoiceCreator = () => {
     } else if (filterStatus === 'stamped') {
       // Stamped = has invoice number OR is stamped OR has FACTURADO tag
       filtered = filtered.filter(o => o.alegra_stamped || o.alegra_invoice_number || hasFacturadoTag(o));
+    } else if (filterStatus === 'cod') {
+      // Only COD orders
+      filtered = orders.filter(o => isContraentrega(o));
     }
     
     // Filter by search term
@@ -1103,7 +1153,7 @@ const BulkInvoiceCreator = () => {
     }
     
     return filtered;
-  }, [orders, filterStatus, searchTerm]);
+  }, [orders, filterStatus, searchTerm, showCODOrders]);
 
   // Compute valid selected count - only count orders that exist, are not stamped, don't have an invoice number, and don't have FACTURADO tag
   const validSelectedCount = useMemo(() => {
@@ -2439,8 +2489,9 @@ const BulkInvoiceCreator = () => {
     await processInvoices(validOrderIds);
   };
 
-  const pendingCount = orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o)).length;
+  const pendingCount = orders.filter(o => !o.alegra_stamped && !o.alegra_invoice_number && !hasFacturadoTag(o) && !isContraentrega(o)).length;
   const stampedCount = orders.filter(o => o.alegra_stamped || o.alegra_invoice_number || hasFacturadoTag(o)).length;
+  const codCount = orders.filter(o => isContraentrega(o)).length;
 
   if (isLoading) {
     return (
@@ -2463,27 +2514,35 @@ const BulkInvoiceCreator = () => {
             className="pl-10"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant={filterStatus === 'all' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setFilterStatus('all')}
+            onClick={() => { setFilterStatus('all'); setShowCODOrders(false); }}
           >
-            Todos ({orders.length})
+            Facturables ({orders.filter(o => !isContraentrega(o)).length})
           </Button>
           <Button
             variant={filterStatus === 'pending' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setFilterStatus('pending')}
+            onClick={() => { setFilterStatus('pending'); setShowCODOrders(false); }}
           >
             Pendientes ({pendingCount})
           </Button>
           <Button
             variant={filterStatus === 'stamped' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setFilterStatus('stamped')}
+            onClick={() => { setFilterStatus('stamped'); setShowCODOrders(false); }}
           >
             Emitidas ({stampedCount})
+          </Button>
+          <Button
+            variant={filterStatus === 'cod' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setFilterStatus('cod'); setShowCODOrders(true); }}
+            className={filterStatus === 'cod' ? 'bg-amber-600 hover:bg-amber-700' : ''}
+          >
+            Contraentrega ({codCount})
           </Button>
         </div>
       </div>
@@ -2615,9 +2674,16 @@ const BulkInvoiceCreator = () => {
                               >
                                 #{order.order_number}
                               </button>
-                              <Badge variant="outline" className={order.financial_status === 'paid' ? 'text-green-600' : 'text-amber-600'}>
-                                {order.financial_status === 'paid' ? 'Pagado' : 'Contra entrega'}
-                              </Badge>
+                              {isContraentrega(order) ? (
+                                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-400">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Contraentrega
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className={order.financial_status === 'paid' ? 'text-green-600' : 'text-amber-600'}>
+                                  {order.financial_status === 'paid' ? 'Pagado' : 'Pendiente'}
+                                </Badge>
+                              )}
                               {isStamped && order.alegra_cufe && (
                                 <Badge className="bg-green-600">
                                   <CheckCircle className="h-3 w-3 mr-1" />
