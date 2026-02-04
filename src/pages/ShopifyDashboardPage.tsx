@@ -9,6 +9,7 @@ import { CustomerAnalyticsTable } from '@/components/CustomerAnalyticsTable';
 import { ProductAnalyticsTable } from '@/components/ProductAnalyticsTable';
 import { ShopifyRealTimeStats } from '@/components/ShopifyRealTimeStats';
 import { ShopifyIntegrationStatus } from '@/components/ShopifyIntegrationStatus';
+import APIStatusCard from '@/components/APIStatusCard';
 import ProductBarcodeModal from '@/components/shopify/ProductBarcodeModal';
 
 export const ShopifyDashboardPage: React.FC = () => {
@@ -65,6 +66,11 @@ export const ShopifyDashboardPage: React.FC = () => {
 
       {/* Integration Status */}
       <ShopifyIntegrationStatus />
+
+      {/* API Status */}
+      <div className="w-full max-w-md">
+        <APIStatusCard />
+      </div>
 
       {/* Stats Overview */}
       <ShopifyRealTimeStats />
