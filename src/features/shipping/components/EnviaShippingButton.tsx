@@ -671,8 +671,49 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     );
   };
 
+  // Manual label check function for "Verificar guía" button
+  const handleVerifyExistingLabel = useCallback(async () => {
+    if (!currentOrganization?.id || !shopifyOrderId) return;
+    setHasChecked(false);
+    const label = await getExistingLabel(shopifyOrderId, currentOrganization.id);
+    setHasChecked(true);
+    onLabelChange?.(label);
+  }, [currentOrganization?.id, shopifyOrderId, getExistingLabel, onLabelChange]);
+
+  // Show IDLE state - user must click to verify/quote
+  // No longer shows loading on initial render - user triggers actions manually
+  if (!hasChecked && !isLoadingLabel) {
+    return (
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="flex-1"
+            onClick={handleVerifyExistingLabel}
+          >
+            <Truck className="h-4 w-4 mr-2" />
+            Verificar Guía
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="flex-1"
+            onClick={handleRefreshQuotes}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Cotizar Envío
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground text-center">
+          Puedes continuar preparando el pedido mientras tanto
+        </p>
+      </div>
+    );
+  }
+
   // Show loading state while checking for existing label
-  if (isLoadingLabel || !hasChecked) {
+  if (isLoadingLabel) {
     return (
       <Button variant="outline" disabled className="w-full">
         <Loader2 className="h-4 w-4 animate-spin mr-2" />

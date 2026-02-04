@@ -1,12 +1,26 @@
 # Memory: features/picking-packing/shipping-quote-manual-trigger
-Updated: 2026-02-03
+Updated: 2026-02-04
 
-Shipping quote requests in the Picking & Packing module are now **completely manual**. No automatic quote loading occurs when an order is opened. Instead:
+The Picking & Packing module now has **completely separated and manual** shipping operations:
 
-1. **Idle State**: Shows a "Cotizar Envío" button + a compact carrier dropdown with basic options (Auto, Coordinadora, Inter Rápido, Deprisa)
-2. **User Action Required**: User must click "Cotizar Envío" to fetch quotes from Envia.com API
-3. **Single Attempt**: Each click triggers a single API call with 8-second timeout, no automatic retries
-4. **Error State**: If the API fails, a prominent Alert shows with "Reintentar" button
-5. **Success State**: Shows full carrier selector with prices and delivery types
+## Product Loading (Independent)
+- Uses new `usePickingLineItems` hook with React Query
+- 30-second staleTime for instant loading of visited orders
+- 10-second timeout - shows "Error al cargar productos" with "Reintentar" button on failure
+- Completely independent of Envia.com API calls
 
-This change prevents resource exhaustion and "buggy" behavior from excessive API calls when rapidly switching between orders. Users can still create labels without quotes by selecting a carrier from the basic dropdown and clicking "Crear Guía".
+## Shipping Section (100% Manual)
+- **Initial State**: Shows two buttons: "Verificar Guía" and "Cotizar Envío"
+- User must click to trigger any shipping API calls - NO automatic loading
+- "Puedes continuar preparando el pedido mientras tanto" message shown
+- Each button triggers a single API call with 8-second timeout
+
+## Error Handling
+- Product errors show Alert with retry button, don't block rest of modal
+- Shipping errors show orange Alert with "Reintentar" button
+- Shipping failures don't affect product loading or order preparation
+
+## Key Files
+- `src/hooks/usePickingLineItems.ts` - New dedicated hook for line items
+- `src/components/picking/PickingOrderDetailsModal.tsx` - Uses new hook
+- `src/features/shipping/components/EnviaShippingButton.tsx` - Manual buttons
