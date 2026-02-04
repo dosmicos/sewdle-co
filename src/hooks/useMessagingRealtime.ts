@@ -52,7 +52,8 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
   const [lastConnectedAt, setLastConnectedAt] = useState<Date | null>(null);
   
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isUnmountedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
@@ -70,9 +71,13 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
 
   // Clear all timers
   const clearTimers = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -117,11 +122,32 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
     }
   }, [clearTimers, stopPolling]);
 
-  const upsertConversationAcrossCaches = useCallback((updater: (old: MessagingConversation[] | undefined) => MessagingConversation[] | undefined) => {
-    queryClient.setQueriesData<MessagingConversation[]>({
-      predicate: (q) => isMessagingConversationsQuery(q.queryKey),
-    }, updater);
-  }, [queryClient]);
+  const upsertConversationAcrossCaches = useCallback(
+    (updater: (old: MessagingConversation[] | undefined) => MessagingConversation[] | undefined) => {
+      // Some screens use different query keys (by channel filter). Update them explicitly to
+      // guarantee sidebar refresh even if predicate-based matching misses a cache.
+      const keys: Array<unknown[]> = [
+        ['messaging-conversations'],
+        ['messaging-conversations', 'all'],
+        ['messaging-conversations', 'whatsapp'],
+        ['messaging-conversations', 'instagram'],
+        ['messaging-conversations', 'messenger'],
+      ];
+
+      keys.forEach((queryKey) => {
+        queryClient.setQueryData<MessagingConversation[]>(queryKey as any, updater as any);
+      });
+
+      // Keep predicate-based update as a safety net for any other keys.
+      queryClient.setQueriesData<MessagingConversation[]>(
+        {
+          predicate: (q) => isMessagingConversationsQuery(q.queryKey),
+        },
+        updater as any
+      );
+    },
+    [queryClient]
+  );
 
   const ensureConversationInCache = useCallback(async (conversationId: string) => {
     if (inflightConversationFetchRef.current.has(conversationId)) return;
@@ -325,18 +351,22 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
     setConnectionStatus('connecting');
     statusRef.current = 'connecting';
 
-    const channelName = `messaging-realtime-${Date.now()}`;
+    // Start polling as a temporary fallback while we connect.
+    // Once we confirm connection (SUBSCRIBED or first event), we stop it.
+    startPolling();
+
+    const channelName = `messaging-realtime-${organizationId}`;
 
     console.log('🔌 Intentando conectar a Supabase Realtime...');
     console.log('🔌 [Realtime] Setting up subscription:', channelName, { organizationId });
 
     // Set connection timeout
-    timeoutRef.current = setTimeout(() => {
+    connectionTimeoutRef.current = setTimeout(() => {
       if (!isUnmountedRef.current && statusRef.current !== 'connected') {
         console.log('⏰ [Realtime] Connection timeout after 10s');
         setConnectionStatus('disconnected');
         statusRef.current = 'disconnected';
-        startPolling();
+        // polling already started; keep it running
       }
     }, CONNECTION_TIMEOUT_MS);
 
@@ -391,7 +421,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
           console.log('❌ [Realtime] Connection error:', status);
           setConnectionStatus('disconnected');
           statusRef.current = 'disconnected';
-          startPolling();
+          // keep polling running while disconnected
           
           // Schedule reconnection with exponential backoff
           const delay = Math.min(3000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
@@ -399,7 +429,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
           
           reconnectAttemptsRef.current += 1;
           
-          timeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = setTimeout(() => {
             if (!isUnmountedRef.current) {
               setConnectionStatus('reconnecting');
               statusRef.current = 'reconnecting';
@@ -410,7 +440,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true, activeCon
           console.log('🔌 [Realtime] Channel closed');
           setConnectionStatus('disconnected');
           statusRef.current = 'disconnected';
-          startPolling();
+          // keep polling running while disconnected
         }
       });
 
