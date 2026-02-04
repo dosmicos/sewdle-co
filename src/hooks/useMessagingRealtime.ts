@@ -12,39 +12,61 @@ interface UseMessagingRealtimeOptions {
   enabled?: boolean;
 }
 
-interface RealtimeState {
-  connectionStatus: ConnectionStatus;
-  lastConnectedAt: Date | null;
-  reconnectAttempts: number;
-}
+const CONNECTION_TIMEOUT_MS = 10000; // 10 seconds timeout
+const POLLING_INTERVAL_MS = 10000; // 10 seconds polling fallback
 
 export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMessagingRealtimeOptions = {}) => {
   const queryClient = useQueryClient();
-  const [state, setState] = useState<RealtimeState>({
-    connectionStatus: 'connecting',
-    lastConnectedAt: null,
-    reconnectAttempts: 0,
-  });
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  const [lastConnectedAt, setLastConnectedAt] = useState<Date | null>(null);
   
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isUnmountedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
 
-  const setConnectionStatus = useCallback((status: ConnectionStatus) => {
-    if (isUnmountedRef.current) return;
-    setState(prev => ({
-      ...prev,
-      connectionStatus: status,
-      lastConnectedAt: status === 'connected' ? new Date() : prev.lastConnectedAt,
-      reconnectAttempts: status === 'connected' ? 0 : prev.reconnectAttempts,
-    }));
+  // Clear all timers
+  const clearTimers = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  // Start polling fallback
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) return; // Already polling
+    
+    console.log('🔄 [Realtime] Starting polling fallback every 10s');
+    
+    pollingIntervalRef.current = setInterval(() => {
+      if (!isUnmountedRef.current) {
+        console.log('🔄 [Realtime] Polling for new messages...');
+        queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['messaging-messages'] });
+      }
+    }, POLLING_INTERVAL_MS);
+  }, [queryClient]);
+
+  // Stop polling
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      console.log('🔄 [Realtime] Stopping polling fallback');
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
   }, []);
 
   const handleNewMessage = useCallback((payload: { new: MessagingMessage }) => {
     const newMessage = payload.new;
     const conversationId = newMessage.conversation_id;
 
-    console.log('[Realtime] New message received:', newMessage.id, 'for conversation:', conversationId);
+    console.log('📨 [Realtime] New message received:', newMessage.id, 'for conversation:', conversationId);
 
     // Update messages cache for the specific conversation
     queryClient.setQueryData(
@@ -102,7 +124,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
     const updatedMessage = payload.new;
     const conversationId = updatedMessage.conversation_id;
 
-    console.log('[Realtime] Message updated:', updatedMessage.id);
+    console.log('📝 [Realtime] Message updated:', updatedMessage.id);
 
     // Update message in cache (e.g., when media_url is filled)
     queryClient.setQueryData(
@@ -121,7 +143,7 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
   }, [queryClient]);
 
   const handleConversationChange = useCallback((payload: { eventType: string; new?: MessagingConversation; old?: { id: string } }) => {
-    console.log('[Realtime] Conversation change:', payload.eventType);
+    console.log('💬 [Realtime] Conversation change:', payload.eventType);
 
     if (payload.eventType === 'INSERT' && payload.new) {
       queryClient.setQueriesData<MessagingConversation[]>(
@@ -166,17 +188,26 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
 
     // Clean up existing channel
     if (channelRef.current) {
+      console.log('🔌 [Realtime] Removing existing channel');
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
+    clearTimers();
     setConnectionStatus('connecting');
 
-    const channelName = organizationId 
-      ? `messaging-realtime-${organizationId}` 
-      : 'messaging-realtime-global';
+    const channelName = `messaging-realtime-${Date.now()}`;
 
-    console.log('[Realtime] Setting up subscription:', channelName);
+    console.log('🔌 [Realtime] Setting up subscription:', channelName);
+
+    // Set connection timeout
+    timeoutRef.current = setTimeout(() => {
+      if (!isUnmountedRef.current && connectionStatus !== 'connected') {
+        console.log('⏰ [Realtime] Connection timeout after 10s');
+        setConnectionStatus('disconnected');
+        startPolling();
+      }
+    }, CONNECTION_TIMEOUT_MS);
 
     const channel = supabase
       .channel(channelName)
@@ -212,89 +243,97 @@ export const useMessagingRealtime = ({ organizationId, enabled = true }: UseMess
         })
       )
       .subscribe((status, err) => {
-        console.log('[Realtime] Subscription status:', status, err);
+        console.log('📡 [Realtime] Subscription status:', status, err || '');
+        
+        if (isUnmountedRef.current) return;
         
         if (status === 'SUBSCRIBED') {
+          console.log('✅ [Realtime] Connected successfully');
+          clearTimers();
+          stopPolling();
           setConnectionStatus('connected');
+          setLastConnectedAt(new Date());
+          reconnectAttemptsRef.current = 0;
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.log('❌ [Realtime] Connection error:', status);
           setConnectionStatus('disconnected');
+          startPolling();
           
           // Schedule reconnection with exponential backoff
-          if (!isUnmountedRef.current) {
-            const delay = Math.min(3000 * Math.pow(2, state.reconnectAttempts), 30000);
-            console.log(`[Realtime] Will reconnect in ${delay}ms`);
-            
-            setState(prev => ({ ...prev, reconnectAttempts: prev.reconnectAttempts + 1 }));
-            
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (!isUnmountedRef.current) {
-                setConnectionStatus('reconnecting');
-                setupSubscription();
-              }
-            }, delay);
-          }
+          const delay = Math.min(3000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          console.log(`🔄 [Realtime] Will attempt reconnect in ${delay}ms`);
+          
+          reconnectAttemptsRef.current += 1;
+          
+          timeoutRef.current = setTimeout(() => {
+            if (!isUnmountedRef.current) {
+              setConnectionStatus('reconnecting');
+              setupSubscription();
+            }
+          }, delay);
         } else if (status === 'CLOSED') {
+          console.log('🔌 [Realtime] Channel closed');
           setConnectionStatus('disconnected');
+          startPolling();
         }
       });
 
     channelRef.current = channel;
-  }, [enabled, organizationId, handleNewMessage, handleMessageUpdate, handleConversationChange, setConnectionStatus, state.reconnectAttempts]);
+  }, [enabled, handleNewMessage, handleMessageUpdate, handleConversationChange, clearTimers, startPolling, stopPolling, connectionStatus]);
 
   // Initial setup and cleanup
   useEffect(() => {
     isUnmountedRef.current = false;
-    setupSubscription();
+    
+    if (enabled) {
+      setupSubscription();
+    }
 
     return () => {
       isUnmountedRef.current = true;
-      
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
+      clearTimers();
+      stopPolling();
       
       if (channelRef.current) {
-        console.log('[Realtime] Cleaning up subscription');
+        console.log('🔌 [Realtime] Cleaning up subscription on unmount');
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [setupSubscription]);
+  }, [enabled]); // Only re-run when enabled changes
 
   // Manual reconnect function
   const reconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    setState(prev => ({ ...prev, reconnectAttempts: 0 }));
+    console.log('🔄 [Realtime] Manual reconnect triggered');
+    clearTimers();
+    stopPolling();
+    reconnectAttemptsRef.current = 0;
     setConnectionStatus('reconnecting');
     setupSubscription();
-  }, [setupSubscription, setConnectionStatus]);
+  }, [clearTimers, stopPolling, setupSubscription]);
 
   // Fetch missed messages when reconnecting
   const fetchMissedMessages = useCallback(async () => {
-    if (!state.lastConnectedAt) return;
+    if (!lastConnectedAt) return;
 
-    console.log('[Realtime] Fetching messages since:', state.lastConnectedAt);
+    console.log('📥 [Realtime] Fetching messages since:', lastConnectedAt);
     
     // Invalidate all messaging queries to get fresh data
     await queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
     await queryClient.invalidateQueries({ queryKey: ['messaging-messages'] });
-  }, [queryClient, state.lastConnectedAt]);
+  }, [queryClient, lastConnectedAt]);
 
   // When reconnected, fetch missed messages
   useEffect(() => {
-    if (state.connectionStatus === 'connected' && state.reconnectAttempts === 0 && state.lastConnectedAt) {
+    if (connectionStatus === 'connected' && lastConnectedAt) {
       fetchMissedMessages();
     }
-  }, [state.connectionStatus, state.reconnectAttempts, state.lastConnectedAt, fetchMissedMessages]);
+  }, [connectionStatus, lastConnectedAt, fetchMissedMessages]);
 
   return {
-    connectionStatus: state.connectionStatus,
-    isConnected: state.connectionStatus === 'connected',
-    isReconnecting: state.connectionStatus === 'reconnecting',
+    connectionStatus,
+    isConnected: connectionStatus === 'connected',
+    isReconnecting: connectionStatus === 'reconnecting',
     reconnect,
   };
 };
