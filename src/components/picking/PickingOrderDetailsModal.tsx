@@ -152,15 +152,34 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < allOrderIds.length - 1;
 
+  // Debounce navigation to avoid firing many requests when user navigates quickly
+  const navigateDebounceRef = useRef<number | null>(null);
+  const debouncedNavigate = useCallback((targetOrderId: string) => {
+    if (navigateDebounceRef.current) {
+      window.clearTimeout(navigateDebounceRef.current);
+    }
+    navigateDebounceRef.current = window.setTimeout(() => {
+      onNavigate(targetOrderId);
+    }, 300);
+  }, [onNavigate]);
+
+  useEffect(() => {
+    return () => {
+      if (navigateDebounceRef.current) {
+        window.clearTimeout(navigateDebounceRef.current);
+      }
+    };
+  }, []);
+
   const handlePrevious = () => {
     if (hasPrevious) {
-      onNavigate(allOrderIds[currentIndex - 1]);
+      debouncedNavigate(allOrderIds[currentIndex - 1]);
     }
   };
 
   const handleNext = () => {
     if (hasNext) {
-      onNavigate(allOrderIds[currentIndex + 1]);
+      debouncedNavigate(allOrderIds[currentIndex + 1]);
     }
   };
 
@@ -200,12 +219,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       if (e.key === 'j' || e.key === 'J') {
         e.preventDefault();
         if (hasPrevious) {
-          onNavigate(allOrderIds[currentIndex - 1]);
+          debouncedNavigate(allOrderIds[currentIndex - 1]);
         }
       } else if (e.key === 'k' || e.key === 'K') {
         e.preventDefault();
         if (hasNext) {
-          onNavigate(allOrderIds[currentIndex + 1]);
+          debouncedNavigate(allOrderIds[currentIndex + 1]);
         }
       }
     };
@@ -217,7 +236,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, onNavigate, localOrder, loadingOrder, updatingStatus]);
+  }, [orderId, currentIndex, allOrderIds, hasPrevious, hasNext, debouncedNavigate, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, focusScanInput]);
 
   // Fetch packed_by user name
   useEffect(() => {

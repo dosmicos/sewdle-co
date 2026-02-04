@@ -24,7 +24,7 @@ interface RawLineItem {
 /**
  * Hook for fetching line items for a Shopify order with caching.
  * - 30 second staleTime for instant loading of visited orders
- * - 10 second timeout with error state
+ * - 15 second timeout with error state
  * - Completely independent of shipping API calls
  */
 export const usePickingLineItems = (
@@ -44,11 +44,14 @@ export const usePickingLineItems = (
     queryFn: async ({ signal }): Promise<ShopifyLineItem[]> => {
       if (!shopifyOrderId) return [];
 
-      // Create timeout promise for 10 seconds
+      const start = performance.now();
+      console.log('⏱️ Iniciando carga de productos para orden', shopifyOrderId);
+
+      // Create timeout promise for 15 seconds
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
           reject(new Error('TIMEOUT: La carga de productos tomó demasiado tiempo'));
-        }, 10000);
+        }, 15000);
       });
 
       const fetchPromise = async (): Promise<ShopifyLineItem[]> => {
@@ -142,7 +145,16 @@ export const usePickingLineItems = (
       };
 
       // Race between fetch and timeout
-      return Promise.race([fetchPromise(), timeoutPromise]);
+      try {
+        const result = await Promise.race([fetchPromise(), timeoutPromise]);
+        const ms = Math.round(performance.now() - start);
+        console.log('✅ Productos cargados para orden', shopifyOrderId, 'en', `${ms}ms`);
+        return result;
+      } catch (err: any) {
+        const ms = Math.round(performance.now() - start);
+        console.error('❌ Error cargando productos para orden', shopifyOrderId, `(${ms}ms):`, err?.message || err);
+        throw err;
+      }
     },
     enabled: !!shopifyOrderId,
     staleTime: 30_000, // 30 seconds - data is considered fresh
