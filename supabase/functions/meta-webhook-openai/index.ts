@@ -6,79 +6,154 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Fetch media from WhatsApp and store in Supabase Storage
-async function fetchMediaUrl(mediaId: string, supabase: any): Promise<{ url: string | null; mimeType: string | null }> {
+// ============== MEDIA DOWNLOAD CONFIG ==============
+const MAX_MEDIA_SIZE = 16 * 1024 * 1024; // 16MB (WhatsApp limit)
+const DOWNLOAD_TIMEOUT_MS = 15000;
+
+function getFileExtension(mimeType: string, messageType: string): string {
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'audio/ogg': 'ogg',
+    'audio/mpeg': 'mp3',
+    'audio/mp4': 'mp4',
+    'audio/amr': 'amr',
+    'video/mp4': 'mp4',
+    'video/3gpp': '3gp',
+    'application/pdf': 'pdf',
+  };
+  if (mimeType && mimeToExt[mimeType.toLowerCase()]) return mimeToExt[mimeType.toLowerCase()];
+
+  const typeDefaults: Record<string, string> = {
+    image: 'jpg',
+    audio: 'ogg',
+    video: 'mp4',
+    sticker: 'webp',
+    document: 'bin',
+  };
+  return typeDefaults[messageType] || 'bin';
+}
+
+function getMediaSubfolder(messageType: string): string {
+  const folders: Record<string, string> = {
+    image: 'images',
+    audio: 'audios',
+    video: 'videos',
+    sticker: 'stickers',
+    document: 'documents',
+  };
+  return folders[messageType] || 'misc';
+}
+
+// Receive media_id -> fetch temp URL -> download -> store in Supabase Storage -> return permanent public URL
+async function fetchMediaUrl(
+  mediaId: string,
+  messageType: string,
+  conversationId: string,
+  supabase: any,
+): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken || !mediaId) {
-    console.log('Missing access token or media ID for media fetch');
-    return { url: null, mimeType: null };
+    return { url: null, mimeType: null, error: 'Missing token or mediaId' };
   }
 
   try {
-    console.log(`Fetching WhatsApp media: ${mediaId}`);
-    
-    // 1. Get media info from Meta
-    const infoResponse = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    
+    // Step 1: media info (temp URL)
+    const infoController = new AbortController();
+    const infoTimeout = setTimeout(() => infoController.abort(), DOWNLOAD_TIMEOUT_MS);
+    let infoResponse: Response;
+    try {
+      infoResponse = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        signal: infoController.signal,
+      });
+    } finally {
+      clearTimeout(infoTimeout);
+    }
+
     if (!infoResponse.ok) {
       const errorText = await infoResponse.text();
-      console.error(`Failed to get media info: ${infoResponse.status}`, errorText);
-      return { url: null, mimeType: null };
-    }
-    
-    const mediaInfo = await infoResponse.json();
-    console.log(`Media info received:`, { url: mediaInfo.url?.substring(0, 50), mime_type: mediaInfo.mime_type });
-    
-    if (!mediaInfo.url) {
-      console.error('No URL in media info response');
-      return { url: null, mimeType: null };
+      console.error(`Failed to get media info (${infoResponse.status}):`, errorText.substring(0, 200));
+      return { url: null, mimeType: null, error: `Meta info error: ${infoResponse.status}` };
     }
 
-    // 2. Download the media binary
-    const mediaResponse = await fetch(mediaInfo.url, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    
+    const mediaInfo = await infoResponse.json();
+    if (!mediaInfo?.url) {
+      return { url: null, mimeType: null, error: 'No URL in media info response' };
+    }
+
+    const mimeType = (mediaInfo?.mime_type || 'application/octet-stream') as string;
+    const fileSize = Number(mediaInfo?.file_size || 0);
+    if (fileSize && fileSize > MAX_MEDIA_SIZE) {
+      return { url: null, mimeType, error: `File too large (${fileSize} bytes)` };
+    }
+
+    // Step 2: download binary
+    const downloadController = new AbortController();
+    const downloadTimeout = setTimeout(() => downloadController.abort(), DOWNLOAD_TIMEOUT_MS);
+    let mediaResponse: Response;
+    try {
+      mediaResponse = await fetch(mediaInfo.url, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        signal: downloadController.signal,
+      });
+    } finally {
+      clearTimeout(downloadTimeout);
+    }
+
     if (!mediaResponse.ok) {
       const errorText = await mediaResponse.text();
-      console.error(`Failed to download media: ${mediaResponse.status}`, errorText);
-      return { url: null, mimeType: null };
+      console.error(`Failed to download media (${mediaResponse.status}):`, errorText.substring(0, 200));
+      return { url: null, mimeType, error: `Download error: ${mediaResponse.status}` };
     }
 
-    // 3. Upload to Supabase Storage
     const arrayBuffer = await mediaResponse.arrayBuffer();
-    const mimeType = mediaInfo.mime_type || 'image/jpeg';
-    const ext = mimeType.split('/')[1]?.split(';')[0] || 'jpg';
-    const fileName = `whatsapp-media/${Date.now()}_${mediaId}.${ext}`;
+    const uint8Array = new Uint8Array(arrayBuffer);
+    if (uint8Array.length === 0) {
+      return { url: null, mimeType, error: 'Empty download' };
+    }
+    if (uint8Array.length > MAX_MEDIA_SIZE) {
+      return { url: null, mimeType, error: `Downloaded file too large (${uint8Array.length} bytes)` };
+    }
 
-    console.log(`Uploading media to storage: ${fileName} (${arrayBuffer.byteLength} bytes)`);
+    // Step 3: upload to storage
+    const ext = getFileExtension(mimeType, messageType);
+    const subfolder = getMediaSubfolder(messageType);
+    const timestamp = Date.now();
+    const path = `whatsapp-media/${subfolder}/${conversationId}/${timestamp}_${mediaId}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('messaging-media')
-      .upload(fileName, new Uint8Array(arrayBuffer), {
+      .upload(path, uint8Array, {
         contentType: mimeType,
         cacheControl: '31536000',
+        upsert: true,
       });
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
-      return { url: null, mimeType: null };
+      return { url: null, mimeType, error: 'Storage upload failed' };
     }
 
-    // 4. Get public URL
     const { data: publicUrlData } = supabase.storage
       .from('messaging-media')
-      .getPublicUrl(fileName);
+      .getPublicUrl(path);
 
     const publicUrl = publicUrlData?.publicUrl;
-    console.log(`Media cached successfully: ${publicUrl?.substring(0, 80)}...`);
+    if (!publicUrl) {
+      return { url: null, mimeType, error: 'No public URL' };
+    }
 
     return { url: publicUrl, mimeType };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      return { url: null, mimeType: null, error: 'Timeout' };
+    }
     console.error('Error fetching WhatsApp media:', error);
-    return { url: null, mimeType: null };
+    return { url: null, mimeType: null, error: error?.message || 'Unknown error' };
   }
 }
 
@@ -765,64 +840,30 @@ serve(async (req) => {
               let messageType = 'text';
               let mediaUrl: string | null = null;
               let mediaMimeType: string | null = null;
+              let mediaId: string | null = null;
+              let mediaError: string | null = null;
               
               if (message.type === 'text') {
                 content = message.text?.body || '';
               } else if (message.type === 'image') {
-                // Extract and download image from WhatsApp
-                const mediaId = message.image?.id;
-                if (mediaId) {
-                  console.log(`Processing inbound image with media_id: ${mediaId}`);
-                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
-                  mediaUrl = mediaResult.url;
-                  mediaMimeType = mediaResult.mimeType;
-                  console.log(`Image processed - URL: ${mediaUrl ? 'saved' : 'failed'}`);
-                }
-                content = message.image?.caption || '';
+                mediaId = message.image?.id || null;
+                content = message.image?.caption || '[Imagen]';
                 messageType = 'image';
               } else if (message.type === 'audio') {
-                // Extract and download audio from WhatsApp
-                const mediaId = message.audio?.id;
-                if (mediaId) {
-                  console.log(`Processing inbound audio with media_id: ${mediaId}`);
-                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
-                  mediaUrl = mediaResult.url;
-                  mediaMimeType = mediaResult.mimeType;
-                }
-                content = '[Audio recibido]';
+                mediaId = message.audio?.id || null;
+                content = '[audio]';
                 messageType = 'audio';
               } else if (message.type === 'document') {
-                // Extract and download document from WhatsApp
-                const mediaId = message.document?.id;
-                if (mediaId) {
-                  console.log(`Processing inbound document with media_id: ${mediaId}`);
-                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
-                  mediaUrl = mediaResult.url;
-                  mediaMimeType = mediaResult.mimeType;
-                }
-                content = message.document?.filename || '[Documento recibido]';
+                mediaId = message.document?.id || null;
+                content = message.document?.filename || '[documento]';
                 messageType = 'document';
               } else if (message.type === 'video') {
-                // Extract and download video from WhatsApp
-                const mediaId = message.video?.id;
-                if (mediaId) {
-                  console.log(`Processing inbound video with media_id: ${mediaId}`);
-                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
-                  mediaUrl = mediaResult.url;
-                  mediaMimeType = mediaResult.mimeType;
-                }
-                content = message.video?.caption || '';
+                mediaId = message.video?.id || null;
+                content = message.video?.caption || '[video]';
                 messageType = 'video';
               } else if (message.type === 'sticker') {
-                // Extract and download sticker from WhatsApp
-                const mediaId = message.sticker?.id;
-                if (mediaId) {
-                  console.log(`Processing inbound sticker with media_id: ${mediaId}`);
-                  const mediaResult = await fetchMediaUrl(mediaId, supabase);
-                  mediaUrl = mediaResult.url;
-                  mediaMimeType = mediaResult.mimeType;
-                }
-                content = '';
+                mediaId = message.sticker?.id || null;
+                content = '[sticker]';
                 messageType = 'sticker';
               } else {
                 content = `[${message.type} recibido]`;
@@ -915,11 +956,28 @@ serve(async (req) => {
                   .from('messaging_conversations')
                   .update({
                     last_message_at: timestamp.toISOString(),
-                    last_message_preview: content.substring(0, 100),
+                    last_message_preview: mediaId
+                      ? (messageType === 'image' ? '📷 Imagen'
+                        : messageType === 'audio' ? '🎵 Audio'
+                        : messageType === 'video' ? '🎬 Video'
+                        : messageType === 'document' ? '📄 Documento'
+                        : messageType === 'sticker' ? '🎭 Sticker'
+                        : content.substring(0, 100))
+                      : content.substring(0, 100),
                     unread_count: (conversation.unread_count || 0) + 1,
                     status: 'active',
                   })
                   .eq('id', conversation.id);
+              }
+
+              // If message includes media_id, download and cache it now (so UI + AI can use permanent URL)
+              if (mediaId && conversation?.id) {
+                console.log(`📥 Downloading inbound media (${messageType}) media_id=${mediaId}`);
+                const res = await fetchMediaUrl(mediaId, messageType, conversation.id, supabase);
+                mediaUrl = res.url;
+                mediaMimeType = res.mimeType;
+                mediaError = res.error || null;
+                console.log(`📦 Inbound media result: url=${mediaUrl ? 'ok' : 'null'} error=${mediaError || 'none'}`);
               }
 
               // Save incoming message with media URL if available
@@ -937,7 +995,11 @@ serve(async (req) => {
                   delivered_at: new Date().toISOString(),
                   media_url: mediaUrl,
                   media_mime_type: mediaMimeType,
-                  metadata: { original_message: message }
+                  metadata: {
+                    original_message: message,
+                    original_media_id: mediaId,
+                    media_download_error: mediaError,
+                  }
                 });
 
               if (msgError) {
