@@ -38,7 +38,8 @@ const MODULE_MAPPING = {
   'finances': 'Finanzas',
   'replenishment': 'Reposición IA',
   'shopify': 'Shopify',
-  'prospects': 'Reclutamiento'
+  'prospects': 'Reclutamiento',
+  'messaging': 'Mensajería IA'
 };
 
 // Mapeo inverso: Interfaz → Base de datos
