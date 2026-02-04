@@ -69,7 +69,9 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     order: cachedOrder, 
     isLoading: isCacheLoading, 
     updateOrderOptimistically,
-    prefetchOrder
+    prefetchOrder,
+    invalidateOrder,
+    refetch: refetchCachedOrder
   } = usePickingOrderDetails(orderId);
   
   // State declarations
@@ -1487,6 +1489,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     shopifyOrderId={effectiveOrder.shopify_order.shopify_order_id}
                     currentTags={effectiveOrder.shopify_order.tags || ''}
                     onTagsUpdate={(newTags) => {
+                      // Update local state for immediate UI response
                       setLocalOrder(prev => prev ? {
                         ...prev,
                         shopify_order: {
@@ -1494,6 +1497,18 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                           tags: newTags
                         }
                       } : prev);
+                      // Also update React Query cache so changes persist across modal opens
+                      updateOrderOptimistically(prev => prev ? {
+                        ...prev,
+                        shopify_order: {
+                          ...prev.shopify_order,
+                          tags: newTags
+                        }
+                      } : prev);
+                      // Force refetch to sync with DB (which gets synced from Shopify)
+                      setTimeout(() => {
+                        refetchCachedOrder();
+                      }, 500);
                     }}
                   />
                 </CardContent>
