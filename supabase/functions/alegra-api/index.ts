@@ -339,12 +339,27 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // Códigos de error transitorios que ameritan reintento
 const TRANSIENT_STATUS_CODES = [429, 502, 503, 504];
 
+// Rate limiting: Alegra API permite ~60 requests/min, espaciar requests para evitar 429
+// Última ejecución por endpoint para throttling básico
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL_MS = 150; // 150ms entre requests = max ~400 req/min
+
 async function makeAlegraRequest(
   endpoint: string,
   method: string = "GET",
   body?: any,
   maxRetries: number = 3,
 ) {
+  // Rate limiting básico: esperar si la última request fue muy reciente
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+    const waitTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest;
+    console.log(`[Alegra] Rate limiting: esperando ${waitTime}ms...`);
+    await sleep(waitTime);
+  }
+  lastRequestTime = Date.now();
+
   const url = `${ALEGRA_API_URL}${endpoint}`;
   let lastError: any = null;
 
@@ -379,12 +394,34 @@ async function makeAlegraRequest(
         data = await response.text();
       }
 
-      // Si es error transitorio y no es el último intento, reintentar con backoff
+      // Si es 429 (rate limit), siempre reintentar con backoff más largo
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        // Para 429, usar delays más largos: 2s, 5s, 10s
+        const delayMs = retryAfter 
+          ? parseInt(retryAfter, 10) * 1000 
+          : Math.min(2000 * Math.pow(2, attempt - 1), 15000);
+        
+        if (attempt < maxRetries) {
+          console.warn(`[Alegra] 429 Rate Limited. Reintentando en ${delayMs}ms...`);
+          await sleep(delayMs);
+          continue;
+        } else {
+          // Último intento, lanzar error específico para que el frontend maneje
+          const err = new Error("Too Many Requests - Alegra API saturada. Espera 30 segundos.");
+          (err as any).status = 429;
+          (err as any).alegra = data;
+          (err as any).retryAfterSec = Math.ceil(delayMs / 1000);
+          throw err;
+        }
+      }
+
+      // Si es otro error transitorio (502, 503, 504) y no es el último intento
       if (TRANSIENT_STATUS_CODES.includes(response.status) && attempt < maxRetries) {
         const retryAfter = response.headers.get('Retry-After');
         const delayMs = retryAfter 
           ? parseInt(retryAfter, 10) * 1000 
-          : Math.min(1000 * Math.pow(2, attempt - 1), 8000); // 1s, 2s, 4s, max 8s
+          : Math.min(1000 * Math.pow(2, attempt - 1), 8000);
         
         console.warn(`[Alegra] ${response.status} transitorio. Reintentando en ${delayMs}ms...`);
         await sleep(delayMs);
@@ -401,10 +438,15 @@ async function makeAlegraRequest(
           (data as any)?.error?.message ||
           (typeof data === "string" ? data : undefined);
 
-        // Mensaje más amigable para 503
-        const errorMessage = response.status === 503
-          ? "Alegra no disponible temporalmente. Intenta en 1 minuto."
-          : (alegraDetail || `Error ${response.status} from Alegra API`);
+        // Mensajes más amigables
+        let errorMessage: string;
+        if (response.status === 503) {
+          errorMessage = "Alegra no disponible temporalmente. Intenta en 1 minuto.";
+        } else if (response.status === 429) {
+          errorMessage = "Alegra saturada. Espera 30 segundos e intenta de nuevo.";
+        } else {
+          errorMessage = alegraDetail || `Error ${response.status} from Alegra API`;
+        }
 
         const err = new Error(errorMessage);
         (err as any).alegra = data;

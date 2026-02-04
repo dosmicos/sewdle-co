@@ -801,6 +801,9 @@ const BulkInvoiceCreator = () => {
     return { alegraItemId: match.id, alegraItemName: match.name };
   };
 
+  // Helper para pausas entre requests (evitar rate limit de Alegra)
+  const throttleDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
   // Sync pending invoices - fetch CUFE from Alegra for invoices that were stamped but not synced
   const syncPendingInvoices = async () => {
     console.log('🔄 Sincronizando facturas pendientes...');
@@ -820,13 +823,30 @@ const BulkInvoiceCreator = () => {
       
       console.log(`📋 Encontradas ${pendingInvoices.length} facturas pendientes de CUFE`);
       let syncedCount = 0;
+      let rateLimitHits = 0;
       
-      for (const invoice of pendingInvoices) {
+      for (let i = 0; i < pendingInvoices.length; i++) {
+        const invoice = pendingInvoices[i];
+        
+        // Throttling: esperar 300ms entre cada request para evitar 429
+        if (i > 0) {
+          await throttleDelay(300);
+        }
+        
         try {
           // 2. Fetch current state from Alegra
           const { data, error } = await supabase.functions.invoke('alegra-api', {
             body: { action: 'get-invoice', data: { id: invoice.alegra_invoice_id } }
           });
+          
+          // Check for rate limit error
+          if (error?.message?.includes('429') || data?.error?.includes('Too Many') || data?.error?.includes('rate limit')) {
+            console.warn(`⚠️ Rate limit alcanzado. Esperando 5 segundos...`);
+            rateLimitHits++;
+            // Si hay rate limit, esperar más y reintentar
+            await throttleDelay(5000);
+            continue;
+          }
           
           if (error || !data?.success) {
             console.warn(`⚠️ Error obteniendo factura ${invoice.alegra_invoice_id}:`, error || data?.error);
@@ -859,9 +879,20 @@ const BulkInvoiceCreator = () => {
           } else {
             console.log(`⏳ Factura ${invoice.alegra_invoice_id} aún sin CUFE en Alegra`);
           }
-        } catch (err) {
-          console.error(`Error sincronizando factura ${invoice.alegra_invoice_id}:`, err);
+        } catch (err: any) {
+          // Check for rate limit in catch block too
+          if (err?.message?.includes('429') || err?.message?.includes('Too Many')) {
+            console.warn(`⚠️ Rate limit en catch. Esperando 5 segundos...`);
+            rateLimitHits++;
+            await throttleDelay(5000);
+          } else {
+            console.error(`Error sincronizando factura ${invoice.alegra_invoice_id}:`, err);
+          }
         }
+      }
+      
+      if (rateLimitHits > 0) {
+        toast.warning(`Se alcanzó el límite de Alegra ${rateLimitHits} veces. Intenta de nuevo en 30 segundos.`);
       }
       
       if (syncedCount > 0) {
