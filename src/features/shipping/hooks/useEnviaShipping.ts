@@ -28,6 +28,11 @@ export const useEnviaShipping = () => {
   const [trackingInfo, setTrackingInfo] = useState<TrackingResponse | null>(null);
   const [matchInfo, setMatchInfo] = useState<CityMatchInfo | null>(null);
 
+  // Keep stable reference to avoid infinite loops in consumers' useEffects
+  const clearMatchInfo = useCallback(() => {
+    setMatchInfo(null);
+  }, []);
+
   // Get all labels for an order (active + history)
   const getExistingLabel = useCallback(async (shopifyOrderId: number, organizationId: string): Promise<ShippingLabel | null> => {
     setIsLoadingLabel(true);
@@ -398,7 +403,7 @@ export const useEnviaShipping = () => {
     
     // City match info
     matchInfo,
-    clearMatchInfo: () => setMatchInfo(null),
+    clearMatchInfo,
     
     // Tracking operations
     isLoadingTracking,
