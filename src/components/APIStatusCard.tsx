@@ -58,14 +58,8 @@ const APIStatusCard = () => {
       // Simple ping with minimal test data
       const { data, error } = await supabase.functions.invoke('envia-quote', {
         body: {
-          organization_id: currentOrganization.id,
-          destination_city: 'BOGOTA',
-          destination_state: 'CUNDINAMARCA',
-          destination_country: 'CO',
-          weight: 1,
-          height: 10,
-          width: 10,
-          length: 10,
+          destination_city: 'Bogota',
+          destination_department: 'Cundinamarca',
           declared_value: 50000
         }
       });
