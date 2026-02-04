@@ -14,7 +14,8 @@ import {
   RefreshCw,
   Award,
   Target,
-  Package
+  Package,
+  Wifi
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell, Tooltip } from 'recharts';
 import { useAdminDashboardData } from '@/hooks/useAdminDashboardData';
@@ -95,12 +96,6 @@ const AdminDashboard = () => {
           </Button>
         </div>
       </div>
-
-      {/* API Status Card */}
-      <div className="max-w-md">
-        <APIStatusCard />
-      </div>
-
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
@@ -171,7 +166,7 @@ const AdminDashboard = () => {
       {/* Main Stats Tabs */}
       <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
         <Tabs defaultValue="produccion" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="produccion" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
               Progreso de la Producción
@@ -183,6 +178,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="shopify" className="flex items-center gap-2">
               <Package className="w-4 h-4" />
               Estadísticas Shopify
+            </TabsTrigger>
+            <TabsTrigger value="apis" className="flex items-center gap-2">
+              <Wifi className="w-4 h-4" />
+              Estado APIs
             </TabsTrigger>
           </TabsList>
 
@@ -296,6 +295,11 @@ const AdminDashboard = () => {
           {/* Tab: Estadísticas Shopify */}
           <TabsContent value="shopify">
             <ShopifyOrderStatsCard embedded />
+          </TabsContent>
+
+          {/* Tab: Estado APIs */}
+          <TabsContent value="apis">
+            <APIStatusCard />
           </TabsContent>
         </Tabs>
       </Card>
