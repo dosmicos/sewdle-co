@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle, Store } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle, Store, RefreshCw, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
 import { usePickingOrderDetails } from '@/hooks/usePickingOrderDetails';
+import { usePickingLineItems } from '@/hooks/usePickingLineItems';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '@/features/shipping';
 import type { EnviaShippingButtonRef } from '@/features/shipping';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface ShopifyLineItem {
   id: string;
@@ -70,12 +72,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     prefetchOrder
   } = usePickingOrderDetails(orderId);
   
+  // State declarations
   const [notes, setNotes] = useState('');
   const [shopifyNote, setShopifyNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingShopifyNote, setIsSavingShopifyNote] = useState(false);
-  const [lineItems, setLineItems] = useState<ShopifyLineItem[]>([]);
-  const [loadingItems, setLoadingItems] = useState(true);
   const [localOrder, setLocalOrder] = useState<PickingOrder | null>(null);
   const [loadingOrder, setLoadingOrder] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -106,6 +107,31 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Ref to hold the latest handleMarkAsPackedAndPrint to avoid stale closure in useEffect
   const handleMarkAsPackedAndPrintRef = useRef<() => void>(() => {});
 
+  // Use cached order as base, fall back to list order - MUST match current orderId
+  const order = orders.find(o => o.id === orderId);
+  const effectiveOrder = useMemo(() => {
+    // Priority: cachedOrder (if matches current), then localOrder (if matches), then list order
+    if (cachedOrder && cachedOrder.id === orderId) return cachedOrder;
+    if (localOrder && localOrder.id === orderId) return localOrder;
+    return order;
+  }, [cachedOrder, localOrder, order, orderId]);
+
+  // Use React Query for line items - completely independent of shipping
+  const rawLineItems = useMemo(() => 
+    effectiveOrder?.shopify_order?.raw_data?.line_items || [],
+    [effectiveOrder?.shopify_order?.raw_data?.line_items]
+  );
+  
+  const currentShopifyOrderIdForItems = effectiveOrder?.shopify_order?.shopify_order_id || null;
+  
+  const {
+    lineItems,
+    isLoading: loadingItems,
+    hasError: lineItemsError,
+    isTimeout: lineItemsTimeout,
+    refetch: refetchLineItems
+  } = usePickingLineItems(currentShopifyOrderIdForItems, rawLineItems);
+
   // Prefetch adjacent orders for faster navigation
   useEffect(() => {
     const currentIndex = allOrderIds.indexOf(orderId);
@@ -120,15 +146,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       prefetchOrder(allOrderIds[currentIndex + 1]);
     }
   }, [orderId, allOrderIds, prefetchOrder]);
-
-  // Use cached order as base, fall back to list order - MUST match current orderId
-  const order = orders.find(o => o.id === orderId);
-  const effectiveOrder = useMemo(() => {
-    // Priority: cachedOrder (if matches current), then localOrder (if matches), then list order
-    if (cachedOrder && cachedOrder.id === orderId) return cachedOrder;
-    if (localOrder && localOrder.id === orderId) return localOrder;
-    return order;
-  }, [cachedOrder, localOrder, order, orderId]);
 
   // Navigation logic
   const currentIndex = allOrderIds.indexOf(orderId);
@@ -413,156 +430,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const shippingMethodForAutopack = shippingLinesForAutopack[0]?.title || '';
   const isExpressShipping = shippingMethodForAutopack.toLowerCase().includes('express');
 
-  // NOTE: Auto-pack useEffect moved after handler declarations to avoid reference errors
-
-  // Fetch line items separately - with isCancelled check
-  useEffect(() => {
-    let isCancelled = false;
-    
-    // Helper function to fetch images from Shopify API (optimized)
-    const fetchImageFromShopify = async (productId: number, variantId: number): Promise<string | null> => {
-      try {
-        const { data, error } = await supabase.functions.invoke('get-shopify-variant-image', {
-          body: { product_id: productId, variant_id: variantId }
-        });
-        
-        if (error) {
-          console.error('Error fetching image:', error);
-          return null;
-        }
-        
-        return data?.image_url || null;
-      } catch (error) {
-        console.error('Error fetching image from Shopify:', error);
-        return null;
-      }
-    };
-
-    const fetchLineItems = async () => {
-      // Capture current shopify_order_id at start
-      const currentShopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id;
-      if (!currentShopifyOrderId) return;
-      
-      setLoadingItems(true);
-      try {
-        const { data, error } = await supabase
-          .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id, properties')
-          .eq('shopify_order_id', currentShopifyOrderId);
-        
-        // Check if cancelled or shopify_order_id changed while waiting
-        if (isCancelled || effectiveOrder?.shopify_order?.shopify_order_id !== currentShopifyOrderId) {
-          console.log('🚫 Ignorando line items de orden anterior');
-          return;
-        }
-        
-        if (error) throw error;
-        
-        // Enrich line items - Priority: Shopify API > raw_data > local products
-        const rawLineItems = effectiveOrder.shopify_order?.raw_data?.line_items || [];
-        let enrichedItems = (data as ShopifyLineItem[]).map(item => {
-          const rawItem = rawLineItems.find((ri: any) => ri.id === item.shopify_line_item_id);
-          return {
-            ...item,
-            // Keep fallback image for now, will be replaced by Shopify API image if available
-            fallback_image_url: item.image_url || rawItem?.image?.src || rawItem?.featured_image || null,
-            image_url: null // Reset to fetch from Shopify API
-          };
-        });
-        
-        // Check again before making more async calls
-        if (isCancelled) return;
-        
-        // ALWAYS fetch images from Shopify API for items with product_id and variant_id
-        // This ensures we get the correct variant-specific image
-        const itemsWithShopifyIds = enrichedItems.filter(item => item.product_id && item.variant_id);
-        if (itemsWithShopifyIds.length > 0) {
-          console.log(`🖼️ Fetching ${itemsWithShopifyIds.length} variant images from Shopify API...`);
-          
-          // Get images from Shopify in parallel
-          const imagePromises = itemsWithShopifyIds.map(async (item) => {
-            const shopifyImage = await fetchImageFromShopify(item.product_id!, item.variant_id!);
-            return { sku: item.sku, image_url: shopifyImage };
-          });
-          
-          const shopifyImages = await Promise.all(imagePromises);
-          
-          // Check again after parallel fetch
-          if (isCancelled) return;
-          
-          const skuToShopifyImageMap = new Map(
-            shopifyImages.map(img => [img.sku, img.image_url])
-          );
-          
-          // Apply Shopify API images (priority) or fallback to saved image
-          enrichedItems = enrichedItems.map(item => ({
-            ...item,
-            image_url: skuToShopifyImageMap.get(item.sku) || (item as any).fallback_image_url || null
-          }));
-        } else {
-          // No Shopify IDs available, use fallback images
-          enrichedItems = enrichedItems.map(item => ({
-            ...item,
-            image_url: (item as any).fallback_image_url || null
-          }));
-        }
-        
-        // Check before final async operation
-        if (isCancelled) return;
-        
-        // Final fallback: query product_variants (only if still no image)
-        const itemsStillWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
-        if (itemsStillWithoutImages.length > 0) {
-          console.log(`⚠️ ${itemsStillWithoutImages.length} items still without images, using local fallback...`);
-          const skus = itemsStillWithoutImages.map(item => item.sku).filter((sku): sku is string => Boolean(sku));
-          
-          const variantResult = await supabase
-            .from('product_variants')
-            .select('sku_variant, products(image_url)')
-            .in('sku_variant', skus);
-          
-          // Final check before setting state
-          if (isCancelled) return;
-          
-          const variantData = variantResult.data as Array<{ sku_variant: string; products: { image_url: string | null } | null }> | null;
-          
-          if (variantData) {
-            const skuToImageMap = new Map<string, string | null>();
-            variantData.forEach((v) => {
-              if (v.sku_variant) {
-                skuToImageMap.set(v.sku_variant, v.products?.image_url || null);
-              }
-            });
-            
-            enrichedItems = enrichedItems.map(item => ({
-              ...item,
-              image_url: item.image_url || (item.sku ? skuToImageMap.get(item.sku) || null : null)
-            }));
-          }
-        }
-        
-        // Only set state if not cancelled
-        if (!isCancelled) {
-          setLineItems(enrichedItems);
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          console.error('Error fetching line items:', error);
-          setLineItems([]);
-        }
-      }
-      if (!isCancelled) {
-        setLoadingItems(false);
-      }
-    };
-
-    fetchLineItems();
-    
-    // Cleanup: mark as cancelled if effect re-runs
-    return () => {
-      isCancelled = true;
-    };
-  }, [effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.raw_data]);
+  // NOTE: Line items now fetched via usePickingLineItems hook with React Query
 
   // Use useCallback with explicit dependencies to prevent stale closures
   const handleStatusChange = useCallback(async (newStatus: OperationalStatus) => {
@@ -1132,6 +1000,33 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-3 md:p-6 pt-0 space-y-2 md:space-y-4">
+                  {/* Error state - show retry button */}
+                  {(lineItemsError || lineItemsTimeout) && lineItems.length === 0 && (
+                    <Alert className="border-destructive/50 bg-destructive/5">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <AlertTitle className="text-destructive">
+                        {lineItemsTimeout ? 'Tiempo de espera agotado' : 'Error al cargar productos'}
+                      </AlertTitle>
+                      <AlertDescription className="space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          {lineItemsTimeout 
+                            ? 'La carga de productos tomó demasiado tiempo. Intenta de nuevo.'
+                            : 'No se pudieron cargar los productos. Verifica tu conexión e intenta de nuevo.'}
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => refetchLineItems()}
+                          className="gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Reintentar
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Normal product list */}
                   {lineItems.map((item, index: number) => (
                     <div key={index} className="flex gap-2 md:gap-4 p-2 md:p-4 border rounded-lg">
                       {/* Product Image - Smaller on mobile */}
