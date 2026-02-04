@@ -452,6 +452,148 @@ async function sendWhatsAppImage(phoneNumber: string, imageUrl: string, caption:
   }
 }
 
+// ============== PRODUCT SEARCH HELPERS ==============
+
+// Extract search keywords from customer message
+function extractSearchTerms(message: string): string[] {
+  const stopWords = new Set([
+    'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'en', 'con', 'por', 'para',
+    'que', 'qué', 'cual', 'cuál', 'como', 'cómo', 'cuanto', 'cuánto', 'tienen', 'tienen', 'tienes',
+    'hay', 'está', 'estan', 'son', 'es', 'quiero', 'busco', 'necesito', 'me', 'mi', 'te', 'tu',
+    'hola', 'buenos', 'dias', 'tardes', 'noches', 'gracias', 'por', 'favor', 'ayuda', 'info',
+    'información', 'precio', 'precios', 'cuesta', 'cuestan', 'disponible', 'disponibles', 'stock',
+    'envío', 'envio', 'enviar', 'comprar', 'pedir', 'ver', 'mostrar', 'enseñar', 'foto', 'fotos',
+    'imagen', 'imágenes', 'imagenes'
+  ]);
+
+  const normalized = message
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^\w\s]/g, ' ') // Remove punctuation
+    .split(/\s+/)
+    .filter(word => word.length > 2 && !stopWords.has(word));
+
+  return [...new Set(normalized)];
+}
+
+// Check if message is a product-related query
+function isProductQuery(message: string): boolean {
+  const productIndicators = [
+    'producto', 'precio', 'cuesta', 'cuestan', 'stock', 'disponible', 'talla', 'size',
+    'color', 'tienen', 'hay', 'busco', 'quiero', 'comprar', 'ver', 'mostrar', 'sleeping',
+    'bag', 'ruana', 'cobija', 'bordado', 'walker', 'manta', 'sku', 'referencia',
+    'catalogo', 'catálogo', 'foto', 'imagen'
+  ];
+  
+  const lowerMsg = message.toLowerCase();
+  return productIndicators.some(indicator => lowerMsg.includes(indicator));
+}
+
+// Search products by relevance to customer message
+function searchRelevantProducts(
+  allProducts: any[],
+  searchTerms: string[],
+  maxResults: number = 10
+): any[] {
+  if (searchTerms.length === 0) {
+    // Return top products by stock if no search terms
+    return allProducts
+      .map(p => ({
+        product: p,
+        totalStock: (p.variants || []).reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0)
+      }))
+      .filter(p => p.totalStock > 0)
+      .sort((a, b) => b.totalStock - a.totalStock)
+      .slice(0, maxResults)
+      .map(p => p.product);
+  }
+
+  // Score each product by relevance
+  const scored = allProducts.map(product => {
+    let score = 0;
+    const title = (product.title || '').toLowerCase();
+    const description = (product.body_html || '').toLowerCase().replace(/<[^>]*>/g, '');
+    const tags = (product.tags || '').toLowerCase();
+    const productType = (product.product_type || '').toLowerCase();
+    const variants = product.variants || [];
+    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
+    
+    // Skip out of stock products
+    if (totalStock === 0) return { product, score: -1 };
+
+    for (const term of searchTerms) {
+      // Title match (highest weight)
+      if (title.includes(term)) score += 10;
+      
+      // SKU exact match
+      const skuMatch = variants.some((v: any) => (v.sku || '').toLowerCase() === term);
+      if (skuMatch) score += 15;
+      
+      // Variant title match (size, color)
+      const variantMatch = variants.some((v: any) => 
+        (v.title || '').toLowerCase().includes(term) ||
+        (v.option1 || '').toLowerCase().includes(term) ||
+        (v.option2 || '').toLowerCase().includes(term) ||
+        (v.option3 || '').toLowerCase().includes(term)
+      );
+      if (variantMatch) score += 8;
+      
+      // Tags match
+      if (tags.includes(term)) score += 5;
+      
+      // Product type match
+      if (productType.includes(term)) score += 6;
+      
+      // Description match (lower weight)
+      if (description.includes(term)) score += 3;
+    }
+
+    return { product, score, totalStock };
+  });
+
+  // Filter and sort by score, then by stock
+  return scored
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score || b.totalStock - a.totalStock)
+    .slice(0, maxResults)
+    .map(s => s.product);
+}
+
+// Format products for AI context
+function formatProductsForContext(products: any[]): string {
+  if (products.length === 0) return '';
+
+  let context = '\n\n📦 PRODUCTOS RELEVANTES ENCONTRADOS:\n';
+  context += '⚠️ IMPORTANTE: Usa SOLO estos productos para responder. NO inventes otros.\n';
+  context += '🔔 RECUERDA: Incluye [PRODUCT_IMAGE_ID:ID] después de CADA producto que menciones.\n\n';
+
+  products.forEach((product: any, index: number) => {
+    const variants = product.variants || [];
+    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
+    const price = variants[0]?.price 
+      ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP` 
+      : 'Consultar';
+
+    // Build variant info with stock
+    const variantDetails = variants
+      .filter((v: any) => (v.inventory_quantity || 0) > 0)
+      .slice(0, 8)
+      .map((v: any) => `${v.title}: ${v.inventory_quantity} uds`)
+      .join(' | ');
+
+    context += `${index + 1}. ${product.title} [PRODUCT_IMAGE_ID:${product.id}]\n`;
+    context += `   💰 Precio: ${price}\n`;
+    context += `   📊 Stock total: ${totalStock} unidades\n`;
+    if (variantDetails) {
+      context += `   📐 Variantes disponibles: ${variantDetails}\n`;
+    }
+    context += '\n';
+  });
+
+  return context;
+}
+
 // Generate AI response using OpenAI GPT-4o-mini
 async function generateAIResponse(
   userMessage: string, 
@@ -469,9 +611,18 @@ async function generateAIResponse(
   }
 
   try {
-    // Build product catalog with IDs
+    // 📨 LOG: Message received
+    console.log(`📨 Mensaje recibido del cliente: ${userMessage}`);
+    
+    // Extract search terms from customer message
+    const searchTerms = extractSearchTerms(userMessage);
+    const isProductRelated = isProductQuery(userMessage);
+    
+    console.log(`🔍 Buscando productos relevantes para: "${searchTerms.join(', ')}" (isProductQuery: ${isProductRelated})`);
+    
     let productCatalog = '';
     let productImageMap: Record<number, { url: string; title: string }> = {};
+    let relevantProducts: any[] = [];
     
     // Get connected products from ai_catalog_connections table
     const { data: connectedProducts } = await supabase
@@ -484,9 +635,9 @@ async function generateAIResponse(
       (connectedProducts || []).map((p: any) => Number(p.shopify_product_id))
     );
     
-    console.log(`Found ${connectedProductIds.size} connected products in ai_catalog_connections`);
+    console.log(`📦 Productos conectados a IA: ${connectedProductIds.size}`);
     
-    // Try to get Shopify products with real-time inventory
+    // Fetch Shopify products
     if (shopifyCredentials && connectedProductIds.size > 0) {
       const storeDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
       const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
@@ -509,56 +660,44 @@ async function generateAIResponse(
             const shopifyData = await shopifyResponse.json();
             const allProducts = shopifyData.products || [];
             
-            // IMPORTANT: Filter ONLY products that are connected in the catalog
-            const products = allProducts.filter((p: any) => connectedProductIds.has(Number(p.id)));
+            // Filter to connected products only
+            const connectedShopifyProducts = allProducts.filter((p: any) => 
+              connectedProductIds.has(Number(p.id))
+            );
             
-            console.log(`Filtered to ${products.length} connected products (out of ${allProducts.length} total)`);
+            console.log(`📦 Productos Shopify conectados: ${connectedShopifyProducts.length} de ${allProducts.length} totales`);
             
-            if (products.length > 0) {
-              productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-              productCatalog += '⚠️ IMPORTANTE: Solo puedes ofrecer los productos listados aquí. NO inventes productos ni menciones artículos que no estén en esta lista.\n';
-              productCatalog += 'Solo ofrece productos con stock disponible (Stock > 0).\n\n';
-              productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
-              productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
-              productCatalog += 'Esto es OBLIGATORIO, no opcional. Los clientes esperan ver fotos de los productos.\n\n';
-              productCatalog += 'Formato correcto: "1. Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251] - Precio: $94.900 COP"\n';
-              productCatalog += 'Formato INCORRECTO: "1. Ruana Caballo - Precio: $94.900 COP" (falta el tag)\n\n';
+            // Build image map for all connected products (for later image sending)
+            connectedShopifyProducts.forEach((product: any) => {
+              const imageUrl = product.image?.src || product.images?.[0]?.src;
+              if (imageUrl) {
+                productImageMap[product.id] = { url: imageUrl, title: product.title };
+              }
+            });
+            
+            if (isProductRelated && connectedShopifyProducts.length > 0) {
+              // Search for relevant products based on customer message
+              relevantProducts = searchRelevantProducts(connectedShopifyProducts, searchTerms, 10);
               
-              products.forEach((product: any) => {
-                const variants = product.variants || [];
-                const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
-                
-                // Store image URL and title
-                const imageUrl = product.image?.src || product.images?.[0]?.src;
-                if (imageUrl) {
-                  productImageMap[product.id] = { url: imageUrl, title: product.title };
-                }
-                
-                if (totalStock === 0) {
-                  productCatalog += `• ${product.title} (ID:${product.id}): ❌ AGOTADO\n`;
-                  return;
-                }
-                
-                const price = variants[0]?.price 
-                  ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP` 
-                  : 'Consultar';
-                
-                const variantInfo = variants
-                  .slice(0, 5)
-                  .map((v: any) => {
-                    const stock = v.inventory_quantity || 0;
-                    return `${v.title}: ${stock > 0 ? `✅${stock}` : '❌'}`;
-                  })
-                  .join(' | ');
-                
-                productCatalog += `\n• ${product.title} (ID:${product.id})`;
-                productCatalog += `\n  💰 ${price} | ${variantInfo}\n`;
-              });
+              // If no matches found, fallback to top products by stock
+              if (relevantProducts.length === 0) {
+                console.log('🔍 No hay coincidencias exactas, usando productos populares como fallback');
+                relevantProducts = searchRelevantProducts(connectedShopifyProducts, [], 5);
+              }
               
-              console.log(`Loaded ${products.length} connected Shopify products for AI context`);
+              const productNames = relevantProducts.map((p: any) => p.title).join(', ');
+              console.log(`📦 Productos encontrados: ${relevantProducts.length} - ${productNames}`);
+              
+              // Format relevant products for context
+              productCatalog = formatProductsForContext(relevantProducts);
+            } else if (!isProductRelated) {
+              console.log('📦 Mensaje no relacionado con productos, omitiendo catálogo del contexto');
+              productCatalog = '\n\nNota: El catálogo de productos está disponible si el cliente pregunta por productos específicos.\n';
             } else {
               productCatalog = '\n\n⚠️ No hay productos conectados al catálogo de IA. Indica al cliente que pronto tendrás información disponible.\n';
             }
+          } else {
+            console.error('Error fetching Shopify products:', shopifyResponse.status);
           }
         } catch (err) {
           console.error("Error fetching Shopify products:", err);
@@ -569,8 +708,8 @@ async function generateAIResponse(
       productCatalog = '\n\n⚠️ No hay productos conectados al catálogo de IA. Indica al cliente que pronto tendrás información disponible.\n';
     }
 
-    // Fallback: load from local products table
-    if (!productCatalog) {
+    // Fallback: load from local products table if no Shopify products
+    if (!productCatalog && isProductRelated) {
       const { data: products } = await supabase
         .from('products')
         .select(`
@@ -602,7 +741,7 @@ async function generateAIResponse(
           productCatalog += '\n';
         });
         
-        console.log(`Loaded ${products.length} local products for AI context`);
+        console.log(`📦 Loaded ${products.length} local products for AI context`);
       }
     }
 
@@ -646,7 +785,12 @@ async function generateAIResponse(
     systemPrompt += productCatalog;
     
     // Add final reminder at the end of prompt
-    systemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
+    if (isProductRelated && relevantProducts.length > 0) {
+      systemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
+    }
+
+    // 🤖 LOG: Context sent to AI
+    console.log(`🤖 Contexto enviado a IA: ${systemPrompt.substring(0, 500)}...`);
 
     // Build conversation history for context
     const historyMessages = conversationHistory.slice(-10).map((msg: any) => ({
@@ -683,7 +827,8 @@ async function generateAIResponse(
     const data = await response.json();
     const rawAiResponse = data.choices?.[0]?.message?.content || '';
     
-    console.log('OpenAI raw response:', rawAiResponse.substring(0, 150) + '...');
+    // 💬 LOG: AI response
+    console.log(`💬 Respuesta de IA: ${rawAiResponse.substring(0, 200)}...`);
     
     // Extract product IDs from explicit tags, and fallback to matching titles
     let productIds = extractProductIdsFromResponse(rawAiResponse);
