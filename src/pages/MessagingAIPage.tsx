@@ -13,10 +13,13 @@ import { KnowledgeBaseEditor } from '@/components/messaging-ai/KnowledgeBaseEdit
 import { AITrainingPanel } from '@/components/messaging-ai/AITrainingPanel';
 import { TagsSettingsPanel } from '@/components/messaging-ai/TagsSettingsPanel';
 import { RealtimeConnectionBanner } from '@/components/messaging-ai/RealtimeConnectionBanner';
+import { MessagingSearchBar } from '@/components/messaging-ai/MessagingSearchBar';
+import { SearchResultsList } from '@/components/messaging-ai/SearchResultsList';
 import { useMessagingConversations } from '@/hooks/useMessagingConversations';
 import { useMessagingMessages } from '@/hooks/useMessagingMessages';
 import { useMessagingTags } from '@/hooks/useMessagingTags';
 import { useMessagingRealtime } from '@/hooks/useMessagingRealtime';
+import { useMessagingSearch } from '@/hooks/useMessagingSearch';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -42,6 +45,20 @@ const MessagingAIPage = () => {
   });
 
   const { tags, tagCounts, useConversationTags } = useMessagingTags();
+
+  // Search functionality
+  const { 
+    searchTerm, 
+    setSearchTerm, 
+    searchResults, 
+    isSearching, 
+    hasSearchTerm, 
+    clearSearch 
+  } = useMessagingSearch({
+    channelFilter: activeChannel,
+    statusFilter: activeFilter,
+    tagFilter: activeTagId,
+  });
 
   const { 
     conversations, 
@@ -279,8 +296,8 @@ const MessagingAIPage = () => {
               {/* Conversations grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px] h-[calc(100vh-220px)]">
                 {/* Conversations List */}
-                <Card className="lg:col-span-1 overflow-hidden">
-                  <CardHeader className="pb-2">
+                <Card className="lg:col-span-1 overflow-hidden flex flex-col">
+                  <CardHeader className="pb-2 flex-shrink-0">
                     <CardTitle className="text-lg">
                       {activeFilter === 'inbox' && 'Todos los chats'}
                       {activeFilter === 'needs-help' && 'Necesita ayuda'}
@@ -293,16 +310,35 @@ const MessagingAIPage = () => {
                           <Loader2 className="h-4 w-4 animate-spin" />
                           Cargando...
                         </span>
+                      ) : hasSearchTerm ? (
+                        `${searchResults.length} resultado${searchResults.length !== 1 ? 's' : ''} encontrado${searchResults.length !== 1 ? 's' : ''}`
                       ) : (
                         `${filteredConversations.filter(c => c.unread > 0).length} conversaciones sin leer`
                       )}
                     </CardDescription>
+                    
+                    {/* Search bar */}
+                    <MessagingSearchBar
+                      value={searchTerm}
+                      onChange={setSearchTerm}
+                      onClear={clearSearch}
+                      isSearching={isSearching}
+                      className="mt-2"
+                    />
                   </CardHeader>
-                  <CardContent className="p-0">
-                    {isLoadingConversations ? (
+                  <CardContent className="p-0 flex-1 overflow-hidden">
+                    {isLoadingConversations && !hasSearchTerm ? (
                       <div className="flex items-center justify-center h-[400px]">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                       </div>
+                    ) : hasSearchTerm ? (
+                      // Show search results
+                      <SearchResultsList
+                        results={searchResults}
+                        selectedId={selectedConversation}
+                        onSelect={setSelectedConversation}
+                        searchTerm={searchTerm}
+                      />
                     ) : filteredConversations.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                         <MessageSquareMore className="h-12 w-12 mb-4 opacity-50" />
