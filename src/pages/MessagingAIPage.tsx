@@ -36,6 +36,7 @@ const MessagingAIPage = () => {
   const { connectionStatus, reconnect } = useMessagingRealtime({
     organizationId: currentOrganization?.id,
     enabled: activeView === 'conversations',
+    activeConversationId: selectedConversation,
   });
 
   const { tags, tagCounts, useConversationTags } = useMessagingTags();
@@ -102,6 +103,8 @@ const MessagingAIPage = () => {
 
   // Transform messages to UI format with reply info
   const transformedMessages = useMemo(() => {
+    type MediaType = 'image' | 'audio' | 'document' | 'video' | 'sticker' | undefined;
+
     return messages.map(msg => {
       // Find replied message content if exists
       let replyToContent: string | undefined;
@@ -123,14 +126,44 @@ const MessagingAIPage = () => {
       const metadata = (typeof msg.metadata === 'object' && msg.metadata !== null)
         ? (msg.metadata as Record<string, unknown>)
         : undefined;
+
+      const inferMediaTypeFromMime = (mime?: string | null): MediaType => {
+        if (!mime) return undefined;
+        if (mime.startsWith('image/')) return 'image';
+        if (mime.startsWith('audio/')) return 'audio';
+        if (mime.startsWith('video/')) return 'video';
+        return 'document';
+      };
+
+      const inferMediaTypeFromMetadata = (m?: Record<string, unknown>): MediaType => {
+        if (!m) return undefined;
+        if (m.image || (m.original_message as any)?.image) return 'image';
+        if (m.audio || (m.original_message as any)?.audio) return 'audio';
+        if (m.video || (m.original_message as any)?.video) return 'video';
+        if (m.sticker || (m.original_message as any)?.sticker) return 'sticker';
+        if (m.document || (m.original_message as any)?.document) return 'document';
+        return undefined;
+      };
+
+      const inferredMediaType = mediaTypeMap[msg.message_type || '']
+        || inferMediaTypeFromMime(msg.media_mime_type)
+        || inferMediaTypeFromMetadata(metadata);
+
+      const normalizedContent = (() => {
+        const c = (msg.content || '').trim();
+        // If the DB stored placeholders like "[Imagen]" for media-only messages, don't render them as text.
+        if (!inferredMediaType) return c;
+        if (/^\[(imagen|image|audio|video|sticker|documento|document)\]$/i.test(c)) return '';
+        return c;
+      })();
       
       return {
         id: msg.id,
         role: (msg.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: msg.content || '',
+        content: normalizedContent,
         timestamp: msg.sent_at ? new Date(msg.sent_at) : new Date(),
         mediaUrl: msg.media_url || undefined,
-        mediaType: mediaTypeMap[msg.message_type || ''] || undefined,
+        mediaType: inferredMediaType,
         mediaMimeType: msg.media_mime_type || undefined,
         replyToMessageId: msg.reply_to_message_id || undefined,
         replyToContent,
