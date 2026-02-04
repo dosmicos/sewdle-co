@@ -27,6 +27,7 @@ import BillingPage from "@/pages/BillingPage";
 import OKRsPage from "@/pages/OKRsPage";
 import AlegraPage from "@/pages/AlegraPage";
 import MessagingAIPage from "@/pages/MessagingAIPage";
+import ApisStatusPage from "@/pages/ApisStatusPage";
 
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
 import UsersRolesPage from "@/pages/UsersRolesPage";
@@ -211,6 +212,12 @@ const AppContent = () => {
         <Route path="alegra" element={
           <AdminRoute>
             <AlegraPage />
+          </AdminRoute>
+        } />
+        
+        <Route path="apis" element={
+          <AdminRoute>
+            <ApisStatusPage />
           </AdminRoute>
         } />
       </Route>
