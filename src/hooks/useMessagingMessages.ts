@@ -58,6 +58,33 @@ export const useMessagingMessages = (conversationId: string | null) => {
           );
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messaging_messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        (payload) => {
+          const updatedMessage = payload.new as MessagingMessage;
+
+          // Update cache in place (e.g. when media_url is filled after retry)
+          queryClient.setQueryData(
+            ['messaging-messages', conversationId],
+            (oldMessages: MessagingMessage[] | undefined) => {
+              if (!oldMessages) return [updatedMessage];
+
+              const idx = oldMessages.findIndex(m => m.id === updatedMessage.id);
+              if (idx === -1) return [...oldMessages, updatedMessage];
+
+              const copy = oldMessages.slice();
+              copy[idx] = { ...(copy[idx] as any), ...(updatedMessage as any) };
+              return copy;
+            }
+          );
+        }
+      )
       .subscribe();
 
     return () => {

@@ -490,27 +490,27 @@ serve(async (req) => {
                   content = `Reaccionó con ${emoji}`;
                   messageType = 'reaction';
                 } else if (message.type === 'image') {
-                  content = message.image?.caption || '';
+                  content = message.image?.caption || '[Imagen]';
                   messageType = 'image';
                   mediaId = message.image?.id;
                   mediaMimeType = message.image?.mime_type;
                 } else if (message.type === 'audio') {
-                  content = '';
+                  content = '[audio]';
                   messageType = 'audio';
                   mediaId = message.audio?.id;
                   mediaMimeType = message.audio?.mime_type;
                 } else if (message.type === 'video') {
-                  content = message.video?.caption || '';
+                  content = message.video?.caption || '[video]';
                   messageType = 'video';
                   mediaId = message.video?.id;
                   mediaMimeType = message.video?.mime_type;
                 } else if (message.type === 'document') {
-                  content = message.document?.filename || '';
+                  content = message.document?.filename || '[documento]';
                   messageType = 'document';
                   mediaId = message.document?.id;
                   mediaMimeType = message.document?.mime_type;
                 } else if (message.type === 'sticker') {
-                  content = '';
+                  content = '[sticker]';
                   messageType = 'sticker';
                   mediaId = message.sticker?.id;
                   mediaMimeType = message.sticker?.mime_type;

@@ -572,6 +572,11 @@ export const ConversationThread = ({
 
   // Retry media download - would need backend support
   const handleRetryMedia = async (message: Message) => {
+    if (!message.id) {
+      toast.error('No se puede reintentar: falta ID del mensaje');
+      return;
+    }
+
     if (!message.metadata?.original_media_id) {
       toast.error('No se puede reintentar: falta ID de media');
       return;
@@ -579,17 +584,49 @@ export const ConversationThread = ({
     
     setRetryingMedia(message.id || null);
     
-    // This would need a dedicated endpoint to retry media download
-    // For now, just show a message
-    toast.info('La funcionalidad de reintento está en desarrollo');
-    
-    setTimeout(() => setRetryingMedia(null), 2000);
+    try {
+      const { data, error } = await supabase.functions.invoke('retry-whatsapp-media', {
+        body: {
+          message_id: message.id,
+        }
+      });
+
+      if (error) {
+        const anyError: any = error;
+        let messageText = error.message || 'Error reintentando descarga';
+        const resp: Response | undefined = anyError?.context?.response;
+
+        if (resp) {
+          try {
+            const body = await resp.clone().json();
+            messageText = body?.details || body?.error || messageText;
+          } catch {
+            // ignore
+          }
+        }
+
+        throw new Error(messageText);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'No se pudo recuperar el medio');
+      }
+
+      toast.success('Medio recuperado');
+      // IMPORTANT: UI will update via Realtime UPDATE subscription in useMessagingMessages
+    } catch (err: any) {
+      console.error('Retry media failed:', err);
+      toast.error(err?.message || 'No se pudo recuperar el medio');
+    } finally {
+      setRetryingMedia(null);
+    }
   };
 
   // Render media content based on type
   const renderMediaContent = (message: Message) => {
     const { mediaUrl, mediaType, mediaMimeType, metadata } = message;
     const hasMediaError = !mediaUrl && metadata?.media_download_error;
+    const canRetry = !!message.id && !!metadata?.original_media_id;
 
     // Handle image
     if (mediaType === 'image') {
@@ -611,22 +648,18 @@ export const ConversationThread = ({
         return (
           <MediaErrorPlaceholder 
             type="image" 
-            onRetry={() => handleRetryMedia(message)}
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
             isRetrying={retryingMedia === message.id}
           />
         );
       } else {
-        // Fallback - AI analyzed badge (only if we know AI processed it)
+        // No URL and no error -> treat as missing media (older messages or pending download)
         return (
-          <div className="max-w-[200px] rounded-lg mb-2 p-3 bg-emerald-50 border border-emerald-200">
-            <div className="flex items-center gap-2 text-emerald-700">
-              <Search className="h-5 w-5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Imagen analizada</p>
-                <p className="text-xs opacity-70">Búsqueda por IA</p>
-              </div>
-            </div>
-          </div>
+          <MediaErrorPlaceholder
+            type="image"
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
+            isRetrying={retryingMedia === message.id}
+          />
         );
       }
     }
@@ -641,7 +674,15 @@ export const ConversationThread = ({
         return (
           <MediaErrorPlaceholder 
             type="audio" 
-            onRetry={() => handleRetryMedia(message)}
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      } else {
+        return (
+          <MediaErrorPlaceholder
+            type="audio"
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
             isRetrying={retryingMedia === message.id}
           />
         );
@@ -663,7 +704,15 @@ export const ConversationThread = ({
         return (
           <MediaErrorPlaceholder 
             type="sticker" 
-            onRetry={() => handleRetryMedia(message)}
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      } else {
+        return (
+          <MediaErrorPlaceholder
+            type="sticker"
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
             isRetrying={retryingMedia === message.id}
           />
         );
@@ -687,7 +736,15 @@ export const ConversationThread = ({
         return (
           <MediaErrorPlaceholder 
             type="video" 
-            onRetry={() => handleRetryMedia(message)}
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      } else {
+        return (
+          <MediaErrorPlaceholder
+            type="video"
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
             isRetrying={retryingMedia === message.id}
           />
         );
@@ -718,7 +775,15 @@ export const ConversationThread = ({
         return (
           <MediaErrorPlaceholder 
             type="document" 
-            onRetry={() => handleRetryMedia(message)}
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
+            isRetrying={retryingMedia === message.id}
+          />
+        );
+      } else {
+        return (
+          <MediaErrorPlaceholder
+            type="document"
+            onRetry={canRetry ? () => handleRetryMedia(message) : undefined}
             isRetrying={retryingMedia === message.id}
           />
         );
