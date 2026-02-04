@@ -1,166 +1,85 @@
 
-# Plan: Crear Nuevos Roles del Sistema
 
-## Resumen
-Agregaremos 4 nuevos roles al sistema sin modificar los roles existentes (Administrador, Diseñador, Líder QC, Taller). También agregaremos el módulo "Mensajería IA" que actualmente falta en el sistema de permisos.
+# Plan: Corregir Problema de Invocación de Edge Functions para Envío
 
----
+## Problema Identificado
 
-## Cambios Requeridos
-
-### 1. Agregar Módulo "Mensajería IA" al Sistema de Permisos
-
-**Archivos a modificar:**
-- `src/hooks/useRoles.ts` - Agregar mapeo del módulo
-- `src/components/RoleModal.tsx` - Agregar módulo a la lista
-
-El módulo se llamará internamente `messaging` en la base de datos y `Mensajería IA` en la interfaz.
-
-### 2. Crear los 4 Nuevos Roles en la Base de Datos
-
-**Migración SQL para crear los roles:**
-
-| Rol | Descripción | Módulos con Acceso |
-|-----|-------------|-------------------|
-| **Calidad** | Control de calidad de productos y entregas | Dashboard (ver), Órdenes (ver/editar), Entregas (ver/editar) |
-| **Atención al Cliente** | Gestión de consultas y soporte al cliente | Dashboard (ver), Órdenes (ver/editar), Entregas (ver/editar), Mensajería IA (ver/crear/editar) |
-| **Reclutamiento** | Gestión de talleres y prospección | Dashboard (ver), Órdenes (ver/editar), Entregas (ver/editar), Insumos (ver), Talleres (ver/editar), Reclutamiento (ver/crear/editar) |
-| **Producción** | Supervisión de producción y materiales | Dashboard (ver), Órdenes (ver/crear/editar), Entregas (ver/editar), Productos (ver/editar), Insumos (ver/editar), Talleres (ver/editar), Reclutamiento (ver) |
-
-### 3. Actualizar el Sidebar para Respetar Permisos del Nuevo Módulo
-
-**Archivo a modificar:** `src/components/AppSidebar.tsx`
-
-Agregar verificación de permisos para "Mensajería IA" en los menús correspondientes.
-
----
-
-## Detalle Técnico
-
-### Paso 1: Actualizar Mapeo de Módulos
+La función `invokeEdgeFunction` en `src/features/shipping/lib/invokeEdgeFunction.ts` falla silenciosamente porque intenta acceder a propiedades que **no existen** en el cliente Supabase v2.x:
 
 ```typescript
-// useRoles.ts - MODULE_MAPPING
-const MODULE_MAPPING = {
-  // ... existing modules
-  'messaging': 'Mensajería IA'  // NUEVO
-};
+// Líneas 21-22 - ESTAS PROPIEDADES NO EXISTEN
+const supabaseUrl = (supabase as any).supabaseUrl as string | undefined;
+const supabaseKey = (supabase as any).supabaseKey as string | undefined;
 ```
 
-### Paso 2: Agregar Módulo al Modal de Roles
+Cuando estas propiedades son `undefined`, el código lanza un error en la línea 24-26 que se captura silenciosamente, causando que el spinner aparezca y desaparezca sin mostrar resultados.
 
-```typescript
-// RoleModal.tsx - modules array
-const modules = [
-  'Dashboard',
-  'Órdenes',
-  'Talleres',
-  'Productos',
-  'Insumos',
-  'Entregas',
-  'Picking y Packing',
-  'Usuarios',
-  'Finanzas',
-  'Reposición IA',
-  'Shopify',
-  'Reclutamiento',
-  'Mensajería IA'  // NUEVO
-];
-```
-
-### Paso 3: Migración SQL para Crear Roles
-
-```sql
--- Rol: Calidad
-INSERT INTO roles (name, description, permissions, is_system) VALUES (
-  'Calidad',
-  'Control de calidad de productos y entregas',
-  '{
-    "dashboard": {"view": true, "create": false, "edit": false, "delete": false},
-    "orders": {"view": true, "create": false, "edit": true, "delete": false},
-    "deliveries": {"view": true, "create": false, "edit": true, "delete": false}
-  }'::jsonb,
-  true
-);
-
--- Rol: Atención al Cliente
-INSERT INTO roles (name, description, permissions, is_system) VALUES (
-  'Atención al Cliente',
-  'Gestión de consultas y soporte al cliente',
-  '{
-    "dashboard": {"view": true, "create": false, "edit": false, "delete": false},
-    "orders": {"view": true, "create": false, "edit": true, "delete": false},
-    "deliveries": {"view": true, "create": false, "edit": true, "delete": false},
-    "messaging": {"view": true, "create": true, "edit": true, "delete": false}
-  }'::jsonb,
-  true
-);
-
--- Rol: Reclutamiento
-INSERT INTO roles (name, description, permissions, is_system) VALUES (
-  'Reclutamiento',
-  'Gestión de talleres y prospección',
-  '{
-    "dashboard": {"view": true, "create": false, "edit": false, "delete": false},
-    "orders": {"view": true, "create": false, "edit": true, "delete": false},
-    "deliveries": {"view": true, "create": false, "edit": true, "delete": false},
-    "insumos": {"view": true, "create": false, "edit": false, "delete": false},
-    "workshops": {"view": true, "create": false, "edit": true, "delete": false},
-    "prospects": {"view": true, "create": true, "edit": true, "delete": false}
-  }'::jsonb,
-  true
-);
-
--- Rol: Producción
-INSERT INTO roles (name, description, permissions, is_system) VALUES (
-  'Producción',
-  'Supervisión de producción y materiales',
-  '{
-    "dashboard": {"view": true, "create": false, "edit": false, "delete": false},
-    "orders": {"view": true, "create": true, "edit": true, "delete": false},
-    "deliveries": {"view": true, "create": false, "edit": true, "delete": false},
-    "products": {"view": true, "create": false, "edit": true, "delete": false},
-    "insumos": {"view": true, "create": false, "edit": true, "delete": false},
-    "workshops": {"view": true, "create": false, "edit": true, "delete": false},
-    "prospects": {"view": true, "create": false, "edit": false, "delete": false}
-  }'::jsonb,
-  true
-);
-```
-
-### Paso 4: Actualizar Sidebar para Mensajería IA
-
-Agregar verificación de permisos para el menú de Mensajería IA similar a como se hace con otros módulos.
+**Nota**: El resto del proyecto usa `supabase.functions.invoke` nativo (38 archivos) y funciona correctamente. Solo la integración de Envia usa esta función personalizada.
 
 ---
 
-## Resumen de Permisos por Rol
+## Solución
 
-| Módulo | Calidad | Atención Cliente | Reclutamiento | Producción |
-|--------|---------|------------------|---------------|------------|
-| Dashboard | ✅ Ver | ✅ Ver | ✅ Ver | ✅ Ver |
-| Órdenes | ✅ Ver/Editar | ✅ Ver/Editar | ✅ Ver/Editar | ✅ Ver/Crear/Editar |
-| Entregas | ✅ Ver/Editar | ✅ Ver/Editar | ✅ Ver/Editar | ✅ Ver/Editar |
-| Productos | ❌ | ❌ | ❌ | ✅ Ver/Editar |
-| Insumos | ❌ | ❌ | ✅ Ver | ✅ Ver/Editar |
-| Talleres | ❌ | ❌ | ✅ Ver/Editar | ✅ Ver/Editar |
-| Reclutamiento | ❌ | ❌ | ✅ Ver/Crear/Editar | ✅ Ver |
-| Mensajería IA | ❌ | ✅ Ver/Crear/Editar | ❌ | ❌ |
+Exportar las constantes `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` desde el archivo del cliente y usarlas directamente en `invokeEdgeFunction`.
+
+---
+
+## Cambios a Realizar
+
+### 1. Exportar Constantes del Cliente Supabase
+
+**Archivo**: `src/integrations/supabase/client.ts`
+
+| Antes | Después |
+|-------|---------|
+| `const SUPABASE_URL = "https://..."` | `export const SUPABASE_URL = "https://..."` |
+| `const SUPABASE_PUBLISHABLE_KEY = "eyJ..."` | `export const SUPABASE_PUBLISHABLE_KEY = "eyJ..."` |
+
+### 2. Actualizar invokeEdgeFunction para Usar las Constantes
+
+**Archivo**: `src/features/shipping/lib/invokeEdgeFunction.ts`
+
+```typescript
+// Cambiar la importación
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+
+// Usar las constantes directamente
+const supabaseUrl = SUPABASE_URL;
+const supabaseKey = SUPABASE_PUBLISHABLE_KEY;
+```
+
+---
+
+## Por Qué Funcionaba Antes
+
+Posiblemente:
+1. Una versión anterior del cliente Supabase exponía estas propiedades
+2. Se actualizó `@supabase/supabase-js` y cambió la estructura interna del cliente
+3. Hubo una regeneración del archivo client.ts que removió configuraciones personalizadas
+
+---
+
+## Impacto de los Cambios
+
+| Aspecto | Descripción |
+|---------|-------------|
+| **Riesgo** | Muy bajo - solo cambia la forma de obtener valores que ya son públicos |
+| **Funcionalidad** | Los botones "Verificar Guía" y "Cotizar Envío" funcionarán correctamente |
+| **Seguridad** | Sin impacto - la anon key está diseñada para uso en cliente |
+| **Otros módulos** | Sin impacto - los 38 archivos que usan `supabase.functions.invoke` no se modifican |
 
 ---
 
 ## Archivos a Modificar
 
-1. `src/hooks/useRoles.ts` - Agregar mapeo de módulo "messaging"
-2. `src/components/RoleModal.tsx` - Agregar "Mensajería IA" a la lista de módulos
-3. `src/components/AppSidebar.tsx` - Agregar verificación de permisos para Mensajería IA
-4. **Migración SQL** - Insertar los 4 nuevos roles en la tabla `roles`
+1. `src/integrations/supabase/client.ts` - Agregar `export` a las constantes
+2. `src/features/shipping/lib/invokeEdgeFunction.ts` - Importar y usar las constantes exportadas
 
 ---
 
-## Notas Importantes
+## Verificación Post-Cambio
 
-- Los roles existentes (Administrador, Diseñador, Líder QC, Taller) **NO serán modificados**
-- Los nuevos roles se crean como `is_system: true` para que sean roles predefinidos del sistema
-- Los usuarios podrán ser asignados a estos nuevos roles desde la página de Usuarios & Roles
-- El módulo "Mensajería IA" se agregará al sistema de permisos para que pueda ser configurado en cualquier rol
+Después de aplicar los cambios, al hacer clic en:
+- **"Verificar Guía"**: Debería buscar si existe una guía previa para el pedido
+- **"Cotizar Envío"**: Debería mostrar opciones de carriers con precios (Coordinadora, Deprisa, Interrapidísimo)
+
