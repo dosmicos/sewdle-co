@@ -12,14 +12,18 @@ import { MessagingSidebar } from '@/components/messaging-ai/MessagingSidebar';
 import { KnowledgeBaseEditor } from '@/components/messaging-ai/KnowledgeBaseEditor';
 import { AITrainingPanel } from '@/components/messaging-ai/AITrainingPanel';
 import { TagsSettingsPanel } from '@/components/messaging-ai/TagsSettingsPanel';
+import { RealtimeConnectionBanner } from '@/components/messaging-ai/RealtimeConnectionBanner';
 import { useMessagingConversations } from '@/hooks/useMessagingConversations';
 import { useMessagingMessages } from '@/hooks/useMessagingMessages';
 import { useMessagingTags } from '@/hooks/useMessagingTags';
+import { useMessagingRealtime } from '@/hooks/useMessagingRealtime';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
 type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags';
 
 const MessagingAIPage = () => {
+  const { currentOrganization } = useOrganization();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
   const [activeChannel, setActiveChannel] = useState<ChannelType | 'all'>('all');
@@ -27,6 +31,12 @@ const MessagingAIPage = () => {
   const [activeView, setActiveView] = useState<ViewType>('conversations');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+
+  // Centralized realtime subscription for all messaging
+  const { connectionStatus, reconnect } = useMessagingRealtime({
+    organizationId: currentOrganization?.id,
+    enabled: activeView === 'conversations',
+  });
 
   const { tags, tagCounts, useConversationTags } = useMessagingTags();
 
@@ -221,6 +231,9 @@ const MessagingAIPage = () => {
             </Button>
           )}
         </div>
+
+        {/* Connection status banner */}
+        <RealtimeConnectionBanner status={connectionStatus} onReconnect={reconnect} />
 
         {/* Content area */}
         <div className="flex-1 overflow-auto p-6 space-y-6">
