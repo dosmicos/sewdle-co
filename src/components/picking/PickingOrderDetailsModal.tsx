@@ -349,21 +349,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [orderId, cachedOrder, localOrder, order]);
 
   // Sync notes when effectiveOrder changes AND matches current orderId
-  // This prevents race condition where orderId effect resets notes after data loads
+  // Only runs on INITIAL load for a given order; once background sync completes
+  // (backgroundSyncDoneRef is set for this order) we stop overwriting from stale cache.
   useEffect(() => {
     if (effectiveOrder?.id !== orderId) return;
 
+    const shopifyOrderId = effectiveOrder.shopify_order?.shopify_order_id;
+    const syncKey = `${orderId}:${shopifyOrderId}`;
+
+    // If background sync already ran for this order, don't let stale cache override
+    if (backgroundSyncDoneRef.current === syncKey) {
+      // Still sync internal notes since those are local-only
+      setNotes(effectiveOrder.internal_notes || '');
+      return;
+    }
+
     const noteFromDb = effectiveOrder.shopify_order?.note || '';
-    
-    // 🔍 DEBUG: Verificar qué datos llegan del servidor/caché
-    console.log('🔍 NOTA DEBUG - Pedido abierto:', {
-      orderId: orderId,
-      orderNumber: effectiveOrder.shopify_order?.order_number,
-      shopifyOrderId: effectiveOrder.shopify_order?.shopify_order_id,
-      noteFromDb: noteFromDb,
-      rawDataNote: effectiveOrder.shopify_order?.raw_data?.note,
-      fullShopifyOrder: effectiveOrder.shopify_order
-    });
 
     setNotes(effectiveOrder.internal_notes || '');
     setShopifyNote(noteFromDb);
