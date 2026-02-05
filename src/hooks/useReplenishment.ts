@@ -14,6 +14,7 @@ export interface ReplenishmentSuggestion {
   variant_color: string | null;
   current_stock: number;
   pending_production: number;
+  in_transit: number;
   sales_30d: number;
   orders_count_30d: number;
   avg_daily_sales: number;

@@ -363,12 +363,13 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   </TableHead>
                   <TableHead>Producto</TableHead>
                   <TableHead>SKU</TableHead>
-                  <TableHead>Calidad</TableHead>
+                  <TableHead>Calidad Datos</TableHead>
                   <TableHead className="text-right">Stock</TableHead>
                   <TableHead className="text-right">Ventas 30d</TableHead>
                   <TableHead className="text-right">Vel. diaria</TableHead>
                   <TableHead className="text-right">Días Stock</TableHead>
-                  <TableHead className="text-right">Pendientes</TableHead>
+                  <TableHead className="text-right">En Producción</TableHead>
+                  <TableHead className="text-right">En Calidad</TableHead>
                   <TableHead 
                     className="text-right cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={toggleSortOrder}
@@ -411,13 +412,22 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       {suggestion.days_of_supply?.toFixed(1) || 'N/A'}
                     </TableCell>
                     <TableCell className="text-right">{suggestion.pending_production}</TableCell>
+                    <TableCell className="text-right">
+                      {suggestion.in_transit > 0 ? (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                          {suggestion.in_transit}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-medium">{suggestion.suggested_quantity}</TableCell>
                     <TableCell>{getUrgencyBadge(suggestion.urgency)}</TableCell>
                   </TableRow>
                 ))}
                 {filteredSuggestions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                       No se encontraron sugerencias de reposición
                     </TableCell>
                   </TableRow>
