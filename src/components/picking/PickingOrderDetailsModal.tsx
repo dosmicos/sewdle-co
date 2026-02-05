@@ -339,22 +339,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [orderId, cachedOrder, localOrder, order]);
 
+  // Sync notes when effectiveOrder changes AND matches current orderId
+  // This prevents race condition where orderId effect resets notes after data loads
   useEffect(() => {
-    if (effectiveOrder?.internal_notes) {
-      setNotes(effectiveOrder.internal_notes);
+    if (effectiveOrder?.id === orderId) {
+      setNotes(effectiveOrder.internal_notes || '');
+      setShopifyNote(effectiveOrder.shopify_order?.note || '');
     }
-    if (effectiveOrder?.shopify_order?.note) {
-      setShopifyNote(effectiveOrder.shopify_order.note);
-    } else {
-      setShopifyNote('');
-    }
-  }, [effectiveOrder]);
+  }, [effectiveOrder, orderId]);
 
   // Reset verification states when orderId changes (but NOT localOrder or lineItems - keep previous data visible during transition)
+  // NOTE: Notes are NOT reset here - they sync from effectiveOrder in the effect above to prevent race conditions
   useEffect(() => {
-    // Reset verification and input states only
-    setNotes('');
-    setShopifyNote('');
+    // Reset verification and input states only - NOT notes!
     setSkuInput('');
     setVerificationResult(null);
     setVerifiedCounts(new Map());
@@ -567,21 +564,32 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     setIsSavingShopifyNote(true);
     try {
-      await updateShopifyNote(effectiveOrder.shopify_order.shopify_order_id.toString(), shopifyNote);
-      
-      // Update local state optimistically
-      setLocalOrder(prev => prev ? {
-        ...prev,
+      // Optimistic update: immediately update local state AND React Query cache
+      const updatedOrder = localOrder ? {
+        ...localOrder,
         shopify_order: {
-          ...prev.shopify_order,
+          ...localOrder.shopify_order,
           note: shopifyNote
         }
-      } : prev);
+      } : null;
       
-      // Re-fetch to confirm
-      await refetchOrder(orderId);
+      if (updatedOrder) {
+        setLocalOrder(updatedOrder as PickingOrder);
+        updateOrderOptimistically(() => updatedOrder as PickingOrder);
+      }
+      
+      // Sync to Shopify (this updates Shopify + local DB)
+      await updateShopifyNote(effectiveOrder.shopify_order.shopify_order_id.toString(), shopifyNote);
+      
+      toast.success('Nota guardada en Shopify');
+      
+      // Background refetch to confirm final state (don't await - already showing optimistic update)
+      refetchCachedOrder();
     } catch (error) {
       console.error('Error saving Shopify note:', error);
+      toast.error('Error al guardar nota en Shopify');
+      // On error, refetch to restore correct state
+      await refetchOrder(orderId);
     } finally {
       setIsSavingShopifyNote(false);
     }
