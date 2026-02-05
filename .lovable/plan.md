@@ -1,163 +1,191 @@
 
-## Diagnóstico (con evidencia)
+# Plan: Corregir Cálculos de Reposición IA
 
-### 1) La base de datos sí tiene notas (al menos en algunos pedidos)
-Consulta directa a Supabase (tabla `shopify_orders`):
+## Diagnóstico del Problema
 
-- Orden **68642** → `note = "ok"` y `raw_data->>'note' = "ok"`
-- Orden **68643** → `note = null` y `raw_data->>'note' = ""` (vacío)
+La sección de **Reposición IA** está sugiriendo cantidades incorrectas porque la función `refresh_inventory_replenishment` tiene tres errores de lógica:
 
-Esto prueba dos cosas:
-- El sistema **sí** puede almacenar notas en Supabase.
-- Para algunos pedidos (ej. 68643) **la nota no está llegando / no se está actualizando** en la DB.
+### Problemas Identificados
 
-### 2) El UI está bloqueando su propio “cargar desde Supabase” (por un bug del parche de cache)
-En `PickingOrderDetailsModal.tsx` hay dos efectos:
-- Efecto A: “hidratar” `shopifyNote` desde `effectiveOrder.shopify_order.note` (lo que viene de Supabase)
-- Efecto B: “background sync” llamando a edge function `update-shopify-order` acción `sync_from_shopify`
+| Problema | Impacto | Ejemplo Real |
+|----------|---------|--------------|
+| No filtra órdenes por estado | Suma cantidades de órdenes completadas/canceladas | Órdenes `completed` siguen contando como pendientes |
+| Usa `quantity_approved` en vez de `quantity_delivered` | No considera productos ya entregados pero en control de calidad | "Sleeping Walker Ovejita" muestra 8 pendientes cuando son 5 |
+| Ignora entregas "en tránsito" | Productos entregados pero no aprobados no se descuentan | 3 unidades en `in_quality` no se consideran |
 
-Hoy el efecto B hace esto:
-- Marca `backgroundSyncDoneRef.current = key` **ANTES** de que el fetch termine.
-- El efecto A, al ver `backgroundSyncDoneRef.current === key`, **sale temprano y NO setea `shopifyNote` desde la DB**.
+### Datos de Ejemplo (Sleeping Walker de Ovejita TOG 2.0)
 
-Resultado:
-- Aunque Supabase tenga nota (68642), el textarea puede quedarse vacío porque **nunca se hidrata desde DB**.
-- Y como el background sync está fallando/abortando, tampoco llega a setear la nota desde Shopify.
+```text
+┌────────────────────────────────────────────┐
+│ CÁLCULO ACTUAL (INCORRECTO)                │
+├────────────────────────────────────────────┤
+│ Ordenado total:          24 unidades       │
+│ Aprobado:                16 unidades       │
+│ Pendiente producción:    24 - 16 = 8       │
+│ Sugerencia:              9 unidades        │ ← SOBRE-SUGIERE
+└────────────────────────────────────────────┘
 
-### 3) El background sync está abortándose (no está completando)
-En los logs de red del navegador aparecen llamadas a:
-`POST /functions/v1/update-shopify-order` con `{"action":"sync_from_shopify"}`  
-y el resultado es:
-- **Error: “signal is aborted without reason”**
-
-Esto coincide con el timeout de 3 segundos en el background sync:
-```ts
-{ timeoutMs: 3_000, signal: controller.signal }
+┌────────────────────────────────────────────┐
+│ CÁLCULO CORRECTO                           │
+├────────────────────────────────────────────┤
+│ Ordenado (no cancelado):  24 unidades      │
+│ Entregado (delivered):    19 unidades      │
+│ Pendiente producción:     24 - 19 = 5      │
+│ Sugerencia:               6 unidades       │ ← CORRECTO
+└────────────────────────────────────────────┘
 ```
-Es decir:
-- El sync en background se está cancelando por timeout (o abort), **y como ya marcamos “done” antes**, no reintenta.
 
-### 4) El webhook de Shopify sí incluye `note` (pero no es suficiente para “siempre actualizado”)
-En `supabase/functions/shopify-webhook/index.ts` el create guarda:
-```ts
-note: order.note || null
+---
+
+## Solución Propuesta
+
+### 1. Actualizar Función `refresh_inventory_replenishment`
+
+Modificar la función SQL para:
+
+**a) Filtrar órdenes activas:**
+```sql
+-- ANTES (suma todas las órdenes)
+SELECT SUM(oi.quantity) as pending_qty
+FROM order_items oi
+JOIN orders o ON oi.order_id = o.id
+WHERE oi.product_variant_id = pv.id
+
+-- DESPUÉS (solo órdenes no completadas/canceladas)
+SELECT SUM(oi.quantity) as pending_qty
+FROM order_items oi
+JOIN orders o ON oi.order_id = o.id
+WHERE oi.product_variant_id = pv.id
+  AND o.status NOT IN ('cancelled', 'completed')
 ```
-y el updateExistingOrder ya tiene guardia:
-```ts
-...(hasOwnProperty('note') ? { note: order.note || null } : {})
+
+**b) Usar quantity_delivered en vez de quantity_approved:**
+```sql
+-- ANTES
+SUM(di.quantity_approved) as total_delivered
+
+-- DESPUÉS
+SUM(di.quantity_delivered) as total_delivered
 ```
-Entonces, a nivel código, “note” está contemplado.  
-Pero para 68643 la DB está en null, lo que significa que:
-- el webhook no llegó,
-- o llegó sin `note`,
-- o el `sync_from_shopify` (que debía corregir esto al abrir) está fallando por el abort.
 
-## Objetivo del arreglo
-1) Al abrir un pedido: mostrar **inmediato** lo que hay en Supabase (sin depender de Shopify).
-2) En paralelo: refrescar desde Shopify sin bloquear y sin “romper” la hidratación desde DB.
-3) Si el refresco en background falla/timeout: no bloquear UI y permitir reintentos futuros.
-4) Mantener auto-guardado con debounce y sync a Shopify en background.
+**c) Agregar columna "en_transito" para mostrar productos en control de calidad:**
+```sql
+-- Nueva columna que muestra productos ya entregados pero pendientes de aprobación
+SUM(CASE 
+  WHEN d.status IN ('in_quality', 'partial_approved') 
+  THEN di.quantity_delivered - COALESCE(di.quantity_approved, 0) 
+  ELSE 0 
+END) as in_transit
+```
 
----
+### 2. Actualizar Vista `v_replenishment_details`
 
-## Cambios propuestos (implementación)
+Agregar columna `in_transit` para mostrar en la UI cuántos productos están en control de calidad.
 
-### A) Corregir la lógica de “no sobrescribir con cache” sin bloquear la hidratación
-En `src/components/picking/PickingOrderDetailsModal.tsx`:
+### 3. Actualizar UI del Componente
 
-1) Reemplazar el uso de `backgroundSyncDoneRef` como “candado global” para la hidratación.
-   - La hidratación desde DB debe suceder siempre al cargar el pedido (primera vez por orderId).
-   - El “no sobrescribir” debe aplicarse solo cuando:
-     - ya trajimos una nota más fresca desde Shopify, o
-     - el usuario está editando (hay cambios locales no guardados).
-
-2) Introducir refs separados:
-   - `hydratedKeyRef`: indica si ya se hidrató desde DB para `orderId`.
-   - `syncInFlightKeyRef`: evita duplicar el request de sync.
-   - `shopifyFreshKeyRef` (o `noteSourceRef`): marca que “esta nota ya viene de Shopify / es más fresca” para no volver a pisarla con un cache viejo.
-
-Regla:
-- **Siempre** hidratar desde DB en el primer render válido del pedido.
-- Luego, si hay updates subsecuentes del cache:
-  - solo aplicar si el usuario no está editando y no tenemos una nota “más fresca” desde Shopify.
-
-### B) Hacer el background sync robusto: no marcar “done” hasta éxito + reintento si timeout
-En el effect de background sync:
-
-1) No asignar `backgroundSyncDoneRef.current = key` antes del fetch.
-2) Usar `syncInFlightKeyRef`:
-   - si está en flight para ese `key`, no disparar otra vez.
-3) Si el request:
-   - **éxito**: entonces sí marcar `shopifyFreshKeyRef = key` y actualizar estado/cache.
-   - **abort/timeout/error**: limpiar `syncInFlightKeyRef` para permitir nuevos intentos (por ejemplo al reabrir modal o al navegar y volver).
-
-4) Ajustar timeout:
-   - El timeout de **3s** está causando aborts reales en producción.
-   - Propuesta: **8–10s** para background (sigue sin bloquear UI, no hay spinner).
-   - Alternativamente mantener 3s, pero entonces se requiere reintento automático; recomiendo subirlo y además optimizar la edge function (siguiente punto).
-
-### C) Optimizar `sync_from_shopify` para que sea rápido y confiable
-En `supabase/functions/update-shopify-order/index.ts`, caso `sync_from_shopify`:
-
-1) Cambiar el GET a Shopify para pedir solo campos mínimos:
-   - `fields=id,note,tags,updated_at`
-   - Endpoint: `/orders/${id}.json?fields=id,note,tags,updated_at`
-
-2) No actualizar `raw_data` (es grande, más lento, y no es necesario para sincronizar nota).
-   - Solo actualizar:
-     - `note`
-     - `tags`
-     - `updated_at_shopify`
-
-3) (Recomendado) Resolver credenciales por organización (como `update-shopify-order-note`):
-   - Hoy `update-shopify-order` depende de `SHOPIFY_STORE_DOMAIN` y `SHOPIFY_ACCESS_TOKEN` en env.
-   - Si hay multi-organización o credenciales por org, esto falla intermitentemente.
-   - Mejor: replicar la lógica “env → fallback DB” ya usada en `update-shopify-order-note`.
-
-Resultado esperado:
-- El background sync pasa a ser suficientemente rápido para no abortar.
-- Y aunque Shopify tarde, el UI ya mostró la nota desde Supabase.
-
-### D) Observabilidad mínima (sin “ensuciar” producción)
-1) Reintroducir logs de diagnóstico pero controlados por `import.meta.env.DEV` o usando `logger.debug`.
-2) Loggear en el modal solo eventos clave:
-   - “hidraté desde DB” (con orderId y longitud de nota, no PII)
-   - “background sync start/success/timeout”
-3) En edge function, loggear:
-   - tiempo total de request
-   - nota recibida (solo longitud o string si es seguro para ustedes)
+Modificar `ReplenishmentSuggestions.tsx` para mostrar:
+- **Pendientes**: Productos en producción (ordenados - entregados)
+- **En Calidad**: Productos entregados pero pendientes de aprobación
 
 ---
 
-## Validación (pasos exactos)
-1) Abrir pedido **68642**:
-   - Debe mostrar “ok” inmediatamente (desde Supabase), sin esperar Shopify.
-2) Abrir pedido **68643**:
-   - Si Supabase está en null, puede abrir vacío inicialmente.
-   - Dentro de ~1–10s (background), debe actualizarse automáticamente con la nota de Shopify si existe.
-3) Editar nota en Sewdle:
-   - Debe verse “Guardando…” → “Guardado ✓” sin depender de Shopify.
-   - Si Shopify falla, debe pasar a estado “pending_sync” y reintentar.
-4) Cambiar nota en Shopify y volver a abrir en Sewdle:
-   - Debe reflejar cambio automáticamente al abrir (sin botón manual).
+## Cambios Técnicos Detallados
+
+### Migración SQL
+
+Se creará una nueva migración que:
+
+1. **Elimina** la función actual `refresh_inventory_replenishment`
+2. **Crea** una nueva versión con la lógica corregida
+3. **Actualiza** la vista `v_replenishment_details` para incluir `in_transit`
+
+```sql
+-- Estructura de la nueva función (pseudocódigo)
+CREATE OR REPLACE FUNCTION refresh_inventory_replenishment(org_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  WITH 
+  -- Ventas de Shopify (sin cambios)
+  sales_data AS (...),
+  
+  -- NUEVO: Órdenes pendientes (excluye cancelled/completed)
+  pending_orders AS (
+    SELECT product_variant_id, SUM(quantity) as ordered_qty
+    FROM order_items oi
+    JOIN orders o ON oi.order_id = o.id
+    WHERE o.organization_id = org_id
+      AND o.status NOT IN ('cancelled', 'completed')
+    GROUP BY product_variant_id
+  ),
+  
+  -- NUEVO: Entregas usando quantity_delivered + in_transit
+  delivery_data AS (
+    SELECT 
+      product_variant_id,
+      SUM(quantity_delivered) as total_delivered,
+      SUM(CASE WHEN status IN ('in_quality', 'partial_approved')
+          THEN quantity_delivered - quantity_approved 
+          ELSE 0 END) as in_transit
+    FROM delivery_items di
+    JOIN deliveries d ON di.delivery_id = d.id
+    ...
+  )
+  
+  INSERT INTO inventory_replenishment (
+    ...,
+    pending_production,  -- = ordered_qty - total_delivered
+    in_transit,          -- NUEVA COLUMNA
+    suggested_quantity   -- = demand_40d - stock - pending - in_transit
+  )
+  ...
+END;
+$$;
+```
+
+### Cambios en UI
+
+Actualizar la tabla de sugerencias para mostrar:
+
+| Columna Actual | Columna Nueva |
+|----------------|---------------|
+| "Pendientes" | "En Producción" (ordenado - entregado) |
+| - | "En Calidad" (entregado - aprobado) |
 
 ---
 
-## Archivos a tocar
-1) `src/components/picking/PickingOrderDetailsModal.tsx`
-   - Arreglar hidratación + flags correctos + robustecer background sync.
-2) `supabase/functions/update-shopify-order/index.ts`
-   - Optimizar `sync_from_shopify` (fields mínimos, sin raw_data, mejor credenciales).
+## Archivos a Modificar
+
+1. **Nueva migración SQL**: `supabase/migrations/YYYYMMDD_fix_replenishment_calculation.sql`
+   - Función `refresh_inventory_replenishment` corregida
+   - Vista `v_replenishment_details` actualizada
+   - Nueva columna `in_transit` en tabla `inventory_replenishment`
+
+2. **`src/hooks/useReplenishment.ts`**
+   - Actualizar interface `ReplenishmentSuggestion` para incluir `in_transit`
+
+3. **`src/components/supplies/ReplenishmentSuggestions.tsx`**
+   - Agregar columna "En Calidad" a la tabla
+   - Actualizar cálculo de totales seleccionados
 
 ---
 
-## Resultado final esperado
-- Las notas se ven siempre “de una” desde Supabase (cuando existan).
-- La verificación con Shopify ocurre en background sin bloquear y sin requerir botón.
-- Si hay notas en Shopify que no están en Supabase, se corrige automáticamente al abrir.
-- El sistema deja de depender de un request que hoy se aborta por timeout y además deja el UI sin hidratar.
+## Resultados Esperados
 
-## Próximas mejoras (opcionales)
-- Mantener el botón de refresh solo como “forzar actualización” y esconderlo detrás de un icono más discreto.
-- Agregar un “última sincronización” (timestamp) pequeño para auditoría interna.
-- Programar un job/cron de reconciliación (si quieren garantizar convergencia incluso si webhooks fallan).
+Después de aplicar los cambios:
+
+- Las sugerencias reflejarán correctamente los productos ya ordenados
+- Los productos en control de calidad se mostrarán por separado
+- La columna `suggested_quantity` será más precisa
+- Se reducirá el riesgo de sobre-producción
+
+---
+
+## Notas de Implementación
+
+- La migración agregará una nueva columna `in_transit` a la tabla `inventory_replenishment`
+- Los usuarios deberán hacer clic en "Calcular Sugerencias" para ver los datos corregidos
+- Los datos históricos no se actualizarán automáticamente
