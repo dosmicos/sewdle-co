@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -174,7 +175,61 @@ serve(async (req) => {
         })
         break
 
-      case 'create_fulfillment':
+      case 'sync_from_shopify':
+        // Fetch order from Shopify and update local database
+        console.log(`🔄 SYNC_FROM_SHOPIFY for order ${orderId}`);
+        
+        const syncResponse = await fetch(`${shopifyApiUrl}.json`, {
+          method: 'GET',
+          headers: {
+            'X-Shopify-Access-Token': shopifyAccessToken,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!syncResponse.ok) {
+          const errorText = await syncResponse.text();
+          throw new Error(`Failed to fetch order from Shopify: ${errorText}`);
+        }
+
+        const shopifyOrder = await syncResponse.json();
+        const order = shopifyOrder.order;
+        
+        console.log(`   Shopify note: "${order.note || '(empty)'}"`);
+        console.log(`   Shopify tags: "${order.tags || '(empty)'}"`);
+        
+        // Update local database with Shopify data
+        const supabaseClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        const { error: dbError } = await supabaseClient
+          .from('shopify_orders')
+          .update({
+            note: order.note || null,
+            tags: order.tags || null,
+            raw_data: order,
+            updated_at_shopify: order.updated_at
+          })
+          .eq('shopify_order_id', orderId);
+
+        if (dbError) {
+          console.error('❌ Error updating local database:', dbError);
+          throw new Error(`Failed to update local database: ${dbError.message}`);
+        }
+
+        console.log(`✅ Local database synced with Shopify data`);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Order synced from Shopify',
+            note: order.note,
+            tags: order.tags
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
         console.log(`📦 Creating fulfillment`)
         const fulfillmentPayload = {
           fulfillment: {
