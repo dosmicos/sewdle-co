@@ -90,6 +90,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [isProcessingPickup, setIsProcessingPickup] = useState(false);
   const [selectedCarrierName, setSelectedCarrierName] = useState<string | null>(null);
   const [isProcessingExpressFulfillment, setIsProcessingExpressFulfillment] = useState(false);
+  const [isSyncingFromShopify, setIsSyncingFromShopify] = useState(false);
   
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
@@ -595,7 +596,49 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
-  // Use useCallback with localOrder to prevent stale closures
+  // Function to sync note from Shopify (when note was added in Shopify but not synced)
+  const handleSyncFromShopify = async () => {
+    if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
+    
+    setIsSyncingFromShopify(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-shopify-order', {
+        body: {
+          orderId: effectiveOrder.shopify_order.shopify_order_id.toString(),
+          action: 'sync_from_shopify'
+        }
+      });
+
+      if (error) throw error;
+
+      // Update local state with synced note
+      const syncedNote = data.note || '';
+      setShopifyNote(syncedNote);
+      
+      // Update local order and cache
+      const updatedOrder = localOrder ? {
+        ...localOrder,
+        shopify_order: {
+          ...localOrder.shopify_order,
+          note: syncedNote,
+          tags: data.tags || localOrder.shopify_order?.tags
+        }
+      } : null;
+      
+      if (updatedOrder) {
+        setLocalOrder(updatedOrder as PickingOrder);
+        updateOrderOptimistically(() => updatedOrder as PickingOrder);
+      }
+
+      toast.success('Nota sincronizada desde Shopify');
+    } catch (error) {
+      console.error('Error syncing from Shopify:', error);
+      toast.error('Error al sincronizar desde Shopify');
+    } finally {
+      setIsSyncingFromShopify(false);
+    }
+  };
+
   const handlePrint = useCallback(() => {
     // Use localOrder directly to ensure we print the correct order
     if (!localOrder?.shopify_order_id) {
@@ -1449,10 +1492,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       {effectiveOrder.shopify_order.customer_first_name} {effectiveOrder.shopify_order.customer_last_name}
                     </Badge>
                   )}
-                  <CardTitle className="text-sm md:text-base flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Notas de Shopify
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm md:text-base flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Notas de Shopify
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSyncFromShopify}
+                      disabled={isSyncingFromShopify || !!effectiveOrder?.shopify_order?.cancelled_at}
+                      className="h-7 w-7 p-0"
+                      title="Sincronizar nota desde Shopify"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isSyncingFromShopify ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-3 md:p-6 pt-0 space-y-2">
                   <Textarea
@@ -1460,7 +1515,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     onChange={(e) => setShopifyNote(e.target.value)}
                     placeholder="Agregar notas visibles en Shopify..."
                     className="min-h-[60px] md:min-h-[100px] text-sm"
-                    disabled={!!effectiveOrder?.shopify_order?.cancelled_at}
+                    disabled={!!effectiveOrder?.shopify_order?.cancelled_at || isSyncingFromShopify}
                   />
                   <Button
                     onClick={handleSaveShopifyNote}
