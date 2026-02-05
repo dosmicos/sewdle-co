@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '@/features/shipping';
 import type { EnviaShippingButtonRef } from '@/features/shipping';
+import { invokeEdgeFunction } from '@/features/shipping/lib/invokeEdgeFunction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface ShopifyLineItem {
@@ -91,7 +92,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [selectedCarrierName, setSelectedCarrierName] = useState<string | null>(null);
   const [isProcessingExpressFulfillment, setIsProcessingExpressFulfillment] = useState(false);
   const [isSyncingFromShopify, setIsSyncingFromShopify] = useState(false);
-  
+
+  // Shopify note sync UX (auto-save + background sync)
+  const [shopifyNoteSaveState, setShopifyNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'pending_sync'>('idle');
+  const lastSavedShopifyNoteRef = useRef<string>('');
+  const debounceSaveTimerRef = useRef<number | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryAttemptRef = useRef(0);
+  const backgroundSyncDoneRef = useRef<string | null>(null);
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
   const [verificationResult, setVerificationResult] = useState<{
@@ -343,30 +351,140 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Sync notes when effectiveOrder changes AND matches current orderId
   // This prevents race condition where orderId effect resets notes after data loads
   useEffect(() => {
-    if (effectiveOrder?.id === orderId) {
-      setNotes(effectiveOrder.internal_notes || '');
-      setShopifyNote(effectiveOrder.shopify_order?.note || '');
-    }
+    if (effectiveOrder?.id !== orderId) return;
+
+    const noteFromDb = effectiveOrder.shopify_order?.note || '';
+
+    setNotes(effectiveOrder.internal_notes || '');
+    setShopifyNote(noteFromDb);
+
+    // Treat the DB value as the baseline to avoid auto-saving on hydration
+    lastSavedShopifyNoteRef.current = noteFromDb;
+    retryAttemptRef.current = 0;
+    setShopifyNoteSaveState(noteFromDb ? 'saved' : 'idle');
   }, [effectiveOrder, orderId]);
 
   // Reset verification states when orderId changes (but NOT localOrder or lineItems - keep previous data visible during transition)
   // NOTE: Notes are NOT reset here - they sync from effectiveOrder in the effect above to prevent race conditions
   useEffect(() => {
+    // Clear pending debounce/retry timers when navigating between orders
+    if (debounceSaveTimerRef.current) {
+      window.clearTimeout(debounceSaveTimerRef.current);
+      debounceSaveTimerRef.current = null;
+    }
+    if (retryTimerRef.current) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    retryAttemptRef.current = 0;
+    backgroundSyncDoneRef.current = null;
+    setShopifyNoteSaveState('idle');
+
     // Reset verification and input states only - NOT notes!
     setSkuInput('');
     setVerificationResult(null);
     setVerifiedCounts(new Map());
     setShowScrollHint(false);
-    
+
     // Reset guards for new order (allow pack/print for the new order)
     autoPackTriggeredRef.current = null;
     autoPrintTriggeredRef.current = null;
     packInFlightRef.current = false;
-    
+
     // DON'T reset lineItems here - causes "0 unidades" flash
     // They will be replaced when fetchLineItems completes for the new order
     // Note: localOrder is NOT reset here to prevent effectiveOrder from becoming null
   }, [orderId]);
+
+  // Background sync: when opening an order, silently refresh note from Shopify (3s timeout)
+  // This updates Supabase + UI if it differs, without blocking the rest of the modal.
+  useEffect(() => {
+    const shopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id;
+    if (!shopifyOrderId) return;
+
+    const key = `${orderId}:${shopifyOrderId}`;
+    if (backgroundSyncDoneRef.current === key) return;
+    backgroundSyncDoneRef.current = key;
+
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const data = await invokeEdgeFunction<any>(
+          'update-shopify-order',
+          { orderId: shopifyOrderId.toString(), action: 'sync_from_shopify' },
+          { timeoutMs: 3_000, signal: controller.signal }
+        );
+
+        const syncedNote = data?.note || '';
+        const syncedTags = data?.tags ?? null;
+
+        // If nothing changed, do nothing (no UI noise)
+        if (syncedNote === lastSavedShopifyNoteRef.current) return;
+
+        setShopifyNote(syncedNote);
+        lastSavedShopifyNoteRef.current = syncedNote;
+        setShopifyNoteSaveState(syncedNote ? 'saved' : 'idle');
+
+        // Update local UI cache so it persists when reopening the modal
+        setLocalOrder((prev) =>
+          prev && prev.id === orderId
+            ? {
+                ...prev,
+                shopify_order: {
+                  ...(prev.shopify_order ?? {}),
+                  note: syncedNote,
+                  ...(syncedTags ? { tags: syncedTags } : {}),
+                } as any,
+              }
+            : prev
+        );
+
+        updateOrderOptimistically((prev) => {
+          if (!prev || prev.id !== orderId) return prev;
+          return {
+            ...prev,
+            shopify_order: {
+              ...(prev.shopify_order ?? {}),
+              note: syncedNote,
+              ...(syncedTags ? { tags: syncedTags } : {}),
+            } as any,
+          } as PickingOrder;
+        });
+      } catch {
+        // Silent failure by design
+      }
+    })();
+
+    return () => controller.abort();
+  }, [orderId, effectiveOrder?.shopify_order?.shopify_order_id, updateOrderOptimistically]);
+
+  // Auto-save (debounced): after 2s without typing, save locally + sync to Shopify in background
+  useEffect(() => {
+    const shopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id;
+    if (!shopifyOrderId) return;
+    if (effectiveOrder?.shopify_order?.cancelled_at) return;
+
+    // No changes since last baseline/success
+    if (shopifyNote === lastSavedShopifyNoteRef.current) return;
+
+    if (debounceSaveTimerRef.current) {
+      window.clearTimeout(debounceSaveTimerRef.current);
+    }
+
+    debounceSaveTimerRef.current = window.setTimeout(() => {
+      void handleSaveShopifyNote(true);
+    }, 2_000);
+
+    return () => {
+      if (debounceSaveTimerRef.current) {
+        window.clearTimeout(debounceSaveTimerRef.current);
+        debounceSaveTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopifyNote, effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.cancelled_at]);
 
   // Show scroll hint when lineItems load and there are 3 or more
   useEffect(() => {
@@ -560,77 +678,154 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setIsSaving(false);
   };
 
-  const handleSaveShopifyNote = async () => {
-    if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
-    
+  /**
+   * Save note locally (Supabase) immediately and sync to Shopify in background.
+   * - silent=true: no toasts/UI noise (used for debounce auto-save)
+   * - retries up to 3 times (5s interval) if Shopify sync fails
+   */
+  const handleSaveShopifyNote = async (silent = false) => {
+    const shopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id?.toString();
+    if (!shopifyOrderId) return;
+    if (effectiveOrder?.shopify_order?.cancelled_at) return;
+
+    // Clear any pending retry when user saves again
+    if (retryTimerRef.current) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    const noteToSave = shopifyNote;
+
     setIsSavingShopifyNote(true);
+    setShopifyNoteSaveState('saving');
+
     try {
       // Optimistic update: immediately update local state AND React Query cache
-      const updatedOrder = localOrder ? {
-        ...localOrder,
-        shopify_order: {
-          ...localOrder.shopify_order,
-          note: shopifyNote
-        }
-      } : null;
-      
-      if (updatedOrder) {
-        setLocalOrder(updatedOrder as PickingOrder);
-        updateOrderOptimistically(() => updatedOrder as PickingOrder);
+      setLocalOrder((prev) =>
+        prev && prev.id === orderId
+          ? {
+              ...prev,
+              shopify_order: {
+                ...(prev.shopify_order ?? {}),
+                note: noteToSave,
+              } as any,
+            }
+          : prev
+      );
+
+      updateOrderOptimistically((prev) => {
+        if (!prev || prev.id !== orderId) return prev;
+        return {
+          ...prev,
+          shopify_order: {
+            ...(prev.shopify_order ?? {}),
+            note: noteToSave,
+          } as any,
+        } as PickingOrder;
+      });
+
+      // Edge function: saves locally first, then attempts Shopify sync
+      const { data, error } = await supabase.functions.invoke('update-shopify-order-note', {
+        body: { shopifyOrderId, note: noteToSave },
+      });
+
+      if (error) throw error;
+
+      const shopifySynced = (data as any)?.shopifySynced !== false;
+
+      if (shopifySynced) {
+        lastSavedShopifyNoteRef.current = noteToSave;
+        retryAttemptRef.current = 0;
+        setShopifyNoteSaveState(noteToSave ? 'saved' : 'idle');
+        if (!silent) toast.success('Nota guardada');
+      } else {
+        setShopifyNoteSaveState('pending_sync');
+        if (!silent) toast.message('Nota guardada localmente. Sincronización con Shopify pendiente.');
       }
-      
-      // Sync to Shopify (this updates Shopify + local DB)
-      await updateShopifyNote(effectiveOrder.shopify_order.shopify_order_id.toString(), shopifyNote);
-      
-      toast.success('Nota guardada en Shopify');
-      
-      // Background refetch to confirm final state (don't await - already showing optimistic update)
+
+      // If Shopify sync is pending, retry up to 3 times (5s interval)
+      if (!shopifySynced) {
+        const attempt = retryAttemptRef.current;
+        if (attempt < 3) {
+          retryAttemptRef.current = attempt + 1;
+          const orderSnapshot = orderId;
+          retryTimerRef.current = window.setTimeout(() => {
+            if (orderId !== orderSnapshot) return;
+            if (shopifyNote !== noteToSave) return; // user changed note again
+            void handleSaveShopifyNote(true);
+          }, 5_000);
+        }
+      }
+
+      // Background refetch to confirm final state (don't block UI)
       refetchCachedOrder();
     } catch (error) {
       console.error('Error saving Shopify note:', error);
-      toast.error('Error al guardar nota en Shopify');
-      // On error, refetch to restore correct state
-      await refetchOrder(orderId);
+      setShopifyNoteSaveState('pending_sync');
+      if (!silent) toast.message('Nota guardada localmente. Sincronización con Shopify pendiente.');
+
+      const attempt = retryAttemptRef.current;
+      if (attempt < 3) {
+        retryAttemptRef.current = attempt + 1;
+        const noteSnapshot = noteToSave;
+        const orderSnapshot = orderId;
+        retryTimerRef.current = window.setTimeout(() => {
+          if (orderId !== orderSnapshot) return;
+          if (shopifyNote !== noteSnapshot) return;
+          void handleSaveShopifyNote(true);
+        }, 5_000);
+      }
     } finally {
       setIsSavingShopifyNote(false);
     }
   };
 
-  // Function to sync note from Shopify (when note was added in Shopify but not synced)
+  // Manual sync button action (kept as "force refresh")
   const handleSyncFromShopify = async () => {
     if (!effectiveOrder?.shopify_order?.shopify_order_id) return;
-    
+
     setIsSyncingFromShopify(true);
     try {
-      const { data, error } = await supabase.functions.invoke('update-shopify-order', {
-        body: {
-          orderId: effectiveOrder.shopify_order.shopify_order_id.toString(),
-          action: 'sync_from_shopify'
-        }
+      const data = await invokeEdgeFunction<any>(
+        'update-shopify-order',
+        { orderId: effectiveOrder.shopify_order.shopify_order_id.toString(), action: 'sync_from_shopify' },
+        { timeoutMs: 10_000 }
+      );
+
+      const syncedNote = data?.note || '';
+      const syncedTags = data?.tags ?? null;
+
+      setShopifyNote(syncedNote);
+      lastSavedShopifyNoteRef.current = syncedNote;
+      retryAttemptRef.current = 0;
+      setShopifyNoteSaveState(syncedNote ? 'saved' : 'idle');
+
+      setLocalOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              shopify_order: {
+                ...(prev.shopify_order ?? {}),
+                note: syncedNote,
+                ...(syncedTags ? { tags: syncedTags } : {}),
+              } as any,
+            }
+          : prev
+      );
+
+      updateOrderOptimistically((prev) => {
+        if (!prev || prev.id !== orderId) return prev;
+        return {
+          ...prev,
+          shopify_order: {
+            ...(prev.shopify_order ?? {}),
+            note: syncedNote,
+            ...(syncedTags ? { tags: syncedTags } : {}),
+          } as any,
+        } as PickingOrder;
       });
 
-      if (error) throw error;
-
-      // Update local state with synced note
-      const syncedNote = data.note || '';
-      setShopifyNote(syncedNote);
-      
-      // Update local order and cache
-      const updatedOrder = localOrder ? {
-        ...localOrder,
-        shopify_order: {
-          ...localOrder.shopify_order,
-          note: syncedNote,
-          tags: data.tags || localOrder.shopify_order?.tags
-        }
-      } : null;
-      
-      if (updatedOrder) {
-        setLocalOrder(updatedOrder as PickingOrder);
-        updateOrderOptimistically(() => updatedOrder as PickingOrder);
-      }
-
-      toast.success('Nota sincronizada desde Shopify');
+      toast.success('Nota actualizada desde Shopify');
     } catch (error) {
       console.error('Error syncing from Shopify:', error);
       toast.error('Error al sincronizar desde Shopify');
@@ -1512,13 +1707,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 <CardContent className="p-3 md:p-6 pt-0 space-y-2">
                   <Textarea
                     value={shopifyNote}
-                    onChange={(e) => setShopifyNote(e.target.value)}
+                    onChange={(e) => {
+                      setShopifyNote(e.target.value);
+                      setShopifyNoteSaveState('idle');
+                    }}
                     placeholder="Agregar notas visibles en Shopify..."
                     className="min-h-[60px] md:min-h-[100px] text-sm"
                     disabled={!!effectiveOrder?.shopify_order?.cancelled_at || isSyncingFromShopify}
                   />
                   <Button
-                    onClick={handleSaveShopifyNote}
+                    onClick={() => void handleSaveShopifyNote(false)}
                     disabled={isSavingShopifyNote || !!effectiveOrder?.shopify_order?.cancelled_at}
                     size="sm"
                     className="w-full text-xs md:text-sm"
@@ -1533,7 +1731,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     )}
                   </Button>
                   <p className="text-xs text-muted-foreground hidden md:block">
-                    ℹ️ Los cambios se sincronizan automáticamente con Shopify
+                    {shopifyNoteSaveState === 'saving'
+                      ? 'Guardando…'
+                      : shopifyNoteSaveState === 'saved'
+                        ? 'Guardado ✓'
+                        : shopifyNoteSaveState === 'pending_sync'
+                          ? 'Guardado localmente. Sincronización con Shopify pendiente.'
+                          : 'ℹ️ Los cambios se sincronizan automáticamente con Shopify'}
                   </p>
                 </CardContent>
               </Card>

@@ -95,55 +95,78 @@ Deno.serve(async (req) => {
     console.log('Domain:', shopifyDomain)
     console.log('Token present:', accessToken ? 'Yes' : 'No')
 
-    console.log(`📝 Updating note for order ${shopifyOrderId} in Shopify...`)
+    // ✅ 1) Guardar PRIMERO en Supabase (respuesta rápida en Sewdle)
+    console.log(`💾 Saving note locally for order ${shopifyOrderId}...`)
 
-    // Update order note in Shopify
-    const shopifyUrl = `https://${shopifyDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`
-    const shopifyResponse = await fetch(shopifyUrl, {
-      method: 'PUT',
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        order: {
-          id: shopifyOrderId,
-          note: note || null
-        }
-      })
-    })
-
-    if (!shopifyResponse.ok) {
-      const errorText = await shopifyResponse.text()
-      console.error('❌ Shopify API error:', errorText)
-      return new Response(
-        JSON.stringify({ error: 'Failed to update note in Shopify', details: errorText }),
-        { status: shopifyResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const updatedOrder = await shopifyResponse.json()
-    console.log('✅ Note updated in Shopify successfully')
-
-    // Update note in local database
-    const { error: updateError } = await supabaseClient
+    const { error: localError } = await supabaseClient
       .from('shopify_orders')
       .update({ 
         note: note || null,
-        raw_data: updatedOrder.order
+        updated_at: new Date().toISOString()
       })
       .eq('shopify_order_id', shopifyOrderId)
 
-    if (updateError) {
-      console.error('⚠️ Error updating local database:', updateError)
-      // No lanzamos error ya que la nota se actualizó en Shopify
+    if (localError) {
+      console.error('❌ Error saving note locally:', localError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to save note locally', details: localError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // ✅ 2) Luego intentar sincronizar con Shopify (en background / best-effort)
+    console.log(`📡 Syncing note for order ${shopifyOrderId} to Shopify...`)
+
+    let shopifySynced = false
+    let shopifyError: string | null = null
+
+    try {
+      const shopifyUrl = `https://${shopifyDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`
+      const shopifyResponse = await fetch(shopifyUrl, {
+        method: 'PUT',
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order: {
+            id: shopifyOrderId,
+            note: note || null
+          }
+        })
+      })
+
+      if (!shopifyResponse.ok) {
+        shopifyError = await shopifyResponse.text()
+        console.error('⚠️ Shopify API error (note sync):', shopifyResponse.status, shopifyError)
+      } else {
+        const updatedOrder = await shopifyResponse.json()
+        shopifySynced = true
+        console.log('✅ Note updated in Shopify successfully')
+
+        // Guardar raw_data actualizado (best-effort)
+        const { error: rawError } = await supabaseClient
+          .from('shopify_orders')
+          .update({ raw_data: updatedOrder.order })
+          .eq('shopify_order_id', shopifyOrderId)
+
+        if (rawError) {
+          console.error('⚠️ Error updating raw_data locally:', rawError)
+        }
+      }
+    } catch (e: any) {
+      shopifyError = e?.message || String(e)
+      console.error('⚠️ Error calling Shopify API (note sync):', shopifyError)
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Note updated successfully',
-        note: note 
+      JSON.stringify({
+        success: true,
+        message: shopifySynced ? 'Note saved and synced' : 'Note saved locally; Shopify sync pending',
+        note,
+        localSaved: true,
+        shopifySynced,
+        shopifyError,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

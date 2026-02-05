@@ -414,6 +414,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
 async function updateExistingOrder(order: any, supabase: any, shopDomain: string) {
   console.log(`🔄 Actualizando orden existente: ${order.id} - ${order.order_number}`);
   console.log(`🏪 Shop domain recibido: ${shopDomain}`);
+  console.log('📝 Nota recibida de Shopify (webhook):', JSON.stringify((order as any)?.note ?? null));
 
   // Get organization_id using exact matching with shop domain from header
   let organizationId = null;
@@ -472,11 +473,13 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     total_shipping: parseFloat(order.total_shipping || '0'),
     total_line_items_price: parseFloat(order.total_line_items_price || '0'),
     
-    // Información adicional - PROTEGER contra sobrescritura de tags
+    // Información adicional - PROTEGER contra sobrescritura de tags/notes
     // Solo actualizar tags si el webhook trae tags válidos (no sobrescribir con null)
     ...(order.tags ? { tags: order.tags } : {}),
-    note: order.note || null,
-    
+
+    // Solo actualizar note si viene en el payload (evita sobrescribir con null cuando Shopify omite el campo)
+    ...(Object.prototype.hasOwnProperty.call(order, 'note') ? { note: order.note || null } : {}),
+
     // Metadatos actualizados
     raw_data: order
   };
