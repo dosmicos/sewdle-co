@@ -176,10 +176,12 @@ serve(async (req) => {
         break
 
       case 'sync_from_shopify':
-        // Fetch order from Shopify and update local database
-        console.log(`🔄 SYNC_FROM_SHOPIFY for order ${orderId}`);
+        // Fetch ONLY minimal fields from Shopify for fast sync (optimized for latency)
+        console.log(`🔄 SYNC_FROM_SHOPIFY for order ${orderId} (optimized)`);
+        const syncStartTime = Date.now();
         
-        const syncResponse = await fetch(`${shopifyApiUrl}.json`, {
+        // Request only the fields we need: note, tags, updated_at
+        const syncResponse = await fetch(`${shopifyApiUrl}.json?fields=id,note,tags,updated_at`, {
           method: 'GET',
           headers: {
             'X-Shopify-Access-Token': shopifyAccessToken,
@@ -195,10 +197,11 @@ serve(async (req) => {
         const shopifyOrder = await syncResponse.json();
         const order = shopifyOrder.order;
         
-        console.log(`   Shopify note: "${order.note || '(empty)'}"`);
+        console.log(`   Shopify note: "${order.note || '(empty)'}" (length: ${(order.note || '').length})`);
         console.log(`   Shopify tags: "${order.tags || '(empty)'}"`);
+        console.log(`   Fetch time: ${Date.now() - syncStartTime}ms`);
         
-        // Update local database with Shopify data
+        // Update local database with Shopify data - skip raw_data for speed
         const supabaseClient = createClient(
           Deno.env.get('SUPABASE_URL') ?? '',
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -209,8 +212,8 @@ serve(async (req) => {
           .update({
             note: order.note || null,
             tags: order.tags || null,
-            raw_data: order,
             updated_at_shopify: order.updated_at
+            // NOTE: raw_data is NOT updated here for performance - it's large and not needed for note sync
           })
           .eq('shopify_order_id', orderId);
 
@@ -219,7 +222,7 @@ serve(async (req) => {
           throw new Error(`Failed to update local database: ${dbError.message}`);
         }
 
-        console.log(`✅ Local database synced with Shopify data`);
+        console.log(`✅ Local database synced with Shopify data (total: ${Date.now() - syncStartTime}ms)`);
         
         return new Response(
           JSON.stringify({ 
