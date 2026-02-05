@@ -99,7 +99,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const debounceSaveTimerRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const retryAttemptRef = useRef(0);
-  const backgroundSyncDoneRef = useRef<string | null>(null);
+  
+  // Separate refs for proper hydration & background sync control:
+  // - hydratedKeyRef: tracks if we already hydrated from DB for this orderId
+  // - syncInFlightKeyRef: prevents duplicate background sync requests
+  // - shopifyFreshKeyRef: marks that we already have fresh data from Shopify (don't overwrite with stale cache)
+  const hydratedKeyRef = useRef<string | null>(null);
+  const syncInFlightKeyRef = useRef<string | null>(null);
+  const shopifyFreshKeyRef = useRef<string | null>(null);
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
   const [verificationResult, setVerificationResult] = useState<{
@@ -349,30 +356,33 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [orderId, cachedOrder, localOrder, order]);
 
   // Sync notes when effectiveOrder changes AND matches current orderId
-  // Only runs on INITIAL load for a given order; once background sync completes
-  // (backgroundSyncDoneRef is set for this order) we stop overwriting from stale cache.
+  // IMPORTANT: This effect ALWAYS hydrates from DB on first render for the order.
+  // Subsequent cache updates are ignored if:
+  // - We already got fresh data from Shopify (shopifyFreshKeyRef set)
+  // - We already hydrated for this orderId (hydratedKeyRef set)
   useEffect(() => {
     if (effectiveOrder?.id !== orderId) return;
 
-    const shopifyOrderId = effectiveOrder.shopify_order?.shopify_order_id;
-    const syncKey = `${orderId}:${shopifyOrderId}`;
+    const hydrateKey = orderId;
 
-    // If background sync already ran for this order, don't let stale cache override
-    if (backgroundSyncDoneRef.current === syncKey) {
-      // Still sync internal notes since those are local-only
-      setNotes(effectiveOrder.internal_notes || '');
+    // Always sync internal notes (they're local-only)
+    setNotes(effectiveOrder.internal_notes || '');
+
+    // If we already hydrated OR already have fresh Shopify data, don't overwrite
+    if (hydratedKeyRef.current === hydrateKey || shopifyFreshKeyRef.current === hydrateKey) {
       return;
     }
 
+    // First-time hydration from DB for this order
     const noteFromDb = effectiveOrder.shopify_order?.note || '';
-
-    setNotes(effectiveOrder.internal_notes || '');
+    
     setShopifyNote(noteFromDb);
-
-    // Treat the DB value as the baseline to avoid auto-saving on hydration
     lastSavedShopifyNoteRef.current = noteFromDb;
     retryAttemptRef.current = 0;
     setShopifyNoteSaveState(noteFromDb ? 'saved' : 'idle');
+    
+    // Mark as hydrated so subsequent cache updates don't overwrite
+    hydratedKeyRef.current = hydrateKey;
   }, [effectiveOrder, orderId]);
 
   // Reset verification states when orderId changes (but NOT localOrder or lineItems - keep previous data visible during transition)
@@ -389,7 +399,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
 
     retryAttemptRef.current = 0;
-    backgroundSyncDoneRef.current = null;
+    // Reset all hydration/sync refs for new order
+    hydratedKeyRef.current = null;
+    syncInFlightKeyRef.current = null;
+    shopifyFreshKeyRef.current = null;
     setShopifyNoteSaveState('idle');
 
     // Reset verification and input states only - NOT notes!
@@ -408,15 +421,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     // Note: localOrder is NOT reset here to prevent effectiveOrder from becoming null
   }, [orderId]);
 
-  // Background sync: when opening an order, silently refresh note from Shopify (3s timeout)
-  // This updates Supabase + UI if it differs, without blocking the rest of the modal.
+  // Background sync: when opening an order, silently refresh note from Shopify
+  // - Only mark as "done" on SUCCESS (not before/during fetch)
+  // - Use longer timeout (10s) to prevent aborts
+  // - Allow retry on failure/timeout by clearing syncInFlightKeyRef
   useEffect(() => {
     const shopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id;
     if (!shopifyOrderId) return;
 
-    const key = `${orderId}:${shopifyOrderId}`;
-    if (backgroundSyncDoneRef.current === key) return;
-    backgroundSyncDoneRef.current = key;
+    const syncKey = orderId;
+    
+    // If sync already in-flight or already got fresh data for this order, skip
+    if (syncInFlightKeyRef.current === syncKey || shopifyFreshKeyRef.current === syncKey) {
+      return;
+    }
+    
+    // Mark sync as in-flight (prevents duplicate requests)
+    syncInFlightKeyRef.current = syncKey;
 
     const controller = new AbortController();
 
@@ -425,15 +446,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         const data = await invokeEdgeFunction<any>(
           'update-shopify-order',
           { orderId: shopifyOrderId.toString(), action: 'sync_from_shopify' },
-          { timeoutMs: 3_000, signal: controller.signal }
+          { timeoutMs: 10_000, signal: controller.signal }
         );
+
+        // SUCCESS: mark as fresh so we don't overwrite with stale cache
+        shopifyFreshKeyRef.current = syncKey;
 
         const syncedNote = data?.note || '';
         const syncedTags = data?.tags ?? null;
 
-        // If nothing changed, do nothing (no UI noise)
-        if (syncedNote === lastSavedShopifyNoteRef.current) return;
-
+        // Update UI with fresh Shopify data
         setShopifyNote(syncedNote);
         lastSavedShopifyNoteRef.current = syncedNote;
         setShopifyNoteSaveState(syncedNote ? 'saved' : 'idle');
@@ -464,7 +486,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           } as PickingOrder;
         });
       } catch {
-        // Silent failure by design
+        // FAILURE/ABORT: clear in-flight so user can retry by reopening
+        if (syncInFlightKeyRef.current === syncKey) {
+          syncInFlightKeyRef.current = null;
+        }
+        // Silent failure by design - UI already shows DB data
       }
     })();
 
