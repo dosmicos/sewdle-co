@@ -464,6 +464,7 @@ export type Database = {
           days_of_supply: number | null
           id: string
           in_transit: number | null
+          last_known_velocity: number | null
           orders_count_30d: number
           organization_id: string
           pending_production: number
@@ -484,6 +485,7 @@ export type Database = {
           days_of_supply?: number | null
           id?: string
           in_transit?: number | null
+          last_known_velocity?: number | null
           orders_count_30d?: number
           organization_id: string
           pending_production?: number
@@ -504,6 +506,7 @@ export type Database = {
           days_of_supply?: number | null
           id?: string
           in_transit?: number | null
+          last_known_velocity?: number | null
           orders_count_30d?: number
           organization_id?: string
           pending_production?: number
@@ -3645,6 +3648,7 @@ export type Database = {
           days_of_supply: number | null
           id: string | null
           in_transit: number | null
+          last_known_velocity: number | null
           orders_count_30d: number | null
           organization_id: string | null
           pending_production: number | null
