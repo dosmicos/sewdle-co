@@ -1,137 +1,182 @@
 
-# Plan: Corregir Bug Critico en Calculo de Ventas de Reposicion IA
+# Plan: Guardar Ultima Velocidad Conocida como Fallback Permanente
 
-## Diagnostico del Problema
+## Problema
 
-Se encontro un **bug critico** en la funcion SQL `refresh_inventory_replenishment` que **infla las ventas 10x** o mas.
-
-### Causa Raiz: LEFT JOIN sin filtro de fecha
-
-La query actual usa dos LEFT JOINs encadenados:
+Cuando un producto lleva mas de 90 dias sin stock, tanto la ventana de 30 dias como la de 90 dias muestran 0 ventas. El sistema sugiere producir 0 unidades, aunque el producto era muy popular antes de agotarse.
 
 ```text
-product_variants
-  LEFT JOIN shopify_order_line_items (SIN filtro de fecha)  <-- BUG AQUI
-    LEFT JOIN shopify_orders (con filtro de fecha en el JOIN)
+Ejemplo: Ruana Pony T6
+- Oct-Nov: Vendia 0.7 unidades/dia (popular)
+- Diciembre 1: Se agota, no hay manera de producir
+- Febrero 6 (hoy): 67 dias sin stock
+  -> Ventana 30d: 0 ventas / 0 dias = 0 velocidad
+  -> Ventana 90d: todavia tiene datos (67 < 90)
+  
+Si pasan 90+ dias:
+  -> Ventana 90d: 0 ventas / 0 dias = 0 velocidad
+  -> Sistema sugiere: 0 unidades  <-- MAL
 ```
 
-El problema es que:
-1. El primer LEFT JOIN une TODOS los line items historicos (sin filtro de fecha)
-2. El segundo LEFT JOIN intenta filtrar por fecha, pero como esta en la condicion del JOIN (no en WHERE), cuando una orden no cumple el filtro, `soli.quantity` sigue existiendo
-3. Resultado: `SUM(soli.quantity)` suma TODAS las ventas de la historia, no solo 30 dias
+## Solucion: Ultima Velocidad Conocida
 
-### Evidencia con datos reales
+Guardar la velocidad de venta calculada cada vez que se ejecuta el calculo. Si en el futuro no hay ventas recientes ni en 30 ni en 90 dias, usar la ultima velocidad guardada como fallback.
 
-| SKU (Pollito T2) | Ventas calculadas | Ventas reales 30d | Inflacion |
-|---|---|---|---|
-| 46581502738667 | 787 | 79 | 10x |
-| 46581502771435 | 532 | 32 | 16x |
-| 46691151380715 | 310 | 23 | 13x |
+### Flujo logico:
 
-Esto explica por que el sistema sugiere cantidades absurdas de produccion.
+```text
+1. Calcular ventas 30d con dias de stock disponible
+2. Si hay datos 30d (>= 5 dias con stock) -> usar velocidad 30d
+3. Si no, calcular ventas 90d con dias de stock disponible
+4. Si hay datos 90d (>= 5 dias con stock) -> usar velocidad 90d
+5. Si no hay datos en ninguna ventana:
+   -> Buscar ultima velocidad guardada en inventory_replenishment
+   -> Usar esa velocidad con data_confidence = 'low'
+   -> Etiquetar con reason = 'Vel. historica guardada'
+6. Guardar siempre la velocidad calculada para uso futuro
+```
 
-### Problema adicional: Ordenes canceladas de Shopify
+## Cambios Tecnicos
 
-La query actual no excluye ordenes canceladas de Shopify (donde `cancelled_at IS NOT NULL`). Para Pollito T2:
-- Con ordenes pagadas + canceladas: 79 unidades
-- Solo pagadas y no canceladas: 62 unidades
+### 1. Nueva columna en `inventory_replenishment`: `last_known_velocity`
 
----
+Agregar una columna `last_known_velocity` (numeric) para almacenar la velocidad calculada cada vez que se procesa una variante con ventas reales. Esta columna sirve como memoria permanente.
 
-## Solucion
+### 2. Actualizar funcion SQL `refresh_inventory_replenishment`
 
-### 1. Corregir la query de ventas en la funcion SQL
+Agregar 3 CTEs nuevos a la funcion:
 
-Cambiar el CTE `sales_data` de LEFT JOINs a un sub-select o INNER JOIN con filtros en WHERE:
+**CTE `sales_90d`** - Ventas en ventana de 90 dias:
+```sql
+sales_90d AS (
+  SELECT pv.id as variant_id, COALESCE(s.total_qty, 0) as sales_90d
+  FROM product_variants pv
+  JOIN products p ON pv.product_id = p.id
+  LEFT JOIN LATERAL (
+    SELECT SUM(soli.quantity) as total_qty
+    FROM shopify_order_line_items soli
+    INNER JOIN shopify_orders so ON ...
+    WHERE so.created_at >= NOW() - INTERVAL '90 days'
+      AND so.cancelled_at IS NULL
+      AND so.financial_status NOT IN ('refunded', 'voided')
+  ) s ON true
+  WHERE p.organization_id = org_id
+)
+```
+
+**CTE `stock_days`** - Dias con stock disponible en cada ventana:
+```sql
+stock_days AS (
+  SELECT psh.product_variant_id as variant_id,
+    COUNT(DISTINCT CASE 
+      WHEN psh.recorded_at >= NOW() - INTERVAL '30 days' AND psh.stock_quantity > 0
+      THEN DATE(psh.recorded_at) END) as days_with_stock_30d,
+    COUNT(DISTINCT CASE 
+      WHEN psh.stock_quantity > 0 
+      THEN DATE(psh.recorded_at) END) as days_with_stock_90d
+  FROM product_stock_history psh
+  WHERE psh.recorded_at >= NOW() - INTERVAL '90 days'
+  GROUP BY psh.product_variant_id
+)
+```
+
+**CTE `last_velocity`** - Ultima velocidad conocida guardada:
+```sql
+last_velocity AS (
+  SELECT DISTINCT ON (variant_id) variant_id, avg_daily_sales as saved_velocity
+  FROM inventory_replenishment
+  WHERE organization_id = org_id AND avg_daily_sales > 0
+  ORDER BY variant_id, calculated_at DESC
+)
+```
+
+**Logica de velocidad en `replenishment_calc`**:
+```sql
+CASE
+  -- Prioridad 1: Velocidad ajustada 30d (dividida por dias con stock, no 30)
+  WHEN stk.days_with_stock_30d >= 5 AND sales.sales_30d > 0
+  THEN ROUND(sales.sales_30d::numeric / stk.days_with_stock_30d, 2)
+  -- Prioridad 2: Velocidad ajustada 90d
+  WHEN stk.days_with_stock_90d >= 5 AND s90.sales_90d > 0
+  THEN ROUND(s90.sales_90d::numeric / stk.days_with_stock_90d, 2)
+  -- Prioridad 3: Division simple 30d (si no hay historial de stock)
+  WHEN sales.sales_30d > 0
+  THEN ROUND(sales.sales_30d::numeric / 30, 2)
+  -- Prioridad 4: FALLBACK - Ultima velocidad guardada
+  WHEN lv.saved_velocity > 0
+  THEN lv.saved_velocity
+  ELSE 0
+END as avg_daily_sales
+```
+
+**Razon almacenada** para identificar la fuente:
+```sql
+CASE
+  WHEN stk.days_with_stock_30d >= 5 AND sales.sales_30d > 0 THEN 'Vel. 30d ajustada'
+  WHEN stk.days_with_stock_90d >= 5 AND s90.sales_90d > 0 THEN 'Vel. 90d ajustada'
+  WHEN sales.sales_30d > 0 THEN 'Vel. 30d'
+  WHEN lv.saved_velocity > 0 THEN 'Vel. historica guardada'
+  ELSE NULL
+END as reason
+```
+
+**Confianza de datos**:
+```sql
+CASE
+  WHEN stk.days_with_stock_30d >= 15 THEN 'high'
+  WHEN stk.days_with_stock_30d >= 5 THEN 'medium'
+  WHEN stk.days_with_stock_90d >= 5 THEN 'low'
+  WHEN lv.saved_velocity > 0 THEN 'low'   -- Fallback historico
+  ELSE 'low'
+END
+```
+
+**Guardar velocidad**: Despues del INSERT principal, actualizar `last_known_velocity` en todos los registros donde la velocidad se calculo con datos reales (no fallback):
+```sql
+UPDATE inventory_replenishment ir
+SET last_known_velocity = ir.avg_daily_sales
+WHERE ir.organization_id = org_id
+  AND ir.calculation_date = today_date
+  AND ir.avg_daily_sales > 0
+  AND ir.reason NOT LIKE '%historica%';
+```
+
+### 3. UI - Indicador visual de fuente de datos
+
+En `ReplenishmentSuggestions.tsx`, junto a la velocidad diaria, mostrar un icono naranja con tooltip cuando la velocidad viene del fallback historico:
+
+- Si `reason` contiene "historica" -> mostrar badge naranja "Est. historico" 
+- Si `reason` contiene "90d" -> mostrar badge amarillo "90d"
+- Si no -> mostrar velocidad normal (datos frescos de 30d)
+
+### 4. Filtro WHERE actualizado
+
+Actualmente la funcion solo incluye variantes con ventas o produccion. Con el fallback, tambien debe incluir variantes que tengan `last_known_velocity > 0`:
 
 ```sql
--- ANTES (BUGGY): LEFT JOIN sin filtro de fecha en line_items
-sales_data AS (
-    SELECT pv.id as variant_id,
-      COALESCE(SUM(soli.quantity), 0) as sales_30d,
-      COUNT(DISTINCT so.id) as orders_count_30d
-    FROM product_variants pv
-    JOIN products p ON pv.product_id = p.id
-    LEFT JOIN shopify_order_line_items soli 
-      ON soli.sku = pv.sku_variant          -- <-- SIN FECHA!
-    LEFT JOIN shopify_orders so 
-      ON soli.shopify_order_id = so.shopify_order_id 
-      AND so.created_at >= NOW() - INTERVAL '30 days'  -- fecha solo en JOIN
-    WHERE p.organization_id = org_id
-    GROUP BY pv.id
-)
-
--- DESPUES (CORRECTO): Calcular ventas por separado con INNER JOIN
-sales_data AS (
-    SELECT 
-      pv.id as variant_id,
-      COALESCE(s.total_qty, 0) as sales_30d,
-      COALESCE(s.order_count, 0) as orders_count_30d
-    FROM product_variants pv
-    JOIN products p ON pv.product_id = p.id
-    LEFT JOIN LATERAL (
-      SELECT 
-        SUM(soli.quantity) as total_qty,
-        COUNT(DISTINCT so.id) as order_count
-      FROM shopify_order_line_items soli
-      INNER JOIN shopify_orders so 
-        ON soli.shopify_order_id = so.shopify_order_id
-      WHERE soli.sku = pv.sku_variant
-        AND so.organization_id = org_id
-        AND so.created_at >= NOW() - INTERVAL '30 days'
-        AND so.financial_status NOT IN ('refunded', 'voided')
-        AND so.cancelled_at IS NULL
-    ) s ON true
-    WHERE p.organization_id = org_id
-)
+WHERE rc.sales_30d > 0 
+  OR rc.pending_production > 0 
+  OR rc.in_transit > 0
+  OR rc.avg_daily_sales > 0  -- Incluye fallback historico
 ```
-
-### 2. Mantener todas las correcciones anteriores
-
-La funcion actualizada conservara:
-- Filtro de ordenes por estado (excluyendo `cancelled` y `completed`)
-- Uso de `quantity_delivered` en vez de `quantity_approved`
-- Calculo de `in_transit` para items en control de calidad
-
-### 3. Preservar registros "executed" y reducir ventana de demanda
-
-Aprovechar esta migracion para incluir las mejoras del plan anterior aprobado:
-- No borrar registros con `status = 'executed'` al recalcular
-- Cambiar proyeccion de 40 dias a 21 dias de cobertura objetivo
-- Filtrar sugerencias ejecutadas en el frontend
-
-### 4. Agregar cobertura de pipeline en la UI
-
-Agregar columna que muestre cuantos dias de venta cubre el pipeline actual.
-
----
-
-## Resultado esperado con datos reales
-
-| Producto | Ventas actuales (buggy) | Ventas reales 30d | Sugerencia actual | Sugerencia corregida |
-|---|---|---|---|---|
-| Pollito T2 | 787 | 62 | 848 | ~0 (pipeline > demanda) |
-| Pollito T4 | 532 | 32 | ~480 | ~0 |
-| Sleeping Walker | similar inflacion | datos reales | proporcional | razonable |
-
----
 
 ## Archivos a modificar
 
-1. **Nueva migracion SQL** - `supabase/migrations/YYYYMMDD_fix_sales_calculation.sql`
-   - Reescribir CTE `sales_data` con INNER JOIN y filtros correctos
-   - Agregar filtro de `cancelled_at IS NULL`
-   - Preservar registros `executed` al recalcular
-   - Cambiar demanda de 40 a 21 dias
-   - Actualizar vista `v_replenishment_details` con campo `pipeline_coverage_days`
+1. **Nueva migracion SQL**
+   - Agregar columna `last_known_velocity` a `inventory_replenishment`
+   - Reescribir funcion `refresh_inventory_replenishment` con CTEs de 90d, stock_days y last_velocity
+   - Actualizar vista `v_replenishment_details`
 
-2. **`src/hooks/useReplenishment.ts`**
-   - Agregar filtro `.eq('status', 'pending')` al fetch
-   - Agregar campo `pipeline_coverage_days` a la interface
+2. **`src/components/supplies/ReplenishmentSuggestions.tsx`**
+   - Agregar indicador visual junto a velocidad diaria cuando viene de fallback historico
 
-3. **`src/hooks/useProductionOrders.ts`**
-   - Agregar filtro de fecha al marcar como `executed`
+## Resultado esperado
 
-4. **`src/components/supplies/ReplenishmentSuggestions.tsx`**
-   - Agregar columna "Cobertura" con badge visual
-   - Filtrar sugerencias ejecutadas
+| Situacion | Antes | Despues |
+|---|---|---|
+| Producto con ventas 30d | Usa vel. 30d/30 | Usa vel. 30d/dias_con_stock (mas precisa) |
+| Agotado 30d, tiene datos 90d | Sugiere 0 | Usa vel. 90d/dias_con_stock |
+| Agotado 90+ dias | Sugiere 0 | Usa ultima velocidad guardada |
+| Producto nuevo sin historial | Sugiere 0 | Sugiere 0 (no hay datos) |
+
+La velocidad se guarda cada vez que se calcula con datos reales, asi que aunque pasen 6 meses sin stock, el sistema recordara la demanda historica del producto.
