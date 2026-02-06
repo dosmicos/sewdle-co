@@ -1,18 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ExternalLink, MessageSquare, Edit, Plus, Trash2, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle } from 'lucide-react';
-import { format, differenceInYears, differenceInMonths } from 'date-fns';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle } from 'lucide-react';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { UgcCreator, UgcCampaign, UgcVideo, CampaignStatus } from '@/types/ugc';
-import { CAMPAIGN_STATUS_CONFIG } from '@/types/ugc';
-import { useUgcCreatorChildren } from '@/hooks/useUgcCreators';
+import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
+import { CAMPAIGN_STATUS_CONFIG, CREATOR_STATUS_CONFIG } from '@/types/ugc';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
+import { UgcChildrenManager } from './UgcChildrenManager';
 
 interface UgcCreatorDetailModalProps {
   open: boolean;
@@ -37,13 +35,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onCampaignStatusChange,
   onVideoStatusChange,
 }) => {
-  const { children, addChild, deleteChild } = useUgcCreatorChildren(creator?.id || null);
   const { videos: allVideos } = useUgcVideos(creator?.id);
-  const [childName, setChildName] = useState('');
-  const [childBirthDate, setChildBirthDate] = useState('');
-  const [childSize, setChildSize] = useState('');
-  const [childGender, setChildGender] = useState('');
-  const [showAddChild, setShowAddChild] = useState(false);
 
   if (!creator) return null;
 
@@ -54,28 +46,6 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const creatorCampaigns = campaigns.filter((c) => c.creator_id === creator.id);
   const activeCampaigns = creatorCampaigns.filter((c) => !['completado', 'cancelado'].includes(c.status));
   const historicCampaigns = creatorCampaigns.filter((c) => ['completado', 'cancelado'].includes(c.status));
-
-  const getAge = (birthDate: string) => {
-    const years = differenceInYears(new Date(), new Date(birthDate));
-    if (years >= 1) return `${years} años`;
-    const months = differenceInMonths(new Date(), new Date(birthDate));
-    return `${months} meses`;
-  };
-
-  const handleAddChild = () => {
-    if (!childName.trim()) return;
-    addChild.mutate({
-      name: childName.trim(),
-      birth_date: childBirthDate || undefined,
-      size: childSize || undefined,
-      gender: childGender || undefined,
-    });
-    setChildName('');
-    setChildBirthDate('');
-    setChildSize('');
-    setChildGender('');
-    setShowAddChild(false);
-  };
 
   const getStatusActions = (campaign: UgcCampaign): { label: string; nextStatus: CampaignStatus; needsInput?: string }[] => {
     switch (campaign.status) {
@@ -104,12 +74,13 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     }
   };
 
-  // Metrics
   const totalVideos = allVideos.length;
   const avgViews = totalVideos > 0 ? Math.round(allVideos.reduce((s, v) => s + v.views, 0) / totalVideos) : 0;
   const avgLikes = totalVideos > 0 ? Math.round(allVideos.reduce((s, v) => s + v.likes, 0) / totalVideos) : 0;
   const completedCampaigns = historicCampaigns.filter((c) => c.status === 'completado').length;
   const cancelledCampaigns = historicCampaigns.filter((c) => c.status === 'cancelado').length;
+
+  const creatorStatusConfig = CREATOR_STATUS_CONFIG[creator.status as keyof typeof CREATOR_STATUS_CONFIG];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -128,19 +99,36 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             </div>
             <div className="flex-1">
               <DialogTitle className="text-xl">{creator.name}</DialogTitle>
-              {creator.instagram_handle && (
-                <a
-                  href={`https://instagram.com/${creator.instagram_handle}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline flex items-center gap-1"
-                >
-                  @{creator.instagram_handle} <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
+              <div className="flex items-center gap-2 mt-1">
+                {creator.instagram_handle && (
+                  <a
+                    href={`https://instagram.com/${creator.instagram_handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline flex items-center gap-1"
+                  >
+                    @{creator.instagram_handle} <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+                {creator.tiktok_handle && (
+                  <a
+                    href={`https://tiktok.com/@${creator.tiktok_handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline flex items-center gap-1"
+                  >
+                    TikTok <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
               <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                 <span>{creator.instagram_followers?.toLocaleString() || 0} seguidores</span>
                 {creator.engagement_rate && <span>{creator.engagement_rate}% engagement</span>}
+                {creatorStatusConfig && (
+                  <Badge className={`${creatorStatusConfig.bgClass} ${creatorStatusConfig.textClass} text-xs`}>
+                    {creatorStatusConfig.label}
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="flex gap-2">
@@ -184,9 +172,25 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                 <p className="font-medium">{creator.city || '—'}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">Estado:</span>
-                <p className="font-medium capitalize">{creator.status}</p>
+                <span className="text-muted-foreground">Plataforma:</span>
+                <p className="font-medium capitalize">{creator.platform || 'Instagram'}</p>
               </div>
+              {creator.content_types && creator.content_types.length > 0 && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Contenido:</span>
+                  <div className="flex gap-1 mt-1">
+                    {creator.content_types.map((t) => (
+                      <Badge key={t} variant="outline" className="text-xs capitalize">{t}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {creator.last_contact_date && (
+                <div>
+                  <span className="text-muted-foreground">Último contacto:</span>
+                  <p className="font-medium">{format(new Date(creator.last_contact_date), 'dd MMM yyyy', { locale: es })}</p>
+                </div>
+              )}
             </div>
 
             {creator.notes && (
@@ -197,62 +201,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             )}
 
             {/* Children */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold text-sm">Hijos</h4>
-                <Button variant="ghost" size="sm" onClick={() => setShowAddChild(!showAddChild)}>
-                  <Plus className="h-4 w-4 mr-1" /> Agregar
-                </Button>
-              </div>
-
-              {showAddChild && (
-                <Card className="mb-3">
-                  <CardContent className="p-3 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-xs">Nombre *</Label>
-                        <Input value={childName} onChange={(e) => setChildName(e.target.value)} className="h-8 text-sm" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Fecha nacimiento</Label>
-                        <Input type="date" value={childBirthDate} onChange={(e) => setChildBirthDate(e.target.value)} className="h-8 text-sm" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Talla</Label>
-                        <Input value={childSize} onChange={(e) => setChildSize(e.target.value)} className="h-8 text-sm" placeholder="Ej: T4" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Género</Label>
-                        <Input value={childGender} onChange={(e) => setChildGender(e.target.value)} className="h-8 text-sm" placeholder="M / F" />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleAddChild} disabled={!childName.trim()}>Guardar</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setShowAddChild(false)}>Cancelar</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {children.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Sin hijos registrados</p>
-              ) : (
-                <div className="space-y-2">
-                  {children.map((child) => (
-                    <div key={child.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 text-sm">
-                      <div>
-                        <span className="font-medium">{child.name}</span>
-                        {child.birth_date && <span className="text-muted-foreground ml-2">({getAge(child.birth_date)})</span>}
-                        {child.size && <span className="text-muted-foreground ml-2">Talla: {child.size}</span>}
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteChild.mutate(child.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <UgcChildrenManager creatorId={creator.id} />
           </TabsContent>
 
           {/* Tab: Campaigns */}
