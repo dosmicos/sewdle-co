@@ -39,13 +39,12 @@ export const useUgcCampaigns = (creatorId?: string | null) => {
           organization_id: orgId,
           creator_id: cId,
           name: formData.name,
-          product_sent: formData.product_sent || null,
+          order_number: formData.order_number || null,
           agreed_videos: formData.agreed_videos || 1,
           agreed_payment: formData.agreed_payment || 0,
           payment_type: formData.payment_type || 'producto',
-          deadline: formData.deadline || null,
           notes: formData.notes || null,
-          status: 'contactado',
+          status: 'aceptado',
         })
         .select()
         .single();

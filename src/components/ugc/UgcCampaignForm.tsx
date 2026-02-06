@@ -23,7 +23,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
   isLoading,
 }) => {
   const [name, setName] = useState('');
-  const [product, setProduct] = useState('');
+  const [orderNumber, setOrderNumber] = useState('');
   const [videos, setVideos] = useState('1');
   const [paymentType, setPaymentType] = useState<'producto' | 'efectivo' | 'mixto'>('producto');
   const [payment, setPayment] = useState('');
@@ -33,7 +33,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
   React.useEffect(() => {
     if (open) {
       setName('');
-      setProduct('');
+      setOrderNumber('');
       setVideos('1');
       setPaymentType('producto');
       setPayment('');
@@ -47,7 +47,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
     if (!name.trim()) return;
     onSubmit({
       name: name.trim(),
-      product_sent: product.trim() || undefined,
+      order_number: orderNumber.trim() || undefined,
       agreed_videos: parseInt(videos) || 1,
       payment_type: paymentType,
       agreed_payment: payment ? parseFloat(payment) : undefined,
@@ -68,8 +68,8 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
             <Input id="campaign-name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ej: Campaña Ruana Invierno 2026" />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="product">Producto a enviar</Label>
-            <Input id="product" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Ej: Sleeping Bag Dinosaurio T4" />
+            <Label htmlFor="order-number">Número de pedido</Label>
+            <Input id="order-number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Ej: #1234, se crea cuando envíes el producto" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
