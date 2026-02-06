@@ -135,9 +135,12 @@ const MessagingAIPage = () => {
       result = result.filter(c => c.tags?.some(t => t.id === activeTagId));
     }
 
-    // Filter by folder if selected
+    // Filter by folder: if a folder is selected show only its chats,
+    // otherwise hide chats that have been moved to any folder
     if (activeFolderId) {
       result = result.filter(c => c.folder_id === activeFolderId);
+    } else {
+      result = result.filter(c => !c.folder_id);
     }
     
     return result;
