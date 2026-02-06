@@ -27,7 +27,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
   const [videos, setVideos] = useState('1');
   const [paymentType, setPaymentType] = useState<'producto' | 'efectivo' | 'mixto'>('producto');
   const [payment, setPayment] = useState('');
-  const [deadline, setDeadline] = useState('');
+  
   const [notes, setNotes] = useState('');
 
   React.useEffect(() => {
@@ -37,7 +37,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
       setVideos('1');
       setPaymentType('producto');
       setPayment('');
-      setDeadline('');
+      
       setNotes('');
     }
   }, [open]);
@@ -51,7 +51,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
       agreed_videos: parseInt(videos) || 1,
       payment_type: paymentType,
       agreed_payment: payment ? parseFloat(payment) : undefined,
-      deadline: deadline || undefined,
+      
       notes: notes.trim() || undefined,
     });
   };
@@ -96,10 +96,6 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
               <Input id="payment" type="number" step="0.01" value={payment} onChange={(e) => setPayment(e.target.value)} />
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="deadline">Deadline</Label>
-            <Input id="deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="campaign-notes">Notas</Label>
             <Textarea id="campaign-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
