@@ -37,6 +37,7 @@ import NotFound from "@/pages/NotFound";
 import PickingPackingPage from "@/pages/PickingPackingPage";
 import PrintableOrderView from "@/pages/PrintableOrderView";
 import PasswordChangeRouteGuard from "@/components/PasswordChangeRouteGuard";
+import UgcCreatorsPage from "@/pages/UgcCreatorsPage";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -208,6 +209,12 @@ const AppContent = () => {
         } />
         
         <Route path="okrs/*" element={<OKRsPage />} />
+        
+        <Route path="ugc-creators" element={
+          <PermissionRoute module="ugc" action="view">
+            <UgcCreatorsPage />
+          </PermissionRoute>
+        } />
         
         <Route path="alegra" element={
           <AdminRoute>

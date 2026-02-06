@@ -3277,6 +3277,267 @@ export type Database = {
         }
         Relationships: []
       }
+      ugc_campaigns: {
+        Row: {
+          agreed_payment: number | null
+          agreed_videos: number | null
+          created_at: string
+          creator_id: string
+          deadline: string | null
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          payment_type: string | null
+          product_sent: string | null
+          received_date: string | null
+          shipping_date: string | null
+          status: string
+          tracking_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          agreed_payment?: number | null
+          agreed_videos?: number | null
+          created_at?: string
+          creator_id: string
+          deadline?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id: string
+          payment_type?: string | null
+          product_sent?: string | null
+          received_date?: string | null
+          shipping_date?: string | null
+          status?: string
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agreed_payment?: number | null
+          agreed_videos?: number | null
+          created_at?: string
+          creator_id?: string
+          deadline?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          payment_type?: string | null
+          product_sent?: string | null
+          received_date?: string | null
+          shipping_date?: string | null
+          status?: string
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_campaigns_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ugc_creator_children: {
+        Row: {
+          birth_date: string | null
+          created_at: string
+          creator_id: string
+          gender: string | null
+          id: string
+          name: string
+          organization_id: string
+          size: string | null
+          updated_at: string
+        }
+        Insert: {
+          birth_date?: string | null
+          created_at?: string
+          creator_id: string
+          gender?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          size?: string | null
+          updated_at?: string
+        }
+        Update: {
+          birth_date?: string | null
+          created_at?: string
+          creator_id?: string
+          gender?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          size?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_creator_children_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_creator_children_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ugc_creators: {
+        Row: {
+          avatar_url: string | null
+          avg_likes: number | null
+          avg_views: number | null
+          city: string | null
+          created_at: string
+          email: string | null
+          engagement_rate: number | null
+          id: string
+          instagram_followers: number | null
+          instagram_handle: string | null
+          name: string
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          avg_likes?: number | null
+          avg_views?: number | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          engagement_rate?: number | null
+          id?: string
+          instagram_followers?: number | null
+          instagram_handle?: string | null
+          name: string
+          notes?: string | null
+          organization_id: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          avg_likes?: number | null
+          avg_views?: number | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          engagement_rate?: number | null
+          id?: string
+          instagram_followers?: number | null
+          instagram_handle?: string | null
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_creators_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ugc_videos: {
+        Row: {
+          campaign_id: string
+          comments: number | null
+          created_at: string
+          creator_id: string
+          feedback: string | null
+          id: string
+          likes: number | null
+          organization_id: string
+          platform: string | null
+          published_date: string | null
+          status: string
+          updated_at: string
+          video_url: string | null
+          views: number | null
+        }
+        Insert: {
+          campaign_id: string
+          comments?: number | null
+          created_at?: string
+          creator_id: string
+          feedback?: string | null
+          id?: string
+          likes?: number | null
+          organization_id: string
+          platform?: string | null
+          published_date?: string | null
+          status?: string
+          updated_at?: string
+          video_url?: string | null
+          views?: number | null
+        }
+        Update: {
+          campaign_id?: string
+          comments?: number | null
+          created_at?: string
+          creator_id?: string
+          feedback?: string | null
+          id?: string
+          likes?: number | null
+          organization_id?: string
+          platform?: string | null
+          published_date?: string | null
+          status?: string
+          updated_at?: string
+          video_url?: string | null
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_videos_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_videos_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_videos_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
