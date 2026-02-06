@@ -113,7 +113,8 @@ export const useProductionOrders = () => {
       const { error: updateError } = await supabase
         .from('inventory_replenishment')
         .update({ status: 'executed' })
-        .in('variant_id', variantIds);
+        .in('variant_id', variantIds)
+        .eq('calculation_date', new Date().toISOString().split('T')[0]);
 
       if (updateError) console.warn('Warning updating replenishment status:', updateError);
 
