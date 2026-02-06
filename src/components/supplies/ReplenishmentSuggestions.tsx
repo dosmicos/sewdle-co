@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useReplenishment, ReplenishmentSuggestion } from '@/hooks/useReplenishment';
 import { ProductionOrderModal } from './ProductionOrderModal';
 import { DataQualityBadge } from './DataQualityBadge';
-import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Package, Search, RefreshCw, Factory, Download, ArrowUpDown, ArrowUp, ArrowDown, Clock, History } from 'lucide-react';
 
 export const ReplenishmentSuggestions: React.FC = () => {
   const { 
@@ -407,7 +408,49 @@ export const ReplenishmentSuggestions: React.FC = () => {
                     <TableCell className="text-right">{suggestion.current_stock}</TableCell>
                     <TableCell className="text-right">{suggestion.sales_30d}</TableCell>
                     <TableCell className="text-right">
-                      {suggestion.avg_daily_sales.toFixed(2)}
+                      <TooltipProvider>
+                        <div className="flex items-center justify-end gap-1">
+                          <span>{suggestion.avg_daily_sales.toFixed(2)}</span>
+                          {suggestion.reason?.includes('historica') && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300 text-[10px] px-1 py-0">
+                                  <History className="h-3 w-3 mr-0.5" />
+                                  Hist.
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Velocidad histórica guardada: sin ventas recientes en 30d ni 90d</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {suggestion.reason?.includes('90d') && !suggestion.reason?.includes('historica') && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-[10px] px-1 py-0">
+                                  <Clock className="h-3 w-3 mr-0.5" />
+                                  90d
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{suggestion.reason}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {suggestion.reason && !suggestion.reason.includes('historica') && !suggestion.reason.includes('90d') && suggestion.reason.includes('ajustada') && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-[10px] px-1 py-0">
+                                  30d
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{suggestion.reason}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell className="text-right">
                       {suggestion.days_of_supply?.toFixed(1) || 'N/A'}
