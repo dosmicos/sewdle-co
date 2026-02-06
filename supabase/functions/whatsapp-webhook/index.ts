@@ -667,6 +667,24 @@ serve(async (req) => {
                   mediaError = mediaResult.error;
                 }
 
+                // Resolve reply_to_message_id from WAMID to internal UUID
+                let resolvedReplyToId: string | null = null;
+                if (replyToMessageId) {
+                  console.log(`🔗 Resolving reply WAMID: ${replyToMessageId}`);
+                  const { data: replyMsg } = await supabase
+                    .from('messaging_messages')
+                    .select('id')
+                    .eq('external_message_id', replyToMessageId)
+                    .limit(1)
+                    .single();
+                  if (replyMsg) {
+                    resolvedReplyToId = replyMsg.id;
+                    console.log(`✅ Resolved reply to internal UUID: ${resolvedReplyToId}`);
+                  } else {
+                    console.log(`⚠️ Reply parent not found in DB, setting reply_to_message_id to null`);
+                  }
+                }
+
                 // Insert message (skip for reaction type)
                 if (messageType !== 'reaction') {
                   const { error: msgError } = await supabase
@@ -681,7 +699,7 @@ serve(async (req) => {
                       message_type: messageType,
                       media_url: mediaUrl,
                       media_mime_type: mediaMimeType,
-                      reply_to_message_id: replyToMessageId,
+                      reply_to_message_id: resolvedReplyToId,
                       metadata: {
                         ...message,
                         original_media_id: mediaId,
