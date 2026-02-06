@@ -21,6 +21,7 @@ import { useMessagingTags } from '@/hooks/useMessagingTags';
 import { useMessagingRealtime } from '@/hooks/useMessagingRealtime';
 import { useMessagingSearch } from '@/hooks/useMessagingSearch';
 import { useMessagingFolders } from '@/hooks/useMessagingFolders';
+import { FolderCreateDialog } from '@/components/messaging-ai/FolderCreateDialog';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -36,6 +37,7 @@ const MessagingAIPage = () => {
   const [activeView, setActiveView] = useState<ViewType>('conversations');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [showCreateFolderFromChat, setShowCreateFolderFromChat] = useState(false);
 
   // Centralized realtime subscription for all messaging
   const { connectionStatus, manualRefresh } = useMessagingRealtime({
@@ -404,6 +406,7 @@ const MessagingAIPage = () => {
                         onTogglePin={(id, isPinned) => togglePin({ conversationId: id, isPinned })}
                         onMoveToFolder={(id, folderId) => moveToFolder({ conversationId: id, folderId })}
                         folders={folders}
+                        onCreateFolder={() => setShowCreateFolderFromChat(true)}
                       />
                     )}
                   </CardContent>
@@ -460,6 +463,14 @@ const MessagingAIPage = () => {
         onOpenChange={setShowNewConversation}
         onCreateConversation={handleCreateConversation}
         isLoading={isCreatingConversation}
+      />
+
+      {/* Folder Create Dialog (from chat context menu) */}
+      <FolderCreateDialog
+        open={showCreateFolderFromChat}
+        onOpenChange={setShowCreateFolderFromChat}
+        onCreate={createFolder}
+        isLoading={isCreatingFolder}
       />
     </div>
   );

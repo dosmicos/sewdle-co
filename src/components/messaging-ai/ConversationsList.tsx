@@ -51,6 +51,7 @@ interface ConversationsListProps {
   onTogglePin?: (id: string, isPinned: boolean) => void;
   onMoveToFolder?: (id: string, folderId: string | null) => void;
   folders?: MessagingFolder[];
+  onCreateFolder?: () => void;
 }
 
 const channelConfig: Record<ChannelType, { icon: React.ElementType; color: string; bgColor: string }> = {
@@ -70,6 +71,7 @@ export const ConversationsList = ({
   onTogglePin,
   onMoveToFolder,
   folders = [],
+  onCreateFolder,
 }: ConversationsListProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
@@ -162,6 +164,7 @@ export const ConversationsList = ({
                 }}
                 onMoveToFolder={(folderId) => onMoveToFolder?.(conversation.id, folderId)}
                 onDelete={() => handleDeleteClick(conversation.id)}
+                onCreateFolder={onCreateFolder}
               />
             </div>
             {isUnread && (
