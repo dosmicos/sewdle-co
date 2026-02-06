@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreVertical, Pin, PinOff, MailOpen, Mail, FolderInput, FolderOutput, Trash2, Loader2 } from 'lucide-react';
+import { MoreVertical, Pin, PinOff, MailOpen, Mail, FolderInput, FolderOutput, FolderPlus, Trash2, Loader2 } from 'lucide-react';
 import { MessagingFolder } from '@/hooks/useMessagingFolders';
 
 interface ConversationContextMenuProps {
@@ -24,6 +24,7 @@ interface ConversationContextMenuProps {
   onToggleUnread: () => void;
   onMoveToFolder: (folderId: string | null) => void;
   onDelete: () => void;
+  onCreateFolder?: () => void;
 }
 
 export const ConversationContextMenu: React.FC<ConversationContextMenuProps> = ({
@@ -37,6 +38,7 @@ export const ConversationContextMenu: React.FC<ConversationContextMenuProps> = (
   onToggleUnread,
   onMoveToFolder,
   onDelete,
+  onCreateFolder,
 }) => {
   return (
     <DropdownMenu>
@@ -84,14 +86,14 @@ export const ConversationContextMenu: React.FC<ConversationContextMenuProps> = (
         <DropdownMenuSeparator />
 
         {/* Move to folder */}
-        {folders.length > 0 && (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FolderInput className="h-4 w-4 mr-2" />
-              Mover a carpeta
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {folders.map((folder) => (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <FolderInput className="h-4 w-4 mr-2" />
+            Mover a carpeta
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {folders.length > 0 ? (
+              folders.map((folder) => (
                 <DropdownMenuItem
                   key={folder.id}
                   onClick={() => onMoveToFolder(folder.id)}
@@ -103,10 +105,15 @@ export const ConversationContextMenu: React.FC<ConversationContextMenuProps> = (
                   />
                   {folder.name}
                 </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        )}
+              ))
+            ) : (
+              <DropdownMenuItem onClick={onCreateFolder}>
+                <FolderPlus className="h-4 w-4 mr-2" />
+                Crear carpeta...
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         {/* Remove from folder */}
         {folderId && (
