@@ -53,6 +53,7 @@ export interface UgcCampaign {
   organization_id: string;
   name: string;
   status: CampaignStatus;
+  order_number: string | null;
   product_sent: string | null;
   tracking_number: string | null;
   shipping_date: string | null;
@@ -102,11 +103,10 @@ export interface UgcCreatorFormData {
 
 export interface UgcCampaignFormData {
   name: string;
-  product_sent?: string;
+  order_number?: string;
   agreed_videos: number;
   agreed_payment?: number;
   payment_type: 'producto' | 'efectivo' | 'mixto';
-  deadline?: string;
   notes?: string;
 }
 

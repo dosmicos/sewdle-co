@@ -239,9 +239,9 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-2">
-                          {campaign.product_sent && (
+                          {campaign.order_number && (
                             <div className="flex items-center gap-1">
-                              <Package className="h-3 w-3" /> {campaign.product_sent}
+                              <Package className="h-3 w-3" /> Pedido: {campaign.order_number}
                             </div>
                           )}
                           {campaign.tracking_number && (

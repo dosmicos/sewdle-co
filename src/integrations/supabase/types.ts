@@ -3287,6 +3287,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          order_number: string | null
           organization_id: string
           payment_type: string | null
           product_sent: string | null
@@ -3305,6 +3306,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          order_number?: string | null
           organization_id: string
           payment_type?: string | null
           product_sent?: string | null
@@ -3323,6 +3325,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          order_number?: string | null
           organization_id?: string
           payment_type?: string | null
           product_sent?: string | null
