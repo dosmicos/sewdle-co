@@ -10,8 +10,8 @@ interface RealtimeConnectionBannerProps {
 }
 
 export const RealtimeConnectionBanner = ({ status, onReconnect }: RealtimeConnectionBannerProps) => {
-  // Don't show anything when connected
-  if (status === 'connected') return null;
+  // Never render the banner – realtime issues are handled silently via polling fallback
+  return null;
 
   const config = {
     connecting: {
