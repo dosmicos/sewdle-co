@@ -20,6 +20,7 @@ import { useMessagingMessages } from '@/hooks/useMessagingMessages';
 import { useMessagingTags } from '@/hooks/useMessagingTags';
 import { useMessagingRealtime } from '@/hooks/useMessagingRealtime';
 import { useMessagingSearch } from '@/hooks/useMessagingSearch';
+import { useMessagingFolders } from '@/hooks/useMessagingFolders';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -31,6 +32,7 @@ const MessagingAIPage = () => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
   const [activeChannel, setActiveChannel] = useState<ChannelType | 'all'>('all');
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ViewType>('conversations');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
@@ -64,13 +66,25 @@ const MessagingAIPage = () => {
     conversations, 
     isLoading: isLoadingConversations, 
     markAsRead,
+    markAsUnread,
     createConversation,
     isCreatingConversation,
     deleteConversation,
     isDeletingConversation,
     toggleAiManaged,
     isTogglingAiManaged,
+    togglePin,
   } = useMessagingConversations(activeChannel);
+
+  const {
+    folders,
+    folderCounts,
+    createFolder,
+    isCreatingFolder,
+    deleteFolder,
+    moveToFolder,
+  } = useMessagingFolders();
+
   const { messages, isLoading: isLoadingMessages, sendMessage, isSending } = useMessagingMessages(selectedConversation);
 
   // Transform DB conversations to UI format
@@ -86,6 +100,8 @@ const MessagingAIPage = () => {
       channel: (conv.channel_type || 'whatsapp') as ChannelType,
       ai_managed: conv.ai_managed ?? true,
       tags: conv.tags || [],
+      is_pinned: (conv as any).is_pinned ?? false,
+      folder_id: (conv as any).folder_id ?? null,
     }));
   }, [conversations]);
 
@@ -116,9 +132,14 @@ const MessagingAIPage = () => {
     if (activeTagId) {
       result = result.filter(c => c.tags?.some(t => t.id === activeTagId));
     }
+
+    // Filter by folder if selected
+    if (activeFolderId) {
+      result = result.filter(c => c.folder_id === activeFolderId);
+    }
     
     return result;
-  }, [activeFilter, activeTagId, transformedConversations]);
+  }, [activeFilter, activeTagId, activeFolderId, transformedConversations]);
 
   // Transform messages to UI format with reply info
   const transformedMessages = useMemo(() => {
@@ -223,6 +244,12 @@ const MessagingAIPage = () => {
     setSelectedConversation(null);
   };
 
+  const handleFolderChange = (folderId: string | null) => {
+    setActiveFolderId(folderId);
+    setActiveView('conversations');
+    setSelectedConversation(null);
+  };
+
   const handleSendMessage = (message: string, mediaFile?: File, mediaType?: string, replyToMessageId?: string) => {
     sendMessage({ message, mediaFile, mediaType, replyToMessageId });
   };
@@ -246,13 +273,20 @@ const MessagingAIPage = () => {
         activeFilter={activeFilter}
         activeChannel={activeChannel}
         activeTagId={activeTagId}
+        activeFolderId={activeFolderId}
         onFilterChange={handleFilterChange}
         onChannelChange={handleChannelChange}
         onTagChange={handleTagChange}
+        onFolderChange={handleFolderChange}
         onNavigate={handleNavigate}
         counts={counts}
         tags={tags}
         tagCounts={tagCounts}
+        folders={folders}
+        folderCounts={folderCounts}
+        onCreateFolder={createFolder}
+        isCreatingFolder={isCreatingFolder}
+        onDeleteFolder={deleteFolder}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
@@ -365,6 +399,11 @@ const MessagingAIPage = () => {
                           }
                         }}
                         isDeleting={isDeletingConversation}
+                        onMarkAsUnread={markAsUnread}
+                        onMarkAsRead={markAsRead}
+                        onTogglePin={(id, isPinned) => togglePin({ conversationId: id, isPinned })}
+                        onMoveToFolder={(id, folderId) => moveToFolder({ conversationId: id, folderId })}
+                        folders={folders}
                       />
                     )}
                   </CardContent>
