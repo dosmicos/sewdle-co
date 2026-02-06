@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUgcCreators } from '@/hooks/useUgcCreators';
 import { useUgcCampaigns } from '@/hooks/useUgcCampaigns';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
+import { useAllUgcCreatorTagAssignments } from '@/hooks/useUgcCreatorTags';
 import { UgcStatsCards } from '@/components/ugc/UgcStatsCards';
 import { UgcKanbanBoard } from '@/components/ugc/UgcKanbanBoard';
 import { UgcProspectKanban } from '@/components/ugc/UgcProspectKanban';
@@ -27,9 +28,10 @@ const UgcCreatorsPage: React.FC = () => {
   const [videoFormOpen, setVideoFormOpen] = useState(false);
   const [videoCampaignId, setVideoCampaignId] = useState<string | null>(null);
 
-  const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus } = useUgcCreators();
+  const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator } = useUgcCreators();
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
   const { createVideo, updateVideoStatus } = useUgcVideos();
+  const { getTagsForCreator } = useAllUgcCreatorTagAssignments();
 
   const handleCreatorSubmit = (data: any) => {
     if (editingCreator) {
@@ -58,6 +60,17 @@ const UgcCreatorsPage: React.FC = () => {
 
   const handleCreatorStatusChange = (creatorId: string, newStatus: CreatorStatus) => {
     updateCreatorStatus.mutate({ id: creatorId, status: newStatus });
+  };
+
+  const handleDeleteCreator = () => {
+    if (selectedCreator) {
+      deleteCreator.mutate(selectedCreator.id, {
+        onSuccess: () => {
+          setDetailOpen(false);
+          setSelectedCreator(null);
+        },
+      });
+    }
   };
 
   const handleNewCampaign = () => {
@@ -138,6 +151,7 @@ const UgcCreatorsPage: React.FC = () => {
               onCreatorClick={handleCreatorClick}
               onStatusChange={handleCreatorStatusChange}
               onCreateCampaign={handleCreateCampaignForCreator}
+              getTagsForCreator={getTagsForCreator}
             />
           </TabsContent>
           <TabsContent value="campanas" className="mt-4">
@@ -149,7 +163,12 @@ const UgcCreatorsPage: React.FC = () => {
           </TabsContent>
         </Tabs>
       ) : (
-        <UgcTableView creators={creators} campaigns={campaigns} onCreatorClick={handleCreatorClick} />
+        <UgcTableView
+          creators={creators}
+          campaigns={campaigns}
+          onCreatorClick={handleCreatorClick}
+          getTagsForCreator={getTagsForCreator}
+        />
       )}
 
       {/* Modals */}
@@ -171,6 +190,7 @@ const UgcCreatorsPage: React.FC = () => {
         onNewVideo={handleNewVideo}
         onCampaignStatusChange={handleCampaignStatusChange}
         onVideoStatusChange={handleVideoStatusChange}
+        onDelete={handleDeleteCreator}
       />
 
       {campaignCreatorId && (

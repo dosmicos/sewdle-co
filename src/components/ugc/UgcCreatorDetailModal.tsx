@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
 import { CAMPAIGN_STATUS_CONFIG, CREATOR_STATUS_CONFIG } from '@/types/ugc';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { UgcChildrenManager } from './UgcChildrenManager';
+import { UgcCreatorTagsManager } from './UgcCreatorTagsManager';
 
 interface UgcCreatorDetailModalProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface UgcCreatorDetailModalProps {
   onNewVideo: (campaignId: string) => void;
   onCampaignStatusChange: (campaignId: string, status: CampaignStatus, extra?: Record<string, any>) => void;
   onVideoStatusChange: (videoId: string, status: string, feedback?: string) => void;
+  onDelete?: () => void;
 }
 
 export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
@@ -34,6 +36,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onNewVideo,
   onCampaignStatusChange,
   onVideoStatusChange,
+  onDelete,
 }) => {
   const { videos: allVideos } = useUgcVideos(creator?.id);
 
@@ -130,6 +133,10 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                   </Badge>
                 )}
               </div>
+              {/* Tags */}
+              <div className="mt-2">
+                <UgcCreatorTagsManager creatorId={creator.id} />
+              </div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={onEdit}>
@@ -142,6 +149,20 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                   onClick={() => window.open(`https://wa.me/${creator.phone?.replace(/\D/g, '')}`, '_blank')}
                 >
                   <MessageSquare className="h-4 w-4 mr-1" /> WhatsApp
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    if (confirm(`¿Estás seguro de eliminar a "${creator.name}"? Se eliminarán también sus campañas y videos.`)) {
+                      onDelete();
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>
@@ -246,11 +267,6 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                           )}
                           {campaign.tracking_number && (
                             <div>📦 Tracking: {campaign.tracking_number}</div>
-                          )}
-                          {campaign.deadline && (
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" /> Deadline: {format(new Date(campaign.deadline), 'dd MMM yyyy', { locale: es })}
-                            </div>
                           )}
                           <div className="flex items-center gap-1">
                             <Video className="h-3 w-3" /> Videos: {videosDelivered}/{campaign.agreed_videos}

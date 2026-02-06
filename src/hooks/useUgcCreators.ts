@@ -109,7 +109,21 @@ export const useUgcCreators = () => {
     onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
 
-  return { creators, isLoading, createCreator, updateCreator, updateCreatorStatus };
+  const deleteCreator = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('ugc_creators').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-creators'] });
+      queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['ugc-creator-tag-assignments'] });
+      toast.success('Creador eliminado');
+    },
+    onError: (err: Error) => toast.error(`Error al eliminar: ${err.message}`),
+  });
+
+  return { creators, isLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator };
 };
 
 export const useUgcCreatorChildren = (creatorId: string | null) => {

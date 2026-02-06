@@ -75,10 +75,10 @@ export const UgcKanbanCard: React.FC<UgcKanbanCardProps> = ({
         </div>
       </div>
 
-      {/* Product */}
-      {campaign.product_sent && (
+      {/* Order Number */}
+      {campaign.order_number && (
         <p className="text-xs text-muted-foreground mt-2 truncate">
-          📦 {campaign.product_sent}
+          📦 Pedido: {campaign.order_number}
         </p>
       )}
 
