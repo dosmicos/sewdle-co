@@ -1,191 +1,137 @@
 
-# Plan: Corregir Cálculos de Reposición IA
+# Plan: Corregir Bug Critico en Calculo de Ventas de Reposicion IA
 
-## Diagnóstico del Problema
+## Diagnostico del Problema
 
-La sección de **Reposición IA** está sugiriendo cantidades incorrectas porque la función `refresh_inventory_replenishment` tiene tres errores de lógica:
+Se encontro un **bug critico** en la funcion SQL `refresh_inventory_replenishment` que **infla las ventas 10x** o mas.
 
-### Problemas Identificados
+### Causa Raiz: LEFT JOIN sin filtro de fecha
 
-| Problema | Impacto | Ejemplo Real |
-|----------|---------|--------------|
-| No filtra órdenes por estado | Suma cantidades de órdenes completadas/canceladas | Órdenes `completed` siguen contando como pendientes |
-| Usa `quantity_approved` en vez de `quantity_delivered` | No considera productos ya entregados pero en control de calidad | "Sleeping Walker Ovejita" muestra 8 pendientes cuando son 5 |
-| Ignora entregas "en tránsito" | Productos entregados pero no aprobados no se descuentan | 3 unidades en `in_quality` no se consideran |
-
-### Datos de Ejemplo (Sleeping Walker de Ovejita TOG 2.0)
+La query actual usa dos LEFT JOINs encadenados:
 
 ```text
-┌────────────────────────────────────────────┐
-│ CÁLCULO ACTUAL (INCORRECTO)                │
-├────────────────────────────────────────────┤
-│ Ordenado total:          24 unidades       │
-│ Aprobado:                16 unidades       │
-│ Pendiente producción:    24 - 16 = 8       │
-│ Sugerencia:              9 unidades        │ ← SOBRE-SUGIERE
-└────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────┐
-│ CÁLCULO CORRECTO                           │
-├────────────────────────────────────────────┤
-│ Ordenado (no cancelado):  24 unidades      │
-│ Entregado (delivered):    19 unidades      │
-│ Pendiente producción:     24 - 19 = 5      │
-│ Sugerencia:               6 unidades       │ ← CORRECTO
-└────────────────────────────────────────────┘
+product_variants
+  LEFT JOIN shopify_order_line_items (SIN filtro de fecha)  <-- BUG AQUI
+    LEFT JOIN shopify_orders (con filtro de fecha en el JOIN)
 ```
+
+El problema es que:
+1. El primer LEFT JOIN une TODOS los line items historicos (sin filtro de fecha)
+2. El segundo LEFT JOIN intenta filtrar por fecha, pero como esta en la condicion del JOIN (no en WHERE), cuando una orden no cumple el filtro, `soli.quantity` sigue existiendo
+3. Resultado: `SUM(soli.quantity)` suma TODAS las ventas de la historia, no solo 30 dias
+
+### Evidencia con datos reales
+
+| SKU (Pollito T2) | Ventas calculadas | Ventas reales 30d | Inflacion |
+|---|---|---|---|
+| 46581502738667 | 787 | 79 | 10x |
+| 46581502771435 | 532 | 32 | 16x |
+| 46691151380715 | 310 | 23 | 13x |
+
+Esto explica por que el sistema sugiere cantidades absurdas de produccion.
+
+### Problema adicional: Ordenes canceladas de Shopify
+
+La query actual no excluye ordenes canceladas de Shopify (donde `cancelled_at IS NOT NULL`). Para Pollito T2:
+- Con ordenes pagadas + canceladas: 79 unidades
+- Solo pagadas y no canceladas: 62 unidades
 
 ---
 
-## Solución Propuesta
+## Solucion
 
-### 1. Actualizar Función `refresh_inventory_replenishment`
+### 1. Corregir la query de ventas en la funcion SQL
 
-Modificar la función SQL para:
-
-**a) Filtrar órdenes activas:**
-```sql
--- ANTES (suma todas las órdenes)
-SELECT SUM(oi.quantity) as pending_qty
-FROM order_items oi
-JOIN orders o ON oi.order_id = o.id
-WHERE oi.product_variant_id = pv.id
-
--- DESPUÉS (solo órdenes no completadas/canceladas)
-SELECT SUM(oi.quantity) as pending_qty
-FROM order_items oi
-JOIN orders o ON oi.order_id = o.id
-WHERE oi.product_variant_id = pv.id
-  AND o.status NOT IN ('cancelled', 'completed')
-```
-
-**b) Usar quantity_delivered en vez de quantity_approved:**
-```sql
--- ANTES
-SUM(di.quantity_approved) as total_delivered
-
--- DESPUÉS
-SUM(di.quantity_delivered) as total_delivered
-```
-
-**c) Agregar columna "en_transito" para mostrar productos en control de calidad:**
-```sql
--- Nueva columna que muestra productos ya entregados pero pendientes de aprobación
-SUM(CASE 
-  WHEN d.status IN ('in_quality', 'partial_approved') 
-  THEN di.quantity_delivered - COALESCE(di.quantity_approved, 0) 
-  ELSE 0 
-END) as in_transit
-```
-
-### 2. Actualizar Vista `v_replenishment_details`
-
-Agregar columna `in_transit` para mostrar en la UI cuántos productos están en control de calidad.
-
-### 3. Actualizar UI del Componente
-
-Modificar `ReplenishmentSuggestions.tsx` para mostrar:
-- **Pendientes**: Productos en producción (ordenados - entregados)
-- **En Calidad**: Productos entregados pero pendientes de aprobación
-
----
-
-## Cambios Técnicos Detallados
-
-### Migración SQL
-
-Se creará una nueva migración que:
-
-1. **Elimina** la función actual `refresh_inventory_replenishment`
-2. **Crea** una nueva versión con la lógica corregida
-3. **Actualiza** la vista `v_replenishment_details` para incluir `in_transit`
+Cambiar el CTE `sales_data` de LEFT JOINs a un sub-select o INNER JOIN con filtros en WHERE:
 
 ```sql
--- Estructura de la nueva función (pseudocódigo)
-CREATE OR REPLACE FUNCTION refresh_inventory_replenishment(org_id uuid)
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  WITH 
-  -- Ventas de Shopify (sin cambios)
-  sales_data AS (...),
-  
-  -- NUEVO: Órdenes pendientes (excluye cancelled/completed)
-  pending_orders AS (
-    SELECT product_variant_id, SUM(quantity) as ordered_qty
-    FROM order_items oi
-    JOIN orders o ON oi.order_id = o.id
-    WHERE o.organization_id = org_id
-      AND o.status NOT IN ('cancelled', 'completed')
-    GROUP BY product_variant_id
-  ),
-  
-  -- NUEVO: Entregas usando quantity_delivered + in_transit
-  delivery_data AS (
+-- ANTES (BUGGY): LEFT JOIN sin filtro de fecha en line_items
+sales_data AS (
+    SELECT pv.id as variant_id,
+      COALESCE(SUM(soli.quantity), 0) as sales_30d,
+      COUNT(DISTINCT so.id) as orders_count_30d
+    FROM product_variants pv
+    JOIN products p ON pv.product_id = p.id
+    LEFT JOIN shopify_order_line_items soli 
+      ON soli.sku = pv.sku_variant          -- <-- SIN FECHA!
+    LEFT JOIN shopify_orders so 
+      ON soli.shopify_order_id = so.shopify_order_id 
+      AND so.created_at >= NOW() - INTERVAL '30 days'  -- fecha solo en JOIN
+    WHERE p.organization_id = org_id
+    GROUP BY pv.id
+)
+
+-- DESPUES (CORRECTO): Calcular ventas por separado con INNER JOIN
+sales_data AS (
     SELECT 
-      product_variant_id,
-      SUM(quantity_delivered) as total_delivered,
-      SUM(CASE WHEN status IN ('in_quality', 'partial_approved')
-          THEN quantity_delivered - quantity_approved 
-          ELSE 0 END) as in_transit
-    FROM delivery_items di
-    JOIN deliveries d ON di.delivery_id = d.id
-    ...
-  )
-  
-  INSERT INTO inventory_replenishment (
-    ...,
-    pending_production,  -- = ordered_qty - total_delivered
-    in_transit,          -- NUEVA COLUMNA
-    suggested_quantity   -- = demand_40d - stock - pending - in_transit
-  )
-  ...
-END;
-$$;
+      pv.id as variant_id,
+      COALESCE(s.total_qty, 0) as sales_30d,
+      COALESCE(s.order_count, 0) as orders_count_30d
+    FROM product_variants pv
+    JOIN products p ON pv.product_id = p.id
+    LEFT JOIN LATERAL (
+      SELECT 
+        SUM(soli.quantity) as total_qty,
+        COUNT(DISTINCT so.id) as order_count
+      FROM shopify_order_line_items soli
+      INNER JOIN shopify_orders so 
+        ON soli.shopify_order_id = so.shopify_order_id
+      WHERE soli.sku = pv.sku_variant
+        AND so.organization_id = org_id
+        AND so.created_at >= NOW() - INTERVAL '30 days'
+        AND so.financial_status NOT IN ('refunded', 'voided')
+        AND so.cancelled_at IS NULL
+    ) s ON true
+    WHERE p.organization_id = org_id
+)
 ```
 
-### Cambios en UI
+### 2. Mantener todas las correcciones anteriores
 
-Actualizar la tabla de sugerencias para mostrar:
+La funcion actualizada conservara:
+- Filtro de ordenes por estado (excluyendo `cancelled` y `completed`)
+- Uso de `quantity_delivered` en vez de `quantity_approved`
+- Calculo de `in_transit` para items en control de calidad
 
-| Columna Actual | Columna Nueva |
-|----------------|---------------|
-| "Pendientes" | "En Producción" (ordenado - entregado) |
-| - | "En Calidad" (entregado - aprobado) |
+### 3. Preservar registros "executed" y reducir ventana de demanda
+
+Aprovechar esta migracion para incluir las mejoras del plan anterior aprobado:
+- No borrar registros con `status = 'executed'` al recalcular
+- Cambiar proyeccion de 40 dias a 21 dias de cobertura objetivo
+- Filtrar sugerencias ejecutadas en el frontend
+
+### 4. Agregar cobertura de pipeline en la UI
+
+Agregar columna que muestre cuantos dias de venta cubre el pipeline actual.
 
 ---
 
-## Archivos a Modificar
+## Resultado esperado con datos reales
 
-1. **Nueva migración SQL**: `supabase/migrations/YYYYMMDD_fix_replenishment_calculation.sql`
-   - Función `refresh_inventory_replenishment` corregida
-   - Vista `v_replenishment_details` actualizada
-   - Nueva columna `in_transit` en tabla `inventory_replenishment`
+| Producto | Ventas actuales (buggy) | Ventas reales 30d | Sugerencia actual | Sugerencia corregida |
+|---|---|---|---|---|
+| Pollito T2 | 787 | 62 | 848 | ~0 (pipeline > demanda) |
+| Pollito T4 | 532 | 32 | ~480 | ~0 |
+| Sleeping Walker | similar inflacion | datos reales | proporcional | razonable |
+
+---
+
+## Archivos a modificar
+
+1. **Nueva migracion SQL** - `supabase/migrations/YYYYMMDD_fix_sales_calculation.sql`
+   - Reescribir CTE `sales_data` con INNER JOIN y filtros correctos
+   - Agregar filtro de `cancelled_at IS NULL`
+   - Preservar registros `executed` al recalcular
+   - Cambiar demanda de 40 a 21 dias
+   - Actualizar vista `v_replenishment_details` con campo `pipeline_coverage_days`
 
 2. **`src/hooks/useReplenishment.ts`**
-   - Actualizar interface `ReplenishmentSuggestion` para incluir `in_transit`
+   - Agregar filtro `.eq('status', 'pending')` al fetch
+   - Agregar campo `pipeline_coverage_days` a la interface
 
-3. **`src/components/supplies/ReplenishmentSuggestions.tsx`**
-   - Agregar columna "En Calidad" a la tabla
-   - Actualizar cálculo de totales seleccionados
+3. **`src/hooks/useProductionOrders.ts`**
+   - Agregar filtro de fecha al marcar como `executed`
 
----
-
-## Resultados Esperados
-
-Después de aplicar los cambios:
-
-- Las sugerencias reflejarán correctamente los productos ya ordenados
-- Los productos en control de calidad se mostrarán por separado
-- La columna `suggested_quantity` será más precisa
-- Se reducirá el riesgo de sobre-producción
-
----
-
-## Notas de Implementación
-
-- La migración agregará una nueva columna `in_transit` a la tabla `inventory_replenishment`
-- Los usuarios deberán hacer clic en "Calcular Sugerencias" para ver los datos corregidos
-- Los datos históricos no se actualizarán automáticamente
+4. **`src/components/supplies/ReplenishmentSuggestions.tsx`**
+   - Agregar columna "Cobertura" con badge visual
+   - Filtrar sugerencias ejecutadas
