@@ -3403,6 +3403,77 @@ export type Database = {
           },
         ]
       }
+      ugc_creator_tag_assignments: {
+        Row: {
+          assigned_at: string
+          creator_id: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          creator_id: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          assigned_at?: string
+          creator_id?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_creator_tag_assignments_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_creator_tag_assignments_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creator_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ugc_creator_tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_creator_tags_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ugc_creators: {
         Row: {
           avatar_url: string | null

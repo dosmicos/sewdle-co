@@ -6,12 +6,14 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { MessageSquare, Plus, UserCheck, UserX } from 'lucide-react';
 import { CREATOR_STATUS_CONFIG, PROSPECT_KANBAN_COLUMNS } from '@/types/ugc';
 import type { UgcCreator, CreatorStatus } from '@/types/ugc';
+import type { UgcCreatorTag } from '@/hooks/useUgcCreatorTags';
 
 interface UgcProspectKanbanProps {
   creators: UgcCreator[];
   onCreatorClick: (creator: UgcCreator) => void;
   onStatusChange: (creatorId: string, newStatus: CreatorStatus) => void;
   onCreateCampaign: (creator: UgcCreator) => void;
+  getTagsForCreator?: (creatorId: string) => UgcCreatorTag[];
 }
 
 export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
@@ -19,6 +21,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
   onCreatorClick,
   onStatusChange,
   onCreateCampaign,
+  getTagsForCreator,
 }) => {
   const [draggedCreator, setDraggedCreator] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<CreatorStatus | null>(null);
@@ -81,6 +84,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                     const avatarUrl = creator.instagram_handle
                       ? `https://unavatar.io/instagram/${creator.instagram_handle}`
                       : null;
+                    const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                     return (
                       <Card
@@ -112,6 +116,22 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                             <p className="text-xs text-muted-foreground">{creator.instagram_followers?.toLocaleString() || 0} seguidores</p>
                           </div>
                         </div>
+
+                        {/* Tags */}
+                        {creatorTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {creatorTags.map((tag) => (
+                              <Badge
+                                key={tag.id}
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0"
+                                style={{ borderColor: tag.color, color: tag.color }}
+                              >
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Quick actions based on status */}
                         <div className="flex gap-1 mt-2 pt-2 border-t border-border" onClick={(e) => e.stopPropagation()}>

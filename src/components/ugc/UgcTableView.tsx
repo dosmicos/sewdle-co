@@ -10,17 +10,20 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
 import { CAMPAIGN_STATUS_CONFIG } from '@/types/ugc';
+import type { UgcCreatorTag } from '@/hooks/useUgcCreatorTags';
 
 interface UgcTableViewProps {
   creators: UgcCreator[];
   campaigns: UgcCampaign[];
   onCreatorClick: (creator: UgcCreator) => void;
+  getTagsForCreator?: (creatorId: string) => UgcCreatorTag[];
 }
 
 export const UgcTableView: React.FC<UgcTableViewProps> = ({
   creators,
   campaigns,
   onCreatorClick,
+  getTagsForCreator,
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -94,9 +97,10 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
               <TableHead>Instagram</TableHead>
               <TableHead className="text-right">Seguidores</TableHead>
               <TableHead>Ciudad</TableHead>
+              <TableHead>Etiquetas</TableHead>
               <TableHead>Campaña Activa</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Producto</TableHead>
+              <TableHead>Pedido</TableHead>
               <TableHead>Videos</TableHead>
               <TableHead>Actualización</TableHead>
             </TableRow>
@@ -104,7 +108,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                   No se encontraron creadores
                 </TableCell>
               </TableRow>
@@ -117,6 +121,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const videosDelivered = activeCampaign?.videos?.filter(
                   (v) => v.status === 'aprobado' || v.status === 'publicado'
                 ).length || 0;
+                const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (
                   <TableRow
@@ -145,6 +150,22 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                       {creator.instagram_followers?.toLocaleString() || '0'}
                     </TableCell>
                     <TableCell className="text-sm">{creator.city || '—'}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {creatorTags.length > 0 ? creatorTags.map((tag) => (
+                          <Badge
+                            key={tag.id}
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0"
+                            style={{ borderColor: tag.color, color: tag.color }}
+                          >
+                            {tag.name}
+                          </Badge>
+                        )) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-sm">{activeCampaign?.name || '—'}</TableCell>
                     <TableCell>
                       {activeCampaign ? (
@@ -155,7 +176,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         <span className="text-muted-foreground text-xs">Sin campaña</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{activeCampaign?.product_sent || '—'}</TableCell>
+                    <TableCell className="text-sm">{activeCampaign?.order_number || '—'}</TableCell>
                     <TableCell className="text-sm">
                       {activeCampaign ? `${videosDelivered}/${activeCampaign.agreed_videos}` : '—'}
                     </TableCell>
