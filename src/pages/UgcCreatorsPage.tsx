@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, LayoutGrid, Table as TableIcon } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUgcCreators } from '@/hooks/useUgcCreators';
 import { useUgcCampaigns } from '@/hooks/useUgcCampaigns';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { UgcStatsCards } from '@/components/ugc/UgcStatsCards';
 import { UgcKanbanBoard } from '@/components/ugc/UgcKanbanBoard';
+import { UgcProspectKanban } from '@/components/ugc/UgcProspectKanban';
 import { UgcTableView } from '@/components/ugc/UgcTableView';
 import { UgcCreatorForm } from '@/components/ugc/UgcCreatorForm';
 import { UgcCampaignForm } from '@/components/ugc/UgcCampaignForm';
 import { UgcVideoForm } from '@/components/ugc/UgcVideoForm';
 import { UgcCreatorDetailModal } from '@/components/ugc/UgcCreatorDetailModal';
-import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
+import type { UgcCreator, UgcCampaign, CampaignStatus, CreatorStatus } from '@/types/ugc';
 
 const UgcCreatorsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [kanbanTab, setKanbanTab] = useState<'prospectos' | 'campanas'>('prospectos');
   const [creatorFormOpen, setCreatorFormOpen] = useState(false);
   const [editingCreator, setEditingCreator] = useState<UgcCreator | null>(null);
   const [selectedCreator, setSelectedCreator] = useState<UgcCreator | null>(null);
@@ -24,17 +27,14 @@ const UgcCreatorsPage: React.FC = () => {
   const [videoFormOpen, setVideoFormOpen] = useState(false);
   const [videoCampaignId, setVideoCampaignId] = useState<string | null>(null);
 
-  const { creators, isLoading: creatorsLoading, createCreator, updateCreator } = useUgcCreators();
+  const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus } = useUgcCreators();
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
   const { createVideo, updateVideoStatus } = useUgcVideos();
 
   const handleCreatorSubmit = (data: any) => {
     if (editingCreator) {
       updateCreator.mutate({ ...data, id: editingCreator.id }, {
-        onSuccess: () => {
-          setCreatorFormOpen(false);
-          setEditingCreator(null);
-        },
+        onSuccess: () => { setCreatorFormOpen(false); setEditingCreator(null); },
       });
     } else {
       createCreator.mutate(data, {
@@ -45,54 +45,46 @@ const UgcCreatorsPage: React.FC = () => {
 
   const handleCampaignClick = (campaign: UgcCampaign) => {
     const creator = creators.find((c) => c.id === campaign.creator_id);
-    if (creator) {
-      setSelectedCreator(creator);
-      setDetailOpen(true);
-    }
+    if (creator) { setSelectedCreator(creator); setDetailOpen(true); }
   };
 
   const handleCreatorClick = (creator: UgcCreator) => {
-    setSelectedCreator(creator);
-    setDetailOpen(true);
-  };
-
-  const handleStatusChange = (campaignId: string, newStatus: CampaignStatus) => {
-    updateCampaignStatus.mutate({ id: campaignId, status: newStatus });
+    setSelectedCreator(creator); setDetailOpen(true);
   };
 
   const handleCampaignStatusChange = (campaignId: string, status: CampaignStatus, extra?: Record<string, any>) => {
     updateCampaignStatus.mutate({ id: campaignId, status, extra });
   };
 
+  const handleCreatorStatusChange = (creatorId: string, newStatus: CreatorStatus) => {
+    updateCreatorStatus.mutate({ id: creatorId, status: newStatus });
+  };
+
   const handleNewCampaign = () => {
-    if (selectedCreator) {
-      setCampaignCreatorId(selectedCreator.id);
-      setCampaignFormOpen(true);
-    }
+    if (selectedCreator) { setCampaignCreatorId(selectedCreator.id); setCampaignFormOpen(true); }
+  };
+
+  const handleCreateCampaignForCreator = (creator: UgcCreator) => {
+    setSelectedCreator(creator);
+    setCampaignCreatorId(creator.id);
+    setCampaignFormOpen(true);
   };
 
   const handleCampaignSubmit = (data: any) => {
     if (!campaignCreatorId) return;
     createCampaign.mutate({ ...data, creatorId: campaignCreatorId }, {
-      onSuccess: () => {
-        setCampaignFormOpen(false);
-        setCampaignCreatorId(null);
-      },
+      onSuccess: () => { setCampaignFormOpen(false); setCampaignCreatorId(null); },
     });
   };
 
   const handleNewVideo = (campaignId: string) => {
-    setVideoCampaignId(campaignId);
-    setVideoFormOpen(true);
+    setVideoCampaignId(campaignId); setVideoFormOpen(true);
   };
 
   const handleVideoSubmit = (data: any) => {
     if (!videoCampaignId || !selectedCreator) return;
     createVideo.mutate({ ...data, campaignId: videoCampaignId, creatorId: selectedCreator.id }, {
-      onSuccess: () => {
-        setVideoFormOpen(false);
-        setVideoCampaignId(null);
-      },
+      onSuccess: () => { setVideoFormOpen(false); setVideoCampaignId(null); },
     });
   };
 
@@ -112,22 +104,11 @@ const UgcCreatorsPage: React.FC = () => {
           <p className="text-sm text-muted-foreground">Gestiona creadores de contenido y campañas</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* View Toggle */}
           <div className="flex items-center bg-muted rounded-lg p-1">
-            <Button
-              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('kanban')}
-              className="h-8"
-            >
+            <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')} className="h-8">
               <LayoutGrid className="h-4 w-4 mr-1" /> Kanban
             </Button>
-            <Button
-              variant={viewMode === 'table' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('table')}
-              className="h-8"
-            >
+            <Button variant={viewMode === 'table' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('table')} className="h-8">
               <TableIcon className="h-4 w-4 mr-1" /> Tabla
             </Button>
           </div>
@@ -146,17 +127,29 @@ const UgcCreatorsPage: React.FC = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       ) : viewMode === 'kanban' ? (
-        <UgcKanbanBoard
-          campaigns={campaigns}
-          onCampaignClick={handleCampaignClick}
-          onStatusChange={handleStatusChange}
-        />
+        <Tabs value={kanbanTab} onValueChange={(v) => setKanbanTab(v as 'prospectos' | 'campanas')}>
+          <TabsList>
+            <TabsTrigger value="prospectos">Prospectos</TabsTrigger>
+            <TabsTrigger value="campanas">Campañas</TabsTrigger>
+          </TabsList>
+          <TabsContent value="prospectos" className="mt-4">
+            <UgcProspectKanban
+              creators={creators}
+              onCreatorClick={handleCreatorClick}
+              onStatusChange={handleCreatorStatusChange}
+              onCreateCampaign={handleCreateCampaignForCreator}
+            />
+          </TabsContent>
+          <TabsContent value="campanas" className="mt-4">
+            <UgcKanbanBoard
+              campaigns={campaigns}
+              onCampaignClick={handleCampaignClick}
+              onStatusChange={(id, status) => handleCampaignStatusChange(id, status)}
+            />
+          </TabsContent>
+        </Tabs>
       ) : (
-        <UgcTableView
-          creators={creators}
-          campaigns={campaigns}
-          onCreatorClick={handleCreatorClick}
-        />
+        <UgcTableView creators={creators} campaigns={campaigns} onCreatorClick={handleCreatorClick} />
       )}
 
       {/* Modals */}
@@ -173,10 +166,7 @@ const UgcCreatorsPage: React.FC = () => {
         onOpenChange={setDetailOpen}
         creator={selectedCreator}
         campaigns={campaigns}
-        onEdit={() => {
-          setEditingCreator(selectedCreator);
-          setCreatorFormOpen(true);
-        }}
+        onEdit={() => { setEditingCreator(selectedCreator); setCreatorFormOpen(true); }}
         onNewCampaign={handleNewCampaign}
         onNewVideo={handleNewVideo}
         onCampaignStatusChange={handleCampaignStatusChange}
@@ -187,7 +177,7 @@ const UgcCreatorsPage: React.FC = () => {
         <UgcCampaignForm
           open={campaignFormOpen}
           onOpenChange={setCampaignFormOpen}
-          creatorName={selectedCreator?.name || ''}
+          creatorName={selectedCreator?.name || creators.find(c => c.id === campaignCreatorId)?.name || ''}
           onSubmit={handleCampaignSubmit}
           isLoading={createCampaign.isPending}
         />

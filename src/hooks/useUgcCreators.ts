@@ -44,6 +44,9 @@ export const useUgcCreators = () => {
           notes: formData.notes || null,
           avatar_url: avatarUrl,
           status: 'prospecto',
+          platform: formData.platform || 'instagram',
+          content_types: formData.content_types || null,
+          tiktok_handle: formData.tiktok_handle || null,
         })
         .select()
         .single();
@@ -74,6 +77,9 @@ export const useUgcCreators = () => {
           engagement_rate: formData.engagement_rate || null,
           notes: formData.notes || null,
           avatar_url: avatarUrl,
+          platform: formData.platform || 'instagram',
+          content_types: formData.content_types || null,
+          tiktok_handle: formData.tiktok_handle || null,
         })
         .eq('id', id)
         .select()
@@ -92,11 +98,15 @@ export const useUgcCreators = () => {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase
         .from('ugc_creators')
-        .update({ status })
+        .update({ status, last_contact_date: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ugc-creators'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-creators'] });
+      toast.success('Estado actualizado');
+    },
+    onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
 
   return { creators, isLoading, createCreator, updateCreator, updateCreatorStatus };
@@ -115,7 +125,7 @@ export const useUgcCreatorChildren = (creatorId: string | null) => {
         .from('ugc_creator_children')
         .select('*')
         .eq('creator_id', creatorId)
-        .order('birth_date', { ascending: true });
+        .order('created_at', { ascending: true });
       if (error) throw error;
       return data as UgcCreatorChild[];
     },
@@ -123,23 +133,32 @@ export const useUgcCreatorChildren = (creatorId: string | null) => {
   });
 
   const addChild = useMutation({
-    mutationFn: async (child: { name: string; birth_date?: string; size?: string; gender?: string }) => {
-      if (!creatorId || !orgId) throw new Error('Missing data');
-      const { error } = await supabase.from('ugc_creator_children').insert({
+    mutationFn: async (child: { name: string; age_description?: string; size?: string; gender?: string }) => {
+      console.log('[UGC] Adding child:', { creatorId, orgId, child });
+      if (!creatorId || !orgId) throw new Error('Missing creatorId or orgId');
+      const { data, error } = await supabase.from('ugc_creator_children').insert({
         creator_id: creatorId,
         organization_id: orgId,
         name: child.name,
-        birth_date: child.birth_date || null,
+        age_description: child.age_description || null,
         size: child.size || null,
         gender: child.gender || null,
-      });
-      if (error) throw error;
+      }).select().single();
+      if (error) {
+        console.error('[UGC] Error adding child:', error);
+        throw error;
+      }
+      console.log('[UGC] Child added successfully:', data);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ugc-children', creatorId] });
       toast.success('Hijo agregado');
     },
-    onError: (err: Error) => toast.error(`Error: ${err.message}`),
+    onError: (err: Error) => {
+      console.error('[UGC] addChild mutation error:', err);
+      toast.error(`Error al agregar hijo: ${err.message}`);
+    },
   });
 
   const deleteChild = useMutation({

@@ -3351,7 +3351,7 @@ export type Database = {
       }
       ugc_creator_children: {
         Row: {
-          birth_date: string | null
+          age_description: string | null
           created_at: string
           creator_id: string
           gender: string | null
@@ -3362,7 +3362,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          birth_date?: string | null
+          age_description?: string | null
           created_at?: string
           creator_id: string
           gender?: string | null
@@ -3373,7 +3373,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          birth_date?: string | null
+          age_description?: string | null
           created_at?: string
           creator_id?: string
           gender?: string | null
@@ -3406,17 +3406,21 @@ export type Database = {
           avg_likes: number | null
           avg_views: number | null
           city: string | null
+          content_types: string[] | null
           created_at: string
           email: string | null
           engagement_rate: number | null
           id: string
           instagram_followers: number | null
           instagram_handle: string | null
+          last_contact_date: string | null
           name: string
           notes: string | null
           organization_id: string
           phone: string | null
+          platform: string | null
           status: string
+          tiktok_handle: string | null
           updated_at: string
         }
         Insert: {
@@ -3424,17 +3428,21 @@ export type Database = {
           avg_likes?: number | null
           avg_views?: number | null
           city?: string | null
+          content_types?: string[] | null
           created_at?: string
           email?: string | null
           engagement_rate?: number | null
           id?: string
           instagram_followers?: number | null
           instagram_handle?: string | null
+          last_contact_date?: string | null
           name: string
           notes?: string | null
           organization_id: string
           phone?: string | null
+          platform?: string | null
           status?: string
+          tiktok_handle?: string | null
           updated_at?: string
         }
         Update: {
@@ -3442,17 +3450,21 @@ export type Database = {
           avg_likes?: number | null
           avg_views?: number | null
           city?: string | null
+          content_types?: string[] | null
           created_at?: string
           email?: string | null
           engagement_rate?: number | null
           id?: string
           instagram_followers?: number | null
           instagram_handle?: string | null
+          last_contact_date?: string | null
           name?: string
           notes?: string | null
           organization_id?: string
           phone?: string | null
+          platform?: string | null
           status?: string
+          tiktok_handle?: string | null
           updated_at?: string
         }
         Relationships: [
