@@ -370,6 +370,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableHead className="text-right">Días Stock</TableHead>
                   <TableHead className="text-right">En Producción</TableHead>
                   <TableHead className="text-right">En Calidad</TableHead>
+                  <TableHead className="text-right">Cobertura</TableHead>
                   <TableHead 
                     className="text-right cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={toggleSortOrder}
@@ -421,13 +422,28 @@ export const ReplenishmentSuggestions: React.FC = () => {
                         <span className="text-muted-foreground">0</span>
                       )}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {suggestion.pipeline_coverage_days != null ? (
+                        <Badge variant="outline" className={
+                          suggestion.pipeline_coverage_days < 7 
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : suggestion.pipeline_coverage_days < 14 
+                              ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                              : 'bg-green-50 text-green-700 border-green-200'
+                        }>
+                          {suggestion.pipeline_coverage_days}d
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-medium">{suggestion.suggested_quantity}</TableCell>
                     <TableCell>{getUrgencyBadge(suggestion.urgency)}</TableCell>
                   </TableRow>
                 ))}
                 {filteredSuggestions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                       No se encontraron sugerencias de reposición
                     </TableCell>
                   </TableRow>

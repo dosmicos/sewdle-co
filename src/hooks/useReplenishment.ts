@@ -21,6 +21,7 @@ export interface ReplenishmentSuggestion {
   days_of_supply: number | null;
   projected_demand_40d: number;
   suggested_quantity: number;
+  pipeline_coverage_days: number | null;
   urgency: 'critical' | 'high' | 'medium' | 'low';
   reason: string | null;
   data_confidence: 'high' | 'medium' | 'low';
@@ -45,7 +46,8 @@ export const useReplenishment = () => {
         .from('v_replenishment_details')
         .select('*')
         .eq('organization_id', currentOrganization.id)
-        .eq('calculation_date', new Date().toISOString().split('T')[0]);
+        .eq('calculation_date', new Date().toISOString().split('T')[0])
+        .eq('status', 'pending');
       
       if (error) throw error;
       

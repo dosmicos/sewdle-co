@@ -3648,6 +3648,7 @@ export type Database = {
           orders_count_30d: number | null
           organization_id: string | null
           pending_production: number | null
+          pipeline_coverage_days: number | null
           product_name: string | null
           projected_demand_40d: number | null
           reason: string | null
