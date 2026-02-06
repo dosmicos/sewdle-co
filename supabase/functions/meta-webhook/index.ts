@@ -700,6 +700,24 @@ Reglas importantes:
 
                 // Insert message (skip for reaction type)
                 if (messageType !== 'reaction') {
+                  // Resolve reply_to_message_id from WAMID to internal UUID
+                  let resolvedReplyToId: string | null = null;
+                  if (replyToMessageId) {
+                    const { data: replyMsg } = await supabase
+                      .from('messaging_messages')
+                      .select('id')
+                      .eq('external_message_id', replyToMessageId)
+                      .limit(1)
+                      .single();
+                    
+                    if (replyMsg) {
+                      resolvedReplyToId = replyMsg.id;
+                      console.log(`✅ Resolved reply WAMID ${replyToMessageId} to internal ID ${resolvedReplyToId}`);
+                    } else {
+                      console.log(`⚠️ Could not resolve reply WAMID ${replyToMessageId}, setting to null`);
+                    }
+                  }
+
                   const { error: msgError } = await supabase
                     .from('messaging_messages')
                     .insert({
@@ -712,7 +730,7 @@ Reglas importantes:
                       message_type: messageType,
                       media_url: mediaUrl,
                       media_mime_type: mediaMimeType,
-                      reply_to_message_id: replyToMessageId,
+                      reply_to_message_id: resolvedReplyToId,
                       metadata: {
                         ...message,
                         original_media_id: mediaId,
