@@ -1034,7 +1034,9 @@ export type Database = {
           channel_type: string
           created_at: string | null
           external_user_id: string
+          folder_id: string | null
           id: string
+          is_pinned: boolean | null
           last_message_at: string | null
           last_message_preview: string | null
           metadata: Json | null
@@ -1052,7 +1054,9 @@ export type Database = {
           channel_type: string
           created_at?: string | null
           external_user_id: string
+          folder_id?: string | null
           id?: string
+          is_pinned?: boolean | null
           last_message_at?: string | null
           last_message_preview?: string | null
           metadata?: Json | null
@@ -1070,7 +1074,9 @@ export type Database = {
           channel_type?: string
           created_at?: string | null
           external_user_id?: string
+          folder_id?: string | null
           id?: string
+          is_pinned?: boolean | null
           last_message_at?: string | null
           last_message_preview?: string | null
           metadata?: Json | null
@@ -1091,7 +1097,52 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "messaging_conversations_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_folders"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "messaging_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messaging_folders: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          name: string
+          organization_id: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_folders_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

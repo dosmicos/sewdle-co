@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, 
   GraduationCap, Brain, Megaphone, BarChart3, ArrowLeft,
-  MessageSquare, Instagram, Facebook, Tag
+  MessageSquare, Instagram, Facebook, FolderPlus, Trash2, Folder
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MessagingTag } from '@/hooks/useMessagingTags';
+import { MessagingFolder } from '@/hooks/useMessagingFolders';
+import { FolderCreateDialog } from './FolderCreateDialog';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
 type ChannelType = 'all' | 'whatsapp' | 'instagram' | 'messenger';
@@ -14,9 +16,11 @@ interface MessagingSidebarProps {
   activeFilter: FilterType;
   activeChannel: ChannelType;
   activeTagId?: string | null;
+  activeFolderId?: string | null;
   onFilterChange: (filter: FilterType) => void;
   onChannelChange: (channel: ChannelType) => void;
   onTagChange?: (tagId: string | null) => void;
+  onFolderChange?: (folderId: string | null) => void;
   onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags') => void;
   counts: {
     total: number;
@@ -28,6 +32,11 @@ interface MessagingSidebarProps {
   };
   tags?: MessagingTag[];
   tagCounts?: Record<string, number>;
+  folders?: MessagingFolder[];
+  folderCounts?: Record<string, number>;
+  onCreateFolder?: (data: { name: string; color: string }) => void;
+  isCreatingFolder?: boolean;
+  onDeleteFolder?: (folderId: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -52,28 +61,16 @@ const channelItems: Array<{
   activeColor: string;
 }> = [
   { 
-    id: 'whatsapp', 
-    label: 'WhatsApp', 
-    icon: MessageSquare, 
-    countKey: 'whatsapp',
-    color: 'text-emerald-400',
-    activeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, countKey: 'whatsapp',
+    color: 'text-emerald-400', activeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
   },
   { 
-    id: 'instagram', 
-    label: 'Instagram', 
-    icon: Instagram, 
-    countKey: 'instagram',
-    color: 'text-pink-400',
-    activeColor: 'bg-pink-500/20 text-pink-400 border-pink-500/30'
+    id: 'instagram', label: 'Instagram', icon: Instagram, countKey: 'instagram',
+    color: 'text-pink-400', activeColor: 'bg-pink-500/20 text-pink-400 border-pink-500/30'
   },
   { 
-    id: 'messenger', 
-    label: 'Messenger', 
-    icon: Facebook, 
-    countKey: 'messenger',
-    color: 'text-blue-400',
-    activeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+    id: 'messenger', label: 'Messenger', icon: Facebook, countKey: 'messenger',
+    color: 'text-blue-400', activeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30'
   },
 ];
 
@@ -81,16 +78,25 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
   activeFilter,
   activeChannel,
   activeTagId,
+  activeFolderId,
   onFilterChange,
   onChannelChange,
   onTagChange,
+  onFolderChange,
   onNavigate,
   counts,
   tags = [],
   tagCounts = {},
+  folders = [],
+  folderCounts = {},
+  onCreateFolder,
+  isCreatingFolder,
+  onDeleteFolder,
   collapsed,
   onToggleCollapse,
 }) => {
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+
   return (
     <div
       className={cn(
@@ -161,9 +167,7 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
                         <span
                           className={cn(
                             "text-xs font-semibold px-2 py-0.5 rounded-full",
-                            isActive
-                              ? "bg-white/20"
-                              : "bg-slate-700 text-slate-300"
+                            isActive ? "bg-white/20" : "bg-slate-700 text-slate-300"
                           )}
                         >
                           {count}
@@ -210,9 +214,7 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
                         <span
                           className={cn(
                             "text-xs font-semibold px-2 py-0.5 rounded-full",
-                            isActive
-                              ? "bg-indigo-500 text-white"
-                              : "bg-slate-700 text-slate-300"
+                            isActive ? "bg-indigo-500 text-white" : "bg-slate-700 text-slate-300"
                           )}
                         >
                           {count}
@@ -236,6 +238,83 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
             </button>
           </div>
         </nav>
+
+        {/* Folders section */}
+        <div className="border-t border-slate-700 py-4 px-2">
+          {!collapsed && (
+            <div className="flex items-center justify-between px-3 mb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Carpetas
+              </span>
+              <button
+                onClick={() => setShowCreateFolder(true)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          {collapsed && (
+            <button
+              onClick={() => setShowCreateFolder(true)}
+              className="w-full flex items-center justify-center px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors mb-1"
+            >
+              <FolderPlus className="h-5 w-5" />
+            </button>
+          )}
+          <ul className="space-y-1">
+            {activeFolderId && (
+              <li>
+                <button
+                  onClick={() => onFolderChange?.(null)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                >
+                  <Inbox className="h-4 w-4 flex-shrink-0" />
+                  {!collapsed && <span className="text-sm font-medium">Todos los chats</span>}
+                </button>
+              </li>
+            )}
+            {folders.map((folder) => {
+              const count = folderCounts[folder.id] || 0;
+              const isActive = activeFolderId === folder.id;
+
+              return (
+                <li key={folder.id}>
+                  <button
+                    onClick={() => onFolderChange?.(isActive ? null : folder.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group/folder",
+                      isActive
+                        ? "bg-slate-700 text-white"
+                        : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    )}
+                  >
+                    <Folder className="h-4 w-4 flex-shrink-0" style={{ color: folder.color }} />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 text-left text-sm font-medium truncate">
+                          {folder.name}
+                        </span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                          {count}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteFolder?.(folder.id);
+                          }}
+                          className="opacity-0 group-hover/folder:opacity-100 text-slate-500 hover:text-red-400 transition-all"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
 
         {/* Tags section */}
         {tags.length > 0 && (
@@ -339,6 +418,14 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Folder Create Dialog */}
+      <FolderCreateDialog
+        open={showCreateFolder}
+        onOpenChange={setShowCreateFolder}
+        onCreate={(data) => onCreateFolder?.(data)}
+        isLoading={isCreatingFolder}
+      />
     </div>
   );
 };

@@ -283,11 +283,73 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     },
   });
 
+  // Mark as unread
+  const markAsUnread = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase
+        .from('messaging_conversations')
+        .update({ unread_count: 1 })
+        .eq('id', conversationId);
+      
+      if (error) throw error;
+    },
+    onMutate: async (conversationId) => {
+      await queryClient.cancelQueries({ queryKey: ['messaging-conversations'] });
+      queryClient.setQueriesData(
+        { queryKey: ['messaging-conversations'] },
+        (old: MessagingConversation[] | undefined) => {
+          if (!old) return old;
+          return old.map(c =>
+            c.id === conversationId ? { ...c, unread_count: Math.max(c.unread_count || 0, 1) } : c
+          );
+        }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+    },
+  });
+
+  // Toggle pin
+  const togglePin = useMutation({
+    mutationFn: async ({ conversationId, isPinned }: { conversationId: string; isPinned: boolean }) => {
+      const { error } = await supabase
+        .from('messaging_conversations')
+        .update({ is_pinned: isPinned })
+        .eq('id', conversationId);
+      
+      if (error) throw error;
+    },
+    onMutate: async ({ conversationId, isPinned }) => {
+      await queryClient.cancelQueries({ queryKey: ['messaging-conversations'] });
+      const previous = queryClient.getQueryData(['messaging-conversations', channelFilter]);
+
+      queryClient.setQueriesData(
+        { queryKey: ['messaging-conversations'] },
+        (old: MessagingConversation[] | undefined) => {
+          if (!old) return old;
+          return old.map(c =>
+            c.id === conversationId ? { ...c, is_pinned: isPinned } : c
+          );
+        }
+      );
+
+      return { previous };
+    },
+    onError: (error: any, _, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['messaging-conversations', channelFilter], context.previous);
+      }
+      toast.error('Error al fijar/desfijar conversación');
+    },
+  });
+
   return {
     conversations: filteredConversations,
     isLoading,
     error,
     markAsRead: markAsRead.mutate,
+    markAsUnread: markAsUnread.mutate,
     updateStatus: updateStatus.mutate,
     deleteConversation: deleteConversation.mutate,
     isDeletingConversation: deleteConversation.isPending,
@@ -295,5 +357,6 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     isCreatingConversation: createConversation.isPending,
     toggleAiManaged: toggleAiManaged.mutate,
     isTogglingAiManaged: toggleAiManaged.isPending,
+    togglePin: togglePin.mutate,
   };
 };
