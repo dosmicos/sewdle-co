@@ -1,91 +1,63 @@
 
-# Fix: Hacer visible la opcion "Mover a carpeta" siempre en el menu contextual
 
-## Problema
+# Fix: days_of_supply debe usar la velocidad ajustada
 
-Las 3 funciones (marcar como no leido, fijar, carpetas) estan implementadas en codigo y base de datos. Sin embargo, la opcion "Mover a carpeta" del menu contextual esta condicionada a `folders.length > 0`, lo que la hace invisible cuando el usuario no ha creado ninguna carpeta todavia. Esto da la impresion de que la funcion no existe.
+## Problema confirmado
+
+En la funcion `refresh_inventory_replenishment` (migracion mas reciente `20260206145019`), lineas 181-185:
+
+```text
+-- Dias de suministro (BUGGY)
+CASE 
+  WHEN sales.sales_30d > 0 AND sd.current_stock > 0
+  THEN ROUND((sd.current_stock::numeric * 30) / sales.sales_30d, 1)
+  ELSE NULL 
+END as days_of_supply
+```
+
+Esta formula equivale a `stock / (sales_30d / 30)`, es decir, siempre divide entre 30 dias. Pero `avg_daily_sales` (lineas 165-179) ya usa la velocidad ajustada dividiendo entre dias con stock. Resultado: los dos valores son inconsistentes.
 
 ## Solucion
 
-### 1. Mostrar siempre "Mover a carpeta" en el menu contextual
-
-**Archivo**: `src/components/messaging-ai/ConversationContextMenu.tsx`
-
-- Eliminar la condicion `folders.length > 0` que oculta el submenu
-- Cuando no hay carpetas, mostrar un item dentro del submenu que diga "Crear carpeta..." y que dispare la creacion de carpeta
-- Agregar un callback `onCreateFolder` como prop para abrir el dialogo de creacion de carpeta desde el menu contextual
-
-### 2. Agregar callback de creacion de carpeta al contexto
-
-**Archivo**: `src/components/messaging-ai/ConversationsList.tsx`
-
-- Agregar prop `onCreateFolder` y pasarla al `ConversationContextMenu`
-
-**Archivo**: `src/pages/MessagingAIPage.tsx`
-
-- Agregar estado para abrir el dialogo de creacion de carpeta
-- Pasar callback `onCreateFolder` al componente `ConversationsList` que abra el dialogo de creacion
-
-### 3. Agregar FolderCreateDialog accesible desde la lista de chats
-
-**Archivo**: `src/pages/MessagingAIPage.tsx`
-
-- Agregar una instancia del `FolderCreateDialog` que se pueda abrir tanto desde el sidebar (ya existente) como desde el menu contextual de un chat
-
----
-
-## Detalles tecnicos
-
-### Cambio en ConversationContextMenu.tsx (lineas 86-109)
-
-Cambiar de:
-```text
-{folders.length > 0 && (
-  <DropdownMenuSub>
-    ...
-  </DropdownMenuSub>
-)}
-```
-
-A:
-```text
-<DropdownMenuSub>
-  <DropdownMenuSubTrigger>
-    <FolderInput className="h-4 w-4 mr-2" />
-    Mover a carpeta
-  </DropdownMenuSubTrigger>
-  <DropdownMenuSubContent>
-    {folders.length > 0 ? (
-      folders.map(folder => ...)
-    ) : (
-      <DropdownMenuItem onClick={onCreateFolder}>
-        <FolderPlus className="h-4 w-4 mr-2" />
-        Crear carpeta...
-      </DropdownMenuItem>
-    )}
-  </DropdownMenuSubContent>
-</DropdownMenuSub>
-```
-
-### Nueva prop en ConversationContextMenu
+Reemplazar el calculo de `days_of_supply` para que replique la misma logica de prioridades que `avg_daily_sales`, calculando `current_stock / velocidad_ajustada`:
 
 ```text
-interface ConversationContextMenuProps {
-  ...existing props...
-  onCreateFolder?: () => void;  // Nuevo
-}
+CASE
+  -- P1: stock / velocidad ajustada 30d
+  WHEN COALESCE(stk.days_with_stock_30d, 0) >= 5 AND COALESCE(sales.sales_30d, 0) > 0 AND COALESCE(sd.current_stock, 0) > 0
+  THEN ROUND(sd.current_stock::numeric / (sales.sales_30d::numeric / stk.days_with_stock_30d), 1)
+  -- P2: stock / velocidad ajustada 90d
+  WHEN COALESCE(stk.days_with_stock_90d, 0) >= 5 AND COALESCE(s90.sales_90d, 0) > 0 AND COALESCE(sd.current_stock, 0) > 0
+  THEN ROUND(sd.current_stock::numeric / (s90.sales_90d::numeric / stk.days_with_stock_90d), 1)
+  -- P3: stock / velocidad simple 30d
+  WHEN COALESCE(sales.sales_30d, 0) > 0 AND COALESCE(sd.current_stock, 0) > 0
+  THEN ROUND(sd.current_stock::numeric / (sales.sales_30d::numeric / 30), 1)
+  -- P4: stock / velocidad historica guardada
+  WHEN COALESCE(lv.saved_velocity, 0) > 0 AND COALESCE(sd.current_stock, 0) > 0
+  THEN ROUND(sd.current_stock::numeric / lv.saved_velocity, 1)
+  ELSE NULL
+END as days_of_supply
 ```
 
-### Cambio en ConversationsList.tsx
+## Cambio requerido
 
-Agregar prop `onCreateFolder` y pasarla al context menu de cada chat.
+### 1. Nueva migracion SQL
 
-### Cambio en MessagingAIPage.tsx
+Se creara un `CREATE OR REPLACE FUNCTION refresh_inventory_replenishment` que es identico al actual excepto por las lineas 181-185, donde se reemplaza la formula naive con la formula ajustada mostrada arriba.
 
-Agregar estado `showCreateFolderFromChat` y pasarlo como callback que abre el `FolderCreateDialog`.
+No se necesitan cambios en el frontend ni en la vista `v_replenishment_details` — la vista ya lee `days_of_supply` directamente de la tabla.
 
-### Archivos a modificar
+## Resultado esperado
 
-1. `src/components/messaging-ai/ConversationContextMenu.tsx` - Mostrar siempre la opcion y agregar creacion inline
-2. `src/components/messaging-ai/ConversationsList.tsx` - Pasar nueva prop onCreateFolder
-3. `src/pages/MessagingAIPage.tsx` - Conectar dialogo de creacion con el menu contextual
+Para la variante 47176267464939 (11 ventas, 11 dias con stock, 7 unidades):
+- Antes: days_of_supply = 7 * 30 / 11 = **19.1 dias** (medium)
+- Despues: days_of_supply = 7 / (11/11) = **7.0 dias** (critical)
+
+Para la variante 46656050168043 (25 ventas, 30 dias con stock, 38 unidades):
+- Antes: 38 * 30 / 25 = **45.6 dias** (low)
+- Despues: 38 / (25/30) = **45.6 dias** (low) -- sin cambio porque tuvo stock los 30 dias
+
+## Archivo
+
+1. Nueva migracion SQL en `supabase/migrations/` con `CREATE OR REPLACE FUNCTION`
+
