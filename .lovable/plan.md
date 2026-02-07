@@ -1,47 +1,28 @@
 
+# Cambiar proyeccion de demanda de 21 a 30 dias
 
-# Eliminar "Interesado" y mostrar conteo de campanas en el Kanban de Prospectos
+## Resumen
+Actualmente la funcion `refresh_inventory_replenishment` proyecta la demanda a 21 dias para calcular la cantidad sugerida. Se cambiara a 30 dias, manteniendo todo lo demas igual (velocidad ajustada, dias de stock, urgencia, etc.).
 
-## Cambio 1: Quitar columna "Interesado" (respondio_si)
+## Cambio unico
 
-Actualmente el flujo en el Kanban de prospectos es:
+### Migracion SQL: Actualizar `refresh_inventory_replenishment`
 
+En el bloque de `projected_demand_21d` (lineas 184-195 de la funcion actual), cambiar todos los `* 21` por `* 30`:
+
+- `(velocidad) * 21` pasa a `(velocidad) * 30`
+- El alias interno cambia de `projected_demand_21d` a `projected_demand_30d`
+- La referencia en el INSERT (linea 259-260) tambien se actualiza
+
+**Formula resultante:**
 ```text
-Prospecto -> Contactado -> Interesado (respondio_si) -> Negociando
+suggested_quantity = MAX(0, (velocidad_ajustada * 30) - stock - produccion_pendiente - en_transito)
 ```
 
-Se cambiara a:
+**Ejemplo (variante 47176267464939):**
+- Velocidad: 1.0/dia
+- Demanda 30d: 30 unidades
+- Stock: 7, pendiente: 0, transito: 0
+- Sugerida: 30 - 7 = 23 unidades (antes era 14 con 21 dias)
 
-```text
-Prospecto -> Contactado -> Negociando
-```
-
-- El boton "Si" en la columna "Contactado" cambiara el status directamente a `negociando` (en vez de `respondio_si`).
-- Se eliminara `respondio_si` de la lista de columnas visibles en el Kanban (`PROSPECT_KANBAN_COLUMNS`).
-- Los creadores que ya esten en `respondio_si` en la base de datos seguiran existiendo pero no apareceran en ninguna columna del Kanban visible. Para resolverlo, se puede: (a) mostrarlos en la columna de "Negociando" mapeandolos automaticamente en el frontend, o (b) dejarlos en la DB y que aparezcan al filtrar. La opcion (a) es mas limpia.
-- El boton "+ Campana" que aparecia en `respondio_si` y `negociando` ahora solo aparecera en `negociando`.
-- NO se eliminara `respondio_si` del CHECK constraint de la base de datos ni del tipo TypeScript, para no romper registros historicos.
-
-## Cambio 2: Mostrar numero de campanas en las tarjetas del Kanban
-
-Para cada creador en el Kanban de prospectos, se contara cuantas campanas tiene y se mostrara un badge en la tarjeta cuando tenga al menos 1.
-
-Esto requiere pasar la lista de `campaigns` al componente `UgcProspectKanban` para poder hacer el conteo por `creator_id`.
-
----
-
-## Archivos a modificar
-
-### 1. `src/types/ugc.ts`
-- Quitar `respondio_si` de `PROSPECT_KANBAN_COLUMNS` (solo quedan: prospecto, contactado, negociando).
-
-### 2. `src/components/ugc/UgcProspectKanban.tsx`
-- Agregar prop `campaigns` al componente.
-- Cambiar el boton "Si" para que envie status `negociando` en vez de `respondio_si`.
-- Eliminar el bloque de botones especifico para `status === 'respondio_si'`.
-- Actualizar la condicion del boton "+ Campana" para que solo aparezca en `negociando`.
-- Mapear creadores con status `respondio_si` a la columna `negociando` en `getCreatorsForColumn`.
-- Agregar un badge con el conteo de campanas por creador (ej: "2 campanas") cuando sea mayor a 0.
-
-### 3. `src/pages/UgcCreatorsPage.tsx`
-- Pasar `campaigns` como nueva prop a `UgcProspectKanban`.
+No se modifica ningun archivo de frontend ni la columna de la tabla (sigue siendo `projected_demand_40d` como nombre de columna en la DB, solo cambia el valor calculado).
