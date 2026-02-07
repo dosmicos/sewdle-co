@@ -3,13 +3,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { MessageSquare, Plus, UserCheck, UserX } from 'lucide-react';
+import { MessageSquare, Plus, UserCheck, UserX, Megaphone } from 'lucide-react';
 import { CREATOR_STATUS_CONFIG, PROSPECT_KANBAN_COLUMNS } from '@/types/ugc';
-import type { UgcCreator, CreatorStatus } from '@/types/ugc';
+import type { UgcCreator, UgcCampaign, CreatorStatus } from '@/types/ugc';
 import type { UgcCreatorTag } from '@/hooks/useUgcCreatorTags';
 
 interface UgcProspectKanbanProps {
   creators: UgcCreator[];
+  campaigns: UgcCampaign[];
   onCreatorClick: (creator: UgcCreator) => void;
   onStatusChange: (creatorId: string, newStatus: CreatorStatus) => void;
   onCreateCampaign: (creator: UgcCreator) => void;
@@ -18,6 +19,7 @@ interface UgcProspectKanbanProps {
 
 export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
   creators,
+  campaigns,
   onCreatorClick,
   onStatusChange,
   onCreateCampaign,
@@ -26,8 +28,16 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
   const [draggedCreator, setDraggedCreator] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<CreatorStatus | null>(null);
 
-  const getCreatorsForColumn = (status: CreatorStatus) =>
-    creators.filter((c) => c.status === status);
+  const getCampaignCount = (creatorId: string) =>
+    campaigns.filter((c) => c.creator_id === creatorId).length;
+
+  const getCreatorsForColumn = (status: CreatorStatus) => {
+    if (status === 'negociando') {
+      // Include respondio_si creators in the negociando column
+      return creators.filter((c) => c.status === 'negociando' || c.status === 'respondio_si');
+    }
+    return creators.filter((c) => c.status === status);
+  };
 
   const handleDragStart = (e: React.DragEvent, creatorId: string) => {
     setDraggedCreator(creatorId);
@@ -85,6 +95,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                       ? `https://unavatar.io/instagram/${creator.instagram_handle}`
                       : null;
                     const creatorTags = getTagsForCreator?.(creator.id) || [];
+                    const campaignCount = getCampaignCount(creator.id);
 
                     return (
                       <Card
@@ -117,8 +128,8 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                           </div>
                         </div>
 
-                        {/* Tags */}
-                        {creatorTags.length > 0 && (
+                        {/* Tags & Campaign count */}
+                        {(creatorTags.length > 0 || campaignCount > 0) && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {creatorTags.map((tag) => (
                               <Badge
@@ -130,6 +141,12 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                                 {tag.name}
                               </Badge>
                             ))}
+                            {campaignCount > 0 && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+                                <Megaphone className="h-2.5 w-2.5" />
+                                {campaignCount}
+                              </Badge>
+                            )}
                           </div>
                         )}
 
@@ -142,7 +159,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                           )}
                           {status === 'contactado' && (
                             <>
-                              <Button size="sm" variant="outline" className="text-xs h-7 flex-1" onClick={() => onStatusChange(creator.id, 'respondio_si')}>
+                              <Button size="sm" variant="outline" className="text-xs h-7 flex-1" onClick={() => onStatusChange(creator.id, 'negociando')}>
                                 <UserCheck className="h-3 w-3 mr-1" /> Sí
                               </Button>
                               <Button size="sm" variant="outline" className="text-xs h-7 flex-1" onClick={() => onStatusChange(creator.id, 'respondio_no')}>
@@ -150,12 +167,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                               </Button>
                             </>
                           )}
-                          {status === 'respondio_si' && (
-                            <Button size="sm" variant="outline" className="text-xs h-7 flex-1" onClick={() => onStatusChange(creator.id, 'negociando')}>
-                              Negociando
-                            </Button>
-                          )}
-                          {(status === 'respondio_si' || status === 'negociando') && (
+                          {status === 'negociando' && (
                             <Button size="sm" variant="default" className="text-xs h-7 flex-1" onClick={() => onCreateCampaign(creator)}>
                               <Plus className="h-3 w-3 mr-1" /> Campaña
                             </Button>

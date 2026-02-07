@@ -148,6 +148,7 @@ const UgcCreatorsPage: React.FC = () => {
           <TabsContent value="prospectos" className="mt-4">
             <UgcProspectKanban
               creators={creators}
+              campaigns={campaigns}
               onCreatorClick={handleCreatorClick}
               onStatusChange={handleCreatorStatusChange}
               onCreateCampaign={handleCreateCampaignForCreator}
