@@ -144,7 +144,6 @@ export const CAMPAIGN_STATUS_CONFIG: Record<CampaignStatus, { label: string; col
 export const PROSPECT_KANBAN_COLUMNS: CreatorStatus[] = [
   'prospecto',
   'contactado',
-  'respondio_si',
   'negociando',
 ];
 
