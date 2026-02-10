@@ -108,35 +108,46 @@ serve(async (req) => {
       );
     }
 
-    // Parse events
+    // Parse events from eventHistory (actual Envia.com API field)
     const events: TrackingEvent[] = [];
-    if (trackingData.checkpoints && Array.isArray(trackingData.checkpoints)) {
-      for (const checkpoint of trackingData.checkpoints) {
+    const eventHistory = trackingData.eventHistory || trackingData.checkpoints;
+    if (eventHistory && Array.isArray(eventHistory)) {
+      for (const evt of eventHistory) {
         events.push({
-          date: checkpoint.date || '',
-          time: checkpoint.time || '',
-          description: checkpoint.description || checkpoint.message || '',
-          location: checkpoint.location || checkpoint.city || '',
-          status: checkpoint.status || ''
+          date: evt.date || '',
+          time: evt.time || '',
+          description: evt.event || evt.description || evt.message || '',
+          location: evt.location || evt.city || '',
+          status: evt.event || evt.status || ''
         });
       }
     }
 
-    // Determine overall status
+    // Determine overall status - use API status as primary source
     let status = 'in_transit';
-    const lastEvent = events[0];
-    if (lastEvent) {
-      const statusLower = lastEvent.status?.toLowerCase() || lastEvent.description?.toLowerCase() || '';
-      if (statusLower.includes('entregado') || statusLower.includes('delivered')) {
+    const apiStatus = (trackingData.status || '').toLowerCase();
+    
+    if (apiStatus === 'delivered' || apiStatus.includes('deliver') || apiStatus.includes('entregad')) {
+      status = 'delivered';
+    } else if (apiStatus === 'returned' || apiStatus.includes('return') || apiStatus.includes('devuel')) {
+      status = 'returned';
+    } else if (apiStatus.includes('exception') || apiStatus.includes('problema')) {
+      status = 'exception';
+    } else if (apiStatus.includes('pending') || apiStatus.includes('pendiente')) {
+      status = 'pending';
+    } else if (apiStatus.includes('transit') || apiStatus.includes('intransit')) {
+      status = 'in_transit';
+    } else if (events.length > 0) {
+      // Fallback: check last event
+      const lastDesc = (events[events.length - 1].description || '').toLowerCase();
+      if (lastDesc.includes('entregad') || lastDesc.includes('delivered')) {
         status = 'delivered';
-      } else if (statusLower.includes('devuelto') || statusLower.includes('returned')) {
+      } else if (lastDesc.includes('devuel') || lastDesc.includes('returned')) {
         status = 'returned';
-      } else if (statusLower.includes('problema') || statusLower.includes('exception')) {
-        status = 'exception';
-      } else if (statusLower.includes('pendiente') || statusLower.includes('pending')) {
-        status = 'pending';
       }
     }
+    
+    console.log(`📊 API status: "${trackingData.status}", resolved: "${status}", events: ${events.length}`);
 
     const response: TrackingResponse = {
       success: true,
@@ -153,11 +164,7 @@ serve(async (req) => {
     // Update shipping_labels table with latest tracking status
     const { error: updateError } = await supabase
       .from('shipping_labels')
-      .update({
-        status: status,
-        last_tracking_update: new Date().toISOString(),
-        tracking_events: events
-      })
+      .update({ status: status })
       .eq('tracking_number', body.tracking_number);
 
     if (updateError) {
