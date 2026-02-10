@@ -150,6 +150,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [labelCreatorName, setLabelCreatorName] = useState<string | null>(null);
   const [historyCreatorNames, setHistoryCreatorNames] = useState<Record<string, string>>({});
   const [showTrackingDetails, setShowTrackingDetails] = useState(false);
+  const [quoteAndCreatePhase, setQuoteAndCreatePhase] = useState<'idle' | 'quoting' | 'creating'>('idle');
   
   // Quote loading state machine - prevents infinite loops
   const [quoteState, setQuoteState] = useState<QuoteLoadingState>({
@@ -453,6 +454,144 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shippingAddress, totalPrice, getQuotesWithRetry]);
 
+  // Select the best carrier from a list of quotes based on business rules
+  const selectBestCarrier = useCallback((carrierQuotes: typeof quotes): string => {
+    const bestQuote = carrierQuotes.find(q => 
+      q.carrier.toLowerCase() === recommendedCarrier.toLowerCase() &&
+      q.deliveryType === 'domicilio'
+    ) || carrierQuotes.find(q => 
+      q.carrier.toLowerCase() === recommendedCarrier.toLowerCase()
+    ) || carrierQuotes[0];
+    
+    if (bestQuote) {
+      return `${bestQuote.carrier}:${bestQuote.service}:${bestQuote.deliveryType}`;
+    }
+    return recommendedCarrier;
+  }, [recommendedCarrier]);
+
+  // Unified flow: quote + auto-select carrier + create label in one click
+  const handleQuoteAndCreateLabel = useCallback(async () => {
+    if (!shippingAddress?.city || !shippingAddress?.province || !currentOrganization?.id) return;
+
+    // Anti-double-click
+    if (isQuoteRequestInProgressRef.current) return;
+    isQuoteRequestInProgressRef.current = true;
+
+    setQuoteAndCreatePhase('quoting');
+    setQuoteState({ status: 'loading', retryCount: 0 });
+
+    // Cancel previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const result = await getQuotesWithRetry(
+        {
+          destination_city: shippingAddress.city,
+          destination_department: shippingAddress.province,
+          destination_postal_code: shippingAddress.zip,
+          declared_value: totalPrice || 100000,
+        },
+        {
+          signal: abortControllerRef.current?.signal,
+          maxRetries: 3,
+          timeoutMs: 10_000,
+          debugOrder: orderNumber,
+          onRetry: (attempt) => {
+            setQuoteState({ status: 'loading', retryCount: attempt });
+          },
+        }
+      );
+
+      if (!result || !result.quotes || result.quotes.length === 0) {
+        setQuoteState({
+          status: 'error',
+          retryCount: 3,
+          errorMessage: 'No se pudieron obtener tarifas de envío',
+        });
+        setQuoteAndCreatePhase('idle');
+        toast.error('No se pudieron obtener tarifas. Intenta de nuevo.');
+        return;
+      }
+
+      setQuoteState({ status: 'success', retryCount: 0 });
+
+      // Auto-select best carrier
+      const bestCarrierKey = selectBestCarrier(result.quotes);
+      setSelectedCarrier(bestCarrierKey);
+
+      // Check city validation from matchInfo
+      if (result.matchInfo?.matchType === 'fuzzy' && !correctedCity) {
+        // City needs correction - stop here, user must accept/reject suggestion
+        setQuoteAndCreatePhase('idle');
+        return;
+      }
+      if (result.matchInfo?.matchType === 'not_found') {
+        setQuoteAndCreatePhase('idle');
+        toast.error('Ciudad de destino no encontrada en cobertura');
+        return;
+      }
+
+      // Phase 2: Create label
+      setQuoteAndCreatePhase('creating');
+
+      // We need to call handleCreateLabel but with the auto-selected carrier already set
+      // Since setSelectedCarrier is async (state), we call createLabel directly
+      const parts = bestCarrierKey.split(':');
+      let preferredCarrier: string | undefined;
+      let preferredService: string | undefined;
+      let deliveryType: 'domicilio' | 'oficina' | undefined;
+
+      if (parts.length === 3) {
+        preferredCarrier = parts[0];
+        preferredService = parts[1];
+        deliveryType = parts[2] as 'domicilio' | 'oficina';
+      } else {
+        preferredCarrier = bestCarrierKey;
+      }
+
+      const city = correctedCity || shippingAddress.city || '';
+      const fullAddress = [shippingAddress.address1, shippingAddress.address2].filter(Boolean).join(', ');
+
+      const labelResult = await createLabel({
+        shopify_order_id: shopifyOrderId,
+        organization_id: currentOrganization.id,
+        order_number: orderNumber,
+        recipient_name: shippingAddress.name || 'Cliente',
+        recipient_phone: shippingAddress.phone || customerPhone || '',
+        recipient_email: customerEmail || '',
+        destination_address: shippingAddress.address1 || '',
+        destination_address2: shippingAddress.address2 || '',
+        destination_city: city,
+        destination_department: shippingAddress.province || '',
+        destination_postal_code: shippingAddress.zip || '',
+        declared_value: totalPrice || 0,
+        package_content: `Pedido ${orderNumber}`,
+        preferred_carrier: preferredCarrier,
+        preferred_service: preferredService,
+        delivery_type: deliveryType,
+        is_cod: isCOD,
+        cod_amount: isCOD ? codAmount : undefined
+      });
+
+      if (labelResult.success && labelResult.label) {
+        onLabelChange?.(labelResult.label);
+        if (labelResult.label.label_url) {
+          const proxyUrl = getProxyLabelUrl(labelResult.label.label_url);
+          const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');
+          if (printWindow) {
+            setTimeout(() => {
+              try { printWindow.focus(); printWindow.print(); } catch (e) { /* noop */ }
+            }, 1500);
+          }
+        }
+      }
+    } finally {
+      isQuoteRequestInProgressRef.current = false;
+      setQuoteAndCreatePhase('idle');
+    }
+  }, [shippingAddress, totalPrice, currentOrganization?.id, orderNumber, getQuotesWithRetry, selectBestCarrier, correctedCity, createLabel, shopifyOrderId, customerPhone, customerEmail, isCOD, codAmount, onLabelChange]);
+
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
       return;
@@ -552,7 +691,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           toast.error('No es posible crear guía en este momento');
           return;
         }
-        await handleCreateLabel();
+        // Use unified flow if no quotes loaded yet
+        if (quoteState.status !== 'success') {
+          await handleQuoteAndCreateLabel();
+        } else {
+          await handleCreateLabel();
+        }
       },
       isReady: !!isReady,
       isCreatingLabel,
@@ -563,7 +707,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     return () => {
       apiRef.current = null;
     };
-  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel, selectedCarrier, quotes, recommendedCarrier]);
+  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrier, quotes, recommendedCarrier]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -1474,10 +1618,15 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       <Button 
         variant="outline" 
         className="w-full"
-        onClick={handleCreateLabel}
-        disabled={disabled || isCreatingLabel || !canCreateLabel || userRejectedSuggestion || matchInfo?.matchType === 'not_found' || (matchInfo?.matchType === 'fuzzy' && !correctedCity)}
+        onClick={quoteState.status !== 'success' ? handleQuoteAndCreateLabel : handleCreateLabel}
+        disabled={disabled || isCreatingLabel || !canCreateLabel || userRejectedSuggestion || matchInfo?.matchType === 'not_found' || (matchInfo?.matchType === 'fuzzy' && !correctedCity) || quoteAndCreatePhase !== 'idle'}
       >
-        {isCreatingLabel ? (
+        {quoteAndCreatePhase === 'quoting' ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            Cotizando envío...
+          </>
+        ) : quoteAndCreatePhase === 'creating' || isCreatingLabel ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
             Creando guía...
