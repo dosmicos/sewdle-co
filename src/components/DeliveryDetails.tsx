@@ -272,16 +272,6 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     return item && !item.synced_to_shopify;
   };
 
-  // Función para detectar si es la última variante sin guardar
-  const isLastUnsavedVariant = (itemId: string) => {
-    const unsavedVariants = delivery.delivery_items?.filter((item: any) => {
-      // Una variante no está guardada si no tiene cantidad_approved ni quantity_defective en la base de datos
-      return (item.quantity_approved === 0 && item.quantity_defective === 0);
-    }) || [];
-    
-    // Es la última si solo queda una sin guardar y es la actual
-    return unsavedVariants.length === 1 && unsavedVariants[0].id === itemId;
-  };
 
   // Función para obtener todas las variantes pendientes de sincronización 
   const getPendingSyncVariants = () => {
@@ -290,7 +280,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }) || [];
   };
 
-  const saveVariantQuality = async (itemId: string, isLastVariant = false) => {
+  // Contador de variantes pendientes de sincronización
+  const pendingSyncCount = getPendingSyncVariants().length;
+
+  const saveVariantQuality = async (itemId: string) => {
     const variantData = qualityData.variants[itemId];
     if (!variantData || (variantData.approved === 0 && variantData.defective === 0)) {
       toast({
@@ -315,19 +308,16 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }
 
     try {
-      // Actualizar datos de calidad de la variante
-      // Si estamos en modo de re-edición, resetear el estado de sincronización
       const updateData: any = {
         quantity_approved: variantData.approved,
         quantity_defective: variantData.defective,
         quality_notes: variantData.reason || null
       };
       
-      // Verificar si la variante ya estaba sincronizada - si es así, resetear sincronización
+      // Resetear sincronización si la variante ya estaba sincronizada
       const currentItem = delivery.delivery_items?.find((di: any) => di.id === itemId);
       const wasAlreadySynced = currentItem?.synced_to_shopify === true;
       
-      // Resetear sincronización si estamos en modo re-edición O si la variante ya estaba sincronizada
       if (isReEditingQuality || wasAlreadySynced) {
         updateData.synced_to_shopify = false;
         updateData.sync_attempt_count = 0;
@@ -350,185 +340,20 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
         return;
       }
 
-      // Si es la última variante, ejecutar proceso secuencial
-      if (isLastVariant) {
-        console.log('🔄 Es la última variante - Iniciando proceso de finalización secuencial');
-        
-        try {
-          // PASO 1: Guardar notas generales de calidad
-          console.log('📝 Paso 1: Guardando notas generales');
-          if (generalNotes.trim()) {
-          const { error: notesError } = await supabase
-            .from('deliveries')
-            .update({
-              notes: generalNotes.trim()
-            })
-            .eq('id', delivery.id);
+      // Actualización optimista del estado local
+      setDelivery((prev: any) => ({
+        ...prev,
+        delivery_items: prev.delivery_items?.map((di: any) =>
+          di.id === itemId ? { ...di, ...updateData } : di
+        )
+      }));
 
-          if (notesError) {
-            console.error('Error saving general notes:', notesError);
-            toast({
-              title: "Advertencia",
-              description: "La variante fue guardada pero hubo un error al guardar las notas generales",
-              variant: "default",
-            });
-          }
-        }
+      toast({
+        title: "Guardado",
+        description: "Revisión de calidad guardada exitosamente",
+      });
 
-        // Subir archivos de evidencia si están presentes
-        if (evidenceFiles.length > 0) {
-          try {
-            console.log('Uploading evidence files from last variant save:', evidenceFiles.length);
-            
-            // Subir cada archivo
-            for (let i = 0; i < evidenceFiles.length; i++) {
-              const file = evidenceFiles[i];
-              
-              try {
-                // Upload to storage
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${delivery.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-                
-                const { data: uploadData, error: uploadError } = await supabase.storage
-                  .from('delivery-evidence')
-                  .upload(fileName, file);
-
-                if (uploadError) {
-                  console.error(`Upload error for ${file.name}:`, uploadError);
-                  continue;
-                }
-
-                // Get public URL
-                const { data: { publicUrl } } = supabase.storage
-                  .from('delivery-evidence')
-                  .getPublicUrl(fileName);
-
-                // Save file record to database
-                const fileRecord = {
-                  delivery_id: delivery.id,
-                  file_name: file.name,
-                  file_url: publicUrl,
-                  file_type: file.type,
-                  file_size: file.size,
-                  uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-                  notes: `Evidencia guardada con revisión completa`,
-                  file_category: 'evidence'
-                };
-
-                const { error: dbError } = await supabase
-                  .from('delivery_files')
-                  .insert([fileRecord]);
-
-                if (dbError) {
-                  console.error(`Database insert error for ${file.name}:`, dbError);
-                }
-              } catch (fileError) {
-                console.error(`Error processing file ${file.name}:`, fileError);
-              }
-            }
-
-            // Limpiar archivos después de subirlos exitosamente
-            setEvidenceFiles([]);
-            setEvidencePreviews([]);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-
-            console.log('Evidence files uploaded successfully from last variant save');
-          } catch (evidenceError) {
-            console.error('Error uploading evidence files:', evidenceError);
-            toast({
-              title: "Advertencia",
-              description: "La variante fue guardada pero hubo un error al subir la evidencia fotográfica",
-              variant: "default",
-            });
-          }
-        }
-
-        // Sincronizar todas las variantes aprobadas pendientes + la variante actual
-        const pendingVariants = getPendingSyncVariants();
-        
-        // Incluir la variante que acabamos de guardar
-        const currentItem = delivery.delivery_items?.find((item: any) => item.id === itemId);
-        const allVariantsToSync = [...pendingVariants];
-        
-        if (currentItem && variantData.approved > 0) {
-          // Actualizar los datos de la variante actual con los valores recién guardados
-          const updatedCurrentItem = {
-            ...currentItem,
-            quantity_approved: variantData.approved,
-            quantity_defective: variantData.defective,
-            quality_notes: variantData.reason || null
-          };
-          allVariantsToSync.push(updatedCurrentItem);
-        }
-        
-        if (allVariantsToSync.length > 0) {
-          try {
-            const syncData = {
-              deliveryId: delivery.id,
-              approvedItems: allVariantsToSync.map(item => ({
-                variantId: item.order_items?.product_variants?.id,
-                skuVariant: item.order_items?.product_variants?.sku_variant,
-                quantityApproved: item.quantity_approved
-              })).filter(item => item.quantityApproved > 0) // Solo sincronizar las que tienen unidades aprobadas
-            };
-
-            const result = await syncApprovedItemsToShopify(syncData);
-
-            if (result.success) {
-              // Marcar todas las variantes como sincronizadas (incluyendo la actual)
-              for (const item of allVariantsToSync) {
-                await supabase
-                  .from('delivery_items')
-                  .update({
-                    synced_to_shopify: true,
-                    last_sync_attempt: new Date().toISOString()
-                  })
-                  .eq('id', item.id);
-              }
-
-              toast({
-                title: "Revisión finalizada",
-                description: `Última variante guardada y ${allVariantsToSync.length} variante(s) sincronizada(s) con Shopify`,
-              });
-            } else {
-              toast({
-                title: "Guardado",
-                description: "Última variante guardada. Error en sincronización con Shopify - puede reintentar manualmente",
-                variant: "default",
-              });
-            }
-          } catch (syncError) {
-            console.error('Error syncing all variants:', syncError);
-            toast({
-              title: "Guardado",
-              description: "Última variante guardada. Error en sincronización con Shopify - puede reintentar manualmente",
-              variant: "default",
-            });
-          }
-        } else {
-          toast({
-            title: "Revisión finalizada",
-            description: "Última variante guardada exitosamente",
-          });
-        }
-        } catch (error) {
-          console.error('❌ Error en proceso de finalización:', error);
-          toast({
-            title: "Error en finalización",
-            description: "Ocurrió un error durante el proceso de finalización. Por favor revise manualmente.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        toast({
-          title: "Guardado",
-          description: "Revisión de calidad guardada exitosamente",
-        });
-      }
-
-      // Recargar datos de la entrega y notificar al componente padre
+      // Refrescar en segundo plano sin bloquear
       loadDelivery();
       onDeliveryUpdated?.();
     } catch (error) {
@@ -538,6 +363,70 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
         description: "Error al guardar la revisión de calidad",
         variant: "destructive",
       });
+    }
+  };
+
+  // Sincronizar TODAS las variantes pendientes con Shopify
+  const syncAllPendingToShopify = async () => {
+    const pendingVariants = getPendingSyncVariants();
+    
+    if (pendingVariants.length === 0) {
+      toast({
+        title: "Todo sincronizado",
+        description: "No hay variantes pendientes de sincronización",
+      });
+      return;
+    }
+
+    // Marcar todas como sincronizando
+    const pendingIds = new Set<string>(pendingVariants.map((v: any) => v.id));
+    setSyncingVariants(pendingIds);
+
+    try {
+      const syncData = {
+        deliveryId: delivery.id,
+        approvedItems: pendingVariants.map((item: any) => ({
+          variantId: item.order_items?.product_variants?.id,
+          skuVariant: item.order_items?.product_variants?.sku_variant,
+          quantityApproved: item.quantity_approved
+        })).filter((item: any) => item.quantityApproved > 0)
+      };
+
+      const result = await syncApprovedItemsToShopify(syncData);
+
+      if (result.success) {
+        for (const item of pendingVariants) {
+          await supabase
+            .from('delivery_items')
+            .update({
+              synced_to_shopify: true,
+              last_sync_attempt: new Date().toISOString()
+            })
+            .eq('id', item.id);
+        }
+
+        toast({
+          title: "Sincronización completada",
+          description: `${pendingVariants.length} variante(s) sincronizada(s) con Shopify`,
+        });
+      } else {
+        toast({
+          title: "Error en sincronización",
+          description: "Hubo un error al sincronizar con Shopify. Puede reintentar.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing all pending variants:', error);
+      toast({
+        title: "Error",
+        description: "Error al sincronizar con Shopify",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncingVariants(new Set());
+      loadDelivery();
+      onDeliveryUpdated?.();
     }
   };
 
@@ -1477,33 +1366,23 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                             
                             {/* Botones de acciones por variante */}
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {/* Mostrar botón guardar solo si hay cambios o es variante nueva sin guardar */}
+                              {/* Botón guardar - solo guarda en DB, no sincroniza */}
                               {canEditDeliveries && (canSaveVariant || (item.synced_to_shopify && hasVariantChanges(item.id))) && (
-                                (() => {
-                                  const isLast = isLastUnsavedVariant(item.id);
-                                  const pendingSync = getPendingSyncVariants().length;
-                                  const showSave = !item.synced_to_shopify || hasVariantChanges(item.id);
-                                  
-                                  if (!showSave) return null;
-                                  
-                                  return (
-                                    <Button
-                                      size="sm"
-                                      variant={isLast ? "default" : "outline"}
-                                      onClick={() => saveVariantQuality(item.id, isLast)}
-                                      className={`text-xs ${isLast ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
-                                    >
-                                      <Save className="w-3 h-3 mr-1" />
-                                      {isLast ? 
-                                        `Guardar y Finalizar Revisión${pendingSync > 0 ? ` (${pendingSync} a sincronizar)` : ''}` : 
-                                        'Guardar'
-                                      }
-                                    </Button>
-                                  );
-                                })()
+                                (!item.synced_to_shopify || hasVariantChanges(item.id)) && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => saveVariantQuality(item.id)}
+                                    className="text-xs"
+                                  >
+                                    <Save className="w-3 h-3 mr-1" />
+                                    Guardar
+                                  </Button>
+                                )
                               )}
                               
-                              {canSyncVariant && !isLastUnsavedVariant(item.id) && (
+                              {/* Botón sincronizar individual */}
+                              {canSyncVariant && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1562,6 +1441,22 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
             </Table>
           </div>
 
+          {/* Botón Sincronizar Todo - visible cuando hay variantes pendientes */}
+          {pendingSyncCount > 0 && canEditDeliveries && !isEditing && (
+            <div className="mt-4 flex justify-end">
+              <Button
+                onClick={syncAllPendingToShopify}
+                disabled={syncingVariants.size > 0}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncingVariants.size > 0 ? 'animate-spin' : ''}`} />
+                {syncingVariants.size > 0 
+                  ? 'Sincronizando...' 
+                  : `Sincronizar Pendientes con Shopify (${pendingSyncCount})`
+                }
+              </Button>
+            </div>
+          )}
           {/* Quality Control Actions - Only for users WITH QC permissions */}
           {canProcessQuality && (
             <div className="mt-6 space-y-6">
