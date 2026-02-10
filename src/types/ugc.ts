@@ -148,8 +148,6 @@ export const PROSPECT_KANBAN_COLUMNS: CreatorStatus[] = [
 ];
 
 export const KANBAN_COLUMNS: CampaignStatus[] = [
-  'contactado',
-  'negociando',
   'aceptado',
   'producto_enviado',
   'producto_recibido',
