@@ -356,6 +356,27 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       // Refrescar en segundo plano sin bloquear
       loadDelivery();
       onDeliveryUpdated?.();
+
+      // Auto-sync: verificar si todas las variantes ya fueron revisadas
+      const updatedItems = delivery.delivery_items?.map((di: any) =>
+        di.id === itemId ? { ...di, ...updateData } : di
+      ) || [];
+      
+      const allReviewed = updatedItems.length > 0 && updatedItems.every((item: any) =>
+        (item.quantity_approved || 0) + (item.quantity_defective || 0) > 0
+      );
+
+      if (allReviewed) {
+        // Verificar si hay pendientes de sincronización
+        const hasPending = updatedItems.some((item: any) => 
+          (item.quantity_approved || 0) > 0 && !item.synced_to_shopify
+        );
+        if (hasPending) {
+          console.log('🔄 Todas las variantes revisadas, auto-sincronizando pendientes...');
+          // Ejecutar sin await para no bloquear
+          syncAllPendingToShopify();
+        }
+      }
     } catch (error) {
       console.error('Error saving variant quality:', error);
       toast({
