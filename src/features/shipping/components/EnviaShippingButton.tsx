@@ -703,7 +703,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   }, [currentOrganization?.id, shopifyOrderId, getExistingLabel, onLabelChange]);
 
   const isBusy = isLoadingLabel || quoteState.status === 'loading' || isLoadingQuotes;
-  const busyMode: 'verifying' | 'quoting' | null = isLoadingLabel ? 'verifying' : quoteState.status === 'loading' ? 'quoting' : null;
+  const busyMode: 'quoting' | null = quoteState.status === 'loading' ? 'quoting' : null;
 
   // Manual-only initial state (NO auto-fetch)
   if (!showManualEntry && !isActiveLabel && quoteState.status === 'idle' && !hasChecked && !isBusy) {
@@ -714,11 +714,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             variant="outline" 
             size="sm"
             className="flex-1"
-            onClick={handleVerifyExistingLabel}
+            onClick={() => setShowManualEntry(true)}
             disabled={disabled || isBusy}
           >
-            <Truck className="h-4 w-4 mr-2" />
-            Verificar Guía
+            <Edit3 className="h-4 w-4 mr-2" />
+            Guía Manual
           </Button>
           <Button 
             variant="outline" 
@@ -747,17 +747,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       <div className="space-y-3">
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="flex-1" disabled>
-            {busyMode === 'verifying' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Verificando...
-              </>
-            ) : (
-              <>
-                <Truck className="h-4 w-4 mr-2" />
-                Verificar Guía
-              </>
-            )}
+            <Edit3 className="h-4 w-4 mr-2" />
+            Guía Manual
           </Button>
           <Button variant="outline" size="sm" className="flex-1" disabled>
             {busyMode === 'quoting' ? (
@@ -804,9 +795,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         </Alert>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleVerifyExistingLabel} disabled={disabled || isBusy}>
-            <Truck className="h-4 w-4 mr-2" />
-            Verificar Guía
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowManualEntry(true)} disabled={disabled || isBusy}>
+            <Edit3 className="h-4 w-4 mr-2" />
+            Guía Manual
           </Button>
           <Button variant="outline" size="sm" className="flex-1" onClick={handleRefreshQuotes} disabled={disabled || isBusy}>
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -829,9 +820,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           </AlertDescription>
         </Alert>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleVerifyExistingLabel} disabled={disabled || isBusy}>
-            <Truck className="h-4 w-4 mr-2" />
-            Verificar Guía
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowManualEntry(true)} disabled={disabled || isBusy}>
+            <Edit3 className="h-4 w-4 mr-2" />
+            Guía Manual
           </Button>
           <Button variant="outline" size="sm" className="flex-1" onClick={handleRefreshQuotes} disabled={disabled || isBusy}>
             <RefreshCw className="h-4 w-4 mr-2" />
