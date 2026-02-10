@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Video } from 'lucide-react';
@@ -12,6 +11,7 @@ interface UgcKanbanCardProps {
   onDragStart: (e: React.DragEvent, id: string) => void;
   onDragEnd: () => void;
   onClick: () => void;
+  onOrderClick?: (orderNumber: string) => void;
 }
 
 export const UgcKanbanCard: React.FC<UgcKanbanCardProps> = ({
@@ -20,8 +20,8 @@ export const UgcKanbanCard: React.FC<UgcKanbanCardProps> = ({
   onDragStart,
   onDragEnd,
   onClick,
+  onOrderClick,
 }) => {
-  const navigate = useNavigate();
   const creator = campaign.creator;
   const avatarUrl = creator?.instagram_handle
     ? `https://unavatar.io/instagram/${creator.instagram_handle}`
@@ -85,7 +85,9 @@ export const UgcKanbanCard: React.FC<UgcKanbanCardProps> = ({
             className="text-primary hover:underline cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/picking-packing?search=${campaign.order_number!.replace('#', '')}`);
+              if (onOrderClick) {
+                onOrderClick(campaign.order_number!);
+              }
             }}
           >
             {campaign.order_number}
