@@ -1,77 +1,54 @@
 
 
-# Flujo unificado: Cotizar + Crear Guia en un solo clic
+# Sincronizar estado de entrega con campanas UGC automaticamente
 
-## Situacion actual
-Hoy el flujo tiene dos pasos manuales separados:
-1. El usuario oprime "Cotizar Envio" y espera las tarifas
-2. Selecciona transportadora y oprime "Crear Guia"
+## Resumen
+Cuando el sistema de tracking (`envia-track`) detecte que un envio fue entregado (`delivered`), automaticamente actualizar la campana UGC vinculada a ese pedido al estado `producto_recibido`.
 
-## Cambio propuesto
-Cuando el usuario oprime "Crear Guia" (o el boton equivalente tras escanear los articulos), el sistema automaticamente:
-1. Primero ejecuta la cotizacion (llama a `getQuotesWithRetry`)
-2. Espera que termine y auto-selecciona la mejor transportadora segun las reglas de negocio existentes
-3. Inmediatamente despues crea la guia con la transportadora seleccionada (llama a `handleCreateLabel`)
+## Donde se hace el cambio
+En la edge function `supabase/functions/envia-track/index.ts`, que es donde se consulta el estado del envio y ya se actualiza la tabla `shipping_labels`. Justo despues de esa actualizacion (linea ~161), se agrega logica para:
 
-Todo en un solo clic, sin pasos intermedios.
+1. Buscar el `order_number` de la guia en `shipping_labels`
+2. Si el status es `delivered`, actualizar `ugc_campaigns` donde el `order_number` coincida y el estado actual sea `producto_enviado`
 
-## Cambios en `EnviaShippingButton.tsx`
+## Cambio en `envia-track/index.ts`
 
-### 1. Nueva funcion `handleQuoteAndCreateLabel`
-Combina los dos pasos en una sola funcion asincrona:
+Despues de actualizar `shipping_labels` (linea 161), agregar:
 
 ```text
-async handleQuoteAndCreateLabel():
-  1. Llamar getQuotesWithRetry (con las mismas opciones de retry/timeout)
-  2. Si falla -> mostrar error de cotizacion con boton de reintentar
-  3. Si tiene exito -> auto-seleccionar la mejor transportadora (mismo logica que ya existe en el useEffect)
-  4. Llamar handleCreateLabel con la transportadora seleccionada
+Si status === 'delivered':
+  1. Consultar shipping_labels para obtener order_number y organization_id
+     usando el tracking_number
+  2. Si encuentra order_number:
+     UPDATE ugc_campaigns
+     SET status = 'producto_recibido', updated_at = NOW()
+     WHERE REPLACE(order_number, '#', '') = REPLACE(label.order_number, '#', '')
+       AND organization_id = label.organization_id
+       AND status = 'producto_enviado'
 ```
 
-### 2. Modificar el boton "Crear Guia" (linea ~1474)
-- Cuando no hay quotes cargados aun (quoteState idle), el boton "Crear Guia" llama a `handleQuoteAndCreateLabel` en vez de `handleCreateLabel`
-- Cuando ya hay quotes cargados, sigue llamando a `handleCreateLabel` directamente
-- El texto del boton cambia durante la cotizacion: "Cotizando..." -> "Creando guia..."
+Esto se ejecuta cada vez que un usuario abre un pedido en Picking y Packing (ya que el tracking se consulta automaticamente al montar el componente), asi que el estado de la campana se actualiza sin necesidad de oprimir nada.
 
-### 3. Estado visual durante el proceso
-- Fase 1 (cotizando): Boton muestra "Cotizando envio..." con spinner
-- Fase 2 (creando): Boton muestra "Creando guia..." con spinner
-- Si la cotizacion falla, se detiene y muestra el error existente
+## Flujo completo
 
-### 4. Seccion de cotizacion idle (lineas ~1442-1471)
-- Se mantiene el boton "Cotizar Envio" por si el usuario quiere ver tarifas antes
-- El selector de transportadora manual tambien se mantiene como opcion alternativa
-
-### Vista del flujo unificado
 ```text
-[Boton: Crear Guia de Envio]
-  click ->
-  [Boton: Cotizando envio... (spinner)] (2-10s)
-  -> auto-selecciona Coordinadora (o la que corresponda)
-  [Boton: Creando guia... (spinner)] (5-10s)
-  -> Guia creada, se muestra el PDF
+Usuario abre pedido en Picking & Packing
+  -> EnviaShippingButton monta y auto-consulta tracking
+  -> envia-track consulta estado en Envia.com
+  -> Si es "delivered":
+     -> Actualiza shipping_labels.status = 'delivered'
+     -> Busca order_number en shipping_labels
+     -> Actualiza ugc_campaigns.status = 'producto_recibido'
+  -> UI muestra badge "Entregado" en picking
+  -> Kanban de UGC muestra la campana en "Producto Recibido"
 ```
-
-## Detalle tecnico
-
-**Nueva funcion en EnviaShippingButton.tsx:**
-- `handleQuoteAndCreateLabel` que encadena `getQuotesWithRetry` + seleccion de carrier + `handleCreateLabel`
-- Un nuevo state `quoteAndCreatePhase` ('idle' | 'quoting' | 'creating') para manejar el texto del boton
-- La seleccion automatica de transportadora se extrae de la logica del useEffect existente (lineas 374-388) a una funcion reutilizable `selectBestCarrier(quotes)`
-
-**Boton "Crear Guia" (linea 1474):**
-- Si `quoteState.status !== 'success'` (no hay quotes): onClick llama `handleQuoteAndCreateLabel`
-- Si `quoteState.status === 'success'` (ya cotizo): onClick llama `handleCreateLabel` (comportamiento actual)
-
-**apiRef (linea 546):**
-- `createLabelWithDefaults` tambien usara `handleQuoteAndCreateLabel` cuando no hay quotes, para que el flujo externo (Express) tambien funcione con un solo paso
 
 ## Archivos a modificar
-- `src/features/shipping/components/EnviaShippingButton.tsx`
+- `supabase/functions/envia-track/index.ts` - agregar logica de sync con ugc_campaigns tras detectar estado delivered
 
 ## Lo que NO se cambia
-- Edge functions (`envia-quote`, `create-envia-label`)
-- Hook `useEnviaShipping`
-- Reglas de seleccion de transportadora
-- Flujo de guia manual
-- Validacion de ciudad (se ejecuta durante la cotizacion como siempre)
+- EnviaShippingButton (ya hace auto-tracking al montar)
+- Trigger existente `sync_ugc_campaign_from_picking` (sigue manejando el paso a `producto_enviado`)
+- Hook useUgcCampaigns
+- UI del Kanban UGC
+
