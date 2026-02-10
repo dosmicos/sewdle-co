@@ -1,28 +1,68 @@
 
-# Cambiar proyeccion de demanda de 21 a 30 dias
+
+# Sincronizacion automatica Picking y Packing a Campanas UGC (con normalizacion de order_number)
 
 ## Resumen
-Actualmente la funcion `refresh_inventory_replenishment` proyecta la demanda a 21 dias para calcular la cantidad sugerida. Se cambiara a 30 dias, manteniendo todo lo demas igual (velocidad ajustada, dias de stock, urgencia, etc.).
+Cuando un pedido se empaca o envia en Picking y Packing, las campanas UGC vinculadas se actualizan automaticamente. El sistema normaliza los numeros de pedido para que coincidan independientemente de si tienen `#` o no.
 
-## Cambio unico
+## Datos actuales
+- **Picking y Packing**: numeros sin `#` (ej: `68875`, `57205`)
+- **Campanas UGC**: mezcla con y sin `#` (ej: `#68588`, `68879`)
 
-### Migracion SQL: Actualizar `refresh_inventory_replenishment`
+## Cambios
 
-En el bloque de `projected_demand_21d` (lineas 184-195 de la funcion actual), cambiar todos los `* 21` por `* 30`:
+### 1. Migracion SQL: Trigger con normalizacion
 
-- `(velocidad) * 21` pasa a `(velocidad) * 30`
-- El alias interno cambia de `projected_demand_21d` a `projected_demand_30d`
-- La referencia en el INSERT (linea 259-260) tambien se actualiza
+Se crea un trigger `sync_ugc_campaign_from_picking` en `picking_packing_orders` que:
 
-**Formula resultante:**
+1. Detecta cuando `operational_status` cambia a `ready_to_ship` o `shipped`
+2. Busca campanas en `ugc_campaigns` comparando el numero **sin el `#`** en ambos lados:
+   ```
+   REPLACE(ugc_campaigns.order_number, '#', '') = REPLACE(picking.order_number, '#', '')
+   ```
+3. Solo actualiza campanas con status `contactado`, `negociando` o `aceptado`
+4. Cambia el status a `producto_enviado` y actualiza `updated_at`
+
+### 2. UgcCreatorDetailModal.tsx: Enlace clickeable en campanas
+
+Donde dice "Pedido: 68879", convertirlo en un link que navega a `/picking-packing?search=68879` (limpiando el `#`). Se cierra el modal antes de navegar.
+
+### 3. UgcKanbanCard.tsx: Enlace clickeable en tarjeta
+
+El numero de pedido en la tarjeta Kanban sera clickeable con la misma logica. Se usa `e.stopPropagation()` para no abrir el modal de detalle al hacer click.
+
+### 4. UgcTableView.tsx: Enlace clickeable en tabla
+
+La columna de pedido en la vista de tabla tambien sera clickeable con la misma navegacion.
+
+## Detalle tecnico del trigger
+
 ```text
-suggested_quantity = MAX(0, (velocidad_ajustada * 30) - stock - produccion_pendiente - en_transito)
+FUNCION sync_ugc_campaign_from_picking():
+  SI NEW.operational_status EN ('ready_to_ship', 'shipped')
+     Y (OLD.operational_status ES NULL O OLD.operational_status != NEW.operational_status)
+     Y NEW.order_number NO ES NULO:
+
+    ACTUALIZAR ugc_campaigns
+    SET status = 'producto_enviado',
+        updated_at = NOW()
+    DONDE REPLACE(order_number, '#', '') = REPLACE(NEW.order_number, '#', '')
+      Y organization_id = NEW.organization_id
+      Y status EN ('contactado', 'negociando', 'aceptado')
+
+TRIGGER: AFTER UPDATE en picking_packing_orders
 ```
 
-**Ejemplo (variante 47176267464939):**
-- Velocidad: 1.0/dia
-- Demanda 30d: 30 unidades
-- Stock: 7, pendiente: 0, transito: 0
-- Sugerida: 30 - 7 = 23 unidades (antes era 14 con 21 dias)
+## Normalizacion en frontend
 
-No se modifica ningun archivo de frontend ni la columna de la tabla (sigue siendo `projected_demand_40d` como nombre de columna en la DB, solo cambia el valor calculado).
+Para la navegacion, se limpia el `#` antes de pasarlo como parametro de busqueda:
+```text
+orderNumber.replace('#', '')  -->  /picking-packing?search=68588
+```
+
+## Lo que NO se cambia
+- No se modifica la tabla `ugc_campaigns` ni `picking_packing_orders`
+- No se agrega FK entre tablas
+- No se modifica el modulo de Picking y Packing
+- Estados avanzados de la campana (producto_recibido, video_en_revision, etc.) no se sobrescriben
+
