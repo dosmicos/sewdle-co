@@ -164,6 +164,36 @@ serve(async (req) => {
       console.log('⚠️ Could not update shipping_labels:', updateError.message);
     }
 
+    // Sync UGC campaign status when shipment is delivered
+    if (status === 'delivered') {
+      console.log('📦 Shipment delivered, checking for linked UGC campaigns...');
+      
+      const { data: label } = await supabase
+        .from('shipping_labels')
+        .select('order_number, organization_id')
+        .eq('tracking_number', body.tracking_number)
+        .maybeSingle();
+
+      if (label?.order_number && label?.organization_id) {
+        const normalizedOrder = label.order_number.replace('#', '');
+        console.log(`🔗 Found order ${normalizedOrder}, updating UGC campaigns...`);
+
+        const { data: updated, error: ugcError } = await supabase
+          .from('ugc_campaigns')
+          .update({ status: 'producto_recibido', updated_at: new Date().toISOString() })
+          .eq('organization_id', label.organization_id)
+          .eq('status', 'producto_enviado')
+          .or(`order_number.eq.${normalizedOrder},order_number.eq.#${normalizedOrder}`)
+          .select('id');
+
+        if (ugcError) {
+          console.log('⚠️ Could not update UGC campaigns:', ugcError.message);
+        } else if (updated && updated.length > 0) {
+          console.log(`✅ Updated ${updated.length} UGC campaign(s) to producto_recibido`);
+        }
+      }
+    }
+
     console.log(`✅ Tracking info retrieved: ${status}, ${events.length} events`);
 
     return new Response(
