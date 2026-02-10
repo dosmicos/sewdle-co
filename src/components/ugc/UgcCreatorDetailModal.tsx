@@ -1,11 +1,10 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle, Trash2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -13,6 +12,9 @@ import { CAMPAIGN_STATUS_CONFIG, CREATOR_STATUS_CONFIG } from '@/types/ugc';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { UgcChildrenManager } from './UgcChildrenManager';
 import { UgcCreatorTagsManager } from './UgcCreatorTagsManager';
+import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface UgcCreatorDetailModalProps {
   open: boolean;
@@ -39,8 +41,49 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onVideoStatusChange,
   onDelete,
 }) => {
-  const navigate = useNavigate();
   const { videos: allVideos } = useUgcVideos(creator?.id);
+  const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
+  const [pickingModalOpen, setPickingModalOpen] = useState(false);
+  const [loadingPickingOrder, setLoadingPickingOrder] = useState(false);
+
+  const handleOpenPickingOrder = async (orderNumber: string) => {
+    const normalized = orderNumber.replace('#', '');
+    setLoadingPickingOrder(true);
+    try {
+      const { data, error } = await supabase
+        .from('picking_packing_orders')
+        .select('id, shopify_order_id')
+        .limit(100);
+
+      if (error) throw error;
+
+      // Find matching order by querying shopify_orders
+      const { data: shopifyOrder } = await supabase
+        .from('shopify_orders')
+        .select('shopify_order_id')
+        .or(`order_number.eq.${normalized},order_number.eq.#${normalized}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!shopifyOrder) {
+        toast.error('No se encontró el pedido en Picking & Packing');
+        return;
+      }
+
+      const match = data?.find(o => o.shopify_order_id === shopifyOrder.shopify_order_id);
+      if (match) {
+        setPickingOrderId(match.id);
+        setPickingModalOpen(true);
+      } else {
+        toast.error('No se encontró el pedido en Picking & Packing');
+      }
+    } catch (err) {
+      console.error('Error finding picking order:', err);
+      toast.error('Error al buscar el pedido');
+    } finally {
+      setLoadingPickingOrder(false);
+    }
+  };
 
   if (!creator) return null;
 
@@ -88,6 +131,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const creatorStatusConfig = CREATOR_STATUS_CONFIG[creator.status as keyof typeof CREATOR_STATUS_CONFIG];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -269,12 +313,10 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                                 className="text-primary hover:underline cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const cleanOrder = campaign.order_number!.replace('#', '');
-                                  onOpenChange(false);
-                                  navigate(`/picking-packing?search=${cleanOrder}`);
+                                  handleOpenPickingOrder(campaign.order_number!);
                                 }}
                               >
-                                {campaign.order_number}
+                                {loadingPickingOrder ? <Loader2 className="h-3 w-3 animate-spin inline" /> : campaign.order_number}
                               </span>
                             </div>
                           )}
@@ -431,5 +473,18 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    {pickingOrderId && pickingModalOpen && (
+      <PickingOrderDetailsModal
+        orderId={pickingOrderId}
+        allOrderIds={[pickingOrderId]}
+        onNavigate={() => {}}
+        onClose={() => {
+          setPickingModalOpen(false);
+          setPickingOrderId(null);
+        }}
+      />
+    )}
+    </>
   );
 };
