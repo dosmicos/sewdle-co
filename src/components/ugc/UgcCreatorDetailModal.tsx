@@ -50,29 +50,27 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     const normalized = orderNumber.replace('#', '');
     setLoadingPickingOrder(true);
     try {
-      const { data, error } = await supabase
-        .from('picking_packing_orders')
-        .select('id, shopify_order_id')
-        .limit(100);
-
-      if (error) throw error;
-
-      // Find matching order by querying shopify_orders
+      // First find the shopify_order_id from shopify_orders
       const { data: shopifyOrder } = await supabase
         .from('shopify_orders')
         .select('shopify_order_id')
         .or(`order_number.eq.${normalized},order_number.eq.#${normalized}`)
-        .limit(1)
         .maybeSingle();
 
       if (!shopifyOrder) {
-        toast.error('No se encontró el pedido en Picking & Packing');
+        toast.error('No se encontró el pedido en Shopify');
         return;
       }
 
-      const match = data?.find(o => o.shopify_order_id === shopifyOrder.shopify_order_id);
-      if (match) {
-        setPickingOrderId(match.id);
+      // Then find the picking order by shopify_order_id
+      const { data: pickingOrder } = await supabase
+        .from('picking_packing_orders')
+        .select('id')
+        .eq('shopify_order_id', shopifyOrder.shopify_order_id)
+        .maybeSingle();
+
+      if (pickingOrder) {
+        setPickingOrderId(pickingOrder.id);
         setPickingModalOpen(true);
       } else {
         toast.error('No se encontró el pedido en Picking & Packing');
