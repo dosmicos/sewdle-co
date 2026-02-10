@@ -1,77 +1,81 @@
 
-# Abrir modal de pedido de Picking & Packing desde UGC Creators
 
-## Resumen
-Al hacer clic en el numero de pedido de una campana UGC, se abrira el modal completo de `PickingOrderDetailsModal` directamente en la pagina de UGC Creators, sin navegar a otra pagina. Todas las modificaciones (notas, tags, estado, guias) se sincronizaran con Shopify igual que en Picking & Packing.
+# Corregir parsing de tracking de Envia.com
 
-## Flujo del usuario
+## Problema
+El estado de envio siempre muestra "En transito" aunque el paquete ya fue entregado. Esto ocurre porque:
+
+1. La API de Envia.com devuelve los eventos en un campo llamado `eventHistory`, pero el codigo busca en `checkpoints` (que no existe en la respuesta)
+2. Como no encuentra eventos, el array queda vacio y el estado por defecto es `in_transit`
+3. Ademas, la API devuelve el estado global en `trackingData.status` (ej: `"Delivered"`) que no se esta usando
+
+## Evidencia del log
+La API devuelve correctamente:
+```text
+"status": "Delivered"
+"eventHistory": [
+  { "event": "A Recibir Por Coordinadora", "date": "2026-02-09 00:00:00" },
+  { "event": "En Terminal Origen", "date": "2026-02-09 17:14:17" },
+  { "event": "Entregada", "description": "Persona que recibe: francy Villamizar", "date": "2026-02-10 13:28:15" }
+]
+```
+Pero el codigo busca `trackingData.checkpoints` que no existe.
+
+## Solucion
+
+### Archivo: `supabase/functions/envia-track/index.ts`
+
+**1. Parsear `eventHistory` en vez de `checkpoints` (lineas 111-123):**
+- Buscar en `trackingData.eventHistory` (el campo real de la API)
+- Mapear `event` como descripcion, ya que la API usa ese campo en vez de `description`
+
+**2. Usar `trackingData.status` como fuente primaria del estado (lineas 125-139):**
+- Primero verificar `trackingData.status` directamente (ej: `"Delivered"`, `"InTransit"`)
+- Si no es concluyente, usar los eventos como fallback
+- Esto hace el parsing mas robusto
+
+**3. Remover columnas inexistentes del UPDATE (lineas 154-161):**
+- La tabla `shipping_labels` no tiene columnas `last_tracking_update` ni `tracking_events`
+- Solo actualizar la columna `status` que si existe
+
+## Cambios especificos
 
 ```text
-UGC Creators > Modal Detalle Creador > Tab Campanas
-  -> Click en "Pedido: 68933"
-  -> Se busca el ID del pedido en picking_packing_orders via order_number
-  -> Se abre PickingOrderDetailsModal encima del modal actual
-  -> Usuario puede ver/editar todo como si estuviera en Picking & Packing
-  -> Al cerrar, vuelve al modal del creador UGC
+// Antes (no funciona):
+if (trackingData.checkpoints && Array.isArray(trackingData.checkpoints)) { ... }
+let status = 'in_transit';
+
+// Despues (correcto):
+if (trackingData.eventHistory && Array.isArray(trackingData.eventHistory)) {
+  for (const evt of trackingData.eventHistory) {
+    events.push({
+      date: evt.date || '',
+      time: '',
+      description: evt.event || evt.description || '',
+      location: evt.location || '',
+      status: evt.event || ''
+    });
+  }
+}
+
+// Usar trackingData.status como fuente primaria
+const apiStatus = (trackingData.status || '').toLowerCase();
+if (apiStatus === 'delivered' || apiStatus.includes('delivered')) {
+  status = 'delivered';
+} else if (apiStatus === 'intransit' || ...) {
+  status = 'in_transit';
+} else {
+  // fallback: revisar ultimo evento
+}
 ```
 
-## Cambios necesarios
-
-### 1. `UgcCreatorDetailModal.tsx` - Agregar estado y modal de picking
-
-**Nuevos estados:**
-- `pickingOrderId`: string | null - el ID del pedido en picking_packing_orders
-- `pickingModalOpen`: boolean - controla si el modal de picking esta abierto
-- `loadingPickingOrder`: boolean - mientras busca el ID
-
-**Nueva funcion `handleOpenPickingOrder(orderNumber)`:**
-1. Normaliza el order_number (quita el #)
-2. Consulta `picking_packing_orders` JOIN `shopify_orders` para encontrar el ID del pedido cuyo `order_number` coincida
-3. Si lo encuentra, guarda el ID en `pickingOrderId` y abre el modal
-4. Si no lo encuentra, muestra toast de error
-
-**Cambio en el click del numero de pedido (linea 270-275):**
-- En vez de `onOpenChange(false)` + `navigate(...)`, llama a `handleOpenPickingOrder(campaign.order_number)`
-- El usuario se queda en la pagina de UGC Creators
-
-**Render del PickingOrderDetailsModal:**
-- Se agrega al final del componente, condicionado a `pickingOrderId && pickingModalOpen`
-- Props: `orderId={pickingOrderId}`, `onClose` cierra el modal, `allOrderIds={[pickingOrderId]}` (sin navegacion entre ordenes), `onNavigate` vacio
-
-### 2. Importaciones nuevas en `UgcCreatorDetailModal.tsx`
-- `PickingOrderDetailsModal` de `@/components/picking/PickingOrderDetailsModal`
-- `supabase` de `@/integrations/supabase/client`
-- `toast` de `sonner`
-- `useState` de `react`
-- `Loader2` de `lucide-react`
-
-## Detalle tecnico
-
-**Busqueda del pedido por order_number:**
+**UPDATE simplificado:**
 ```text
-SELECT ppo.id
-FROM picking_packing_orders ppo
-JOIN shopify_orders so ON so.shopify_order_id = ppo.shopify_order_id
-WHERE REPLACE(so.order_number, '#', '') = '68933'
-LIMIT 1
+// Solo actualizar status (las otras columnas no existen)
+.update({ status: status })
+.eq('tracking_number', body.tracking_number)
 ```
-
-**Manejo de z-index:**
-- El PickingOrderDetailsModal usa Dialog de Radix que se renderiza en un portal con z-50
-- El modal del creador UGC tambien usa z-50
-- Como ambos son portales independientes, el segundo se renderizara encima del primero naturalmente
-
-**Props del PickingOrderDetailsModal:**
-- `orderId`: el ID encontrado en la consulta
-- `allOrderIds`: array con solo ese ID (no necesita navegacion J/K entre ordenes)
-- `onNavigate`: funcion vacia (no aplica en este contexto)
-- `onClose`: cierra el modal de picking y mantiene abierto el del creador
 
 ## Archivos a modificar
-- `src/components/ugc/UgcCreatorDetailModal.tsx`
+- `supabase/functions/envia-track/index.ts` - corregir parsing de respuesta API y UPDATE de DB
 
-## Lo que NO se cambia
-- `PickingOrderDetailsModal` (se reutiliza tal cual)
-- Hooks de picking (`usePickingOrders`, `usePickingOrderDetails`, `usePickingLineItems`)
-- Edge functions de Shopify/Envia
-- Logica de sincronizacion existente
