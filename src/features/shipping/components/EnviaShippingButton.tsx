@@ -133,7 +133,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [hasChecked, setHasChecked] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualTracking, setManualTracking] = useState('');
-  const [manualCarrier, setManualCarrier] = useState('coordinadora');
+  // manualCarrier removed - hardcoded to 'manual'
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [selectedCarrier, setSelectedCarrier] = useState<string>('');
   const [recommendedCarrier, setRecommendedCarrier] = useState<string>('coordinadora');
@@ -542,18 +542,22 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
     setIsSavingManual(true);
     try {
+      // Get current user for audit
+      const { data: { user } } = await supabase.auth.getUser();
+
       const labelRecord = {
         organization_id: currentOrganization.id,
         shopify_order_id: shopifyOrderId,
         order_number: orderNumber,
-        carrier: manualCarrier,
+        carrier: 'manual',
         tracking_number: manualTracking.trim(),
         status: 'manual',
         destination_city: shippingAddress?.city || '',
         destination_department: shippingAddress?.province || '',
         destination_address: [shippingAddress?.address1, shippingAddress?.address2].filter(Boolean).join(', '),
         recipient_name: shippingAddress?.name || '',
-        recipient_phone: shippingAddress?.phone || customerPhone || ''
+        recipient_phone: shippingAddress?.phone || customerPhone || '',
+        created_by: user?.id || null
       };
 
       const { data, error } = await supabase
@@ -563,6 +567,25 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         .single();
 
       if (error) throw error;
+
+      // Auto-fulfill in Shopify if not already fulfilled
+      if (!isFulfilled) {
+        try {
+          const { error: fulfillError } = await supabase.functions.invoke('fulfill-express-order', {
+            body: {
+              shopify_order_id: shopifyOrderId,
+              organization_id: currentOrganization.id,
+              user_id: user?.id || null
+            }
+          });
+          if (fulfillError) {
+            console.warn('Fulfillment warning:', fulfillError);
+            toast.warning('Guía guardada pero no se pudo preparar en Shopify automáticamente');
+          }
+        } catch (fulfillErr) {
+          console.warn('Fulfillment error (non-blocking):', fulfillErr);
+        }
+      }
 
       toast.success('Guía registrada manualmente');
       onLabelChange?.(data as ShippingLabel);
@@ -669,7 +692,14 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
                   </Badge>
                   <span className="font-medium">{carrierName}</span>
                   {label.tracking_number && (
-                    <span className="font-mono text-muted-foreground">#{label.tracking_number}</span>
+                    <a 
+                      href={`https://envia.com/tracking?label=${label.tracking_number}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-blue-600 hover:underline cursor-pointer"
+                    >
+                      #{label.tracking_number}
+                    </a>
                   )}
                 </div>
                 <div className="mt-1 text-muted-foreground">
@@ -856,7 +886,14 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             {isManual && " (Manual)"}
           </Badge>
           {existingLabel.tracking_number && (
-            <span className="font-mono text-xs">{existingLabel.tracking_number}</span>
+            <a 
+              href={`https://envia.com/tracking?label=${existingLabel.tracking_number}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs text-blue-600 hover:underline cursor-pointer"
+            >
+              {existingLabel.tracking_number}
+            </a>
           )}
         </div>
         
@@ -938,19 +975,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             className="text-sm"
           />
           
-          <select
-            value={manualCarrier}
-            onChange={(e) => setManualCarrier(e.target.value)}
-            className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background"
-          >
-            <option value="coordinadora">Coordinadora</option>
-            <option value="interrapidisimo">Inter Rapidísimo</option>
-            <option value="servientrega">Servientrega</option>
-            <option value="deprisa">Deprisa</option>
-            <option value="envia">Envía</option>
-            <option value="tcc">TCC</option>
-            <option value="otro">Otro</option>
-          </select>
+          {/* Carrier selector removed - hardcoded to 'manual' */}
         </div>
         
         <div className="flex gap-2">
