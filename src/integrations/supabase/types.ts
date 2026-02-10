@@ -3602,6 +3602,64 @@ export type Database = {
           },
         ]
       }
+      ugc_notifications: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          creator_id: string
+          id: string
+          message: string
+          organization_id: string
+          read: boolean | null
+          title: string
+          type: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          creator_id: string
+          id?: string
+          message: string
+          organization_id: string
+          read?: boolean | null
+          title: string
+          type: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          creator_id?: string
+          id?: string
+          message?: string
+          organization_id?: string
+          read?: boolean | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_notifications_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_notifications_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ugc_videos: {
         Row: {
           campaign_id: string

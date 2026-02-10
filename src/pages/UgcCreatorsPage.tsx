@@ -6,6 +6,7 @@ import { useUgcCreators } from '@/hooks/useUgcCreators';
 import { useUgcCampaigns } from '@/hooks/useUgcCampaigns';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { useAllUgcCreatorTagAssignments } from '@/hooks/useUgcCreatorTags';
+import { useUgcCampaignSync } from '@/hooks/useUgcCampaignSync';
 import { UgcStatsCards } from '@/components/ugc/UgcStatsCards';
 import { UgcKanbanBoard } from '@/components/ugc/UgcKanbanBoard';
 import { UgcProspectKanban } from '@/components/ugc/UgcProspectKanban';
@@ -14,6 +15,7 @@ import { UgcCreatorForm } from '@/components/ugc/UgcCreatorForm';
 import { UgcCampaignForm } from '@/components/ugc/UgcCampaignForm';
 import { UgcVideoForm } from '@/components/ugc/UgcVideoForm';
 import { UgcCreatorDetailModal } from '@/components/ugc/UgcCreatorDetailModal';
+import { UgcNotificationCenter } from '@/components/ugc/UgcNotificationCenter';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -37,6 +39,9 @@ const UgcCreatorsPage: React.FC = () => {
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
   const { createVideo, updateVideoStatus } = useUgcVideos();
   const { getTagsForCreator } = useAllUgcCreatorTagAssignments();
+
+  // Auto-sync campaign statuses based on shipping events
+  useUgcCampaignSync(campaigns);
 
   const handleCreatorSubmit = (data: any) => {
     if (editingCreator) {
@@ -145,6 +150,14 @@ const UgcCreatorsPage: React.FC = () => {
   const isLoading = creatorsLoading || campaignsLoading;
   const activeCampaign = videoCampaignId ? campaigns.find((c) => c.id === videoCampaignId) : null;
 
+  const handleNotificationClick = (creatorId: string) => {
+    const creator = creators.find(c => c.id === creatorId);
+    if (creator) {
+      setSelectedCreator(creator);
+      setDetailOpen(true);
+    }
+  };
+
   return (
     <>
     <div className="space-y-6">
@@ -163,6 +176,7 @@ const UgcCreatorsPage: React.FC = () => {
               <TableIcon className="h-4 w-4 mr-1" /> Tabla
             </Button>
           </div>
+          <UgcNotificationCenter onNotificationClick={handleNotificationClick} />
           <Button onClick={() => { setEditingCreator(null); setCreatorFormOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nuevo Creador
           </Button>
