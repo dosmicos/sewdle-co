@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw, User } from 'lucide-react';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -143,6 +143,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [correctedCity, setCorrectedCity] = useState<string | null>(null);
   const [userRejectedSuggestion, setUserRejectedSuggestion] = useState(false);
   const [labelCheckError, setLabelCheckError] = useState<string | null>(null);
+  const [labelCreatorName, setLabelCreatorName] = useState<string | null>(null);
+  const [historyCreatorNames, setHistoryCreatorNames] = useState<Record<string, string>>({});
   
   // Quote loading state machine - prevents infinite loops
   const [quoteState, setQuoteState] = useState<QuoteLoadingState>({
@@ -154,6 +156,45 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const hasTriedQuotesRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isQuoteRequestInProgressRef = useRef(false);
+
+  // Fetch creator name for active manual label
+  useEffect(() => {
+    const fetchCreatorName = async () => {
+      if (existingLabel?.status === 'manual' && existingLabel?.created_by) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', existingLabel.created_by)
+          .single();
+        setLabelCreatorName(data?.name || null);
+      } else {
+        setLabelCreatorName(null);
+      }
+    };
+    fetchCreatorName();
+  }, [existingLabel?.created_by, existingLabel?.status]);
+
+  // Fetch creator names for history labels
+  useEffect(() => {
+    const fetchHistoryNames = async () => {
+      const idsWithCreator = labelHistory
+        .filter(l => l.created_by)
+        .map(l => l.created_by as string);
+      const uniqueIds = [...new Set(idsWithCreator)];
+      if (uniqueIds.length === 0) {
+        setHistoryCreatorNames({});
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', uniqueIds);
+      const names: Record<string, string> = {};
+      data?.forEach(p => { if (p.name) names[p.id] = p.name; });
+      setHistoryCreatorNames(names);
+    };
+    fetchHistoryNames();
+  }, [labelHistory]);
 
   // Update COD amount when totalPrice changes
   useEffect(() => {
@@ -707,6 +748,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
                   {cancelledAt && (
                     <span className="ml-2">• Cancelada: {formatDate(cancelledAt)}</span>
                   )}
+                  {label.created_by && historyCreatorNames[label.created_by] && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <User className="h-3 w-3" />
+                      <span>Por: {historyCreatorNames[label.created_by]}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -918,9 +965,17 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             </Button>
           </div>
         ) : isManual ? (
-          <div className="flex items-center gap-2 text-sm text-blue-600">
-            <PackageCheck className="h-4 w-4" />
-            <span>Guía registrada manualmente</span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm text-blue-600">
+              <PackageCheck className="h-4 w-4" />
+              <span>Guía registrada manualmente</span>
+            </div>
+            {labelCreatorName && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-6">
+                <User className="h-3 w-3" />
+                <span>Registrada por: {labelCreatorName}</span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-amber-600">
