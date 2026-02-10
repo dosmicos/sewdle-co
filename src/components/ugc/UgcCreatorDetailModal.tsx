@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onVideoStatusChange,
   onDelete,
 }) => {
+  const navigate = useNavigate();
   const { videos: allVideos } = useUgcVideos(creator?.id);
 
   if (!creator) return null;
@@ -262,7 +264,18 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-2">
                           {campaign.order_number && (
                             <div className="flex items-center gap-1">
-                              <Package className="h-3 w-3" /> Pedido: {campaign.order_number}
+                              <Package className="h-3 w-3" /> Pedido:{' '}
+                              <span
+                                className="text-primary hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const cleanOrder = campaign.order_number!.replace('#', '');
+                                  onOpenChange(false);
+                                  navigate(`/picking-packing?search=${cleanOrder}`);
+                                }}
+                              >
+                                {campaign.order_number}
+                              </span>
                             </div>
                           )}
                           {campaign.tracking_number && (
