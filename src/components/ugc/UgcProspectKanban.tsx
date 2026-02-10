@@ -70,7 +70,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
           return (
             <div
               key={status}
-              className={`flex flex-col w-[280px] min-h-[500px] rounded-lg border transition-colors ${
+              className={`flex flex-col w-[280px] rounded-lg border transition-colors ${
                 isDragOver ? 'border-primary bg-accent/50' : 'border-border bg-muted/30'
               }`}
               onDragOver={(e) => handleDragOver(e, status)}
@@ -84,7 +84,7 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
                 </div>
               </div>
 
-              <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-300px)]">
+              <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-380px)]">
                 {columnCreators.length === 0 ? (
                   <div className="flex items-center justify-center h-20 text-xs text-muted-foreground italic">
                     Sin prospectos
