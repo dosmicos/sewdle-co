@@ -1,27 +1,32 @@
 
+# Fix Kanban column cards getting cut off
 
-# Cambiar notificacion "contactar creador" a 5 dias despues de entrega
+## Problem
+The Kanban column body uses `max-h-[calc(100vh-300px)]` which doesn't account for the actual page layout (sidebar, header, stats cards, tabs). This causes cards at the bottom of each column to be clipped and not fully visible.
 
-## Cambio
-Actualmente la notificacion "contactar creador" se genera cuando una campana lleva mas de 1 dia en estado `producto_enviado`. El nuevo comportamiento sera:
+## Solution
+Adjust the `max-h` calculation in `src/components/ugc/UgcKanbanBoard.tsx` to properly account for all elements above the Kanban board:
+- Page header (~64px)
+- Stats cards (~100px)  
+- Tabs bar (~48px)
+- Column header (~48px)
+- Padding/gaps (~40px)
 
-- Se genera cuando la campana lleva mas de **5 dias** en estado `producto_recibido` (es decir, el producto ya fue entregado y han pasado 5 dias sin avance)
-- Ya no se revisa el estado `producto_enviado` para esta notificacion
+Total offset: ~350-380px
 
-## Archivo a modificar
-`src/hooks/useUgcCampaignSync.ts`
+## Change
+In `src/components/ugc/UgcKanbanBoard.tsx`, line 87:
 
-## Cambio especifico (seccion 3, lineas 92-121)
+**Before:**
+```
+max-h-[calc(100vh-300px)]
+```
 
-**Antes:**
-- Filtra campanas en `producto_enviado`
-- Revisa si `updated_at` es mayor a 1 dia
-- Mensaje: "lleva mas de 1 dia en Producto Enviado"
+**After:**
+```
+max-h-[calc(100vh-380px)]
+```
 
-**Despues:**
-- Filtra campanas en `producto_recibido`
-- Revisa si `updated_at` es mayor a 5 dias (5 * 24 * 60 * 60 * 1000 ms)
-- Mensaje: "El producto fue entregado hace mas de 5 dias. Contacta al creador para dar seguimiento a la campana"
+Also remove `min-h-[500px]` from the column container (line 69) since it forces columns to be taller than needed when there are few cards, and can conflict with the max-height causing layout issues.
 
-No se modifica ninguna otra logica ni archivo.
-
+This single file change ensures all cards render fully visible within each column's scrollable area.
