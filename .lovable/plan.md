@@ -1,47 +1,45 @@
 
 
-# Mejoras en Guia Manual: Link tracking, quitar transportadora, registrar usuario, y fulfillment en Shopify
+# Mostrar quien registro la guia manual
 
-## Resumen
-Cuatro cambios en el flujo de guia manual en `EnviaShippingButton.tsx` y una nueva edge function para el fulfillment:
+## Situacion actual
+- El fulfillment de Shopify SI se sigue haciendo cuando se crea una guia directa via Envia.com (en la edge function `create-envia-label`). Eso no se toca.
+- El campo `created_by` ya se guarda al crear una guia manual, pero NO se muestra en la UI.
+- Cuando un pedido se empaca y se genera la guia al mismo tiempo (Express), el sistema ya registra `packed_by` y `shipped_by` como la misma persona -- no necesita registro adicional de guia.
 
-## 1. Quitar selector de transportadora
-- Eliminar el `<select>` de transportadora del formulario manual (lineas 941-953)
-- Hardcodear `carrier: 'manual'` en `handleSaveManualLabel`
-- Eliminar el state `manualCarrier` si existe
+## Cambios
 
-## 2. Registrar quien creo la guia
-- Obtener el usuario actual con `supabase.auth.getUser()` antes del insert
-- Guardar `created_by: user?.id || null` en el registro de `shipping_labels`
+### 1. Mostrar quien registro la guia manual en la vista activa
+En `EnviaShippingButton.tsx`, cuando la guia activa es manual (`isManual`), buscar el nombre del usuario que la creo usando `existingLabel.created_by` y mostrarlo debajo del tracking, similar a como se muestra "Por: {packedByName}" en el modal de picking.
 
-## 3. Tracking clickeable con link de envia.com
-- En la vista de label activa (linea 858-859): convertir el tracking en un `<a>` que abre `https://envia.com/tracking?label={tracking_number}` en nueva pestana
-- En el historial (linea 671-672): mismo cambio para los tracking del historial
-- Estilo: texto azul con underline al hover
+Texto: "Registrada por: {nombre}" con icono de usuario.
 
-## 4. Fulfillment automatico en Shopify al guardar guia manual
-- Despues de guardar la guia manual exitosamente, invocar la edge function `fulfill-express-order` con el `shopify_order_id` y `organization_id`
-- Esta funcion ya verifica si el pedido esta fulfilled (busca fulfillment orders con status `open` o `in_progress`; si no hay, no hace nada)
-- Esto marca el pedido como "Fulfilled" en Shopify automaticamente
-- Si el pedido ya esta fulfilled (`isFulfilled` prop es true), se salta la llamada
+### 2. Mostrar quien registro la guia en el historial
+En la seccion `LabelHistorySection`, para cada label que tenga `created_by`, mostrar el nombre del usuario.
 
-### Flujo en handleSaveManualLabel:
+### Detalle tecnico
+
+**En `EnviaShippingButton.tsx`:**
+- Agregar un state `labelCreatorName` y un `useEffect` que busque en `profiles` el nombre cuando `existingLabel?.created_by` cambie
+- En la vista de label activa manual (linea ~920-924), agregar una linea con el nombre del creador
+- En el historial, hacer lo mismo (batch fetch de nombres para los labels con `created_by`)
+
 ```text
-1. Validar tracking
-2. Obtener usuario actual (auth.getUser)
-3. Insertar en shipping_labels con carrier='manual' y created_by=user.id
-4. Si el pedido NO esta fulfilled (isFulfilled === false):
-   - Invocar fulfill-express-order (ya maneja el caso de pedidos ya fulfilled en Shopify)
-   - No bloquear el flujo si falla - solo mostrar warning
-5. Toast de exito
-6. Limpiar formulario
+Vista actual:
+  [Manual] 240045946725
+  Guia registrada manualmente
+
+Vista nueva:
+  [Manual] 240045946725 (clickeable)
+  Guia registrada manualmente
+  Registrada por: Juan Perez
 ```
 
-## Archivos a modificar
-- `src/features/shipping/components/EnviaShippingButton.tsx` - todos los cambios frontend
+### Archivos a modificar
+- `src/features/shipping/components/EnviaShippingButton.tsx`
 
-## Lo que NO se cambia
-- No se crean edge functions nuevas (se reutiliza `fulfill-express-order`)
-- El flujo de cotizacion y creacion de guia via Envia.com
-- La cancelacion de guias
-- La tabla `shipping_labels`
+### Lo que NO se cambia
+- El fulfillment automatico en `create-envia-label` (ya funciona)
+- El flujo de empacado Express (ya registra `packed_by` y `shipped_by`)
+- La logica de `handleSaveManualLabel` (ya guarda `created_by`)
+
