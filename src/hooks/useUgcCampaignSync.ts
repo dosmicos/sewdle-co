@@ -89,12 +89,12 @@ export const useUgcCampaignSync = (campaigns: UgcCampaign[]) => {
         }
       }
 
-      // 3. Notification for 1+ day in producto_enviado
-      const allShipped = campaigns.filter(c => c.status === 'producto_enviado');
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // 3. Notification for 5+ days in producto_recibido
+      const allReceived = campaigns.filter(c => c.status === 'producto_recibido');
+      const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
 
-      for (const campaign of allShipped) {
-        if (campaign.updated_at && campaign.updated_at < oneDayAgo) {
+      for (const campaign of allReceived) {
+        if (campaign.updated_at && campaign.updated_at < fiveDaysAgo) {
           // Check if notification already exists
           const { data: existing } = await supabase
             .from('ugc_notifications')
@@ -113,7 +113,7 @@ export const useUgcCampaignSync = (campaigns: UgcCampaign[]) => {
                 creator_id: campaign.creator_id,
                 type: 'contactar_creador',
                 title: 'Contactar creador',
-                message: `La campaña "${campaign.name}" lleva más de 1 día en "Producto Enviado". Contacta al creador.`,
+                message: `El producto de la campaña "${campaign.name}" fue entregado hace más de 5 días. Contacta al creador para dar seguimiento a la campaña.`,
               });
             changed = true;
           }
