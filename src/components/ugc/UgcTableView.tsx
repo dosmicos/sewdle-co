@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -25,6 +26,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   onCreatorClick,
   getTagsForCreator,
 }) => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
@@ -176,7 +178,19 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         <span className="text-muted-foreground text-xs">Sin campaña</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{activeCampaign?.order_number || '—'}</TableCell>
+                    <TableCell className="text-sm">
+                      {activeCampaign?.order_number ? (
+                        <span
+                          className="text-primary hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/picking-packing?search=${activeCampaign.order_number!.replace('#', '')}`);
+                          }}
+                        >
+                          {activeCampaign.order_number}
+                        </span>
+                      ) : '—'}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {activeCampaign ? `${videosDelivered}/${activeCampaign.agreed_videos}` : '—'}
                     </TableCell>
