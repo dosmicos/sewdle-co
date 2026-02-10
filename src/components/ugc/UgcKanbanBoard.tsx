@@ -9,12 +9,14 @@ interface UgcKanbanBoardProps {
   campaigns: UgcCampaign[];
   onCampaignClick: (campaign: UgcCampaign) => void;
   onStatusChange: (campaignId: string, newStatus: CampaignStatus) => void;
+  onOrderClick?: (orderNumber: string) => void;
 }
 
 export const UgcKanbanBoard: React.FC<UgcKanbanBoardProps> = ({
   campaigns,
   onCampaignClick,
   onStatusChange,
+  onOrderClick,
 }) => {
   const [draggedCampaign, setDraggedCampaign] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<CampaignStatus | null>(null);
@@ -96,6 +98,7 @@ export const UgcKanbanBoard: React.FC<UgcKanbanBoardProps> = ({
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onClick={() => onCampaignClick(campaign)}
+                      onOrderClick={onOrderClick}
                     />
                   ))
                 )}

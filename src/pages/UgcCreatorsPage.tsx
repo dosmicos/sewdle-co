@@ -14,6 +14,9 @@ import { UgcCreatorForm } from '@/components/ugc/UgcCreatorForm';
 import { UgcCampaignForm } from '@/components/ugc/UgcCampaignForm';
 import { UgcVideoForm } from '@/components/ugc/UgcVideoForm';
 import { UgcCreatorDetailModal } from '@/components/ugc/UgcCreatorDetailModal';
+import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { UgcCreator, UgcCampaign, CampaignStatus, CreatorStatus } from '@/types/ugc';
 
 const UgcCreatorsPage: React.FC = () => {
@@ -27,6 +30,8 @@ const UgcCreatorsPage: React.FC = () => {
   const [campaignCreatorId, setCampaignCreatorId] = useState<string | null>(null);
   const [videoFormOpen, setVideoFormOpen] = useState(false);
   const [videoCampaignId, setVideoCampaignId] = useState<string | null>(null);
+  const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
+  const [pickingModalOpen, setPickingModalOpen] = useState(false);
 
   const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator } = useUgcCreators();
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
@@ -105,10 +110,43 @@ const UgcCreatorsPage: React.FC = () => {
     updateVideoStatus.mutate({ id: videoId, status, feedback });
   };
 
+  const handleOrderClick = async (orderNumber: string) => {
+    const normalized = orderNumber.replace('#', '');
+    try {
+      const { data: shopifyOrder } = await supabase
+        .from('shopify_orders')
+        .select('shopify_order_id')
+        .or(`order_number.eq.${normalized},order_number.eq.#${normalized}`)
+        .maybeSingle();
+
+      if (!shopifyOrder) {
+        toast.error('No se encontró el pedido en Shopify');
+        return;
+      }
+
+      const { data: pickingOrder } = await supabase
+        .from('picking_packing_orders')
+        .select('id')
+        .eq('shopify_order_id', shopifyOrder.shopify_order_id)
+        .maybeSingle();
+
+      if (pickingOrder) {
+        setPickingOrderId(pickingOrder.id);
+        setPickingModalOpen(true);
+      } else {
+        toast.error('No se encontró el pedido en Picking & Packing');
+      }
+    } catch (err) {
+      console.error('Error finding picking order:', err);
+      toast.error('Error al buscar el pedido');
+    }
+  };
+
   const isLoading = creatorsLoading || campaignsLoading;
   const activeCampaign = videoCampaignId ? campaigns.find((c) => c.id === videoCampaignId) : null;
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -160,6 +198,7 @@ const UgcCreatorsPage: React.FC = () => {
               campaigns={campaigns}
               onCampaignClick={handleCampaignClick}
               onStatusChange={(id, status) => handleCampaignStatusChange(id, status)}
+              onOrderClick={handleOrderClick}
             />
           </TabsContent>
         </Tabs>
@@ -214,6 +253,19 @@ const UgcCreatorsPage: React.FC = () => {
         />
       )}
     </div>
+
+    {pickingOrderId && pickingModalOpen && (
+      <PickingOrderDetailsModal
+        orderId={pickingOrderId}
+        allOrderIds={[pickingOrderId]}
+        onNavigate={() => {}}
+        onClose={() => {
+          setPickingModalOpen(false);
+          setPickingOrderId(null);
+        }}
+      />
+    )}
+    </>
   );
 };
 
