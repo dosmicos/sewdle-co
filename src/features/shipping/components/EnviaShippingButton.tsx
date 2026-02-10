@@ -203,13 +203,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [totalPrice]);
 
-  // Reset state when order changes
+  // Reset state and auto-fetch existing label when order changes
   useEffect(() => {
     if (currentOrganization?.id && shopifyOrderId) {
-      clearLabel();
       clearQuotes();
       clearMatchInfo();
-      setHasChecked(false);
       setShowManualEntry(false);
       setManualTracking('');
       setSelectedCarrier('');
@@ -223,8 +221,19 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       hasTriedQuotesRef.current = false;
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
+
+      // Auto-fetch existing label (includes manual labels)
+      getExistingLabel(shopifyOrderId, currentOrganization.id)
+        .then(label => {
+          setHasChecked(true);
+          onLabelChange?.(label);
+        })
+        .catch(err => {
+          console.warn('Error auto-fetching label:', err?.message);
+          setHasChecked(true);
+        });
     }
-  }, [shopifyOrderId, currentOrganization?.id, clearLabel, clearQuotes, clearMatchInfo]);
+  }, [shopifyOrderId, currentOrganization?.id, clearQuotes, clearMatchInfo]);
 
   // NO automatic quote loading - user must click "Cotizar" button
   // This prevents excessive API calls and resource consumption
