@@ -1,42 +1,47 @@
 
-# Reemplazar "Verificar Guia" por "Registrar Guia Manual"
+
+# Mejoras en Guia Manual: Link tracking, quitar transportadora, registrar usuario, y fulfillment en Shopify
 
 ## Resumen
-Quitar el boton "Verificar Guia" (que no funciona correctamente) y reemplazarlo por un boton para registrar manualmente el numero de guia. El boton "Cotizar Envio" se mantiene.
+Cuatro cambios en el flujo de guia manual en `EnviaShippingButton.tsx` y una nueva edge function para el fulfillment:
 
-## Cambios en EnviaShippingButton.tsx
+## 1. Quitar selector de transportadora
+- Eliminar el `<select>` de transportadora del formulario manual (lineas 941-953)
+- Hardcodear `carrier: 'manual'` en `handleSaveManualLabel`
+- Eliminar el state `manualCarrier` si existe
 
-### Estado inicial (lineas ~709-741)
-- Reemplazar el boton "Verificar Guia" por un boton "Guia Manual" que abre el formulario de registro manual (setShowManualEntry(true))
-- Mantener el boton "Cotizar Envio" tal cual
+## 2. Registrar quien creo la guia
+- Obtener el usuario actual con `supabase.auth.getUser()` antes del insert
+- Guardar `created_by: user?.id || null` en el registro de `shipping_labels`
 
-### Estado de carga (lineas ~745-781)
-- Quitar la referencia al modo "verifying" del boton izquierdo
-- Reemplazar por el boton "Guia Manual" deshabilitado mientras se cotiza
+## 3. Tracking clickeable con link de envia.com
+- En la vista de label activa (linea 858-859): convertir el tracking en un `<a>` que abre `https://envia.com/tracking?label={tracking_number}` en nueva pestana
+- En el historial (linea 671-672): mismo cambio para los tracking del historial
+- Estilo: texto azul con underline al hover
 
-### Estado de error (lineas ~784-817)
-- Quitar el boton "Verificar Guia" de la seccion de error
-- Reemplazar por "Guia Manual"
+## 4. Fulfillment automatico en Shopify al guardar guia manual
+- Despues de guardar la guia manual exitosamente, invocar la edge function `fulfill-express-order` con el `shopify_order_id` y `organization_id`
+- Esta funcion ya verifica si el pedido esta fulfilled (busca fulfillment orders con status `open` o `in_progress`; si no hay, no hace nada)
+- Esto marca el pedido como "Fulfilled" en Shopify automaticamente
+- Si el pedido ya esta fulfilled (`isFulfilled` prop es true), se salta la llamada
 
-### Estado "no se encontro guia" (lineas ~821-846)
-- Quitar el boton "Verificar Guia"
-- Reemplazar por "Guia Manual"
-
-### Logica de busyMode (linea ~706)
-- Simplificar: ya no necesita el modo 'verifying' porque no se verifica automaticamente
-
-## Lo que NO se cambia
-- El formulario de registro manual (lineas 934-991) ya existe y funciona perfectamente
-- La funcion handleSaveManualLabel ya guarda en shipping_labels
-- El boton "Cotizar Envio" se mantiene igual
-- Toda la logica de creacion de guia via Envia.com se mantiene
-- El historial de guias se mantiene
-
-## Resultado visual
-
+### Flujo en handleSaveManualLabel:
 ```text
-Antes:                          Despues:
-[Verificar Guia] [Cotizar]     [Guia Manual] [Cotizar Envio]
+1. Validar tracking
+2. Obtener usuario actual (auth.getUser)
+3. Insertar en shipping_labels con carrier='manual' y created_by=user.id
+4. Si el pedido NO esta fulfilled (isFulfilled === false):
+   - Invocar fulfill-express-order (ya maneja el caso de pedidos ya fulfilled en Shopify)
+   - No bloquear el flujo si falla - solo mostrar warning
+5. Toast de exito
+6. Limpiar formulario
 ```
 
-Al hacer click en "Guia Manual", se muestra el formulario existente con campo de tracking, selector de transportadora, y botones Cancelar/Guardar.
+## Archivos a modificar
+- `src/features/shipping/components/EnviaShippingButton.tsx` - todos los cambios frontend
+
+## Lo que NO se cambia
+- No se crean edge functions nuevas (se reutiliza `fulfill-express-order`)
+- El flujo de cotizacion y creacion de guia via Envia.com
+- La cancelacion de guias
+- La tabla `shipping_labels`
