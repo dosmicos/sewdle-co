@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw, User } from 'lucide-react';
+import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw, User, MapPin } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useEnviaShipping } from '../hooks/useEnviaShipping';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Badge } from '@/components/ui/badge';
@@ -127,7 +128,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     getQuotesWithRetry,
     clearQuotes,
     matchInfo,
-    clearMatchInfo
+    clearMatchInfo,
+    trackShipment,
+    isLoadingTracking,
+    trackingInfo
   } = useEnviaShipping();
   
   const [hasChecked, setHasChecked] = useState(false);
@@ -145,6 +149,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [labelCheckError, setLabelCheckError] = useState<string | null>(null);
   const [labelCreatorName, setLabelCreatorName] = useState<string | null>(null);
   const [historyCreatorNames, setHistoryCreatorNames] = useState<Record<string, string>>({});
+  const [showTrackingDetails, setShowTrackingDetails] = useState(false);
   
   // Quote loading state machine - prevents infinite loops
   const [quoteState, setQuoteState] = useState<QuoteLoadingState>({
@@ -234,6 +239,16 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         });
     }
   }, [shopifyOrderId, currentOrganization?.id, clearQuotes, clearMatchInfo]);
+
+  // Auto-track shipment when an active label with tracking number is loaded
+  useEffect(() => {
+    if (existingLabel?.tracking_number && existingLabel.status !== 'cancelled' && existingLabel.status !== 'error') {
+      trackShipment({
+        tracking_number: existingLabel.tracking_number,
+        carrier: existingLabel.carrier || 'manual'
+      });
+    }
+  }, [existingLabel?.tracking_number, existingLabel?.status]);
 
   // NO automatic quote loading - user must click "Cotizar" button
   // This prevents excessive API calls and resource consumption
@@ -990,6 +1005,77 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           <div className="flex items-center gap-2 text-sm text-amber-600">
             <AlertCircle className="h-4 w-4" />
             <span>Guía creada sin PDF disponible</span>
+          </div>
+        )}
+
+        {/* Tracking status - auto-loaded */}
+        {existingLabel.tracking_number && (
+          <div className="space-y-1.5 pt-1">
+            {isLoadingTracking ? (
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+              </div>
+            ) : trackingInfo ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={
+                      trackingInfo.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                      trackingInfo.status === 'in_transit' ? 'bg-yellow-100 text-yellow-800' :
+                      trackingInfo.status === 'returned' || trackingInfo.status === 'exception' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }
+                  >
+                    {trackingInfo.status === 'delivered' ? '✅ Entregado' :
+                     trackingInfo.status === 'in_transit' ? '🚚 En tránsito' :
+                     trackingInfo.status === 'returned' ? '↩️ Devuelto' :
+                     trackingInfo.status === 'exception' ? '⚠️ Problema' :
+                     '⏳ Pendiente'}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={() => trackShipment({
+                      tracking_number: existingLabel.tracking_number!,
+                      carrier: existingLabel.carrier || 'manual'
+                    })}
+                    disabled={isLoadingTracking}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
+                {trackingInfo.events && trackingInfo.events.length > 0 && (
+                  <Collapsible open={showTrackingDetails} onOpenChange={setShowTrackingDetails}>
+                    <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer">
+                      {showTrackingDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      Ver detalle de seguimiento ({trackingInfo.events.length})
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-1.5">
+                      <div className="space-y-1 pl-2 border-l-2 border-muted ml-1">
+                        {trackingInfo.events.map((event: any, idx: number) => (
+                          <div key={idx} className="text-xs text-muted-foreground pl-2">
+                            <span className="font-medium text-foreground">
+                              {event.date}{event.time ? ` ${event.time}` : ''}
+                            </span>
+                            {' — '}
+                            {event.description}
+                            {event.location && (
+                              <span className="inline-flex items-center gap-0.5 ml-1">
+                                <MapPin className="h-2.5 w-2.5 inline" />
+                                {event.location}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </>
+            ) : null}
           </div>
         )}
 
