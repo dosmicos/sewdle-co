@@ -1,32 +1,25 @@
 
-# Fix Kanban column cards getting cut off
+# Eliminar columnas "Contactado" y "Negociando" del Kanban de Campanas y mejorar layout
 
-## Problem
-The Kanban column body uses `max-h-[calc(100vh-300px)]` which doesn't account for the actual page layout (sidebar, header, stats cards, tabs). This causes cards at the bottom of each column to be clipped and not fully visible.
+## Problema
+El Kanban de campanas muestra 7 columnas (Contactado, Negociando, Aceptado, Producto Enviado, Producto Recibido, Video en Revision, Completado). Las dos primeras siempre estan vacias porque las campanas se crean directamente en estado "aceptado". Ademas, con tantas columnas se requiere scroll horizontal.
 
-## Solution
-Adjust the `max-h` calculation in `src/components/ugc/UgcKanbanBoard.tsx` to properly account for all elements above the Kanban board:
-- Page header (~64px)
-- Stats cards (~100px)  
-- Tabs bar (~48px)
-- Column header (~48px)
-- Padding/gaps (~40px)
+## Cambios
 
-Total offset: ~350-380px
+### 1. Eliminar columnas del array `KANBAN_COLUMNS` (`src/types/ugc.ts`)
+Quitar `contactado` y `negociando` del array, dejando solo 5 columnas:
+- Aceptado
+- Producto Enviado
+- Producto Recibido
+- Video en Revision
+- Completado
 
-## Change
-In `src/components/ugc/UgcKanbanBoard.tsx`, line 87:
+### 2. Hacer columnas responsivas (`src/components/ugc/UgcKanbanBoard.tsx`)
+- Cambiar el ancho fijo `w-[280px]` por `flex-1 min-w-[200px]`
+- Quitar `min-w-max` del contenedor flex para que las columnas se distribuyan en el espacio disponible sin forzar scroll horizontal
+- Con 5 columnas y ancho flexible, todo cabe en pantalla sin scroll lateral
 
-**Before:**
-```
-max-h-[calc(100vh-300px)]
-```
-
-**After:**
-```
-max-h-[calc(100vh-380px)]
-```
-
-Also remove `min-h-[500px]` from the column container (line 69) since it forces columns to be taller than needed when there are few cards, and can conflict with the max-height causing layout issues.
-
-This single file change ensures all cards render fully visible within each column's scrollable area.
+## Resultado
+- 5 columnas que se reparten el ancho disponible
+- Sin scroll horizontal
+- Sin columnas vacias innecesarias
