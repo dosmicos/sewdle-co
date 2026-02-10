@@ -57,7 +57,7 @@ export const UgcKanbanBoard: React.FC<UgcKanbanBoardProps> = ({
 
   return (
     <ScrollArea className="w-full">
-      <div className="flex gap-3 pb-4 min-w-max px-1">
+      <div className="flex gap-3 pb-4 px-1">
         {KANBAN_COLUMNS.map((status) => {
           const config = CAMPAIGN_STATUS_CONFIG[status];
           const columnCampaigns = getCampaignsForColumn(status);
@@ -66,7 +66,7 @@ export const UgcKanbanBoard: React.FC<UgcKanbanBoardProps> = ({
           return (
             <div
               key={status}
-              className={`flex flex-col w-[280px] rounded-lg border transition-colors ${
+              className={`flex flex-col flex-1 min-w-[200px] rounded-lg border transition-colors ${
                 isDragOver ? 'border-primary bg-accent/50' : 'border-border bg-muted/30'
               }`}
               onDragOver={(e) => handleDragOver(e, status)}
