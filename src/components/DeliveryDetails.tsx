@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown, Trash2, Check, Printer } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, Package, Upload, X, AlertTriangle, CheckCircle, RefreshCw, DollarSign, ChevronUp, ChevronDown, Trash2, Check, Printer, Loader2, XCircle } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +54,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
   const [syncingVariants, setSyncingVariants] = useState<Set<string>>(new Set());
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; phase: string; status: 'syncing' | 'done' | 'error' } | null>(null);
   const [editingSyncedVariants, setEditingSyncedVariants] = useState<Set<string>>(new Set());
   const [editingDeliveredQuantity, setEditingDeliveredQuantity] = useState<string | null>(null);
   const [tempDeliveredQuantity, setTempDeliveredQuantity] = useState<number>(0);
@@ -402,6 +404,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     // Marcar todas como sincronizando
     const pendingIds = new Set<string>(pendingVariants.map((v: any) => v.id));
     setSyncingVariants(pendingIds);
+    setSyncProgress({ current: 0, total: pendingVariants.length, phase: 'Enviando a Shopify...', status: 'syncing' });
 
     try {
       const syncData = {
@@ -416,7 +419,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       const result = await syncApprovedItemsToShopify(syncData);
 
       if (result.success) {
-        for (const item of pendingVariants) {
+        setSyncProgress(prev => prev ? { ...prev, phase: 'Actualizando registros...', status: 'syncing' } : null);
+        
+        for (let i = 0; i < pendingVariants.length; i++) {
+          const item = pendingVariants[i];
           await supabase
             .from('delivery_items')
             .update({
@@ -424,26 +430,37 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
               last_sync_attempt: new Date().toISOString()
             })
             .eq('id', item.id);
+          
+          setSyncProgress(prev => prev ? { ...prev, current: i + 1 } : null);
         }
 
+        setSyncProgress(prev => prev ? { ...prev, phase: 'Sincronización completada', status: 'done' } : null);
+        
         toast({
           title: "Sincronización completada",
           description: `${pendingVariants.length} variante(s) sincronizada(s) con Shopify`,
         });
+        
+        // Limpiar después de 2 segundos
+        setTimeout(() => setSyncProgress(null), 2000);
       } else {
+        setSyncProgress(prev => prev ? { ...prev, phase: 'Error en sincronización', status: 'error' } : null);
         toast({
           title: "Error en sincronización",
           description: "Hubo un error al sincronizar con Shopify. Puede reintentar.",
           variant: "destructive",
         });
+        setTimeout(() => setSyncProgress(null), 3000);
       }
     } catch (error) {
       console.error('Error syncing all pending variants:', error);
+      setSyncProgress(prev => prev ? { ...prev, phase: 'Error al sincronizar', status: 'error' } : null);
       toast({
         title: "Error",
         description: "Error al sincronizar con Shopify",
         variant: "destructive",
       });
+      setTimeout(() => setSyncProgress(null), 3000);
     } finally {
       setSyncingVariants(new Set());
       loadDelivery();
@@ -1408,7 +1425,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                                   size="sm"
                                   variant="outline"
                                   onClick={() => syncVariantToShopify(item.id)}
-                                  disabled={syncingVariants.has(item.id)}
+                                  disabled={syncingVariants.has(item.id) || syncProgress !== null}
                                   className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700"
                                 >
                                   <RefreshCw className={`w-3 h-3 mr-1 ${syncingVariants.has(item.id) ? 'animate-spin' : ''}`} />
@@ -1462,20 +1479,53 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
             </Table>
           </div>
 
-          {/* Botón Sincronizar Todo - visible cuando hay variantes pendientes */}
-          {pendingSyncCount > 0 && canEditDeliveries && !isEditing && (
-            <div className="mt-4 flex justify-end">
-              <Button
-                onClick={syncAllPendingToShopify}
-                disabled={syncingVariants.size > 0}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${syncingVariants.size > 0 ? 'animate-spin' : ''}`} />
-                {syncingVariants.size > 0 
-                  ? 'Sincronizando...' 
-                  : `Sincronizar Pendientes con Shopify (${pendingSyncCount})`
-                }
-              </Button>
+          {/* Botón Sincronizar Todo - visible cuando hay variantes pendientes o sync en progreso */}
+          {(pendingSyncCount > 0 || syncProgress) && canEditDeliveries && !isEditing && (
+            <div className="mt-4 space-y-3">
+              <div className="flex justify-end">
+                <Button
+                  onClick={syncAllPendingToShopify}
+                  disabled={syncProgress !== null}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {syncProgress ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  {syncProgress
+                    ? syncProgress.phase
+                    : `Sincronizar Pendientes con Shopify (${pendingSyncCount})`
+                  }
+                </Button>
+              </div>
+              
+              {/* Barra de progreso visual */}
+              {syncProgress && (
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                  {syncProgress.status === 'syncing' && (
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600 shrink-0" />
+                  )}
+                  {syncProgress.status === 'done' && (
+                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                  )}
+                  {syncProgress.status === 'error' && (
+                    <XCircle className="w-5 h-5 text-destructive shrink-0" />
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">{syncProgress.phase}</span>
+                      <span className="text-muted-foreground">
+                        {syncProgress.current}/{syncProgress.total} variantes
+                      </span>
+                    </div>
+                    <Progress 
+                      value={syncProgress.total > 0 ? (syncProgress.current / syncProgress.total) * 100 : 0} 
+                      className="h-2"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {/* Quality Control Actions - Only for users WITH QC permissions */}
