@@ -19,12 +19,14 @@ export const UgcChildrenManager: React.FC<UgcChildrenManagerProps> = ({ creatorI
   const [ageDescription, setAgeDescription] = useState('');
   const [childSize, setChildSize] = useState('');
   const [childGender, setChildGender] = useState('');
+  const [birthDate, setBirthDate] = useState('');
 
   const resetForm = () => {
     setChildName('');
     setAgeDescription('');
     setChildSize('');
     setChildGender('');
+    setBirthDate('');
     setShowForm(false);
   };
 
@@ -37,6 +39,7 @@ export const UgcChildrenManager: React.FC<UgcChildrenManagerProps> = ({ creatorI
         age_description: ageDescription.trim(),
         size: childSize.trim() || undefined,
         gender: childGender || undefined,
+        birth_date: birthDate || undefined,
       },
       {
         onSuccess: () => {
@@ -114,6 +117,15 @@ export const UgcChildrenManager: React.FC<UgcChildrenManagerProps> = ({ creatorI
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-xs">Cumpleaños</Label>
+                <Input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSubmit} disabled={!ageDescription.trim() || addChild.isPending}>
@@ -138,6 +150,7 @@ export const UgcChildrenManager: React.FC<UgcChildrenManagerProps> = ({ creatorI
                 {child.age_description && <span className="text-muted-foreground">• {child.age_description}</span>}
                 {child.size && <span className="text-muted-foreground">• Talla: {child.size}</span>}
                 {child.gender && <span className="text-muted-foreground">• {getGenderLabel(child.gender)}</span>}
+                {(child as any).birth_date && <span className="text-muted-foreground">• 🎂 {new Date((child as any).birth_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</span>}
               </div>
               <Button
                 variant="ghost"

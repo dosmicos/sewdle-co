@@ -147,7 +147,7 @@ export const useUgcCreatorChildren = (creatorId: string | null) => {
   });
 
   const addChild = useMutation({
-    mutationFn: async (child: { name: string; age_description?: string; size?: string; gender?: string }) => {
+    mutationFn: async (child: { name: string; age_description?: string; size?: string; gender?: string; birth_date?: string }) => {
       console.log('[UGC] Adding child:', { creatorId, orgId, child });
       if (!creatorId || !orgId) throw new Error('Missing creatorId or orgId');
       const { data, error } = await supabase.from('ugc_creator_children').insert({
@@ -157,7 +157,8 @@ export const useUgcCreatorChildren = (creatorId: string | null) => {
         age_description: child.age_description || null,
         size: child.size || null,
         gender: child.gender || null,
-      }).select().single();
+        birth_date: child.birth_date || null,
+      } as any).select().single();
       if (error) {
         console.error('[UGC] Error adding child:', error);
         throw error;

@@ -110,10 +110,12 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="instagram">Instagram handle (sin @)</Label>
-            <Input id="instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="username" />
-          </div>
+          {(platform === 'instagram' || platform === 'ambas') && (
+            <div className="space-y-2">
+              <Label htmlFor="instagram">Instagram handle (sin @)</Label>
+              <Input id="instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="username" />
+            </div>
+          )}
 
           {(platform === 'tiktok' || platform === 'ambas') && (
             <div className="space-y-2">
