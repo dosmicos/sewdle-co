@@ -212,13 +212,12 @@ Deno.serve(async (req) => {
         // Process each variant
         for (const variant of shopProduct.variants) {
           try {
-            // Skip variants without SKU — can't match them
-            if (!variant.sku || variant.sku.trim() === '') {
-              variantsSkipped++
-              continue
-            }
+            // Use SKU if available, otherwise use Shopify variant ID
+            const variantSku = (variant.sku && variant.sku.trim() !== '') 
+              ? variant.sku 
+              : `SHOPIFY-${variant.id}`
 
-            const existingVariant = variantBySku.get(variant.sku)
+            const existingVariant = variantBySku.get(variantSku)
 
             if (existingVariant) {
               // Update stock and price if changed
@@ -238,7 +237,7 @@ Deno.serve(async (req) => {
 
                 if (updateErr) {
                   errors++
-                  errorDetails.push(`Update variant ${variant.sku}: ${updateErr.message}`)
+                  errorDetails.push(`Update variant ${variantSku}: ${updateErr.message}`)
                 } else {
                   variantsUpdated++
                 }
@@ -254,7 +253,7 @@ Deno.serve(async (req) => {
                 .from('product_variants')
                 .insert({
                   product_id: sewdleProduct.id,
-                  sku_variant: variant.sku,
+                  sku_variant: variantSku,
                   size,
                   color,
                   stock_quantity: variant.inventoryQuantity,
@@ -264,10 +263,10 @@ Deno.serve(async (req) => {
 
               if (insertErr) {
                 errors++
-                errorDetails.push(`Insert variant ${variant.sku}: ${insertErr.message}`)
+                errorDetails.push(`Insert variant ${variantSku}: ${insertErr.message}`)
               } else {
                 variantsCreated++
-                variantBySku.set(variant.sku, { sku_variant: variant.sku })
+                variantBySku.set(variantSku, { sku_variant: variantSku })
               }
             }
           } catch (variantError) {
