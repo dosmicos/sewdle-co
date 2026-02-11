@@ -1,62 +1,58 @@
 
 
-# Indicador visual de progreso para sincronizacion con Shopify
+## Plan: Cumpleanos de hijos + Fix link TikTok
 
-## Problema
-Cuando se sincroniza (automatica o manualmente), el boton se queda "cargando" sin mostrar progreso real. No hay feedback visual de cuantas variantes se han procesado ni si el proceso funciono.
+### Problema 1: Agregar campo de cumpleanos para hijos
 
-## Solucion
+Actualmente la tabla `ugc_creator_children` no tiene un campo para la fecha de nacimiento/cumpleanos. Se necesita:
 
-### 1. Nuevo estado de progreso de sincronizacion
-Agregar estados en `DeliveryDetails.tsx`:
-- `syncProgress`: objeto con `{ current: number, total: number, status: 'syncing' | 'done' | 'error' }` o `null` cuando no hay sync activo
-- Este estado controla la barra de progreso y los mensajes
+1. **Migracion de base de datos**: Agregar columna `birth_date` (tipo `date`, nullable) a la tabla `ugc_creator_children`.
 
-### 2. Modificar `syncAllPendingToShopify` para reportar progreso
-Actualmente sincroniza todo en una sola llamada a la edge function. El progreso se mostrara en dos fases:
-- Fase 1: "Enviando a Shopify..." (llamada a edge function)
-- Fase 2: "Actualizando registros..." (marcando items como sincronizados en DB, uno por uno con progreso)
+2. **Actualizar tipo TypeScript** (`src/types/ugc.ts`): Agregar `birth_date: string | null` a la interfaz `UgcCreatorChild`.
 
-La funcion actualizara `syncProgress` en cada paso, mostrando el avance real.
+3. **Actualizar formulario de hijos** (`src/components/ugc/UgcChildrenManager.tsx`):
+   - Agregar campo de fecha (input tipo date) con label "Cumpleanos".
+   - Incluir `birth_date` en la mutacion `addChild`.
+   - Mostrar la fecha de cumpleanos en la lista de hijos existentes.
 
-### 3. Componente visual de progreso
-Debajo del boton "Sincronizar Pendientes con Shopify", cuando `syncProgress` no es null, mostrar:
-- Una barra de progreso (componente `Progress` de shadcn/ui que ya existe)
-- Texto indicando fase actual: "Sincronizando con Shopify... (3/5 variantes)"
-- Icono de spinner animado durante el proceso
-- Icono de check verde al completarse exitosamente
-- Icono de error rojo si falla
+4. **Actualizar hook** (`src/hooks/useUgcCreators.ts`): Incluir `birth_date` en el insert de `addChild`.
 
-### 4. Deshabilitar botones durante sincronizacion
-- El boton "Sincronizar Pendientes" se deshabilita mientras `syncProgress` no sea null
-- Los botones individuales "Sincronizar" por variante tambien se deshabilitan
-- El boton "Guardar" de cada variante sigue funcionando normalmente (no se bloquea)
+5. **Actualizar tipos de Supabase** (`src/integrations/supabase/types.ts`): Regenerar o agregar manualmente el campo.
 
-## Cambios tecnicos en `src/components/DeliveryDetails.tsx`
+---
 
-**Nuevo estado (~linea 55):**
+### Problema 2: Fix link de TikTok
+
+**Causa raiz**: El formulario de creadores (`UgcCreatorForm.tsx`) siempre muestra el campo "Instagram handle" sin importar la plataforma seleccionada. Cuando alguien selecciona "tiktok" como plataforma, ingresa su usuario de TikTok en el campo de Instagram, y el modal de detalle genera un link a `instagram.com/usuario` en lugar de `tiktok.com/@usuario`.
+
+**Solucion**:
+
+1. **Actualizar `UgcCreatorForm.tsx`**:
+   - Cuando la plataforma es "tiktok", ocultar el campo de Instagram y solo mostrar el de TikTok.
+   - Cuando es "instagram", solo mostrar el de Instagram (como esta actualmente).
+   - Cuando es "ambas", mostrar ambos campos.
+
+2. **Actualizar `UgcCreatorDetailModal.tsx`**:
+   - Validar que los links se generen correctamente segun la plataforma del creador.
+   - Si la plataforma es "tiktok" y solo tiene `instagram_handle` (datos legacy), generar el link como TikTok en lugar de Instagram.
+
+---
+
+### Detalle tecnico
+
+**Migracion SQL**:
+```sql
+ALTER TABLE ugc_creator_children ADD COLUMN birth_date date;
 ```
-syncProgress: { current: number, total: number, phase: string } | null
-```
 
-**En `syncAllPendingToShopify` (~linea 391):**
-- Al inicio: `setSyncProgress({ current: 0, total: pendingVariants.length, phase: 'Enviando a Shopify...' })`
-- Despues del edge function call: actualizar fase a "Actualizando registros..."
-- En el loop de `supabase.update()` por item: incrementar `current` en cada iteracion
-- En `finally`: despues de 2 segundos, limpiar `setSyncProgress(null)`
+**Cambios en archivos**:
 
-**En el boton "Sincronizar Todo" (~linea 1465):**
-- Agregar seccion debajo del boton que muestra la barra de progreso cuando `syncProgress !== null`
-- Usar el componente `Progress` existente de `src/components/ui/progress.tsx`
-- Mostrar texto descriptivo del progreso
+| Archivo | Cambio |
+|---|---|
+| `src/types/ugc.ts` | Agregar `birth_date: string / null` a `UgcCreatorChild` |
+| `src/components/ugc/UgcChildrenManager.tsx` | Agregar input de fecha + mostrar cumpleanos en lista |
+| `src/hooks/useUgcCreators.ts` | Incluir `birth_date` en insert/tipo del mutation |
+| `src/components/ugc/UgcCreatorForm.tsx` | Condicionar visibilidad del campo Instagram segun plataforma |
+| `src/components/ugc/UgcCreatorDetailModal.tsx` | Fallback inteligente para links segun plataforma |
+| `src/integrations/supabase/types.ts` | Agregar campo `birth_date` al tipo de la tabla |
 
-**En el auto-sync (~linea 369):**
-- La misma funcion `syncAllPendingToShopify` ya mostrara el progreso automaticamente
-
-## Resultado visual
-Al oprimir "Sincronizar Pendientes" o al auto-sincronizar:
-1. Boton se deshabilita con spinner
-2. Aparece barra de progreso debajo: "Enviando a Shopify... (0/5)"
-3. Barra avanza: "Actualizando registros... (3/5)"
-4. Barra llega a 100%: icono verde + "Sincronizacion completada"
-5. Despues de 2 segundos, la barra desaparece
