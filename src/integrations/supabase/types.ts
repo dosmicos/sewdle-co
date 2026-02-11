@@ -49,6 +49,36 @@ export type Database = {
           },
         ]
       }
+      ai_generations: {
+        Row: {
+          created_at: string
+          id: string
+          model: string
+          prompt: string
+          result: string
+          tokens_used: number
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          model: string
+          prompt: string
+          result: string
+          tokens_used?: number
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          model?: string
+          prompt?: string
+          result?: string
+          tokens_used?: number
+          type?: string
+        }
+        Relationships: []
+      }
       alegra_invoices: {
         Row: {
           alegra_invoice_id: number
@@ -142,6 +172,542 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          rate_limit: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          rate_limit?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          rate_limit?: number
+        }
+        Relationships: []
+      }
+      automation_enrollments: {
+        Row: {
+          automation_id: string
+          completed_at: string | null
+          contact_id: string
+          current_step_id: string | null
+          enrolled_at: string
+          id: string
+          next_action_at: string | null
+          status: string
+        }
+        Insert: {
+          automation_id: string
+          completed_at?: string | null
+          contact_id: string
+          current_step_id?: string | null
+          enrolled_at?: string
+          id?: string
+          next_action_at?: string | null
+          status?: string
+        }
+        Update: {
+          automation_id?: string
+          completed_at?: string | null
+          contact_id?: string
+          current_step_id?: string | null
+          enrolled_at?: string
+          id?: string
+          next_action_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_enrollments_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_enrollments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_enrollments_current_step_id_fkey"
+            columns: ["current_step_id"]
+            isOneToOne: false
+            referencedRelation: "automation_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_steps: {
+        Row: {
+          automation_id: string
+          config: Json | null
+          created_at: string
+          id: string
+          step_order: number
+          step_type: string
+        }
+        Insert: {
+          automation_id: string
+          config?: Json | null
+          created_at?: string
+          id?: string
+          step_order?: number
+          step_type: string
+        }
+        Update: {
+          automation_id?: string
+          config?: Json | null
+          created_at?: string
+          id?: string
+          step_order?: number
+          step_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_steps_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automations: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          total_completed: number
+          total_enrolled: number
+          trigger_config: Json | null
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string
+          total_completed?: number
+          total_enrolled?: number
+          trigger_config?: Json | null
+          trigger_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          total_completed?: number
+          total_enrolled?: number
+          trigger_config?: Json | null
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      campaign_discount_codes: {
+        Row: {
+          campaign_id: string
+          discount_code_id: string
+        }
+        Insert: {
+          campaign_id: string
+          discount_code_id: string
+        }
+        Update: {
+          campaign_id?: string
+          discount_code_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_discount_codes_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_discount_codes_discount_code_id_fkey"
+            columns: ["discount_code_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          ab_test_duration_hours: number | null
+          ab_test_enabled: boolean
+          ab_test_sample_percentage: number | null
+          ab_test_subject_b: string | null
+          ab_test_winner: string | null
+          ab_test_winner_criteria: string | null
+          created_at: string
+          design: Json | null
+          estimated_recipients: number | null
+          exclude_list_ids: string[] | null
+          from_email: string | null
+          from_name: string | null
+          html: string | null
+          id: string
+          name: string
+          preview_text: string | null
+          recipient_list_ids: string[] | null
+          recipient_segment_ids: string[] | null
+          recipient_tag_ids: string[] | null
+          recipient_type: string
+          reply_to: string | null
+          scheduled_at: string | null
+          sending_completed_at: string | null
+          sending_started_at: string | null
+          status: string
+          subject: string | null
+          template_id: string | null
+          total_bounced: number
+          total_clicked: number
+          total_complained: number
+          total_delivered: number
+          total_opened: number
+          total_orders: number
+          total_revenue: number
+          total_sent: number
+          total_unsubscribed: number
+          updated_at: string
+        }
+        Insert: {
+          ab_test_duration_hours?: number | null
+          ab_test_enabled?: boolean
+          ab_test_sample_percentage?: number | null
+          ab_test_subject_b?: string | null
+          ab_test_winner?: string | null
+          ab_test_winner_criteria?: string | null
+          created_at?: string
+          design?: Json | null
+          estimated_recipients?: number | null
+          exclude_list_ids?: string[] | null
+          from_email?: string | null
+          from_name?: string | null
+          html?: string | null
+          id?: string
+          name: string
+          preview_text?: string | null
+          recipient_list_ids?: string[] | null
+          recipient_segment_ids?: string[] | null
+          recipient_tag_ids?: string[] | null
+          recipient_type?: string
+          reply_to?: string | null
+          scheduled_at?: string | null
+          sending_completed_at?: string | null
+          sending_started_at?: string | null
+          status?: string
+          subject?: string | null
+          template_id?: string | null
+          total_bounced?: number
+          total_clicked?: number
+          total_complained?: number
+          total_delivered?: number
+          total_opened?: number
+          total_orders?: number
+          total_revenue?: number
+          total_sent?: number
+          total_unsubscribed?: number
+          updated_at?: string
+        }
+        Update: {
+          ab_test_duration_hours?: number | null
+          ab_test_enabled?: boolean
+          ab_test_sample_percentage?: number | null
+          ab_test_subject_b?: string | null
+          ab_test_winner?: string | null
+          ab_test_winner_criteria?: string | null
+          created_at?: string
+          design?: Json | null
+          estimated_recipients?: number | null
+          exclude_list_ids?: string[] | null
+          from_email?: string | null
+          from_name?: string | null
+          html?: string | null
+          id?: string
+          name?: string
+          preview_text?: string | null
+          recipient_list_ids?: string[] | null
+          recipient_segment_ids?: string[] | null
+          recipient_tag_ids?: string[] | null
+          recipient_type?: string
+          reply_to?: string | null
+          scheduled_at?: string | null
+          sending_completed_at?: string | null
+          sending_started_at?: string | null
+          status?: string
+          subject?: string | null
+          template_id?: string | null
+          total_bounced?: number
+          total_clicked?: number
+          total_complained?: number
+          total_delivered?: number
+          total_opened?: number
+          total_orders?: number
+          total_revenue?: number
+          total_sent?: number
+          total_unsubscribed?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_lists: {
+        Row: {
+          contact_id: string
+          created_at: string
+          list_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          list_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          list_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_lists_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_lists_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_segments: {
+        Row: {
+          contact_id: string
+          created_at: string
+          segment_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          segment_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          segment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_segments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_segments_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_tags: {
+        Row: {
+          contact_id: string
+          created_at: string
+          tag_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          tag_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_tags_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          average_order_value: number
+          birthday: string | null
+          children_ages: Json | null
+          city: string | null
+          created_at: string
+          custom_fields: Json | null
+          department: string | null
+          email: string
+          email_consent: boolean
+          email_consent_at: string | null
+          emails_clicked: number
+          emails_opened: number
+          emails_sent: number
+          first_name: string | null
+          first_order_at: string | null
+          id: string
+          last_email_clicked_at: string | null
+          last_email_opened_at: string | null
+          last_name: string | null
+          last_order_at: string | null
+          lifecycle_stage: string
+          phone: string | null
+          preferred_sizes: Json | null
+          rfm_frequency_score: number | null
+          rfm_last_calculated_at: string | null
+          rfm_monetary_score: number | null
+          rfm_recency_score: number | null
+          rfm_segment: string | null
+          rfm_total_score: number | null
+          shopify_customer_id: string | null
+          sms_consent: boolean
+          source: string | null
+          status: string
+          total_orders: number
+          total_spent: number
+          updated_at: string
+        }
+        Insert: {
+          average_order_value?: number
+          birthday?: string | null
+          children_ages?: Json | null
+          city?: string | null
+          created_at?: string
+          custom_fields?: Json | null
+          department?: string | null
+          email: string
+          email_consent?: boolean
+          email_consent_at?: string | null
+          emails_clicked?: number
+          emails_opened?: number
+          emails_sent?: number
+          first_name?: string | null
+          first_order_at?: string | null
+          id?: string
+          last_email_clicked_at?: string | null
+          last_email_opened_at?: string | null
+          last_name?: string | null
+          last_order_at?: string | null
+          lifecycle_stage?: string
+          phone?: string | null
+          preferred_sizes?: Json | null
+          rfm_frequency_score?: number | null
+          rfm_last_calculated_at?: string | null
+          rfm_monetary_score?: number | null
+          rfm_recency_score?: number | null
+          rfm_segment?: string | null
+          rfm_total_score?: number | null
+          shopify_customer_id?: string | null
+          sms_consent?: boolean
+          source?: string | null
+          status?: string
+          total_orders?: number
+          total_spent?: number
+          updated_at?: string
+        }
+        Update: {
+          average_order_value?: number
+          birthday?: string | null
+          children_ages?: Json | null
+          city?: string | null
+          created_at?: string
+          custom_fields?: Json | null
+          department?: string | null
+          email?: string
+          email_consent?: boolean
+          email_consent_at?: string | null
+          emails_clicked?: number
+          emails_opened?: number
+          emails_sent?: number
+          first_name?: string | null
+          first_order_at?: string | null
+          id?: string
+          last_email_clicked_at?: string | null
+          last_email_opened_at?: string | null
+          last_name?: string | null
+          last_order_at?: string | null
+          lifecycle_stage?: string
+          phone?: string | null
+          preferred_sizes?: Json | null
+          rfm_frequency_score?: number | null
+          rfm_last_calculated_at?: string | null
+          rfm_monetary_score?: number | null
+          rfm_recency_score?: number | null
+          rfm_segment?: string | null
+          rfm_total_score?: number | null
+          shopify_customer_id?: string | null
+          sms_consent?: boolean
+          source?: string | null
+          status?: string
+          total_orders?: number
+          total_spent?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       deliveries: {
         Row: {
@@ -454,6 +1020,208 @@ export type Database = {
           },
         ]
       }
+      email_events: {
+        Row: {
+          campaign_id: string | null
+          contact_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          link_url: string | null
+          metadata: Json | null
+          queue_id: string | null
+          tracking_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          metadata?: Json | null
+          queue_id?: string | null
+          tracking_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          metadata?: Json | null
+          queue_id?: string | null
+          tracking_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "email_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_queue: {
+        Row: {
+          ab_variant: string | null
+          attempts: number
+          campaign_id: string | null
+          contact_id: string | null
+          created_at: string
+          error_message: string | null
+          from_email: string
+          from_name: string | null
+          html: string
+          id: string
+          max_attempts: number
+          next_retry_at: string | null
+          provider: string | null
+          provider_message_id: string | null
+          reply_to: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          to_name: string | null
+          tracking_id: string
+          updated_at: string
+        }
+        Insert: {
+          ab_variant?: string | null
+          attempts?: number
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_email: string
+          from_name?: string | null
+          html: string
+          id?: string
+          max_attempts?: number
+          next_retry_at?: string | null
+          provider?: string | null
+          provider_message_id?: string | null
+          reply_to?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          to_email: string
+          to_name?: string | null
+          tracking_id: string
+          updated_at?: string
+        }
+        Update: {
+          ab_variant?: string | null
+          attempts?: number
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          from_email?: string
+          from_name?: string | null
+          html?: string
+          id?: string
+          max_attempts?: number
+          next_retry_at?: string | null
+          provider?: string | null
+          provider_message_id?: string | null
+          reply_to?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          to_name?: string | null
+          tracking_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          design: Json | null
+          html: string | null
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+          name: string
+          subject: string | null
+          thumbnail_url: string | null
+          times_used: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          design?: Json | null
+          html?: string | null
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          name: string
+          subject?: string | null
+          thumbnail_url?: string | null
+          times_used?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          design?: Json | null
+          html?: string | null
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          name?: string
+          subject?: string | null
+          thumbnail_url?: string | null
+          times_used?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inventory_replenishment: {
         Row: {
           avg_daily_sales: number
@@ -580,6 +1348,39 @@ export type Database = {
           sync_results?: Json
           synced_at?: string
           verification_status?: string | null
+        }
+        Relationships: []
+      }
+      lists: {
+        Row: {
+          contact_count: number
+          created_at: string
+          description: string | null
+          dynamic_rules: Json | null
+          id: string
+          name: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          dynamic_rules?: Json | null
+          id?: string
+          name: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          dynamic_rules?: Json | null
+          id?: string
+          name?: string
+          type?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2122,6 +2923,55 @@ export type Database = {
           },
         ]
       }
+      product_email_clicks: {
+        Row: {
+          campaign_id: string | null
+          clicked_at: string
+          contact_id: string | null
+          id: string
+          product_id: string
+          tracking_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          clicked_at?: string
+          contact_id?: string | null
+          id?: string
+          product_id: string
+          tracking_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          clicked_at?: string
+          contact_id?: string | null
+          id?: string
+          product_id?: string
+          tracking_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_email_clicks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_email_clicks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_email_clicks_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_embeddings: {
         Row: {
           created_at: string | null
@@ -2402,9 +3252,12 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          locale: string | null
           name: string | null
           organization_id: string | null
           requires_password_change: boolean | null
+          role: string | null
+          timezone: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2412,9 +3265,12 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id: string
+          locale?: string | null
           name?: string | null
           organization_id?: string | null
           requires_password_change?: boolean | null
+          role?: string | null
+          timezone?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2422,9 +3278,12 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          locale?: string | null
           name?: string | null
           organization_id?: string | null
           requires_password_change?: boolean | null
+          role?: string | null
+          timezone?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2693,6 +3552,69 @@ export type Database = {
         }
         Relationships: []
       }
+      segments: {
+        Row: {
+          contact_count: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          last_evaluated_at: string | null
+          name: string
+          rfm_label: string | null
+          rules: Json | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_evaluated_at?: string | null
+          name: string
+          rfm_label?: string | null
+          rules?: Json | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_evaluated_at?: string | null
+          name?: string
+          rfm_label?: string | null
+          rules?: Json | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       shipping_coverage: {
         Row: {
           coordinadora: boolean | null
@@ -2900,6 +3822,139 @@ export type Database = {
           },
         ]
       }
+      shopify_carts: {
+        Row: {
+          abandoned_at: string | null
+          contact_id: string | null
+          created_at: string
+          id: string
+          is_abandoned: boolean
+          line_items: Json | null
+          shopify_cart_token: string
+          shopify_created_at: string | null
+          total_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          abandoned_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          is_abandoned?: boolean
+          line_items?: Json | null
+          shopify_cart_token: string
+          shopify_created_at?: string | null
+          total_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          abandoned_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          is_abandoned?: boolean
+          line_items?: Json | null
+          shopify_cart_token?: string
+          shopify_created_at?: string | null
+          total_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_carts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_collections: {
+        Row: {
+          created_at: string
+          description: string | null
+          handle: string | null
+          id: string
+          image_url: string | null
+          products_count: number | null
+          shopify_collection_id: string
+          shopify_updated_at: string | null
+          sort_order: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          products_count?: number | null
+          shopify_collection_id: string
+          shopify_updated_at?: string | null
+          sort_order?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          products_count?: number | null
+          shopify_collection_id?: string
+          shopify_updated_at?: string | null
+          sort_order?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_discount_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          price_rule_id: string
+          shopify_created_at: string | null
+          shopify_discount_code_id: string | null
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          price_rule_id: string
+          shopify_created_at?: string | null
+          shopify_discount_code_id?: string | null
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          price_rule_id?: string
+          shopify_created_at?: string | null
+          shopify_discount_code_id?: string | null
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_discount_codes_price_rule_id_fkey"
+            columns: ["price_rule_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_price_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_order_line_items: {
         Row: {
           created_at: string
@@ -3008,6 +4063,7 @@ export type Database = {
           browser_ip: string | null
           cancelled_at: string | null
           closed_at: string | null
+          contact_id: string | null
           created_at: string
           created_at_shopify: string
           currency: string | null
@@ -3024,6 +4080,7 @@ export type Database = {
           fulfillment_status: string | null
           id: string
           landing_site: string | null
+          line_items: Json | null
           note: string | null
           order_number: string
           order_source_url: string | null
@@ -3033,6 +4090,7 @@ export type Database = {
           raw_data: Json | null
           referring_site: string | null
           shipping_address: Json | null
+          shopify_created_at: string | null
           shopify_order_id: number
           source_name: string | null
           subtotal_price: number | null
@@ -3061,6 +4119,7 @@ export type Database = {
           browser_ip?: string | null
           cancelled_at?: string | null
           closed_at?: string | null
+          contact_id?: string | null
           created_at?: string
           created_at_shopify: string
           currency?: string | null
@@ -3077,6 +4136,7 @@ export type Database = {
           fulfillment_status?: string | null
           id?: string
           landing_site?: string | null
+          line_items?: Json | null
           note?: string | null
           order_number: string
           order_source_url?: string | null
@@ -3086,6 +4146,7 @@ export type Database = {
           raw_data?: Json | null
           referring_site?: string | null
           shipping_address?: Json | null
+          shopify_created_at?: string | null
           shopify_order_id: number
           source_name?: string | null
           subtotal_price?: number | null
@@ -3114,6 +4175,7 @@ export type Database = {
           browser_ip?: string | null
           cancelled_at?: string | null
           closed_at?: string | null
+          contact_id?: string | null
           created_at?: string
           created_at_shopify?: string
           currency?: string | null
@@ -3130,6 +4192,7 @@ export type Database = {
           fulfillment_status?: string | null
           id?: string
           landing_site?: string | null
+          line_items?: Json | null
           note?: string | null
           order_number?: string
           order_source_url?: string | null
@@ -3139,6 +4202,7 @@ export type Database = {
           raw_data?: Json | null
           referring_site?: string | null
           shipping_address?: Json | null
+          shopify_created_at?: string | null
           shopify_order_id?: number
           source_name?: string | null
           subtotal_price?: number | null
@@ -3155,6 +4219,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "shopify_orders_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "shopify_orders_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -3162,6 +4233,263 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      shopify_price_rules: {
+        Row: {
+          allocation_method: string
+          created_at: string
+          customer_selection: string
+          ends_at: string | null
+          entitled_collection_ids: string[] | null
+          entitled_product_ids: string[] | null
+          id: string
+          last_synced_at: string | null
+          once_per_customer: boolean
+          shopify_created_at: string | null
+          shopify_price_rule_id: string | null
+          shopify_updated_at: string | null
+          starts_at: string
+          status: string
+          target_selection: string
+          target_type: string
+          title: string
+          updated_at: string
+          usage_limit: number | null
+          value: number
+          value_type: string
+        }
+        Insert: {
+          allocation_method?: string
+          created_at?: string
+          customer_selection?: string
+          ends_at?: string | null
+          entitled_collection_ids?: string[] | null
+          entitled_product_ids?: string[] | null
+          id?: string
+          last_synced_at?: string | null
+          once_per_customer?: boolean
+          shopify_created_at?: string | null
+          shopify_price_rule_id?: string | null
+          shopify_updated_at?: string | null
+          starts_at?: string
+          status?: string
+          target_selection?: string
+          target_type?: string
+          title: string
+          updated_at?: string
+          usage_limit?: number | null
+          value: number
+          value_type?: string
+        }
+        Update: {
+          allocation_method?: string
+          created_at?: string
+          customer_selection?: string
+          ends_at?: string | null
+          entitled_collection_ids?: string[] | null
+          entitled_product_ids?: string[] | null
+          id?: string
+          last_synced_at?: string | null
+          once_per_customer?: boolean
+          shopify_created_at?: string | null
+          shopify_price_rule_id?: string | null
+          shopify_updated_at?: string | null
+          starts_at?: string
+          status?: string
+          target_selection?: string
+          target_type?: string
+          title?: string
+          updated_at?: string
+          usage_limit?: number | null
+          value?: number
+          value_type?: string
+        }
+        Relationships: []
+      }
+      shopify_product_collections: {
+        Row: {
+          collection_id: string
+          position: number | null
+          product_id: string
+        }
+        Insert: {
+          collection_id: string
+          position?: number | null
+          product_id: string
+        }
+        Update: {
+          collection_id?: string
+          position?: number | null
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_product_collections_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_product_collections_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_product_variants: {
+        Row: {
+          compare_at_price: number | null
+          created_at: string
+          id: string
+          image_url: string | null
+          inventory_quantity: number | null
+          is_available: boolean | null
+          option1: string | null
+          option2: string | null
+          option3: string | null
+          position: number | null
+          price: number | null
+          product_id: string
+          shopify_variant_id: string
+          sku: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          compare_at_price?: number | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          inventory_quantity?: number | null
+          is_available?: boolean | null
+          option1?: string | null
+          option2?: string | null
+          option3?: string | null
+          position?: number | null
+          price?: number | null
+          product_id: string
+          shopify_variant_id: string
+          sku?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          compare_at_price?: number | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          inventory_quantity?: number | null
+          is_available?: boolean | null
+          option1?: string | null
+          option2?: string | null
+          option3?: string | null
+          position?: number | null
+          price?: number | null
+          product_id?: string
+          shopify_variant_id?: string
+          sku?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_products: {
+        Row: {
+          compare_at_price: number | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          handle: string | null
+          id: string
+          image_url: string | null
+          images: Json | null
+          last_synced_at: string | null
+          price: number | null
+          product_type: string | null
+          shopify_created_at: string | null
+          shopify_product_id: string
+          shopify_updated_at: string | null
+          shopify_url: string | null
+          status: string
+          tags: string[] | null
+          title: string
+          total_email_clicks: number | null
+          total_email_conversions: number | null
+          total_inventory: number | null
+          total_revenue: number | null
+          total_sold: number | null
+          track_inventory: boolean | null
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          compare_at_price?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          images?: Json | null
+          last_synced_at?: string | null
+          price?: number | null
+          product_type?: string | null
+          shopify_created_at?: string | null
+          shopify_product_id: string
+          shopify_updated_at?: string | null
+          shopify_url?: string | null
+          status?: string
+          tags?: string[] | null
+          title: string
+          total_email_clicks?: number | null
+          total_email_conversions?: number | null
+          total_inventory?: number | null
+          total_revenue?: number | null
+          total_sold?: number | null
+          track_inventory?: boolean | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          compare_at_price?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          images?: Json | null
+          last_synced_at?: string | null
+          price?: number | null
+          product_type?: string | null
+          shopify_created_at?: string | null
+          shopify_product_id?: string
+          shopify_updated_at?: string | null
+          shopify_url?: string | null
+          status?: string
+          tags?: string[] | null
+          title?: string
+          total_email_clicks?: number | null
+          total_email_conversions?: number | null
+          total_inventory?: number | null
+          total_revenue?: number | null
+          total_sold?: number | null
+          track_inventory?: boolean | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: []
       }
       sku_assignment_logs: {
         Row: {
@@ -3325,6 +4653,33 @@ export type Database = {
           sync_mode?: string
           sync_type?: string
           variants_updated?: number
+        }
+        Relationships: []
+      }
+      tags: {
+        Row: {
+          color: string | null
+          contact_count: number
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string | null
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string | null
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
         }
         Relationships: []
       }
@@ -4655,6 +6010,10 @@ export type Database = {
       has_recent_successful_sync: {
         Args: { delivery_id_param: string; minutes_threshold?: number }
         Returns: boolean
+      }
+      increment_product_clicks: {
+        Args: { p_product_id: string }
+        Returns: undefined
       }
       is_admin: { Args: { user_uuid: string }; Returns: boolean }
       is_current_user_admin: { Args: never; Returns: boolean }
