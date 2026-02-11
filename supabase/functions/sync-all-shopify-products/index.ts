@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
             sku: `SHOP-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
             base_price: firstVariant ? parseFloat(firstVariant.price) : 0,
             category: shopProduct.productType || 'Shopify',
-            status: shopProduct.status === 'ACTIVE' ? 'active' : 'draft',
+            status: shopProduct.status === 'ACTIVE' ? 'active' : 'inactive',
             ...(organization_id ? { organization_id } : {}),
           }
 
