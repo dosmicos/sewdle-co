@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Search, RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { Search, RefreshCw, CheckCircle, AlertCircle, Clock, Zap } from 'lucide-react'
 import { useVariantSync, VariantComparison } from '@/hooks/useVariantSync'
+import { useFullShopifySync } from '@/hooks/useFullShopifySync'
 
 export const VariantSyncManager = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -23,6 +24,8 @@ export const VariantSyncManager = () => {
     syncVariants,
     getNewVariants
   } = useVariantSync()
+
+  const { syncing: fullSyncing, summary: fullSyncSummary, syncAll } = useFullShopifySync()
 
   const handleDetectVariants = async () => {
     await detectNewVariants(searchTerm)
@@ -81,12 +84,70 @@ export const VariantSyncManager = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Full Sync Card */}
+      <Card className="border-green-200 bg-green-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-green-600" />
+            Sincronización Completa Automática
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Sincroniza TODOS los productos y variantes de Shopify a Sewdle en un solo clic.
+            Crea productos faltantes, crea variantes nuevas y actualiza stock/precios.
+          </p>
+          <Button
+            onClick={() => syncAll()}
+            disabled={fullSyncing}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+          >
+            <Zap className="h-4 w-4" />
+            {fullSyncing ? 'Sincronizando todo...' : 'Sincronizar Todo desde Shopify'}
+          </Button>
+
+          {fullSyncSummary && (
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-blue-600">{fullSyncSummary.shopify_products}</div>
+                <div className="text-xs text-muted-foreground">Productos Shopify</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-green-600">{fullSyncSummary.products_created}</div>
+                <div className="text-xs text-muted-foreground">Productos Creados</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-orange-600">{fullSyncSummary.variants_created}</div>
+                <div className="text-xs text-muted-foreground">Variantes Creadas</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-purple-600">{fullSyncSummary.variants_updated}</div>
+                <div className="text-xs text-muted-foreground">Variantes Actualizadas</div>
+              </div>
+              {fullSyncSummary.errors > 0 && (
+                <div className="col-span-full">
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {fullSyncSummary.errors} errores durante la sincronización.
+                      {fullSyncSummary.error_details.slice(0, 3).map((e, i) => (
+                        <div key={i} className="text-xs mt-1">• {e}</div>
+                      ))}
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Manual Detection Header */}
       <Card>
         <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
-            Sincronización de Variantes de Shopify
+            Detección Manual de Variantes
           </CardTitle>
         </CardHeader>
         <CardContent>
