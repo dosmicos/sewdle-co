@@ -5031,7 +5031,7 @@ export type Database = {
       }
       ugc_videos: {
         Row: {
-          campaign_id: string
+          campaign_id: string | null
           comments: number | null
           created_at: string
           creator_id: string
@@ -5047,7 +5047,7 @@ export type Database = {
           views: number | null
         }
         Insert: {
-          campaign_id: string
+          campaign_id?: string | null
           comments?: number | null
           created_at?: string
           creator_id: string
@@ -5063,7 +5063,7 @@ export type Database = {
           views?: number | null
         }
         Update: {
-          campaign_id?: string
+          campaign_id?: string | null
           comments?: number | null
           created_at?: string
           creator_id?: string
@@ -6136,11 +6136,11 @@ export type Database = {
       trigger_replenishment_calculation: { Args: never; Returns: Json }
       ugc_submit_video: {
         Args: {
-          p_campaign_id: string
+          p_campaign_id?: string
           p_notes?: string
           p_platform?: string
           p_token: string
-          p_video_url: string
+          p_video_url?: string
         }
         Returns: Json
       }

@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.auto-invoice-alegra]
 verify_jwt = false
+
+[functions.sync-all-shopify-products]
+verify_jwt = false
