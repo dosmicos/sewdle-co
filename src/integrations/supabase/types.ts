@@ -246,13 +246,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "automation_enrollments_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "automation_enrollments_current_step_id_fkey"
             columns: ["current_step_id"]
             isOneToOne: false
@@ -1069,13 +1062,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "email_events_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "email_events_queue_id_fkey"
             columns: ["queue_id"]
             isOneToOne: false
@@ -1163,13 +1149,6 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "email_queue_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -2957,13 +2936,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "product_email_clicks_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "product_email_clicks_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -3859,15 +3831,7 @@ export type Database = {
           total_price?: number | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "shopify_carts_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       shopify_collections: {
         Row: {
@@ -4218,13 +4182,6 @@ export type Database = {
           updated_at_shopify?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "shopify_orders_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "shopify_orders_organization_id_fkey"
             columns: ["organization_id"]
