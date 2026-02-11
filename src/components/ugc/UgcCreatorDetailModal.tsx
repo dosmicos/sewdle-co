@@ -147,7 +147,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             <div className="flex-1">
               <DialogTitle className="text-xl">{creator.name}</DialogTitle>
               <div className="flex items-center gap-2 mt-1">
-                {creator.instagram_handle && (
+                {creator.instagram_handle && creator.platform !== 'tiktok' && (
                   <a
                     href={`https://instagram.com/${creator.instagram_handle}`}
                     target="_blank"
@@ -157,14 +157,15 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                     @{creator.instagram_handle} <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
-                {creator.tiktok_handle && (
+                {/* TikTok: use tiktok_handle, or fallback to instagram_handle for legacy data */}
+                {(creator.tiktok_handle || (creator.platform === 'tiktok' && creator.instagram_handle)) && (
                   <a
-                    href={`https://tiktok.com/@${creator.tiktok_handle}`}
+                    href={`https://tiktok.com/@${creator.tiktok_handle || creator.instagram_handle}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-primary hover:underline flex items-center gap-1"
                   >
-                    TikTok <ExternalLink className="h-3 w-3" />
+                    TikTok @{creator.tiktok_handle || creator.instagram_handle} <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>

@@ -4761,6 +4761,7 @@ export type Database = {
       ugc_creator_children: {
         Row: {
           age_description: string | null
+          birth_date: string | null
           created_at: string
           creator_id: string
           gender: string | null
@@ -4772,6 +4773,7 @@ export type Database = {
         }
         Insert: {
           age_description?: string | null
+          birth_date?: string | null
           created_at?: string
           creator_id: string
           gender?: string | null
@@ -4783,6 +4785,7 @@ export type Database = {
         }
         Update: {
           age_description?: string | null
+          birth_date?: string | null
           created_at?: string
           creator_id?: string
           gender?: string | null

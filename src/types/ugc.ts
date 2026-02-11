@@ -31,6 +31,7 @@ export interface UgcCreatorChild {
   age_description: string | null;
   size: string | null;
   gender: 'masculino' | 'femenino' | 'otro' | null;
+  birth_date: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,0 +1,1 @@
+ALTER TABLE ugc_creator_children ADD COLUMN birth_date date;
