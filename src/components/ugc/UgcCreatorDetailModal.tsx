@@ -12,6 +12,7 @@ import { CAMPAIGN_STATUS_CONFIG, CREATOR_STATUS_CONFIG } from '@/types/ugc';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { UgcChildrenManager } from './UgcChildrenManager';
 import { UgcCreatorTagsManager } from './UgcCreatorTagsManager';
+import { GenerateUploadLinkButton } from './GenerateUploadLinkButton';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -183,7 +184,8 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                 <UgcCreatorTagsManager creatorId={creator.id} />
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
               <Button variant="outline" size="sm" onClick={onEdit}>
                 <Edit className="h-4 w-4 mr-1" /> Editar
               </Button>
