@@ -29,7 +29,7 @@ export const useDeliveryOrders = () => {
             )
           )
         `)
-        .in('status', ['assigned', 'in_progress'])
+        .in('status', ['assigned', 'in_progress', 'completed'])
         .order('due_date', { ascending: true, nullsFirst: false });
 
       // Si el usuario es taller (no admin), filtrar solo órdenes de su taller
