@@ -5018,6 +5018,60 @@ export type Database = {
           },
         ]
       }
+      ugc_upload_tokens: {
+        Row: {
+          created_at: string | null
+          creator_id: string
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          max_uploads: number | null
+          organization_id: string
+          token: string
+          updated_at: string | null
+          upload_count: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          creator_id: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_uploads?: number | null
+          organization_id: string
+          token?: string
+          updated_at?: string | null
+          upload_count?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          creator_id?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_uploads?: number | null
+          organization_id?: string
+          token?: string
+          updated_at?: string | null
+          upload_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ugc_upload_tokens_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "ugc_creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ugc_upload_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ugc_videos: {
         Row: {
           campaign_id: string
@@ -6123,6 +6177,16 @@ export type Database = {
       sync_sales_metrics_from_shopify: { Args: never; Returns: undefined }
       sync_shopify_inventory: { Args: never; Returns: Json }
       trigger_replenishment_calculation: { Args: never; Returns: Json }
+      ugc_submit_video: {
+        Args: {
+          p_campaign_id: string
+          p_notes?: string
+          p_platform?: string
+          p_token: string
+          p_video_url: string
+        }
+        Returns: Json
+      }
       update_sales_metrics_secure: {
         Args: {
           p_avg_order_size: number
@@ -6160,6 +6224,7 @@ export type Database = {
         Args: { user1_id: string; user2_id: string }
         Returns: boolean
       }
+      validate_ugc_upload_token: { Args: { p_token: string }; Returns: Json }
     }
     Enums: {
       okr_area: "marketing" | "diseno_prod" | "operaciones"
