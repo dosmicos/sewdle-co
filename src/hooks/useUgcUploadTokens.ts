@@ -85,7 +85,7 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
   });
 
   const getUploadUrl = (token: string) => {
-    return `${window.location.origin}/upload/${token}`;
+    return `https://upload.dosmicos.com/upload/${token}`;
   };
 
   return {
