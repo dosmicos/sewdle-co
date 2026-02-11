@@ -1,0 +1,1 @@
+DELETE FROM delivery_items WHERE id = '54dfcb91-ae9b-4781-aa80-58e9c4659833';
