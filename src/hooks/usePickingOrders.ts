@@ -759,13 +759,40 @@ export const usePickingOrders = () => {
     }
   };
 
-  // Nota: No hacemos fetch automático aquí - la página controla la carga con filtros de URL
-  // Esto evita la condición de carrera donde un fetch sin filtros sobrescribía los datos filtrados
-  // Mantenemos el useEffect para preservar el número de hooks (reglas de React)
+  // Background sync of fulfillment status (every 15 minutes max)
   useEffect(() => {
     if (!currentOrganization?.id) {
       setLoading(true);
+      return;
     }
+
+    const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+    const STORAGE_KEY = 'lastFulfillmentSync';
+
+    const runBackgroundSync = async () => {
+      try {
+        const lastSync = localStorage.getItem(STORAGE_KEY);
+        const now = Date.now();
+
+        if (lastSync && now - parseInt(lastSync) < SYNC_INTERVAL_MS) {
+          return; // Too soon since last sync
+        }
+
+        logger.info('[PickingOrders] Running background fulfillment sync');
+        localStorage.setItem(STORAGE_KEY, now.toString());
+
+        await supabase.functions.invoke('sync-shopify-fulfillment', {
+          body: { organization_id: currentOrganization.id, days_back: 30 }
+        });
+
+        logger.info('[PickingOrders] Background fulfillment sync completed');
+      } catch (error) {
+        logger.error('[PickingOrders] Background fulfillment sync failed', error);
+      }
+    };
+
+    // Run in background without blocking
+    runBackgroundSync();
   }, [currentOrganization?.id]);
 
   return {

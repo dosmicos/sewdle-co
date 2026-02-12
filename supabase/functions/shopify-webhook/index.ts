@@ -941,10 +941,60 @@ Deno.serve(async (req) => {
 
     console.log('✅ Webhook verificado correctamente');
 
-    // Parse order data
-    const order = JSON.parse(body);
-    
-    // Process both order creation and update webhooks
+    // Parse webhook data
+    const parsedBody = JSON.parse(body);
+
+    // Initialize Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Handle fulfillment webhooks (fulfillments/create, fulfillments/update)
+    if (topic === 'fulfillments/create' || topic === 'fulfillments/update') {
+      const orderId = parsedBody.order_id;
+      console.log(`📦 Fulfillment webhook recibido - order_id: ${orderId}, topic: ${topic}`);
+
+      if (!orderId) {
+        console.log('⚠️ Fulfillment webhook sin order_id, ignorando');
+        return new Response(
+          JSON.stringify({ message: 'No order_id in fulfillment payload' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Update shopify_orders fulfillment_status
+      const { error: shopifyError } = await supabase
+        .from('shopify_orders')
+        .update({ fulfillment_status: 'fulfilled', updated_at: new Date().toISOString() })
+        .eq('shopify_order_id', orderId);
+
+      if (shopifyError) {
+        console.error('❌ Error actualizando shopify_orders:', shopifyError);
+      } else {
+        console.log(`✅ shopify_orders.fulfillment_status actualizado a 'fulfilled' para order ${orderId}`);
+      }
+
+      // Update picking_packing_orders operational_status
+      const { error: pickingError } = await supabase
+        .from('picking_packing_orders')
+        .update({ 
+          operational_status: 'shipped', 
+          shipped_at: new Date().toISOString() 
+        })
+        .eq('shopify_order_id', orderId);
+
+      if (pickingError) {
+        console.error('❌ Error actualizando picking_packing_orders:', pickingError);
+      } else {
+        console.log(`✅ picking_packing_orders.operational_status actualizado a 'shipped' para order ${orderId}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: 'Fulfillment status synced', orderId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Process only order creation and update webhooks
+    const order = parsedBody;
     if (topic !== 'orders/create' && topic !== 'orders/update' && topic !== 'orders/updated') {
       console.log(`ℹ️ Webhook ignorado - topic: ${topic}`);
       return new Response(
@@ -952,9 +1002,6 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Initialize Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Log webhook event with action type
     const action = topic === 'orders/create' ? 'CREATE' : 'UPDATE';
