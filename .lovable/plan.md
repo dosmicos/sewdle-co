@@ -1,89 +1,69 @@
 
 
-## Plan: Sincronizacion completa de productos y variantes de Shopify a Sewdle
+## Corregir orden #68902 y prevenir desincronizaciones de fulfillment
 
-### Problema
+### Estado actual de la orden #68902
 
-Actualmente el sistema tiene una herramienta manual (`VariantSyncManager`) donde debes:
-1. Hacer clic en "Detectar Variantes"
-2. Seleccionar las variantes nuevas
-3. Hacer clic en "Sincronizar"
+La orden ya esta corregida en la base de datos:
+- `fulfillment_status` = `fulfilled`
+- `operational_status` = `shipped`
 
-Esto deja variantes sin sincronizar si no se ejecuta regularmente. Ademas, la funcion `shopify-products` solo trae 250 productos (1 pagina REST) sin paginacion completa.
+No se necesita accion adicional para esta orden especifica.
 
-### Solucion
+### Problema raiz
 
-Crear una nueva Edge Function `sync-all-shopify-products` que haga una sincronizacion completa automatica:
+El webhook actual (`shopify-webhook`) solo procesa los topics `orders/create` y `orders/update`. Cuando alguien marca un pedido como "fulfilled" directamente en Shopify, Shopify envia un webhook `fulfillments/create` que el sistema ignora (linea 948: "Webhook ignorado"). Aunque Shopify tambien deberia enviar un `orders/update`, este puede perderse o llegar con delay.
 
-1. Obtiene TODOS los productos y variantes de Shopify usando GraphQL con paginacion (como ya hace `detect-new-variants`)
-2. Para cada variante, busca o crea el producto base en Sewdle
-3. Crea las variantes faltantes automaticamente
-4. Actualiza stock y precio de variantes existentes
+### Solucion: 2 capas de proteccion
 
-Luego agregar un boton "Sincronizar Todo" en la pagina de productos que ejecute esta funcion con un solo clic.
+#### 1. Agregar soporte para `fulfillments/create` en el webhook existente
 
-### Detalle tecnico
+Modificar `supabase/functions/shopify-webhook/index.ts` para que cuando reciba un evento `fulfillments/create`, extraiga el `order_id` del payload y actualice:
+- `shopify_orders.fulfillment_status` a `fulfilled`
+- `picking_packing_orders.operational_status` a `shipped`
 
-#### 1. Nueva Edge Function: `supabase/functions/sync-all-shopify-products/index.ts`
+Esto es un cambio pequeno en la logica de routing del webhook (linea 948).
 
-- Usa GraphQL API de Shopify con paginacion (como `detect-new-variants`) para obtener TODOS los productos
-- Para cada producto de Shopify:
-  - Busca producto en Sewdle por nombre (ilike)
-  - Si no existe, lo crea en `products`
-  - Para cada variante:
-    - Busca por `sku_variant` en `product_variants`
-    - Si no existe, la crea con size/color extraidos de las opciones
-    - Si existe, actualiza `stock_quantity` con el valor de Shopify
-- Retorna resumen: productos procesados, variantes creadas, variantes actualizadas, errores
-- Procesa en lotes para evitar timeouts
+#### 2. Cron de sincronizacion como respaldo
 
-#### 2. Nuevo Hook: `src/hooks/useFullShopifySync.ts`
+Ya existe la Edge Function `sync-shopify-fulfillment` que sincroniza el fulfillment_status de todas las ordenes. La solucion es invocarla automaticamente desde el frontend como parte del flujo de Picking & Packing, ejecutandola en segundo plano al cargar la pagina de Picking. Esto actua como red de seguridad para cualquier evento webhook perdido.
 
-- Llama a la edge function `sync-all-shopify-products`
-- Maneja estados de loading/progress/resultados
-- Muestra toast con resumen al finalizar
+### Archivos a modificar
 
-#### 3. Modificar: `src/pages/ProductsPage.tsx`
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/shopify-webhook/index.ts` | Agregar manejo del topic `fulfillments/create` para actualizar fulfillment_status y operational_status |
+| `src/hooks/usePickingOrders.ts` | Agregar llamada en segundo plano a `sync-shopify-fulfillment` al cargar la lista de ordenes (cada 15 minutos maximo) |
 
-- Agregar boton "Sincronizar Todo desde Shopify" en la pestana de catalogo o en el header
-- Al hacer clic, ejecuta la sincronizacion completa
-- Muestra progreso y resultados
+### Detalle tecnico del cambio en el webhook
 
-#### 4. Modificar: `src/components/VariantSyncManager.tsx`
-
-- Agregar boton de "Sincronizar Todo Automaticamente" ademas del flujo manual existente
-- Mostrar resultados de la sincronizacion completa
-
-### Flujo
-
-```text
-[Boton "Sincronizar Todo"]
-        |
-        v
-[Edge Function: sync-all-shopify-products]
-        |
-        v
-[GraphQL API Shopify - paginado]
-        |
-        v
-[Para cada producto]
-  ├── Buscar en Sewdle por nombre
-  ├── Si no existe -> Crear producto
-  └── Para cada variante
-       ├── Buscar por SKU en product_variants
-       ├── Si no existe -> Crear variante
-       └── Si existe -> Actualizar stock
-        |
-        v
-[Retornar resumen]
+```typescript
+// En la seccion de routing (linea 948), agregar:
+if (topic === 'fulfillments/create' || topic === 'fulfillments/update') {
+  const fulfillmentData = JSON.parse(body);
+  const orderId = fulfillmentData.order_id;
+  
+  // Actualizar shopify_orders
+  await supabase.from('shopify_orders')
+    .update({ fulfillment_status: 'fulfilled' })
+    .eq('shopify_order_id', orderId);
+  
+  // Actualizar picking_packing_orders
+  await supabase.from('picking_packing_orders')
+    .update({ operational_status: 'shipped' })
+    .eq('shopify_order_id', orderId);
+  
+  return Response con success;
+}
 ```
 
-### Archivos a crear/modificar
+### Detalle del sync periodico en Picking
 
-| Archivo | Accion |
-|---------|--------|
-| `supabase/functions/sync-all-shopify-products/index.ts` | Crear |
-| `src/hooks/useFullShopifySync.ts` | Crear |
-| `src/components/VariantSyncManager.tsx` | Modificar - agregar boton sync total |
-| `src/pages/ProductsPage.tsx` | Modificar - agregar boton en header |
+En `usePickingOrders.ts`, al cargar las ordenes, verificar si han pasado mas de 15 minutos desde la ultima sincronizacion y, si es asi, invocar `sync-shopify-fulfillment` en segundo plano sin bloquear la carga de la pagina.
+
+### Resultado esperado
+
+- Los pedidos marcados como "fulfilled" en Shopify se reflejan inmediatamente en Sewdle via webhook
+- Como respaldo, cada 15 minutos se sincroniza el estado de fulfillment al visitar Picking & Packing
+- No se vuelven a presentar discrepancias entre Shopify y Sewdle
 
