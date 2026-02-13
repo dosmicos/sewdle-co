@@ -81,7 +81,7 @@ serve(async (req) => {
     }
 
     // Create checkout session
-    const origin = req.headers.get("origin") || "https://sewdle.lovable.app";
+    const origin = req.headers.get("origin") || "https://sewdle.co";
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [
