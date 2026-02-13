@@ -1163,7 +1163,7 @@ serve(async (req) => {
         }
         
         const paymentPayload = {
-          date: payment.date || new Date().toISOString().split('T')[0],
+          date: payment.date || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
           type: "in", // Ingreso (cobro)
           bankAccount: payment.bankAccount || 1, // Cuenta predeterminada
           paymentMethod: payment.paymentMethod || "cash",

@@ -88,6 +88,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+const getColombiaDate = (): string => {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+};
 import InvoiceDetailsModal, { EditedInvoiceData } from './InvoiceDetailsModal';
 import BulkValidationResultsModal, { BulkValidationResult } from './BulkValidationResultsModal';
 import { validateOrderForInvoice } from '@/hooks/useInvoiceValidation';
@@ -1614,8 +1618,8 @@ const BulkInvoiceCreator = () => {
         data: {
           invoice: {
             client: contactId,
-            date: format(new Date(), 'yyyy-MM-dd'),
-            dueDate: format(new Date(), 'yyyy-MM-dd'),
+            date: getColombiaDate(),
+            dueDate: getColombiaDate(),
             items,
             observations: `Pedido Shopify #${order.order_number}`,
             status: 'open',
@@ -2080,8 +2084,8 @@ const BulkInvoiceCreator = () => {
         data: {
           invoice: {
             client: contactId,
-            date: format(new Date(), 'yyyy-MM-dd'),
-            dueDate: format(new Date(), 'yyyy-MM-dd'),
+            date: getColombiaDate(),
+            dueDate: getColombiaDate(),
             items,
             observations: `Pedido Shopify #${order.order_number}`,
             status: 'open',
