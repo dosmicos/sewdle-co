@@ -1,6 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 
+// ============= HELPERS =============
+function getColombiaDate(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
 // ============= ALEGRA API CONFIGURATION =============
 const ALEGRA_API_URL = 'https://api.alegra.com/api/v1'
 
@@ -589,7 +594,7 @@ async function createInvoice(
     throw new Error('No hay items válidos para facturar')
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = getColombiaDate()
   
   const invoicePayload = {
     client: contactId,
@@ -624,7 +629,7 @@ async function stampInvoice(invoiceId: number): Promise<any> {
 async function registerPayment(invoiceId: number, amount: number, orderNumber: string): Promise<void> {
   try {
     const paymentPayload = {
-      date: new Date().toISOString().split('T')[0],
+      date: getColombiaDate(),
       type: 'in',
       bankAccount: 1,
       paymentMethod: 'transfer',
