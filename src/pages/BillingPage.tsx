@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { OrganizationGuard } from '@/components/OrganizationGuard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +8,50 @@ import { Progress } from '@/components/ui/progress';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, Crown, Zap, Building2, Calendar, CreditCard, Download, RefreshCw } from 'lucide-react';
+import { Check, Crown, Building2, Calendar, CreditCard, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+type BillingSummary = {
+  subscription: {
+    id: string;
+    status: string;
+    current_period_start: number;
+    current_period_end: number;
+    cancel_at_period_end: boolean;
+    currency: string;
+    plan_name: string | null;
+  } | null;
+  upcoming_invoice: {
+    amount_due: number;
+    amount_remaining: number;
+    currency: string;
+    next_payment_attempt: number | null;
+  } | null;
+  payment_method: {
+    type: string | null;
+    card_brand: string | null;
+    card_last4: string | null;
+    card_exp_month: number | null;
+    card_exp_year: number | null;
+  } | null;
+  invoices: Array<{
+    id: string;
+    number: string | null;
+    status: string | null;
+    amount_due: number;
+    amount_paid: number;
+    total: number;
+    currency: string;
+    created: number;
+    hosted_invoice_url: string | null;
+    invoice_pdf: string | null;
+  }>;
+};
 
 const BillingPage = () => {
   const { currentOrganization, getUsageStats } = useOrganization();
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const { data: usageStats, isLoading: statsLoading, refetch } = useQuery({
     queryKey: ['organization-stats', currentOrganization?.id],
@@ -20,15 +60,78 @@ const BillingPage = () => {
     refetchInterval: 5 * 60 * 1000,
   });
 
+  const { data: billingSummary, isLoading: billingLoading, refetch: refetchBilling } = useQuery({
+    queryKey: ['billing-summary', currentOrganization?.id],
+    enabled: !!currentOrganization,
+    queryFn: async (): Promise<BillingSummary> => {
+      const { data, error } = await supabase.functions.invoke('customer-portal', {
+        body: { action: 'summary' }
+      });
+
+      if (error) throw error;
+      return (data ?? { subscription: null, upcoming_invoice: null, payment_method: null, invoices: [] }) as BillingSummary;
+    },
+    refetchInterval: 5 * 60 * 1000,
+  });
+
   const getUsagePercentage = (current: number, max: number): number => {
     if (max === -1) return 0; // Unlimited
     return Math.min((current / max) * 100, 100);
   };
 
-  const getUsageColor = (percentage: number): 'destructive' | 'warning' | 'default' => {
-    if (percentage >= 90) return 'destructive';
-    if (percentage >= 75) return 'warning';
-    return 'default';
+  const openCustomerPortal = async () => {
+    try {
+      setPortalLoading(true);
+      const { data, error } = await supabase.functions.invoke('customer-portal');
+      if (error) throw error;
+
+      if (!data?.url) {
+        throw new Error('No se recibió URL del portal de facturación');
+      }
+
+      window.location.href = data.url;
+    } catch (error: unknown) {
+      console.error('Error opening customer portal:', error);
+      const message = error instanceof Error ? error.message : 'No se pudo abrir el portal de facturación';
+      toast.error(message);
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const formatCurrency = (amountCents: number | null | undefined, currency: string | null | undefined) => {
+    if (amountCents == null) return 'No disponible';
+    const code = (currency || 'USD').toUpperCase();
+    try {
+      return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: code,
+      }).format(amountCents / 100);
+    } catch {
+      return `${(amountCents / 100).toFixed(2)} ${code}`;
+    }
+  };
+
+  const formatUnixDate = (unixSeconds: number | null | undefined) => {
+    if (!unixSeconds) return 'No disponible';
+    return new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(new Date(unixSeconds * 1000));
+  };
+
+  const humanInvoiceStatus = (status: string | null | undefined) => {
+    switch (status) {
+      case 'paid':
+        return 'Pagada';
+      case 'open':
+        return 'Pendiente';
+      case 'draft':
+        return 'Borrador';
+      case 'void':
+        return 'Anulada';
+      case 'uncollectible':
+        return 'Incobrable';
+      default:
+        return status || 'Desconocido';
+    }
   };
 
   const plans = [
@@ -104,7 +207,7 @@ const BillingPage = () => {
               Gestiona tu plan de suscripción y facturación
             </p>
           </div>
-          <Button onClick={() => refetch()} variant="outline" size="sm">
+          <Button onClick={() => { refetch(); refetchBilling(); }} variant="outline" size="sm">
             <RefreshCw className="w-4 h-4 mr-2" />
             Actualizar
           </Button>
@@ -303,11 +406,38 @@ const BillingPage = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <p className="text-2xl font-bold">$99.00</p>
-                    <p className="text-sm text-muted-foreground">
-                      Se cobrará el 15 de febrero, 2024
-                    </p>
+                  <div className="space-y-3">
+                    {billingLoading ? (
+                      <Skeleton className="h-12 w-full" />
+                    ) : (
+                      <>
+                        <p className="text-2xl font-bold">
+                          {formatCurrency(
+                            billingSummary?.upcoming_invoice?.amount_due ?? billingSummary?.invoices?.[0]?.amount_due,
+                            billingSummary?.upcoming_invoice?.currency ?? billingSummary?.invoices?.[0]?.currency
+                          )}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Próximo cobro: {formatUnixDate(
+                            billingSummary?.upcoming_invoice?.next_payment_attempt ??
+                            billingSummary?.subscription?.current_period_end
+                          )}
+                        </p>
+                      </>
+                    )}
+                    <Button onClick={openCustomerPortal} disabled={portalLoading} className="w-full">
+                      {portalLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Abriendo portal...
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Ver Próxima Factura
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -321,18 +451,35 @@ const BillingPage = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center">
-                        <CreditCard className="w-4 h-4 text-blue-600" />
-                      </div>
+                  <div className="space-y-3">
+                    {billingLoading ? (
+                      <Skeleton className="h-12 w-full" />
+                    ) : billingSummary?.payment_method?.card_last4 ? (
                       <div>
-                        <p className="font-medium">•••• •••• •••• 4242</p>
-                        <p className="text-sm text-muted-foreground">Expira 12/26</p>
+                        <p className="font-medium">
+                          {billingSummary.payment_method.card_brand?.toUpperCase()} •••• {billingSummary.payment_method.card_last4}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Expira {billingSummary.payment_method.card_exp_month}/{billingSummary.payment_method.card_exp_year}
+                        </p>
                       </div>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      Actualizar
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No hay método de pago disponible en Stripe para este cliente.
+                      </p>
+                    )}
+                    <Button onClick={openCustomerPortal} disabled={portalLoading} variant="outline" className="w-full">
+                      {portalLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Abriendo portal...
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Actualizar Método de Pago
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -344,34 +491,61 @@ const BillingPage = () => {
               <CardHeader>
                 <CardTitle>Historial de Facturas</CardTitle>
                 <CardDescription>
-                  Descarga tus facturas anteriores
+                  Facturas reales desde Stripe.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {[
-                    { date: '15 Ene 2024', amount: '$99.00', status: 'Pagada' },
-                    { date: '15 Dic 2023', amount: '$99.00', status: 'Pagada' },
-                    { date: '15 Nov 2023', amount: '$99.00', status: 'Pagada' },
-                  ].map((invoice, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="text-sm">
-                          <p className="font-medium">{invoice.date}</p>
-                          <p className="text-muted-foreground">{invoice.amount}</p>
+                {billingLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : billingSummary?.invoices?.length ? (
+                  <div className="space-y-3">
+                    {billingSummary.invoices.map((invoice) => {
+                      const url = invoice.invoice_pdf || invoice.hosted_invoice_url;
+                      return (
+                        <div key={invoice.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="text-sm">
+                            <p className="font-medium">{invoice.number || invoice.id}</p>
+                            <p className="text-muted-foreground">
+                              {formatUnixDate(invoice.created)} • {formatCurrency(invoice.amount_paid || invoice.total, invoice.currency)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{humanInvoiceStatus(invoice.status)}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!url}
+                              onClick={() => url && window.open(url, '_blank', 'noopener,noreferrer')}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-green-600">
-                          {invoice.status}
-                        </Badge>
-                        <Button variant="ghost" size="sm">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">No hay facturas disponibles todavía.</p>
+                    <Button onClick={openCustomerPortal} disabled={portalLoading} variant="outline">
+                      {portalLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Abriendo portal...
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Ver Historial en Stripe
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

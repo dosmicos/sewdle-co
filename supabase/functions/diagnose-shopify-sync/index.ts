@@ -1,6 +1,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
+import { requireAuthenticatedUser } from '../_shared/auth.ts'
 
 interface ShopifyOrder {
   id: number;
@@ -124,6 +125,12 @@ Deno.serve(async (req) => {
 
   try {
     console.log('🔍 Iniciando diagnóstico de sincronización Shopify...');
+
+    const authResult = await requireAuthenticatedUser(req, corsHeaders);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    console.log('✅ Authenticated user for diagnose-shopify-sync:', authResult.userId);
     
     const env = validateEnvironment();
     const supabase = createClient(env.supabaseUrl, env.supabaseServiceKey);

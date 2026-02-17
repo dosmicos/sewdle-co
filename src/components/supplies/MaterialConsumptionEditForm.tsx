@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Edit3, Trash2 } from 'lucide-react';
 
 interface MaterialConsumptionEditFormProps {
-  consumption: any;
+  consumption: unknown;
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -70,7 +70,7 @@ const MaterialConsumptionEditForm = ({
 
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating material consumption:', error);
       toast({
         title: "Error al actualizar",
@@ -102,7 +102,7 @@ const MaterialConsumptionEditForm = ({
 
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting material consumption:', error);
       toast({
         title: "Error al eliminar",

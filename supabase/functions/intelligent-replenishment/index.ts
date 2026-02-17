@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       throw new Error(`Error en función RPC: ${calcError.message || JSON.stringify(calcError)}`);
     }
 
-    const insertedCount = (rpcResult as any)?.inserted || 0;
+    const insertedCount = (rpcResult as Record<string, unknown>)?.inserted || 0;
     console.log(`✅ Procesadas ${insertedCount} variantes de productos`);
 
     // Obtener registros generados desde la vista

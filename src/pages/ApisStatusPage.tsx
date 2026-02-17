@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,7 +49,7 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'connected', responseTime };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
@@ -86,7 +86,7 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'error', responseTime, error: data?.error || 'Sin respuesta' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
@@ -118,7 +118,7 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'error', responseTime, error: data?.error || 'Sin conexión' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
@@ -160,7 +160,7 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'error', responseTime, error: 'Canal inactivo' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
@@ -182,7 +182,7 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'connected', responseTime };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
@@ -217,7 +217,7 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'error', responseTime, error: data?.error || 'Sin conexión' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
@@ -252,13 +252,13 @@ const ApisStatusPage = () => {
       }
 
       return { status: 'error', responseTime, error: data?.error || 'Sin conexión' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseTime = Math.round(performance.now() - startTime);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
     }
   }, [currentOrganization?.id]);
 
-  const apiConfigs: APIConfig[] = [
+  const apiConfigs: APIConfig[] = useMemo(() => [
     {
       id: 'supabase',
       name: 'Supabase (Base de datos)',
@@ -315,7 +315,7 @@ const ApisStatusPage = () => {
       checkFn: checkGeminiAPI,
       category: 'ai'
     }
-  ];
+  ], [checkSupabaseAPI, checkShopifyAPI, checkEnviaAPI, checkAlegraAPI, checkWhatsAppAPI, checkOpenAIAPI, checkGeminiAPI]);
 
   const externalApis = apiConfigs.filter(api => api.category === 'external');
   const aiApis = apiConfigs.filter(api => api.category === 'ai');

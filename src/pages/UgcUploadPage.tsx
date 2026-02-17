@@ -156,7 +156,7 @@ const UgcUploadPage: React.FC = () => {
         if (!result.success) throw new Error(result.error || 'Error al registrar video');
 
         updateItem(item.id, { status: 'success', progress: 100 });
-      } catch (err: any) {
+      } catch (err: unknown) {
         updateItem(item.id, { status: 'error', progress: 0, errorMessage: err.message || 'Error al subir' });
       }
     }

@@ -4,7 +4,7 @@ export interface Organization {
   slug: string;
   plan: 'starter' | 'professional' | 'enterprise';
   status: 'active' | 'inactive' | 'suspended';
-  settings: Record<string, any>;
+  settings: Record<string, unknown>;
   branding: {
     logo?: string;
     primaryColor?: string;
@@ -12,7 +12,7 @@ export interface Organization {
     customDomain?: string;
   };
   shopify_store_url?: string;
-  shopify_credentials?: Record<string, any>;
+  shopify_credentials?: Record<string, unknown>;
   max_users: number;
   max_orders_per_month: number;
   max_workshops: number;

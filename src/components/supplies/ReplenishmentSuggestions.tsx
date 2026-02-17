@@ -29,7 +29,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
 
   useEffect(() => {
     fetchSuggestions();
-  }, []);
+  }, [fetchSuggestions]);
 
   const handleRecalculate = async () => {
     await calculateSuggestions();

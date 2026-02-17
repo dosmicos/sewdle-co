@@ -180,7 +180,7 @@ export const sortVariants = <T extends VariantForSorting>(variants: T[]): T[] =>
 /**
  * Función específica para ordenar variantes de Shopify
  */
-export const sortShopifyVariants = (variants: any[]): any[] => {
+export const sortShopifyVariants = (variants: unknown[]): unknown[] => {
   return sortVariants(variants.map(v => ({
     ...v,
     title: v.title || v.size || '',
@@ -191,6 +191,6 @@ export const sortShopifyVariants = (variants: any[]): any[] => {
 /**
  * Función específica para ordenar variantes de productos locales
  */
-export const sortProductVariants = (variants: any[]): any[] => {
+export const sortProductVariants = (variants: unknown[]): unknown[] => {
   return sortVariants(variants);
 };

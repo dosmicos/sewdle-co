@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,7 +22,18 @@ export const useWorkshopStats = (workshopId: string) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
+    if (!workshopId) {
+      setStats({
+        activeOrders: 0,
+        completionRate: 0,
+        qualityScore: 0,
+        onTimeDelivery: 0,
+        unitsDeliveredLastWeek: 0
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -116,7 +127,7 @@ export const useWorkshopStats = (workshopId: string) => {
         unitsDeliveredLastWeek
       });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching workshop stats:', error);
       toast({
         title: "Error",
@@ -126,13 +137,11 @@ export const useWorkshopStats = (workshopId: string) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, workshopId]);
 
   useEffect(() => {
-    if (workshopId) {
-      fetchStats();
-    }
-  }, [workshopId]);
+    fetchStats();
+  }, [fetchStats]);
 
   return { stats, loading, refetch: fetchStats };
 };

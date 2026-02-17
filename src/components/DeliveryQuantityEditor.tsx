@@ -10,7 +10,7 @@ import { Edit, Save, X, AlertTriangle } from 'lucide-react';
 import { sortVariants } from '@/lib/variantSorting';
 
 interface DeliveryQuantityEditorProps {
-  deliveryData: any;
+  deliveryData: unknown;
   onSave: (quantityUpdates: Array<{id: string, quantity: number}>) => Promise<boolean>;
   onCancel: () => void;
   loading?: boolean;
@@ -29,7 +29,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
   useEffect(() => {
     if (deliveryData?.delivery_items) {
       const initialQuantities: Record<string, number> = {};
-      deliveryData.delivery_items.forEach((item: any) => {
+      deliveryData.delivery_items.forEach((item: unknown) => {
         initialQuantities[item.id] = item.quantity_delivered || 0;
       });
       setQuantities(initialQuantities);
@@ -37,7 +37,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
   }, [deliveryData]);
 
   // Helper function to sort delivery items by product first, then by variant size
-  const getSortedDeliveryItems = (items: any[]) => {
+  const getSortedDeliveryItems = (items: unknown[]) => {
     if (!items) return [];
     
     // Group items by product name
@@ -52,10 +52,10 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
         title: item.order_items?.product_variants?.size || ''
       });
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, unknown[]>);
     
     // Sort each product group by variants and then combine all
-    const sortedItems: any[] = [];
+    const sortedItems: unknown[] = [];
     
     // Sort product names alphabetically
     const sortedProductNames = Object.keys(groupedByProduct).sort();
@@ -71,7 +71,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
   };
 
   // Helper function para obtener info del producto
-  const getProductInfo = (item: any) => {
+  const getProductInfo = (item: unknown) => {
     const product = item?.order_items?.product_variants?.products;
     const variant = item?.order_items?.product_variants;
     
@@ -86,7 +86,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
 
   const handleQuantityChange = (itemId: string, value: string) => {
     const numValue = parseInt(value) || 0;
-    const item = deliveryData.delivery_items.find((i: any) => i.id === itemId);
+    const item = deliveryData.delivery_items.find((i: unknown) => i.id === itemId);
     const maxQuantity = item?.order_items?.quantity || 0;
 
     // Validar cantidad
@@ -114,7 +114,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
     // Preparar updates solo para items que cambiaron
     const updates: Array<{id: string, quantity: number}> = [];
     
-    deliveryData.delivery_items.forEach((item: any) => {
+    deliveryData.delivery_items.forEach((item: unknown) => {
       const currentQuantity = item.quantity_delivered || 0;
       const newQuantity = quantities[item.id] || 0;
       
@@ -138,7 +138,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
   };
 
   const hasChanges = () => {
-    return deliveryData.delivery_items.some((item: any) => {
+    return deliveryData.delivery_items.some((item: unknown) => {
       const currentQuantity = item.quantity_delivered || 0;
       const newQuantity = quantities[item.id] || 0;
       return newQuantity !== currentQuantity;
@@ -179,7 +179,7 @@ const DeliveryQuantityEditor: React.FC<DeliveryQuantityEditorProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedDeliveryItems?.map((item: any) => {
+              {sortedDeliveryItems?.map((item: unknown) => {
                 const productInfo = getProductInfo(item);
                 const itemId = item.id;
                 const currentQuantity = item.quantity_delivered || 0;

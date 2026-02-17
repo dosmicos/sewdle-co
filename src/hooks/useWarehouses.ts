@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -18,7 +18,7 @@ export const useWarehouses = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchWarehouses = async () => {
+  const fetchWarehouses = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -28,7 +28,7 @@ export const useWarehouses = () => {
 
       if (error) throw error;
       setWarehouses(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching warehouses:', error);
       toast({
         title: "Error",
@@ -38,7 +38,7 @@ export const useWarehouses = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const getCentralWarehouse = () => {
     return warehouses.find(warehouse => warehouse.is_central);
@@ -46,7 +46,7 @@ export const useWarehouses = () => {
 
   useEffect(() => {
     fetchWarehouses();
-  }, []);
+  }, [fetchWarehouses]);
 
   return {
     warehouses,

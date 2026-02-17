@@ -24,8 +24,8 @@ interface ProductBarcodeModalProps {
 const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({ isOpen, onClose }) => {
   const { products, loading, fetchProductVariants } = useProducts(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [variants, setVariants] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<unknown>(null);
+  const [variants, setVariants] = useState<unknown[]>([]);
   const [loadingVariants, setLoadingVariants] = useState(false);
   const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);
 
@@ -39,7 +39,7 @@ const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({ isOpen, onClo
     ).slice(0, 20);
   }, [products, searchTerm]);
 
-  const handleSelectProduct = async (product: any) => {
+  const handleSelectProduct = async (product: unknown) => {
     setSelectedProduct(product);
     setLoadingVariants(true);
     try {
@@ -52,7 +52,7 @@ const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({ isOpen, onClo
     }
   };
 
-  const handleAddVariant = (variant: any, quantity: number) => {
+  const handleAddVariant = (variant: unknown, quantity: number) => {
     if (quantity <= 0) return;
     
     const variantText = [variant.size, variant.color].filter(Boolean).join(' - ');
@@ -432,7 +432,7 @@ const ProductBarcodeModal: React.FC<ProductBarcodeModalProps> = ({ isOpen, onClo
 
 // Sub-component for variant row with quantity input
 const VariantRow: React.FC<{
-  variant: any;
+  variant: unknown;
   productName: string;
   onAdd: (quantity: number) => void;
 }> = ({ variant, productName, onAdd }) => {

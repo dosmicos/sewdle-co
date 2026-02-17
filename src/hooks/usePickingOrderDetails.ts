@@ -74,7 +74,7 @@ export const usePickingOrderDetails = (
     enabled: !!orderId && enabled,
     staleTime: 30_000, // 30 seconds - data is considered fresh
     gcTime: 5 * 60_000, // 5 minutes - keep in memory for quick access
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: unknown) => {
       // Don't retry aborted requests
       if (error?.name === 'AbortError' || error?.message?.includes('aborted')) return false;
       return failureCount < 2;

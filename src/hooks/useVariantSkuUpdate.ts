@@ -78,7 +78,7 @@ export const useVariantSkuUpdate = () => {
       const result = data as unknown as SkuUpdateResult;
       if (!result.success) {
         if (result.error === 'SKU already exists') {
-          toast.error(`El SKU "${(result as any).conflicting_sku}" ya existe en otra variante`);
+          toast.error(`El SKU "${(result as Record<string, unknown>).conflicting_sku}" ya existe en otra variante`);
         } else {
           toast.error(result.error || 'Error al actualizar el SKU');
         }

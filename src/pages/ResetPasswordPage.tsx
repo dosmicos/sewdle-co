@@ -48,8 +48,21 @@ const ResetPasswordPage = () => {
       return;
     }
 
-    let timeoutId: NodeJS.Timeout;
     let handled = false;
+
+    // Timeout de seguridad: si después de 5 segundos no hay respuesta
+    const timeoutId = setTimeout(() => {
+      if (!handled) {
+        console.error('Timeout waiting for password recovery session');
+        toast({
+          title: "Error",
+          description: "El enlace de recuperación es inválido o ha expirado",
+          variant: "destructive",
+        });
+        setHasValidToken(false);
+        setIsCheckingToken(false);
+      }
+    }, 5000);
 
     // Escuchar los eventos de autenticación de Supabase
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -118,20 +131,6 @@ const ResetPasswordPage = () => {
     };
 
     setupSession();
-
-    // Timeout de seguridad: si después de 5 segundos no hay respuesta
-    timeoutId = setTimeout(() => {
-      if (!handled) {
-        console.error('Timeout waiting for password recovery session');
-        toast({
-          title: "Error",
-          description: "El enlace de recuperación es inválido o ha expirado",
-          variant: "destructive",
-        });
-        setHasValidToken(false);
-        setIsCheckingToken(false);
-      }
-    }, 5000);
 
     // Cleanup
     return () => {

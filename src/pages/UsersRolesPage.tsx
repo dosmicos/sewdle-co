@@ -55,7 +55,7 @@ const UsersRolesPage = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [lastAccessData, setLastAccessData] = useState<Record<string, string>>({});
-  const [deleteConfirmUser, setDeleteConfirmUser] = useState<any>(null);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<unknown>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const {
@@ -114,11 +114,11 @@ const UsersRolesPage = () => {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const handleEditUser = (user: any) => {
+  const handleEditUser = (user: unknown) => {
     setSelectedUser(user);
     setShowUserModal(true);
   };
-  const handleEditRole = (role: any) => {
+  const handleEditRole = (role: unknown) => {
     setSelectedRole(role);
     setShowRoleModal(true);
   };
@@ -130,7 +130,7 @@ const UsersRolesPage = () => {
     setSelectedRole(null);
     setShowRoleModal(true);
   };
-  const handleUserSave = async (userData: any) => {
+  const handleUserSave = async (userData: unknown) => {
     console.log('UsersRolesPage: handleUserSave called with:', userData);
     let result;
     if (selectedUser) {
@@ -154,7 +154,7 @@ const UsersRolesPage = () => {
     
     return result;
   };
-  const handleRoleSave = async (roleData: any) => {
+  const handleRoleSave = async (roleData: unknown) => {
     if (selectedRole) {
       await updateRole(selectedRole.id, roleData);
     } else {
@@ -186,7 +186,7 @@ const UsersRolesPage = () => {
   };
 
   // Función para eliminar usuario con validaciones
-  const handleDeleteUser = (user: any) => {
+  const handleDeleteUser = (user: unknown) => {
     // Validación: No permitir auto-eliminación
     if (currentUser?.id === user.id) {
       toast({

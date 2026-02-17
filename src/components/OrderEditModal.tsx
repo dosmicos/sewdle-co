@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { useWorkshops } from '@/hooks/useWorkshops';
 import { WorkshopReassignmentDialog } from './WorkshopReassignmentDialog';
 
 interface OrderEditModalProps {
-  order: any;
+  order: unknown;
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -32,7 +32,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('');
   const [activeTab, setActiveTab] = useState('details');
-  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<unknown[]>([]);
   const [orderWorkshopId, setOrderWorkshopId] = useState<string>('');
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
   const [showMaterialConsumption, setShowMaterialConsumption] = useState(false);
@@ -44,21 +44,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
 
   const canEditQuantities = isAdmin || isDesigner;
 
-  useEffect(() => {
-    if (order) {
-      setDueDate(order.due_date || '');
-      setNotes(order.notes || '');
-      setStatus(order.status || 'pending');
-      setActiveTab('details'); // Reset to details tab when order changes
-      setSelectedProducts([]); // Reset selected products
-      
-      // Obtener el workshop_id de la orden
-      fetchOrderWorkshop();
-    }
-  }, [order]);
-
-
-  const fetchOrderWorkshop = async () => {
+  const fetchOrderWorkshop = useCallback(async () => {
     if (!order?.id) return;
     
     try {
@@ -80,7 +66,20 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     } catch (error) {
       console.error('Error fetching order workshop:', error);
     }
-  };
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (order) {
+      setDueDate(order.due_date || '');
+      setNotes(order.notes || '');
+      setStatus(order.status || 'pending');
+      setActiveTab('details'); // Reset to details tab when order changes
+      setSelectedProducts([]); // Reset selected products
+      
+      // Obtener el workshop_id de la orden
+      fetchOrderWorkshop();
+    }
+  }, [order, fetchOrderWorkshop]);
 
 
 
@@ -125,7 +124,7 @@ const OrderEditModal = ({ order, open, onClose, onSuccess }: OrderEditModalProps
     }
   };
 
-  const handleProductsChange = (products: any[]) => {
+  const handleProductsChange = (products: unknown[]) => {
     setSelectedProducts(products);
   };
 

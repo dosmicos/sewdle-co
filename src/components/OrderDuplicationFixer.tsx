@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ export const OrderDuplicationFixer = () => {
   const [fixing, setFixing] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const detectDuplicates = async () => {
+  const detectDuplicates = useCallback(async () => {
     setLoading(true);
     try {
       // Query to find orders with duplicate product_variant_id entries
@@ -57,9 +57,9 @@ export const OrderDuplicationFixer = () => {
       if (error) throw error;
 
       // Group by order_id + product_variant_id to find duplicates
-      const grouped: Record<string, any[]> = {};
+      const grouped: Record<string, unknown[]> = {};
       
-      data?.forEach((item: any) => {
+      data?.forEach((item: unknown) => {
         const key = `${item.order_id}_${item.product_variant_id}`;
         if (!grouped[key]) {
           grouped[key] = [];
@@ -81,10 +81,10 @@ export const OrderDuplicationFixer = () => {
             product_name: first.product_variants?.products?.name || 'N/A',
             variant_name: `${first.product_variants?.size || ''} ${first.product_variants?.color || ''}`.trim(),
             duplicate_count: items.length,
-            total_quantity: items.reduce((sum: number, i: any) => sum + i.quantity, 0),
-            item_ids: items.map((i: any) => i.id),
-            item_quantities: items.map((i: any) => i.quantity),
-            item_created_ats: items.map((i: any) => i.created_at)
+            total_quantity: items.reduce((sum: number, i: unknown) => sum + i.quantity, 0),
+            item_ids: items.map((i: unknown) => i.id),
+            item_quantities: items.map((i: unknown) => i.quantity),
+            item_created_ats: items.map((i: unknown) => i.created_at)
           });
         }
       });
@@ -117,7 +117,7 @@ export const OrderDuplicationFixer = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const fixDuplicate = async (duplicate: DuplicateItem, action: 'keep_first' | 'consolidate') => {
     setFixing(`${duplicate.order_id}_${duplicate.product_variant_id}`);
@@ -200,7 +200,7 @@ export const OrderDuplicationFixer = () => {
 
   useEffect(() => {
     detectDuplicates();
-  }, []);
+  }, [detectDuplicates]);
 
   return (
     <Card>

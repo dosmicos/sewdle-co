@@ -19,7 +19,7 @@ export function useCopilot() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return parsed.map((m: any) => ({
+        return parsed.map((m: unknown) => ({
           ...m,
           timestamp: new Date(m.timestamp)
         }));
@@ -99,7 +99,7 @@ export function useCopilot() {
 
       const decoder = new TextDecoder();
       let assistantContent = '';
-      let assistantMessageId = crypto.randomUUID();
+      const assistantMessageId = crypto.randomUUID();
       let textBuffer = '';
 
       // Add empty assistant message that we'll update

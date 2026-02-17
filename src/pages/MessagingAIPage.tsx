@@ -102,8 +102,8 @@ const MessagingAIPage = () => {
       channel: (conv.channel_type || 'whatsapp') as ChannelType,
       ai_managed: conv.ai_managed ?? true,
       tags: conv.tags || [],
-      is_pinned: (conv as any).is_pinned ?? false,
-      folder_id: (conv as any).folder_id ?? null,
+      is_pinned: (conv as Record<string, unknown>).is_pinned ?? false,
+      folder_id: (conv as Record<string, unknown>).folder_id ?? null,
     }));
   }, [conversations]);
 
@@ -182,11 +182,11 @@ const MessagingAIPage = () => {
 
       const inferMediaTypeFromMetadata = (m?: Record<string, unknown>): MediaType => {
         if (!m) return undefined;
-        if (m.image || (m.original_message as any)?.image) return 'image';
-        if (m.audio || (m.original_message as any)?.audio) return 'audio';
-        if (m.video || (m.original_message as any)?.video) return 'video';
-        if (m.sticker || (m.original_message as any)?.sticker) return 'sticker';
-        if (m.document || (m.original_message as any)?.document) return 'document';
+        if (m.image || (m.original_message as Record<string, unknown>)?.image) return 'image';
+        if (m.audio || (m.original_message as Record<string, unknown>)?.audio) return 'audio';
+        if (m.video || (m.original_message as Record<string, unknown>)?.video) return 'video';
+        if (m.sticker || (m.original_message as Record<string, unknown>)?.sticker) return 'sticker';
+        if (m.document || (m.original_message as Record<string, unknown>)?.document) return 'document';
         return undefined;
       };
 

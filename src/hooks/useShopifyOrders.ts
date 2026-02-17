@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -53,11 +53,12 @@ export const useShopifyOrders = () => {
   const [totalCustomers, setTotalCustomers] = useState(0);
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
+  const organizationId = currentOrganization?.id;
 
-  const fetchOrders = async (limit = 50, offset = 0) => {
+  const fetchOrders = useCallback(async (limit = 50, offset = 0) => {
     setOrdersLoading(true);
     try {
-      if (!currentOrganization?.id) {
+      if (!organizationId) {
         setOrders([]);
         setTotalOrders(0);
         return [];
@@ -68,7 +69,7 @@ export const useShopifyOrders = () => {
         const { count } = await supabase
           .from('shopify_orders')
           .select('*', { count: 'exact', head: true })
-          .eq('organization_id', currentOrganization.id);
+          .eq('organization_id', organizationId);
         
         setTotalOrders(count || 0);
 
@@ -88,7 +89,7 @@ export const useShopifyOrders = () => {
             total_price,
             currency
           `)
-          .eq('organization_id', currentOrganization.id)
+          .eq('organization_id', organizationId)
           .order('created_at_shopify', { ascending: false })
           .range(offset, offset + limit - 1);
 
@@ -105,7 +106,7 @@ export const useShopifyOrders = () => {
         if (sanitizedError) throw sanitizedError;
         
         // Transform sanitized data to match expected interface
-        const transformedData = (sanitizedData || []).slice(offset, offset + limit).map((item: any) => ({
+        const transformedData = (sanitizedData || []).slice(offset, offset + limit).map((item: unknown) => ({
           id: item.id,
           shopify_order_id: item.shopify_order_id,
           order_number: item.order_number,
@@ -135,18 +136,18 @@ export const useShopifyOrders = () => {
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }, [organizationId, toast]);
 
   // Fetch all orders at once in chunks (use with caution for very large datasets)
-  const fetchAllOrders = async () => {
+  const fetchAllOrders = useCallback(async () => {
     setOrdersLoading(true);
     try {
-      if (!currentOrganization?.id) return [] as ShopifyOrder[];
+      if (!organizationId) return [] as ShopifyOrder[];
 
       const { count, error: countError } = await supabase
         .from('shopify_orders')
         .select('*', { count: 'exact', head: true })
-        .eq('organization_id', currentOrganization.id);
+        .eq('organization_id', organizationId);
 
       if (countError) throw countError;
       const total = count || 0;
@@ -174,7 +175,7 @@ export const useShopifyOrders = () => {
             total_price,
             currency
           `)
-          .eq('organization_id', currentOrganization.id)
+          .eq('organization_id', organizationId)
           .order('created_at_shopify', { ascending: false })
           .range(start, end);
       });
@@ -194,12 +195,12 @@ export const useShopifyOrders = () => {
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }, [organizationId, toast]);
 
-  const fetchCustomerAnalytics = async (limit = 50, offset = 0, startDate?: string, endDate?: string) => {
+  const fetchCustomerAnalytics = useCallback(async (limit = 50, offset = 0, startDate?: string, endDate?: string) => {
     setCustomersLoading(true);
     try {
-      if (!currentOrganization?.id) {
+      if (!organizationId) {
         setCustomerAnalytics([]);
         setTotalCustomers(0);
         return [];
@@ -209,7 +210,7 @@ export const useShopifyOrders = () => {
       const { count } = await supabase
         .from('shopify_orders')
         .select('customer_email', { count: 'exact', head: true })
-        .eq('organization_id', currentOrganization.id);
+        .eq('organization_id', organizationId);
       
       // Estimado aproximado de clientes únicos (será actualizado con datos reales)
       setTotalCustomers(Math.ceil((count || 0) / 3)); // Estimación: promedio 3 órdenes por cliente
@@ -244,12 +245,12 @@ export const useShopifyOrders = () => {
     } finally {
       setCustomersLoading(false);
     }
-  };
+  }, [organizationId, toast]);
 
-  const fetchProductAnalytics = async (startDate?: string, endDate?: string) => {
+  const fetchProductAnalytics = useCallback(async (startDate?: string, endDate?: string) => {
     setLoading(true);
     try {
-      if (!currentOrganization?.id) {
+      if (!organizationId) {
         setProductAnalytics([]);
         return;
       }
@@ -271,15 +272,15 @@ export const useShopifyOrders = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [organizationId, toast]);
 
   useEffect(() => {
-    if (currentOrganization?.id) {
+    if (organizationId) {
       fetchOrders();
       fetchCustomerAnalytics();
       fetchProductAnalytics();
     }
-  }, [currentOrganization?.id]);
+  }, [organizationId, fetchOrders, fetchCustomerAnalytics, fetchProductAnalytics]);
 
   return {
     orders,

@@ -26,8 +26,8 @@ interface BulkActionsBarProps {
   selectedCount: number;
   selectedIds: string[];
   prospects: WorkshopProspect[];
-  onUpdate: (id: string, updates: Partial<WorkshopProspect>) => Promise<any>;
-  onDelete: (id: string) => Promise<any>;
+  onUpdate: (id: string, updates: Partial<WorkshopProspect>) => Promise<unknown>;
+  onDelete: (id: string) => Promise<unknown>;
   onClear: () => void;
 }
 

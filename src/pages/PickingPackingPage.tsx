@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout';
 import { Input } from '@/components/ui/input';
@@ -83,15 +83,18 @@ const PickingPackingPage = () => {
   const { toast } = useToast();
   const { availableTags } = useShopifyTags();
   const [searchParams, setSearchParams] = useSearchParams();
+  const didInitialUrlResetRef = useRef(false);
   
   // Clear URL filters on initial mount - user starts with clean slate
   useEffect(() => {
+    if (didInitialUrlResetRef.current) return;
+    didInitialUrlResetRef.current = true;
+
     const hasFilters = searchParams.toString().length > 0;
     if (hasFilters) {
       setSearchParams(new URLSearchParams(), { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, [searchParams, setSearchParams]);
 
   // Enrich FILTER_OPTIONS with dynamic Shopify tags
   const enrichedFilterOptions = useMemo(() => {
@@ -125,16 +128,37 @@ const PickingPackingPage = () => {
   const [commandValue, setCommandValue] = useState('');
   const [lastWebhookUpdate, setLastWebhookUpdate] = useState<Date | null>(null);
   const [hasPendingUpdates, setHasPendingUpdates] = useState(false);
-const [showItemsModal, setShowItemsModal] = useState(false);
+  const [showItemsModal, setShowItemsModal] = useState(false);
   const [showManifestsPanel, setShowManifestsPanel] = useState(false);
+  const currentOrganizationId = currentOrganization?.id;
 
   // Read filters from URL - must be declared before handleRefreshList
   const searchTerm = searchParams.get('search') || '';
-  const operationalStatuses = searchParams.get('operational_status')?.split(',').filter(Boolean) || [];
-  const financialStatuses = searchParams.get('financial_status')?.split(',').filter(Boolean) || [];
-  const fulfillmentStatuses = searchParams.get('fulfillment_status')?.split(',').filter(Boolean) || [];
-  const tags = searchParams.get('tags')?.split(',').filter(Boolean) || [];
-  const excludeTags = searchParams.get('exclude_tags')?.split(',').filter(Boolean) || [];
+  const operationalStatusesParam = searchParams.get('operational_status') || '';
+  const financialStatusesParam = searchParams.get('financial_status') || '';
+  const fulfillmentStatusesParam = searchParams.get('fulfillment_status') || '';
+  const tagsParam = searchParams.get('tags') || '';
+  const excludeTagsParam = searchParams.get('exclude_tags') || '';
+  const operationalStatuses = useMemo(
+    () => (operationalStatusesParam ? operationalStatusesParam.split(',').filter(Boolean) : []),
+    [operationalStatusesParam]
+  );
+  const financialStatuses = useMemo(
+    () => (financialStatusesParam ? financialStatusesParam.split(',').filter(Boolean) : []),
+    [financialStatusesParam]
+  );
+  const fulfillmentStatuses = useMemo(
+    () => (fulfillmentStatusesParam ? fulfillmentStatusesParam.split(',').filter(Boolean) : []),
+    [fulfillmentStatusesParam]
+  );
+  const tags = useMemo(
+    () => (tagsParam ? tagsParam.split(',').filter(Boolean) : []),
+    [tagsParam]
+  );
+  const excludeTags = useMemo(
+    () => (excludeTagsParam ? excludeTagsParam.split(',').filter(Boolean) : []),
+    [excludeTagsParam]
+  );
   const priceRange = searchParams.get('price_range') || '';
   const dateRange = searchParams.get('date_range') || '';
   const shippingMethod = searchParams.get('shipping_method') || '';
@@ -145,7 +169,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
   const totalTeams = parseInt(searchParams.get('total_teams') || '1'); // 1-4 teams
 
   // Simple refresh - only fetches from local DB (webhook handles real-time updates from Shopify)
-  const handleRefreshList = () => {
+  const handleRefreshList = useCallback(() => {
     fetchOrders({
       searchTerm: searchTerm || undefined,
       operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
@@ -159,11 +183,24 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       excludeShippingMethod: excludeShippingMethod || undefined,
       page: currentPage
     });
-  };
+  }, [
+    fetchOrders,
+    searchTerm,
+    operationalStatuses,
+    financialStatuses,
+    fulfillmentStatuses,
+    tags,
+    excludeTags,
+    priceRange,
+    dateRange,
+    shippingMethod,
+    excludeShippingMethod,
+    currentPage,
+  ]);
 
   // Supabase Realtime - Auto refresh when shopify_orders table changes
   useEffect(() => {
-    if (!currentOrganization?.id) return;
+    if (!currentOrganizationId) return;
 
     const channel = supabase
       .channel('shopify-orders-realtime')
@@ -173,7 +210,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
           event: '*',
           schema: 'public',
           table: 'shopify_orders',
-          filter: `organization_id=eq.${currentOrganization.id}`
+          filter: `organization_id=eq.${currentOrganizationId}`
         },
         (payload) => {
           console.log('🔔 Webhook update received:', payload.eventType);
@@ -192,8 +229,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentOrganization?.id, searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentPage, selectedOrderId]);
+  }, [currentOrganizationId, selectedOrderId, handleRefreshList]);
 
   // Auto-refresh list when modal closes if there were pending updates
   useEffect(() => {
@@ -201,7 +237,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       handleRefreshList();
       setHasPendingUpdates(false);
     }
-  }, [selectedOrderId, hasPendingUpdates]);
+  }, [selectedOrderId, hasPendingUpdates, handleRefreshList]);
 
   // Auto-ajustar filtros cuando se usa tags=confirmado (Para Preparar)
   // Esto asegura que la vista coincida exactamente con Shopify
@@ -280,7 +316,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
   });
 
   // Load saved filter
-  const loadSavedFilter = (filters: Record<string, any>) => {
+  const loadSavedFilter = (filters: Record<string, unknown>) => {
     const newParams = new URLSearchParams();
     
     Object.entries(filters).forEach(([key, value]) => {
@@ -418,7 +454,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
 
   // Fetch orders when filters change
   useEffect(() => {
-    if (currentOrganization?.id) {
+    if (currentOrganizationId) {
       // Si hay búsqueda activa, ignorar los demás filtros para buscar globalmente
       if (searchTerm) {
         fetchOrders({ 
@@ -441,8 +477,20 @@ const [showItemsModal, setShowItemsModal] = useState(false);
         });
       }
     }
-  }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentOrganization?.id]);
+  }, [
+    currentOrganizationId,
+    fetchOrders,
+    searchTerm,
+    operationalStatuses,
+    financialStatuses,
+    fulfillmentStatuses,
+    tags,
+    excludeTags,
+    priceRange,
+    dateRange,
+    shippingMethod,
+    excludeShippingMethod,
+  ]);
 
   
 
@@ -854,7 +902,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
             </div>
           ) : (
             filteredOrdersByTeam.map((order) => {
-              const rawData = order.shopify_order?.raw_data as any;
+              const rawData = order.shopify_order?.raw_data as Record<string, unknown>;
               const shippingMethod = rawData?.shipping_lines?.[0]?.title || '';
               const itemCount = rawData?.line_items?.length || 0;
               const orderTime = order.shopify_order?.created_at_shopify 

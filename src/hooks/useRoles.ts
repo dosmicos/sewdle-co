@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
@@ -54,7 +54,7 @@ export const useRoles = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const fetchRoles = async () => {
+  const fetchRoles = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -76,7 +76,7 @@ export const useRoles = () => {
       }
 
       // Transformar permisos del formato JSONB al formato esperado
-      const formattedRoles: Role[] = rolesData?.map((role: any) => {
+      const formattedRoles: Role[] = rolesData?.map((role: unknown) => {
         const permissions: Permission[] = [];
         
         if (role.permissions && typeof role.permissions === 'object') {
@@ -115,7 +115,7 @@ export const useRoles = () => {
       }) || [];
 
       setRoles(formattedRoles);
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error fetching roles', err);
       setError(err.message || 'Error al cargar roles');
       toast({
@@ -126,7 +126,7 @@ export const useRoles = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const createRole = async (roleData: {
     name: string;
@@ -135,7 +135,7 @@ export const useRoles = () => {
   }) => {
     try {
       // Transformar permisos al formato JSONB usando mapeo inverso
-      const permissionsJson: Record<string, any> = {};
+      const permissionsJson: Record<string, unknown> = {};
       roleData.permissions.forEach(permission => {
         // Convertir nombre del módulo de UI a BD
         const dbModule = REVERSE_MODULE_MAPPING[permission.module] || 
@@ -164,7 +164,7 @@ export const useRoles = () => {
       });
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error creating role', err);
       toast({
         title: "Error al crear rol",
@@ -181,7 +181,7 @@ export const useRoles = () => {
     permissions?: Permission[];
   }) => {
     try {
-      const updateData: any = {};
+      const updateData: unknown = {};
       
       if (updates.name) updateData.name = updates.name;
       if (updates.description) updateData.description = updates.description;
@@ -189,7 +189,7 @@ export const useRoles = () => {
       if (updates.permissions) {
         // SIMPLIFICACIÓN: Como RoleModal ahora envía TODOS los módulos,
         // no necesitamos hacer merge. Simplemente convertimos y filtramos.
-        const permissionsJson: Record<string, any> = {};
+        const permissionsJson: Record<string, unknown> = {};
         
         // Procesar cada módulo recibido
         updates.permissions.forEach(permission => {
@@ -258,7 +258,7 @@ export const useRoles = () => {
         .eq('id', roleId)
         .single();
 
-      const permissions = verifyRole?.permissions as Record<string, any> | null;
+      const permissions = verifyRole?.permissions as Record<string, unknown> | null;
       console.log('🔍 Role después del update:', verifyRole);
       console.log('🔍 ¿prospects existe en BD?', permissions?.prospects);
       console.log('🔍 Todos los módulos en BD:', Object.keys(permissions || {}));
@@ -280,7 +280,7 @@ export const useRoles = () => {
       });
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error updating role', err);
       toast({
         title: "Error al actualizar rol",
@@ -310,7 +310,7 @@ export const useRoles = () => {
       });
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error deleting role', err);
       toast({
         title: "Error al eliminar rol",
@@ -323,7 +323,7 @@ export const useRoles = () => {
 
   useEffect(() => {
     fetchRoles();
-  }, []);
+  }, [fetchRoles]);
 
   return {
     roles,

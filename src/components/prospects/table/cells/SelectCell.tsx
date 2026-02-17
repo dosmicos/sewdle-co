@@ -14,7 +14,7 @@ import { Loader2 } from 'lucide-react';
 interface SelectCellProps {
   value: ProspectStage;
   prospectId: string;
-  onSave: (value: ProspectStage) => Promise<any>;
+  onSave: (value: ProspectStage) => Promise<unknown>;
 }
 
 const STAGE_COLORS: Record<ProspectStage, string> = {

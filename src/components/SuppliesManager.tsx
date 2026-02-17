@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,19 +30,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
   const { materials, loading: materialsLoading } = useMaterials();
   const { materialDeliveries, fetchMaterialDeliveries } = useMaterialDeliveries();
 
-  useEffect(() => {
-    if (selectedWorkshop) {
-      loadWorkshopStock();
-    }
-  }, [selectedWorkshop]);
-
-  useEffect(() => {
-    if (selectedWorkshop && supplies.length > 0) {
-      checkMaterialAvailability();
-    }
-  }, [supplies, workshopStock, selectedWorkshop]);
-
-  const loadWorkshopStock = async () => {
+  const loadWorkshopStock = useCallback(async () => {
     if (!selectedWorkshop) return;
     
     try {
@@ -62,9 +50,9 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
     } catch (error) {
       console.error('Error loading workshop stock:', error);
     }
-  };
+  }, [selectedWorkshop, fetchMaterialDeliveries, materialDeliveries]);
 
-  const checkMaterialAvailability = () => {
+  const checkMaterialAvailability = useCallback(() => {
     const missing: Supply[] = [];
     
     supplies.forEach(supply => {
@@ -82,7 +70,19 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
     });
     
     setMissingMaterials(missing);
-  };
+  }, [supplies, workshopStock]);
+
+  useEffect(() => {
+    if (selectedWorkshop) {
+      loadWorkshopStock();
+    }
+  }, [selectedWorkshop, loadWorkshopStock]);
+
+  useEffect(() => {
+    if (selectedWorkshop && supplies.length > 0) {
+      checkMaterialAvailability();
+    }
+  }, [selectedWorkshop, supplies, workshopStock, checkMaterialAvailability]);
 
   const addSupply = () => {
     onSuppliesChange([...supplies, { materialId: '', quantity: 0, unit: '', notes: '' }]);
@@ -134,7 +134,7 @@ const SuppliesManager = ({ supplies, onSuppliesChange, selectedWorkshop, onCreat
   };
 
   // Helper function to format material display name with color
-  const formatMaterialDisplayName = (material: any) => {
+  const formatMaterialDisplayName = (material: unknown) => {
     const baseName = `${material.name} (${material.sku})`;
     return material.color ? `${baseName} - ${material.color}` : baseName;
   };

@@ -6,7 +6,7 @@ import { Zap, Loader2, Info } from 'lucide-react';
 import { useShopifySkuAssignment } from '@/hooks/useShopifySkuAssignment';
 
 export const ShopifySkuAssignment = () => {
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<unknown>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMode, setSelectedMode] = useState<'empty-only' | 'artificial'>('empty-only');
   

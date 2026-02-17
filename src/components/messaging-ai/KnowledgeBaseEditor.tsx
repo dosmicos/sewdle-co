@@ -90,7 +90,7 @@ export const KnowledgeBaseEditor = () => {
 
         if (channel) {
           setChannelId(channel.id);
-          const config = channel.ai_config as any;
+          const config = channel.ai_config as Record<string, unknown>;
           
           if (config?.knowledgeBase && Array.isArray(config.knowledgeBase)) {
             setItems(config.knowledgeBase);
@@ -123,7 +123,7 @@ export const KnowledgeBaseEditor = () => {
             organization_id: currentOrganization.id,
             channel_type: 'whatsapp',
             is_active: false,
-          } as any)
+          } as Record<string, unknown>)
           .select('id')
           .single();
 
@@ -140,7 +140,7 @@ export const KnowledgeBaseEditor = () => {
 
       if (channelError) throw channelError;
 
-      const currentConfig = (channel?.ai_config as any) || {};
+      const currentConfig = (channel?.ai_config as Record<string, unknown>) || {};
 
       const { error } = await supabase
         .from('messaging_channels')

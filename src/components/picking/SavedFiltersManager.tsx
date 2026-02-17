@@ -43,8 +43,8 @@ const PRESET_FILTERS = [
 ];
 
 interface SavedFiltersManagerProps {
-  currentFilters: Record<string, any>;
-  onLoadFilter: (filters: Record<string, any>) => void;
+  currentFilters: Record<string, unknown>;
+  onLoadFilter: (filters: Record<string, unknown>) => void;
   onAddFilter?: () => void;
 }
 

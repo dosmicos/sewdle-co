@@ -19,7 +19,7 @@ interface MaterialAvailabilityCheckerProps {
 const MaterialAvailabilityChecker = ({ requirements, className = '' }: MaterialAvailabilityCheckerProps) => {
   const { materials, loading } = useMaterials();
   const [availability, setAvailability] = useState<Array<{
-    material: any;
+    material: unknown;
     required: number;
     available: number;
     sufficient: boolean;

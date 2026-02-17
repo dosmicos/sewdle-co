@@ -99,7 +99,7 @@ const ProductsList = ({
         onProductUpdate();
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating product status:', error);
       toast({
         title: "Error al cambiar estado",
@@ -148,7 +148,7 @@ const ProductsList = ({
         onProductUpdate();
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting product:', error);
       toast({
         title: "Error al eliminar producto",

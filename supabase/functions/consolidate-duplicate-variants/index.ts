@@ -8,7 +8,7 @@ const corsHeaders = {
 interface ConsolidationResult {
   success: boolean;
   variants_consolidated?: number;
-  consolidation_details?: any;
+  consolidation_details?: unknown;
   error?: string;
 }
 

@@ -57,7 +57,7 @@ export const ShopifyConfigurationModal: React.FC<ShopifyConfigurationModalProps>
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
-    storeInfo?: any;
+    storeInfo?: unknown;
   } | null>(null);
 
   // Load existing credentials when modal opens
@@ -142,7 +142,7 @@ export const ShopifyConfigurationModal: React.FC<ShopifyConfigurationModalProps>
         toast.error(data.message || 'Error al conectar con Shopify');
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error testing Shopify connection:', error);
       setTestResult({
         success: false,
@@ -182,7 +182,7 @@ export const ShopifyConfigurationModal: React.FC<ShopifyConfigurationModalProps>
       toast.success('Configuración de Shopify guardada exitosamente');
       onSuccess();
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving Shopify configuration:', error);
       toast.error('Error al guardar la configuración');
     } finally {

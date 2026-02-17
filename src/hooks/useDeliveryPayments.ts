@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -46,9 +46,10 @@ export const useDeliveryPayments = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
+  const organizationId = currentOrganization?.id;
 
-  const fetchPayments = async () => {
-    if (!currentOrganization) return;
+  const fetchPayments = useCallback(async () => {
+    if (!organizationId) return;
     
     try {
       setLoading(true);
@@ -60,7 +61,7 @@ export const useDeliveryPayments = () => {
           workshops!delivery_payments_workshop_id_fkey(name),
           orders!delivery_payments_order_id_fkey(order_number)
         `)
-        .eq('organization_id', currentOrganization.id)
+        .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -84,7 +85,7 @@ export const useDeliveryPayments = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [organizationId, toast]);
 
   const calculatePayment = async (
     deliveryId: string, 
@@ -134,7 +135,7 @@ export const useDeliveryPayments = () => {
           delivery_id: deliveryId,
           workshop_id: delivery.workshop_id,
           order_id: delivery.order_id,
-          organization_id: currentOrganization?.id,
+          organization_id: organizationId,
           total_units: calculation.total_units,
           billable_units: calculation.billable_units,
           unit_price: calculation.billable_units > 0 ? calculation.gross_amount / calculation.billable_units : 0,
@@ -262,7 +263,7 @@ export const useDeliveryPayments = () => {
 
   useEffect(() => {
     fetchPayments();
-  }, [currentOrganization]);
+  }, [fetchPayments]);
 
   return {
     payments,

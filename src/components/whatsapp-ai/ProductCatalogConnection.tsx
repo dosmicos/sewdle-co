@@ -73,7 +73,7 @@ export const ProductCatalogConnection = () => {
     return new Set(connections?.filter(c => c.connected).map(c => c.shopify_product_id) || []);
   }, [connections]);
 
-  const products = shopifyData?.products || [];
+  const products = useMemo(() => shopifyData?.products || [], [shopifyData?.products]);
 
   // Calculate total stock per product
   const getProductStock = (product: ShopifyProduct) => {

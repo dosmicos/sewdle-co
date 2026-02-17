@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { requireAuthenticatedUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +8,23 @@ const corsHeaders = {
 };
 
 const ALEGRA_API_URL = "https://api.alegra.com/api/v1";
+
+type JsonObject = Record<string, unknown>;
+
+interface AlegraRequestError extends Error {
+  status?: number;
+  alegra?: unknown;
+  retryAfterSec?: number;
+}
+
+function asObject(value: unknown): JsonObject {
+  return typeof value === "object" && value !== null ? (value as JsonObject) : {};
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error ?? "Error desconocido");
+}
 
 function getAlegraAuthHeader(): string {
   const email = Deno.env.get("ALEGRA_USER_EMAIL");
@@ -46,7 +64,7 @@ async function findContactInAlegra(params: {
 }): Promise<{
   found: boolean;
   matchedBy: "identification" | "phone" | "email" | "created" | "rate_limited";
-  contact: any;
+  contact: JsonObject | null;
   rateLimited?: boolean;
   retryAfterSec?: number;
 }> {
@@ -57,9 +75,11 @@ async function findContactInAlegra(params: {
   console.log("findContactInAlegra - Buscando:", { email, identification, phone });
 
   // Helper para detectar rate limit
-  const isRateLimitError = (e: any) => {
-    const msg = String(e?.message || e?.alegra?.message || "").toLowerCase();
-    return msg.includes("too many requests") || msg.includes("rate limit") || e?.status === 429;
+  const isRateLimitError = (e: unknown) => {
+    const err = e as AlegraRequestError;
+    const alegra = asObject(err.alegra);
+    const msg = String(err.message || alegra["message"] || "").toLowerCase();
+    return msg.includes("too many requests") || msg.includes("rate limit") || err.status === 429;
   };
 
   // 1) PRIMERO: Buscar por EMAIL (query directo, 1 request)
@@ -70,20 +90,21 @@ async function findContactInAlegra(params: {
         `/contacts?type=client&query=${encodeURIComponent(email)}&start=0&limit=10`
       );
       if (Array.isArray(byEmail) && byEmail.length > 0) {
-        const match = byEmail.find((c: any) => 
-          normalizeWhitespace(c.email).toLowerCase() === email
+        const match = byEmail.find((c) =>
+          normalizeWhitespace(asObject(c)["email"]).toLowerCase() === email
         );
         if (match) {
-          console.log("findContactInAlegra - Encontrado por email:", match.id, match.name);
-          return { found: true, matchedBy: "email", contact: match };
+          const matchObj = asObject(match);
+          console.log("findContactInAlegra - Encontrado por email:", matchObj["id"], matchObj["name"]);
+          return { found: true, matchedBy: "email", contact: matchObj };
         }
       }
-    } catch (e: any) {
+    } catch (e) {
       if (isRateLimitError(e)) {
         console.warn("findContactInAlegra - Rate limit en búsqueda por email");
         return { found: false, matchedBy: "rate_limited", contact: null, rateLimited: true, retryAfterSec: 20 };
       }
-      console.error("findContactInAlegra - Error buscando por email:", e.message);
+      console.error("findContactInAlegra - Error buscando por email:", getErrorMessage(e));
     }
   }
 
@@ -95,15 +116,16 @@ async function findContactInAlegra(params: {
         `/contacts?type=client&identification=${encodeURIComponent(identification)}&start=0&limit=10`
       );
       if (Array.isArray(byId) && byId.length > 0) {
-        console.log("findContactInAlegra - Encontrado por identificación:", byId[0].id, byId[0].name);
-        return { found: true, matchedBy: "identification", contact: byId[0] };
+        const first = asObject(byId[0]);
+        console.log("findContactInAlegra - Encontrado por identificación:", first["id"], first["name"]);
+        return { found: true, matchedBy: "identification", contact: first };
       }
-    } catch (e: any) {
+    } catch (e) {
       if (isRateLimitError(e)) {
         console.warn("findContactInAlegra - Rate limit en búsqueda por identificación");
         return { found: false, matchedBy: "rate_limited", contact: null, rateLimited: true, retryAfterSec: 20 };
       }
-      console.error("findContactInAlegra - Error buscando por identificación:", e.message);
+      console.error("findContactInAlegra - Error buscando por identificación:", getErrorMessage(e));
     }
   }
 
@@ -117,22 +139,24 @@ async function findContactInAlegra(params: {
         `/contacts?type=client&query=${encodeURIComponent(phoneDigits)}&start=0&limit=10`
       );
       if (Array.isArray(byPhone) && byPhone.length > 0) {
-        const match = byPhone.find((c: any) => {
-          const p1 = normalizeCOPhone(c.phonePrimary);
-          const p2 = normalizeCOPhone(c.mobile);
+        const match = byPhone.find((c) => {
+          const contact = asObject(c);
+          const p1 = normalizeCOPhone(contact["phonePrimary"]);
+          const p2 = normalizeCOPhone(contact["mobile"]);
           return (p1 && p1 === phone) || (p2 && p2 === phone);
         });
         if (match) {
-          console.log("findContactInAlegra - Encontrado por teléfono:", match.id, match.name);
-          return { found: true, matchedBy: "phone", contact: match };
+          const matchObj = asObject(match);
+          console.log("findContactInAlegra - Encontrado por teléfono:", matchObj["id"], matchObj["name"]);
+          return { found: true, matchedBy: "phone", contact: matchObj };
         }
       }
-    } catch (e: any) {
+    } catch (e) {
       if (isRateLimitError(e)) {
         console.warn("findContactInAlegra - Rate limit en búsqueda por teléfono");
         return { found: false, matchedBy: "rate_limited", contact: null, rateLimited: true, retryAfterSec: 20 };
       }
-      console.error("findContactInAlegra - Error buscando por teléfono:", e.message);
+      console.error("findContactInAlegra - Error buscando por teléfono:", getErrorMessage(e));
     }
   }
 
@@ -293,9 +317,9 @@ function normalizeAlegraCOAddress(address: unknown): {
   city?: string;
   department?: string;
 } {
-  const a = (typeof address === "object" && address) ? (address as any) : {};
-  const rawCity = normalizeWhitespace(a.city);
-  const rawDepartment = normalizeWhitespace(a.department);
+  const a = asObject(address);
+  const rawCity = normalizeWhitespace(a["city"]);
+  const rawDepartment = normalizeWhitespace(a["department"]);
 
   // Normalizar para búsqueda en diccionario
   const cityKey = rawCity
@@ -347,7 +371,7 @@ const MIN_REQUEST_INTERVAL_MS = 150; // 150ms entre requests = max ~400 req/min
 async function makeAlegraRequest(
   endpoint: string,
   method: string = "GET",
-  body?: any,
+  body?: unknown,
   maxRetries: number = 3,
 ) {
   // Rate limiting básico: esperar si la última request fue muy reciente
@@ -361,7 +385,7 @@ async function makeAlegraRequest(
   lastRequestTime = Date.now();
 
   const url = `${ALEGRA_API_URL}${endpoint}`;
-  let lastError: any = null;
+  let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`[Alegra] ${method} ${endpoint} (intento ${attempt}/${maxRetries})`);
@@ -387,7 +411,7 @@ async function makeAlegraRequest(
       const response = await fetch(url, options);
 
       // Alegra casi siempre responde JSON, pero en errores puntuales puede no hacerlo.
-      let data: any = null;
+      let data: unknown = null;
       try {
         data = await response.json();
       } catch {
@@ -408,10 +432,10 @@ async function makeAlegraRequest(
           continue;
         } else {
           // Último intento, lanzar error específico para que el frontend maneje
-          const err = new Error("Too Many Requests - Alegra API saturada. Espera 30 segundos.");
-          (err as any).status = 429;
-          (err as any).alegra = data;
-          (err as any).retryAfterSec = Math.ceil(delayMs / 1000);
+          const err = new Error("Too Many Requests - Alegra API saturada. Espera 30 segundos.") as AlegraRequestError;
+          err.status = 429;
+          err.alegra = data;
+          err.retryAfterSec = Math.ceil(delayMs / 1000);
           throw err;
         }
       }
@@ -432,10 +456,13 @@ async function makeAlegraRequest(
         console.error("Alegra API error:", data);
 
         // Alegra often returns validation errors under `error: [{ message, code, ... }]`
+        const dataObj = asObject(data);
+        const errorField = asObject(dataObj["error"]);
+        const firstError = Array.isArray(dataObj["error"]) ? asObject(dataObj["error"][0]) : {};
         const alegraDetail =
-          (data as any)?.message ||
-          (data as any)?.error?.[0]?.message ||
-          (data as any)?.error?.message ||
+          dataObj["message"] ||
+          firstError["message"] ||
+          errorField["message"] ||
           (typeof data === "string" ? data : undefined);
 
         // Mensajes más amigables
@@ -448,27 +475,28 @@ async function makeAlegraRequest(
           errorMessage = alegraDetail || `Error ${response.status} from Alegra API`;
         }
 
-        const err = new Error(errorMessage);
-        (err as any).alegra = data;
-        (err as any).status = response.status;
+        const err = new Error(errorMessage) as AlegraRequestError;
+        err.alegra = data;
+        err.status = response.status;
         throw err;
       }
 
       return data;
-    } catch (fetchError: any) {
+    } catch (fetchError) {
       lastError = fetchError;
+      const err = fetchError as AlegraRequestError;
       
       // Si es un error de red/timeout y no es el último intento, reintentar
-      if (fetchError.name === 'TypeError' && attempt < maxRetries) {
+      if (err.name === 'TypeError' && attempt < maxRetries) {
         const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
-        console.warn(`[Alegra] Error de red. Reintentando en ${delayMs}ms...`, fetchError.message);
+        console.warn(`[Alegra] Error de red. Reintentando en ${delayMs}ms...`, getErrorMessage(fetchError));
         await sleep(delayMs);
         continue;
       }
       
       // Si ya tiene status (es un error de Alegra), propagar
-      if (fetchError.status) {
-        throw fetchError;
+      if (err.status) {
+        throw err;
       }
       
       // Error de red en último intento
@@ -480,8 +508,8 @@ async function makeAlegraRequest(
   throw lastError || new Error("Error desconocido en Alegra API");
 }
 
-async function putMergedContact(contactId: string, patch: any) {
-  const current = await makeAlegraRequest(`/contacts/${contactId}`);
+async function putMergedContact(contactId: string, patch: JsonObject) {
+  const current = asObject(await makeAlegraRequest(`/contacts/${contactId}`));
 
   const allowedKeys = [
     "name",
@@ -497,15 +525,16 @@ async function putMergedContact(contactId: string, patch: any) {
     "type",
   ] as const;
 
-  const base: Record<string, unknown> = {};
+  const base: JsonObject = {};
   for (const key of allowedKeys) {
-    if ((current as any)?.[key] !== undefined) base[key] = (current as any)[key];
+    if (current[key] !== undefined) base[key] = current[key];
   }
 
-  const currentAddress = typeof (current as any)?.address === "object" ? (current as any).address : {};
+  const currentAddress = asObject(current["address"]);
+  const patchAddress = asObject(patch?.address);
   const mergedAddress = {
     ...currentAddress,
-    ...(patch?.address || {}),
+    ...patchAddress,
   };
 
   // Normalize city/department for Colombia to satisfy DIAN validations
@@ -518,16 +547,16 @@ async function putMergedContact(contactId: string, patch: any) {
   // Ensure identificationType is always present and normalized (required by Alegra Colombia)
   const rawIdType =
     patch?.identificationType ||
-    (base as any).identificationType ||
-    (current as any)?.identificationObject?.type ||
+    base["identificationType"] ||
+    asObject(current["identificationObject"])["type"] ||
     "CC";
   const identificationType = normalizeIdentificationType(rawIdType);
 
   const identificationNumber =
     patch?.identificationNumber ||
-    (base as any).identificationNumber ||
-    (typeof (base as any).identification === "string" ? (base as any).identification : null) ||
-    (current as any)?.identificationObject?.number ||
+    base["identificationNumber"] ||
+    (typeof base["identification"] === "string" ? base["identification"] : null) ||
+    asObject(current["identificationObject"])["number"] ||
     String(Date.now());
 
   const normalizeKindOfPerson = (value: unknown, idType: string) => {
@@ -541,13 +570,13 @@ async function putMergedContact(contactId: string, patch: any) {
   };
 
   const kindOfPerson = normalizeKindOfPerson(
-    patch?.kindOfPerson || (base as any).kindOfPerson || (current as any)?.kindOfPerson,
+    patch?.kindOfPerson || base["kindOfPerson"] || current["kindOfPerson"],
     String(identificationType),
   );
 
   // Ensure nameObject is always properly structured (required by Alegra Colombia)
-  let nameObject = (current as any)?.nameObject || (base as any).nameObject || patch?.nameObject;
-  const fullName = normalizeWhitespace(patch?.name || (base as any).name || (current as any)?.name);
+  let nameObject = asObject(current["nameObject"]) || asObject(base["nameObject"]) || asObject(patch?.nameObject);
+  const fullName = normalizeWhitespace(patch?.name || base["name"] || current["name"]);
 
   if (!nameObject || !nameObject.firstName || !nameObject.lastName) {
     const nameParts = fullName.split(" ").filter(Boolean);
@@ -573,7 +602,7 @@ async function putMergedContact(contactId: string, patch: any) {
     kindOfPerson,
   };
 
-  delete (updated as any).id;
+  delete (updated as JsonObject).id;
 
   console.log("Updating contact with:", JSON.stringify(updated, null, 2));
   return await makeAlegraRequest(`/contacts/${contactId}`, "PUT", updated);
@@ -586,6 +615,12 @@ serve(async (req) => {
   }
 
   try {
+    const authResult = await requireAuthenticatedUser(req, corsHeaders);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    console.log("✅ Authenticated user for alegra-api:", authResult.userId);
+
     const { action, data } = await req.json();
 
     console.log(`Alegra API action: ${action}`);
@@ -646,7 +681,7 @@ serve(async (req) => {
           contact.identification;
 
         // Usar función de normalización para validar tipo de identificación según DIAN
-        let identificationType = normalizeIdentificationType(rawType);
+        const identificationType = normalizeIdentificationType(rawType);
         let identificationNumber = String(rawNumber || "").trim();
 
         // Ensure we send a numeric identification number (Alegra commonly expects digits)
@@ -717,22 +752,18 @@ serve(async (req) => {
         };
 
         // Remove object-shaped identification to avoid confusing the API
-        if (typeof (normalizedContact as any).identification === "object") {
-          (normalizedContact as any).identification = identificationNumber;
-        }
-
         try {
           result = await makeAlegraRequest("/contacts", "POST", normalizedContact);
         } catch (e) {
-          const alegra = (e as any)?.alegra;
+          const alegra = asObject((e as AlegraRequestError).alegra);
 
           // If contact already exists, Alegra returns code 2006 with contactId.
-          if (alegra?.code === 2006 && alegra?.contactId) {
+          if (alegra["code"] === 2006 && alegra["contactId"]) {
             console.log(
               "Contact already exists, fetching existing contact:",
-              alegra.contactId,
+              alegra["contactId"],
             );
-            result = await makeAlegraRequest(`/contacts/${alegra.contactId}`);
+            result = await makeAlegraRequest(`/contacts/${alegra["contactId"]}`);
           } else {
             throw e;
           }
@@ -772,7 +803,7 @@ serve(async (req) => {
           price: priceValue
         }];
         
-        const itemPayload: Record<string, any> = {
+        const itemPayload: Record<string, unknown> = {
           name: item.name,
           price: priceArray,
           tax: item.tax || [{ id: 3 }],  // ID 3 = IVA 19% en Alegra Colombia
@@ -797,7 +828,7 @@ serve(async (req) => {
       case "create-items-bulk": {
         // Create multiple items with delay to avoid rate limiting
         const items = data?.items || [];
-        const results: Array<{ success: boolean; item?: any; name?: string; error?: string }> = [];
+        const results: Array<{ success: boolean; item?: unknown; name?: string; error?: string }> = [];
         
         console.log(`Creating ${items.length} items in bulk...`);
         
@@ -810,7 +841,7 @@ serve(async (req) => {
               price: priceValue
             }];
             
-            const itemPayload: Record<string, any> = {
+            const itemPayload: Record<string, unknown> = {
               name: item.name,
               price: priceArray,
               tax: [{ id: 3 }],  // IVA 19%
@@ -833,12 +864,12 @@ serve(async (req) => {
             if (i < items.length - 1) {
               await sleep(300);
             }
-          } catch (err: any) {
-            console.error(`Error creating item "${item.name}":`, err.message);
+          } catch (err) {
+            console.error(`Error creating item "${item.name}":`, getErrorMessage(err));
             results.push({ 
               success: false, 
               name: item.name, 
-              error: err?.message || "Error desconocido"
+              error: getErrorMessage(err)
             });
           }
         }
@@ -879,7 +910,7 @@ serve(async (req) => {
         
         const pageSize = 30; // Alegra max limit
         const maxPages = 10; // Up to 300 invoices
-        const allInvoices: any[] = [];
+        const allInvoices: unknown[] = [];
         
         // Paginate through invoices
         for (let page = 0; page < maxPages; page++) {
@@ -903,8 +934,8 @@ serve(async (req) => {
           // Early exit if we found matches and are searching by orderNumber
           if (orderNumber) {
             const searchPattern = `Pedido Shopify #${orderNumber}`;
-            const foundInPage = pageData.filter((inv: any) => 
-              inv.observations?.includes(searchPattern)
+            const foundInPage = pageData.filter((inv) =>
+              String(asObject(inv)["observations"] || "").includes(searchPattern)
             );
             if (foundInPage.length > 0) {
               console.log(`search-invoices: Found ${foundInPage.length} matches in page ${page}, stopping early`);
@@ -924,17 +955,21 @@ serve(async (req) => {
         // Filter locally by observations field
         if (orderNumber) {
           const searchPattern = `Pedido Shopify #${orderNumber}`;
-          const filtered = allInvoices.filter((inv: any) => 
-            inv.observations?.includes(searchPattern)
+          const filtered = allInvoices.filter((inv) =>
+            String(asObject(inv)["observations"] || "").includes(searchPattern)
           );
           console.log(`search-invoices: Found ${filtered.length} invoices matching orderNumber ${orderNumber}`);
           result = filtered;
         } else if (query) {
           // General query search in observations or invoice number
-          const filtered = allInvoices.filter((inv: any) => 
-            inv.observations?.includes(query) ||
-            inv.numberTemplate?.fullNumber?.includes(query)
-          );
+          const filtered = allInvoices.filter((inv) => {
+            const invoice = asObject(inv);
+            const numberTemplate = asObject(invoice["numberTemplate"]);
+            return (
+              String(invoice["observations"] || "").includes(query) ||
+              String(numberTemplate["fullNumber"] || "").includes(query)
+            );
+          });
           console.log(`search-invoices: Found ${filtered.length} invoices matching query "${query}"`);
           result = filtered;
         } else {
@@ -996,8 +1031,9 @@ serve(async (req) => {
         const tolerance = 500;
         const targetTotal = parseFloat(String(totalAmount)) || 0;
         
-        const matchingInvoices = invoices.filter((inv: any) => {
-          const invoiceTotal = parseFloat(inv.total || inv.totalAmount || 0);
+        const matchingInvoices = invoices.filter((inv) => {
+          const invoice = asObject(inv);
+          const invoiceTotal = parseFloat(String(invoice["total"] || invoice["totalAmount"] || 0));
           const diff = Math.abs(invoiceTotal - targetTotal);
           return diff <= tolerance;
         });
@@ -1087,7 +1123,7 @@ serve(async (req) => {
           } catch (e) {
             console.error("Failed to normalize address before stamping", {
               invoiceId,
-              message: (e as any)?.message,
+              message: getErrorMessage(e),
             });
           }
         }
@@ -1123,7 +1159,7 @@ serve(async (req) => {
             enrichedResults.push({
               ...stampResult,
               _stampSuccess: true,
-              _fetchError: (fetchError as any)?.message
+              _fetchError: getErrorMessage(fetchError)
             });
           }
         }
@@ -1190,18 +1226,19 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error in alegra-api function:", error);
+    const err = error as AlegraRequestError;
 
     const status =
-      typeof error?.status === "number" && Number.isFinite(error.status)
-        ? error.status
+      typeof err.status === "number" && Number.isFinite(err.status)
+        ? err.status
         : 500;
 
     return new Response(
       JSON.stringify({
         success: false,
-        error: error?.message || "Error desconocido",
+        error: getErrorMessage(error),
       }),
       {
         status,

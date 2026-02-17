@@ -68,7 +68,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         throw new Error('Respuesta inválida de Shopify');
       }
 
-      const formattedProducts = data.products.map((product: any) => {
+      const formattedProducts = data.products.map((product: unknown) => {
         // Ordenar las variantes usando nuestra función utilitaria
         const sortedVariants = product.variants ? sortShopifyVariants(product.variants) : [];
         
@@ -78,7 +78,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
           description: product.body_html || '',
           price: parseFloat(sortedVariants[0]?.price || '0'),
           image_url: product.image?.src || product.images?.[0]?.src || '',
-          variants: sortedVariants.map((variant: any) => ({
+          variants: sortedVariants.map((variant: unknown) => ({
             size: variant.title !== 'Default Title' ? variant.title : '',
             color: variant.option2 || '',
             sku: variant.sku || '',
@@ -96,7 +96,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
         description: `Se encontraron ${formattedProducts.length} productos.`,
       });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching products from Shopify:', error);
       const errorMessage = error.message || "Error en la conexión con Shopify.";
       setError(errorMessage);
@@ -266,7 +266,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
       onProductSelect(product);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error importing product:', error);
       toast({
         title: "Error al importar producto",

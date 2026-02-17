@@ -334,7 +334,7 @@ export const ConversationThread = ({
       const timer = setTimeout(() => scrollToBottom('instant'), 50);
       return () => clearTimeout(timer);
     }
-  }, [conversation?.id]);
+  }, [conversation?.id, messages.length]);
 
   // Smooth scroll when new messages arrive
   useEffect(() => {
@@ -603,7 +603,7 @@ export const ConversationThread = ({
       });
 
       if (error) {
-        const anyError: any = error;
+        const anyError: unknown = error;
         let messageText = error.message || 'Error reintentando descarga';
         const resp: Response | undefined = anyError?.context?.response;
 
@@ -625,7 +625,7 @@ export const ConversationThread = ({
 
       toast.success('Medio recuperado');
       // IMPORTANT: UI will update via Realtime UPDATE subscription in useMessagingMessages
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Retry media failed:', err);
       toast.error(err?.message || 'No se pudo recuperar el medio');
     } finally {

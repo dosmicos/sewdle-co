@@ -39,7 +39,7 @@ export const useMaterialConsumption = () => {
       });
 
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error consuming materials:', error);
       
       let errorMessage = "No se pudieron consumir los materiales";

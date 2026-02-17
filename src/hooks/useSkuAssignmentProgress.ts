@@ -19,7 +19,7 @@ interface SkuAssignmentLog {
   shopify_api_calls: number;
   rate_limit_hits: number;
   error_message: string | null;
-  detailed_results: any;
+  detailed_results: unknown;
   started_at: string;
   completed_at: string | null;
   last_activity_at: string;

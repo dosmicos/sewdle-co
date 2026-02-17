@@ -90,7 +90,7 @@ export const OrderAdvancesManager = ({ orderId, workshopId }: OrderAdvancesManag
     }
   };
 
-  const handleEdit = (advance: any) => {
+  const handleEdit = (advance: unknown) => {
     setEditingAdvance(advance.id);
     setFormData({
       order_id: advance.order_id,

@@ -17,6 +17,28 @@ interface SalesVelocityData {
   days_with_stock?: number;
 }
 
+interface VariantMetrics {
+  product_id: string;
+  product_name: string;
+  sku_variant: string;
+  current_stock: number;
+  sales_60_days: number;
+  revenue_60_days: number;
+  orders_count: number;
+}
+
+interface ConsolidatedProductMetrics {
+  product_id: string;
+  product_name: string;
+  variant_count: number;
+  main_sku: string;
+  skus: string[];
+  current_stock: number;
+  sales_60_days: number;
+  revenue_60_days: number;
+  orders_count: number;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -89,7 +111,7 @@ Deno.serve(async (req) => {
       }
 
       // Calculate sales for each variant and group by product
-      const variantData: any[] = [];
+      const variantData: VariantMetrics[] = [];
       
       for (const variant of variants || []) {
         // Get sales data from Shopify orders
@@ -132,7 +154,7 @@ Deno.serve(async (req) => {
       }
 
       // Group by product and consolidate metrics
-      const productMap = new Map<string, any>();
+      const productMap = new Map<string, ConsolidatedProductMetrics>();
       
       console.log(`🔍 Agrupando ${variantData.length} variantes por producto...`);
       
@@ -155,6 +177,9 @@ Deno.serve(async (req) => {
         }
         
         const product = productMap.get(productKey);
+        if (!product) {
+          return;
+        }
         product.variant_count += 1;
         product.skus.push(variant.sku_variant);
         product.current_stock += variant.current_stock;

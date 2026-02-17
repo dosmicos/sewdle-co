@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { addQuarters, startOfQuarter, endOfQuarter, format, subQuarters } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -18,7 +18,7 @@ export const useOKRQuarter = () => {
   const [selectedQuarter, setSelectedQuarter] = useState<Quarter | null>(null);
   const [availableQuarters, setAvailableQuarters] = useState<Quarter[]>([]);
 
-  const generateQuarter = (date: Date): Quarter => {
+  const generateQuarter = useCallback((date: Date): Quarter => {
     const startDate = startOfQuarter(date);
     const endDate = endOfQuarter(date);
     const year = date.getFullYear();
@@ -35,9 +35,9 @@ export const useOKRQuarter = () => {
       isCurrent: startDate <= now && now <= endDate,
       isActive: endDate >= now // Quarter is current or future
     };
-  };
+  }, []);
 
-  const generateAvailableQuarters = () => {
+  const generateAvailableQuarters = useCallback(() => {
     const quarters: Quarter[] = [];
     const now = new Date();
     
@@ -48,7 +48,7 @@ export const useOKRQuarter = () => {
     }
     
     return quarters.sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
-  };
+  }, [generateQuarter]);
 
   const navigateToQuarter = (direction: 'prev' | 'next') => {
     if (!selectedQuarter) return;
@@ -117,7 +117,7 @@ export const useOKRQuarter = () => {
       setCurrentQuarter(current);
       setSelectedQuarter(current);
     }
-  }, []);
+  }, [generateAvailableQuarters]);
 
   return {
     currentQuarter,

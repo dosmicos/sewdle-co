@@ -106,7 +106,7 @@ serve(async (req) => {
     const organizationId = label.organization_id;
     let shopifyFulfillmentCancelled = true;
     let shopifyFulfillmentError: string | null = null;
-    let pendingFulfillmentIds: string[] = [];
+    const pendingFulfillmentIds: string[] = [];
     
     if (shopifyOrderId && organizationId) {
       console.log(`Cancelling Shopify fulfillment for order ${shopifyOrderId}`);

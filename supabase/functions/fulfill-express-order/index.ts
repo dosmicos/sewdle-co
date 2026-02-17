@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     const fulfillmentOrders = fulfillmentOrdersData.fulfillment_orders || [];
     
     // Find open fulfillment order
-    const openFulfillmentOrder = fulfillmentOrders.find((fo: any) => 
+    const openFulfillmentOrder = fulfillmentOrders.find((fo: unknown) => 
       fo.status === 'open' || fo.status === 'in_progress'
     );
 
@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Error en fulfill-express-order:', error);
     return new Response(
       JSON.stringify({

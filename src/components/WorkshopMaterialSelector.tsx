@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SearchableMaterialSelector from '@/components/supplies/SearchableMaterialSelector';
 import { Input } from '@/components/ui/input';
@@ -43,7 +43,7 @@ const WorkshopMaterialSelector = ({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchWorkshopMaterials = async () => {
+  const fetchWorkshopMaterials = useCallback(async () => {
     if (!workshopId) return;
     
     setLoading(true);
@@ -56,10 +56,10 @@ const WorkshopMaterialSelector = ({
 
       // Filtrar solo materiales del taller específico con stock positivo
       const workshopMaterials = data
-        ?.filter((delivery: any) => 
+        ?.filter((delivery: unknown) => 
           delivery.workshop_id === workshopId && delivery.real_balance > 0
         )
-        .map((delivery: any) => ({
+        .map((delivery: unknown) => ({
           id: delivery.material_id,
           material_id: delivery.material_id,
           material_name: delivery.material_name,
@@ -81,7 +81,7 @@ const WorkshopMaterialSelector = ({
       }, []);
 
       setAvailableMaterials(uniqueMaterials);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching workshop materials:', error);
       toast({
         title: "Error",
@@ -91,11 +91,11 @@ const WorkshopMaterialSelector = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [workshopId, toast]);
 
   useEffect(() => {
     fetchWorkshopMaterials();
-  }, [workshopId]);
+  }, [fetchWorkshopMaterials]);
 
   const addMaterial = () => {
     onMaterialsChange([
@@ -109,7 +109,7 @@ const WorkshopMaterialSelector = ({
     onMaterialsChange(updatedMaterials);
   };
 
-  const updateMaterial = (index: number, field: keyof SelectedMaterial, value: any) => {
+  const updateMaterial = (index: number, field: keyof SelectedMaterial, value: unknown) => {
     const updatedMaterials = [...selectedMaterials];
     
     if (field === 'id' && value) {

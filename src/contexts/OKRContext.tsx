@@ -132,7 +132,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setKeyResults(keyResultsData || []);
       setCheckins(checkinsData || []);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading OKR data:', error);
       setError(error.message);
       toast.error('Error cargando datos de OKR');
@@ -165,7 +165,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Objetivo creado exitosamente');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating objective:', error);
       toast.error('Error creando objetivo');
       throw error;
@@ -184,7 +184,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Objetivo actualizado');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating objective:', error);
       toast.error('Error actualizando objetivo');
       throw error;
@@ -203,7 +203,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Objetivo eliminado');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting objective:', error);
       toast.error('Error eliminando objetivo');
       throw error;
@@ -227,7 +227,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Key Result creado exitosamente');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating key result:', error);
       toast.error('Error creando Key Result');
       throw error;
@@ -246,7 +246,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Key Result actualizado');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating key result:', error);
       toast.error('Error actualizando Key Result');
       throw error;
@@ -265,7 +265,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Key Result eliminado');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting key result:', error);
       toast.error('Error eliminando Key Result');
       throw error;
@@ -289,7 +289,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast.success('Check-in registrado');
       await refreshData();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating checkin:', error);
       toast.error('Error registrando check-in');
       throw error;
@@ -340,6 +340,7 @@ export const OKRProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useOKR = () => {
   const context = useContext(OKRContext);
   if (!context) {

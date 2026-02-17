@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,15 +14,11 @@ interface DeliveryInvoiceFilesProps {
 }
 
 const DeliveryInvoiceFiles = ({ deliveryId }: DeliveryInvoiceFilesProps) => {
-  const [files, setFiles] = useState<any[]>([]);
+  const [files, setFiles] = useState<unknown[]>([]);
   const { fetchEvidenceFiles, deleteEvidenceFile, loading } = useDeliveryEvidence();
   const { canEditDeliveries } = useUserContext();
 
-  useEffect(() => {
-    loadFiles();
-  }, [deliveryId]);
-
-  const loadFiles = async () => {
+  const loadFiles = useCallback(async () => {
     const allFiles = await fetchEvidenceFiles(deliveryId);
     // Filtrar solo archivos de cuenta de cobro/remisión
     const invoiceFiles = allFiles.filter(file => 
@@ -30,7 +26,11 @@ const DeliveryInvoiceFiles = ({ deliveryId }: DeliveryInvoiceFilesProps) => {
       (!file.file_category && file.file_type === 'application/pdf')
     );
     setFiles(invoiceFiles);
-  };
+  }, [fetchEvidenceFiles, deliveryId]);
+
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
 
   const handleDownload = (fileUrl: string, fileName: string) => {
     const link = document.createElement('a');

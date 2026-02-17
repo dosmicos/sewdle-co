@@ -59,8 +59,8 @@ export const useUgcCampaigns = (creatorId?: string | null) => {
   });
 
   const updateCampaignStatus = useMutation({
-    mutationFn: async ({ id, status, extra }: { id: string; status: CampaignStatus; extra?: Record<string, any> }) => {
-      const updateData: Record<string, any> = { status, ...extra };
+    mutationFn: async ({ id, status, extra }: { id: string; status: CampaignStatus; extra?: Record<string, unknown> }) => {
+      const updateData: Record<string, unknown> = { status, ...extra };
       const { error } = await supabase
         .from('ugc_campaigns')
         .update(updateData)

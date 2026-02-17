@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 interface SyncResult {
   success: boolean;
   message: string;
-  summary?: any;
+  summary?: unknown;
 }
 
 export const useShopifySync = () => {

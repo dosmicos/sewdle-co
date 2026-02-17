@@ -92,7 +92,7 @@ const LazyImage: React.FC<{ item: ParaEmpacarItem }> = ({ item }) => {
 
   return (
     <img
-      ref={imgRef as any}
+      ref={imgRef as Record<string, unknown>}
       src={imageUrl}
       alt={item.title}
       className="w-14 h-14 rounded-md object-cover flex-shrink-0"

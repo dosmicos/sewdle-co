@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,9 +15,9 @@ interface InventorySyncManagerProps {
 }
 
 const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
-  const [syncLogs, setSyncLogs] = useState<any[]>([]);
-  const [pendingDeliveries, setPendingDeliveries] = useState<any[]>([]);
-  const [skuStatuses, setSkuStatuses] = useState<{[deliveryId: string]: any[]}>({});
+  const [syncLogs, setSyncLogs] = useState<unknown[]>([]);
+  const [pendingDeliveries, setPendingDeliveries] = useState<unknown[]>([]);
+  const [skuStatuses, setSkuStatuses] = useState<{[deliveryId: string]: unknown[]}>({});
 
   const { 
     syncApprovedItemsToShopify, 
@@ -32,11 +32,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
   const { fetchDeliveries, fetchDeliveryById, loading: deliveriesLoading } = useDeliveries();
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadData();
-  }, [deliveryId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [logs, deliveries] = await Promise.all([
       fetchSyncLogs(deliveryId),
       fetchDeliveries()
@@ -46,7 +42,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     
     // Filtrar entregas aprobadas que necesitan sincronización
     const filteredDeliveries = [];
-    const newSkuStatuses: {[deliveryId: string]: any[]} = {};
+    const newSkuStatuses: {[deliveryId: string]: unknown[]} = {};
     
     for (const delivery of deliveries) {
       // Solo incluir entregas aprobadas con items pendientes
@@ -63,8 +59,8 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
         
         if (fullDelivery?.delivery_items) {
           const skuVariants = fullDelivery.delivery_items
-            .filter((item: any) => item.quantity_approved > 0)
-            .map((item: any) => item.order_items?.product_variants?.sku_variant)
+            .filter((item: unknown) => item.quantity_approved > 0)
+            .map((item: unknown) => item.order_items?.product_variants?.sku_variant)
             .filter(Boolean);
           
           if (skuVariants.length > 0) {
@@ -89,7 +85,11 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     
     setSkuStatuses(newSkuStatuses);
     setPendingDeliveries(filteredDeliveries);
-  };
+  }, [deliveryId, fetchSyncLogs, fetchDeliveries, checkRecentSuccessfulSync, fetchDeliveryById, checkSkuSyncStatus]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleClearSyncLock = async (deliveryId: string) => {
     try {
@@ -111,7 +111,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     }
   }
 
-  const handleManualSync = async (delivery: any) => {
+  const handleManualSync = async (delivery: unknown) => {
     try {
       // Verificar que no esté ya sincronizada
       if (delivery.synced_to_shopify) {
@@ -162,13 +162,13 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
 
       // Mapear items aprobados para sincronización
       const approvedItems = fullDelivery.delivery_items
-        .filter((item: any) => item.quantity_approved > 0)
-        .map((item: any) => ({
+        .filter((item: unknown) => item.quantity_approved > 0)
+        .map((item: unknown) => ({
           variantId: item.order_items?.product_variant_id || '',
           skuVariant: item.order_items?.product_variants?.sku_variant || '',
           quantityApproved: item.quantity_approved
         }))
-        .filter((item: any) => item.skuVariant);
+        .filter((item: unknown) => item.skuVariant);
 
       if (approvedItems.length === 0) {
         throw new Error('No hay items aprobados para sincronizar');
@@ -187,7 +187,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     }
   };
 
-  const renderSyncStatus = (log: any) => {
+  const renderSyncStatus = (log: unknown) => {
     const successRate = log.success_count / (log.success_count + log.error_count) * 100;
     
     if (successRate === 100) {
@@ -199,7 +199,7 @@ const InventorySyncManager = ({ deliveryId }: InventorySyncManagerProps) => {
     }
   };
 
-  const renderDeliveryStatus = (delivery: any) => {
+  const renderDeliveryStatus = (delivery: unknown) => {
     if (delivery.synced_to_shopify) {
       return <Badge className="bg-green-100 text-green-700"><Shield className="w-3 h-3 mr-1" />Sincronizado</Badge>;
     } else if (delivery.sync_attempts > 0) {

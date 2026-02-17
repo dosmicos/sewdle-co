@@ -7,7 +7,7 @@ import dosmicosLogo from '@/assets/dosmicos-logo.png';
 const PrintableOrderView = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   
   // Guard to prevent double print in React StrictMode

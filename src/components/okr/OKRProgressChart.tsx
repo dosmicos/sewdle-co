@@ -61,7 +61,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
 
   const renderChart = () => {
     switch (dataType) {
-      case 'trends':
+      case 'trends': {
         if (variant === 'area') {
           const data = timeSeriesData.filter(d => Number.isFinite(Number(d.progress)));
           if (data.length === 0) {
@@ -106,8 +106,9 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
             </LineChart>
           </ResponsiveContainer>
         );
+      }
 
-      case 'areas':
+      case 'areas': {
         const areaData = getAreaDistributionData().filter(d => Number.isFinite(Number(d.progress)));
         if (areaData.length === 0) {
           return <div className="text-sm text-muted-foreground">Sin datos por área</div>;
@@ -127,6 +128,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
             </BarChart>
           </ResponsiveContainer>
         );
+      }
 
       case 'distribution':
         return (
@@ -154,7 +156,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
           </ResponsiveContainer>
         );
 
-      default: // progress
+      default: { // progress
         const progressOverviewData = progressData.slice(0, 10).map(obj => {
           const val = Number(obj.overallProgress);
           const safe = Number.isFinite(val) ? val : 0;
@@ -187,6 +189,7 @@ export const OKRProgressChart: React.FC<OKRProgressChartProps> = ({
             </BarChart>
           </ResponsiveContainer>
         );
+      }
     }
   };
 

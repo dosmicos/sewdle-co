@@ -47,7 +47,7 @@ const DeliveriesPage = () => {
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deliveryToDelete, setDeliveryToDelete] = useState<any>(null);
+  const [deliveryToDelete, setDeliveryToDelete] = useState<unknown>(null);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
   
   // Query params for filters
@@ -206,7 +206,7 @@ const DeliveriesPage = () => {
     refetch();
   };
 
-  const handleViewDelivery = (delivery: any) => {
+  const handleViewDelivery = (delivery: unknown) => {
     // Preservar los filtros actuales en la URL
     const queryString = searchParams.toString();
     const url = `/deliveries/${delivery.tracking_number}${queryString ? `?${queryString}` : ''}`;
@@ -215,7 +215,7 @@ const DeliveriesPage = () => {
     });
   };
 
-  const handleDeleteDelivery = (delivery: any) => {
+  const handleDeleteDelivery = (delivery: unknown) => {
     setDeliveryToDelete(delivery);
     setShowDeleteDialog(true);
   };
@@ -749,9 +749,9 @@ const DeliveryCards = ({
   canDeleteDeliveries,
   PaymentStatusIndicator 
 }: { 
-  deliveries: any[], 
-  onViewDetails: (delivery: any) => void,
-  onDeleteDelivery: (delivery: any) => void,
+  deliveries: unknown[], 
+  onViewDetails: (delivery: unknown) => void,
+  onDeleteDelivery: (delivery: unknown) => void,
   canDeleteDeliveries: boolean,
   PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null
 }) => {
@@ -777,7 +777,7 @@ const DeliveryCards = ({
     }
   };
 
-  const getQuantities = (delivery: any) => {
+  const getQuantities = (delivery: unknown) => {
     return {
       total: delivery.total_quantity || 0,
       approved: delivery.total_approved || 0,
@@ -895,9 +895,9 @@ const DeliveryTable = ({
   canDeleteDeliveries,
   PaymentStatusIndicator 
 }: { 
-  deliveries: any[], 
-  onViewDetails: (delivery: any) => void,
-  onDeleteDelivery: (delivery: any) => void,
+  deliveries: unknown[], 
+  onViewDetails: (delivery: unknown) => void,
+  onDeleteDelivery: (delivery: unknown) => void,
   canDeleteDeliveries: boolean,
   PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null
 }) => {
@@ -923,7 +923,7 @@ const DeliveryTable = ({
     }
   };
 
-  const getQuantities = (delivery: any) => {
+  const getQuantities = (delivery: unknown) => {
     return {
       total: delivery.total_quantity || 0,
       approved: delivery.total_approved || 0,

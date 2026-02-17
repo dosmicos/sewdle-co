@@ -64,8 +64,8 @@ export const useOrganizationData = () => {
   const { currentOrganization } = useOrganization();
 
   // Función helper para agregar filtro de organización a queries
-  const withOrganizationFilter = <T extends Record<string, any>>(
-    query: any,
+  const withOrganizationFilter = <T extends Record<string, unknown>>(
+    query: unknown,
     options?: { 
       table?: string;
       column?: string;

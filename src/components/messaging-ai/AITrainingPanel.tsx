@@ -55,7 +55,7 @@ export const AITrainingPanel = () => {
   const [messages, setMessages] = useState<TestMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [aiConfig, setAiConfig] = useState<any>(null);
+  const [aiConfig, setAiConfig] = useState<unknown>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   const [channelId, setChannelId] = useState<string | null>(null);
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -93,7 +93,7 @@ export const AITrainingPanel = () => {
         if (channel) {
           setChannelId(channel.id);
           setAiConfig(channel.ai_config);
-          setSystemPrompt((channel.ai_config as any)?.systemPrompt || '');
+          setSystemPrompt((channel.ai_config as Record<string, unknown>)?.systemPrompt || '');
         }
       } catch (err) {
         console.error('Error loading config:', err);
@@ -125,7 +125,7 @@ export const AITrainingPanel = () => {
             channel_type: 'whatsapp',
             is_active: false,
             ai_enabled: true,
-          } as any)
+          } as Record<string, unknown>)
           .select('id')
           .single();
 
@@ -141,7 +141,7 @@ export const AITrainingPanel = () => {
         .eq('id', effectiveChannelId)
         .maybeSingle();
 
-      const currentConfig = (current?.ai_config as any) || {};
+      const currentConfig = (current?.ai_config as Record<string, unknown>) || {};
 
       const { error } = await supabase
         .from('messaging_channels')
@@ -156,7 +156,7 @@ export const AITrainingPanel = () => {
       if (error) throw error;
 
       // Update local state
-      setAiConfig((prev: any) => ({ ...prev, systemPrompt }));
+      setAiConfig((prev: unknown) => ({ ...prev, systemPrompt }));
       toast.success('Prompt guardado correctamente');
     } catch (err) {
       console.error('Error saving prompt:', err);
@@ -193,7 +193,7 @@ export const AITrainingPanel = () => {
 
       if (aiConfig?.rules?.length > 0) {
         systemPrompt += '\n\nReglas especiales:';
-        aiConfig.rules.forEach((rule: any) => {
+        aiConfig.rules.forEach((rule: unknown) => {
           if (rule.condition && rule.response) {
             systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
           }
@@ -202,7 +202,7 @@ export const AITrainingPanel = () => {
 
       if (aiConfig?.knowledgeBase?.length > 0) {
         systemPrompt += '\n\nConocimiento de la empresa:';
-        aiConfig.knowledgeBase.forEach((item: any) => {
+        aiConfig.knowledgeBase.forEach((item: unknown) => {
           if (item.question && item.answer) {
             systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
           }
@@ -260,7 +260,7 @@ export const AITrainingPanel = () => {
           ]);
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error generating response:', err);
       
       let errorMessage = 'Error: No se pudo conectar con la IA.';

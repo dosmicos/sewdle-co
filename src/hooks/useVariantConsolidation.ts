@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 interface ConsolidationResult {
   success: boolean;
   variants_consolidated?: number;
-  consolidation_details?: any;
+  consolidation_details?: unknown;
   error?: string;
 }
 
@@ -64,7 +64,7 @@ export const useVariantConsolidation = () => {
       
       // Safe type checking for consolidation details
       if (data && typeof data === 'object' && 'consolidation_details' in data) {
-        const details = data.consolidation_details as any;
+        const details = data.consolidation_details as Record<string, unknown>;
         return details?.consolidations || [];
       }
       

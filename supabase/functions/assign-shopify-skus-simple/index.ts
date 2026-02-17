@@ -27,7 +27,7 @@ serve(async (req) => {
     console.log(`🚀 Starting SKU assignment in mode: ${mode}`)
     
     // Process all variants without limits
-    let pageCursor: string | null = null
+    const pageCursor: string | null = null
 
     const rawShopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
     const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')

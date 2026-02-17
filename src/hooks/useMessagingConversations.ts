@@ -60,9 +60,9 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
         }
         if (assignment.tag) {
           tagsByConversation[convId].push({
-            id: (assignment.tag as any).id,
-            name: (assignment.tag as any).name,
-            color: (assignment.tag as any).color,
+            id: (assignment.tag as Record<string, unknown>).id,
+            name: (assignment.tag as Record<string, unknown>).name,
+            color: (assignment.tag as Record<string, unknown>).color,
           });
         }
       });
@@ -155,7 +155,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
         ? 'IA activada: Responderá automáticamente' 
         : 'Control manual activado: Solo tú responderás');
     },
-    onError: (error: any, _, context) => {
+    onError: (error: unknown, _, context) => {
       console.error('Error toggling AI managed:', error);
       // Rollback on error
       if (context?.previousConversations) {
@@ -188,7 +188,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
       queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
       toast.success('Conversación eliminada');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Error deleting conversation:', error);
       toast.error(`Error al eliminar: ${error.message}`);
     },
@@ -254,7 +254,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
        });
 
        if (error) {
-         const anyError: any = error;
+         const anyError: unknown = error;
          let messageText = error.message || 'Error enviando mensaje';
          const resp: Response | undefined = anyError?.context?.response;
 
@@ -277,7 +277,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
       toast.success('Conversación iniciada correctamente');
       return data.conversationId;
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Error creating conversation:', error);
       toast.error(`Error al iniciar conversación: ${error.message}`);
     },
@@ -336,7 +336,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
 
       return { previous };
     },
-    onError: (error: any, _, context) => {
+    onError: (error: unknown, _, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['messaging-conversations', channelFilter], context.previous);
       }

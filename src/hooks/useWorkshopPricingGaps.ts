@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,7 +17,7 @@ export const useWorkshopPricingGaps = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchPricingGaps = async () => {
+  const fetchPricingGaps = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase.rpc('get_workshop_pricing_gaps');
@@ -35,11 +35,11 @@ export const useWorkshopPricingGaps = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchPricingGaps();
-  }, []);
+  }, [fetchPricingGaps]);
 
   return {
     gaps,

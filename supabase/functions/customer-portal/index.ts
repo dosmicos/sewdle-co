@@ -8,10 +8,23 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const logStep = (step: string, details?: any) => {
+type CustomerPortalAction = "portal" | "summary";
+
+const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CUSTOMER-PORTAL] ${step}${detailsStr}`);
 };
+
+function resolveAction(body: Record<string, unknown>): CustomerPortalAction {
+  return body.action === "summary" ? "summary" : "portal";
+}
+
+function asExpandedPaymentMethod(
+  value: string | Stripe.PaymentMethod | null | undefined
+): Stripe.PaymentMethod | null {
+  if (!value || typeof value === "string") return null;
+  return value;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -20,6 +33,16 @@ serve(async (req) => {
 
   try {
     logStep("Function started");
+    let requestBody: Record<string, unknown> = {};
+    try {
+      const parsed = await req.json();
+      if (parsed && typeof parsed === "object") {
+        requestBody = parsed as Record<string, unknown>;
+      }
+    } catch {
+      requestBody = {};
+    }
+    const action = resolveAction(requestBody);
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
@@ -51,7 +74,97 @@ serve(async (req) => {
       throw new Error("No Stripe customer found for this user");
     }
     const customerId = customers.data[0].id;
+    const customer = customers.data[0];
     logStep("Found Stripe customer", { customerId });
+
+    if (action === "summary") {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 10,
+        expand: ["data.default_payment_method"],
+      });
+
+      const activeStatuses = ["active", "trialing", "past_due", "incomplete", "unpaid"];
+      const currentSubscription =
+        subscriptions.data.find((sub) => activeStatuses.includes(sub.status)) ??
+        subscriptions.data[0] ??
+        null;
+
+      const paymentMethod =
+        asExpandedPaymentMethod(currentSubscription?.default_payment_method) ??
+        asExpandedPaymentMethod(customer.invoice_settings?.default_payment_method);
+
+      let upcomingInvoice: Stripe.Invoice | null = null;
+      try {
+        const upcoming = await stripe.invoices.retrieveUpcoming({ customer: customerId });
+        upcomingInvoice = upcoming as Stripe.Invoice;
+      } catch {
+        upcomingInvoice = null;
+      }
+
+      const invoices = await stripe.invoices.list({
+        customer: customerId,
+        limit: 12,
+      });
+
+      const summary = {
+        customerId,
+        subscription: currentSubscription
+          ? {
+              id: currentSubscription.id,
+              status: currentSubscription.status,
+              current_period_start: currentSubscription.current_period_start,
+              current_period_end: currentSubscription.current_period_end,
+              cancel_at_period_end: currentSubscription.cancel_at_period_end,
+              currency: currentSubscription.currency,
+              plan_name:
+                currentSubscription.items.data[0]?.price?.nickname ??
+                currentSubscription.items.data[0]?.price?.id ??
+                null,
+            }
+          : null,
+        upcoming_invoice: upcomingInvoice
+          ? {
+              amount_due: upcomingInvoice.amount_due ?? 0,
+              amount_remaining: upcomingInvoice.amount_remaining ?? 0,
+              currency: upcomingInvoice.currency ?? "usd",
+              next_payment_attempt: upcomingInvoice.next_payment_attempt ?? null,
+            }
+          : null,
+        payment_method: paymentMethod
+          ? {
+              type: paymentMethod.type ?? null,
+              card_brand: paymentMethod.card?.brand ?? null,
+              card_last4: paymentMethod.card?.last4 ?? null,
+              card_exp_month: paymentMethod.card?.exp_month ?? null,
+              card_exp_year: paymentMethod.card?.exp_year ?? null,
+            }
+          : null,
+        invoices: invoices.data.map((inv) => ({
+          id: inv.id,
+          number: inv.number,
+          status: inv.status,
+          amount_due: inv.amount_due,
+          amount_paid: inv.amount_paid,
+          total: inv.total,
+          currency: inv.currency,
+          created: inv.created,
+          hosted_invoice_url: inv.hosted_invoice_url,
+          invoice_pdf: inv.invoice_pdf,
+        })),
+      };
+
+      logStep("Billing summary generated", {
+        hasSubscription: !!summary.subscription,
+        invoiceCount: summary.invoices.length,
+      });
+
+      return new Response(JSON.stringify(summary), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
     // Create customer portal session
     const origin = req.headers.get("origin") || "https://sewdle.lovable.app";

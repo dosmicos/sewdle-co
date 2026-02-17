@@ -125,7 +125,7 @@ export const useProductionOrders = () => {
 
       return { success: true, order };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating production order:', error);
       toast({
         title: "Error",

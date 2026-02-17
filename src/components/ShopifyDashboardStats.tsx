@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, ShoppingCart, Users, TrendingUp } from 'lucide-react';
 
 interface ShopifyDashboardStatsProps {
-  orders: any[];
-  customerAnalytics: any[];
-  productAnalytics: any[];
+  orders: unknown[];
+  customerAnalytics: unknown[];
+  productAnalytics: unknown[];
 }
 
 export const ShopifyDashboardStats: React.FC<ShopifyDashboardStatsProps> = ({

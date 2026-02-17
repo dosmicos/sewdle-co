@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, format, eachDayOfInterval, differenceInSeconds } from 'date-fns';
@@ -36,6 +36,7 @@ interface ShopifyOrderStats {
 
 export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
   const { currentOrganization } = useOrganization();
+  const organizationId = currentOrganization?.id;
   const [dateRange, setDateRange] = useState<DateRangeType>(initialRange);
   const [stats, setStats] = useState<ShopifyOrderStats>({
     ordersReceived: 0,
@@ -54,7 +55,7 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
   const dateRangeValues = useMemo(() => {
     const now = new Date();
     let start: Date;
-    let end: Date = endOfDay(now);
+    const end: Date = endOfDay(now);
 
     switch (dateRange) {
       case 'today':
@@ -79,8 +80,8 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
     return { start, end };
   }, [dateRange]);
 
-  const fetchStats = async () => {
-    if (!currentOrganization?.id) return;
+  const fetchStats = useCallback(async () => {
+    if (!organizationId) return;
 
     setLoading(true);
     try {
@@ -92,7 +93,7 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
       const { data: receivedData, error: receivedError } = await supabase
         .from('shopify_orders')
         .select('id, created_at_shopify')
-        .eq('organization_id', currentOrganization.id)
+        .eq('organization_id', organizationId)
         .gte('created_at_shopify', startISO)
         .lte('created_at_shopify', endISO);
 
@@ -102,7 +103,7 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
       const { data: packedData, error: packedError } = await supabase
         .from('picking_packing_orders')
         .select('id, packed_at')
-        .eq('organization_id', currentOrganization.id)
+        .eq('organization_id', organizationId)
         .not('packed_at', 'is', null)
         .gte('packed_at', startISO)
         .lte('packed_at', endISO)
@@ -200,11 +201,11 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRangeValues, organizationId]);
 
   useEffect(() => {
     fetchStats();
-  }, [currentOrganization?.id, dateRange, dateRangeValues]);
+  }, [fetchStats]);
 
   return {
     stats,

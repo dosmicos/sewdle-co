@@ -80,7 +80,7 @@ export const useSalesVelocityRanking = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const refreshRanking = useCallback(async () => {
     try {
@@ -98,7 +98,7 @@ export const useSalesVelocityRanking = () => {
     } finally {
       setCalculating(false);
     }
-  }, [fetchRanking, toast]);
+  }, [fetchRanking]);
 
   const markForDiscontinuation = useCallback(async (productIds: string[]) => {
     try {
@@ -128,7 +128,7 @@ export const useSalesVelocityRanking = () => {
       console.error('❌ Error marcando productos:', error);
       toast.error("Error marcando productos para descontinuación");
     }
-  }, [fetchRanking, toast]);
+  }, [fetchRanking]);
 
   const exportRankingCSV = useCallback((filteredData?: SalesVelocityItem[]) => {
     const dataToExport = filteredData || ranking;
@@ -209,7 +209,7 @@ export const useSalesVelocityRanking = () => {
         description: `Archivo ${filename} descargado`
       });
     }
-  }, [ranking, summary, toast]);
+  }, [ranking, summary]);
 
   return {
     ranking,

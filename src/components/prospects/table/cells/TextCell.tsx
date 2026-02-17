@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 interface TextCellProps {
   value?: string | null;
-  onSave: (value: string) => Promise<any>;
+  onSave: (value: string) => Promise<unknown>;
   type?: 'text' | 'email';
   required?: boolean;
   multiline?: boolean;

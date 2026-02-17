@@ -13,7 +13,7 @@ export type InvokeEdgeFunctionOptions = {
  * Invoke a Supabase Edge Function with support for AbortController + timeout.
  * We intentionally avoid `supabase.functions.invoke` because it doesn't expose abort signals.
  */
-export async function invokeEdgeFunction<T = any>(
+export async function invokeEdgeFunction<T = unknown>(
   functionName: string,
   body?: unknown,
   options?: InvokeEdgeFunctionOptions
@@ -49,7 +49,7 @@ export async function invokeEdgeFunction<T = any>(
     });
 
     const text = await res.text();
-    let parsed: any = null;
+    let parsed: unknown = null;
     try {
       parsed = text ? JSON.parse(text) : null;
     } catch {
@@ -57,8 +57,13 @@ export async function invokeEdgeFunction<T = any>(
     }
 
     if (!res.ok) {
+      const parsedError =
+        parsed && typeof parsed === 'object'
+          ? (parsed as { error?: string; message?: string })
+          : undefined;
       const msg =
-        (parsed && typeof parsed === 'object' && (parsed.error || parsed.message)) ||
+        parsedError?.error ||
+        parsedError?.message ||
         `HTTP ${res.status}`;
       throw new Error(msg);
     }

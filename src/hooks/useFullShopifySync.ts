@@ -38,7 +38,7 @@ export const useFullShopifySync = () => {
       })
 
       return data.summary
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in full sync:', error)
       toast({
         title: 'Error de sincronización',

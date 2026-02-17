@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,7 +23,7 @@ interface StatusData {
 
 interface RecentActivity {
   id: string;
-  icon: any;
+  icon: unknown;
   color: string;
   title: string;
   description: string;
@@ -43,7 +43,7 @@ export const useDashboardData = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = useCallback(async () => {
     try {
       // Fetch active orders count
       const { count: activeOrdersCount, error: ordersError } = await supabase
@@ -92,9 +92,9 @@ export const useDashboardData = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
-  const fetchMonthlyOrderData = async () => {
+  const fetchMonthlyOrderData = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -129,9 +129,9 @@ export const useDashboardData = () => {
     } catch (error) {
       console.error('Error fetching monthly order data:', error);
     }
-  };
+  }, []);
 
-  const fetchOrderStatusData = async () => {
+  const fetchOrderStatusData = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -182,9 +182,26 @@ export const useDashboardData = () => {
     } catch (error) {
       console.error('Error fetching order status data:', error);
     }
-  };
+  }, []);
 
-  const fetchRecentActivity = async () => {
+  const getTimeAgo = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days > 0) {
+      return `Hace ${days} día${days > 1 ? 's' : ''}`;
+    } else if (hours > 0) {
+      return `Hace ${hours} hora${hours > 1 ? 's' : ''}`;
+    } else {
+      return 'Hace unos minutos';
+    }
+  }, []);
+
+  const fetchRecentActivity = useCallback(async () => {
     try {
       // Fetch recent deliveries
       const { data: deliveries, error: deliveriesError } = await supabase
@@ -214,26 +231,9 @@ export const useDashboardData = () => {
     } catch (error) {
       console.error('Error fetching recent activity:', error);
     }
-  };
+  }, [getTimeAgo]);
 
-  const getTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (days > 0) {
-      return `Hace ${days} día${days > 1 ? 's' : ''}`;
-    } else if (hours > 0) {
-      return `Hace ${hours} hora${hours > 1 ? 's' : ''}`;
-    } else {
-      return 'Hace unos minutos';
-    }
-  };
-
-  const loadAllData = async () => {
+  const loadAllData = useCallback(async () => {
     setLoading(true);
     await Promise.all([
       fetchDashboardStats(),
@@ -242,11 +242,11 @@ export const useDashboardData = () => {
       fetchRecentActivity()
     ]);
     setLoading(false);
-  };
+  }, [fetchDashboardStats, fetchMonthlyOrderData, fetchOrderStatusData, fetchRecentActivity]);
 
   useEffect(() => {
     loadAllData();
-  }, []);
+  }, [loadAllData]);
 
   return {
     stats,

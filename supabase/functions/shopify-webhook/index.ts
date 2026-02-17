@@ -31,7 +31,7 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
 
 // Function to determine automatic tags based on payment gateway and line items
 // IMPORTANTE: Usa el ÚLTIMO método de pago del array como el efectivo (orden cronológico de Shopify)
-function determineAutoTags(order: any): string[] {
+function determineAutoTags(order: unknown): string[] {
   const tags: string[] = [];
   
   // Payment gateway names comes as array in chronological order
@@ -69,7 +69,7 @@ function determineAutoTags(order: any): string[] {
   
   // Line items rule for "BORDADO" tag
   const lineItems = order.line_items || [];
-  const hasBordado = lineItems.some((item: any) => 
+  const hasBordado = lineItems.some((item: unknown) => 
     item.title?.toLowerCase().includes('bordado') || 
     item.name?.toLowerCase().includes('bordado')
   );
@@ -90,7 +90,7 @@ async function applyAutoTagsToShopify(
   tagsToAdd: string[], 
   existingTags: string | null,
   shopDomain: string,
-  supabase: any
+  supabase: unknown
 ): Promise<void> {
   if (tagsToAdd.length === 0) {
     console.log('🏷️ No hay tags automáticos que aplicar');
@@ -169,7 +169,7 @@ async function applyAutoTagsToShopify(
 }
 
 // Function to process and store a single Shopify order
-async function processSingleOrder(order: any, supabase: any, shopDomain: string) {
+async function processSingleOrder(order: unknown, supabase: unknown, shopDomain: string) {
   console.log(`📦 Procesando orden en tiempo real: ${order.id} - ${order.order_number}`);
   console.log(`🏪 Shop domain recibido: ${shopDomain}`);
 
@@ -302,7 +302,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
 
   // Build SKU to image_url map from product_variants
   console.log('🖼️ Building SKU to image map for line items...');
-  const skusInOrder = order.line_items.map((item: any) => item.sku).filter(Boolean);
+  const skusInOrder = order.line_items.map((item: unknown) => item.sku).filter(Boolean);
   const skuToImageMap = new Map();
   
   if (skusInOrder.length > 0) {
@@ -316,7 +316,7 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     if (variantError) {
       console.error('⚠️ Error fetching variant images:', variantError);
     } else if (variantData) {
-      variantData.forEach((v: any) => {
+      variantData.forEach((v: unknown) => {
         if (v.sku_variant && v.products?.image_url) {
           skuToImageMap.set(v.sku_variant, v.products.image_url);
         }
@@ -411,10 +411,10 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
 }
 
 // Function to update an existing Shopify order (for orders/update webhook)
-async function updateExistingOrder(order: any, supabase: any, shopDomain: string) {
+async function updateExistingOrder(order: unknown, supabase: unknown, shopDomain: string) {
   console.log(`🔄 Actualizando orden existente: ${order.id} - ${order.order_number}`);
   console.log(`🏪 Shop domain recibido: ${shopDomain}`);
-  console.log('📝 Nota recibida de Shopify (webhook):', JSON.stringify((order as any)?.note ?? null));
+  console.log('📝 Nota recibida de Shopify (webhook):', JSON.stringify((order as Record<string, unknown>)?.note ?? null));
 
   // Get organization_id using exact matching with shop domain from header
   let organizationId = null;
@@ -569,7 +569,7 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
 
   // Build SKU to image_url map from product_variants
   console.log('🖼️ Building SKU to image map for updated line items...');
-  const skusInOrder = order.line_items.map((item: any) => item.sku).filter(Boolean);
+  const skusInOrder = order.line_items.map((item: unknown) => item.sku).filter(Boolean);
   const skuToImageMap = new Map();
   
   if (skusInOrder.length > 0) {
@@ -583,7 +583,7 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     if (variantError) {
       console.error('⚠️ Error fetching variant images:', variantError);
     } else if (variantData) {
-      variantData.forEach((v: any) => {
+      variantData.forEach((v: unknown) => {
         if (v.sku_variant && v.products?.image_url) {
           skuToImageMap.set(v.sku_variant, v.products.image_url);
         }
@@ -693,7 +693,7 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
     }
 
     // Insertar items actualizados
-    const pickingItemsToInsert = order.line_items.map((item: any) => {
+    const pickingItemsToInsert = order.line_items.map((item: unknown) => {
       // Usar la misma lógica de imagen que para shopify_order_line_items
       const imageUrl = item.image?.src || 
                        item.featured_image || 
@@ -749,7 +749,7 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
 }
 
 // Function to process sales metrics for real-time order
-async function processSalesMetrics(order: any, supabase: any) {
+async function processSalesMetrics(order: unknown, supabase: unknown) {
   console.log(`📊 Procesando métricas de ventas para orden: ${order.order_number}`);
 
   // Get mapping from Shopify SKUs to local variants
@@ -845,7 +845,7 @@ async function processSalesMetrics(order: any, supabase: any) {
 // ============= AUTO-INVOICE ELIGIBILITY & TRIGGER =============
 
 // Check if order qualifies for automatic Alegra invoice
-async function checkAutoInvoiceEligibility(order: any, supabase: any, organizationId: string): Promise<boolean> {
+async function checkAutoInvoiceEligibility(order: unknown, supabase: unknown, organizationId: string): Promise<boolean> {
   // 1. Only PAID orders
   if (order.financial_status !== 'paid') {
     console.log('🧾 Elegibilidad: NO - no está pagado');

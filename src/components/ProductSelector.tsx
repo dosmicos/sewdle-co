@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,8 +8,8 @@ import { sortProductVariants } from '@/lib/variantSorting';
 import SearchableProductSelector from './SearchableProductSelector';
 
 interface ProductSelectorProps {
-  selectedProducts: any[];
-  onProductsChange: (products: any[]) => void;
+  selectedProducts: unknown[];
+  onProductsChange: (products: unknown[]) => void;
 }
 
 interface Product {
@@ -54,23 +54,8 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     fetchProducts();
   }, []);
 
-  // Sincronizar productos internos con los externos cuando cambian los productos seleccionados
-  useEffect(() => {
-    // Solo actualizar si los productos seleccionados externos no tienen la estructura interna
-    if (selectedProducts.length === 0 || !selectedProducts.some(p => p.tempId)) {
-      updateExternalProducts();
-    }
-  }, [internalProducts]);
-
-  // Restaurar estado interno desde productos externos al montar el componente
-  useEffect(() => {
-    if (selectedProducts.length > 0 && internalProducts.length === 0 && availableProducts.length > 0) {
-      restoreInternalFromExternal();
-    }
-  }, [selectedProducts, availableProducts]);
-
-  const restoreInternalFromExternal = () => {
-    const groupedProducts: { [productId: string]: any[] } = {};
+  const restoreInternalFromExternal = useCallback(() => {
+    const groupedProducts: { [productId: string]: unknown[] } = {};
     
     // Agrupar productos por productId
     selectedProducts.forEach(product => {
@@ -84,7 +69,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
       const productData = availableProducts.find(p => p.id === productId);
       if (!productData) return null;
 
-      const variants: any = {};
+      const variants: unknown = {};
       productData.variants.forEach(variant => {
         const existingVariant = groupedProducts[productId].find(p => p.variantId === variant.id);
         variants[variant.id] = {
@@ -106,7 +91,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     }).filter(Boolean);
 
     setInternalProducts(restoredProducts);
-  };
+  }, [selectedProducts, availableProducts]);
 
   const fetchProducts = async () => {
     try {
@@ -159,13 +144,13 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     }
   };
 
-  const updateExternalProducts = () => {
+  const updateExternalProducts = useCallback(() => {
     const formattedProducts = internalProducts.flatMap((product: InternalSelectedProduct) => {
       if (!product.variants) return [];
       
       return Object.values(product.variants)
-        .filter((variant: any) => variant.quantity > 0)
-        .map((variant: any) => ({
+        .filter((variant: unknown) => variant.quantity > 0)
+        .map((variant: unknown) => ({
           productId: product.productId,
           variantId: variant.id,
           quantity: variant.quantity,
@@ -175,7 +160,22 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
 
     console.log('Updating external products:', formattedProducts);
     onProductsChange(formattedProducts);
-  };
+  }, [internalProducts, onProductsChange]);
+
+  // Sincronizar productos internos con los externos cuando cambian los productos seleccionados
+  useEffect(() => {
+    // Solo actualizar si los productos seleccionados externos no tienen la estructura interna
+    if (selectedProducts.length === 0 || !selectedProducts.some(p => p.tempId)) {
+      updateExternalProducts();
+    }
+  }, [selectedProducts, updateExternalProducts]);
+
+  // Restaurar estado interno desde productos externos al montar el componente
+  useEffect(() => {
+    if (selectedProducts.length > 0 && internalProducts.length === 0 && availableProducts.length > 0) {
+      restoreInternalFromExternal();
+    }
+  }, [selectedProducts, internalProducts.length, availableProducts.length, restoreInternalFromExternal]);
 
   const addProduct = () => {
     const newProduct: InternalSelectedProduct = {
@@ -199,7 +199,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
 
     setInternalProducts(prev => {
       const updated = [...prev];
-      const variants: any = {};
+      const variants: unknown = {};
       
       // Las variantes ya vienen ordenadas desde fetchProducts
       selectedProduct.variants.forEach(variant => {
@@ -237,7 +237,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
   };
 
   const getProductQuantityTotal = (product: InternalSelectedProduct) => {
-    return Object.values(product.variants).reduce((total: number, variant: any) => {
+    return Object.values(product.variants).reduce((total: number, variant: unknown) => {
       return total + variant.quantity;
     }, 0);
   };

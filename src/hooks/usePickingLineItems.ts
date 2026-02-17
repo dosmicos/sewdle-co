@@ -150,7 +150,7 @@ export const usePickingLineItems = (
         const ms = Math.round(performance.now() - start);
         console.log('✅ Productos cargados para orden', shopifyOrderId, 'en', `${ms}ms`);
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         const ms = Math.round(performance.now() - start);
         console.error('❌ Error cargando productos para orden', shopifyOrderId, `(${ms}ms):`, err?.message || err);
         throw err;
@@ -159,7 +159,7 @@ export const usePickingLineItems = (
     enabled: !!shopifyOrderId,
     staleTime: 30_000, // 30 seconds - data is considered fresh
     gcTime: 5 * 60_000, // 5 minutes - keep in memory
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: unknown) => {
       // Don't retry timeouts or aborts
       if (error?.message?.includes('TIMEOUT')) return false;
       if (error?.name === 'AbortError' || error?.message?.includes('aborted')) return false;

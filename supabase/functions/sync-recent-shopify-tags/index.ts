@@ -25,6 +25,8 @@ interface OrganizationCredentials {
   }
 }
 
+const LOOKBACK_MINUTES = Number(Deno.env.get('SHOPIFY_TAG_SYNC_LOOKBACK_MINUTES') ?? '7')
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -87,12 +89,12 @@ Deno.serve(async (req) => {
         }
         storeDomain = storeDomain.replace(/\/$/, '')
 
-        // Get orders updated in the last 5 minutes (with buffer for timing)
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+        // Get recently updated orders with a small overlap window to avoid misses between runs.
+        const updatedSince = new Date(Date.now() - LOOKBACK_MINUTES * 60 * 1000).toISOString()
         
-        const shopifyUrl = `https://${storeDomain}/admin/api/2024-01/orders.json?updated_at_min=${fiveMinutesAgo}&limit=100&status=any&fields=id,order_number,tags,note,financial_status,fulfillment_status,cancelled_at,updated_at`
+        const shopifyUrl = `https://${storeDomain}/admin/api/2024-01/orders.json?updated_at_min=${updatedSince}&limit=100&status=any&fields=id,order_number,tags,note,financial_status,fulfillment_status,cancelled_at,updated_at`
         
-        console.log(`📡 Consultando Shopify API: orders updated since ${fiveMinutesAgo}`)
+        console.log(`📡 Consultando Shopify API: orders updated since ${updatedSince}`)
 
         const shopifyResponse = await fetch(shopifyUrl, {
           headers: {
@@ -118,35 +120,36 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Update each order's tags and status fields in the database
-        let ordersUpdated = 0
-        for (const order of orders) {
-          const { error: updateError } = await supabase
-            .from('shopify_orders')
-            .update({
-              tags: order.tags || null,
-              note: order.note || null,
-              financial_status: order.financial_status,
-              fulfillment_status: order.fulfillment_status,
-              cancelled_at: order.cancelled_at,
-              updated_at_shopify: order.updated_at,
-            })
-            .eq('shopify_order_id', order.id)
-            .eq('organization_id', org.id)
+        // Bulk update in a single RPC call. The DB function only writes rows with actual changes.
+        const payload = orders.map((order) => ({
+          shopify_order_id: order.id,
+          tags: order.tags || null,
+          note: order.note || null,
+          financial_status: order.financial_status || null,
+          fulfillment_status: order.fulfillment_status || null,
+          cancelled_at: order.cancelled_at || null,
+          updated_at_shopify: order.updated_at,
+        }))
 
-          if (updateError) {
-            console.error(`⚠️ Error actualizando orden ${order.order_number}:`, updateError.message)
-          } else {
-            ordersUpdated++
-            if (order.tags) {
-              console.log(`✅ Orden ${order.order_number}: tags="${order.tags}"`)
-            }
+        const { data: updatedCount, error: updateError } = await supabase.rpc(
+          'bulk_update_shopify_order_tags',
+          {
+            org_id_param: org.id,
+            orders_param: payload,
           }
+        )
+
+        if (updateError) {
+          console.error(`❌ ${org.name}: Error en actualización masiva:`, updateError)
+          results.push({ organization: org.name, orders_updated: 0, error: 'Bulk update failed' })
+          continue
         }
+
+        const ordersUpdated = Number(updatedCount || 0)
 
         totalOrdersUpdated += ordersUpdated
         results.push({ organization: org.name, orders_updated: ordersUpdated })
-        console.log(`✅ ${org.name}: ${ordersUpdated} pedidos actualizados`)
+        console.log(`✅ ${org.name}: ${ordersUpdated}/${orders.length} pedidos actualizados`)
 
       } catch (orgError) {
         console.error(`❌ Error procesando ${org.name}:`, orgError)

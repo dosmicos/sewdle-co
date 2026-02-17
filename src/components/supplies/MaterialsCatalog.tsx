@@ -111,9 +111,9 @@ const MaterialsCatalog = () => {
 
       return true;
     });
-  }, [materials, searchQuery, filterCategory, filterStatus, filterSupplier]);
+  }, [materials, searchQuery, filterCategory, filterStatus, filterSupplier, isWorkshopUser, workshopFilter]);
 
-  const getStockStatus = (material: any) => {
+  const getStockStatus = (material: unknown) => {
     const currentStock = material.current_stock || 0;
     const minStock = material.min_stock_alert || 0;
 

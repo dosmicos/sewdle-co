@@ -25,7 +25,7 @@ interface UgcCreatorDetailModalProps {
   onEdit: () => void;
   onNewCampaign: () => void;
   onNewVideo: (campaignId: string) => void;
-  onCampaignStatusChange: (campaignId: string, status: CampaignStatus, extra?: Record<string, any>) => void;
+  onCampaignStatusChange: (campaignId: string, status: CampaignStatus, extra?: Record<string, unknown>) => void;
   onVideoStatusChange: (videoId: string, status: string, feedback?: string) => void;
   onDelete?: () => void;
 }
@@ -347,7 +347,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                                       onCampaignStatusChange(campaign.id, action.nextStatus, { tracking_number: tracking, shipping_date: new Date().toISOString().split('T')[0] });
                                     }
                                   } else {
-                                    const extra: Record<string, any> = {};
+                                    const extra: Record<string, unknown> = {};
                                     if (action.nextStatus === 'producto_recibido') {
                                       extra.received_date = new Date().toISOString().split('T')[0];
                                     }

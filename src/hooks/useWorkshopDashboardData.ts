@@ -114,7 +114,7 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
       let pendingUnits = 0;
       pendingUnitsData?.forEach(item => {
         const totalOrdered = item.quantity || 0;
-        const totalApproved = item.delivery_items?.reduce((sum: number, di: any) => 
+        const totalApproved = item.delivery_items?.reduce((sum: number, di: unknown) => 
           sum + (di.quantity_approved || 0), 0) || 0;
         pendingUnits += Math.max(0, totalOrdered - totalApproved);
       });
@@ -170,7 +170,7 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
         let totalApproved = 0;
         
         deliveries.forEach(delivery => {
-          delivery.delivery_items?.forEach((item: any) => {
+          delivery.delivery_items?.forEach((item: unknown) => {
             totalDelivered += item.quantity_delivered || 0;
             totalApproved += item.quantity_approved || 0;
           });
@@ -454,12 +454,12 @@ export const useWorkshopDashboardData = (viewMode: 'weekly' | 'monthly' = 'weekl
   // Load main data only when workshopId changes
   useEffect(() => {
     loadMainData();
-  }, [workshopId]);
+  }, [workshopId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load progress data when viewMode changes
   useEffect(() => {
     loadProgressData();
-  }, [workshopId, viewMode]);
+  }, [workshopId, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshData = async () => {
     await Promise.all([

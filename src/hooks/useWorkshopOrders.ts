@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,7 +19,12 @@ export const useWorkshopOrders = (workshopId: string) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
+    if (!workshopId) {
+      setOrders([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -68,7 +73,7 @@ export const useWorkshopOrders = (workshopId: string) => {
 
       const formattedOrders: WorkshopOrder[] = assignments?.map(assignment => {
         const order = assignment.orders;
-        const totalQuantity = order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
+        const totalQuantity = order.order_items?.reduce((sum: number, item: unknown) => sum + (item.quantity || 0), 0) || 0;
         
         // Obtener nombre del primer producto (simplificado)
         const firstProduct = order.order_items?.[0]?.product_variants?.products?.name || 'Producto';
@@ -78,9 +83,9 @@ export const useWorkshopOrders = (workshopId: string) => {
 
         // Calcular progreso basado en entregas aprobadas
         let totalApproved = 0;
-        const orderDeliveries = deliveries.filter((d: any) => d.order_id === order.id);
-        orderDeliveries.forEach((delivery: any) => {
-          delivery.delivery_items?.forEach((item: any) => {
+        const orderDeliveries = deliveries.filter((d: unknown) => d.order_id === order.id);
+        orderDeliveries.forEach((delivery: unknown) => {
+          delivery.delivery_items?.forEach((item: unknown) => {
             totalApproved += item.quantity_approved || 0;
           });
         });
@@ -115,7 +120,7 @@ export const useWorkshopOrders = (workshopId: string) => {
 
       setOrders(formattedOrders);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching workshop orders:', error);
       toast({
         title: "Error",
@@ -125,13 +130,11 @@ export const useWorkshopOrders = (workshopId: string) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, workshopId]);
 
   useEffect(() => {
-    if (workshopId) {
-      fetchOrders();
-    }
-  }, [workshopId]);
+    fetchOrders();
+  }, [fetchOrders]);
 
   return { orders, loading, refetch: fetchOrders };
 };

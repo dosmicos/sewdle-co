@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -38,7 +38,7 @@ const WorkshopMaterialSingleSelector = ({
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
-  const fetchWorkshopMaterials = async () => {
+  const fetchWorkshopMaterials = useCallback(async () => {
     if (!workshopId) return;
     
     setLoading(true);
@@ -84,11 +84,11 @@ const WorkshopMaterialSingleSelector = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [workshopId, toast]);
 
   useEffect(() => {
     fetchWorkshopMaterials();
-  }, [workshopId]);
+  }, [fetchWorkshopMaterials]);
 
   const formatMaterialDisplayName = (material: WorkshopMaterial) => {
     const baseName = `${material.material_name} (${material.material_sku})`;

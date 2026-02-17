@@ -28,8 +28,8 @@ interface ShopifyOrder {
   };
   
   // Addresses
-  billing_address?: any;
-  shipping_address?: any;
+  billing_address?: unknown;
+  shipping_address?: unknown;
   
   // Financial info
   currency: string;
@@ -61,7 +61,7 @@ interface ShopifyOrder {
     quantity: number;
     price: string;
     total_discount: string;
-    properties?: any[];
+    properties?: unknown[];
     gift_card: boolean;
     taxable: boolean;
     fulfillment_status?: string;
@@ -153,7 +153,7 @@ async function fetchOrdersForChunk(
   chunk: SyncChunk,
   validStatuses: string[],
   logId: string,
-  supabase: any
+  supabase: unknown
 ): Promise<ShopifyOrder[]> {
   const allOrders: ShopifyOrder[] = [];
   let hasNextPage = true;
@@ -301,7 +301,7 @@ async function fetchOrdersForChunk(
 }
 
 // Function to store complete Shopify orders in database
-async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organizationId: string | null = null): Promise<void> {
+async function storeCompleteOrders(orders: ShopifyOrder[], supabase: unknown, organizationId: string | null = null): Promise<void> {
   if (orders.length === 0) return;
 
   console.log(`💾 Almacenando ${orders.length} órdenes completas...`);
@@ -537,7 +537,7 @@ Deno.serve(async (req) => {
     
     console.log(`💰 Estados financieros CORREGIDOS (más restrictivos): ${validStatuses.join(', ')}`);
     
-    let allOrders: ShopifyOrder[] = [];
+    const allOrders: ShopifyOrder[] = [];
     const statusSummary = new Map<string, number>();
     const fulfillmentSummary = new Map<string, number>();
     

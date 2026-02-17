@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ interface SyncLogItem {
 interface SyncResultsObject {
   results: SyncLogItem[];
   intelligent_sync?: boolean;
-  skipped_items?: any[];
+  skipped_items?: unknown[];
   total_items_sent?: number;
   items_processed?: number;
 }
@@ -58,7 +58,7 @@ const ShopifySyncDiagnostics = () => {
   const [resyncing, setResyncing] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const loadSyncData = async () => {
+  const loadSyncData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -115,7 +115,7 @@ const ShopifySyncDiagnostics = () => {
           synced_at: log.synced_at,
           success_count: log.success_count,
           error_count: log.error_count,
-          sync_results: (log.sync_results as any[]) || []
+          sync_results: (log.sync_results as unknown[]) || []
         });
       });
 
@@ -130,7 +130,7 @@ const ShopifySyncDiagnostics = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const resyncDelivery = async (deliveryId: string, trackingNumber: string, failedSkus?: string[]) => {
     try {
@@ -166,7 +166,7 @@ const ShopifySyncDiagnostics = () => {
 
   useEffect(() => {
     loadSyncData();
-  }, []);
+  }, [loadSyncData]);
 
   const filteredDeliveries = deliveries.filter(delivery =>
     delivery.tracking_number.toLowerCase().includes(searchTerm.toLowerCase())

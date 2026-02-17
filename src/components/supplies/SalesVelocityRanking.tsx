@@ -75,7 +75,7 @@ export const SalesVelocityRanking: React.FC = () => {
 
   // Filter and sort data
   const filteredAndSortedRanking = React.useMemo(() => {
-    let filtered = ranking.filter(item => {
+    const filtered = ranking.filter(item => {
       const searchText = searchTerm.toLowerCase();
       const matchesSearch = 
         item.product_name.toLowerCase().includes(searchText) ||
@@ -88,8 +88,8 @@ export const SalesVelocityRanking: React.FC = () => {
 
     // Sort data
     filtered.sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
+      let aValue: unknown;
+      let bValue: unknown;
 
       if (sortColumn === 'status') {
         const statusOrder = { critical: 4, low: 3, warning: 2, good: 1 };

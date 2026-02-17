@@ -49,7 +49,7 @@ export const OKRAlignmentTree: React.FC<OKRAlignmentTreeProps> = ({
     }
   };
 
-  const ObjectiveNode: React.FC<{ objective: any; level: number; children?: any[] }> = ({
+  const ObjectiveNode: React.FC<{ objective: unknown; level: number; children?: unknown[] }> = ({
     objective,
     level,
     children = []

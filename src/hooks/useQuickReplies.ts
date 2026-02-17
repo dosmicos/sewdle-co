@@ -44,7 +44,7 @@ export const useQuickReplies = (organizationId: string | undefined) => {
       
       if (error) throw error;
       
-      const aiConfig = channel?.ai_config as any;
+      const aiConfig = channel?.ai_config as Record<string, unknown>;
       const dbReplies = (aiConfig?.quickReplies as QuickReply[]) || [];
       
       // Return DB replies if they exist, otherwise return defaults

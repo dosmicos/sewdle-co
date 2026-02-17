@@ -46,6 +46,6 @@ export interface AuditLog {
   action: string;
   changedBy: string;
   timestamp: string;
-  before: any;
-  after: any;
+  before: unknown;
+  after: unknown;
 }

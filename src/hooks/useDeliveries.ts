@@ -10,7 +10,7 @@ export const useDeliveries = () => {
   const { syncApprovedItemsToShopify } = useInventorySync();
   const { uploadEvidenceFiles } = useDeliveryEvidence();
 
-  const fetchDeliveries = async () => {
+  const fetchDeliveries = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -32,7 +32,7 @@ export const useDeliveries = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const fetchDeliveryById = useCallback(async (deliveryId: string) => {
     setLoading(true);
@@ -106,7 +106,7 @@ export const useDeliveries = () => {
       // Verificar la estructura de los datos
       if (data?.delivery_items) {
         console.log('Delivery items structure check:');
-        data.delivery_items.forEach((item: any, index: number) => {
+        data.delivery_items.forEach((item: unknown, index: number) => {
           console.log(`Item ${index}:`, {
             id: item.id,
             order_item_id: item.order_item_id,
@@ -209,7 +209,7 @@ export const useDeliveries = () => {
       // Verificar la estructura de los datos
       if (data?.delivery_items) {
         console.log('Delivery items structure check:');
-        data.delivery_items.forEach((item: any, index: number) => {
+        data.delivery_items.forEach((item: unknown, index: number) => {
           console.log(`Item ${index}:`, {
             id: item.id,
             order_item_id: item.order_item_id,
@@ -276,7 +276,7 @@ export const useDeliveries = () => {
     }
   };
 
-  const createDelivery = async (deliveryData: any) => {
+  const createDelivery = async (deliveryData: unknown) => {
     setLoading(true);
     console.log('Starting delivery creation process with enhanced file handling...');
     
@@ -339,7 +339,7 @@ export const useDeliveries = () => {
 
       // Step 3: Validate order items
       if (deliveryData.items && deliveryData.items.length > 0) {
-        const orderItemIds = deliveryData.items.map((item: any) => item.orderItemId);
+        const orderItemIds = deliveryData.items.map((item: unknown) => item.orderItemId);
         const { data: orderItemsExist, error: orderItemsError } = await supabase
           .from('order_items')
           .select('id')
@@ -400,7 +400,7 @@ export const useDeliveries = () => {
 
       // Step 6: Create delivery items
       if (deliveryData.items && deliveryData.items.length > 0) {
-        const deliveryItems = deliveryData.items.map((item: any) => ({
+        const deliveryItems = deliveryData.items.map((item: unknown) => ({
           delivery_id: createdDelivery.id,
           order_item_id: item.orderItemId,
           quantity_delivered: item.quantityDelivered,
@@ -577,7 +577,7 @@ export const useDeliveries = () => {
     }
   };
 
-  const processQualityReview = async (deliveryId: string, qualityData: any) => {
+  const processQualityReview = async (deliveryId: string, qualityData: unknown) => {
     setLoading(true);
     try {
       console.log('Processing quality review for delivery:', deliveryId);
@@ -587,7 +587,7 @@ export const useDeliveries = () => {
         throw new Error('No se encontraron datos de variantes para procesar');
       }
 
-      const itemsReview = Object.entries(qualityData.variants).map(([deliveryItemId, data]: [string, any]) => {
+      const itemsReview = Object.entries(qualityData.variants).map(([deliveryItemId, data]: [string, unknown]) => {
         console.log('Processing item:', deliveryItemId, 'with data:', data);
         
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -696,9 +696,9 @@ export const useDeliveries = () => {
 
       // Calcular estadísticas para determinar el estado de la entrega
       const totalItems = deliveryData.delivery_items?.length || 0;
-      const itemsWithApproved = deliveryData.delivery_items?.filter((item: any) => item.quantity_approved > 0).length || 0;
-      const itemsWithDefective = deliveryData.delivery_items?.filter((item: any) => item.quantity_defective > 0).length || 0;
-      const alreadySyncedCount = deliveryData.delivery_items?.filter((item: any) => item.synced_to_shopify && item.quantity_approved > 0).length || 0;
+      const itemsWithApproved = deliveryData.delivery_items?.filter((item: unknown) => item.quantity_approved > 0).length || 0;
+      const itemsWithDefective = deliveryData.delivery_items?.filter((item: unknown) => item.quantity_defective > 0).length || 0;
+      const alreadySyncedCount = deliveryData.delivery_items?.filter((item: unknown) => item.synced_to_shopify && item.quantity_approved > 0).length || 0;
 
       // Determinar el nuevo estado de la entrega
       let newDeliveryStatus = 'pending';
@@ -712,13 +712,13 @@ export const useDeliveries = () => {
 
       // Filtrar items que tienen cantidad aprobada (la verificación de sync la hará syncApprovedItemsToShopify)
       const approvedItems = deliveryData.delivery_items
-        ?.filter((item: any) => item.quantity_approved > 0)
-        .map((item: any) => ({
+        ?.filter((item: unknown) => item.quantity_approved > 0)
+        .map((item: unknown) => ({
           variantId: item.order_items?.product_variant_id || '',
           skuVariant: item.order_items?.product_variants?.sku_variant || '',
           quantityApproved: item.quantity_approved
         }))
-        .filter((item: any) => item.skuVariant) || [];
+        .filter((item: unknown) => item.skuVariant) || [];
 
       // Actualizar estado de la entrega primero
       console.log('Updating delivery status to:', newDeliveryStatus);

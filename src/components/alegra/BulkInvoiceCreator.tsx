@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 
 // Helper para detectar errores 503/rate limit
-const isServiceUnavailableError = (error: any, data: any): boolean => {
+const isServiceUnavailableError = (error: unknown, data: unknown): boolean => {
   const errorStr = JSON.stringify({ error, data }).toLowerCase();
   return errorStr.includes('503') || 
          errorStr.includes('service unavailable') ||
@@ -52,7 +52,7 @@ const isServiceUnavailableError = (error: any, data: any): boolean => {
 };
 
 // Helper para extraer mensaje de error completo de Edge Function responses
-const extractEdgeFunctionError = async (error: any, data: any, fallbackMessage: string): Promise<string> => {
+const extractEdgeFunctionError = async (error: unknown, data: unknown, fallbackMessage: string): Promise<string> => {
   // Detectar 503/rate limit y dar mensaje amigable
   if (isServiceUnavailableError(error, data)) {
     return 'Alegra no está disponible temporalmente (sobrecarga o mantenimiento). Espera 1-2 minutos y vuelve a intentar. Tip: emite de a 1-2 facturas por vez.';
@@ -77,7 +77,9 @@ const extractEdgeFunctionError = async (error: any, data: any, fallbackMessage: 
         if (errorText) {
           return errorText;
         }
-      } catch {}
+      } catch (_textError) {
+        // Ignore fallback parse error and continue with generic message.
+      }
     }
   }
   
@@ -237,8 +239,8 @@ export interface ShopifyOrderForInvoice {
   customer_first_name: string | null;
   customer_last_name: string | null;
   customer_phone: string | null;
-  billing_address: any;
-  shipping_address: any;
+  billing_address: unknown;
+  shipping_address: unknown;
   total_price: number;
   subtotal_price: number;
   total_tax: number;
@@ -280,15 +282,15 @@ type ProcessingStatus =
 
 interface InvoiceDiscrepancy {
   type: 'total' | 'items' | 'client';
-  expected: any;
-  actual: any;
+  expected: unknown;
+  actual: unknown;
   message: string;
 }
 
 interface InvoiceValidationResult {
   isValid: boolean;
   discrepancies: InvoiceDiscrepancy[];
-  existingInvoice: any;
+  existingInvoice: unknown;
   clientFromInvoice?: { id: string; name: string };
 }
 
@@ -301,7 +303,7 @@ interface InvoiceResult {
   cufe?: string;
   error?: string;
   discrepancies?: InvoiceDiscrepancy[];
-  existingInvoice?: any;
+  existingInvoice?: unknown;
 }
 
 const normalizeForAlegra = (city?: string, province?: string) => {
@@ -380,7 +382,7 @@ const isContraentrega = (order: ShopifyOrderForInvoice): boolean => {
   }
   
   // Check raw_data for payment gateway
-  const rawData = (order as any).raw_data;
+  const rawData = (order as Record<string, unknown>).raw_data;
   if (rawData) {
     const gateway = (rawData.gateway || rawData.payment_gateway_names?.[0] || '').toLowerCase();
     if (
@@ -448,7 +450,7 @@ const addFacturadoTag = async (shopifyOrderId: number): Promise<void> => {
 // Validar coherencia entre factura existente en Alegra y pedido de Shopify
 const validateExistingInvoice = async (
   order: ShopifyOrderForInvoice,
-  existingInvoice: any
+  existingInvoice: unknown
 ): Promise<InvoiceValidationResult> => {
   const discrepancies: InvoiceDiscrepancy[] = [];
   
@@ -502,11 +504,11 @@ const validateExistingInvoice = async (
 // Ahora también valida coherencia para facturas no emitidas
 const verifyNoExistingInvoice = async (
   order: ShopifyOrderForInvoice,
-  searchInvoiceFn: (orderNumber: string, order?: ShopifyOrderForInvoice) => Promise<any>,
-  getInvoiceDetailsFn?: (invoiceId: number) => Promise<any>
+  searchInvoiceFn: (orderNumber: string, order?: ShopifyOrderForInvoice) => Promise<unknown>,
+  getInvoiceDetailsFn?: (invoiceId: number) => Promise<unknown>
 ): Promise<{ 
   exists: boolean; 
-  invoice?: any; 
+  invoice?: unknown; 
   source?: 'local' | 'alegra';
   validation?: InvoiceValidationResult;
   needsValidation?: boolean;
@@ -620,7 +622,7 @@ const verifyNoExistingInvoice = async (
 // Registrar factura emitida en tabla alegra_invoices
 const registerInvoice = async (
   order: ShopifyOrderForInvoice,
-  invoice: any,
+  invoice: unknown,
   stamped: boolean = false,
   cufe?: string
 ): Promise<void> => {
@@ -883,7 +885,7 @@ const BulkInvoiceCreator = () => {
           } else {
             console.log(`⏳ Factura ${invoice.alegra_invoice_id} aún sin CUFE en Alegra`);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           // Check for rate limit in catch block too
           if (err?.message?.includes('429') || err?.message?.includes('Too Many')) {
             console.warn(`⚠️ Rate limit en catch. Esperando 5 segundos...`);
@@ -981,14 +983,14 @@ const BulkInvoiceCreator = () => {
     loadAlegraFullCatalog();
     // Sync pending invoices in background (don't block loading)
     syncPendingInvoices();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Helper to get shipping cost from the most reliable source
-  const getShippingFromOrder = (order: any): number => {
+  const getShippingFromOrder = (order: unknown): number => {
     // Priority 1: shipping_lines in raw_data (most reliable, always updated)
     const shippingLines = order.raw_data?.shipping_lines;
     if (Array.isArray(shippingLines) && shippingLines.length > 0) {
-      return shippingLines.reduce((sum: number, line: any) => 
+      return shippingLines.reduce((sum: number, line: unknown) => 
         sum + (parseFloat(line.price) || 0), 0);
     }
     // Priority 2: total_shipping if exists
@@ -1001,10 +1003,10 @@ const BulkInvoiceCreator = () => {
 
   // Helper to get effective totals based on active line_items
   // Shopify doesn't update subtotal_price/total_price when items are deleted
-  const getEffectiveOrderTotals = (order: any): { subtotal: number; shipping: number; total: number; hasDeletedItems: boolean } => {
+  const getEffectiveOrderTotals = (order: unknown): { subtotal: number; shipping: number; total: number; hasDeletedItems: boolean } => {
     // Calculate actual subtotal from current line_items
     const calculatedSubtotal = (order.line_items || []).reduce(
-      (sum: number, item: any) => sum + (Number(item.price) * item.quantity), 0
+      (sum: number, item: unknown) => sum + (Number(item.price) * item.quantity), 0
     );
     
     // Get shipping from reliable source
@@ -1036,7 +1038,7 @@ const BulkInvoiceCreator = () => {
     setIsLoading(true);
     try {
       const BATCH_SIZE = 1000;
-      let allOrders: any[] = [];
+      let allOrders: unknown[] = [];
       let page = 0;
       let hasMore = true;
 
@@ -1067,7 +1069,7 @@ const BulkInvoiceCreator = () => {
       // Load line_items in chunks to avoid large .in() arrays
       const orderIds = allOrders.map(o => o.shopify_order_id);
       const CHUNK_SIZE = 500;
-      const allLineItems: any[] = [];
+      const allLineItems: unknown[] = [];
 
       for (let i = 0; i < orderIds.length; i += CHUNK_SIZE) {
         const chunk = orderIds.slice(i, i + CHUNK_SIZE);
@@ -1080,7 +1082,7 @@ const BulkInvoiceCreator = () => {
       }
 
       // Group line_items by order using a Map for O(1) lookups
-      const lineItemsByOrder = new Map<number, any[]>();
+      const lineItemsByOrder = new Map<number, unknown[]>();
       for (const item of allLineItems) {
         const existing = lineItemsByOrder.get(item.shopify_order_id) || [];
         existing.push(item);
@@ -1107,7 +1109,7 @@ const BulkInvoiceCreator = () => {
         const cleaned = new Set([...prev].filter(id => validOrderIds.has(id)));
         return cleaned;
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching Shopify orders:', error);
       toast.error('Error al cargar pedidos: ' + error.message);
     } finally {
@@ -1252,7 +1254,7 @@ const BulkInvoiceCreator = () => {
       console.log(`📋 Encontradas ${invoices.length} facturas por observations para orden ${orderNumber}`);
       
       // Sort: prefer unstamped (drafts) first, then oldest first within same status
-      const sorted = invoices.sort((a: any, b: any) => {
+      const sorted = invoices.sort((a: unknown, b: unknown) => {
         const aStamped = !!a.stamp?.cufe;
         const bStamped = !!b.stamp?.cufe;
         if (!aStamped && bStamped) return -1;
@@ -1293,7 +1295,7 @@ const BulkInvoiceCreator = () => {
           console.log(`📋 Encontradas ${invoices.length} facturas por cliente para orden ${orderNumber}`);
           
           // Sort: prefer unstamped first
-          const sorted = invoices.sort((a: any, b: any) => {
+          const sorted = invoices.sort((a: unknown, b: unknown) => {
             const aStamped = !!a.stamp?.cufe;
             const bStamped = !!b.stamp?.cufe;
             if (!aStamped && bStamped) return -1;
@@ -1315,7 +1317,7 @@ const BulkInvoiceCreator = () => {
   };
 
   // Obtener detalles completos de una factura en Alegra
-  const getInvoiceDetails = async (invoiceId: number): Promise<any> => {
+  const getInvoiceDetails = async (invoiceId: number): Promise<unknown> => {
     const { data, error } = await supabase.functions.invoke('alegra-api', {
       body: { action: 'get-invoice', data: { invoiceId } }
     });
@@ -1381,7 +1383,7 @@ const BulkInvoiceCreator = () => {
     if (searchResult?.success && searchResult.data) {
       // 1. First search by identification number (most reliable)
       if (identificationNumber) {
-        const contactByIdentification = searchResult.data.find((c: any) => {
+        const contactByIdentification = searchResult.data.find((c: unknown) => {
           // Check multiple possible field names for identification
           const contactId =
             c.identificationNumber || c.identification || c.identificationObject?.number || '';
@@ -1402,7 +1404,7 @@ const BulkInvoiceCreator = () => {
       if (customerPhone) {
         const phoneClean = customerPhone.replace(/[^0-9]/g, '');
         const contactByPhone = searchResult.data.find(
-          (c: any) =>
+          (c: unknown) =>
             c.phonePrimary?.replace(/[^0-9]/g, '') === phoneClean ||
             c.mobile?.replace(/[^0-9]/g, '') === phoneClean
         );
@@ -1416,7 +1418,7 @@ const BulkInvoiceCreator = () => {
       // 3. Then search by email
       if (customerEmail) {
         const contactByEmail = searchResult.data.find(
-          (c: any) => c.email?.toLowerCase() === customerEmail.toLowerCase()
+          (c: unknown) => c.email?.toLowerCase() === customerEmail.toLowerCase()
         );
         if (contactByEmail) {
           console.log('Contact found by email:', contactByEmail.name);
@@ -1428,7 +1430,7 @@ const BulkInvoiceCreator = () => {
       // 4. Finally search by name (normalized comparison)
       const normalizedName = customerName.toLowerCase().trim();
       const contactByName = searchResult.data.find(
-        (c: any) => c.name?.toLowerCase().trim() === normalizedName
+        (c: unknown) => c.name?.toLowerCase().trim() === normalizedName
       );
       if (contactByName) {
         console.log('Contact found by name:', contactByName.name);
@@ -1571,7 +1573,7 @@ const BulkInvoiceCreator = () => {
     const shippingCost = getShippingFromOrder(order);
     if (shippingCost > 0) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
-      let shippingMapping = mappings?.find(m => 
+      const shippingMapping = mappings?.find(m => 
         m.shopify_sku === 'ENVIO' || 
         m.shopify_product_title?.toLowerCase() === 'envío' ||
         m.shopify_product_title?.toLowerCase() === 'envio'
@@ -1837,7 +1839,7 @@ const BulkInvoiceCreator = () => {
         console.error('⚠️ stampInvoices no devolvió resultados para factura', invoice.id);
         throw new Error('No se recibió confirmación de emisión DIAN');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       updateResult(order.id, { status: 'error', error: error.message });
       toast.error(`Error: ${error.message}`);
     }
@@ -1862,7 +1864,7 @@ const BulkInvoiceCreator = () => {
     if (searchResult?.success && searchResult.data) {
       // Search by identification number
       if (identificationNumber) {
-        const contactByIdentification = searchResult.data.find((c: any) => {
+        const contactByIdentification = searchResult.data.find((c: unknown) => {
           const contactId = c.identificationNumber || c.identification || c.identificationObject?.number || '';
           return String(contactId).replace(/\D/g, '') === identificationNumber.replace(/\D/g, '');
         });
@@ -1958,11 +1960,11 @@ const BulkInvoiceCreator = () => {
       // Check if it's an edited item (has 'title') or Shopify line item
       const isEditedItem = 'title' in item && !('variant_title' in item);
       const productTitle = item.title;
-      const variantTitle = isEditedItem ? null : (item as any).variant_title || null;
-      const sku = (item as any).sku || null;
+      const variantTitle = isEditedItem ? null : (item as Record<string, unknown>).variant_title || null;
+      const sku = (item as Record<string, unknown>).sku || null;
       
       // Skip shipping items - handled separately below
-      if ((item as any).isShipping === true || 
+      if ((item as Record<string, unknown>).isShipping === true || 
           productTitle?.toLowerCase() === 'envío' || 
           productTitle?.toLowerCase() === 'envio') {
         continue;
@@ -2001,7 +2003,7 @@ const BulkInvoiceCreator = () => {
         
         if (!useEditedData) {
           // Datos originales: usar SOLO el descuento del line item (NO discountFactor)
-          const itemDiscount = (item as any).total_discount || 0;
+          const itemDiscount = (item as Record<string, unknown>).total_discount || 0;
           if (itemDiscount > 0 && precioOriginal > 0) {
             const precioFinal = precioOriginal - (itemDiscount / item.quantity);
             discountPercentage = Math.round((1 - (precioFinal / precioOriginal)) * 100 * 100) / 100;
@@ -2027,7 +2029,7 @@ const BulkInvoiceCreator = () => {
     }
 
     // Check if shipping already exists in edited items
-    const hasShippingItem = sourceItems.some((item: any) => 
+    const hasShippingItem = sourceItems.some((item: unknown) => 
       item.isShipping === true || 
       item.title?.toLowerCase() === 'envío' || 
       item.title?.toLowerCase() === 'envio'
@@ -2037,7 +2039,7 @@ const BulkInvoiceCreator = () => {
     const shippingCost = getShippingFromOrder(order);
     if (shippingCost > 0 && !hasShippingItem) {
       // Look for shipping mapping by SKU 'ENVIO' or title 'Envío'
-      let shippingMapping = mappings?.find(m => 
+      const shippingMapping = mappings?.find(m => 
         m.shopify_sku === 'ENVIO' || 
         m.shopify_product_title?.toLowerCase() === 'envío' ||
         m.shopify_product_title?.toLowerCase() === 'envio'
@@ -2184,7 +2186,7 @@ const BulkInvoiceCreator = () => {
           return newSet;
         });
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         updateResult(orderId, { status: 'error', error: error.message });
         toast.error(`Error en #${order.order_number}: ${error.message}`);
       }
@@ -2299,7 +2301,7 @@ const BulkInvoiceCreator = () => {
               }
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           batch.forEach(item => {
             updateResult(item.orderId, { status: 'error', error: error.message });
           });
@@ -2396,7 +2398,7 @@ const BulkInvoiceCreator = () => {
           total: getEffectiveOrderTotals(order).total,
           validationResult
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         results.push({
           orderId,
           orderNumber: order.order_number,
@@ -2487,7 +2489,7 @@ const BulkInvoiceCreator = () => {
           ? { ...r, validationResult }
           : r
       ));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error re-validating order:', error);
     }
   };

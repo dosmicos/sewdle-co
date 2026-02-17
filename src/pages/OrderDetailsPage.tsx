@@ -23,7 +23,7 @@ const OrderDetailsPage = () => {
   const { toast } = useToast();
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingConsumption, setEditingConsumption] = useState<any>(null);
+  const [editingConsumption, setEditingConsumption] = useState<unknown>(null);
   
   const { orders, loading, fetchOrders } = useOrders();
   const { canEditOrders, canDeleteOrders, canCreateDeliveries } = useUserContext();
@@ -95,7 +95,7 @@ const OrderDetailsPage = () => {
 
   const getTotalQuantity = () => {
     if (!order.order_items) return 0;
-    return order.order_items.reduce((total: number, item: any) => total + item.quantity, 0);
+    return order.order_items.reduce((total: number, item: unknown) => total + item.quantity, 0);
   };
 
   const handleEdit = () => {
@@ -127,7 +127,7 @@ const OrderDetailsPage = () => {
     }
   };
 
-  const handleFileAction = (file: any, action: 'view' | 'download') => {
+  const handleFileAction = (file: unknown, action: 'view' | 'download') => {
     // Check if it's a legacy mock URL
     if (file.file_url && file.file_url.includes('mock-url/')) {
       console.warn('Legacy file URL detected:', file.file_url);
@@ -329,7 +329,7 @@ const OrderDetailsPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {order.order_items.map((item: any, index: number) => (
+                  {order.order_items.map((item: unknown, index: number) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex-1">
                         <h4 className="font-medium text-black">
@@ -363,7 +363,7 @@ const OrderDetailsPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {order.order_supplies.map((supply: any, index: number) => (
+                  {order.order_supplies.map((supply: unknown, index: number) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex-1">
                         <h4 className="font-medium text-black">
@@ -406,7 +406,7 @@ const OrderDetailsPage = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                     {materialConsumptions.map((consumption: any, index: number) => (
+                     {materialConsumptions.map((consumption: unknown, index: number) => (
                        <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
                          <div className="flex-1">
                            <h4 className="font-medium text-black">
@@ -466,7 +466,7 @@ const OrderDetailsPage = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {order.order_files.map((file: any, index: number) => (
+                  {order.order_files.map((file: unknown, index: number) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center space-x-3">
                         <FileText className="w-8 h-8 text-blue-500" />

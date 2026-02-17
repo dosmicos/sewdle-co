@@ -74,7 +74,7 @@ export const useVariantSync = () => {
     }
   }
 
-  const syncVariants = async (variantsToSync: any[]) => {
+  const syncVariants = async (variantsToSync: unknown[]) => {
     setSyncing(true)
     
     try {
@@ -89,7 +89,7 @@ export const useVariantSync = () => {
       // Update comparisons to reflect synced variants
       setComparisons(prev => 
         prev.map(comp => {
-          const syncDetail = data.results.details.find((d: any) => d.sku === comp.shopify_sku)
+          const syncDetail = data.results.details.find((d: unknown) => d.sku === comp.shopify_sku)
           if (syncDetail && syncDetail.status === 'success') {
             return { ...comp, exists_in_sewdle: true }
           }

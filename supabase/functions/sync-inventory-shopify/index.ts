@@ -1,10 +1,33 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireAuthenticatedUser } from '../_shared/auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+type ApprovedItem = {
+  skuVariant: string
+  quantityApproved: number
+}
+
+type SyncResultEntry = {
+  sku?: string
+  status?: string
+  addedQuantity?: number
+}
+
+type SyncResultsPayload = {
+  results?: SyncResultEntry[]
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
 }
 
 // Rate limiting configuration
@@ -19,16 +42,17 @@ const SHOPIFY_API_RATE_LIMIT = {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // Helper function to retry API calls with exponential backoff
-const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = SHOPIFY_API_RATE_LIMIT.MAX_RETRIES) => {
+const retryWithBackoff = async <T>(fn: () => Promise<T>, maxRetries = SHOPIFY_API_RATE_LIMIT.MAX_RETRIES): Promise<T> => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await fn()
       return result
     } catch (error) {
-      console.log(`Attempt ${attempt} failed:`, error.message)
+      const errorMessage = getErrorMessage(error)
+      console.log(`Attempt ${attempt} failed:`, errorMessage)
       
       // Check if it's a rate limit error
-      if (error.message?.includes('429') || error.message?.includes('rate limit') || error.message?.includes('Exceeded')) {
+      if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('Exceeded')) {
         if (attempt < maxRetries) {
           const delayTime = SHOPIFY_API_RATE_LIMIT.RETRY_DELAY * Math.pow(2, attempt - 1)
           console.log(`Rate limit hit, waiting ${delayTime}ms before retry ${attempt + 1}/${maxRetries}`)
@@ -38,9 +62,13 @@ const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = SHOPIFY_API
       }
       
       // For non-rate-limit errors or final attempt, throw the error
-      throw error
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error(errorMessage)
     }
   }
+  throw new Error('Unexpected retry termination')
 }
 
 // Helper function to generate a sync fingerprint for idempotency
@@ -58,6 +86,12 @@ serve(async (req) => {
   let lockAcquired = false
 
   try {
+    const authResult = await requireAuthenticatedUser(req, corsHeaders)
+    if (!authResult.ok) {
+      return authResult.response
+    }
+    console.log('✅ Authenticated user for sync-inventory-shopify:', authResult.userId)
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -165,7 +199,7 @@ serve(async (req) => {
     console.log('Domain:', shopifyDomain)
     console.log('Token presente:', shopifyToken ? 'Sí' : 'No')
 
-    const approvedItems = requestData.approvedItems
+    const approvedItems = requestData.approvedItems as ApprovedItem[]
     const intelligentSync = requestData.intelligentSync || false
 
     if (!approvedItems || !Array.isArray(approvedItems)) {
@@ -265,8 +299,8 @@ serve(async (req) => {
     }
 
     // Si es sync inteligente, verificar qué SKUs ya fueron sincronizados
-    let alreadySyncedSkus = []
-    let itemsToSync = []
+    const alreadySyncedSkus: Array<{ sku: string; reason: string; quantityApproved: number }> = []
+    const itemsToSync: ApprovedItem[] = []
 
     if (intelligentSync) {
       console.log('🧠 Modo Sync Inteligente - Verificando estado individual de cada SKU')
@@ -291,9 +325,9 @@ serve(async (req) => {
         if (syncLogs && syncLogs.length > 0) {
           for (const log of syncLogs) {
             if (log.sync_results && typeof log.sync_results === 'object') {
-              const syncResults = log.sync_results as any;
+              const syncResults = log.sync_results as SyncResultsPayload
               if (syncResults.results && Array.isArray(syncResults.results)) {
-                const skuResult = syncResults.results.find((r: any) => 
+                const skuResult = syncResults.results.find((r) => 
                   r.sku === approvedItem.skuVariant && 
                   r.status === 'success' && 
                   r.addedQuantity === approvedItem.quantityApproved

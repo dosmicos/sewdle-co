@@ -150,7 +150,7 @@ export const UgcChildrenManager: React.FC<UgcChildrenManagerProps> = ({ creatorI
                 {child.age_description && <span className="text-muted-foreground">• {child.age_description}</span>}
                 {child.size && <span className="text-muted-foreground">• Talla: {child.size}</span>}
                 {child.gender && <span className="text-muted-foreground">• {getGenderLabel(child.gender)}</span>}
-                {(child as any).birth_date && <span className="text-muted-foreground">• 🎂 {new Date((child as any).birth_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</span>}
+                {(child as Record<string, unknown>).birth_date && <span className="text-muted-foreground">• 🎂 {new Date((child as Record<string, unknown>).birth_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</span>}
               </div>
               <Button
                 variant="ghost"

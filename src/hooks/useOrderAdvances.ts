@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,7 +37,7 @@ export const useOrderAdvances = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchAdvances = async () => {
+  const fetchAdvances = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -68,7 +68,7 @@ export const useOrderAdvances = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const createAdvance = async (newAdvance: OrderAdvanceInsert) => {
     try {
@@ -169,7 +169,7 @@ export const useOrderAdvances = () => {
 
   useEffect(() => {
     fetchAdvances();
-  }, []);
+  }, [fetchAdvances]);
 
   return {
     advances,

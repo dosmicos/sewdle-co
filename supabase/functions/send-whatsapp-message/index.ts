@@ -1,10 +1,67 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuthenticatedUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+type ShopifyCredentials = {
+  store_domain?: string;
+  shopDomain?: string;
+  access_token?: string;
+  accessToken?: string;
+};
+
+type WhatsAppApiError = {
+  message?: string;
+  error_data?: {
+    details?: string;
+  };
+  code?: number;
+  fbtrace_id?: string;
+};
+
+type WhatsAppApiResponse = {
+  messages?: Array<{ id?: string }>;
+  error?: WhatsAppApiError;
+  id?: string;
+  [key: string]: unknown;
+};
+
+type ConversationChannel = {
+  meta_phone_number_id?: string | null;
+};
+
+type ConversationWithChannel = {
+  external_user_id?: string;
+  channel_type?: string;
+  channel_id?: string;
+  messaging_channels?: ConversationChannel | ConversationChannel[];
+};
+
+type OutboundMessagePayload = {
+  messaging_product: 'whatsapp';
+  recipient_type: 'individual';
+  to: string;
+  type: string;
+  text?: {
+    preview_url: boolean;
+    body: string;
+  };
+  context?: {
+    message_id: string;
+  };
+  [key: string]: unknown;
+};
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Unknown error';
+}
 
 // --- Product image helpers (WhatsApp) ---
 function extractProductIdsFromText(text: string): number[] {
@@ -66,7 +123,7 @@ function inferProductIdsFromMentionedTitles(
 
 async function fetchShopifyProductImage(
   productId: number,
-  shopifyCredentials: any
+  shopifyCredentials: ShopifyCredentials
 ): Promise<{ url: string; title: string } | null> {
   const storeDomain = shopifyCredentials?.store_domain || shopifyCredentials?.shopDomain;
   const accessToken = shopifyCredentials?.access_token || shopifyCredentials?.accessToken;
@@ -97,7 +154,7 @@ async function fetchShopifyProductImage(
 }
 
 async function cacheImageToStorage(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   imageUrl: string,
   organizationId: string,
   productId: number
@@ -139,7 +196,7 @@ async function sendWhatsAppImageByLink(
   to: string,
   imageUrl: string,
   caption?: string
-): Promise<{ ok: boolean; messageId?: string; error?: any }> {
+): Promise<{ ok: boolean; messageId?: string; error?: unknown }> {
   try {
     const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
       method: 'POST',
@@ -159,7 +216,7 @@ async function sendWhatsAppImageByLink(
       }),
     });
 
-    const data = await resp.json();
+    const data = await resp.json() as WhatsAppApiResponse;
     if (!resp.ok) return { ok: false, error: data };
     return { ok: true, messageId: data?.messages?.[0]?.id };
   } catch (e) {
@@ -173,6 +230,12 @@ serve(async (req) => {
   }
 
   try {
+    const authResult = await requireAuthenticatedUser(req, corsHeaders);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+    console.log('✅ Authenticated user for send-whatsapp-message:', authResult.userId);
+
     const { 
       conversation_id, 
       message, 
@@ -208,7 +271,7 @@ serve(async (req) => {
 
     // Get phone number and phone_number_id from conversation/channel
     let recipientPhone = phone_number;
-    let conversationId = conversation_id;
+    const conversationId = conversation_id;
     let channelType = 'whatsapp';
     let phoneNumberId: string | null = null;
     
@@ -235,18 +298,21 @@ serve(async (req) => {
         );
       }
       
-      recipientPhone = conversation.external_user_id;
-      channelType = conversation.channel_type;
+      const conversationData = conversation as ConversationWithChannel;
+      recipientPhone = conversationData.external_user_id || '';
+      channelType = conversationData.channel_type || 'whatsapp';
       
       // Get phone_number_id from the channel
-      const channel = conversation.messaging_channels as any;
+      const channel = Array.isArray(conversationData.messaging_channels)
+        ? conversationData.messaging_channels[0]
+        : conversationData.messaging_channels;
       phoneNumberId = channel?.meta_phone_number_id;
       
       console.log('Resolved from conversation:', {
         recipientPhone,
         channelType,
         phoneNumberId,
-        channelId: conversation.channel_id
+        channelId: conversationData.channel_id
       });
     }
 
@@ -294,7 +360,7 @@ serve(async (req) => {
     // Clean phone number (remove + and spaces)
     const cleanPhone = recipientPhone.replace(/[\s+]/g, '');
 
-    let result: any;
+    let result: WhatsAppApiResponse;
     let savedMediaUrl: string | null = null;
     let messageTypeForDb = 'text';
 
@@ -365,7 +431,7 @@ serve(async (req) => {
         }
       );
 
-      result = await response.json();
+      result = await response.json() as WhatsAppApiResponse;
       console.log('WhatsApp API response:', result);
 
       if (!response.ok) {
@@ -389,7 +455,7 @@ serve(async (req) => {
       });
 
       // Construir el payload del mensaje
-      const messagePayload: Record<string, any> = {
+      const messagePayload: OutboundMessagePayload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: cleanPhone,
@@ -420,7 +486,7 @@ serve(async (req) => {
         }
       );
 
-      result = await response.json();
+      result = await response.json() as WhatsAppApiResponse;
       console.log('WhatsApp API response:', result);
 
       if (!response.ok) {
@@ -489,7 +555,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error sending WhatsApp message:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: getErrorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -524,7 +590,7 @@ async function uploadMediaToWhatsApp(
       }
     );
 
-    const result = await response.json();
+    const result = await response.json() as WhatsAppApiResponse;
     
     if (!response.ok) {
       console.error('Media upload error:', result);
@@ -534,7 +600,7 @@ async function uploadMediaToWhatsApp(
     return { success: true, media_id: result.id };
   } catch (error) {
     console.error('Error uploading media:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
@@ -545,8 +611,8 @@ function buildMediaMessagePayload(
   mediaId: string, 
   caption?: string,
   replyToExternalId?: string | null  // WAMID del mensaje al que se responde
-): Record<string, any> {
-  const payload: Record<string, any> = {
+): OutboundMessagePayload {
+  const payload: OutboundMessagePayload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to,
@@ -560,7 +626,7 @@ function buildMediaMessagePayload(
     };
   }
 
-  const mediaObject: Record<string, any> = {
+  const mediaObject: { id: string; caption?: string } = {
     id: mediaId,
   };
 

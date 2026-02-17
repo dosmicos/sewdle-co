@@ -28,7 +28,7 @@ export const OKRCoachingPanel: React.FC<OKRCoachingPanelProps> = ({
     return avgProgress < 50 || hasLowConfidence;
   });
 
-  const getRiskIndicator = (objective: any) => {
+  const getRiskIndicator = (objective: unknown) => {
     const krs = getKeyResultsByObjective(objective.id);
     const avgProgress = krs.length > 0 ? krs.reduce((sum, kr) => sum + kr.progress_pct, 0) / krs.length : 0;
     const hasLowConfidence = krs.some(kr => kr.confidence === 'low');

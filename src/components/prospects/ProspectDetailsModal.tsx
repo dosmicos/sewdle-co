@@ -65,7 +65,7 @@ export const ProspectDetailsModal = ({ prospect, open, onClose, onUpdateStage }:
     }
   };
 
-  const handleActivitySubmit = async (data: any) => {
+  const handleActivitySubmit = async (data: unknown) => {
     if (!prospect?.organization_id) return;
     await createActivity({
       prospect_id: prospect.id,

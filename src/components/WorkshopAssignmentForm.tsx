@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,6 +39,11 @@ const WorkshopAssignmentForm: React.FC<WorkshopAssignmentFormProps> = ({
   const { createAssignment, getAvailableOrders } = useWorkshopAssignments();
   const { workshops } = useWorkshops();
 
+  const loadAvailableOrders = useCallback(async () => {
+    const orders = await getAvailableOrders();
+    setAvailableOrders(orders);
+  }, [getAvailableOrders]);
+
   useEffect(() => {
     if (open) {
       loadAvailableOrders();
@@ -46,12 +51,7 @@ const WorkshopAssignmentForm: React.FC<WorkshopAssignmentFormProps> = ({
         setSelectedOrderId(orderId);
       }
     }
-  }, [open, orderId]);
-
-  const loadAvailableOrders = async () => {
-    const orders = await getAvailableOrders();
-    setAvailableOrders(orders);
-  };
+  }, [open, orderId, loadAvailableOrders]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

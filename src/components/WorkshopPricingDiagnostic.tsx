@@ -12,7 +12,7 @@ export const WorkshopPricingDiagnostic: React.FC = () => {
   const { gaps, loading, refetch } = useWorkshopPricingGaps();
   const { createPricing } = useWorkshopPricing();
 
-  const handleQuickFix = async (gap: any) => {
+  const handleQuickFix = async (gap: unknown) => {
     try {
       // Calcular precio sugerido basado en promedio de venta con descuento
       const suggestedPrice = Math.round(gap.avg_sale_price * 0.1); // 10% del precio de venta

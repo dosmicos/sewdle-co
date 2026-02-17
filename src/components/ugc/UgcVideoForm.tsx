@@ -62,7 +62,7 @@ export const UgcVideoForm: React.FC<UgcVideoFormProps> = ({
           </div>
           <div className="space-y-2">
             <Label>Plataforma</Label>
-            <Select value={platform} onValueChange={(v: any) => setPlatform(v)}>
+            <Select value={platform} onValueChange={(v: unknown) => setPlatform(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

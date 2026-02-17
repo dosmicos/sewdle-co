@@ -36,7 +36,7 @@ export const useShopifyConfiguration = () => {
       if (error) throw error;
 
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error testing Shopify connection:', error);
       return {
         success: false,
@@ -69,7 +69,7 @@ export const useShopifyConfiguration = () => {
 
       toast.success('Configuración de Shopify guardada exitosamente');
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving Shopify configuration:', error);
       toast.error('Error al guardar la configuración');
       return false;
@@ -103,7 +103,7 @@ export const useShopifyConfiguration = () => {
         toast.error(data.error || 'Error al iniciar la sincronización');
         return false;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error triggering sync:', error);
       toast.error('Error al iniciar la sincronización');
       return false;
@@ -126,7 +126,7 @@ export const useShopifyConfiguration = () => {
 
       toast.success('Configuración de Shopify removida');
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error removing Shopify configuration:', error);
       toast.error('Error al remover la configuración');
       return false;

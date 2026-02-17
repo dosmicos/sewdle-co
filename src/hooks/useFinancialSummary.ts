@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -21,7 +21,7 @@ export const useFinancialSummary = () => {
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
 
-  const fetchFinancialSummary = async () => {
+  const fetchFinancialSummary = useCallback(async () => {
     if (!currentOrganization) return;
     
     setLoading(true);
@@ -85,11 +85,11 @@ export const useFinancialSummary = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentOrganization, toast]);
 
   useEffect(() => {
     fetchFinancialSummary();
-  }, [currentOrganization]);
+  }, [fetchFinancialSummary]);
 
   return {
     summary,

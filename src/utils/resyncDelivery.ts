@@ -30,8 +30,8 @@ export const resyncDeliveryDEL0022 = async () => {
 
     // Preparar los datos para sincronización con los SKUs actualizados
     const approvedItems = deliveryData.delivery_items
-      .filter((item: any) => item.quantity_approved > 0)
-      .map((item: any) => ({
+      .filter((item: unknown) => item.quantity_approved > 0)
+      .map((item: unknown) => ({
         variantId: item.order_items.product_variants.id,
         skuVariant: item.order_items.product_variants.sku_variant,
         quantityApproved: item.quantity_approved

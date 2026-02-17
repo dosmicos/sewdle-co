@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
     permissions: [] as Permission[]
   });
 
-  const modules = [
+  const modules = useMemo(() => [
     'Dashboard',
     'Órdenes',
     'Talleres',
@@ -36,7 +36,7 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
     'Shopify',
     'Reclutamiento',
     'Mensajería IA'
-  ];
+  ], []);
 
   const actions = [
     { key: 'view', label: 'Ver' },
@@ -71,7 +71,7 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
         permissions: allModules
       });
     }
-  }, [role]);
+  }, [role, modules]);
 
   const handlePermissionChange = (moduleIndex: number, action: string, checked: boolean) => {
     const newPermissions = [...formData.permissions];

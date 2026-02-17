@@ -443,7 +443,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
     void (async () => {
       try {
-        const data = await invokeEdgeFunction<any>(
+        const data = await invokeEdgeFunction<unknown>(
           'update-shopify-order',
           { orderId: shopifyOrderId.toString(), action: 'sync_from_shopify' },
           { timeoutMs: 10_000, signal: controller.signal }
@@ -469,7 +469,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   ...(prev.shopify_order ?? {}),
                   note: syncedNote,
                   ...(syncedTags ? { tags: syncedTags } : {}),
-                } as any,
+                } as Record<string, unknown>,
               }
             : prev
         );
@@ -482,7 +482,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               ...(prev.shopify_order ?? {}),
               note: syncedNote,
               ...(syncedTags ? { tags: syncedTags } : {}),
-            } as any,
+            } as Record<string, unknown>,
           } as PickingOrder;
         });
       } catch {
@@ -520,8 +520,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         debounceSaveTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shopifyNote, effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.cancelled_at]);
+  }, [shopifyNote, effectiveOrder?.shopify_order?.shopify_order_id, effectiveOrder?.shopify_order?.cancelled_at, handleSaveShopifyNote]);
 
   // Show scroll hint when lineItems load and there are 3 or more
   useEffect(() => {
@@ -720,7 +719,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
    * - silent=true: no toasts/UI noise (used for debounce auto-save)
    * - retries up to 3 times (5s interval) if Shopify sync fails
    */
-  const handleSaveShopifyNote = async (silent = false) => {
+  const handleSaveShopifyNote = useCallback(async (silent = false) => {
     const shopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id?.toString();
     if (!shopifyOrderId) return;
     if (effectiveOrder?.shopify_order?.cancelled_at) return;
@@ -745,7 +744,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
               shopify_order: {
                 ...(prev.shopify_order ?? {}),
                 note: noteToSave,
-              } as any,
+              } as Record<string, unknown>,
             }
           : prev
       );
@@ -757,7 +756,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           shopify_order: {
             ...(prev.shopify_order ?? {}),
             note: noteToSave,
-          } as any,
+          } as Record<string, unknown>,
         } as PickingOrder;
       });
 
@@ -768,7 +767,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
       if (error) throw error;
 
-      const shopifySynced = (data as any)?.shopifySynced !== false;
+      const shopifySynced = (data as Record<string, unknown>)?.shopifySynced !== false;
 
       if (shopifySynced) {
         lastSavedShopifyNoteRef.current = noteToSave;
@@ -815,7 +814,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     } finally {
       setIsSavingShopifyNote(false);
     }
-  };
+  }, [
+    effectiveOrder?.shopify_order?.cancelled_at,
+    effectiveOrder?.shopify_order?.shopify_order_id,
+    orderId,
+    refetchCachedOrder,
+    shopifyNote,
+    updateOrderOptimistically,
+  ]);
 
   // Manual sync button action (kept as "force refresh")
   const handleSyncFromShopify = async () => {
@@ -823,7 +829,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
     setIsSyncingFromShopify(true);
     try {
-      const data = await invokeEdgeFunction<any>(
+      const data = await invokeEdgeFunction<unknown>(
         'update-shopify-order',
         { orderId: effectiveOrder.shopify_order.shopify_order_id.toString(), action: 'sync_from_shopify' },
         { timeoutMs: 10_000 }
@@ -845,7 +851,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 ...(prev.shopify_order ?? {}),
                 note: syncedNote,
                 ...(syncedTags ? { tags: syncedTags } : {}),
-              } as any,
+              } as Record<string, unknown>,
             }
           : prev
       );
@@ -858,7 +864,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             ...(prev.shopify_order ?? {}),
             note: syncedNote,
             ...(syncedTags ? { tags: syncedTags } : {}),
-          } as any,
+          } as Record<string, unknown>,
         } as PickingOrder;
       });
 
@@ -1002,7 +1008,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       } else {
         throw new Error(data?.error || 'Error procesando pedido Express');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error procesando pedido Express:', error);
       toast.error(error.message || 'Error procesando pedido Express');
     } finally {
@@ -1085,7 +1091,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       } else {
         throw new Error(data?.error || 'Error procesando pedido');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error en Listo para Retiro:', error);
       toast.error(error.message || 'Error procesando pedido para retiro');
     } finally {
@@ -1129,7 +1135,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       } else {
         throw new Error(data?.error || 'Error confirmando entrega');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error confirmando entrega:', error);
       toast.error(error.message || 'Error confirmando entrega');
     } finally {

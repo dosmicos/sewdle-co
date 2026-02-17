@@ -108,7 +108,7 @@ export const useMessagingSearch = (options: UseMessagingSearchOptions = {}) => {
 
       // Fetch tags for found conversations
       const conversationIds = convData?.map(c => c.id) || [];
-      let tagsByConversation: Record<string, ConversationTagInfo[]> = {};
+      const tagsByConversation: Record<string, ConversationTagInfo[]> = {};
       
       if (conversationIds.length > 0) {
         const { data: assignmentsData } = await supabase
@@ -126,9 +126,9 @@ export const useMessagingSearch = (options: UseMessagingSearchOptions = {}) => {
           }
           if (assignment.tag) {
             tagsByConversation[convId].push({
-              id: (assignment.tag as any).id,
-              name: (assignment.tag as any).name,
-              color: (assignment.tag as any).color,
+              id: (assignment.tag as Record<string, unknown>).id,
+              name: (assignment.tag as Record<string, unknown>).name,
+              color: (assignment.tag as Record<string, unknown>).color,
             });
           }
         });
@@ -153,7 +153,7 @@ export const useMessagingSearch = (options: UseMessagingSearchOptions = {}) => {
       });
 
       // 2. Search in message content
-      let msgQuery = supabase
+      const msgQuery = supabase
         .from('messaging_messages')
         .select('id, conversation_id, content, sent_at')
         .ilike('content', `%${debouncedTerm}%`)
@@ -206,9 +206,9 @@ export const useMessagingSearch = (options: UseMessagingSearchOptions = {}) => {
               }
               if (assignment.tag) {
                 tagsByConversation[convId].push({
-                  id: (assignment.tag as any).id,
-                  name: (assignment.tag as any).name,
-                  color: (assignment.tag as any).color,
+                  id: (assignment.tag as Record<string, unknown>).id,
+                  name: (assignment.tag as Record<string, unknown>).name,
+                  color: (assignment.tag as Record<string, unknown>).color,
                 });
               }
             });

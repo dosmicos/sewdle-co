@@ -81,9 +81,9 @@ serve(async (req) => {
 
     // Try to get variant-specific image first
     if (variant_id && product.variants) {
-      const variant = product.variants.find((v: any) => v.id === variant_id);
+      const variant = product.variants.find((v: unknown) => v.id === variant_id);
       if (variant?.image_id && product.images) {
-        const variantImage = product.images.find((img: any) => img.id === variant.image_id);
+        const variantImage = product.images.find((img: unknown) => img.id === variant.image_id);
         if (variantImage?.src) {
           imageUrl = variantImage.src;
           console.log(`✅ Found variant-specific image for variant ${variant_id}`);

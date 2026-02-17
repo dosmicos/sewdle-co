@@ -154,6 +154,18 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     await loadUserOrganizations();
   }, [loadUserOrganizations]);
 
+  // Obtener plan del usuario
+  const getUserPlan = useCallback((): 'starter' | 'professional' | 'enterprise' => {
+    if (!userOrganizations.length) return 'starter';
+    
+    // El plan más alto entre todas las organizaciones del usuario
+    const plans = userOrganizations.map(ou => ou.organization?.plan || 'starter');
+    
+    if (plans.includes('enterprise')) return 'enterprise';
+    if (plans.includes('professional')) return 'professional';
+    return 'starter';
+  }, [userOrganizations]);
+
   // Verificar si el usuario puede crear una organización
   const canCreateOrganization = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
@@ -177,19 +189,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.error('Error checking organization limit:', err);
       return false;
     }
-  }, [user]);
-
-  // Obtener plan del usuario
-  const getUserPlan = useCallback((): 'starter' | 'professional' | 'enterprise' => {
-    if (!userOrganizations.length) return 'starter';
-    
-    // El plan más alto entre todas las organizaciones del usuario
-    const plans = userOrganizations.map(ou => ou.organization?.plan || 'starter');
-    
-    if (plans.includes('enterprise')) return 'enterprise';
-    if (plans.includes('professional')) return 'professional';
-    return 'starter';
-  }, [userOrganizations]);
+  }, [user, getUserPlan]);
 
   // Crear nueva organización
   const createOrganization = useCallback(async (data: CreateOrganizationData): Promise<Organization> => {
@@ -266,7 +266,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       let maxLimit = 0;
 
       switch (limitType) {
-        case 'orders':
+        case 'orders': {
           const { count: ordersCount } = await supabase
             .from('orders')
             .select('*', { count: 'exact', head: true })
@@ -275,8 +275,8 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           currentCount = ordersCount || 0;
           maxLimit = planLimits.maxOrdersPerMonth;
           break;
-
-        case 'users':
+        }
+        case 'users': {
           const { count: usersCount } = await supabase
             .from('organization_users')
             .select('*', { count: 'exact', head: true })
@@ -285,8 +285,8 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           currentCount = usersCount || 0;
           maxLimit = planLimits.maxUsers;
           break;
-
-        case 'workshops':
+        }
+        case 'workshops': {
           const { count: workshopsCount } = await supabase
             .from('workshops')
             .select('*', { count: 'exact', head: true })
@@ -295,6 +295,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           currentCount = workshopsCount || 0;
           maxLimit = planLimits.maxWorkshops;
           break;
+        }
       }
 
       return maxLimit === -1 || currentCount < maxLimit;
@@ -419,7 +420,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       isMounted = false;
     };
-  }, [user?.id, session?.access_token, loadUserOrganizations]);
+  }, [user, session?.access_token, loadUserOrganizations]);
 
   const value: OrganizationContextType = {
     currentOrganization,
@@ -445,6 +446,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useOrganization = (): OrganizationContextType => {
   const context = useContext(OrganizationContext);
   if (!context) {

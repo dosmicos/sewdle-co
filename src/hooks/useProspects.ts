@@ -13,7 +13,7 @@ const normalizeProspectStage = (stage: string): ProspectStage => {
   return stage as ProspectStage;
 };
 
-const normalizeProspect = (prospect: any): WorkshopProspect => ({
+const normalizeProspect = (prospect: unknown): WorkshopProspect => ({
   ...prospect,
   stage: normalizeProspectStage(prospect.stage),
 });
@@ -37,7 +37,7 @@ export const useProspects = () => {
       if (fetchError) throw fetchError;
 
       setProspects((data || []).map(normalizeProspect));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching prospects:', err);
       setError(err.message);
       toast.error('Error al cargar prospectos');
@@ -65,7 +65,7 @@ export const useProspects = () => {
       setProspects(prev => [normalizeProspect(data), ...prev]);
       toast.success('Prospecto creado exitosamente');
       return { data, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating prospect:', err);
       toast.error('Error al crear prospecto');
       return { data: null, error: err.message };
@@ -86,7 +86,7 @@ export const useProspects = () => {
       setProspects(prev => prev.map(p => p.id === id ? normalizeProspect(data) : p));
       toast.success('Prospecto actualizado');
       return { data, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error updating prospect:', err);
       toast.error('Error al actualizar prospecto');
       return { data: null, error: err.message };
@@ -105,7 +105,7 @@ export const useProspects = () => {
       setProspects(prev => prev.filter(p => p.id !== id));
       toast.success('Prospecto eliminado');
       return { error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error deleting prospect:', err);
       toast.error('Error al eliminar prospecto');
       return { error: err.message };

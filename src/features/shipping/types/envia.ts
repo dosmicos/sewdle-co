@@ -55,7 +55,7 @@ export interface EnviaShipmentResponse {
     trackingNumber: string;
     trackUrl: string;
     label: string;
-    additionalFiles: any[];
+    additionalFiles: unknown[];
     createdAt: string;
     shipmentId: number;
     totalPrice: number;
@@ -79,7 +79,7 @@ export interface ShippingLabel {
   destination_address: string | null;
   recipient_name: string | null;
   recipient_phone: string | null;
-  raw_response: any;
+  raw_response: unknown;
   created_by: string | null;
   created_at: string;
   updated_at: string;

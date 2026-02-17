@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Button } from '@/components/ui/button';
@@ -122,7 +122,7 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
         break;
       }
       
-      const items = data.data.filter((item: any) => item.status === 'active');
+      const items = data.data.filter((item: unknown) => item.status === 'active');
       allItems.push(...items);
       
       hasMore = items.length === pageSize;
@@ -135,7 +135,7 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
     return allItems;
   };
 
-  const detectMissingProducts = async () => {
+  const detectMissingProducts = useCallback(async () => {
     if (!currentOrganization?.id) return;
     
     setIsLoading(true);
@@ -269,13 +269,13 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       if (missing.length === 0) {
         toast.success('¡Todos los productos ya existen en Alegra!');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error detecting missing products:', error);
       toast.error('Error al detectar productos: ' + error.message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentOrganization?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncProductsToAlegra = async () => {
     const selectedProducts = missingProducts.filter(p => p.selected);
@@ -354,7 +354,7 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       }
       
       onSyncComplete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error syncing products:', error);
       toast.error('Error al sincronizar: ' + error.message);
       setStep('review');
@@ -384,7 +384,7 @@ const AlegraProductSyncModal = ({ open, onOpenChange, onSyncComplete }: AlegraPr
       setSyncProgress(0);
       setSyncResults({ success: 0, failed: 0 });
     }
-  }, [open]);
+  }, [open, detectMissingProducts]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

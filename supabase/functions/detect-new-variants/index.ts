@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Fetch all Shopify products with variants
     console.log('📦 Fetching Shopify products...')
     
-    let allShopifyVariants: ShopifyVariant[] = []
+    const allShopifyVariants: ShopifyVariant[] = []
     let cursor = null
     let hasNextPage = true
 
