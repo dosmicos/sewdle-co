@@ -55,9 +55,9 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     const publicationReadyVideos = campaignVideos.filter(
       (v) => v.status === 'aprobado' || v.status === 'publicado'
     );
-    const missingOrganic = publicationReadyVideos.some((v) => !(v.published_organic || v.status === 'publicado'));
+    const missingOrganic = publicationReadyVideos.some((v) => !v.published_organic);
     const missingAds = publicationReadyVideos.some((v) => !v.published_ads);
-    const hasOrganicPublished = campaignVideos.some((v) => v.published_organic || v.status === 'publicado');
+    const hasOrganicPublished = campaignVideos.some((v) => v.published_organic);
     const hasAdsPublished = campaignVideos.some((v) => v.published_ads);
 
     const matchesPublication =
@@ -133,13 +133,15 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
               <TableHead>Status</TableHead>
               <TableHead>Pedido</TableHead>
               <TableHead>Videos</TableHead>
+              <TableHead>Orgánico</TableHead>
+              <TableHead>Ads</TableHead>
               <TableHead>Actualización</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   No se encontraron creadores
                 </TableCell>
               </TableRow>
@@ -152,6 +154,12 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const videosDelivered = activeCampaign?.videos?.filter(
                   (v) => v.status === 'aprobado' || v.status === 'publicado'
                 ).length || 0;
+                const publicationReadyVideos = activeCampaign?.videos?.filter(
+                  (v) => v.status === 'aprobado' || v.status === 'publicado'
+                ) || [];
+                const organicPublished = publicationReadyVideos.filter((v) => v.published_organic).length;
+                const adsPublished = publicationReadyVideos.filter((v) => v.published_ads).length;
+                const publicationGoal = activeCampaign?.agreed_videos || publicationReadyVideos.length;
                 const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (
@@ -222,6 +230,20 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                     </TableCell>
                     <TableCell className="text-sm">
                       {activeCampaign ? `${videosDelivered}/${activeCampaign.agreed_videos}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {activeCampaign ? (
+                        <Badge className={`${organicPublished >= publicationGoal ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'} text-xs`}>
+                          {organicPublished}/{publicationGoal}
+                        </Badge>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {activeCampaign ? (
+                        <Badge className={`${adsPublished >= publicationGoal ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'} text-xs`}>
+                          {adsPublished}/{publicationGoal}
+                        </Badge>
+                      ) : '—'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(creator.updated_at), 'dd MMM', { locale: es })}

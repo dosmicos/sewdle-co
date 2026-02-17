@@ -86,18 +86,20 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
       id,
       publishedOrganic,
       publishedAds,
+      currentStatus,
     }: {
       id: string;
       publishedOrganic?: boolean;
       publishedAds?: boolean;
+      currentStatus?: string;
     }) => {
       const update: Record<string, any> = {};
 
       if (publishedOrganic !== undefined) {
         update.published_organic = publishedOrganic;
         update.published_organic_at = publishedOrganic ? new Date().toISOString() : null;
-        if (publishedOrganic) {
-          update.status = 'publicado';
+        if (!publishedOrganic && currentStatus === 'publicado') {
+          update.status = 'aprobado';
         }
       }
 

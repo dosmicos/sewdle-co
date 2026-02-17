@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -27,7 +29,7 @@ interface UgcCreatorDetailModalProps {
   onNewVideo: (campaignId: string) => void;
   onCampaignStatusChange: (campaignId: string, status: CampaignStatus, extra?: Record<string, any>) => void;
   onVideoStatusChange: (videoId: string, status: string, feedback?: string) => void;
-  onVideoPublicationChange: (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean) => void;
+  onVideoPublicationChange: (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean, currentStatus?: string) => void;
   onDelete?: () => void;
 }
 
@@ -130,12 +132,12 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const completedCampaigns = historicCampaigns.filter((c) => c.status === 'completado').length;
   const cancelledCampaigns = historicCampaigns.filter((c) => c.status === 'cancelado').length;
   const videosEligibleForPublication = allVideos.filter((video) => video.status === 'aprobado' || video.status === 'publicado');
-  const pendingOrganicCount = videosEligibleForPublication.filter((video) => !(video.published_organic || video.status === 'publicado')).length;
+  const pendingOrganicCount = videosEligibleForPublication.filter((video) => !video.published_organic).length;
   const pendingAdsCount = videosEligibleForPublication.filter((video) => !video.published_ads).length;
-  const publishedOrganicCount = allVideos.filter((video) => video.published_organic || video.status === 'publicado').length;
+  const publishedOrganicCount = allVideos.filter((video) => video.published_organic).length;
   const publishedAdsCount = allVideos.filter((video) => video.published_ads).length;
   const filteredVideos = allVideos.filter((video) => {
-    const isOrganicPublished = !!(video.published_organic || video.status === 'publicado');
+    const isOrganicPublished = !!video.published_organic;
     const isAdsPublished = !!video.published_ads;
 
     switch (videoFilter) {
@@ -400,32 +402,28 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
               <p className="text-center text-muted-foreground py-8">Sin videos registrados</p>
             ) : (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <Card className="border border-border">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Publicados orgánico</p>
-                      <p className="text-xl font-semibold text-foreground">{publishedOrganicCount}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border border-border">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Publicados en ads</p>
-                      <p className="text-xl font-semibold text-foreground">{publishedAdsCount}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border border-amber-200 bg-amber-50/50">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-amber-700">Faltan orgánico</p>
-                      <p className="text-xl font-semibold text-amber-800">{pendingOrganicCount}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border border-orange-200 bg-orange-50/50">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-orange-700">Faltan en ads</p>
-                      <p className="text-xl font-semibold text-orange-800">{pendingAdsCount}</p>
-                    </CardContent>
-                  </Card>
-                </div>
+                <Card className="border border-border">
+                  <CardContent className="p-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Orgánico publicados</p>
+                        <p className="text-lg font-semibold text-foreground">{publishedOrganicCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Ads publicados</p>
+                        <p className="text-lg font-semibold text-foreground">{publishedAdsCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Faltan orgánico</p>
+                        <p className="text-lg font-semibold text-amber-700">{pendingOrganicCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Faltan ads</p>
+                        <p className="text-lg font-semibold text-orange-700">{pendingAdsCount}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant={videoFilter === 'all' ? 'default' : 'outline'} onClick={() => setVideoFilter('all')}>
@@ -445,116 +443,132 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredVideos.length === 0 && (
-                  <Card className="border border-dashed border-border sm:col-span-2">
-                    <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                      No hay videos para este filtro.
-                    </CardContent>
-                  </Card>
-                )}
-                {filteredVideos.map((video) => {
-                  const isOrganicPublished = !!(video.published_organic || video.status === 'publicado');
-                  const isAdsPublished = !!video.published_ads;
-
-                  return (
-                  <Card key={video.id} className="border border-border">
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between mb-2">
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {video.platform?.replace('_', ' ') || 'N/A'}
-                        </Badge>
-                        <Badge
-                          className={`text-xs ${
-                            video.status === 'aprobado' || video.status === 'publicado'
-                              ? 'bg-green-100 text-green-700'
-                              : video.status === 'rechazado'
-                              ? 'bg-red-100 text-red-700'
-                              : video.status === 'en_revision'
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {video.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        <Badge className={isOrganicPublished ? 'bg-green-100 text-green-700 text-xs' : 'bg-amber-100 text-amber-700 text-xs'}>
-                          {isOrganicPublished ? 'Orgánico publicado' : 'Falta orgánico'}
-                        </Badge>
-                        <Badge className={isAdsPublished ? 'bg-blue-100 text-blue-700 text-xs' : 'bg-orange-100 text-orange-700 text-xs'}>
-                          {isAdsPublished ? 'Ads publicado' : 'Falta ads'}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {video.views.toLocaleString()}</span>
-                        <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {video.likes.toLocaleString()}</span>
-                        <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {video.comments}</span>
-                      </div>
-
-                      <div className="flex gap-2 mt-2">
-                        {video.video_url && (
-                          <Button size="sm" variant="outline" className="text-xs" onClick={() => window.open(video.video_url!, '_blank')}>
-                            <ExternalLink className="h-3 w-3 mr-1" /> Ver
-                          </Button>
-                        )}
-                        {video.status === 'en_revision' && (
-                          <>
-                            <Button size="sm" variant="outline" className="text-xs" onClick={() => onVideoStatusChange(video.id, 'aprobado')}>
-                              ✅ Aprobar
-                            </Button>
-                            <Button size="sm" variant="outline" className="text-xs" onClick={() => {
-                              const fb = prompt('Feedback:');
-                              if (fb) onVideoStatusChange(video.id, 'rechazado', fb);
-                            }}>
-                              ❌ Rechazar
-                            </Button>
-                          </>
-                        )}
-                        {video.status === 'aprobado' && (
-                          <Button size="sm" variant="outline" className="text-xs" onClick={() => onVideoStatusChange(video.id, 'publicado')}>
-                            📢 Publicado
-                          </Button>
-                        )}
-                        {(video.status === 'aprobado' || video.status === 'publicado') && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant={isOrganicPublished ? 'secondary' : 'outline'}
-                              className="text-xs"
-                              onClick={() => onVideoPublicationChange(video.id, !isOrganicPublished, undefined)}
-                            >
-                              {isOrganicPublished ? 'Quitar orgánico' : 'Marcar orgánico'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={isAdsPublished ? 'secondary' : 'outline'}
-                              className="text-xs"
-                              disabled={!isOrganicPublished}
-                              onClick={() => onVideoPublicationChange(video.id, undefined, !isAdsPublished)}
-                            >
-                              {isAdsPublished ? 'Quitar ads' : 'Marcar ads'}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-
-                      {(video.published_organic_at || video.published_ads_at) && (
-                        <div className="mt-2 text-[11px] text-muted-foreground space-y-0.5">
-                          {video.published_organic_at && <p>Orgánico: {format(new Date(video.published_organic_at), 'dd MMM yyyy HH:mm', { locale: es })}</p>}
-                          {video.published_ads_at && <p>Ads: {format(new Date(video.published_ads_at), 'dd MMM yyyy HH:mm', { locale: es })}</p>}
-                        </div>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Video</TableHead>
+                        <TableHead>Revisión</TableHead>
+                        <TableHead>Orgánico</TableHead>
+                        <TableHead>Ads</TableHead>
+                        <TableHead>Métricas</TableHead>
+                        <TableHead>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredVideos.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No hay videos para este filtro.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredVideos.map((video) => {
+                          const isOrganicPublished = !!video.published_organic;
+                          const isAdsPublished = !!video.published_ads;
+                          return (
+                            <TableRow key={video.id}>
+                              <TableCell className="align-top">
+                                <div className="space-y-1">
+                                  <Badge variant="outline" className="text-xs capitalize">
+                                    {video.platform?.replace('_', ' ') || 'N/A'}
+                                  </Badge>
+                                  {video.feedback && (
+                                    <p className="text-xs text-muted-foreground line-clamp-2">{video.feedback}</p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <Badge
+                                  className={`text-xs ${
+                                    video.status === 'aprobado' || video.status === 'publicado'
+                                      ? 'bg-green-100 text-green-700'
+                                      : video.status === 'rechazado'
+                                      ? 'bg-red-100 text-red-700'
+                                      : video.status === 'en_revision'
+                                      ? 'bg-orange-100 text-orange-700'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}
+                                >
+                                  {video.status.replace('_', ' ')}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Switch
+                                      checked={isOrganicPublished}
+                                      onCheckedChange={(checked) => onVideoPublicationChange(video.id, checked, undefined, video.status)}
+                                    />
+                                    <span className={`text-xs font-medium ${isOrganicPublished ? 'text-green-700' : 'text-amber-700'}`}>
+                                      {isOrganicPublished ? 'Publicado' : 'Pendiente'}
+                                    </span>
+                                  </div>
+                                  {video.published_organic_at && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {format(new Date(video.published_organic_at), 'dd MMM HH:mm', { locale: es })}
+                                    </p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Switch
+                                      checked={isAdsPublished}
+                                      onCheckedChange={(checked) => onVideoPublicationChange(video.id, undefined, checked, video.status)}
+                                    />
+                                    <span className={`text-xs font-medium ${isAdsPublished ? 'text-blue-700' : 'text-orange-700'}`}>
+                                      {isAdsPublished ? 'Publicado' : 'Pendiente'}
+                                    </span>
+                                  </div>
+                                  {video.published_ads_at && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {format(new Date(video.published_ads_at), 'dd MMM HH:mm', { locale: es })}
+                                    </p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <div className="text-xs text-muted-foreground space-y-1">
+                                  <p className="flex items-center gap-1"><Eye className="h-3 w-3" /> {video.views.toLocaleString()}</p>
+                                  <p className="flex items-center gap-1"><Heart className="h-3 w-3" /> {video.likes.toLocaleString()}</p>
+                                  <p className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {video.comments}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <div className="flex flex-wrap gap-1">
+                                  {video.video_url && (
+                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => window.open(video.video_url!, '_blank')}>
+                                      <ExternalLink className="h-3 w-3 mr-1" /> Ver
+                                    </Button>
+                                  )}
+                                  {video.status === 'en_revision' && (
+                                    <>
+                                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onVideoStatusChange(video.id, 'aprobado')}>
+                                        Aprobar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs"
+                                        onClick={() => {
+                                          const fb = prompt('Feedback:');
+                                          if (fb) onVideoStatusChange(video.id, 'rechazado', fb);
+                                        }}
+                                      >
+                                        Rechazar
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
-
-                      {video.feedback && (
-                        <p className="text-xs text-muted-foreground mt-2 italic">💬 {video.feedback}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-                })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}

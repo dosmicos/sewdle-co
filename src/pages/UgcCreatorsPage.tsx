@@ -115,8 +115,13 @@ const UgcCreatorsPage: React.FC = () => {
     updateVideoStatus.mutate({ id: videoId, status, feedback });
   };
 
-  const handleVideoPublicationChange = (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean) => {
-    updateVideoPublication.mutate({ id: videoId, publishedOrganic, publishedAds });
+  const handleVideoPublicationChange = (
+    videoId: string,
+    publishedOrganic?: boolean,
+    publishedAds?: boolean,
+    currentStatus?: string,
+  ) => {
+    updateVideoPublication.mutate({ id: videoId, publishedOrganic, publishedAds, currentStatus });
   };
 
   const handleOrderClick = async (orderNumber: string) => {
