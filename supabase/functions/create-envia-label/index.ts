@@ -1,27 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireAuthenticatedUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
-
-type SupabaseClient = ReturnType<typeof createClient>;
-
-interface ShippingCoverageRow {
-  dane_code: string;
-  municipality: string;
-  department: string;
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return 'Unknown error';
-}
 
 // Colombia department to state code mapping according to Envia.com API documentation
 // Reference: https://docs.envia.com/#004e17f0-dc66-48bc-918a-919daeec68f2
@@ -105,11 +89,11 @@ function normalizeForComparison(text: string): string {
 // Find coverage row with accent-insensitive matching in JavaScript
 // This solves the ilike limitation with accents (Medellin vs Medellín)
 async function findCoverageRowNormalized(
-  supabase: SupabaseClient,
+  supabase: any, 
   organizationId: string, 
   city: string, 
   department?: string
-): Promise<ShippingCoverageRow | null> {
+): Promise<{ dane_code: string; municipality: string; department: string } | null> {
   const normalizedCity = normalizeForComparison(city);
   const normalizedDept = department ? normalizeForComparison(department) : null;
   
@@ -143,18 +127,16 @@ async function findCoverageRowNormalized(
     return null;
   }
   
-  const candidateRows = (candidates ?? []) as ShippingCoverageRow[];
-
-  if (candidateRows.length === 0) {
+  if (!candidates || candidates.length === 0) {
     console.log(`⚠️ No coverage candidates found for org=${organizationId}, dept contains "${normalizedDept?.substring(0, 5) || 'any'}"`);
     return null;
   }
   
-  console.log(`📊 Found ${candidateRows.length} coverage candidates, matching city...`);
+  console.log(`📊 Found ${candidates.length} coverage candidates, matching city...`);
   
   // Match in JavaScript using normalized comparison
   // Priority 1: Exact match (normalized)
-  let match = candidateRows.find((row) =>
+  let match = candidates.find((row: any) => 
     normalizeForComparison(row.municipality) === normalizedCity
   );
   
@@ -166,7 +148,7 @@ async function findCoverageRowNormalized(
   // Priority 2: Municipality contains city or vice versa
   // Find ALL partial matches, then pick the longest municipality name (most specific)
   // This prevents "Pitalito" from matching "Pital" incorrectly
-  const partialMatches = candidateRows.filter((row) => {
+  const partialMatches = candidates.filter((row: any) => {
     const normMunicipality = normalizeForComparison(row.municipality);
     return normMunicipality.includes(normalizedCity) || normalizedCity.includes(normMunicipality);
   });
@@ -174,7 +156,7 @@ async function findCoverageRowNormalized(
   if (partialMatches.length > 0) {
     // Sort by municipality name length descending - longest (most specific) wins
     // "Pitalito" (8 chars) beats "Pital" (5 chars)
-    partialMatches.sort((a, b) =>
+    partialMatches.sort((a: any, b: any) => 
       b.municipality.length - a.municipality.length
     );
     match = partialMatches[0];
@@ -182,13 +164,13 @@ async function findCoverageRowNormalized(
     return match;
   }
   
-  console.log(`⚠️ No matching municipality found for "${city}" among ${candidateRows.length} candidates`);
+  console.log(`⚠️ No matching municipality found for "${city}" among ${candidates.length} candidates`);
   return null;
 }
 
 // Get DANE code - uses normalized matching + fallback to Envia Queries API
 async function getDaneCodeFromDB(
-  supabase: SupabaseClient,
+  supabase: any, 
   city: string, 
   department: string | undefined, 
   organizationId: string,
@@ -331,7 +313,7 @@ function extractDistrict(address: string, city: string): string {
   }
   
   // If no pattern matched, try to extract from address parts
-  const parts = address.split(/[,-]/);
+  const parts = address.split(/[,\-]/);
   if (parts.length >= 3) {
     // Usually the neighborhood is in the 2nd or 3rd part
     const possibleDistrict = parts[1]?.trim() || parts[2]?.trim();
@@ -577,88 +559,8 @@ interface CreateLabelRequest {
   package_weight?: number;
   declared_value?: number;
   preferred_carrier?: string;
-  preferred_service?: string;
-  delivery_type?: 'domicilio' | 'oficina';
   is_cod?: boolean; // Cash on Delivery
   cod_amount?: number; // Amount to collect on delivery
-}
-
-interface EnviaOriginData {
-  address_id: number;
-  name: string;
-  company: string;
-  email: string;
-  phone: string;
-  street: string;
-  number: string;
-  city: string;
-  state: string;
-  country: string;
-  postalCode: string;
-  reference: string;
-  identification_number: string;
-}
-
-interface EnviaDestinationData {
-  name: string;
-  company: string;
-  email: string;
-  phone: string;
-  street: string;
-  number: string;
-  district: string;
-  city: string;
-  state: string;
-  country: string;
-  postalCode: string;
-  reference: string;
-  identificationNumber?: string;
-  identificationType?: string;
-}
-
-interface EnviaPackage {
-  content: string;
-  amount: number;
-  type: string;
-  weight: number;
-  insurance: number;
-  declaredValue: number;
-  weightUnit: string;
-  lengthUnit: string;
-  dimensions: {
-    length: number;
-    width: number;
-    height: number;
-  };
-  additionalServices?: Array<{ data: { amount: number }; service: string }>;
-}
-
-interface EnviaGenerateRequest {
-  origin: EnviaOriginData;
-  destination: EnviaDestinationData;
-  packages: EnviaPackage[];
-  shipment: {
-    carrier: string;
-    service: string;
-    type: 1 | 2;
-  };
-  settings: {
-    printFormat: string;
-    printSize: string;
-    currency: string;
-    order_id: string;
-    comments: string;
-  };
-}
-
-interface ShopifyFulfillmentOrder {
-  id: string | number;
-  status?: string;
-}
-
-interface ShopifyFulfillmentOrdersResponse {
-  fulfillment_orders?: ShopifyFulfillmentOrder[];
-  errors?: unknown;
 }
 
 serve(async (req) => {
@@ -679,12 +581,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
-
-    const authResult = await requireAuthenticatedUser(req, corsHeaders);
-    if (!authResult.ok) {
-      return authResult.response;
-    }
-    console.log('✅ Authenticated user for create-envia-label:', authResult.userId);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const body: CreateLabelRequest = await req.json();
@@ -817,7 +713,7 @@ serve(async (req) => {
     const isInterRapidisimo = carrierConfig.carrier === 'interrapidisimo';
 
     // Full origin data for ALL carriers
-    const originData: EnviaOriginData = {
+    const originData = {
       address_id: 6289477,
       name: `${body.order_number} - Dosmicos sas`,
       company: DOSMICOS_ORIGIN.company,
@@ -842,7 +738,7 @@ serve(async (req) => {
     const referenceText = (body.destination_address2 || '').trim().replace(/\s+/g, ' ').substring(0, 100);
 
     // Build destination - use DANE code for both city and postalCode
-    const destinationData: EnviaDestinationData = {
+    const destinationData: Record<string, any> = {
       name: body.recipient_name || "Cliente",
       company: "",
       email: body.recipient_email || "cliente@dosmicos.co",
@@ -868,7 +764,7 @@ serve(async (req) => {
     }
 
     console.log(`📤 Destination address:`, destinationData);
-    const enviaRequest: EnviaGenerateRequest = {
+    const enviaRequest: Record<string, any> = {
       origin: originData,
       destination: destinationData,
       packages: [{
@@ -884,8 +780,8 @@ serve(async (req) => {
       }],
       shipment: {
         carrier: carrierConfig.carrier,
-        service: body.preferred_service || carrierConfig.service,
-        type: body.delivery_type === 'oficina' ? 2 : 1
+        service: (body as any).preferred_service || carrierConfig.service,
+        type: (body as any).delivery_type === 'oficina' ? 2 : 1
       },
       settings: {
         printFormat: "PDF",
@@ -1155,7 +1051,7 @@ serve(async (req) => {
               }
             );
             
-            const fulfillmentOrdersData = await fulfillmentOrdersResponse.json() as ShopifyFulfillmentOrdersResponse;
+            const fulfillmentOrdersData = await fulfillmentOrdersResponse.json();
             console.log('📋 Fulfillment orders status:', fulfillmentOrdersResponse.status);
             console.log('📋 Fulfillment orders response:', JSON.stringify(fulfillmentOrdersData, null, 2));
             
@@ -1167,12 +1063,12 @@ serve(async (req) => {
               // Get the first open fulfillment order
               const fulfillmentOrders = fulfillmentOrdersData.fulfillment_orders || [];
               console.log('📋 Found', fulfillmentOrders.length, 'fulfillment orders');
-              fulfillmentOrders.forEach((fo, idx: number) => {
+              fulfillmentOrders.forEach((fo: any, idx: number) => {
                 console.log(`📋 Fulfillment order ${idx}: id=${fo.id}, status=${fo.status}`);
               });
               
               const openFulfillmentOrder = fulfillmentOrders.find(
-                (fo) => fo.status === 'open' || fo.status === 'in_progress'
+                (fo: any) => fo.status === 'open' || fo.status === 'in_progress'
               );
               
               if (!openFulfillmentOrder) {
@@ -1259,10 +1155,10 @@ serve(async (req) => {
             }
           }
         }
-      } catch (fulfillmentError) {
+      } catch (fulfillmentError: any) {
         console.error('❌ Exception in Shopify fulfillment:', fulfillmentError);
         shopifyFulfillmentStatus = 'failed';
-        shopifyFulfillmentError = getErrorMessage(fulfillmentError);
+        shopifyFulfillmentError = fulfillmentError.message || 'Unknown error';
       }
     } else {
       console.log('⚠️ Skipping Shopify fulfillment - missing shopify_order_id or organization_id');
@@ -1305,10 +1201,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in create-envia-label:', error);
     return new Response(
-      JSON.stringify({ success: false, error: getErrorMessage(error) }),
+      JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

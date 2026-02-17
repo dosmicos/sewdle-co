@@ -97,7 +97,7 @@ export const useOrderDeliveryStats = () => {
       // Esta función ya fue actualizada para usar los nuevos campos estructurados
       const { data, error } = await supabase.rpc('get_order_variants_breakdown', { 
         order_id_param: orderId 
-      }) as { data: VariantBreakdown[] | null, error: unknown };
+      }) as { data: VariantBreakdown[] | null, error: any };
 
       if (error) {
         console.error('Error fetching variants breakdown:', error);

@@ -48,18 +48,6 @@ Deno.serve(async (req) => {
       variants: ShopifyVariantData[]
     }
 
-    interface SewdleProductLookup {
-      id: string
-      name: string
-    }
-
-    interface SewdleVariantLookup {
-      id: string
-      sku_variant: string
-      stock_quantity: number
-      additional_price: number
-    }
-
     const allProducts: ShopifyProductData[] = []
     let cursor: string | null = null
     let hasNextPage = true
@@ -121,7 +109,7 @@ Deno.serve(async (req) => {
       const edges = data.data.products.edges
       for (const edge of edges) {
         const node = edge.node
-        const variants: ShopifyVariantData[] = node.variants.edges.map((ve: unknown) => {
+        const variants: ShopifyVariantData[] = node.variants.edges.map((ve: any) => {
           const v = ve.node
           const opts = v.selectedOptions || []
           return {
@@ -165,20 +153,15 @@ Deno.serve(async (req) => {
     if (varErr) throw varErr
 
     // Build lookup maps
-    const productByName = new Map<string, SewdleProductLookup>()
+    const productByName = new Map<string, any>()
     for (const p of sewdleProducts || []) {
-      productByName.set(p.name.toLowerCase().trim(), { id: p.id, name: p.name })
+      productByName.set(p.name.toLowerCase().trim(), p)
     }
 
-    const variantBySku = new Map<string, SewdleVariantLookup>()
+    const variantBySku = new Map<string, any>()
     for (const v of sewdleVariants || []) {
       if (v.sku_variant) {
-        variantBySku.set(v.sku_variant, {
-          id: v.id,
-          sku_variant: v.sku_variant,
-          stock_quantity: v.stock_quantity || 0,
-          additional_price: v.additional_price || 0,
-        })
+        variantBySku.set(v.sku_variant, v)
       }
     }
 
@@ -220,8 +203,8 @@ Deno.serve(async (req) => {
             continue
           }
 
-          sewdleProduct = { id: created.id, name: created.name }
-          productByName.set(shopProduct.title.toLowerCase().trim(), { id: created.id, name: created.name })
+          sewdleProduct = created
+          productByName.set(shopProduct.title.toLowerCase().trim(), created)
           productsCreated++
           console.log(`✅ Created product: ${shopProduct.title}`)
         }
@@ -266,7 +249,7 @@ Deno.serve(async (req) => {
               const size = variant.option1 || null
               const color = variant.option2 || null
 
-              const { data: insertedVariant, error: insertErr } = await supabase
+              const { error: insertErr } = await supabase
                 .from('product_variants')
                 .insert({
                   product_id: sewdleProduct.id,
@@ -277,22 +260,13 @@ Deno.serve(async (req) => {
                   additional_price: parseFloat(variant.price),
                   ...(organization_id ? { organization_id } : {}),
                 })
-                .select('id, sku_variant, stock_quantity, additional_price')
-                .single()
 
               if (insertErr) {
                 errors++
                 errorDetails.push(`Insert variant ${variantSku}: ${insertErr.message}`)
               } else {
                 variantsCreated++
-                if (insertedVariant) {
-                  variantBySku.set(variantSku, {
-                    id: insertedVariant.id,
-                    sku_variant: insertedVariant.sku_variant || variantSku,
-                    stock_quantity: insertedVariant.stock_quantity || 0,
-                    additional_price: insertedVariant.additional_price || 0,
-                  })
-                }
+                variantBySku.set(variantSku, { sku_variant: variantSku })
               }
             }
           } catch (variantError) {

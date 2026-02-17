@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,14 +15,18 @@ interface OrderDeliveryTrackerProps {
 }
 
 const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, orderNumber }) => {
-  const [stats, setStats] = useState<unknown>(null);
-  const [deliveries, setDeliveries] = useState<unknown[]>([]);
-  const [variants, setVariants] = useState<unknown[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [variants, setVariants] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const { getOrderStats, getOrderDeliveriesBreakdown, getOrderVariantsBreakdown, loading } = useOrderDeliveryStats();
 
+  useEffect(() => {
+    loadData();
+  }, [orderId]);
+
   // Helper function to sort variants by product first, then by variant size
-  const getSortedVariants = useCallback((variants: unknown[]) => {
+  const getSortedVariants = (variants: any[]) => {
     if (!variants) return [];
     
     // Group variants by product name
@@ -37,10 +41,10 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
         title: variant.variant_size || ''
       });
       return acc;
-    }, {} as Record<string, unknown[]>);
+    }, {} as Record<string, any[]>);
     
     // Sort each product group by variants and then combine all
-    const sortedVariants: unknown[] = [];
+    const sortedVariants: any[] = [];
     
     // Sort product names alphabetically
     const sortedProductNames = Object.keys(groupedByProduct).sort();
@@ -53,9 +57,9 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
     });
     
     return sortedVariants;
-  }, []);
+  };
 
-  const loadData = useCallback(async (forceRefresh = false) => {
+  const loadData = async (forceRefresh = false) => {
     if (forceRefresh) {
       setRefreshing(true);
     }
@@ -82,11 +86,7 @@ const OrderDeliveryTracker: React.FC<OrderDeliveryTrackerProps> = ({ orderId, or
         setRefreshing(false);
       }
     }
-  }, [orderId, getOrderStats, getOrderDeliveriesBreakdown, getOrderVariantsBreakdown, getSortedVariants]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   const handleRefresh = () => {
     logger.debug('Manual refresh triggered');

@@ -100,7 +100,7 @@ export const useShippingManifests = () => {
 
       if (fetchError) throw fetchError;
       setManifests(data || []);
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error fetching manifests:', err);
       setError(err.message);
     } finally {
@@ -137,7 +137,7 @@ export const useShippingManifests = () => {
 
       setCurrentManifest(manifestWithItems);
       return manifestWithItems;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error fetching manifest:', err);
       setError(err.message);
       return null;
@@ -211,7 +211,7 @@ export const useShippingManifests = () => {
       toast.success(`Manifiesto ${manifestNumber} creado con ${labelIds.length} guías`);
       await fetchManifests();
       return manifest;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error creating manifest:', err);
       setError(err.message);
       toast.error('Error al crear manifiesto: ' + err.message);
@@ -252,7 +252,7 @@ export const useShippingManifests = () => {
         return {
           success: false,
           status: 'wrong_manifest',
-          message: `Guía pertenece al manifiesto ${(existingItem as Record<string, unknown>).shipping_manifests.manifest_number}`
+          message: `Guía pertenece al manifiesto ${(existingItem as any).shipping_manifests.manifest_number}`
         };
       }
 
@@ -299,7 +299,7 @@ export const useShippingManifests = () => {
         message: `✓ Guía ${trackingNumber} verificada - Pedido ${existingItem.order_number}`,
         item: updatedItem
       };
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error scanning:', err);
       return {
         success: false,
@@ -331,7 +331,7 @@ export const useShippingManifests = () => {
       toast.success('Manifiesto cerrado');
       await fetchManifests();
       return true;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error closing manifest:', err);
       toast.error('Error al cerrar manifiesto: ' + err.message);
       return false;
@@ -360,7 +360,7 @@ export const useShippingManifests = () => {
       toast.success('Retiro confirmado');
       await fetchManifests();
       return true;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error confirming pickup:', err);
       toast.error('Error al confirmar retiro: ' + err.message);
       return false;
@@ -380,7 +380,7 @@ export const useShippingManifests = () => {
       toast.success('Manifiesto eliminado');
       await fetchManifests();
       return true;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error deleting manifest:', err);
       toast.error('Error al eliminar manifiesto: ' + err.message);
       return false;
@@ -421,7 +421,7 @@ export const useShippingManifests = () => {
       const usedIds = new Set((usedLabels || []).map(l => l.shipping_label_id));
       
       return (labels || []).filter(l => !usedIds.has(l.id));
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error fetching available labels:', err);
       return [];
     }
@@ -440,7 +440,7 @@ export const useShippingManifests = () => {
 
       if (error) throw error;
       return true;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error marking item missing:', err);
       return false;
     }

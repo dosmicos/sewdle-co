@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useWorkshops, Workshop } from './useWorkshops';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,7 @@ export const useWorkshopsWithStats = () => {
   const [statsLoading, setStatsLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchAllWorkshopStats = useCallback(async (workshopList: Workshop[]) => {
+  const fetchAllWorkshopStats = async (workshopList: Workshop[]) => {
     if (workshopList.length === 0) return;
     
     try {
@@ -59,7 +59,7 @@ export const useWorkshopsWithStats = () => {
 
               pendingUnitsData?.forEach(item => {
                 const totalOrdered = item.quantity || 0;
-                const totalApproved = item.delivery_items?.reduce((sum: number, di: unknown) => 
+                const totalApproved = item.delivery_items?.reduce((sum: number, di: any) => 
                   sum + (di.quantity_approved || 0), 0) || 0;
                 pendingUnits += Math.max(0, totalOrdered - totalApproved);
               });
@@ -134,7 +134,7 @@ export const useWorkshopsWithStats = () => {
 
       const results = await Promise.all(statsPromises);
       setWorkshopsWithStats(results);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error fetching workshop stats:', error);
       toast({
         title: "Error",
@@ -144,7 +144,7 @@ export const useWorkshopsWithStats = () => {
     } finally {
       setStatsLoading(false);
     }
-  }, [toast]);
+  };
 
   // Ordenar talleres por unidades entregadas última semana (mayor a menor)
   const sortedWorkshopsWithStats = useMemo(() => {
@@ -159,7 +159,7 @@ export const useWorkshopsWithStats = () => {
     } else if (!workshopsLoading && workshops.length === 0) {
       setWorkshopsWithStats([]);
     }
-  }, [fetchAllWorkshopStats, workshops, workshopsLoading]);
+  }, [workshops, workshopsLoading]);
 
   return {
     workshops: sortedWorkshopsWithStats,

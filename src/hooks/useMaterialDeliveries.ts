@@ -154,7 +154,7 @@ export const useMaterialDeliveries = () => {
       queryClient.invalidateQueries({ queryKey: ['material-deliveries'] });
       queryClient.invalidateQueries({ queryKey: ['individual-material-deliveries'] });
     },
-    onError: (error: unknown) => {
+    onError: (error: any) => {
       console.error('Error creating material delivery:', error);
       
       let errorMessage = "No se pudo registrar la entrega de materiales";
@@ -236,7 +236,7 @@ export const useMaterialDeliveries = () => {
         });
       }
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error deleting material delivery:', error);
       
       let errorMessage = "No se pudo eliminar la entrega de material";
@@ -382,7 +382,7 @@ export const useMaterialDeliveries = () => {
       console.log('=== FETCH INDIVIDUAL MATERIAL DELIVERIES SUCCESS ===');
       return transformedData;
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('=== FETCH INDIVIDUAL MATERIAL DELIVERIES ERROR ===');
       console.error('Error details:', error);
       
@@ -496,7 +496,7 @@ export const useMaterialDeliveries = () => {
       console.log('=== FETCH MATERIAL DELIVERIES SUCCESS ===');
       return filteredData;
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('=== FETCH MATERIAL DELIVERIES ERROR ===');
       console.error('Error details:', error);
       

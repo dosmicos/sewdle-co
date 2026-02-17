@@ -25,14 +25,14 @@ const formatDateForList = (dateString: string): string => {
 };
 
 interface OrderCardProps {
-  order: unknown;
-  onView: (order: unknown) => void;
-  onEdit: (order: unknown) => void;
-  onDelete: (order: unknown) => void;
+  order: any;
+  onView: (order: any) => void;
+  onEdit: (order: any) => void;
+  onDelete: (order: any) => void;
   getStatusColor: (status: string) => string;
   getStatusText: (status: string) => string;
-  getWorkshopName: (order: unknown) => string;
-  getWorkshopColor: (order: unknown) => string;
+  getWorkshopName: (order: any) => string;
+  getWorkshopColor: (order: any) => string;
   canEdit: boolean;
   canDelete: boolean;
 }

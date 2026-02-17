@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { logger } from '@/lib/logger';
-import { invokeEdgeFunction } from '@/features/shipping/lib/invokeEdgeFunction';
 
 export type OperationalStatus = 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'awaiting_pickup' | 'shipped';
 
@@ -62,21 +61,12 @@ export interface PickingOrder {
     note?: string;
     tags?: string;
     cancelled_at?: string;
-    raw_data?: unknown;
+    raw_data?: any;
   };
   
   // Line items
-  line_items?: unknown[];
+  line_items?: any[];
 }
-
-type UpdateShopifyOrderResponse = {
-  success?: boolean;
-  error?: string;
-  finalTags?: string[] | string;
-};
-
-const isAbortError = (error: unknown): boolean =>
-  error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('abort'));
 
 export const usePickingOrders = () => {
   const [orders, setOrders] = useState<PickingOrder[]>([]);
@@ -248,7 +238,7 @@ export const usePickingOrders = () => {
       }
 
       // Map orders and apply tag-based status mapping
-      let ordersData = data.map((order: unknown) => {
+      let ordersData = data.map((order: any) => {
         const mappedStatus = getOperationalStatusFromTags(
           order.shopify_order?.tags,
           order.operational_status
@@ -265,14 +255,14 @@ export const usePickingOrders = () => {
       
       // Filter by operational_status AFTER tag mapping
       if (filters?.operationalStatuses && filters.operationalStatuses.length > 0) {
-        ordersData = ordersData.filter((order: unknown) => 
+        ordersData = ordersData.filter((order: any) => 
           filters.operationalStatuses?.includes(order.operational_status)
         );
       }
 
       // Filter by tags (INCLUIR) - requires ALL tags to be present (AND logic)
       if (filters?.tags && filters.tags.length > 0) {
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
           return filters.tags?.every(tag => orderTags.includes(tag.toLowerCase()));
         });
@@ -280,7 +270,7 @@ export const usePickingOrders = () => {
 
       // Filter by exclude_tags (EXCLUIR)
       if (filters?.excludeTags && filters.excludeTags.length > 0) {
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
           return !filters.excludeTags?.some(tag => orderTags.includes(tag.toLowerCase()));
         });
@@ -289,7 +279,7 @@ export const usePickingOrders = () => {
       // In-memory search filter for customer name/email (DB filter only catches order_number)
       if (filters?.searchTerm && filters.searchTerm.length > 0) {
         const searchLower = filters.searchTerm.toLowerCase();
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const orderNumber = order.order_number?.toLowerCase() || '';
           const customerEmail = order.shopify_order?.customer_email?.toLowerCase() || '';
           const firstName = order.shopify_order?.customer_first_name?.toLowerCase() || '';
@@ -308,7 +298,7 @@ export const usePickingOrders = () => {
         const min = parseFloat(minStr);
         const max = parseFloat(maxStr);
         
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const price = order.shopify_order?.total_price || 0;
           return price >= min && price <= max;
         });
@@ -323,12 +313,11 @@ export const usePickingOrders = () => {
           case 'today':
             startDate = new Date(now.setHours(0, 0, 0, 0));
             break;
-          case 'yesterday': {
+          case 'yesterday':
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
             startDate = new Date(yesterday.setHours(0, 0, 0, 0));
             break;
-          }
           case 'last_7_days':
             startDate = new Date(now.setDate(now.getDate() - 7));
             break;
@@ -339,7 +328,7 @@ export const usePickingOrders = () => {
             startDate = new Date(0);
         }
         
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const orderDate = new Date(order.shopify_order?.created_at_shopify || order.created_at);
           return orderDate >= startDate;
         });
@@ -348,7 +337,7 @@ export const usePickingOrders = () => {
       // Filter by shipping method
       if (filters?.shippingMethod) {
         const shippingFilter = filters.shippingMethod.toLowerCase();
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const shippingTitle = order.shopify_order?.raw_data?.shipping_lines?.[0]?.title || '';
           return shippingTitle.toLowerCase().includes(shippingFilter);
         });
@@ -357,7 +346,7 @@ export const usePickingOrders = () => {
       // Exclude by shipping method
       if (filters?.excludeShippingMethod) {
         const excludeFilter = filters.excludeShippingMethod.toLowerCase();
-        ordersData = ordersData.filter((order: unknown) => {
+        ordersData = ordersData.filter((order: any) => {
           const shippingTitle = order.shopify_order?.raw_data?.shipping_lines?.[0]?.title || '';
           return !shippingTitle.toLowerCase().includes(excludeFilter);
         });
@@ -375,7 +364,7 @@ export const usePickingOrders = () => {
       setOrders(paginatedOrders as PickingOrder[]);
       setTotalCount(filteredTotalCount);
       setCurrentPage(page);
-    } catch (error: unknown) {
+    } catch (error: any) {
       logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
       setOrders([]);
@@ -391,7 +380,7 @@ export const usePickingOrders = () => {
     shopifyOrderId?: number
   ) => {
     try {
-      const updates: unknown = {
+      const updates: any = {
         operational_status: newStatus,
       };
 
@@ -453,41 +442,28 @@ export const usePickingOrders = () => {
 
       toast.success('Estado actualizado correctamente');
       await fetchOrders();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error updating order status:', error);
       toast.error('Error al actualizar estado');
-      throw error;
     }
   };
 
   const updateShopifyTags = async (shopifyOrderId: number, newTags: string[]) => {
     try {
       console.log(`🏷️ Agregando tags a orden ${shopifyOrderId} usando merge:`, newTags);
-
-      // Retry once on timeout/abort to avoid leaving the UI stuck on transient edge function latency.
-      let shopifyResponse: UpdateShopifyOrderResponse | undefined;
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          shopifyResponse = await invokeEdgeFunction<UpdateShopifyOrderResponse>(
-            'update-shopify-order',
-            {
-              orderId: shopifyOrderId,
-              action: 'add_tags',
-              data: { tags: newTags },
-            },
-            { timeoutMs: 15_000 }
-          );
-          break;
-        } catch (invokeError) {
-          if (isAbortError(invokeError) && attempt < 2) {
-            console.warn(`⚠️ Timeout Shopify orden ${shopifyOrderId}, reintentando (${attempt}/2)...`);
-            continue;
-          }
-          if (isAbortError(invokeError)) {
-            throw new Error('Timeout al sincronizar con Shopify. Intenta de nuevo.');
-          }
-          throw invokeError;
+      
+      // Use add_tags action - reads from Shopify, merges, and updates
+      const { data: shopifyResponse, error: shopifyError } = await supabase.functions.invoke('update-shopify-order', {
+        body: {
+          orderId: shopifyOrderId,
+          action: 'add_tags',
+          data: { tags: newTags }
         }
+      });
+
+      if (shopifyError) {
+        console.error(`❌ Error Shopify para orden ${shopifyOrderId}:`, shopifyError);
+        throw shopifyError;
       }
       
       if (!shopifyResponse?.success) {
@@ -516,7 +492,7 @@ export const usePickingOrders = () => {
       
       console.log(`✅ Tags actualizados en Shopify y DB para orden ${shopifyOrderId}:`, finalTagsString);
         
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(`❌ Error updating Shopify tags para orden ${shopifyOrderId}:`, error);
       throw error;
     }
@@ -533,7 +509,7 @@ export const usePickingOrders = () => {
 
       toast.success('Notas actualizadas');
       await fetchOrders();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error updating notes:', error);
       toast.error('Error al actualizar notas');
     }
@@ -551,7 +527,7 @@ export const usePickingOrders = () => {
       
       toast.success('Nota sincronizada con Shopify');
       await fetchOrders();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error updating Shopify note:', error);
       toast.error('Error al actualizar nota en Shopify');
       throw error;
@@ -575,7 +551,7 @@ export const usePickingOrders = () => {
       }
 
       toast.success('Sincronizado con Shopify');
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error syncing to Shopify:', error);
       toast.error('Error al sincronizar');
     }
@@ -716,7 +692,7 @@ export const usePickingOrders = () => {
           
           results.successful.push(order.id);
           console.log(`✅ Orden ${order.shopify_order_id} actualizada localmente (${results.successful.length}/${ordersToUpdate.length})`);
-        } catch (error: unknown) {
+        } catch (error: any) {
           console.error(`❌ Error actualizando orden ${order.shopify_order_id}:`, error);
           results.failed.push(order.id);
         }
@@ -778,7 +754,7 @@ export const usePickingOrders = () => {
       if (error) throw error;
       
       logger.info(`[PickingOrders] Orden ${shopifyOrderId} inicializada correctamente`);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error initializing picking order:', error);
     }
   };

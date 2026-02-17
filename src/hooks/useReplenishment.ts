@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { toast } from 'sonner';
@@ -34,10 +34,9 @@ export const useReplenishment = () => {
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const { currentOrganization } = useOrganization();
-  const organizationId = currentOrganization?.id;
 
-  const fetchSuggestions = useCallback(async () => {
-    if (!organizationId) return;
+  const fetchSuggestions = async () => {
+    if (!currentOrganization?.id) return;
     
     try {
       setLoading(true);
@@ -46,7 +45,7 @@ export const useReplenishment = () => {
       const { data, error } = await supabase
         .from('v_replenishment_details')
         .select('*')
-        .eq('organization_id', organizationId)
+        .eq('organization_id', currentOrganization.id)
         .eq('calculation_date', new Date().toISOString().split('T')[0])
         .eq('status', 'pending');
       
@@ -59,10 +58,10 @@ export const useReplenishment = () => {
     } finally {
       setLoading(false);
     }
-  }, [organizationId]);
+  };
 
-  const calculateSuggestions = useCallback(async () => {
-    if (!organizationId) {
+  const calculateSuggestions = async () => {
+    if (!currentOrganization?.id) {
       toast.error('No se pudo identificar la organización');
       return;
     }
@@ -70,12 +69,12 @@ export const useReplenishment = () => {
     try {
       setCalculating(true);
       
-      console.log('🔄 Calculando sugerencias para organización:', organizationId);
+      console.log('🔄 Calculando sugerencias para organización:', currentOrganization.id);
       
       // Llamar a la nueva función refresh_inventory_replenishment
       const { data, error } = await supabase
         .rpc('refresh_inventory_replenishment', {
-          org_id: organizationId
+          org_id: currentOrganization.id
         });
       
       if (error) {
@@ -93,17 +92,19 @@ export const useReplenishment = () => {
       } else {
         toast.warning('No se generaron nuevas sugerencias');
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('❌ Error calculating suggestions:', error);
       toast.error(error.message || 'Error al calcular sugerencias');
     } finally {
       setCalculating(false);
     }
-  }, [fetchSuggestions, organizationId]);
+  };
 
   useEffect(() => {
-    fetchSuggestions();
-  }, [fetchSuggestions]);
+    if (currentOrganization?.id) {
+      fetchSuggestions();
+    }
+  }, [currentOrganization?.id]);
 
   return {
     suggestions,

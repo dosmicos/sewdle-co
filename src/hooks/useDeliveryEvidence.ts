@@ -159,7 +159,7 @@ export const useDeliveryEvidence = () => {
         .order('created_at', { ascending: false });
 
       // Obtener los perfiles por separado si hay archivos
-      let profilesData: unknown[] = [];
+      let profilesData: any[] = [];
       if (data && data.length > 0) {
         const userIds = [...new Set(data.map(file => file.uploaded_by).filter(Boolean))];
         if (userIds.length > 0) {

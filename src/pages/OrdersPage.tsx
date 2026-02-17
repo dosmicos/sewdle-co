@@ -22,10 +22,10 @@ const OrdersPage = () => {
   const { deleteOrder } = useOrderActions();
   
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<unknown>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState<unknown>(null);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
   
   // Query params for filters
@@ -104,21 +104,21 @@ const OrdersPage = () => {
     }
   };
 
-  const getWorkshopName = (order: unknown) => {
+  const getWorkshopName = (order: any) => {
     return order.workshop_assignments?.[0]?.workshops?.name || 'Sin asignar';
   };
 
-  const getWorkshopColor = (order: unknown) => {
+  const getWorkshopColor = (order: any) => {
     return order.workshop_assignments?.[0]?.workshops?.name ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200';
   };
 
   // Event handlers
-  const handleEditOrder = (order: unknown) => {
+  const handleEditOrder = (order: any) => {
     setSelectedOrder(order);
     setShowEditModal(true);
   };
 
-  const handleViewDetails = (order: unknown) => {
+  const handleViewDetails = (order: any) => {
     navigate(`/orders/${order.id}`, {
       state: { from: 'orders' }
     });
@@ -135,7 +135,7 @@ const OrdersPage = () => {
     refetch();
   };
 
-  const handleDeleteOrder = (order: unknown) => {
+  const handleDeleteOrder = (order: any) => {
     setOrderToDelete(order);
     setShowDeleteDialog(true);
   };
@@ -167,18 +167,18 @@ const OrdersPage = () => {
     const matchesSearch = 
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.order_items?.some((item: unknown) => 
+      order.order_items?.some((item: any) => 
         item.product_variants?.sku_variant?.toLowerCase().includes(searchTerm.toLowerCase())
       ) ||
-      order.order_items?.some((item: unknown) => 
+      order.order_items?.some((item: any) => 
         item.product_variants?.products?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       ) ||
-      order.order_items?.some((item: unknown) => 
+      order.order_items?.some((item: any) => 
         item.product_variants?.variant_title?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     const matchesWorkshop = selectedWorkshop === 'all' || 
                            (selectedWorkshop === 'unassigned' && !order.workshop_assignments?.length) ||
-                           order.workshop_assignments?.some((assignment: unknown) => assignment.workshop_id === selectedWorkshop);
+                           order.workshop_assignments?.some((assignment: any) => assignment.workshop_id === selectedWorkshop);
     const matchesStatus = selectedStatus === 'all' || order.status === selectedStatus;
     return matchesSearch && matchesWorkshop && matchesStatus;
   });

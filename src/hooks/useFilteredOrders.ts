@@ -1,22 +1,22 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useOrders } from '@/hooks/useOrders';
 import { useUserContext } from '@/hooks/useUserContext';
 
 export const useFilteredOrders = () => {
   const { createOrder, fetchOrders, loading } = useOrders();
   const { workshopFilter, isWorkshopUser } = useUserContext();
-  const [orders, setOrders] = useState<unknown[]>([]);
-  const [error, setError] = useState<unknown>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [error, setError] = useState<any>(null);
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = async () => {
     try {
       const data = await fetchOrders();
       
       if (isWorkshopUser && workshopFilter) {
         // Filtrar órdenes asignadas al taller del usuario
         const workshopOrders = data.filter(order => {
-          return order.workshop_assignments?.some((assignment: unknown) => 
+          return order.workshop_assignments?.some((assignment: any) => 
             assignment.workshop_id === workshopFilter
           );
         });
@@ -30,11 +30,11 @@ export const useFilteredOrders = () => {
       setError(err);
       setOrders([]);
     }
-  }, [fetchOrders, isWorkshopUser, workshopFilter]);
+  };
 
   useEffect(() => {
     loadOrders();
-  }, [loadOrders]);
+  }, [isWorkshopUser, workshopFilter]);
 
   return {
     orders,

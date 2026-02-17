@@ -17,7 +17,7 @@ interface SkuAssignmentResult {
     errorVariants: number;
     skippedVariants: number;
   };
-  details?: unknown[];
+  details?: any[];
   nextCursor?: string;
 }
 

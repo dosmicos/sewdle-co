@@ -30,7 +30,7 @@ async function verifyShopifyWebhook(body: string, signature: string, secret: str
 }
 
 // Function to process inventory level updates
-async function processInventoryUpdate(inventoryLevel: unknown, supabase: unknown) {
+async function processInventoryUpdate(inventoryLevel: any, supabase: any) {
   console.log(`📦 Procesando actualización de inventario: ${inventoryLevel.inventory_item_id}`);
 
   try {

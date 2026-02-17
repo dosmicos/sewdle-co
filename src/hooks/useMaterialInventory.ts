@@ -28,7 +28,7 @@ export const useMaterialInventory = (locationId?: string, locationType?: 'wareho
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchInventory = useCallback(async () => {
+  const fetchInventory = async () => {
     try {
       setLoading(true);
       let query = supabase
@@ -80,12 +80,12 @@ export const useMaterialInventory = (locationId?: string, locationType?: 'wareho
           ...item,
           location_type: item.location_type as 'warehouse' | 'workshop',
           location_name: locationName,
-          material: (item.material as Record<string, unknown>)?.id ? item.material as Record<string, unknown> : undefined
+          material: (item.material as any)?.id ? item.material as any : undefined
         } as MaterialInventory;
       }));
 
       setInventory(enrichedData);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error fetching inventory:', error);
       toast({
         title: "Error",
@@ -95,7 +95,7 @@ export const useMaterialInventory = (locationId?: string, locationType?: 'wareho
     } finally {
       setLoading(false);
     }
-  }, [locationId, locationType, toast]);
+  };
 
   // Función asíncrona para obtener stock disponible desde material_deliveries
   const getAvailableStockAsync = useCallback(async (
@@ -151,7 +151,7 @@ export const useMaterialInventory = (locationId?: string, locationType?: 'wareho
 
   useEffect(() => {
     fetchInventory();
-  }, [fetchInventory]);
+  }, [locationId, locationType]);
 
   return {
     inventory,

@@ -24,8 +24,8 @@ import { ProspectDetailsModal } from '../ProspectDetailsModal';
 
 interface ProspectsTableViewProps {
   prospects: WorkshopProspect[];
-  onUpdate: (id: string, updates: Partial<WorkshopProspect>) => Promise<unknown>;
-  onDelete: (id: string) => Promise<unknown>;
+  onUpdate: (id: string, updates: Partial<WorkshopProspect>) => Promise<any>;
+  onDelete: (id: string) => Promise<any>;
 }
 
 type ColumnConfig = {

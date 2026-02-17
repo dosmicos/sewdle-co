@@ -17,7 +17,7 @@ const ProductImageUpload = ({ onImageUploaded, currentImageUrl, onImageRemoved }
   const [dragActive, setDragActive] = useState(false);
   const { toast } = useToast();
 
-  const validateFile = useCallback((file: File): boolean => {
+  const validateFile = (file: File): boolean => {
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     const maxSize = 5 * 1024 * 1024; // 5MB
 
@@ -40,9 +40,9 @@ const ProductImageUpload = ({ onImageUploaded, currentImageUrl, onImageRemoved }
     }
 
     return true;
-  }, [toast]);
+  };
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = async (file: File) => {
     if (!validateFile(file)) return;
 
     setUploading(true);
@@ -74,7 +74,7 @@ const ProductImageUpload = ({ onImageUploaded, currentImageUrl, onImageRemoved }
         description: "La imagen del producto ha sido cargada.",
       });
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error uploading image:', error);
       toast({
         title: "Error al subir imagen",
@@ -84,7 +84,7 @@ const ProductImageUpload = ({ onImageUploaded, currentImageUrl, onImageRemoved }
     } finally {
       setUploading(false);
     }
-  }, [validateFile, onImageUploaded, toast]);
+  };
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -104,7 +104,7 @@ const ProductImageUpload = ({ onImageUploaded, currentImageUrl, onImageRemoved }
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       uploadFile(e.dataTransfer.files[0]);
     }
-  }, [uploadFile]);
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

@@ -7,8 +7,8 @@ interface ShopifyOrder {
   order_number: string;
   customer_phone: string | null;
   customer_email: string | null;
-  billing_address: unknown;
-  shipping_address: unknown;
+  billing_address: any;
+  shipping_address: any;
   total_price: number;
   subtotal_price?: number;
   total_tax?: number;
@@ -110,7 +110,7 @@ export const validateOrderForInvoice = async (
 
     if (findContactError) throw findContactError;
 
-    const payload = findContactResponse as Record<string, unknown>;
+    const payload = findContactResponse as any;
     const searchResult = payload?.data || payload;
     const rateLimited = Boolean(searchResult?.rateLimited);
     const retryAfterSec = searchResult?.retryAfterSec || 20;
@@ -150,7 +150,7 @@ export const validateOrderForInvoice = async (
       };
       warnings.push('Se creará un nuevo cliente en Alegra');
     }
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('Validación cliente - Error:', error);
     const errorMsg = error?.message || String(error);
     // Detectar rate limit en errores
@@ -170,7 +170,7 @@ export const validateOrderForInvoice = async (
   }
 
   // 2. COD DELIVERY VALIDATION
-  const orderTags = (order as Record<string, unknown>).tags || '';
+  const orderTags = (order as any).tags || '';
   const isContraentrega = orderTags.toLowerCase().includes('contraentrega') || 
                           order.financial_status === 'pending';
 
@@ -265,7 +265,7 @@ export const validateOrderForInvoice = async (
           errors.push(`${statusInfo.message}: ${statusInfo.detail}`);
         }
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       const statusInfo = DELIVERY_STATUS_MESSAGES['error'];
       checks.deliveryCheck = {
         passed: false,
@@ -281,7 +281,7 @@ export const validateOrderForInvoice = async (
   // 3. PRICE VALIDATION - Compare invoice total with Shopify expected total
   // Calculate expected total from line items WITH their discounts applied
   const calculatedSubtotal = order.line_items.reduce((sum, item) => {
-    const itemDiscount = (item as Record<string, unknown>).total_discount || 0;
+    const itemDiscount = (item as any).total_discount || 0;
     const priceWithDiscount = item.price - (itemDiscount / item.quantity);
     return sum + (priceWithDiscount * item.quantity);
   }, 0);
@@ -289,7 +289,7 @@ export const validateOrderForInvoice = async (
   // Invoice total from edited data or from calculated subtotal
   const invoiceTotal = editedData
     ? editedData.lineItems
-        .filter((item: unknown) => !item.isShipping)
+        .filter((item: any) => !item.isShipping)
         .reduce((sum, item) => sum + (item.price * item.quantity), 0)
     : calculatedSubtotal;
   

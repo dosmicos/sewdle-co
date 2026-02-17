@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Database } from '@/integrations/supabase/types';
@@ -31,7 +31,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
   const [loading, setLoading] = useState(autoFetch); // Solo iniciar en loading si autoFetch es true
   const { toast } = useToast();
 
-  const fetchAssignments = useCallback(async () => {
+  const fetchAssignments = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -55,7 +55,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
   const createAssignment = async (assignmentData: WorkshopAssignmentInsert) => {
     try {
@@ -95,7 +95,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
         description: "Asignación creada correctamente",
       });
       return { data, error: null };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error creating assignment:', error);
       toast({
         title: "Error",
@@ -125,7 +125,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
         description: "Asignación actualizada correctamente",
       });
       return { data, error: null };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error updating assignment:', error);
       toast({
         title: "Error",
@@ -151,7 +151,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
         description: "Asignación eliminada correctamente",
       });
       return { error: null };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error deleting assignment:', error);
       toast({
         title: "Error",
@@ -188,7 +188,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
     if (autoFetch) {
       fetchAssignments();
     }
-  }, [autoFetch, fetchAssignments]);
+  }, [autoFetch]);
 
   const reassignWorkshop = async (
     assignmentId: string,
@@ -207,7 +207,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
         throw new Error('Usuario no autenticado');
       }
 
-      const updateData: unknown = {
+      const updateData: any = {
         workshop_id: newWorkshopId,
         assigned_by: session.user.id,
         assigned_date: new Date().toISOString().split('T')[0]
@@ -240,7 +240,7 @@ export const useWorkshopAssignments = (autoFetch: boolean = true) => {
       });
       
       return { data, error: null };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error reassigning workshop:', error);
       toast({
         title: "Error",

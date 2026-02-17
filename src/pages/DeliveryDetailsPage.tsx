@@ -12,7 +12,7 @@ const DeliveryDetailsPage = () => {
   const { fetchDeliveryByTrackingNumber } = useDeliveries();
   const { deliveries: allDeliveries } = useFilteredDeliveries();
   const { hasPermission } = usePermissions();
-  const [delivery, setDelivery] = useState<unknown>(null);
+  const [delivery, setDelivery] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +105,7 @@ const DeliveryDetailsPage = () => {
     }
 
     // Prevent refetch if same delivery is already loaded
-    if (delivery?.tracking_number === deliveryId) {
+    if (delivery && delivery.tracking_number === deliveryId) {
       return;
     }
 

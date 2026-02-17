@@ -40,7 +40,7 @@ const AlegraPage = () => {
       } else {
         throw new Error(data.error);
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error testing Alegra connection:', error);
       setIsConnected(false);
       toast.error('Error al conectar con Alegra: ' + error.message);

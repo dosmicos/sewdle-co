@@ -45,7 +45,7 @@ const isStandardSize = (str: string): boolean => {
   return ['xxxs', '3xs', 'xxs', '2xs', 'xs', 's', 'small', 'm', 'medium', 'l', 'large', 'xl', 'xxl', '2xl', 'xxxl', '3xl', '4xl'].includes(lowerStr);
 };
 
-const sortVariants = (variants: unknown[]): unknown[] => {
+const sortVariants = (variants: any[]): any[] => {
   return [...variants].sort((a, b) => {
     const aValue = a.title || a.size || '';
     const bValue = b.title || b.size || '';
@@ -124,7 +124,7 @@ serve(async (req) => {
     const cleanDomain = storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
     
     // Obtener todos los productos activos y borrador
-    const apiUrl = `https://${cleanDomain}.myshopify.com/admin/api/2023-10/products.json?status=active,draft&limit=250&published_status=any`
+    let apiUrl = `https://${cleanDomain}.myshopify.com/admin/api/2023-10/products.json?status=active,draft&limit=250&published_status=any`
 
     console.log('Fetching from Shopify API:', apiUrl)
 
@@ -173,12 +173,12 @@ serve(async (req) => {
       // Si hay término de búsqueda, filtrar en el backend también
       if (searchTerm && searchTerm.trim()) {
         const searchTermLower = searchTerm.toLowerCase()
-        data.products = data.products.filter((product: unknown) => 
+        data.products = data.products.filter((product: any) => 
           product.title.toLowerCase().includes(searchTermLower) ||
           (product.body_html && product.body_html.toLowerCase().includes(searchTermLower)) ||
           (product.product_type && product.product_type.toLowerCase().includes(searchTermLower)) ||
           (product.tags && product.tags.toLowerCase().includes(searchTermLower)) ||
-          product.variants.some((variant: unknown) => 
+          product.variants.some((variant: any) => 
             (variant.sku && variant.sku.toLowerCase().includes(searchTermLower)) ||
             (variant.title && variant.title.toLowerCase().includes(searchTermLower))
           )
@@ -193,7 +193,7 @@ serve(async (req) => {
       _metadata: {
         timestamp: new Date().toISOString(),
         total_products: data.products?.length || 0,
-        total_variants: data.products?.reduce((sum: number, p: unknown) => sum + (p.variants?.length || 0), 0) || 0,
+        total_variants: data.products?.reduce((sum: number, p: any) => sum + (p.variants?.length || 0), 0) || 0,
         function_version: '2.0'
       }
     };

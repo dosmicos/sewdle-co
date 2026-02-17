@@ -40,7 +40,7 @@ export const DeliveryPaymentsList = () => {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [paymentToDelete, setPaymentToDelete] = useState<unknown>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>({
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: "",
@@ -174,7 +174,7 @@ export const DeliveryPaymentsList = () => {
     setIsPaymentDialogOpen(true);
   };
 
-  const openDeleteDialog = (payment: unknown) => {
+  const openDeleteDialog = (payment: any) => {
     setPaymentToDelete(payment);
     setIsDeleteDialogOpen(true);
   };

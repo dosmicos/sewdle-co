@@ -158,7 +158,7 @@ export const useUgcCreatorChildren = (creatorId: string | null) => {
         size: child.size || null,
         gender: child.gender || null,
         birth_date: child.birth_date || null,
-      } as Record<string, unknown>).select().single();
+      } as any).select().single();
       if (error) {
         console.error('[UGC] Error adding child:', error);
         throw error;

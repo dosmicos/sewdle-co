@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
@@ -25,21 +25,20 @@ export const useUsers = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
-  const organizationId = currentOrganization?.id;
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
 
       // Verificar que tengamos una organización seleccionada
-      if (!organizationId) {
+      if (!currentOrganization?.id) {
         setUsers([]);
         setLoading(false);
         return;
       }
 
-      console.log('🔍 DEBUGGING: Current organization id:', organizationId);
+      console.log('🔍 DEBUGGING: Current organization:', currentOrganization);
       
       // Usar la nueva función optimizada de base de datos
       const { data: usersData, error: usersError } = await supabase
@@ -76,7 +75,7 @@ export const useUsers = () => {
 
       console.log('🔍 DEBUGGING: Final transformed users count:', transformedUsers.length);
       setUsers(transformedUsers);
-    } catch (err: unknown) {
+    } catch (err: any) {
       logger.error('Error fetching users', err);
       setError(err.message || 'Error al cargar usuarios');
       toast({
@@ -87,7 +86,7 @@ export const useUsers = () => {
     } finally {
       setLoading(false);
     }
-  }, [organizationId, toast]);
+  };
 
   const createUser = async (userData: {
     name: string;
@@ -133,7 +132,7 @@ export const useUsers = () => {
       
       // No mostrar toast aquí - se maneja en UserModal para mejor UX
       return successResult;
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.log('useUsers: Error in createUser:', err);
       logger.error('Error creating user', err);
       toast({
@@ -207,7 +206,7 @@ export const useUsers = () => {
       });
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err: any) {
       logger.error('Error updating user', err);
       toast({
         title: "Error al actualizar usuario",
@@ -250,7 +249,7 @@ export const useUsers = () => {
       });
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err: any) {
       logger.error('Error deleting user', err);
       toast({
         title: "Error al eliminar usuario",
@@ -263,7 +262,7 @@ export const useUsers = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+  }, [currentOrganization?.id]);
 
   return {
     users,

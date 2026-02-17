@@ -9,7 +9,7 @@ import { es } from 'date-fns/locale';
 import DeliveryManualBarcodeModal from './delivery/DeliveryManualBarcodeModal';
 
 interface DeliveryReviewSummaryProps {
-  delivery: unknown;
+  delivery: any;
   totalDelivered: number;
   totalApproved: number;
   totalDefective: number;

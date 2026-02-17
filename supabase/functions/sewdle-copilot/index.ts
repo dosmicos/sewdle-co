@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireAuthenticatedUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -228,7 +227,7 @@ const tools = [
 ];
 
 // Execute tool functions
-async function executeTool(supabase: unknown, toolName: string, args: unknown, organizationId: string) {
+async function executeTool(supabase: any, toolName: string, args: any, organizationId: string) {
   console.log(`Executing tool: ${toolName} with args:`, args);
   
   switch (toolName) {
@@ -260,19 +259,19 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       let results = data || [];
       if (args.product_name) {
         const searchTerm = args.product_name.toLowerCase();
-        results = results.filter((order: unknown) => 
-          order.order_items?.some((item: unknown) => 
+        results = results.filter((order: any) => 
+          order.order_items?.some((item: any) => 
             item.product_variants?.products?.name?.toLowerCase().includes(searchTerm)
           )
         );
       }
       
-      return results.map((order: unknown) => ({
+      return results.map((order: any) => ({
         order_number: order.order_number,
         status: order.status,
         due_date: order.due_date,
         created_at: order.created_at,
-        items: order.order_items?.map((item: unknown) => ({
+        items: order.order_items?.map((item: any) => ({
           product: item.product_variants?.products?.name,
           variant: `${item.product_variants?.color || ''} ${item.product_variants?.size || ''}`.trim(),
           quantity: item.quantity
@@ -297,7 +296,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       if (error) throw error;
       
-      return (data || []).map((order: unknown) => {
+      return (data || []).map((order: any) => {
         const dueDate = new Date(order.due_date);
         const daysOverdue = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
         return {
@@ -305,7 +304,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
           status: order.status,
           due_date: order.due_date,
           days_overdue: daysOverdue,
-          products: order.order_items?.map((i: unknown) => i.product_variants?.products?.name).filter(Boolean)
+          products: order.order_items?.map((i: any) => i.product_variants?.products?.name).filter(Boolean)
         };
       });
     }
@@ -326,18 +325,18 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       const { data, error } = await query;
       if (error) throw error;
       
-      return (data || []).map((workshop: unknown) => ({
+      return (data || []).map((workshop: any) => ({
         name: workshop.name,
         contact: workshop.contact_name,
         total_deliveries: workshop.deliveries?.length || 0,
-        pending_deliveries: workshop.deliveries?.filter((d: unknown) => d.status === 'pending').length || 0,
-        completed_deliveries: workshop.deliveries?.filter((d: unknown) => d.status === 'completed').length || 0
+        pending_deliveries: workshop.deliveries?.filter((d: any) => d.status === 'pending').length || 0,
+        completed_deliveries: workshop.deliveries?.filter((d: any) => d.status === 'completed').length || 0
       }));
     }
     
     case "get_deliveries_summary": {
       const period = args.period || 'month';
-      const startDate = new Date();
+      let startDate = new Date();
       
       switch (period) {
         case 'today': startDate.setHours(0, 0, 0, 0); break;
@@ -346,7 +345,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         case 'year': startDate.setFullYear(startDate.getFullYear() - 1); break;
       }
       
-      const query = supabase
+      let query = supabase
         .from('deliveries')
         .select(`
           id, status, delivery_date, created_at,
@@ -360,16 +359,16 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       if (error) throw error;
       
       const deliveries = data || [];
-      const totalDelivered = deliveries.reduce((sum: number, d: unknown) => 
-        sum + (d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_delivered || 0), 0) || 0), 0);
-      const totalApproved = deliveries.reduce((sum: number, d: unknown) => 
-        sum + (d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_approved || 0), 0) || 0), 0);
+      const totalDelivered = deliveries.reduce((sum: number, d: any) => 
+        sum + (d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_delivered || 0), 0) || 0), 0);
+      const totalApproved = deliveries.reduce((sum: number, d: any) => 
+        sum + (d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_approved || 0), 0) || 0), 0);
       
       // Group by workshop
       const byWorkshop: Record<string, number> = {};
-      deliveries.forEach((d: unknown) => {
+      deliveries.forEach((d: any) => {
         const workshopName = d.workshops?.name || 'Sin taller';
-        const units = d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_delivered || 0), 0) || 0;
+        const units = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_delivered || 0), 0) || 0;
         byWorkshop[workshopName] = (byWorkshop[workshopName] || 0) + units;
       });
       
@@ -395,14 +394,14 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       if (error) throw error;
       
-      return (data || []).map((p: unknown) => ({
+      return (data || []).map((p: any) => ({
         name: p.name,
         sku: p.sku,
         category: p.category,
         status: p.status,
         variants_count: p.product_variants?.length || 0,
-        total_stock: p.product_variants?.reduce((s: number, v: unknown) => s + (v.stock_quantity || 0), 0) || 0,
-        variants: p.product_variants?.map((v: unknown) => ({
+        total_stock: p.product_variants?.reduce((s: number, v: any) => s + (v.stock_quantity || 0), 0) || 0,
+        variants: p.product_variants?.map((v: any) => ({
           sku_variant: v.sku_variant,
           color: v.color,
           size: v.size,
@@ -413,7 +412,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
     
     case "get_production_summary": {
       const period = args.period || 'month';
-      const startDate = new Date();
+      let startDate = new Date();
       
       switch (period) {
         case 'week': startDate.setDate(startDate.getDate() - 7); break;
@@ -439,9 +438,9 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         total_units: 0
       };
       
-      (orders || []).forEach((order: unknown) => {
+      (orders || []).forEach((order: any) => {
         const status = order.status || 'pending';
-        const units = order.order_items?.reduce((s: number, i: unknown) => s + (i.quantity || 0), 0) || 0;
+        const units = order.order_items?.reduce((s: number, i: any) => s + (i.quantity || 0), 0) || 0;
         
         if (!summary.by_status[status]) {
           summary.by_status[status] = { orders: 0, units: 0 };
@@ -483,8 +482,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       console.log(`get_workshop_ranking: period=${start_date || 'all'} to ${end_date || 'all'}, deliveries found: ${deliveries?.length || 0}`);
       
       // Group by workshop
-      const workshopStats: Record<string, unknown> = {};
-      (deliveries || []).forEach((d: unknown) => {
+      const workshopStats: Record<string, any> = {};
+      (deliveries || []).forEach((d: any) => {
         const workshopName = d.workshops?.name || 'Sin taller';
         const workshopId = d.workshops?.id;
         
@@ -497,8 +496,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
           };
         }
         
-        const delivered = d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_delivered || 0), 0) || 0;
-        const defective = d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_defective || 0), 0) || 0;
+        const delivered = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_delivered || 0), 0) || 0;
+        const defective = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_defective || 0), 0) || 0;
         
         workshopStats[workshopId].total_units += delivered;
         workshopStats[workshopId].defective_units += defective;
@@ -506,7 +505,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       });
       
       // Calculate quality rate and create ranked array
-      const ranked = Object.values(workshopStats).map((w: unknown) => ({
+      const ranked = Object.values(workshopStats).map((w: any) => ({
         ...w,
         quality_rate: w.total_units > 0 
           ? Math.round(((w.total_units - w.defective_units) / w.total_units * 100) * 10) / 10 
@@ -545,8 +544,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       const { data, error } = await query;
       if (error) throw error;
       
-      const results = (data || []).flatMap((p: unknown) => 
-        (p.product_variants || []).map((v: unknown) => ({
+      const results = (data || []).flatMap((p: any) => 
+        (p.product_variants || []).map((v: any) => ({
           product: p.name,
           sku: v.sku_variant,
           variant: `${v.color || ''} ${v.size || ''}`.trim() || 'Default',
@@ -586,19 +585,19 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       // Filter by workshop if provided
       if (workshop_name) {
-        deliveries = deliveries.filter((d: unknown) => 
+        deliveries = deliveries.filter((d: any) => 
           d.workshops?.name?.toLowerCase().includes(workshop_name.toLowerCase())
         );
       }
       
-      const totalApproved = deliveries.reduce((sum: number, d: unknown) => 
-        sum + (d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_approved || 0), 0) || 0), 0);
+      const totalApproved = deliveries.reduce((sum: number, d: any) => 
+        sum + (d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_approved || 0), 0) || 0), 0);
       
       // Group by workshop
       const byWorkshop: Record<string, number> = {};
-      deliveries.forEach((d: unknown) => {
+      deliveries.forEach((d: any) => {
         const name = d.workshops?.name || 'Sin taller';
-        const units = d.delivery_items?.reduce((s: number, i: unknown) => s + (i.quantity_approved || 0), 0) || 0;
+        const units = d.delivery_items?.reduce((s: number, i: any) => s + (i.quantity_approved || 0), 0) || 0;
         byWorkshop[name] = (byWorkshop[name] || 0) + units;
       });
       
@@ -634,12 +633,12 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       if (error) throw error;
       
       const ordersList = orders || [];
-      const totalRevenue = ordersList.reduce((sum: number, o: unknown) => sum + (parseFloat(o.total_price) || 0), 0);
+      const totalRevenue = ordersList.reduce((sum: number, o: any) => sum + (parseFloat(o.total_price) || 0), 0);
       const avgOrderValue = ordersList.length > 0 ? totalRevenue / ordersList.length : 0;
       
       // Group by financial status
       const byStatus: Record<string, { count: number; revenue: number }> = {};
-      ordersList.forEach((o: unknown) => {
+      ordersList.forEach((o: any) => {
         const status = o.financial_status || 'unknown';
         if (!byStatus[status]) {
           byStatus[status] = { count: 0, revenue: 0 };
@@ -679,7 +678,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       if (ordersError) throw ordersError;
       
-      const validOrderIds = (validOrders || []).map((o: unknown) => o.shopify_order_id);
+      const validOrderIds = (validOrders || []).map((o: any) => o.shopify_order_id);
       
       if (validOrderIds.length === 0) {
         return {
@@ -708,7 +707,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         orders: Set<number>;
       }> = {};
       
-      (lineItems || []).forEach((item: unknown) => {
+      (lineItems || []).forEach((item: any) => {
         const key = item.title;
         if (!productMap[key]) {
           productMap[key] = { 
@@ -725,7 +724,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       });
       
       // Convert to array and sort
-      const products = Object.values(productMap).map(p => ({
+      let products = Object.values(productMap).map(p => ({
         product: p.title,
         units_sold: p.units,
         revenue: Math.round(p.revenue * 100) / 100,
@@ -803,15 +802,15 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       // Filter by workshop name if provided (post-query due to nested join)
       if (workshop_name) {
-        deliveries = deliveries.filter((d: unknown) => 
+        deliveries = deliveries.filter((d: any) => 
           d.workshops?.name?.toLowerCase().includes(workshop_name.toLowerCase())
         );
       }
       
       // Filter by product name if provided (post-query filter due to nested structure)
       if (product_name) {
-        deliveries = deliveries.filter((d: unknown) => 
-          d.delivery_items?.some((item: unknown) => 
+        deliveries = deliveries.filter((d: any) => 
+          d.delivery_items?.some((item: any) => 
             item.order_items?.product_variants?.products?.name?.toLowerCase()
               .includes(product_name.toLowerCase())
           )
@@ -843,8 +842,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       // Filter by size if provided
       if (size) {
-        deliveries = deliveries.filter((d: unknown) => 
-          d.delivery_items?.some((item: unknown) => 
+        deliveries = deliveries.filter((d: any) => 
+          d.delivery_items?.some((item: any) => 
             sizeMatches(item.order_items?.product_variants?.size, size)
           )
         );
@@ -852,8 +851,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       // Filter by color if provided
       if (color) {
-        deliveries = deliveries.filter((d: unknown) => 
-          d.delivery_items?.some((item: unknown) => 
+        deliveries = deliveries.filter((d: any) => 
+          d.delivery_items?.some((item: any) => 
             item.order_items?.product_variants?.color?.toLowerCase().includes(color.toLowerCase())
           )
         );
@@ -861,9 +860,9 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       console.log(`search_deliveries: found ${deliveries.length} deliveries after filtering`);
       
-      return deliveries.map((d: unknown) => {
+      return deliveries.map((d: any) => {
         // Extract detailed variants
-        const variants = d.delivery_items?.map((item: unknown) => ({
+        const variants = d.delivery_items?.map((item: any) => ({
           product: item.order_items?.product_variants?.products?.name,
           sku: item.order_items?.product_variants?.products?.sku,
           color: item.order_items?.product_variants?.color,
@@ -872,22 +871,22 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
           quantity_delivered: item.quantity_delivered,
           quantity_approved: item.quantity_approved,
           quantity_defective: item.quantity_defective
-        })).filter((v: unknown) => v.product) || [];
+        })).filter((v: any) => v.product) || [];
         
-        const uniqueProducts = [...new Set(variants.map((v: unknown) => v.product))];
-        const uniqueSizes = [...new Set(variants.map((v: unknown) => v.size).filter(Boolean))];
-        const uniqueColors = [...new Set(variants.map((v: unknown) => v.color).filter(Boolean))];
+        const uniqueProducts = [...new Set(variants.map((v: any) => v.product))];
+        const uniqueSizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))];
+        const uniqueColors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))];
         
         const totalDelivered = d.delivery_items?.reduce(
-          (s: number, i: unknown) => s + (i.quantity_delivered || 0), 0
+          (s: number, i: any) => s + (i.quantity_delivered || 0), 0
         ) || 0;
         
         const totalApproved = d.delivery_items?.reduce(
-          (s: number, i: unknown) => s + (i.quantity_approved || 0), 0
+          (s: number, i: any) => s + (i.quantity_approved || 0), 0
         ) || 0;
         
         const totalDefective = d.delivery_items?.reduce(
-          (s: number, i: unknown) => s + (i.quantity_defective || 0), 0
+          (s: number, i: any) => s + (i.quantity_defective || 0), 0
         ) || 0;
         
         return {
@@ -937,7 +936,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         return { error: `No se encontró la entrega ${tracking_number}` };
       }
       
-      const variants = data?.delivery_items?.map((item: unknown) => ({
+      const variants = data?.delivery_items?.map((item: any) => ({
         product: item.order_items?.product_variants?.products?.name,
         sku: item.order_items?.product_variants?.products?.sku,
         sku_variant: item.order_items?.product_variants?.sku_variant,
@@ -947,7 +946,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         quantity_delivered: item.quantity_delivered,
         quantity_approved: item.quantity_approved,
         quantity_defective: item.quantity_defective
-      })).filter((v: unknown) => {
+      })).filter((v: any) => {
         if (!v.product) return false;
         if (product_name) {
           return v.product.toLowerCase().includes(product_name.toLowerCase());
@@ -955,9 +954,9 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         return true;
       }) || [];
       
-      const uniqueSizes = [...new Set(variants.map((v: unknown) => v.size).filter(Boolean))];
-      const uniqueColors = [...new Set(variants.map((v: unknown) => v.color).filter(Boolean))];
-      const uniqueProducts = [...new Set(variants.map((v: unknown) => v.product).filter(Boolean))];
+      const uniqueSizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))];
+      const uniqueColors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))];
+      const uniqueProducts = [...new Set(variants.map((v: any) => v.product).filter(Boolean))];
       
       return {
         tracking_number: data?.tracking_number,
@@ -970,8 +969,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
           products: uniqueProducts,
           sizes_included: uniqueSizes,
           colors_included: uniqueColors,
-          total_delivered: variants.reduce((s: number, v: unknown) => s + (v.quantity_delivered || 0), 0),
-          total_approved: variants.reduce((s: number, v: unknown) => s + (v.quantity_approved || 0), 0)
+          total_delivered: variants.reduce((s: number, v: any) => s + (v.quantity_delivered || 0), 0),
+          total_approved: variants.reduce((s: number, v: any) => s + (v.quantity_approved || 0), 0)
         }
       };
     }
@@ -1012,10 +1011,10 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       if (productError) throw productError;
       
-      const matchingVariants = (products || []).flatMap((p: unknown) => 
+      const matchingVariants = (products || []).flatMap((p: any) => 
         (p.product_variants || [])
-          .filter((v: unknown) => sizeMatches(v.size, size) && colorMatches(v.color, color))
-          .map((v: unknown) => ({
+          .filter((v: any) => sizeMatches(v.size, size) && colorMatches(v.color, color))
+          .map((v: any) => ({
             product: p.name,
             sku_variant: v.sku_variant,
             color: v.color,
@@ -1048,8 +1047,8 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       const orderItemIds: string[] = [];
       const orderItemQuantities: { [key: string]: number } = {};
       
-      (orders || []).forEach((o: unknown) => {
-        (o.order_items || []).forEach((item: unknown) => {
+      (orders || []).forEach((o: any) => {
+        (o.order_items || []).forEach((item: any) => {
           const pn = item.product_variants?.products?.name;
           if (pn && pn.toLowerCase().includes(product_name.toLowerCase())) {
             if (sizeMatches(item.product_variants?.size, size) && colorMatches(item.product_variants?.color, color)) {
@@ -1061,14 +1060,14 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       });
       
       // Get delivered quantities for these order items
-      const deliveredByOrderItem: { [key: string]: number } = {};
+      let deliveredByOrderItem: { [key: string]: number } = {};
       if (orderItemIds.length > 0) {
         const { data: deliveryItems } = await supabase
           .from('delivery_items')
           .select('order_item_id, quantity_delivered')
           .in('order_item_id', orderItemIds);
         
-        (deliveryItems || []).forEach((di: unknown) => {
+        (deliveryItems || []).forEach((di: any) => {
           deliveredByOrderItem[di.order_item_id] = (deliveredByOrderItem[di.order_item_id] || 0) + di.quantity_delivered;
         });
       }
@@ -1080,14 +1079,14 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         'in_progress': 'En producción activa'
       };
       
-      const inOrders = (orders || []).flatMap((o: unknown) => 
+      const inOrders = (orders || []).flatMap((o: any) => 
         (o.order_items || [])
-          .filter((item: unknown) => {
+          .filter((item: any) => {
             const pn = item.product_variants?.products?.name;
             if (!pn || !pn.toLowerCase().includes(product_name.toLowerCase())) return false;
             return sizeMatches(item.product_variants?.size, size) && colorMatches(item.product_variants?.color, color);
           })
-          .map((item: unknown) => {
+          .map((item: any) => {
             const ordered = item.quantity || 0;
             const delivered = deliveredByOrderItem[item.id] || 0;
             const pending = ordered - delivered;
@@ -1104,7 +1103,7 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
               quantity_pending: pending
             };
           })
-          .filter((item: unknown) => item.quantity_pending > 0) // Only show if there's pending quantity
+          .filter((item: any) => item.quantity_pending > 0) // Only show if there's pending quantity
       );
       
       // 3. Check in deliveries (pending, in_transit, in_quality)
@@ -1128,15 +1127,15 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
       
       if (deliveryError) throw deliveryError;
       
-      const inDeliveries = (deliveries || []).flatMap((d: unknown) => 
+      const inDeliveries = (deliveries || []).flatMap((d: any) => 
         (d.delivery_items || [])
-          .filter((item: unknown) => {
+          .filter((item: any) => {
             const pn = item.order_items?.product_variants?.products?.name;
             if (!pn || !pn.toLowerCase().includes(product_name.toLowerCase())) return false;
             return sizeMatches(item.order_items?.product_variants?.size, size) && 
                    colorMatches(item.order_items?.product_variants?.color, color);
           })
-          .map((item: unknown) => ({
+          .map((item: any) => ({
             tracking_number: d.tracking_number,
             delivery_status: d.status,
             workshop: d.workshops?.name,
@@ -1154,26 +1153,26 @@ async function executeTool(supabase: unknown, toolName: string, args: unknown, o
         inventory: {
           found: matchingVariants.length > 0,
           variants: matchingVariants,
-          total_stock: matchingVariants.reduce((s: number, v: unknown) => s + (v.stock || 0), 0)
+          total_stock: matchingVariants.reduce((s: number, v: any) => s + (v.stock || 0), 0)
         },
         production_orders: {
           found: inOrders.length > 0,
           items: inOrders,
-          total_ordered: inOrders.reduce((s: number, o: unknown) => s + (o.quantity_ordered || 0), 0),
-          total_delivered: inOrders.reduce((s: number, o: unknown) => s + (o.quantity_delivered || 0), 0),
-          total_pending: inOrders.reduce((s: number, o: unknown) => s + (o.quantity_pending || 0), 0)
+          total_ordered: inOrders.reduce((s: number, o: any) => s + (o.quantity_ordered || 0), 0),
+          total_delivered: inOrders.reduce((s: number, o: any) => s + (o.quantity_delivered || 0), 0),
+          total_pending: inOrders.reduce((s: number, o: any) => s + (o.quantity_pending || 0), 0)
         },
         deliveries: {
           found: inDeliveries.length > 0,
           items: inDeliveries,
-          total_delivered: inDeliveries.reduce((s: number, d: unknown) => s + (d.quantity_delivered || 0), 0),
-          total_approved: inDeliveries.reduce((s: number, d: unknown) => s + (d.quantity_approved || 0), 0)
+          total_delivered: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_delivered || 0), 0),
+          total_approved: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_approved || 0), 0)
         },
         summary: {
           variant_exists: matchingVariants.length > 0,
-          available_stock: matchingVariants.reduce((s: number, v: unknown) => s + (v.stock || 0), 0),
-          pending_in_production: inOrders.reduce((s: number, o: unknown) => s + (o.quantity_pending || 0), 0),
-          in_deliveries: inDeliveries.reduce((s: number, d: unknown) => s + (d.quantity_delivered || 0), 0)
+          available_stock: matchingVariants.reduce((s: number, v: any) => s + (v.stock || 0), 0),
+          pending_in_production: inOrders.reduce((s: number, o: any) => s + (o.quantity_pending || 0), 0),
+          in_deliveries: inDeliveries.reduce((s: number, d: any) => s + (d.quantity_delivered || 0), 0)
         }
       };
     }
@@ -1189,12 +1188,6 @@ serve(async (req) => {
   }
 
   try {
-    const authResult = await requireAuthenticatedUser(req, corsHeaders);
-    if (!authResult.ok) {
-      return authResult.response;
-    }
-    console.log("✅ Authenticated user for sewdle-copilot:", authResult.userId);
-
     const body = await req.json();
     const { action, message, conversationHistory, organizationId } = body;
     
@@ -1575,7 +1568,7 @@ FORMATO DE RESPUESTA:
 
     // Check if AI wants to use tools
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      console.log("AI requested tools:", assistantMessage.tool_calls.map((t: unknown) => t.function.name));
+      console.log("AI requested tools:", assistantMessage.tool_calls.map((t: any) => t.function.name));
       
       const toolResults = [];
       

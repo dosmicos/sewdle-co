@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -37,7 +37,7 @@ export const useAdminDashboardData = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchDashboardStats = useCallback(async () => {
+  const fetchDashboardStats = async () => {
     try {
       // Active orders count
       const { count: activeOrdersCount, error: ordersError } = await supabase
@@ -114,9 +114,9 @@ export const useAdminDashboardData = () => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  };
 
-  const fetchProductionData = useCallback(async () => {
+  const fetchProductionData = async () => {
     try {
       const isWeekly = viewMode === 'weekly';
       const periods = isWeekly ? 8 : 6; // Last 8 weeks or 6 months
@@ -201,9 +201,9 @@ export const useAdminDashboardData = () => {
     } catch (error) {
       console.error('Error fetching production data:', error);
     }
-  }, [viewMode]);
+  };
 
-  const fetchWorkshopRanking = useCallback(async () => {
+  const fetchWorkshopRanking = async () => {
     try {
       // Get last week's data
       const weekAgo = new Date();
@@ -224,7 +224,7 @@ export const useAdminDashboardData = () => {
       if (error) throw error;
 
       // Group by workshop and calculate metrics
-      const workshopStats: { [key: string]: unknown } = {};
+      const workshopStats: { [key: string]: any } = {};
       
       workshopData?.forEach(delivery => {
         const workshopId = delivery.workshop_id;
@@ -248,7 +248,7 @@ export const useAdminDashboardData = () => {
       const workshopsArray = Object.values(workshopStats);
       
       // First pass: calculate quality scores
-      const workshopsWithQuality = workshopsArray.map((workshop: unknown) => {
+      const workshopsWithQuality = workshopsArray.map((workshop: any) => {
         const qualityScore = workshop.deliveredUnits > 0 
           ? Math.round((workshop.approvedUnits / workshop.deliveredUnits) * 100)
           : 0;
@@ -262,7 +262,7 @@ export const useAdminDashboardData = () => {
       // Calculate volume scores based on relative ranking
       const maxDelivered = Math.max(...workshopsWithQuality.map(w => w.deliveredUnits || 1));
       
-      const ranking = workshopsWithQuality.map((workshop: unknown) => {
+      const ranking = workshopsWithQuality.map((workshop: any) => {
         // Volume score: normalized to 0-100 based on delivered units
         const volumeScore = Math.round((workshop.deliveredUnits / maxDelivered) * 100);
         
@@ -281,9 +281,9 @@ export const useAdminDashboardData = () => {
     } catch (error) {
       console.error('Error fetching workshop ranking:', error);
     }
-  }, []);
+  };
 
-  const loadAllData = useCallback(async () => {
+  const loadAllData = async () => {
     setLoading(true);
     await Promise.all([
       fetchDashboardStats(),
@@ -291,11 +291,11 @@ export const useAdminDashboardData = () => {
       fetchWorkshopRanking()
     ]);
     setLoading(false);
-  }, [fetchDashboardStats, fetchProductionData, fetchWorkshopRanking]);
+  };
 
   useEffect(() => {
     loadAllData();
-  }, [loadAllData]);
+  }, [viewMode]);
 
   return {
     stats,

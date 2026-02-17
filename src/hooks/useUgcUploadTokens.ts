@@ -24,7 +24,7 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
     queryFn: async () => {
       if (!creatorId) return null;
       const { data, error } = await supabase
-        .from('ugc_upload_tokens' as Record<string, unknown>)
+        .from('ugc_upload_tokens' as any)
         .select('*')
         .eq('creator_id', creatorId)
         .eq('is_active', true)
@@ -41,8 +41,8 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
 
       // Deactivate existing tokens
       await supabase
-        .from('ugc_upload_tokens' as Record<string, unknown>)
-        .update({ is_active: false } as Record<string, unknown>)
+        .from('ugc_upload_tokens' as any)
+        .update({ is_active: false } as any)
         .eq('creator_id', creatorId)
         .eq('is_active', true);
 
@@ -51,14 +51,14 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
         : null;
 
       const { data, error } = await supabase
-        .from('ugc_upload_tokens' as Record<string, unknown>)
+        .from('ugc_upload_tokens' as any)
         .insert({
           organization_id: currentOrganization.id,
           creator_id: creatorId,
           is_active: true,
           expires_at: expiresAt,
           max_uploads: maxUploads || null,
-        } as Record<string, unknown>)
+        } as any)
         .select()
         .single();
 
@@ -74,8 +74,8 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
     mutationFn: async () => {
       if (!activeToken) throw new Error('No active token');
       const { error } = await supabase
-        .from('ugc_upload_tokens' as Record<string, unknown>)
-        .update({ is_active: false } as Record<string, unknown>)
+        .from('ugc_upload_tokens' as any)
+        .update({ is_active: false } as any)
         .eq('id', activeToken.id);
       if (error) throw error;
     },

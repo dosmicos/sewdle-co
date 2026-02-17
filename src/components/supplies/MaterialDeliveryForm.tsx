@@ -48,7 +48,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
   const { createMaterialDelivery, loading: creatingDelivery } = useMaterialDeliveries();
 
   // Helper function to format material display name with color
-  const formatMaterialDisplayName = (material: unknown) => {
+  const formatMaterialDisplayName = (material: any) => {
     const baseName = `${material.name} (${material.sku})`;
     return material.color ? `${baseName} - ${material.color}` : baseName;
   };

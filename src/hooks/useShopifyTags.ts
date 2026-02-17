@@ -128,7 +128,7 @@ export const useShopifyTags = () => {
       }
 
       return finalTagsString;
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('❌ Error adding tag:', error);
       toast.error(error.message || 'Error al agregar etiqueta');
       return null;
@@ -180,7 +180,7 @@ export const useShopifyTags = () => {
 
       toast.success(`Etiqueta "${tag}" eliminada correctamente`);
       return finalTagsString;
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('❌ Error removing tag:', error);
       toast.error(error.message || 'Error al eliminar etiqueta');
       return null;

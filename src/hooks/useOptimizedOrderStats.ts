@@ -108,7 +108,7 @@ export const useOptimizedOrderStats = (orderId: string) => {
           error: null
         });
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error fetching order stats:', err);
       
       // Usar valores por defecto si hay error

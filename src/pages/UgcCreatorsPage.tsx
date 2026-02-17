@@ -43,7 +43,7 @@ const UgcCreatorsPage: React.FC = () => {
   // Auto-sync campaign statuses based on shipping events
   useUgcCampaignSync(campaigns);
 
-  const handleCreatorSubmit = (data: unknown) => {
+  const handleCreatorSubmit = (data: any) => {
     if (editingCreator) {
       updateCreator.mutate({ ...data, id: editingCreator.id }, {
         onSuccess: () => { setCreatorFormOpen(false); setEditingCreator(null); },
@@ -64,7 +64,7 @@ const UgcCreatorsPage: React.FC = () => {
     setSelectedCreator(creator); setDetailOpen(true);
   };
 
-  const handleCampaignStatusChange = (campaignId: string, status: CampaignStatus, extra?: Record<string, unknown>) => {
+  const handleCampaignStatusChange = (campaignId: string, status: CampaignStatus, extra?: Record<string, any>) => {
     updateCampaignStatus.mutate({ id: campaignId, status, extra });
   };
 
@@ -93,7 +93,7 @@ const UgcCreatorsPage: React.FC = () => {
     setCampaignFormOpen(true);
   };
 
-  const handleCampaignSubmit = (data: unknown) => {
+  const handleCampaignSubmit = (data: any) => {
     if (!campaignCreatorId) return;
     createCampaign.mutate({ ...data, creatorId: campaignCreatorId }, {
       onSuccess: () => { setCampaignFormOpen(false); setCampaignCreatorId(null); },
@@ -104,7 +104,7 @@ const UgcCreatorsPage: React.FC = () => {
     setVideoCampaignId(campaignId); setVideoFormOpen(true);
   };
 
-  const handleVideoSubmit = (data: unknown) => {
+  const handleVideoSubmit = (data: any) => {
     if (!videoCampaignId || !selectedCreator) return;
     createVideo.mutate({ ...data, campaignId: videoCampaignId, creatorId: selectedCreator.id }, {
       onSuccess: () => { setVideoFormOpen(false); setVideoCampaignId(null); },

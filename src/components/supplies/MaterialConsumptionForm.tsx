@@ -40,7 +40,7 @@ const MaterialConsumptionForm = ({ orderId, orderNumber, workshopId, onClose, on
     }
   };
 
-  const updateConsumption = async (index: number, field: string, value: unknown) => {
+  const updateConsumption = async (index: number, field: string, value: any) => {
     const updated = [...consumptions];
     updated[index] = { ...updated[index], [field]: value };
     

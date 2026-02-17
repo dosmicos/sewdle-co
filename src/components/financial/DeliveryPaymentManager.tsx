@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Calculator, DollarSign, Receipt, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
   // Find existing payment for this delivery
   const existingPayment = payments.find(p => p.delivery_id === deliveryId);
 
-  const handleCalculatePayment = useCallback(async (customAdvance?: number) => {
+  const handleCalculatePayment = async (customAdvance?: number) => {
     setIsCalculating(true);
     try {
       const result = await calculatePayment(deliveryId, customAdvance);
@@ -58,18 +58,16 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
       // Update advance adjustment max value
       if (result && result.total_advance_available !== undefined && result.advance_already_used !== undefined) {
         const maxDeduction = result.total_advance_available - result.advance_already_used;
-        setAdvanceAdjustment(prev =>
-          prev.customAdvanceDeduction > maxDeduction
-            ? { ...prev, customAdvanceDeduction: maxDeduction }
-            : prev
-        );
+        if (advanceAdjustment.customAdvanceDeduction > maxDeduction) {
+          setAdvanceAdjustment(prev => ({ ...prev, customAdvanceDeduction: maxDeduction }));
+        }
       }
     } catch (error) {
       console.error('Error calculating payment:', error);
     } finally {
       setIsCalculating(false);
     }
-  }, [calculatePayment, deliveryId]);
+  };
 
   const handleCreatePayment = async (useCustomAdvance: boolean = false) => {
     try {
@@ -144,7 +142,7 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
 
   useEffect(() => {
     handleCalculatePayment();
-  }, [deliveryId, handleCalculatePayment]);
+  }, [deliveryId]);
 
   return (
     <Card>

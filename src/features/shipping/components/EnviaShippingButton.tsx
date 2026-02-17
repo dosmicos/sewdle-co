@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Truck, FileText, Loader2, ExternalLink, AlertCircle, PackageCheck, Edit3, XCircle, Printer, RotateCcw, ChevronDown, ChevronUp, History, Check, X, RefreshCw, User, MapPin } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -239,7 +239,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           setHasChecked(true);
         });
     }
-  }, [shopifyOrderId, currentOrganization?.id, clearQuotes, clearMatchInfo, getExistingLabel, onLabelChange]);
+  }, [shopifyOrderId, currentOrganization?.id, clearQuotes, clearMatchInfo]);
 
   // Auto-track shipment when an active label with tracking number is loaded
   useEffect(() => {
@@ -249,7 +249,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         carrier: existingLabel.carrier || 'manual'
       });
     }
-  }, [existingLabel?.tracking_number, existingLabel?.status, existingLabel?.carrier, trackShipment]);
+  }, [existingLabel?.tracking_number, existingLabel?.status]);
 
   // NO automatic quote loading - user must click "Cotizar" button
   // This prevents excessive API calls and resource consumption
@@ -452,7 +452,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     } finally {
       isQuoteRequestInProgressRef.current = false;
     }
-  }, [shippingAddress, totalPrice, getQuotesWithRetry, orderNumber]);
+  }, [shippingAddress, totalPrice, getQuotesWithRetry]);
 
   // Select the best carrier from a list of quotes based on business rules
   const selectBestCarrier = useCallback((carrierQuotes: typeof quotes): string => {
@@ -592,7 +592,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shippingAddress, totalPrice, currentOrganization?.id, orderNumber, getQuotesWithRetry, selectBestCarrier, correctedCity, createLabel, shopifyOrderId, customerPhone, customerEmail, isCOD, codAmount, onLabelChange]);
 
-  const handleCreateLabel = useCallback(async () => {
+  const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
       return;
     }
@@ -664,23 +664,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         }
       }
     }
-  }, [
-    currentOrganization?.id,
-    shippingAddress,
-    selectedCarrier,
-    createLabel,
-    shopifyOrderId,
-    orderNumber,
-    customerPhone,
-    customerEmail,
-    totalPrice,
-    correctedCity,
-    isCOD,
-    codAmount,
-    onLabelChange,
-  ]);
+  };
 
-  const selectedCarrierDisplayName = useMemo((): string | null => {
+  // Helper to get the selected carrier display name
+  const getSelectedCarrierDisplayName = (): string | null => {
     if (selectedCarrier && selectedCarrier !== 'auto') {
       // If quotes are available and selectedCarrier is in format "carrier:service:type"
       if (quotes.length > 0 && selectedCarrier.includes(':')) {
@@ -692,7 +679,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
     // Auto or no selection - use recommended carrier
     return CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora';
-  }, [selectedCarrier, quotes, recommendedCarrier]);
+  };
 
   // Expose methods via apiRef for external control
   useEffect(() => {
@@ -714,13 +701,13 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       isReady: !!isReady,
       isCreatingLabel,
       hasExistingLabel: !!isActiveLabel,
-      selectedCarrierName: selectedCarrierDisplayName,
+      selectedCarrierName: getSelectedCarrierDisplayName(),
     };
 
     return () => {
       apiRef.current = null;
     };
-  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrierDisplayName]);
+  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrier, quotes, recommendedCarrier]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -815,7 +802,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       setManualTracking('');
       
       await getExistingLabel(shopifyOrderId, currentOrganization.id);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error saving manual label:', error);
       toast.error('Error al guardar: ' + error.message);
     } finally {
@@ -862,7 +849,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       // Refresh to get updated history (best-effort)
       try {
         await getExistingLabel(shopifyOrderId, currentOrganization.id);
-      } catch (e: unknown) {
+      } catch (e: any) {
         console.warn('Error refreshing labels after cancel:', e?.message);
       }
       setShowHistory(true);
@@ -953,7 +940,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       const label = await getExistingLabel(shopifyOrderId, currentOrganization.id);
       setHasChecked(true);
       onLabelChange?.(label);
-    } catch (error: unknown) {
+    } catch (error: any) {
       setHasChecked(true);
       setLabelCheckError('Servicio de envío no disponible');
       console.error('Error verificando guía:', error);
@@ -1212,7 +1199,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-1.5">
                       <div className="space-y-1 pl-2 border-l-2 border-muted ml-1">
-                        {trackingInfo.events.map((event: unknown, idx: number) => (
+                        {trackingInfo.events.map((event: any, idx: number) => (
                           <div key={idx} className="text-xs text-muted-foreground pl-2">
                             <span className="font-medium text-foreground">
                               {event.date}{event.time ? ` ${event.time}` : ''}

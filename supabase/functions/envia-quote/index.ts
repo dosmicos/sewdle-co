@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireAuthenticatedUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,52 +103,8 @@ interface DaneCodeResult {
   matchInfo: CityMatchInfo;
 }
 
-interface ShippingCoverageRow {
-  dane_code: string;
-  municipality: string;
-  department: string;
-}
-
-interface EnviaRateItem {
-  service?: string;
-  carrier?: string;
-  totalPrice?: number;
-  price?: number;
-  currency?: string;
-  deliveryDays?: number;
-  days?: number;
-  deliveryEstimate?: string;
-}
-
-interface EnviaRateResponse {
-  meta?: string;
-  error?: {
-    message?: string;
-  };
-  data?: EnviaRateItem[];
-}
-
-interface CarrierRateResult {
-  carrier: string;
-  deliveryType: 'domicilio' | 'oficina';
-  success: boolean;
-  data?: EnviaRateResponse;
-  error?: string;
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return 'Unknown error';
-}
-
 // Get DANE code from database with match info - queries shipping_coverage table
-async function getDaneCodeWithMatchInfo(
-  supabase: ReturnType<typeof createClient>,
-  city: string,
-  department?: string
-): Promise<DaneCodeResult> {
+async function getDaneCodeWithMatchInfo(supabase: any, city: string, department?: string): Promise<DaneCodeResult> {
   const originalCity = city.trim();
   const normalizedCity = city.toLowerCase().trim()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -157,22 +112,21 @@ async function getDaneCodeWithMatchInfo(
   console.log(`🔍 Looking up DANE code for city: "${originalCity}" (normalized: "${normalizedCity}")`);
   
   // Step 1: Try exact match with ORIGINAL name (preserves accents like "Fómeque")
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
     .ilike('municipality', originalCity)
     .limit(1);
-  const exactMatches = (data ?? []) as ShippingCoverageRow[];
   
-  if (exactMatches.length > 0) {
-    console.log(`✅ DANE code found (exact with accents): "${originalCity}" → "${exactMatches[0].dane_code}"`);
+  if (data && data.length > 0) {
+    console.log(`✅ DANE code found (exact with accents): "${originalCity}" → "${data[0].dane_code}"`);
     return {
-      daneCode: exactMatches[0].dane_code,
+      daneCode: data[0].dane_code,
       matchInfo: {
         matchType: 'exact',
         inputCity: originalCity,
-        matchedMunicipality: exactMatches[0].municipality,
-        matchedDepartment: exactMatches[0].department,
+        matchedMunicipality: data[0].municipality,
+        matchedDepartment: data[0].department,
         confidence: 1.0,
         suggestions: []
       }
@@ -184,14 +138,13 @@ async function getDaneCodeWithMatchInfo(
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
     .limit(2000);
-  const municipalities = (allMunicipalities ?? []) as ShippingCoverageRow[];
   
-  if (municipalities.length > 0) {
+  if (allMunicipalities && allMunicipalities.length > 0) {
     const normalizedDept = department?.toLowerCase().trim()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
     
     // Try exact normalized match first
-    const exactMatch = municipalities.find((item) => {
+    const exactMatch = allMunicipalities.find((item: any) => {
       const itemMunicipality = item.municipality.toLowerCase().trim()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const itemDept = item.department.toLowerCase().trim()
@@ -221,7 +174,7 @@ async function getDaneCodeWithMatchInfo(
     // Calculate similarity for all municipalities
     const similarityResults: Array<{ municipality: string; department: string; similarity: number; dane_code: string }> = [];
     
-    for (const item of municipalities) {
+    for (const item of allMunicipalities) {
       const similarity = calculateSimilarity(originalCity, item.municipality);
       if (similarity >= 0.7) {
         similarityResults.push({
@@ -351,12 +304,6 @@ serve(async (req) => {
       );
     }
 
-    const authResult = await requireAuthenticatedUser(req, corsHeaders);
-    if (!authResult.ok) {
-      return authResult.response;
-    }
-    console.log('✅ Authenticated user for envia-quote:', authResult.userId);
-
     // Initialize Supabase client for database queries
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -418,7 +365,7 @@ serve(async (req) => {
     console.log('📦 Shipment types: domicilio (type=1) and oficina (type=2)');
 
     // Make parallel requests for each carrier × shipment type combination
-    const ratePromises: Promise<CarrierRateResult>[] = [];
+    const ratePromises: Promise<{ carrier: string; deliveryType: 'domicilio' | 'oficina'; success: boolean; data?: any; error?: string }>[] = [];
     
     for (const carrier of AVAILABLE_CARRIERS) {
       for (const shipmentType of SHIPMENT_TYPES) {
@@ -440,9 +387,9 @@ serve(async (req) => {
             });
 
             const text = await response.text();
-            let data: EnviaRateResponse;
+            let data;
             try {
-              data = JSON.parse(text) as EnviaRateResponse;
+              data = JSON.parse(text);
             } catch {
               console.log(`⚠️ Invalid JSON from ${carrier} (${shipmentType.label}):`, text.substring(0, 100));
               return { carrier, deliveryType: shipmentType.label, success: false, error: 'Invalid response' };
@@ -455,10 +402,9 @@ serve(async (req) => {
 
             console.log(`✅ Got ${shipmentType.label} quote from ${carrier}`);
             return { carrier, deliveryType: shipmentType.label, success: true, data };
-          } catch (error) {
-            const message = getErrorMessage(error);
-            console.log(`❌ Error getting ${shipmentType.label} quote from ${carrier}:`, message);
-            return { carrier, deliveryType: shipmentType.label, success: false, error: message };
+          } catch (error: any) {
+            console.log(`❌ Error getting ${shipmentType.label} quote from ${carrier}:`, error.message);
+            return { carrier, deliveryType: shipmentType.label, success: false, error: error.message };
           }
         })();
 
@@ -553,10 +499,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in envia-quote:', error);
     return new Response(
-      JSON.stringify({ success: false, error: getErrorMessage(error) }),
+      JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

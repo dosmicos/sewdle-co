@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,7 +63,13 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
   const { toast } = useToast();
   const { checkUpdateSafety, updateVariantSku, loading: skuUpdateLoading } = useVariantSkuUpdate();
 
-  const fetchProductVariants = useCallback(async () => {
+  useEffect(() => {
+    if (isOpen && product.id) {
+      fetchProductVariants();
+    }
+  }, [isOpen, product.id]);
+
+  const fetchProductVariants = async () => {
     try {
       setLoadingVariants(true);
       const { data, error } = await supabase
@@ -81,7 +87,7 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
       const sortedVariants = sortVariants(fetchedVariants);
       setVariants(sortedVariants);
       setOriginalVariants(sortedVariants);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error loading variants:', error);
       toast({
         title: "Error al cargar variantes",
@@ -91,13 +97,7 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
     } finally {
       setLoadingVariants(false);
     }
-  }, [product.id, toast]);
-
-  useEffect(() => {
-    if (isOpen && product.id) {
-      fetchProductVariants();
-    }
-  }, [isOpen, product.id, fetchProductVariants]);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -117,7 +117,7 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
     }]);
   };
 
-  const updateVariant = (index: number, field: keyof ProductVariant, value: unknown) => {
+  const updateVariant = (index: number, field: keyof ProductVariant, value: any) => {
     const updatedVariants = [...variants];
     updatedVariants[index] = {
       ...updatedVariants[index],
@@ -528,7 +528,7 @@ const ProductEditModal = ({ product, isOpen, onClose, onSuccess }: ProductEditMo
         onClose();
       }
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('=== ERROR EN GUARDADO ===');
       console.error('Error completo:', error);
       

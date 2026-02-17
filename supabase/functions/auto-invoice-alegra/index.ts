@@ -210,7 +210,7 @@ function findSimilarCity(cityInput: string): { city: string; department: string 
 
 // ============= NUEVA FUNCIÓN: Normalización de ciudad desde shipping_coverage =============
 async function normalizeAlegraCityFromDB(
-  supabase: unknown,
+  supabase: any,
   organizationId: string,
   cityName: string,
   provinceName: string
@@ -247,7 +247,7 @@ async function normalizeAlegraCityFromDB(
       console.log(`📍 Ciudad normalizada desde DB: ${cityName} → ${match.municipality}, ${match.department}`)
       return { city: match.municipality, department: match.department, wasNormalized: true }
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.warn(`⚠️ Error consultando shipping_coverage: ${e.message}`)
   }
   
@@ -290,9 +290,9 @@ function normalizeIdentificationType(type: unknown): string {
 }
 
 // ============= ALEGRA API REQUESTS =============
-async function makeAlegraRequest(endpoint: string, method = 'GET', body?: unknown, maxRetries = 3) {
+async function makeAlegraRequest(endpoint: string, method = 'GET', body?: any, maxRetries = 3) {
   const url = `${ALEGRA_API_URL}${endpoint}`
-  let lastError: unknown = null
+  let lastError: any = null
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`[Alegra] ${method} ${endpoint} (intento ${attempt}/${maxRetries})`)
@@ -311,7 +311,7 @@ async function makeAlegraRequest(endpoint: string, method = 'GET', body?: unknow
       }
 
       const response = await fetch(url, options)
-      let data: unknown
+      let data: any
       try {
         data = await response.json()
       } catch {
@@ -327,17 +327,17 @@ async function makeAlegraRequest(endpoint: string, method = 'GET', body?: unknow
       }
 
       if (!response.ok) {
-        const errorMessage = (data as Record<string, unknown>)?.message || 
-          (data as Record<string, unknown>)?.error?.[0]?.message || 
+        const errorMessage = (data as any)?.message || 
+          (data as any)?.error?.[0]?.message || 
           `Error ${response.status} from Alegra API`
         const err = new Error(errorMessage)
-        ;(err as Record<string, unknown>).status = response.status
-        ;(err as Record<string, unknown>).alegra = data
+        ;(err as any).status = response.status
+        ;(err as any).alegra = data
         throw err
       }
 
       return data
-    } catch (fetchError: unknown) {
+    } catch (fetchError: any) {
       lastError = fetchError
       if (fetchError.status) throw fetchError
       if (attempt < maxRetries) {
@@ -364,13 +364,13 @@ async function findContactInAlegra(params: { phone?: string; identification?: st
     try {
       const byEmail = await makeAlegraRequest(`/contacts?type=client&query=${encodeURIComponent(email)}&start=0&limit=10`)
       if (Array.isArray(byEmail) && byEmail.length > 0) {
-        const match = byEmail.find((c: unknown) => normalizeWhitespace(c.email).toLowerCase() === email)
+        const match = byEmail.find((c: any) => normalizeWhitespace(c.email).toLowerCase() === email)
         if (match) {
           console.log('findContactInAlegra - Encontrado por email:', match.id)
           return { found: true, matchedBy: 'email', contact: match }
         }
       }
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error('Error buscando por email:', e.message)
     }
   }
@@ -383,7 +383,7 @@ async function findContactInAlegra(params: { phone?: string; identification?: st
         console.log('findContactInAlegra - Encontrado por identificación:', byId[0].id)
         return { found: true, matchedBy: 'identification', contact: byId[0] }
       }
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error('Error buscando por identificación:', e.message)
     }
   }
@@ -393,7 +393,7 @@ async function findContactInAlegra(params: { phone?: string; identification?: st
     try {
       const byPhone = await makeAlegraRequest(`/contacts?type=client&query=${encodeURIComponent(phone)}&start=0&limit=10`)
       if (Array.isArray(byPhone) && byPhone.length > 0) {
-        const match = byPhone.find((c: unknown) => {
+        const match = byPhone.find((c: any) => {
           const p1 = normalizeCOPhone(c.phonePrimary)
           const p2 = normalizeCOPhone(c.mobile)
           return (p1 && p1 === phone) || (p2 && p2 === phone)
@@ -403,7 +403,7 @@ async function findContactInAlegra(params: { phone?: string; identification?: st
           return { found: true, matchedBy: 'phone', contact: match }
         }
       }
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error('Error buscando por teléfono:', e.message)
     }
   }
@@ -411,7 +411,7 @@ async function findContactInAlegra(params: { phone?: string; identification?: st
   return { found: false, matchedBy: 'created', contact: null }
 }
 
-async function createContact(orderData: unknown, supabase: unknown, organizationId: string): Promise<unknown> {
+async function createContact(orderData: any, supabase: any, organizationId: string): Promise<any> {
   const billingAddress = orderData.billing_address || orderData.shipping_address || {}
   const shippingAddress = orderData.shipping_address || orderData.billing_address || {}
   
@@ -465,7 +465,7 @@ async function createContact(orderData: unknown, supabase: unknown, organization
   
   try {
     return await makeAlegraRequest('/contacts', 'POST', contactPayload)
-  } catch (e: unknown) {
+  } catch (e: any) {
     // If contact already exists, fetch it
     if (e.alegra?.code === 2006 && e.alegra?.contactId) {
       console.log('Contacto ya existe, obteniendo:', e.alegra.contactId)
@@ -477,13 +477,13 @@ async function createContact(orderData: unknown, supabase: unknown, organization
 
 // ============= INVOICE CREATION =============
 async function createInvoice(
-  orderData: unknown, 
-  lineItems: unknown[], 
+  orderData: any, 
+  lineItems: any[], 
   contactId: string, 
-  mappings: unknown[],
-  alegraItems: unknown[]
-): Promise<unknown> {
-  const items: unknown[] = []
+  mappings: any[],
+  alegraItems: any[]
+): Promise<any> {
+  const items: any[] = []
   const missingItems: string[] = []
 
   // Helper to find best match by name similarity
@@ -556,10 +556,10 @@ async function createInvoice(
 
   // Add shipping as separate item
   const shippingLines = orderData.raw_data?.shipping_lines || []
-  const shippingCost = shippingLines.reduce((sum: number, line: unknown) => sum + (parseFloat(line.price) || 0), 0)
+  const shippingCost = shippingLines.reduce((sum: number, line: any) => sum + (parseFloat(line.price) || 0), 0)
   
   if (shippingCost > 0) {
-    const shippingMapping = mappings.find(m => 
+    let shippingMapping = mappings.find(m => 
       m.shopify_sku === 'ENVIO' || 
       m.shopify_product_title?.toLowerCase() === 'envío' ||
       m.shopify_product_title?.toLowerCase() === 'envio'
@@ -586,7 +586,7 @@ async function createInvoice(
   // If any items are missing, throw error with tag
   if (missingItems.length > 0) {
     const error = new Error(`Productos sin mapeo: ${missingItems.join(', ')}`)
-    ;(error as Record<string, unknown>).missingProducts = true
+    ;(error as any).missingProducts = true
     throw error
   }
 
@@ -612,7 +612,7 @@ async function createInvoice(
   return await makeAlegraRequest('/invoices', 'POST', invoicePayload)
 }
 
-async function stampInvoice(invoiceId: number): Promise<unknown> {
+async function stampInvoice(invoiceId: number): Promise<any> {
   console.log(`Emitiendo factura ${invoiceId} con DIAN...`)
   const stampResult = await makeAlegraRequest('/invoices/stamp', 'POST', { ids: [invoiceId] })
   
@@ -640,14 +640,14 @@ async function registerPayment(invoiceId: number, amount: number, orderNumber: s
     console.log('Registrando pago:', JSON.stringify(paymentPayload, null, 2))
     await makeAlegraRequest('/payments', 'POST', paymentPayload)
     console.log(`✅ Pago registrado para factura ${invoiceId}`)
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('⚠️ Error registrando pago:', e.message)
     // Don't throw - payment failure shouldn't stop the process
   }
 }
 
 // ============= SHOPIFY CREDENTIALS HELPER =============
-async function getShopifyCredentials(supabase: unknown, organizationId: string): Promise<{
+async function getShopifyCredentials(supabase: any, organizationId: string): Promise<{
   domain: string;
   accessToken: string;
 } | null> {
@@ -676,7 +676,7 @@ async function getShopifyCredentials(supabase: unknown, organizationId: string):
         shopifyDomain = url.hostname
         shopifyToken = org.shopify_credentials.access_token
         console.log('✅ Credenciales Shopify obtenidas de la organización')
-      } catch (e: unknown) {
+      } catch (e: any) {
         console.error('❌ Error parseando URL de Shopify:', e.message)
         return null
       }
@@ -699,7 +699,7 @@ async function getShopifyCredentials(supabase: unknown, organizationId: string):
 }
 
 // ============= SHOPIFY TAG UPDATE =============
-async function addFacturadoTag(shopifyOrderId: number, supabase: unknown, organizationId: string): Promise<void> {
+async function addFacturadoTag(shopifyOrderId: number, supabase: any, organizationId: string): Promise<void> {
   const credentials = await getShopifyCredentials(supabase, organizationId)
   if (!credentials) {
     console.warn('⚠️ No se pudieron obtener credenciales de Shopify para agregar tag FACTURADO')
@@ -749,12 +749,12 @@ async function addFacturadoTag(shopifyOrderId: number, supabase: unknown, organi
     } else {
       console.error('Error agregando tag FACTURADO:', updateResponse.status)
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('Error en addFacturadoTag:', e.message)
   }
 }
 
-async function addErrorTag(shopifyOrderId: number, supabase: unknown, organizationId: string, errorMessage: string): Promise<void> {
+async function addErrorTag(shopifyOrderId: number, supabase: any, organizationId: string, errorMessage: string): Promise<void> {
   const credentials = await getShopifyCredentials(supabase, organizationId)
   if (!credentials) return
 
@@ -786,7 +786,7 @@ async function addErrorTag(shopifyOrderId: number, supabase: unknown, organizati
       )
       console.log(`⚠️ Tag AUTO_INVOICE_FAILED agregado a orden ${shopifyOrderId}`)
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('Error agregando tag de error:', e.message)
   }
 }
@@ -801,7 +801,7 @@ async function verifyNoExistingInvoice(orderNumber: string): Promise<{ exists: b
     
     if (Array.isArray(invoices) && invoices.length > 0) {
       // Buscar coincidencia exacta en observaciones
-      const match = invoices.find((inv: unknown) => 
+      const match = invoices.find((inv: any) => 
         inv.observations?.includes(`#${orderNumber}`) || 
         inv.observations?.includes(orderNumber)
       )
@@ -817,7 +817,7 @@ async function verifyNoExistingInvoice(orderNumber: string): Promise<{ exists: b
     }
     
     return { exists: false }
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.warn(`⚠️ No se pudo verificar facturas existentes: ${e.message}`)
     // En caso de error, asumir que no existe para no bloquear
     return { exists: false }
@@ -825,7 +825,7 @@ async function verifyNoExistingInvoice(orderNumber: string): Promise<{ exists: b
 }
 
 // ============= BATCH PROCESSING: Find pending orders =============
-async function findPendingOrders(supabase: unknown): Promise<Array<{
+async function findPendingOrders(supabase: any): Promise<Array<{
   shopify_order_id: number, 
   organization_id: string, 
   order_number: string,
@@ -879,7 +879,7 @@ async function findPendingOrders(supabase: unknown): Promise<Array<{
 async function processAutoInvoice(
   shopifyOrderId: number,
   organizationId: string,
-  supabase: unknown
+  supabase: any
 ): Promise<{ success: boolean; invoiceId?: number; cufe?: string; error?: string }> {
   console.log(`\n🧾 ========== AUTO-INVOICE para pedido ${shopifyOrderId} ==========`)
 
@@ -933,7 +933,7 @@ async function processAutoInvoice(
     
     // 3. Verificar shipping tag (algunos usan esto)
     const shippingLines = rawData.shipping_lines || []
-    const shippingTitle = shippingLines.map((l: unknown) => (l.title || '').toLowerCase()).join(' ')
+    const shippingTitle = shippingLines.map((l: any) => (l.title || '').toLowerCase()).join(' ')
     const hasCODShipping = codTagPatterns.some(pattern => shippingTitle.includes(pattern))
     
     // Si tiene cualquier indicador de contraentrega, saltar
@@ -1013,14 +1013,14 @@ async function processAutoInvoice(
         
         console.log(`✅ Re-stamp exitoso: Factura ${invoiceNumber} emitida`)
         return { success: true, invoiceId: orderData.alegra_invoice_id, cufe }
-      } catch (stampError: unknown) {
+      } catch (stampError: any) {
         console.error(`❌ Re-stamp falló: ${stampError.message}`)
         
         // NUEVO: Incrementar contador de reintentos
         const currentRetries = orderData.auto_invoice_retries || 0
         const newRetries = currentRetries + 1
         
-        const updateData: Record<string, unknown> = { auto_invoice_retries: newRetries }
+        const updateData: Record<string, any> = { auto_invoice_retries: newRetries }
         
         // Si alcanza el límite, marcar como fallido permanente
         if (newRetries >= 3) {
@@ -1067,7 +1067,7 @@ async function processAutoInvoice(
       phone: orderData.customer_phone || billingAddress.phone || shippingAddress.phone,
     })
 
-    let contact: unknown
+    let contact: any
     if (searchResult.found) {
       contact = searchResult.contact
       console.log(`✅ Contacto encontrado: ${contact.name} (ID: ${contact.id})`)
@@ -1086,7 +1086,7 @@ async function processAutoInvoice(
 
     // 7. Load Alegra catalog for auto-matching
     console.log('📦 Cargando catálogo de Alegra para auto-match...')
-    let alegraItems: unknown[] = []
+    let alegraItems: any[] = []
     try {
       const catalogResult = await makeAlegraRequest('/items?start=0&limit=100')
       alegraItems = Array.isArray(catalogResult) ? catalogResult : []
@@ -1113,7 +1113,7 @@ async function processAutoInvoice(
 
     // 10. Stamp with DIAN
     console.log('📡 Emitiendo con DIAN...')
-    let stampedInvoice: unknown
+    let stampedInvoice: any
     let cufe: string | undefined
     let invoiceNumber: string
     
@@ -1125,7 +1125,7 @@ async function processAutoInvoice(
       if (cufe) {
         console.log(`✅ CUFE: ${cufe.substring(0, 30)}...`)
       }
-    } catch (stampError: unknown) {
+    } catch (stampError: any) {
       // CAMBIO: Si el stamp falla, guardar factura sin emitir (no duplicar)
       console.error(`❌ Error emitiendo factura ${invoice.id}:`, stampError.message)
       
@@ -1133,7 +1133,7 @@ async function processAutoInvoice(
       const currentRetries = orderData.auto_invoice_retries || 0
       const newRetries = currentRetries + 1
       
-      const updateData: Record<string, unknown> = {
+      const updateData: Record<string, any> = {
         alegra_invoice_id: invoice.id,
         alegra_invoice_number: invoice.numberTemplate?.fullNumber || String(invoice.id),
         alegra_stamped: false,  // No emitida
@@ -1215,7 +1215,7 @@ async function processAutoInvoice(
       invoiceId: invoice.id,
       cufe: cufe || undefined,
     }
-  } catch (processError: unknown) {
+  } catch (processError: any) {
     console.error(`❌ Error procesando pedido ${shopifyOrderId}:`, processError.message)
     throw processError
   }
@@ -1276,7 +1276,7 @@ Deno.serve(async (req) => {
           JSON.stringify(result),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
-      } catch (processError: unknown) {
+      } catch (processError: any) {
         console.error('❌ Error en auto-invoice (single):', processError.message)
 
         // Add error tag to Shopify order
@@ -1347,7 +1347,7 @@ Deno.serve(async (req) => {
         
         // Esperar 2 segundos entre pedidos para no saturar Alegra
         await sleep(2000)
-      } catch (err: unknown) {
+      } catch (err: any) {
         console.error(`❌ Error procesando ${order.order_number}:`, err.message)
         results.push({ 
           orderId: order.shopify_order_id, 
@@ -1359,9 +1359,7 @@ Deno.serve(async (req) => {
         // Add error tag to Shopify - getShopifyCredentials maneja la obtención de credenciales
         try {
           await addErrorTag(order.shopify_order_id, supabase, order.organization_id, err.message)
-        } catch (_tagError) {
-          // Ignore tagging failures in batch mode; keep processing remaining orders.
-        }
+        } catch {}
         
         // Log error
         await supabase.from('sync_control_logs').insert({
@@ -1394,7 +1392,7 @@ Deno.serve(async (req) => {
       JSON.stringify(summary),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('❌ Error en handler:', error.message)
     return new Response(
       JSON.stringify({ success: false, error: error.message }),

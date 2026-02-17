@@ -27,13 +27,13 @@ export const useSkuCorrection = () => {
       const shopifyProductsMap = new Map();
       const shopifyVariantsMap = new Map();
       
-      shopifyData.products.forEach((product: unknown) => {
+      shopifyData.products.forEach((product: any) => {
         // Mapear por título normalizado
         const normalizedTitle = product.title.toLowerCase().trim();
         shopifyProductsMap.set(normalizedTitle, product);
         
         // Mapear variantes por características múltiples
-        product.variants?.forEach((variant: unknown) => {
+        product.variants?.forEach((variant: any) => {
           // Crear múltiples claves para mapear variantes
           const variantTitle = variant.title || '';
           const option1 = variant.option1 || '';
@@ -104,7 +104,7 @@ export const useSkuCorrection = () => {
       };
 
       // 5. Función para encontrar la mejor coincidencia de variante
-      const findBestVariantMatch = (productName: string, localVariant: unknown, shopifyProduct: unknown) => {
+      const findBestVariantMatch = (productName: string, localVariant: any, shopifyProduct: any) => {
         if (!shopifyProduct.variants || shopifyProduct.variants.length === 0) {
           return null;
         }
@@ -234,7 +234,7 @@ export const useSkuCorrection = () => {
               console.log(`⚠️ No se pudo mapear variante ${localVariant.size}/${localVariant.color}`);
               // Listar variantes disponibles para debugging
               console.log(`📋 Variantes disponibles en Shopify:`);
-              shopifyProduct.variants?.forEach((v: unknown, idx: number) => {
+              shopifyProduct.variants?.forEach((v: any, idx: number) => {
                 console.log(`   ${idx + 1}. ${v.title} (${v.option1}/${v.option2}) - SKU: ${v.sku}`);
               });
             }
@@ -282,7 +282,7 @@ export const useSkuCorrection = () => {
         skippedProducts
       };
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('💥 Error corrigiendo SKUs:', error);
       toast({
         title: "Error en corrección de SKUs",

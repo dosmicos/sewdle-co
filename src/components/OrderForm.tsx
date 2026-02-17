@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,18 +23,18 @@ interface OrderFormProps {
 const OrderForm = ({ onClose }: OrderFormProps) => {
   const [selectedWorkshop, setSelectedWorkshop] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [selectedProducts, setSelectedProducts] = useState<unknown[]>([]);
-  const [supplies, setSupplies] = useState<unknown[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [supplies, setSupplies] = useState<any[]>([]);
   const [notes, setNotes] = useState('');
   const [cuttingOrderFile, setCuttingOrderFile] = useState<File | null>(null);
   
   // Estados para manejo de diálogos
   const [showOrderForm, setShowOrderForm] = useState(true);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
-  const [pendingMissingMaterials, setPendingMissingMaterials] = useState<unknown[]>([]);
+  const [pendingMissingMaterials, setPendingMissingMaterials] = useState<any[]>([]);
 
   // Estados para validación de materiales
-  const [materialValidation, setMaterialValidation] = useState<unknown>(null);
+  const [materialValidation, setMaterialValidation] = useState<any>(null);
   const [showMaterialValidation, setShowMaterialValidation] = useState(false);
 
   const { workshops, loading: workshopsLoading } = useWorkshops();
@@ -42,7 +42,17 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
   const { validateMaterialsForWorkshop, loading: validatingMaterials } = useOrderMaterialValidation();
   const { consumeOrderMaterials } = useMaterialConsumption();
 
-  const handleMaterialValidation = useCallback(async () => {
+  // Validar materiales cuando cambien los insumos o el taller
+  useEffect(() => {
+    if (selectedWorkshop && supplies.length > 0) {
+      handleMaterialValidation();
+    } else {
+      setMaterialValidation(null);
+      setShowMaterialValidation(false);
+    }
+  }, [selectedWorkshop, supplies]);
+
+  const handleMaterialValidation = async () => {
     if (!selectedWorkshop || supplies.length === 0) return;
 
     const validSupplies = supplies.filter(supply => 
@@ -60,19 +70,9 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
     const validation = await validateMaterialsForWorkshop(selectedWorkshop, materialRequirements);
     setMaterialValidation(validation);
     setShowMaterialValidation(true);
-  }, [selectedWorkshop, supplies, validateMaterialsForWorkshop]);
+  };
 
-  // Validar materiales cuando cambien los insumos o el taller
-  useEffect(() => {
-    if (selectedWorkshop && supplies.length > 0) {
-      handleMaterialValidation();
-    } else {
-      setMaterialValidation(null);
-      setShowMaterialValidation(false);
-    }
-  }, [selectedWorkshop, supplies, handleMaterialValidation]);
-
-  const handleCreateDelivery = (missingMaterials?: unknown[]) => {
+  const handleCreateDelivery = (missingMaterials?: any[]) => {
     console.log('OrderForm: handleCreateDelivery called');
     const materialsToDeliver = missingMaterials || materialValidation?.insufficientMaterials || [];
     setPendingMissingMaterials(materialsToDeliver);

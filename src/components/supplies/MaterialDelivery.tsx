@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,13 +68,9 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
   const { workshopFilter, isWorkshopUser } = useUserContext();
   
 
-  const loadDeliveries = useCallback(async () => {
-    await fetchIndividualMaterialDeliveries();
-  }, [fetchIndividualMaterialDeliveries]);
-
   useEffect(() => {
     loadDeliveries();
-  }, [loadDeliveries]);
+  }, []);
 
   // Sincronizar el estado local con los datos de React Query
   useEffect(() => {
@@ -82,6 +78,10 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
       setDeliveries(individualDeliveries);
     }
   }, [individualDeliveries]);
+
+  const loadDeliveries = async () => {
+    await fetchIndividualMaterialDeliveries();
+  };
 
   const handleDeliveryCreated = () => {
     setShowDeliveryForm(false);
@@ -126,16 +126,14 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
         case 'today':
           if (deliveryDate.toDateString() !== now.toDateString()) return false;
           break;
-        case 'week': {
+        case 'week':
           const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           if (deliveryDate < weekAgo) return false;
           break;
-        }
-        case 'month': {
+        case 'month':
           const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           if (deliveryDate < monthAgo) return false;
           break;
-        }
       }
     }
     return true;

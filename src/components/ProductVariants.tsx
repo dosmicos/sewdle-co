@@ -63,7 +63,7 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
   // Generar variantes automáticamente cuando cambien las opciones
   useEffect(() => {
     generateVariants();
-  }, [variantOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [variantOptions]);
 
   const generateVariants = () => {
     const colorOption = variantOptions.find(opt => opt.id === 'color');
@@ -98,7 +98,7 @@ const ProductVariants = ({ variants, onVariantsChange }: ProductVariantsProps) =
     onVariantsChange(newVariants);
   };
 
-  const updateVariant = (index: number, field: keyof Variant, value: unknown) => {
+  const updateVariant = (index: number, field: keyof Variant, value: any) => {
     const updatedVariants = [...generatedVariants];
     updatedVariants[index] = { ...updatedVariants[index], [field]: value };
     setGeneratedVariants(updatedVariants);

@@ -59,7 +59,7 @@ async function fetchAndCacheMedia(
   mediaId: string,
   messageType: string,
   conversationId: string,
-  supabase: unknown,
+  supabase: any,
 ): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken) return { url: null, mimeType: null, error: 'META_WHATSAPP_TOKEN not configured' };
@@ -145,7 +145,7 @@ async function fetchAndCacheMedia(
     if (!publicUrl) return { url: null, mimeType, error: 'No public URL' };
 
     return { url: publicUrl, mimeType };
-  } catch (err: unknown) {
+  } catch (err: any) {
     if (err?.name === 'AbortError') return { url: null, mimeType: null, error: 'Timeout' };
     console.error('fetchAndCacheMedia error:', err);
     return { url: null, mimeType: null, error: err?.message || 'Unknown error' };
@@ -184,7 +184,7 @@ serve(async (req) => {
     }
 
     const messageType = (msg.message_type || 'document') as string;
-    const metadata: unknown = (msg.metadata && typeof msg.metadata === 'object') ? msg.metadata : {};
+    const metadata: any = (msg.metadata && typeof msg.metadata === 'object') ? msg.metadata : {};
     const conversationId = msg.conversation_id as string;
 
     const originalMediaId = metadata?.original_media_id
@@ -228,7 +228,7 @@ serve(async (req) => {
     }
 
     return json({ success: true, media_url: res.url, media_mime_type: res.mimeType });
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error('retry-whatsapp-media error:', err);
     return json({ success: false, error: err?.message || 'Error interno' }, 500);
   }

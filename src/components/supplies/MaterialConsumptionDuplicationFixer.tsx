@@ -13,7 +13,7 @@ interface DuplicateGroup {
   material_name: string;
   material_sku: string;
   order_number: string;
-  records: unknown[];
+  records: any[];
   total_quantity: number;
 }
 
@@ -50,7 +50,7 @@ export const MaterialConsumptionDuplicationFixer: React.FC = () => {
       if (error) throw error;
 
       // Group by material + order
-      const groups: { [key: string]: unknown[] } = {};
+      const groups: { [key: string]: any[] } = {};
       
       data?.forEach(record => {
         const key = `${record.material_id}-${record.order_id}`;
@@ -86,7 +86,7 @@ export const MaterialConsumptionDuplicationFixer: React.FC = () => {
         title: "Análisis completado",
         description: `Se encontraron ${duplicateGroups.length} grupos con registros duplicados.`,
       });
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error finding duplicates:', error);
       toast({
         title: "Error",
@@ -150,7 +150,7 @@ export const MaterialConsumptionDuplicationFixer: React.FC = () => {
         `${d.material_id}-${d.order_id}` !== key
       ));
       
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error consolidating duplicate:', error);
       toast({
         title: "Error",

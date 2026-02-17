@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { resyncDeliveryStatus } from '@/utils/resyncDeliveryStatus';
 
 interface DeliverySyncStatusProps {
-  delivery: unknown;
+  delivery: any;
   onSyncSuccess?: () => void;
   showDetails?: boolean;
   size?: 'sm' | 'md' | 'lg';
@@ -41,16 +41,16 @@ export const DeliverySyncStatus = ({
     const totalItems = items.length;
     
     // Solo considerar items que han sido revisados en calidad (approved + defective > 0)
-    const reviewedItems = items.filter((item: unknown) => 
+    const reviewedItems = items.filter((item: any) => 
       (item.quantity_approved || 0) + (item.quantity_defective || 0) > 0
     );
     
-    const itemsWithApprovedQty = items.filter((item: unknown) => 
+    const itemsWithApprovedQty = items.filter((item: any) => 
       item.quantity_approved > 0
     ).length;
     
     // CORRECCIÓN: Detectar errores tanto a nivel de entrega como de items
-    const failedItems = items.filter((item: unknown) => 
+    const failedItems = items.filter((item: any) => 
       item.quantity_approved > 0 && (!item.synced_to_shopify || item.sync_error_message)
     ).length;
 
@@ -65,12 +65,12 @@ export const DeliverySyncStatus = ({
     const canBeSynced = delivery.status === 'approved' || delivery.status === 'partial_approved';
     
     // CORRECCIÓN: Items que están realmente sincronizados (solo contar los aprobados y sincronizados)
-    const syncedApprovedItems = items.filter((item: unknown) => 
+    const syncedApprovedItems = items.filter((item: any) => 
       item.quantity_approved > 0 && item.synced_to_shopify && !item.sync_error_message
     ).length;
     
     // CORRECCIÓN: Items que no necesitan sincronización (cantidad aprobada = 0 en entregas NO en revisión)
-    const itemsNotNeedingSync = items.filter((item: unknown) => 
+    const itemsNotNeedingSync = items.filter((item: any) => 
       item.quantity_approved === 0 && !isInReview
     ).length;
     
@@ -79,7 +79,7 @@ export const DeliverySyncStatus = ({
     // 2. Todos los items con cantidad aprobada > 0 están sincronizados Y
     // 3. Tiene al menos un item procesado Y
     // 4. NO hay errores a nivel de entrega
-    const itemsNeedingSync = items.filter((item: unknown) => item.quantity_approved > 0);
+    const itemsNeedingSync = items.filter((item: any) => item.quantity_approved > 0);
     const isFullySynced = !isInReview && canBeSynced && 
       (itemsNeedingSync.length === 0 || syncedApprovedItems === itemsNeedingSync.length) &&
       totalItems > 0 && !hasDeliveryError && delivery.synced_to_shopify !== false;
@@ -185,13 +185,13 @@ export const DeliverySyncStatus = ({
       
       // Get items that need to be synced (approved items that aren't synced yet)
       const itemsToSync = delivery.delivery_items
-        ?.filter((item: unknown) => item.quantity_approved > 0 && !item.synced_to_shopify)
-        ?.map((item: unknown) => ({
+        ?.filter((item: any) => item.quantity_approved > 0 && !item.synced_to_shopify)
+        ?.map((item: any) => ({
           variantId: item.order_items?.product_variants?.id,
           skuVariant: item.order_items?.product_variants?.sku_variant,
           quantityApproved: item.quantity_approved
         }))
-        ?.filter((item: unknown) => item.variantId && item.skuVariant);
+        ?.filter((item: any) => item.variantId && item.skuVariant);
 
       if (!itemsToSync || itemsToSync.length === 0) {
         // Recalculate status and refresh
@@ -221,7 +221,7 @@ export const DeliverySyncStatus = ({
         title: "Sincronización completada",
         description: `Se sincronizaron ${itemsToSync.length} elementos exitosamente.`,
       });
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error en retry sync:', error);
       toast({
         title: "Error en sincronización",
@@ -263,8 +263,8 @@ export const DeliverySyncStatus = ({
       
       // Mostrar errores específicos de items
       const itemErrors = delivery.delivery_items
-        ?.filter((item: unknown) => item.quantity_approved > 0 && item.sync_error_message)
-        ?.map((item: unknown) => `  • ${item.order_items?.product_variants?.sku_variant}: ${item.sync_error_message}`)
+        ?.filter((item: any) => item.quantity_approved > 0 && item.sync_error_message)
+        ?.map((item: any) => `  • ${item.order_items?.product_variants?.sku_variant}: ${item.sync_error_message}`)
         ?.slice(0, 3); // Limitar a 3 errores para no sobrecargar el tooltip
       
       if (itemErrors && itemErrors.length > 0) {

@@ -17,7 +17,7 @@ interface DuplicationIssue {
   items: {
     sku: string;
     duplicatedQuantity: number;
-    syncLogs: unknown[];
+    syncLogs: any[];
   }[];
 }
 
@@ -29,7 +29,7 @@ const InventoryDuplicationFixer = () => {
   const { toast } = useToast();
 
   // Helper function to normalize sync_results to always return an array
-  const normalizeSyncResults = (rawSyncResults: unknown): unknown[] => {
+  const normalizeSyncResults = (rawSyncResults: any): any[] => {
     if (!rawSyncResults) return [];
     
     // New format: sync_results is an object with results property
@@ -52,7 +52,7 @@ const InventoryDuplicationFixer = () => {
     setLoading(true);
     try {
       // Primero obtener todos los logs de sincronización
-      const syncLogsQuery = supabase
+      let syncLogsQuery = supabase
         .from('inventory_sync_logs')
         .select('*')
         .order('synced_at', { ascending: false });
@@ -94,7 +94,7 @@ const InventoryDuplicationFixer = () => {
       }
 
       // Agrupar por delivery_id y analizar duplicaciones
-      const deliveryGroups = new Map<string, unknown[]>();
+      const deliveryGroups = new Map<string, any[]>();
       
       filteredLogs.forEach(log => {
         const deliveryId = log.delivery_id;
@@ -110,11 +110,11 @@ const InventoryDuplicationFixer = () => {
         const trackingNumber = deliveriesMap.get(deliveryId) || 'Unknown';
         
         // Buscar duplicaciones por SKU
-        const skuSyncCount = new Map<string, { count: number, totalQuantity: number, logs: unknown[] }>();
+        const skuSyncCount = new Map<string, { count: number, totalQuantity: number, logs: any[] }>();
         
         deliveryLogs.forEach(log => {
           const syncResults = normalizeSyncResults(log.sync_results);
-          syncResults.forEach((result: unknown) => {
+          syncResults.forEach((result: any) => {
             const addedQuantity = Number(result.addedQuantity ?? 0);
             if (result.status === 'success' && addedQuantity > 0) {
               const sku = result.sku || result.skuVariant || '';

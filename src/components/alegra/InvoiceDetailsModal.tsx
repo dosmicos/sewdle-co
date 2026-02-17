@@ -57,8 +57,8 @@ interface ShopifyOrderForInvoice {
   customer_first_name: string | null;
   customer_last_name: string | null;
   customer_phone: string | null;
-  billing_address: unknown;
-  shipping_address: unknown;
+  billing_address: any;
+  shipping_address: any;
   total_price: number;
   subtotal_price: number;
   total_tax: number;
@@ -225,7 +225,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
         const precioOriginal = Number(item.price);
         
         // Apply ONLY the line item discount (total_discount is the total discount for all units)
-        const itemDiscount = (item as Record<string, unknown>).total_discount || 0;
+        const itemDiscount = (item as any).total_discount || 0;
         const precioFinal = precioOriginal - (itemDiscount / item.quantity);
         
         return {
@@ -239,10 +239,10 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
 
       // Get shipping from reliable source (shipping_lines in raw_data)
       const getShippingCost = (): number => {
-        const rawData = (order as Record<string, unknown>).raw_data;
+        const rawData = (order as any).raw_data;
         const shippingLines = rawData?.shipping_lines;
         if (Array.isArray(shippingLines) && shippingLines.length > 0) {
-          return shippingLines.reduce((sum: number, line: unknown) => 
+          return shippingLines.reduce((sum: number, line: any) => 
             sum + (parseFloat(line.price) || 0), 0);
         }
         // Fallback: use difference only if no deleted items detected
@@ -409,7 +409,7 @@ const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
       setValidationResult(result);
       
       // Always show the modal - user must confirm before emitting
-    } catch (error: unknown) {
+    } catch (error: any) {
       setValidationResult({
         valid: false,
         errors: ['Error en la validación: ' + error.message],

@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 
 // Function to determine automatic tags based on payment gateway and line items
-function determineAutoTags(rawData: unknown): string[] {
+function determineAutoTags(rawData: any): string[] {
   const tags: string[] = [];
   
   const paymentGateways = rawData?.payment_gateway_names || [];
@@ -32,7 +32,7 @@ function determineAutoTags(rawData: unknown): string[] {
   
   // Line items rule for "BORDADO" tag
   const lineItems = rawData?.line_items || [];
-  const hasBordado = lineItems.some((item: unknown) => 
+  const hasBordado = lineItems.some((item: any) => 
     item.title?.toLowerCase().includes('bordado') || 
     item.name?.toLowerCase().includes('bordado')
   );
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       updated: 0,
       skipped: 0,
       errors: 0,
-      details: [] as unknown[]
+      details: [] as any[]
     };
 
     for (const order of ordersWithoutTags || []) {

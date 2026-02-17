@@ -276,7 +276,7 @@ export const WorkshopPricingManager = () => {
     }
   };
 
-  const handleEdit = (pricing: unknown) => {
+  const handleEdit = (pricing: any) => {
     setEditingPricing(pricing.id);
     setFormData({
       workshop_id: pricing.workshop_id,

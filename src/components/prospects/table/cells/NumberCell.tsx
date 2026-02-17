@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 interface NumberCellProps {
   value?: number | null;
-  onSave: (value: number) => Promise<unknown>;
+  onSave: (value: number) => Promise<any>;
   min?: number;
   max?: number;
 }

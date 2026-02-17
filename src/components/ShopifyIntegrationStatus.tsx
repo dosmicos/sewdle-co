@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,7 @@ export const ShopifyIntegrationStatus: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  const checkShopifyConnection = useCallback(async () => {
+  const checkShopifyConnection = async () => {
     if (!currentOrganization?.id) {
       setLoading(false);
       return;
@@ -86,7 +86,7 @@ export const ShopifyIntegrationStatus: React.FC = () => {
         testing: false
       });
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error checking Shopify connection:', error);
       setStatus({
         isConnected: false,
@@ -102,7 +102,7 @@ export const ShopifyIntegrationStatus: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization]);
+  };
 
   const testConnection = async () => {
     setStatus(prev => ({ ...prev, testing: true }));
@@ -124,7 +124,7 @@ export const ShopifyIntegrationStatus: React.FC = () => {
           testing: false
         }));
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       setStatus(prev => ({
         ...prev,
         errorMessage: error.message || 'Error al probar la conexión',
@@ -135,7 +135,7 @@ export const ShopifyIntegrationStatus: React.FC = () => {
 
   useEffect(() => {
     checkShopifyConnection();
-  }, [checkShopifyConnection]);
+  }, [currentOrganization?.id]);
 
   const getStatusIcon = () => {
     if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;

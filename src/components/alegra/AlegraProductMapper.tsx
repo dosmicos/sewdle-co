@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { Button } from '@/components/ui/button';
@@ -59,7 +59,7 @@ const AlegraProductMapper = () => {
   // Sync modal state
   const [syncModalOpen, setSyncModalOpen] = useState(false);
 
-  const fetchAlegraItems = useCallback(async (page = 0) => {
+  const fetchAlegraItems = async (page = 0) => {
     setIsLoading(true);
     try {
       const pageSize = 30;
@@ -84,15 +84,15 @@ const AlegraProductMapper = () => {
       } else {
         throw new Error(data?.error || 'Error al cargar productos');
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error fetching Alegra items:', error);
       toast.error('Error al cargar productos de Alegra: ' + error.message);
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm]);
+  };
 
-  const fetchMappings = useCallback(async () => {
+  const fetchMappings = async () => {
     if (!currentOrganization?.id) return;
     
     setIsLoadingMappings(true);
@@ -104,18 +104,18 @@ const AlegraProductMapper = () => {
 
       if (error) throw error;
       setMappings(data || []);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error fetching mappings:', error);
       toast.error('Error al cargar mapeos: ' + error.message);
     } finally {
       setIsLoadingMappings(false);
     }
-  }, [currentOrganization?.id]);
+  };
 
   useEffect(() => {
     fetchAlegraItems();
     fetchMappings();
-  }, [fetchAlegraItems, fetchMappings]);
+  }, [currentOrganization?.id]);
 
   const handleSearch = () => {
     setCurrentPage(0);
@@ -157,7 +157,7 @@ const AlegraProductMapper = () => {
       toast.success('Mapeo guardado correctamente');
       setMappingDialogOpen(false);
       fetchMappings();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error saving mapping:', error);
       toast.error('Error al guardar mapeo: ' + error.message);
     } finally {
@@ -176,7 +176,7 @@ const AlegraProductMapper = () => {
 
       toast.success('Mapeo eliminado');
       fetchMappings();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error deleting mapping:', error);
       toast.error('Error al eliminar mapeo: ' + error.message);
     }

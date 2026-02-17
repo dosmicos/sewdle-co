@@ -39,7 +39,7 @@ const SuppliesDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deliveriesData, setDeliveriesData] = useState<unknown[]>([]);
+  const [deliveriesData, setDeliveriesData] = useState<any[]>([]);
 
   const { materials, loading: materialsLoading } = useMaterials();
   const { materialDeliveries, loading: deliveriesLoading } = useMaterialDeliveries();
@@ -206,7 +206,7 @@ const SuppliesDashboard = () => {
         }
         
         console.log('=== DASHBOARD DATA LOADING SUCCESS ===');
-      } catch (err: unknown) {
+      } catch (err: any) {
         console.error('=== DASHBOARD DATA LOADING ERROR ===');
         console.error('Error details:', err);
         
@@ -232,7 +232,7 @@ const SuppliesDashboard = () => {
     return () => {
       controller.abort();
     };
-  }, [materialDeliveries, isAdmin, isDesigner, isWorkshopUser, currentUser?.id]);
+  }, [materialDeliveries, isAdmin, isDesigner, isWorkshopUser]);
 
   // Calcular estadísticas de materiales de forma segura
   const materialStats = React.useMemo(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useOKR } from '@/contexts/OKRContext';
 import { useOKRQuarter } from './useOKRQuarter';
 
@@ -33,7 +33,7 @@ export const useOKRHistory = () => {
   const [insights, setInsights] = useState<PerformanceInsight[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const calculateHistoricalMetrics = useCallback(() => {
+  const calculateHistoricalMetrics = () => {
     const metrics: HistoricalMetric[] = [];
     
     // Generate historical data for each quarter
@@ -87,9 +87,9 @@ export const useOKRHistory = () => {
     });
 
     return metrics.sort((a, b) => a.quarter.localeCompare(b.quarter));
-  }, [availableQuarters, keyResults, objectives]);
+  };
 
-  const calculateTrends = useCallback((metrics: HistoricalMetric[]) => {
+  const calculateTrends = (metrics: HistoricalMetric[]) => {
     const trends: Record<string, TrendAnalysis> = {};
     
     if (metrics.length < 2) return trends;
@@ -129,9 +129,9 @@ export const useOKRHistory = () => {
     };
 
     return trends;
-  }, []);
+  };
 
-  const generateInsights = useCallback((metrics: HistoricalMetric[], trends: Record<string, TrendAnalysis>) => {
+  const generateInsights = (metrics: HistoricalMetric[], trends: Record<string, TrendAnalysis>) => {
     const insights: PerformanceInsight[] = [];
 
     if (metrics.length === 0) return insights;
@@ -178,7 +178,7 @@ export const useOKRHistory = () => {
     }
 
     return insights;
-  }, []);
+  };
 
   const exportHistoricalData = () => {
     const csvContent = [
@@ -206,18 +206,24 @@ export const useOKRHistory = () => {
   };
 
   useEffect(() => {
-    if (objectives.length > 0 && keyResults.length > 0 && availableQuarters.length > 0) {
+    const loadHistoricalData = async () => {
       setLoading(true);
+      
       const metrics = calculateHistoricalMetrics();
       const trendAnalysis = calculateTrends(metrics);
       const performanceInsights = generateInsights(metrics, trendAnalysis);
-
+      
       setHistoricalData(metrics);
       setTrends(trendAnalysis);
       setInsights(performanceInsights);
+      
       setLoading(false);
+    };
+
+    if (objectives.length > 0 && keyResults.length > 0 && availableQuarters.length > 0) {
+      loadHistoricalData();
     }
-  }, [availableQuarters, calculateHistoricalMetrics, calculateTrends, generateInsights, keyResults, objectives]);
+  }, [objectives, keyResults, availableQuarters]);
 
   return {
     historicalData,

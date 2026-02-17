@@ -1,15 +1,15 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 
 export const useFilteredDeliveries = () => {
   const { fetchDeliveries, loading } = useDeliveries();
   const { workshopFilter, isWorkshopUser } = useUserContext();
-  const [deliveries, setDeliveries] = useState<unknown[]>([]);
-  const [error, setError] = useState<unknown>(null);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [error, setError] = useState<any>(null);
 
-  const loadDeliveries = useCallback(async () => {
+  const loadDeliveries = async () => {
     try {
       // Fetch deliveries with sync status information
       const data = await fetchDeliveries();
@@ -29,11 +29,11 @@ export const useFilteredDeliveries = () => {
       setError(err);
       setDeliveries([]);
     }
-  }, [fetchDeliveries, isWorkshopUser, workshopFilter]);
+  };
 
   useEffect(() => {
     loadDeliveries();
-  }, [loadDeliveries]);
+  }, [isWorkshopUser, workshopFilter]);
 
   return {
     deliveries,

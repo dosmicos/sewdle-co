@@ -53,7 +53,7 @@ async function fetchMediaUrl(
   mediaId: string,
   messageType: string,
   conversationId: string,
-  supabase: unknown,
+  supabase: any,
 ): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken || !mediaId) {
@@ -148,7 +148,7 @@ async function fetchMediaUrl(
     }
 
     return { url: publicUrl, mimeType };
-  } catch (error: unknown) {
+  } catch (error: any) {
     if (error?.name === 'AbortError') {
       return { url: null, mimeType: null, error: 'Timeout' };
     }
@@ -264,7 +264,7 @@ async function cacheImageToStorage(
   imageUrl: string,
   productId: number,
   organizationId: string,
-  supabase: unknown
+  supabase: any
 ): Promise<string | null> {
   try {
     console.log(`Caching image for product ${productId}...`);
@@ -321,7 +321,7 @@ async function cacheImageToStorage(
 // Fetch product image from Shopify using organization credentials
 async function fetchShopifyProductImage(
   productId: number, 
-  shopifyCredentials: unknown
+  shopifyCredentials: any
 ): Promise<string | null> {
   if (!shopifyCredentials) {
     console.log('No Shopify credentials provided');
@@ -373,8 +373,8 @@ async function fetchShopifyProductImage(
 async function findProductImageByName(
   productName: string, 
   organizationId: string, 
-  supabase: unknown,
-  shopifyCredentials: unknown
+  supabase: any,
+  shopifyCredentials: any
 ): Promise<string | null> {
   try {
     // Normalize search term
@@ -387,7 +387,7 @@ async function findProductImageByName(
       .eq('organization_id', organizationId)
       .limit(50);
 
-    const matchingProduct = products?.find((p: unknown) => {
+    const matchingProduct = products?.find((p: any) => {
       const name = p.name?.toLowerCase() || '';
       return name.includes(searchTerm) || searchTerm.includes(name.split(' ').slice(0, 2).join(' '));
     });
@@ -492,16 +492,16 @@ function isProductQuery(message: string): boolean {
 
 // Search products by relevance to customer message
 function searchRelevantProducts(
-  allProducts: unknown[],
+  allProducts: any[],
   searchTerms: string[],
   maxResults: number = 10
-): unknown[] {
+): any[] {
   if (searchTerms.length === 0) {
     // Return top products by stock if no search terms
     return allProducts
       .map(p => ({
         product: p,
-        totalStock: (p.variants || []).reduce((sum: number, v: unknown) => sum + (v.inventory_quantity || 0), 0)
+        totalStock: (p.variants || []).reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0)
       }))
       .filter(p => p.totalStock > 0)
       .sort((a, b) => b.totalStock - a.totalStock)
@@ -517,7 +517,7 @@ function searchRelevantProducts(
     const tags = (product.tags || '').toLowerCase();
     const productType = (product.product_type || '').toLowerCase();
     const variants = product.variants || [];
-    const totalStock = variants.reduce((sum: number, v: unknown) => sum + (v.inventory_quantity || 0), 0);
+    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
     
     // Skip out of stock products
     if (totalStock === 0) return { product, score: -1 };
@@ -527,11 +527,11 @@ function searchRelevantProducts(
       if (title.includes(term)) score += 10;
       
       // SKU exact match
-      const skuMatch = variants.some((v: unknown) => (v.sku || '').toLowerCase() === term);
+      const skuMatch = variants.some((v: any) => (v.sku || '').toLowerCase() === term);
       if (skuMatch) score += 15;
       
       // Variant title match (size, color)
-      const variantMatch = variants.some((v: unknown) => 
+      const variantMatch = variants.some((v: any) => 
         (v.title || '').toLowerCase().includes(term) ||
         (v.option1 || '').toLowerCase().includes(term) ||
         (v.option2 || '').toLowerCase().includes(term) ||
@@ -561,25 +561,25 @@ function searchRelevantProducts(
 }
 
 // Format products for AI context
-function formatProductsForContext(products: unknown[]): string {
+function formatProductsForContext(products: any[]): string {
   if (products.length === 0) return '';
 
   let context = '\n\n📦 PRODUCTOS RELEVANTES ENCONTRADOS:\n';
   context += '⚠️ IMPORTANTE: Usa SOLO estos productos para responder. NO inventes otros.\n';
   context += '🔔 RECUERDA: Incluye [PRODUCT_IMAGE_ID:ID] después de CADA producto que menciones.\n\n';
 
-  products.forEach((product: unknown, index: number) => {
+  products.forEach((product: any, index: number) => {
     const variants = product.variants || [];
-    const totalStock = variants.reduce((sum: number, v: unknown) => sum + (v.inventory_quantity || 0), 0);
+    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
     const price = variants[0]?.price 
       ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP` 
       : 'Consultar';
 
     // Build variant info with stock
     const variantDetails = variants
-      .filter((v: unknown) => (v.inventory_quantity || 0) > 0)
+      .filter((v: any) => (v.inventory_quantity || 0) > 0)
       .slice(0, 8)
-      .map((v: unknown) => `${v.title}: ${v.inventory_quantity} uds`)
+      .map((v: any) => `${v.title}: ${v.inventory_quantity} uds`)
       .join(' | ');
 
     context += `${index + 1}. ${product.title} [PRODUCT_IMAGE_ID:${product.id}]\n`;
@@ -597,11 +597,11 @@ function formatProductsForContext(products: unknown[]): string {
 // Generate AI response using OpenAI GPT-4o-mini
 async function generateAIResponse(
   userMessage: string, 
-  conversationHistory: unknown[],
-  aiConfig: unknown,
+  conversationHistory: any[],
+  aiConfig: any,
   organizationId: string,
-  supabase: unknown,
-  shopifyCredentials: unknown
+  supabase: any,
+  shopifyCredentials: any
 ): Promise<{ text: string; productImages: Array<{ product_id: number; image_url: string; product_name: string }> }> {
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
   
@@ -621,8 +621,8 @@ async function generateAIResponse(
     console.log(`🔍 Buscando productos relevantes para: "${searchTerms.join(', ')}" (isProductQuery: ${isProductRelated})`);
     
     let productCatalog = '';
-    const productImageMap: Record<number, { url: string; title: string }> = {};
-    let relevantProducts: unknown[] = [];
+    let productImageMap: Record<number, { url: string; title: string }> = {};
+    let relevantProducts: any[] = [];
     
     // Get connected products from ai_catalog_connections table
     const { data: connectedProducts } = await supabase
@@ -632,7 +632,7 @@ async function generateAIResponse(
       .eq('connected', true);
     
     const connectedProductIds = new Set(
-      (connectedProducts || []).map((p: unknown) => Number(p.shopify_product_id))
+      (connectedProducts || []).map((p: any) => Number(p.shopify_product_id))
     );
     
     console.log(`📦 Productos conectados a IA: ${connectedProductIds.size}`);
@@ -661,14 +661,14 @@ async function generateAIResponse(
             const allProducts = shopifyData.products || [];
             
             // Filter to connected products only
-            const connectedShopifyProducts = allProducts.filter((p: unknown) => 
+            const connectedShopifyProducts = allProducts.filter((p: any) => 
               connectedProductIds.has(Number(p.id))
             );
             
             console.log(`📦 Productos Shopify conectados: ${connectedShopifyProducts.length} de ${allProducts.length} totales`);
             
             // Build image map for all connected products (for later image sending)
-            connectedShopifyProducts.forEach((product: unknown) => {
+            connectedShopifyProducts.forEach((product: any) => {
               const imageUrl = product.image?.src || product.images?.[0]?.src;
               if (imageUrl) {
                 productImageMap[product.id] = { url: imageUrl, title: product.title };
@@ -685,7 +685,7 @@ async function generateAIResponse(
                 relevantProducts = searchRelevantProducts(connectedShopifyProducts, [], 5);
               }
               
-              const productNames = relevantProducts.map((p: unknown) => p.title).join(', ');
+              const productNames = relevantProducts.map((p: any) => p.title).join(', ');
               console.log(`📦 Productos encontrados: ${relevantProducts.length} - ${productNames}`);
               
               // Format relevant products for context
@@ -723,14 +723,14 @@ async function generateAIResponse(
       if (products && products.length > 0) {
         productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS:\n';
         
-        products.forEach((p: unknown) => {
+        products.forEach((p: any) => {
           const price = p.base_price 
             ? `$${Number(p.base_price).toLocaleString('es-CO')} COP` 
             : 'Consultar';
           
           const availableVariants = p.product_variants
-            ?.filter((v: unknown) => (v.stock_quantity || 0) > 0)
-            ?.map((v: unknown) => `${v.size} (${v.stock_quantity})`)
+            ?.filter((v: any) => (v.stock_quantity || 0) > 0)
+            ?.map((v: any) => `${v.size} (${v.stock_quantity})`)
             .join(', ');
           
           productCatalog += `\n• ${p.name}`;
@@ -764,7 +764,7 @@ async function generateAIResponse(
     // Add special rules
     if (config.rules?.length > 0) {
       systemPrompt += '\n\nREGLAS ESPECIALES:';
-      config.rules.forEach((rule: unknown) => {
+      config.rules.forEach((rule: any) => {
         if (rule.condition && rule.response) {
           systemPrompt += `\n- Cuando mencionen "${rule.condition}": ${rule.response}`;
         }
@@ -774,7 +774,7 @@ async function generateAIResponse(
     // Add knowledge base
     if (config.knowledgeBase?.length > 0) {
       systemPrompt += '\n\nBASE DE CONOCIMIENTO:';
-      config.knowledgeBase.forEach((item: unknown) => {
+      config.knowledgeBase.forEach((item: any) => {
         if (item.question && item.answer) {
           systemPrompt += `\n\nP: ${item.question}\nR: ${item.answer}`;
         }
@@ -793,7 +793,7 @@ async function generateAIResponse(
     console.log(`🤖 Contexto enviado a IA: ${systemPrompt.substring(0, 500)}...`);
 
     // Build conversation history for context
-    const historyMessages = conversationHistory.slice(-10).map((msg: unknown) => ({
+    const historyMessages = conversationHistory.slice(-10).map((msg: any) => ({
       role: msg.direction === 'inbound' ? 'user' : 'assistant',
       content: msg.content || ''
     }));
@@ -1018,14 +1018,13 @@ serve(async (req) => {
               console.log(`Processing message from ${senderPhone}: ${content.substring(0, 50)}...`);
 
               // Find channel by phone_number_id
-              const { data: initialChannel, error: channelError } = await supabase
+              let { data: channel, error: channelError } = await supabase
                 .from('messaging_channels')
                 .select('*')
                 .eq('meta_phone_number_id', phoneNumberId)
                 .eq('channel_type', 'whatsapp')
                 .eq('is_active', true)
                 .single();
-              let channel = initialChannel;
 
               if (channelError || !channel) {
                 console.log(`Channel not found for phone_number_id ${phoneNumberId}, trying default org`);

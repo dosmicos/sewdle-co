@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { sortProductVariants } from '@/lib/variantSorting';
 import { useToast } from '@/hooks/use-toast';
@@ -35,10 +34,10 @@ export const useProducts = (includeInactive: boolean = false) => {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const { toast } = useToast();
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<any>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchProducts = useCallback(async (showNotification = false) => {
+  const fetchProducts = async (showNotification = false) => {
     try {
       if (showNotification) {
         setSyncStatus('syncing');
@@ -91,10 +90,10 @@ export const useProducts = (includeInactive: boolean = false) => {
         setLoading(false);
       }
     }
-  }, [includeInactive, toast]);
+  };
 
   // Setup real-time subscription for product variants
-  const setupRealtimeSubscription = useCallback(() => {
+  const setupRealtimeSubscription = () => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
@@ -129,10 +128,10 @@ export const useProducts = (includeInactive: boolean = false) => {
       .subscribe();
 
     console.log('✅ Suscripción en tiempo real configurada para variantes de productos');
-  }, [fetchProducts]);
+  };
 
   // Setup auto-refresh polling
-  const setupAutoRefresh = useCallback(() => {
+  const setupAutoRefresh = () => {
     if (!autoRefreshEnabled) return;
 
     // Clear existing interval
@@ -149,10 +148,10 @@ export const useProducts = (includeInactive: boolean = false) => {
     }, 120000); // 2 minutes
 
     console.log('⏰ Auto-refresh configurado cada 2 minutos');
-  }, [autoRefreshEnabled, fetchProducts]);
+  };
 
   // Cleanup function
-  const cleanup = useCallback(() => {
+  const cleanup = () => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
@@ -161,7 +160,7 @@ export const useProducts = (includeInactive: boolean = false) => {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
-  }, []);
+  };
 
   const fetchProductVariants = async (productId: string): Promise<ProductVariant[]> => {
     try {
@@ -204,7 +203,16 @@ export const useProducts = (includeInactive: boolean = false) => {
       cleanup();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [includeInactive, autoRefreshEnabled, fetchProducts, setupRealtimeSubscription, setupAutoRefresh, cleanup]);
+  }, [includeInactive]);
+
+  useEffect(() => {
+    setupAutoRefresh();
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [autoRefreshEnabled]);
 
   return {
     products,

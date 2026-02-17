@@ -8,80 +8,17 @@ const corsHeaders = {
 };
 
 // ============== CONFIGURACIÓN PRINCIPAL ==============
-// Organización por defecto para canales nuevos (configurable por entorno)
-const DEFAULT_ORG_ID = Deno.env.get('DEFAULT_MESSAGING_ORG_ID') ?? null;
+// Organización por defecto para canales nuevos: Dosmicos
+const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
 
 // Maximum file size for media downloads (16MB - WhatsApp limit)
 const MAX_MEDIA_SIZE = 16 * 1024 * 1024;
 
-type ConversationMessage = {
-  direction?: string;
-  content?: string;
-};
-
-type AIConfigRule = {
-  condition?: string;
-  response?: string;
-};
-
-type AIKnowledgeBaseItem = {
-  question?: string;
-  answer?: string;
-};
-
-type AIConfig = {
-  systemPrompt?: string;
-  tone?: string;
-  rules?: AIConfigRule[];
-  knowledgeBase?: AIKnowledgeBaseItem[];
-  autoReply?: boolean;
-  businessHours?: boolean;
-  responseDelay?: string | number;
-};
-
-type ChatMessagePart =
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string; detail: 'auto' | 'low' | 'high' } };
-
-type ChatMessage = {
-  role: 'system' | 'user' | 'assistant';
-  content: string | ChatMessagePart[];
-};
-
-type StorageClientLike = {
-  storage: {
-    from: (bucket: string) => {
-      upload: (
-        path: string,
-        body: unknown,
-        options?: { contentType?: string; cacheControl?: string; upsert?: boolean }
-      ) => Promise<{ error: unknown | null }>;
-      getPublicUrl: (path: string) => { data: { publicUrl?: string } | null };
-    };
-  };
-};
-
-type WhatsAppSendResult = {
-  messages?: Array<{ id?: string }>;
-  [key: string]: unknown;
-};
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return 'Unknown error';
-}
-
 // Generate AI response using Lovable AI Gateway (Gemini)
 async function generateAIResponse(
   userMessage: string,
-  conversationHistory: ConversationMessage[],
-  aiConfig: AIConfig,
+  conversationHistory: any[],
+  aiConfig: any,
   mediaContext?: { type: string; url?: string }
 ): Promise<string> {
   const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
@@ -113,7 +50,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
     // Add response rules if configured
     if (aiConfig?.rules && Array.isArray(aiConfig.rules) && aiConfig.rules.length > 0) {
       systemPrompt += '\n\nReglas especiales:';
-      aiConfig.rules.forEach((rule) => {
+      aiConfig.rules.forEach((rule: any) => {
         if (rule.condition && rule.response) {
           systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
         }
@@ -123,7 +60,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
     // Add knowledge base context if available
     if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase)) {
       systemPrompt += '\n\nConocimiento de la empresa:';
-      aiConfig.knowledgeBase.forEach((item) => {
+      aiConfig.knowledgeBase.forEach((item: any) => {
         if (item.question && item.answer) {
           systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
         }
@@ -143,11 +80,11 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
     }
 
     // Build messages array with conversation history
-    const messages: ChatMessage[] = [
+    const messages: any[] = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory.slice(-10).map((msg) => ({
+      ...conversationHistory.slice(-10).map((msg: any) => ({
         role: msg.direction === 'inbound' ? 'user' : 'assistant',
-        content: msg.content ?? ''
+        content: msg.content
       })),
     ];
 
@@ -255,7 +192,7 @@ async function fetchMediaUrl(
   mediaId: string,
   messageType: string,
   conversationId: string,
-  supabase: StorageClientLike | null
+  supabase: any
 ): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
 
@@ -409,22 +346,18 @@ async function fetchMediaUrl(
     console.log(`✅ Media cached successfully: ${publicUrl.substring(0, 80)}...`);
     return { url: publicUrl, mimeType };
 
-  } catch (error) {
-    if (isAbortError(error)) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
       console.error('❌ Media fetch timed out');
       return { url: null, mimeType: null, error: 'Timeout' };
     }
     console.error('❌ Error fetching WhatsApp media:', error);
-    return { url: null, mimeType: null, error: getErrorMessage(error) };
+    return { url: null, mimeType: null, error: error.message || 'Unknown error' };
   }
 }
 
 // Send WhatsApp message via Meta API
-async function sendWhatsAppMessage(
-  phoneNumberId: string,
-  recipientPhone: string,
-  message: string
-): Promise<WhatsAppSendResult | null> {
+async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string, message: string): Promise<any> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
 
   if (!accessToken) {
@@ -506,7 +439,7 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseKey);
 
       // Helper to normalize Meta's payload (can be array or object with numeric keys)
-      const toArray = <T>(obj: T[] | Record<string, T> | null | undefined): T[] => {
+      const toArray = (obj: any): any[] => {
         if (!obj) return [];
         if (Array.isArray(obj)) return obj;
         // Meta sometimes sends objects like { "0": {...}, "1": {...} }
@@ -530,7 +463,7 @@ serve(async (req) => {
                 const timestamp = new Date(parseInt(message.timestamp) * 1000);
 
                 // Get contact name
-                const contact = toArray(value.contacts)?.find((c) => c.wa_id === contactPhone);
+                const contact = toArray(value.contacts)?.find((c: any) => c.wa_id === contactPhone);
                 const contactName = contact?.profile?.name || contactPhone;
 
                 // Get message content
@@ -622,12 +555,7 @@ serve(async (req) => {
                 if (exactChannel) {
                   channel = exactChannel;
                 } else {
-                  if (!DEFAULT_ORG_ID) {
-                    console.warn('No exact channel match and DEFAULT_MESSAGING_ORG_ID is not configured. Skipping message.');
-                    continue;
-                  }
-
-                  // 2. Buscar cualquier canal WhatsApp activo de la organización por defecto
+                  // 2. Buscar cualquier canal WhatsApp activo de Dosmicos
                   const { data: dosmicoChannel } = await supabase
                     .from('messaging_channels')
                     .select('*')
@@ -645,7 +573,7 @@ serve(async (req) => {
                       .eq('id', dosmicoChannel.id);
                     channel = dosmicoChannel;
                   } else {
-                    // 3. Crear nuevo canal para la organización por defecto
+                    // 3. Crear nuevo canal para Dosmicos
                     const { data: newChannel, error: createError } = await supabase
                       .from('messaging_channels')
                       .insert({
@@ -676,13 +604,12 @@ serve(async (req) => {
                 }
 
                 // Find or create conversation
-                const { data: existingConversation, error: convError } = await supabase
+                let { data: conversation, error: convError } = await supabase
                   .from('messaging_conversations')
                   .select('*')
                   .eq('channel_id', channel.id)
                   .eq('external_user_id', contactPhone)
                   .single();
-                let conversation = existingConversation;
 
                 if (convError || !conversation) {
                   const { data: newConv, error: createConvError } = await supabase
@@ -787,7 +714,7 @@ serve(async (req) => {
                     console.error('Error inserting message:', msgError);
                   } else {
                     // Generate AI response if AI is enabled (AUTO-RESPONDER)
-                    const aiConfig = (channel.ai_config as AIConfig | null) ?? {};
+                    const aiConfig = channel.ai_config as any;
                     const autoReplyEnabled = aiConfig?.autoReply !== false;
 
                     // Releer el estado de la conversación para respetar el switch
@@ -895,7 +822,7 @@ serve(async (req) => {
                 const statusType = status.status;
                 const ts = new Date(parseInt(status.timestamp) * 1000);
 
-                const updateData: Record<string, string> = {};
+                const updateData: any = {};
                 if (statusType === 'delivered') updateData.delivered_at = ts.toISOString();
                 if (statusType === 'read') updateData.read_at = ts.toISOString();
 
@@ -915,9 +842,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Webhook POST handler error:', err);
-      return new Response(JSON.stringify({ success: false, error: getErrorMessage(err) }), {
+      return new Response(JSON.stringify({ success: false, error: err?.message || 'Error interno' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
       });

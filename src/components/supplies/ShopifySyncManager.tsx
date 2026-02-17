@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,7 @@ interface SyncLog {
   variants_updated: number;
   metrics_created: number;
   error_message?: string;
-  execution_details?: unknown;
+  execution_details?: any;
 }
 
 export const ShopifySyncManager: React.FC = () => {
@@ -28,7 +28,7 @@ export const ShopifySyncManager: React.FC = () => {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [refreshingLogs, setRefreshingLogs] = useState(false);
 
-  const loadSyncLogs = useCallback(async () => {
+  const loadSyncLogs = async () => {
     setRefreshingLogs(true);
     try {
       const logs = await getSyncLogs();
@@ -38,11 +38,11 @@ export const ShopifySyncManager: React.FC = () => {
     } finally {
       setRefreshingLogs(false);
     }
-  }, [getSyncLogs]);
+  };
 
   useEffect(() => {
     loadSyncLogs();
-  }, [loadSyncLogs]);
+  }, []);
 
   const handleSync = async (mode: 'initial' | 'daily' | 'monthly') => {
     try {

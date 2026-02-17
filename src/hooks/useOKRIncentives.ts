@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,11 +36,11 @@ export const useOKRIncentives = () => {
   const [incentives, setIncentives] = useState<OKRIncentive[]>([]);
   const [userPoints, setUserPoints] = useState<UserPoints | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
-  const [leaderboard, setLeaderboard] = useState<unknown[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchIncentives = useCallback(async () => {
+  const fetchIncentives = async () => {
     try {
       const { data, error } = await supabase
         .from('okr_incentive')
@@ -58,9 +58,9 @@ export const useOKRIncentives = () => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  };
 
-  const fetchUserPoints = useCallback(async () => {
+  const fetchUserPoints = async () => {
     try {
       // Simulated data - replace with actual calculations
       const totalPoints = incentives
@@ -77,9 +77,9 @@ export const useOKRIncentives = () => {
     } catch (error) {
       console.error('Error calculating user points:', error);
     }
-  }, [incentives]);
+  };
 
-  const fetchRewards = useCallback(async () => {
+  const fetchRewards = async () => {
     // Simulated rewards data
     const mockRewards: Reward[] = [
       {
@@ -111,9 +111,9 @@ export const useOKRIncentives = () => {
       }
     ];
     setRewards(mockRewards);
-  }, []);
+  };
 
-  const fetchLeaderboard = useCallback(async () => {
+  const fetchLeaderboard = async () => {
     // Simulated leaderboard data
     const mockLeaderboard = [
       {
@@ -149,7 +149,7 @@ export const useOKRIncentives = () => {
       }
     ];
     setLeaderboard(mockLeaderboard);
-  }, [userPoints]);
+  };
 
   const claimReward = async (rewardId: string) => {
     try {
@@ -232,19 +232,19 @@ export const useOKRIncentives = () => {
     };
 
     loadData();
-  }, [fetchIncentives, fetchRewards]);
+  }, []);
 
   useEffect(() => {
     if (incentives.length > 0) {
       fetchUserPoints();
     }
-  }, [incentives, fetchUserPoints]);
+  }, [incentives]);
 
   useEffect(() => {
     if (userPoints) {
       fetchLeaderboard();
     }
-  }, [userPoints, fetchLeaderboard]);
+  }, [userPoints]);
 
   return {
     incentives,

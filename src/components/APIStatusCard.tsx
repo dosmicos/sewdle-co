@@ -41,7 +41,7 @@ const APIStatusCard = () => {
       }
 
       return { status: 'connected', responseTime };
-    } catch (err: unknown) {
+    } catch (err: any) {
       const responseTime = Math.round(performance.now() - startTime);
       console.error('Shopify API exception:', err);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
@@ -82,7 +82,7 @@ const APIStatusCard = () => {
       }
 
       return { status: 'error', responseTime, error: data?.error || 'Sin respuesta' };
-    } catch (err: unknown) {
+    } catch (err: any) {
       const responseTime = Math.round(performance.now() - startTime);
       console.error('Envia API exception:', err);
       return { status: 'error', responseTime, error: err.message || 'Error de conexión' };

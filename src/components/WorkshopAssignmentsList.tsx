@@ -83,15 +83,15 @@ const WorkshopAssignmentsList: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <Package className="w-4 h-4 text-blue-500" />
                       <div>
-                        <p className="font-medium">{(assignment as Record<string, unknown>).orders?.order_number}</p>
-                        <p className="text-sm text-gray-600">{(assignment as Record<string, unknown>).orders?.client_name}</p>
+                        <p className="font-medium">{(assignment as any).orders?.order_number}</p>
+                        <p className="text-sm text-gray-600">{(assignment as any).orders?.client_name}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
                       <Building2 className="w-4 h-4 text-green-500" />
-                      <span>{(assignment as Record<string, unknown>).workshops?.name}</span>
+                      <span>{(assignment as any).workshops?.name}</span>
                     </div>
                   </TableCell>
                   <TableCell>

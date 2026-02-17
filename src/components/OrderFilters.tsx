@@ -13,7 +13,7 @@ interface OrderFiltersProps {
   setSelectedWorkshop: (workshop: string) => void;
   selectedStatus: string;
   setSelectedStatus: (status: string) => void;
-  workshops: unknown[];
+  workshops: any[];
   showFiltersSheet: boolean;
   setShowFiltersSheet: (show: boolean) => void;
   onRefetch: () => void;

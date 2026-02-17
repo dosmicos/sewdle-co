@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useOKR } from '@/contexts/OKRContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface OKRStats {
   // Estadísticas generales
@@ -49,6 +50,7 @@ interface OKRStats {
 
 export const useOKRStats = (): OKRStats => {
   const { objectives, keyResults } = useOKR();
+  const { user } = useAuth();
 
   return useMemo(() => {
     // Estadísticas básicas
@@ -212,5 +214,5 @@ export const useOKRStats = (): OKRStats => {
       getStatsByArea,
       getStatsByQuarter
     };
-  }, [objectives, keyResults]);
+  }, [objectives, keyResults, user]);
 };

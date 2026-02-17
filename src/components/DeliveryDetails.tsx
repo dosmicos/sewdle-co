@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +36,7 @@ import DeliveryInvoiceFiles from './DeliveryInvoiceFiles';
 import { DeliveryPaymentManager } from './financial/DeliveryPaymentManager';
 
 interface DeliveryDetailsProps {
-  delivery: unknown;
+  delivery: any;
   onBack?: (shouldRefresh?: boolean) => void;
   onDeliveryUpdated?: () => void;
   onPrevious?: () => void;
@@ -48,8 +48,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const [delivery, setDelivery] = useState(initialDelivery);
   const [isEditing, setIsEditing] = useState(false);
   const [isReEditingQuality, setIsReEditingQuality] = useState(false); // Nuevo estado para re-edición
-  const [quantityData, setQuantityData] = useState<unknown>({});
-  const [qualityData, setQualityData] = useState<unknown>({ variants: {} });
+  const [quantityData, setQuantityData] = useState<any>({});
+  const [qualityData, setQualityData] = useState<any>({ variants: {} });
   const [generalNotes, setGeneralNotes] = useState('');
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidencePreviews, setEvidencePreviews] = useState<string[]>([]);
@@ -74,21 +74,25 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const { syncApprovedItemsToShopify } = useInventorySync();
   const { toast } = useToast();
 
-  const loadDelivery = useCallback(async () => {
+  useEffect(() => {
+    loadDelivery();
+  }, [initialDelivery.id]);
+
+  const loadDelivery = async () => {
     const refreshedDelivery = await fetchDeliveryById(initialDelivery.id);
     if (refreshedDelivery) {
       setDelivery(refreshedDelivery);
       
       // Initialize quantity data
-      const initialQuantityData: unknown = {};
-      refreshedDelivery.delivery_items?.forEach((item: unknown) => {
+      const initialQuantityData: any = {};
+      refreshedDelivery.delivery_items?.forEach((item: any) => {
         initialQuantityData[item.id] = item.quantity_delivered || 0;
       });
       setQuantityData(initialQuantityData);
       
       // Initialize quality data
-      const initialQualityData: unknown = { variants: {} };
-      refreshedDelivery.delivery_items?.forEach((item: unknown) => {
+      const initialQualityData: any = { variants: {} };
+      refreshedDelivery.delivery_items?.forEach((item: any) => {
         initialQualityData.variants[item.id] = {
           approved: item.quantity_approved || 0,
           defective: item.quantity_defective || 0,
@@ -100,14 +104,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       // Initialize general notes from delivery data
       setGeneralNotes(refreshedDelivery.notes || '');
     }
-  }, [fetchDeliveryById, initialDelivery.id]);
-
-  useEffect(() => {
-    loadDelivery();
-  }, [loadDelivery]);
+  };
 
   // Helper function to sort delivery items by product first, then by variant size
-  const getSortedDeliveryItems = (items: unknown[]) => {
+  const getSortedDeliveryItems = (items: any[]) => {
     if (!items) return [];
     
     // Group items by product name
@@ -122,10 +122,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
         title: item.order_items?.product_variants?.size || ''
       });
       return acc;
-    }, {} as Record<string, unknown[]>);
+    }, {} as Record<string, any[]>);
     
     // Sort each product group by variants and then combine all
-    const sortedItems: unknown[] = [];
+    const sortedItems: any[] = [];
     
     // Sort product names alphabetically
     const sortedProductNames = Object.keys(groupedByProduct).sort();
@@ -161,7 +161,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }
   };
 
-  const handleQualityChange = (itemId: string, field: string, value: unknown) => {
+  const handleQualityChange = (itemId: string, field: string, value: any) => {
     setQualityData(prev => ({
       ...prev,
       variants: {
@@ -176,7 +176,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
 
   // Función para detectar si una variante sincronizada tiene cambios pendientes
   const hasVariantChanges = (itemId: string) => {
-    const item = delivery.delivery_items?.find((di: unknown) => di.id === itemId);
+    const item = delivery.delivery_items?.find((di: any) => di.id === itemId);
     if (!item) return false;
     
     const currentData = qualityData.variants[itemId];
@@ -269,7 +269,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     const totalItems = delivery.delivery_items?.length || 0;
     if (totalItems <= 1) return false; // No eliminar si es la última
     
-    const item = delivery.delivery_items?.find((di: unknown) => di.id === itemId);
+    const item = delivery.delivery_items?.find((di: any) => di.id === itemId);
     // Solo permitir eliminar si NO está sincronizada con Shopify
     return item && !item.synced_to_shopify;
   };
@@ -277,7 +277,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
 
   // Función para obtener todas las variantes pendientes de sincronización 
   const getPendingSyncVariants = () => {
-    return delivery.delivery_items?.filter((item: unknown) => {
+    return delivery.delivery_items?.filter((item: any) => {
       return item.quantity_approved > 0 && !item.synced_to_shopify;
     }) || [];
   };
@@ -296,7 +296,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       return;
     }
 
-    const deliveredItem = delivery.delivery_items?.find((item: unknown) => item.id === itemId);
+    const deliveredItem = delivery.delivery_items?.find((item: any) => item.id === itemId);
     if (!deliveredItem) return;
 
     const totalReviewed = variantData.approved + variantData.defective;
@@ -310,14 +310,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }
 
     try {
-      const updateData: unknown = {
+      const updateData: any = {
         quantity_approved: variantData.approved,
         quantity_defective: variantData.defective,
         quality_notes: variantData.reason || null
       };
       
       // Resetear sincronización si la variante ya estaba sincronizada
-      const currentItem = delivery.delivery_items?.find((di: unknown) => di.id === itemId);
+      const currentItem = delivery.delivery_items?.find((di: any) => di.id === itemId);
       const wasAlreadySynced = currentItem?.synced_to_shopify === true;
       
       if (isReEditingQuality || wasAlreadySynced) {
@@ -343,9 +343,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       }
 
       // Actualización optimista del estado local
-      setDelivery((prev: unknown) => ({
+      setDelivery((prev: any) => ({
         ...prev,
-        delivery_items: prev.delivery_items?.map((di: unknown) =>
+        delivery_items: prev.delivery_items?.map((di: any) =>
           di.id === itemId ? { ...di, ...updateData } : di
         )
       }));
@@ -360,17 +360,17 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       onDeliveryUpdated?.();
 
       // Auto-sync: verificar si todas las variantes ya fueron revisadas
-      const updatedItems = delivery.delivery_items?.map((di: unknown) =>
+      const updatedItems = delivery.delivery_items?.map((di: any) =>
         di.id === itemId ? { ...di, ...updateData } : di
       ) || [];
       
-      const allReviewed = updatedItems.length > 0 && updatedItems.every((item: unknown) =>
+      const allReviewed = updatedItems.length > 0 && updatedItems.every((item: any) =>
         (item.quantity_approved || 0) + (item.quantity_defective || 0) > 0
       );
 
       if (allReviewed) {
         // Verificar si hay pendientes de sincronización
-        const hasPending = updatedItems.some((item: unknown) => 
+        const hasPending = updatedItems.some((item: any) => 
           (item.quantity_approved || 0) > 0 && !item.synced_to_shopify
         );
         if (hasPending) {
@@ -402,18 +402,18 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }
 
     // Marcar todas como sincronizando
-    const pendingIds = new Set<string>(pendingVariants.map((v: unknown) => v.id));
+    const pendingIds = new Set<string>(pendingVariants.map((v: any) => v.id));
     setSyncingVariants(pendingIds);
     setSyncProgress({ current: 0, total: pendingVariants.length, phase: 'Enviando a Shopify...', status: 'syncing' });
 
     try {
       const syncData = {
         deliveryId: delivery.id,
-        approvedItems: pendingVariants.map((item: unknown) => ({
+        approvedItems: pendingVariants.map((item: any) => ({
           variantId: item.order_items?.product_variants?.id,
           skuVariant: item.order_items?.product_variants?.sku_variant,
           quantityApproved: item.quantity_approved
-        })).filter((item: unknown) => item.quantityApproved > 0)
+        })).filter((item: any) => item.quantityApproved > 0)
       };
 
       const result = await syncApprovedItemsToShopify(syncData);
@@ -469,7 +469,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   };
 
   const syncVariantToShopify = async (itemId: string) => {
-    const deliveredItem = delivery.delivery_items?.find((item: unknown) => item.id === itemId);
+    const deliveredItem = delivery.delivery_items?.find((item: any) => item.id === itemId);
     if (!deliveredItem || deliveredItem.quantity_approved === 0) {
       toast({
         title: "Error",
@@ -669,7 +669,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     printWindow.document.close();
   };
 
-  const handlePrintItemBarcodes = (item: unknown) => {
+  const handlePrintItemBarcodes = (item: any) => {
     const variant = item.order_items?.product_variants;
     if (!variant) return;
 
@@ -758,8 +758,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     setIsReEditingQuality(true);
     
     // Reset quality data to allow re-editing
-    const resetQualityData: unknown = { variants: {} };
-    delivery.delivery_items?.forEach((item: unknown) => {
+    const resetQualityData: any = { variants: {} };
+    delivery.delivery_items?.forEach((item: any) => {
       resetQualityData.variants[item.id] = {
         approved: item.quantity_approved || 0,
         defective: item.quantity_defective || 0,
@@ -778,8 +778,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const cancelQualityReEdit = () => {
     setIsReEditingQuality(false);
     // Restaurar datos originales
-    const originalQualityData: unknown = { variants: {} };
-    delivery.delivery_items?.forEach((item: unknown) => {
+    const originalQualityData: any = { variants: {} };
+    delivery.delivery_items?.forEach((item: any) => {
       originalQualityData.variants[item.id] = {
         approved: item.quantity_approved || 0,
         defective: item.quantity_defective || 0,
@@ -798,7 +798,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const saveQualityReEdit = async () => {
     try {
       // Validar que las cantidades sumen correctamente
-      const hasErrors = delivery.delivery_items?.some((item: unknown) => {
+      const hasErrors = delivery.delivery_items?.some((item: any) => {
         const variantData = qualityData.variants[item.id];
         const totalReviewed = (variantData?.approved || 0) + (variantData?.defective || 0);
         return totalReviewed !== item.quantity_delivered;
@@ -853,7 +853,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   // Función para resincronizar solo items que necesitan sincronización
   const resyncEntireDelivery = async () => {
     // Filtrar solo items que tienen cantidades aprobadas Y que NO están sincronizados
-    const itemsToSync = delivery.delivery_items?.filter((item: unknown) => 
+    const itemsToSync = delivery.delivery_items?.filter((item: any) => 
       item.quantity_approved > 0 && !item.synced_to_shopify
     );
     
@@ -867,13 +867,13 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     }
 
     const confirmResync = window.confirm(
-      `¿Desea sincronizar los cambios pendientes de la entrega ${delivery.tracking_number} con Shopify?\n\nSe sincronizarán ${itemsToSync.length} variante(s) con un total de ${itemsToSync.reduce((sum: number, item: unknown) => sum + item.quantity_approved, 0)} unidades aprobadas.\n\n⚠️ ATENCIÓN: Esto actualizará el inventario en Shopify solo con los cambios pendientes.`
+      `¿Desea sincronizar los cambios pendientes de la entrega ${delivery.tracking_number} con Shopify?\n\nSe sincronizarán ${itemsToSync.length} variante(s) con un total de ${itemsToSync.reduce((sum: number, item: any) => sum + item.quantity_approved, 0)} unidades aprobadas.\n\n⚠️ ATENCIÓN: Esto actualizará el inventario en Shopify solo con los cambios pendientes.`
     );
 
     if (!confirmResync) return;
 
     try {
-      setSyncingVariants(new Set(itemsToSync.map((item: unknown) => item.id)));
+      setSyncingVariants(new Set(itemsToSync.map((item: any) => item.id)));
 
       const syncData = {
         deliveryId: delivery.id,
@@ -941,7 +941,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   };
 
   // Helper function to get individual item sync status
-  const getItemSyncStatus = (item: unknown) => {
+  const getItemSyncStatus = (item: any) => {
     const hasApproved = item.quantity_approved > 0;
     const hasDefective = item.quantity_defective > 0;
     const hasReviewed = hasApproved || hasDefective;
@@ -990,7 +990,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const getTotalQuantities = () => {
     if (!delivery.delivery_items) return { delivered: 0, approved: 0, defective: 0 };
     
-    return delivery.delivery_items.reduce((totals: unknown, item: unknown) => ({
+    return delivery.delivery_items.reduce((totals: any, item: any) => ({
       delivered: totals.delivered + (item.quantity_delivered || 0),
       approved: totals.approved + (item.quantity_approved || 0),
       defective: totals.defective + (item.quantity_defective || 0)
@@ -1001,7 +1001,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     let totalApproved = 0;
     let totalDefective = 0;
     
-    Object.values(qualityData.variants).forEach((variant: unknown) => {
+    Object.values(qualityData.variants).forEach((variant: any) => {
       totalApproved += variant.approved || 0;
       totalDefective += variant.defective || 0;
     });
@@ -1010,9 +1010,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   };
 
   const getDiscrepancies = () => {
-    const discrepancies: unknown[] = [];
+    const discrepancies: any[] = [];
     
-    delivery.delivery_items?.forEach((item: unknown) => {
+    delivery.delivery_items?.forEach((item: any) => {
       const delivered = item.quantity_delivered || 0;
       const variantData = qualityData.variants[item.id] || {};
       const approved = variantData.approved || 0;
@@ -1214,7 +1214,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedDeliveryItems?.map((item: unknown) => {
+                {sortedDeliveryItems?.map((item: any) => {
                   const delivered = item.quantity_delivered || 0;
                   const variantData = qualityData.variants[item.id] || {};
                   const approved = variantData.approved || 0;

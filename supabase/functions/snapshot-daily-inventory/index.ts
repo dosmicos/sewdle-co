@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Procesando ${variants.length} variantes...`);
 
     // Prepare snapshot records
-    const snapshots = variants.map((variant: unknown) => ({
+    const snapshots = variants.map((variant: any) => ({
       product_variant_id: variant.id,
       organization_id: variant.product.organization_id,
       stock_quantity: variant.stock_quantity || 0,

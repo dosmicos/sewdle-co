@@ -72,14 +72,14 @@ export const ManifestScannerModal: React.FC<ManifestScannerModalProps> = ({
     setItems(manifest.items);
   }, [manifest.items]);
 
-  const playSound = useCallback((type: 'success' | 'error') => {
+  const playSound = (type: 'success' | 'error') => {
     if (!soundEnabled) return;
     const audio = type === 'success' ? successAudio.current : errorAudio.current;
     if (audio) {
       audio.currentTime = 0;
       audio.play().catch(() => {});
     }
-  }, [soundEnabled]);
+  };
 
   const handleScan = useCallback(async () => {
     const trackingNumber = scanInput.trim().toUpperCase();

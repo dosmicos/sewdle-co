@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface OrderFileManagerProps {
   orderId: string;
-  orderFiles: unknown[];
+  orderFiles: any[];
   onFilesUpdated: () => void;
   editable?: boolean;
 }
@@ -192,7 +192,7 @@ const OrderFileManager = ({ orderId, orderFiles, onFilesUpdated, editable = true
             </div>
           ) : (
             <div className="space-y-3">
-              {orderFiles.map((file: unknown) => (
+              {orderFiles.map((file: any) => (
                 <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
                     {getFileIcon(file.file_name)}

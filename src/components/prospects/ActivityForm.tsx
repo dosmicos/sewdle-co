@@ -8,7 +8,7 @@ import { ProspectActivityType, ACTIVITY_TYPE_LABELS } from '@/types/prospects';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface ActivityFormProps {
-  onSubmit: (data: unknown) => Promise<void>;
+  onSubmit: (data: any) => Promise<void>;
   onCancel: () => void;
 }
 

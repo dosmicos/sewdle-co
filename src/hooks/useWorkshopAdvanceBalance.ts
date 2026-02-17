@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -17,7 +17,7 @@ export const useWorkshopAdvanceBalance = () => {
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
 
-  const fetchWorkshopBalances = useCallback(async () => {
+  const fetchWorkshopBalances = async () => {
     if (!currentOrganization) return;
 
     try {
@@ -108,11 +108,11 @@ export const useWorkshopAdvanceBalance = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization, toast]);
+  };
 
   useEffect(() => {
     fetchWorkshopBalances();
-  }, [fetchWorkshopBalances]);
+  }, [currentOrganization]);
 
   return {
     balances,

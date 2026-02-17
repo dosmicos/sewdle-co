@@ -54,9 +54,9 @@ export const useInventorySync = () => {
         // Buscar el estado más reciente para este SKU
         for (const log of syncLogs || []) {
           if (log.sync_results && typeof log.sync_results === 'object') {
-            const syncResults = log.sync_results as Record<string, unknown>;
+            const syncResults = log.sync_results as any;
             if (syncResults.results && Array.isArray(syncResults.results)) {
-              const skuResult = syncResults.results.find((r: unknown) => r.skuVariant === sku || r.sku === sku);
+              const skuResult = syncResults.results.find((r: any) => r.skuVariant === sku || r.sku === sku);
               
               if (skuResult) {
                 lastSyncAt = log.synced_at;

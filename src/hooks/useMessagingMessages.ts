@@ -33,7 +33,7 @@ export const useMessagingMessages = (conversationId: string | null) => {
     mutationFn: async ({ message, mediaFile, mediaType, replyToMessageId }: { message: string; mediaFile?: File; mediaType?: string; replyToMessageId?: string }) => {
       if (!conversationId) throw new Error('No conversation selected');
       
-      let body: Record<string, unknown> = { 
+      let body: Record<string, any> = { 
         conversation_id: conversationId, 
         message,
         reply_to_message_id: replyToMessageId || null
@@ -74,7 +74,7 @@ export const useMessagingMessages = (conversationId: string | null) => {
       queryClient.invalidateQueries({ queryKey: ['messaging-conversations'], exact: false, refetchType: 'all' });
       toast.success('Mensaje enviado');
     },
-    onError: (error: unknown) => {
+    onError: (error: any) => {
       console.error('Error sending message:', error);
       toast.error(`Error al enviar mensaje: ${error.message}`);
     },

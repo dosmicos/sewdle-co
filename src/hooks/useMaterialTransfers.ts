@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,7 +36,7 @@ export const useMaterialTransfers = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchTransfers = useCallback(async () => {
+  const fetchTransfers = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -101,12 +101,12 @@ export const useMaterialTransfers = () => {
           to_location_type: transfer.to_location_type as 'warehouse' | 'workshop',
           from_location_name: fromLocationName,
           to_location_name: toLocationName,
-          material: (transfer.material as Record<string, unknown>)?.id ? transfer.material as Record<string, unknown> : undefined
+          material: (transfer.material as any)?.id ? transfer.material as any : undefined
         } as MaterialTransfer;
       }));
 
       setTransfers(enrichedData);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error fetching transfers:', error);
       toast({
         title: "Error",
@@ -116,7 +116,7 @@ export const useMaterialTransfers = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
   const createTransfer = async (transferData: {
     material_id: string;
@@ -156,7 +156,7 @@ export const useMaterialTransfers = () => {
 
       await fetchTransfers();
       return data;
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error creating transfer:', error);
       toast({
         title: "Error",
@@ -185,7 +185,7 @@ export const useMaterialTransfers = () => {
       });
 
       await fetchTransfers();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error approving transfer:', error);
       toast({
         title: "Error",
@@ -209,7 +209,7 @@ export const useMaterialTransfers = () => {
       });
 
       await fetchTransfers();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error processing transfer:', error);
       toast({
         title: "Error",
@@ -234,7 +234,7 @@ export const useMaterialTransfers = () => {
       });
 
       await fetchTransfers();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error cancelling transfer:', error);
       toast({
         title: "Error",
@@ -246,7 +246,7 @@ export const useMaterialTransfers = () => {
 
   useEffect(() => {
     fetchTransfers();
-  }, [fetchTransfers]);
+  }, []);
 
   return {
     transfers,

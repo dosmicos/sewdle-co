@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -30,7 +30,7 @@ export const useWorkshops = () => {
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
 
-  const fetchWorkshops = useCallback(async () => {
+  const fetchWorkshops = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -44,7 +44,7 @@ export const useWorkshops = () => {
         throw workshopsError;
       }
 
-      const formattedWorkshops: Workshop[] = data?.map((workshop: unknown) => ({
+      const formattedWorkshops: Workshop[] = data?.map((workshop: any) => ({
         id: workshop.id,
         name: workshop.name,
         address: workshop.address,
@@ -64,7 +64,7 @@ export const useWorkshops = () => {
       })) || [];
 
       setWorkshops(formattedWorkshops);
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error fetching workshops:', err);
       setError(err.message || 'Error al cargar talleres');
       toast({
@@ -75,7 +75,7 @@ export const useWorkshops = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
   const createWorkshop = async (workshopData: {
     name: string;
@@ -127,7 +127,7 @@ export const useWorkshops = () => {
       });
 
       return { data, error: null };
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error creating workshop:', err);
       toast({
         title: "Error al crear taller",
@@ -158,7 +158,7 @@ export const useWorkshops = () => {
       });
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error deleting workshop:', err);
       toast({
         title: "Error al eliminar taller",
@@ -211,7 +211,7 @@ export const useWorkshops = () => {
       });
 
       return { error: null };
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error updating workshop:', err);
       toast({
         title: "Error al actualizar taller",
@@ -224,7 +224,7 @@ export const useWorkshops = () => {
 
   useEffect(() => {
     fetchWorkshops();
-  }, [fetchWorkshops]);
+  }, []);
 
   return {
     workshops,

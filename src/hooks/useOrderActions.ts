@@ -6,7 +6,7 @@ export const useOrderActions = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const addProductsToOrder = async (orderId: string, selectedProducts: unknown[]) => {
+  const addProductsToOrder = async (orderId: string, selectedProducts: any[]) => {
     setLoading(true);
     try {
       console.log('Adding products to order:', orderId, selectedProducts);
@@ -203,7 +203,7 @@ export const useOrderActions = () => {
     }
   };
 
-  const updateOrder = async (orderId: string, updates: unknown) => {
+  const updateOrder = async (orderId: string, updates: any) => {
     setLoading(true);
     try {
       console.log('Updating order:', orderId, updates);

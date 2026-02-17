@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,9 +46,9 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
     },
     files: null
   });
-  const [selectedOrder, setSelectedOrder] = useState<unknown>(null);
-  const [availableOrders, setAvailableOrders] = useState<unknown[]>([]);
-  const [variantsBreakdown, setVariantsBreakdown] = useState<unknown[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
+  const [variantsBreakdown, setVariantsBreakdown] = useState<any[]>([]);
   const [fileUploadStatus, setFileUploadStatus] = useState<FileUploadStatus[]>([]);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   
@@ -56,13 +56,23 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
   const { createDelivery, loading: deliveryLoading } = useDeliveries();
   const { getOrderVariantsBreakdown } = useOrderDeliveryStats();
 
-  const loadAvailableOrders = useCallback(async () => {
+  useEffect(() => {
+    loadAvailableOrders();
+  }, []);
+
+  useEffect(() => {
+    if (preselectedOrderId && availableOrders.length > 0) {
+      handleOrderSelect(preselectedOrderId);
+    }
+  }, [preselectedOrderId, availableOrders]);
+
+  const loadAvailableOrders = async () => {
     const orders = await fetchAvailableOrders();
     console.log('Available orders loaded:', orders);
     setAvailableOrders(orders);
-  }, [fetchAvailableOrders]);
+  };
 
-  const handleOrderSelect = useCallback(async (orderId: string) => {
+  const handleOrderSelect = async (orderId: string) => {
     const order = availableOrders.find(o => o.id === orderId);
     setSelectedOrder(order || null);
     
@@ -79,17 +89,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
       const variants = await getOrderVariantsBreakdown(orderId);
       setVariantsBreakdown(variants);
     }
-  }, [availableOrders, getOrderVariantsBreakdown]);
-
-  useEffect(() => {
-    loadAvailableOrders();
-  }, [loadAvailableOrders]);
-
-  useEffect(() => {
-    if (preselectedOrderId && availableOrders.length > 0) {
-      handleOrderSelect(preselectedOrderId);
-    }
-  }, [preselectedOrderId, availableOrders, handleOrderSelect]);
+  };
 
   const handleVariantChange = (orderItemId: string, value: string) => {
     const numValue = parseInt(value) || 0;
@@ -251,7 +251,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
     }
   };
 
-  const getPendingQuantityForVariant = (orderItem: unknown) => {
+  const getPendingQuantityForVariant = (orderItem: any) => {
     const variant = variantsBreakdown.find(v => 
       v.product_name === orderItem.product_variants?.products?.name &&
       v.variant_size === orderItem.product_variants?.size &&
@@ -323,7 +323,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                 <h4 className="font-medium mb-3">Items en la orden:</h4>
                 <div className="space-y-3">
-                  {selectedOrder.order_items?.map((item: unknown) => (
+                  {selectedOrder.order_items?.map((item: any) => (
                     <div key={item.id} className="border-l-4 border-blue-500 pl-3">
                       <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
                       <div className="text-sm text-gray-600">
@@ -345,7 +345,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
             <h3 className="font-medium text-lg">Cantidades a Entregar</h3>
             {selectedOrder && selectedOrder.order_items && (
               <div className="space-y-4">
-                {selectedOrder.order_items.map((item: unknown) => {
+                {selectedOrder.order_items.map((item: any) => {
                   const pendingQuantity = getPendingQuantityForVariant(item);
                   return (
                     <div key={item.id} className="border border-gray-200 rounded-lg p-4">
@@ -486,7 +486,7 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
               <div className="p-4 bg-gray-50 rounded-lg">
                 <h4 className="font-medium mb-3">Orden: {selectedOrder?.order_number}</h4>
                 <div className="space-y-3">
-                  {selectedOrder?.order_items?.map((item: unknown) => {
+                  {selectedOrder?.order_items?.map((item: any) => {
                     const quantity = formData.products[item.id];
                     if (!quantity || quantity === 0) return null;
                     

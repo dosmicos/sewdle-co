@@ -80,7 +80,7 @@ const PasswordChangePage = () => {
       // Redirigir al dashboard con replace para evitar volver atrás
       navigate('/dashboard', { replace: true });
       
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error changing password:', error);
       
       let errorMessage = 'No se pudo cambiar la contraseña';

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,14 +16,18 @@ interface DeliveryEvidenceGalleryProps {
 }
 
 const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) => {
-  const [evidenceFiles, setEvidenceFiles] = useState<unknown[]>([]);
+  const [evidenceFiles, setEvidenceFiles] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState<string>('');
   const [initialLoading, setInitialLoading] = useState(true);
   const { fetchEvidenceFiles, deleteEvidenceFile, loading } = useDeliveryEvidence();
   const { isAdmin } = useUserContext();
 
-  const loadEvidence = useCallback(async () => {
+  useEffect(() => {
+    loadEvidence();
+  }, [deliveryId]);
+
+  const loadEvidence = async () => {
     try {
       const allFiles = await fetchEvidenceFiles(deliveryId);
       // Filtrar solo archivos de evidencia fotográfica
@@ -37,11 +41,7 @@ const DeliveryEvidenceGallery = ({ deliveryId }: DeliveryEvidenceGalleryProps) =
     } finally {
       setInitialLoading(false);
     }
-  }, [fetchEvidenceFiles, deliveryId]);
-
-  useEffect(() => {
-    loadEvidence();
-  }, [loadEvidence]);
+  };
 
   const handleViewImage = (fileUrl: string, fileName: string) => {
     setSelectedImage(fileUrl);

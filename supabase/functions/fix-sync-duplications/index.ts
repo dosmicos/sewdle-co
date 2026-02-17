@@ -38,7 +38,7 @@ serve(async (req) => {
       if (metricsError) throw metricsError
 
       // Agrupar por variant_id para detectar duplicaciones
-      const grouped = metrics.reduce((acc: unknown, metric: unknown) => {
+      const grouped = metrics.reduce((acc: any, metric: any) => {
         const key = metric.product_variant_id
         if (!acc[key]) {
           acc[key] = []
@@ -48,15 +48,15 @@ serve(async (req) => {
       }, {})
 
       const duplications = Object.entries(grouped)
-        .filter(([_, metrics]: unknown) => metrics.length > 1)
-        .map(([variantId, metrics]: unknown) => ({
+        .filter(([_, metrics]: any) => metrics.length > 1)
+        .map(([variantId, metrics]: any) => ({
           variant_id: variantId,
           sku_variant: metrics[0].product_variants?.sku_variant,
           product_name: metrics[0].product_variants?.products?.name,
           duplicate_count: metrics.length,
-          total_sales: metrics.reduce((sum: number, m: unknown) => sum + m.sales_quantity, 0),
-          total_orders: metrics.reduce((sum: number, m: unknown) => sum + m.orders_count, 0),
-          entries: metrics.map((m: unknown) => ({
+          total_sales: metrics.reduce((sum: number, m: any) => sum + m.sales_quantity, 0),
+          total_orders: metrics.reduce((sum: number, m: any) => sum + m.orders_count, 0),
+          entries: metrics.map((m: any) => ({
             id: m.id,
             sales_quantity: m.sales_quantity,
             orders_count: m.orders_count,
@@ -81,7 +81,7 @@ serve(async (req) => {
 
     if (action === 'clean') {
       let deletedCount = 0
-      const cleanedVariants: string[] = []
+      let cleanedVariants: string[] = []
 
       // Obtener duplicaciones
       const { data: metrics, error: metricsError } = await supabaseClient
@@ -93,7 +93,7 @@ serve(async (req) => {
       if (metricsError) throw metricsError
 
       // Agrupar por variant_id
-      const grouped = metrics.reduce((acc: Record<string, unknown[]>, metric: unknown) => {
+      const grouped = metrics.reduce((acc: any, metric: any) => {
         const key = metric.product_variant_id
         if (!acc[key]) {
           acc[key] = []
@@ -103,7 +103,7 @@ serve(async (req) => {
       }, {})
 
       // Limpiar duplicaciones (mantener solo el más reciente)
-      for (const [variantId, duplicates] of Object.entries(grouped) as [string, unknown[]][]) {
+      for (const [variantId, duplicates] of Object.entries(grouped) as [string, any][]) {
         if (duplicates.length > 1) {
           // Si hay SKU específico, solo limpiar ese
           if (specificSku) {
@@ -119,7 +119,7 @@ serve(async (req) => {
           }
 
           // Mantener el más reciente, borrar el resto
-          const [keep, ...toDelete] = duplicates.sort((a: unknown, b: unknown) => 
+          const [keep, ...toDelete] = duplicates.sort((a: any, b: any) => 
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           )
 
@@ -160,7 +160,7 @@ serve(async (req) => {
         `)
         .eq('metric_date', date)
 
-      const validation = currentMetrics?.reduce((acc: unknown, metric: unknown) => {
+      const validation = currentMetrics?.reduce((acc: any, metric: any) => {
         const sku = metric.product_variants?.sku_variant
         if (!acc[sku]) {
           acc[sku] = {
@@ -176,7 +176,7 @@ serve(async (req) => {
         return acc
       }, {})
 
-      const duplicatesFound = Object.values(validation || {}).filter((v: unknown) => v.entries_count > 1)
+      const duplicatesFound = Object.values(validation || {}).filter((v: any) => v.entries_count > 1)
 
       return new Response(JSON.stringify({
         success: true,

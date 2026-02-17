@@ -64,7 +64,7 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
 
   const updateVideoStatus = useMutation({
     mutationFn: async ({ id, status, feedback }: { id: string; status: string; feedback?: string }) => {
-      const update: Record<string, unknown> = { status };
+      const update: Record<string, any> = { status };
       if (feedback !== undefined) update.feedback = feedback;
       const { error } = await supabase.from('ugc_videos').update(update).eq('id', id);
       if (error) throw error;

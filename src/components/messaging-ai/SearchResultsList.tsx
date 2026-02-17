@@ -72,8 +72,8 @@ const getMatchContext = (content: string, searchTerm: string, maxLength: number 
   
   // Calculate start position to center the match
   const contextPadding = Math.floor((maxLength - searchTerm.length) / 2);
-  const start = Math.max(0, matchIndex - contextPadding);
-  const end = Math.min(content.length, matchIndex + searchTerm.length + contextPadding);
+  let start = Math.max(0, matchIndex - contextPadding);
+  let end = Math.min(content.length, matchIndex + searchTerm.length + contextPadding);
   
   let result = content.slice(start, end);
   

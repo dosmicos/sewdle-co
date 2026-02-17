@@ -13,8 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const WorkshopsPage = () => {
   const [showForm, setShowForm] = useState(false);
-  const [selectedWorkshop, setSelectedWorkshop] = useState<unknown>(null);
-  const [editingWorkshop, setEditingWorkshop] = useState<unknown>(null);
+  const [selectedWorkshop, setSelectedWorkshop] = useState<any>(null);
+  const [editingWorkshop, setEditingWorkshop] = useState<any>(null);
   const {
     workshops,
     loading,
@@ -30,7 +30,7 @@ const WorkshopsPage = () => {
   const canEditWorkshops = hasPermission('workshops', 'edit');
   const canDeleteWorkshops = hasPermission('workshops', 'delete');
   
-  const handleWorkshopClick = (workshop: unknown) => {
+  const handleWorkshopClick = (workshop: any) => {
     setSelectedWorkshop(workshop);
   };
   
@@ -43,7 +43,7 @@ const WorkshopsPage = () => {
     await deleteWorkshop(workshopId);
   };
 
-  const handleEditWorkshop = (workshop: unknown, e: React.MouseEvent) => {
+  const handleEditWorkshop = (workshop: any, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingWorkshop(workshop);
   };

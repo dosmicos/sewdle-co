@@ -45,7 +45,7 @@ async function fetchMediaUrl(
   mediaId: string,
   messageType: string,
   conversationId: string,
-  supabase: unknown
+  supabase: any
 ): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken) return { url: null, mimeType: null, error: 'Token not configured' };
@@ -106,7 +106,7 @@ async function fetchMediaUrl(
     if (!pubUrl?.publicUrl) return { url: null, mimeType, error: 'No public URL' };
     console.log(`✅ Media cached: ${pubUrl.publicUrl.substring(0, 60)}...`);
     return { url: pubUrl.publicUrl, mimeType };
-  } catch (e: unknown) {
+  } catch (e: any) {
     if (e.name === 'AbortError') return { url: null, mimeType: null, error: 'Timeout' };
     console.error('fetchMediaUrl error:', e);
     return { url: null, mimeType: null, error: e.message || 'Unknown error' };
@@ -114,7 +114,7 @@ async function fetchMediaUrl(
 }
 
 // ============== AI RESPONSE (optional) ==============
-async function generateAIResponse(userMessage: string, history: unknown[], aiConfig: unknown, mediaContext?: { type: string; url?: string }): Promise<string> {
+async function generateAIResponse(userMessage: string, history: any[], aiConfig: any, mediaContext?: { type: string; url?: string }): Promise<string> {
   const key = Deno.env.get('LOVABLE_API_KEY');
   if (!key) return '';
   try {
@@ -123,9 +123,9 @@ async function generateAIResponse(userMessage: string, history: unknown[], aiCon
     if (aiConfig?.tone && toneMap[aiConfig.tone]) prompt += '\n' + toneMap[aiConfig.tone];
 
     if (mediaContext?.type === 'sticker') return '¡Lindo sticker! 😊 ¿En qué puedo ayudarte?';
-    const userMsg = userMessage || (mediaContext?.type === 'image' ? '[El cliente envió una imagen]' : mediaContext?.type === 'audio' ? '[El cliente envió un audio]' : '');
+    let userMsg = userMessage || (mediaContext?.type === 'image' ? '[El cliente envió una imagen]' : mediaContext?.type === 'audio' ? '[El cliente envió un audio]' : '');
 
-    const messages: unknown[] = [{ role: 'system', content: prompt }, ...history.slice(-10).map(m => ({ role: m.direction === 'inbound' ? 'user' : 'assistant', content: m.content }))];
+    const messages: any[] = [{ role: 'system', content: prompt }, ...history.slice(-10).map(m => ({ role: m.direction === 'inbound' ? 'user' : 'assistant', content: m.content }))];
     if (mediaContext?.type === 'image' && mediaContext.url) {
       messages.push({ role: 'user', content: [{ type: 'text', text: userMsg }, { type: 'image_url', image_url: { url: mediaContext.url, detail: 'auto' } }] });
     } else {
@@ -142,7 +142,7 @@ async function generateAIResponse(userMessage: string, history: unknown[], aiCon
   } catch { return ''; }
 }
 
-async function sendWhatsAppMessage(phoneNumberId: string, to: string, text: string): Promise<unknown> {
+async function sendWhatsAppMessage(phoneNumberId: string, to: string, text: string): Promise<any> {
   const token = Deno.env.get('META_WHATSAPP_TOKEN');
   if (!token) return null;
   try {
@@ -173,7 +173,7 @@ serve(async (req) => {
       const body = await req.json();
       console.log('========== WHATSAPP WEBHOOK ==========', JSON.stringify(body).substring(0, 400));
       const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-      const toArray = (o: unknown) => (!o ? [] : Array.isArray(o) ? o : Object.values(o));
+      const toArray = (o: any) => (!o ? [] : Array.isArray(o) ? o : Object.values(o));
 
       if (body.object === 'whatsapp_business_account') {
         for (const entry of toArray(body.entry)) {
@@ -186,7 +186,7 @@ serve(async (req) => {
               const from = message.from;
               const extId = message.id;
               const ts = new Date(parseInt(message.timestamp) * 1000);
-              const contact = toArray(val.contacts)?.find((c: unknown) => c.wa_id === from);
+              const contact = toArray(val.contacts)?.find((c: any) => c.wa_id === from);
               const contactName = contact?.profile?.name || from;
 
               let content = '', messageType = 'text', mediaId: string | null = null, mediaMimeType: string | null = null;
@@ -241,7 +241,7 @@ serve(async (req) => {
                 });
 
                 // AI auto-reply
-                const aiConfig = channel.ai_config as Record<string, unknown>;
+                const aiConfig = channel.ai_config as any;
                 const { data: freshConv } = await supabase.from('messaging_conversations').select('ai_managed').eq('id', conv.id).single();
                 const shouldReply = channel.ai_enabled !== false && (freshConv?.ai_managed ?? conv.ai_managed) !== false && aiConfig?.autoReply !== false;
                 if (shouldReply) {
@@ -262,7 +262,7 @@ serve(async (req) => {
 
             // status updates
             for (const st of toArray(val.statuses)) {
-              const upd: unknown = {};
+              const upd: any = {};
               if (st.status === 'delivered') upd.delivered_at = new Date(parseInt(st.timestamp) * 1000).toISOString();
               if (st.status === 'read') upd.read_at = new Date(parseInt(st.timestamp) * 1000).toISOString();
               if (Object.keys(upd).length) await supabase.from('messaging_messages').update(upd).eq('external_message_id', st.id);
@@ -271,7 +271,7 @@ serve(async (req) => {
         }
       }
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error('Webhook error:', e);
       return new Response(JSON.stringify({ error: e.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
     }

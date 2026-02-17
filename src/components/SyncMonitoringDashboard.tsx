@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ interface SyncStats {
   failedDeliveries: number;
   syncSuccessRate: number;
   avgSyncTime: number;
-  recentFailures: unknown[];
+  recentFailures: any[];
   topErrors: { error: string; count: number }[];
 }
 
@@ -34,7 +34,7 @@ export const SyncMonitoringDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
 
-  const loadSyncStats = useCallback(async () => {
+  const loadSyncStats = async () => {
     try {
       const { data: deliveries, error: deliveriesError } = await supabase
         .from('deliveries')
@@ -61,12 +61,12 @@ export const SyncMonitoringDashboard = () => {
       let syncedDeliveries = 0;
       let pendingDeliveries = 0;
       let failedDeliveries = 0;
-      const recentFailures: unknown[] = [];
+      const recentFailures: any[] = [];
       const errorCounts: Record<string, number> = {};
 
       deliveries?.forEach(delivery => {
         const hasItemsToSync = delivery.delivery_items?.some(
-          (item: unknown) => item.quantity_approved > 0
+          (item: any) => item.quantity_approved > 0
         );
 
         if (!hasItemsToSync) {
@@ -145,7 +145,7 @@ export const SyncMonitoringDashboard = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [toast]);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -159,7 +159,7 @@ export const SyncMonitoringDashboard = () => {
     const interval = setInterval(loadSyncStats, 30000);
     
     return () => clearInterval(interval);
-  }, [loadSyncStats]);
+  }, []);
 
   if (loading || !stats) {
     return (

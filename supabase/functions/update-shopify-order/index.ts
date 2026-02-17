@@ -71,12 +71,12 @@ serve(async (req) => {
 
     const shopifyApiUrl = `https://${shopifyDomain}/admin/api/2024-01/orders/${orderId}`
 
-    let updatePayload: Record<string, unknown> = {}
+    let updatePayload: any = {}
     let response: Response
     let finalTags: string[] | null = null
 
     switch (action) {
-      case 'add_tags': {
+      case 'add_tags':
         // Merge tags using Shopify as source of truth
         console.log(`🏷️ ADD_TAGS for order ${orderId}`);
         console.log(`   Tags to add:`, data.tags);
@@ -102,9 +102,8 @@ serve(async (req) => {
           body: JSON.stringify(updatePayload)
         });
         break;
-      }
 
-      case 'remove_tags': {
+      case 'remove_tags':
         // Remove tags using Shopify as source of truth
         console.log(`🏷️ REMOVE_TAGS for order ${orderId}`);
         console.log(`   Tags to remove:`, data.tags);
@@ -130,9 +129,8 @@ serve(async (req) => {
           body: JSON.stringify(updatePayload)
         });
         break;
-      }
 
-      case 'update_tags': {
+      case 'update_tags':
         console.log(`🏷️ Updating tags for order ${orderId}`)
         console.log(`   Tags received (type: ${typeof data.tags}):`, data.tags)
         
@@ -159,9 +157,8 @@ serve(async (req) => {
           body: JSON.stringify(updatePayload)
         })
         break
-      }
 
-      case 'update_notes': {
+      case 'update_notes':
         console.log(`📝 Updating notes`)
         updatePayload = {
           order: {
@@ -177,9 +174,8 @@ serve(async (req) => {
           body: JSON.stringify(updatePayload)
         })
         break
-      }
 
-      case 'sync_from_shopify': {
+      case 'sync_from_shopify':
         // Fetch ONLY minimal fields from Shopify for fast sync (optimized for latency)
         console.log(`🔄 SYNC_FROM_SHOPIFY for order ${orderId} (optimized)`);
         const syncStartTime = Date.now();
@@ -237,7 +233,23 @@ serve(async (req) => {
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
-      }
+        console.log(`📦 Creating fulfillment`)
+        const fulfillmentPayload = {
+          fulfillment: {
+            location_id: data.locationId,
+            tracking_number: data.trackingNumber || null,
+            notify_customer: data.notifyCustomer || false,
+          }
+        }
+        response = await fetch(`${shopifyApiUrl}/fulfillments.json`, {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopifyAccessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(fulfillmentPayload)
+        })
+        break
 
       default:
         throw new Error(`Unknown action: ${action}`)
@@ -249,8 +261,7 @@ serve(async (req) => {
       console.error(`   Status: ${response.status}`)
       console.error(`   Response: ${errorText}`)
       if (action === 'update_tags') {
-        const orderPayload = updatePayload.order as Record<string, unknown> | undefined
-        console.error(`   Sent tags: "${String(orderPayload?.tags ?? '')}"`)
+        console.error(`   Sent tags: "${updatePayload.order.tags}"`)
       }
       throw new Error(`Shopify API error: ${errorText}`)
     }

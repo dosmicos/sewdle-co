@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
         )
       }
 
-      const { organizations } = orderData as Record<string, unknown>
+      const { organizations } = orderData as any
       organizationId = orderData.organization_id
       
       if (organizations.shopify_store_url && organizations.shopify_credentials?.access_token) {
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
           console.error('⚠️ Error updating raw_data locally:', rawError)
         }
       }
-    } catch (e: unknown) {
+    } catch (e: any) {
       shopifyError = e?.message || String(e)
       console.error('⚠️ Error calling Shopify API (note sync):', shopifyError)
     }

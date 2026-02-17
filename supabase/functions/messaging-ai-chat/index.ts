@@ -48,7 +48,7 @@ serve(async (req) => {
         if (channelError) {
           console.error("Error loading channel config:", channelError);
         } else if (channel?.ai_config) {
-          const aiConfig = channel.ai_config as Record<string, unknown>;
+          const aiConfig = channel.ai_config as any;
           
           // Get saved system prompt
           if (aiConfig.systemPrompt) {
@@ -72,7 +72,7 @@ serve(async (req) => {
           if (aiConfig.rules?.length > 0) {
             rulesContext = '\n\n📋 REGLAS ESPECIALES DE RESPUESTA:\n';
             rulesContext += 'IMPORTANTE: Estas reglas son OBLIGATORIAS. Cuando detectes estas palabras clave, DEBES seguir la instrucción correspondiente:\n';
-            aiConfig.rules.forEach((rule: unknown) => {
+            aiConfig.rules.forEach((rule: any) => {
               if (rule.condition && rule.response) {
                 rulesContext += `- Si el cliente menciona "${rule.condition}": ${rule.response}\n`;
               }
@@ -85,7 +85,7 @@ serve(async (req) => {
             knowledgeContext = '\n\n📚 BASE DE CONOCIMIENTO DE LA EMPRESA:\n';
             knowledgeContext += 'Usa esta información para responder preguntas de los clientes:\n\n';
             
-            aiConfig.knowledgeBase.forEach((item: unknown) => {
+            aiConfig.knowledgeBase.forEach((item: any) => {
               if (item.category === 'product') {
                 // Product knowledge
                 knowledgeContext += `🏷️ PRODUCTO: ${item.productName || item.title}\n`;
@@ -135,7 +135,7 @@ serve(async (req) => {
           .eq('id', organizationId)
           .single();
 
-        const shopifyCredentials = org?.shopify_credentials as Record<string, unknown>;
+        const shopifyCredentials = org?.shopify_credentials as any;
 
         if (shopifyCredentials && connectedProductIds.size > 0) {
           const shopifyDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
@@ -161,16 +161,16 @@ serve(async (req) => {
                 
                 // Filter to only connected products
                 const connectedProducts = shopifyProducts.filter(
-                  (p: unknown) => connectedProductIds.has(p.id)
+                  (p: any) => connectedProductIds.has(p.id)
                 );
                 
                 if (connectedProducts.length > 0) {
                   productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS:\n';
                   productCatalog += 'Solo ofrece productos con stock disponible:\n\n';
                   
-                  connectedProducts.forEach((product: unknown) => {
+                  connectedProducts.forEach((product: any) => {
                     const variants = product.variants || [];
-                    const totalStock = variants.reduce((sum: number, v: unknown) => sum + (v.inventory_quantity || 0), 0);
+                    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
                     
                     if (totalStock === 0) {
                       productCatalog += `• ${product.title}: ❌ AGOTADO\n`;
@@ -182,7 +182,7 @@ serve(async (req) => {
                       : 'Consultar';
                     
                     const variantInfo = variants
-                      .map((v: unknown) => {
+                      .map((v: any) => {
                         const stock = v.inventory_quantity || 0;
                         return `${v.title}: ${stock > 0 ? `✅ ${stock}` : '❌'}`;
                       })

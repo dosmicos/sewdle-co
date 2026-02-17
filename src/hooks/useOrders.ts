@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
@@ -25,11 +25,11 @@ interface CreateOrderData {
   supplies: OrderSupply[];
   notes?: string;
   cuttingOrderFile?: File;
-  materialValidation?: unknown;
+  materialValidation?: any;
 }
 
 export const useOrders = () => {
-  const [orders, setOrders] = useState<unknown[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { consumeOrderMaterials } = useMaterialConsumption();
@@ -337,7 +337,7 @@ export const useOrders = () => {
     }
   };
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -383,11 +383,11 @@ export const useOrders = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+  }, []);
 
   return {
     orders,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,7 +33,7 @@ export const useWorkshopPricing = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchPricing = useCallback(async () => {
+  const fetchPricing = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -64,7 +64,7 @@ export const useWorkshopPricing = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
   const createPricing = async (newPricing: WorkshopPricingInsert) => {
     try {
@@ -151,7 +151,7 @@ export const useWorkshopPricing = () => {
 
   useEffect(() => {
     fetchPricing();
-  }, [fetchPricing]);
+  }, []);
 
   return {
     pricing,

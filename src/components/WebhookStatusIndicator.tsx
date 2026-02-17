@@ -26,7 +26,7 @@ export const WebhookStatusIndicator: React.FC = () => {
     const fetchLastWebhook = async () => {
       try {
         // Cast supabase to any to avoid TypeScript deep type instantiation error
-        const client = supabase as Record<string, unknown>;
+        const client = supabase as any;
         const { data, error } = await client
           .from('sync_control_logs')
           .select('*')
@@ -38,7 +38,7 @@ export const WebhookStatusIndicator: React.FC = () => {
           console.error('Error fetching webhook status:', error);
         } else if (data && data.length > 0) {
           // Find the most recent webhook-related log
-          const webhookLog = data.find((log: unknown) => 
+          const webhookLog = data.find((log: any) => 
             log.sync_type?.includes('webhook') || log.sync_type === 'shopify_orders'
           );
           if (webhookLog) {

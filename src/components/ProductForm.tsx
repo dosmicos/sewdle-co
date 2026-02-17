@@ -46,7 +46,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
     technicalSpecs: ''
   });
 
-  const [variants, setVariants] = useState<unknown[]>([]);
+  const [variants, setVariants] = useState<any[]>([]);
   const [technicalFiles, setTechnicalFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -60,7 +60,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
     setTechnicalFiles(files);
   };
 
-  const handleVariantsChange = (newVariants: unknown[]) => {
+  const handleVariantsChange = (newVariants: any[]) => {
     setVariants(newVariants);
   };
 
@@ -68,7 +68,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
     setVariants(prev => [...prev, { size: '', color: '', skuVariant: '', additionalPrice: 0, stockQuantity: 0 }]);
   };
 
-  const updateVariant = (index: number, field: string, value: unknown) => {
+  const updateVariant = (index: number, field: string, value: any) => {
     const updatedVariants = [...variants];
     updatedVariants[index][field] = value;
     setVariants(updatedVariants);
@@ -172,7 +172,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
 
       handleClose();
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error creating product:', error);
       toast({
         title: "Error al crear producto",

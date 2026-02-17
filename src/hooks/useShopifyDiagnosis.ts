@@ -8,7 +8,7 @@ interface DiagnosticResult {
     orders_count: number;
     total_units: number;
     unique_products: number;
-    orders: unknown[];
+    orders: any[];
   };
   local_data: {
     metrics_count: number;

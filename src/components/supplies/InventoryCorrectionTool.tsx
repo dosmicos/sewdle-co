@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,7 @@ export const InventoryCorrectionTool = () => {
   const [manualCorrection, setManualCorrection] = useState('');
   const { toast } = useToast();
 
-  const detectDiscrepancies = useCallback(async () => {
+  const detectDiscrepancies = async () => {
     setLoading(true);
     try {
       // Get all approved delivery items with their SKUs
@@ -82,7 +82,7 @@ export const InventoryCorrectionTool = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  };
 
   const correctInventory = async (sku: string, correctionAmount: number) => {
     setCorrecting(sku);
@@ -129,7 +129,7 @@ export const InventoryCorrectionTool = () => {
 
   useEffect(() => {
     detectDiscrepancies();
-  }, [detectDiscrepancies]);
+  }, []);
 
   return (
     <div className="space-y-6">

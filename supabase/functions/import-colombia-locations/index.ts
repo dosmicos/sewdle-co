@@ -1265,7 +1265,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('❌ Import error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),

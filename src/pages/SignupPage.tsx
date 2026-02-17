@@ -333,7 +333,7 @@ const SignupPage = () => {
               </div>
               
               <div className="grid gap-4">
-                {plans.map(plan => <Card key={plan.id} className={`p-6 cursor-pointer transition-all relative ${formData.selectedPlan === plan.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`} onClick={() => updateFormData('selectedPlan', plan.id as Record<string, unknown>)}>
+                {plans.map(plan => <Card key={plan.id} className={`p-6 cursor-pointer transition-all relative ${formData.selectedPlan === plan.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`} onClick={() => updateFormData('selectedPlan', plan.id as any)}>
                     {plan.popular && <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
                         <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-medium">
                           Más Popular

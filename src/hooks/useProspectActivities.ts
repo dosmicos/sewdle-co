@@ -22,7 +22,7 @@ export const useProspectActivities = (prospectId?: string) => {
       if (error) throw error;
 
       setActivities(data || []);
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error fetching activities:', err);
       toast.error('Error al cargar actividades');
     } finally {
@@ -51,7 +51,7 @@ export const useProspectActivities = (prospectId?: string) => {
       setActivities(prev => [data, ...prev]);
       toast.success('Actividad registrada');
       return { data, error: null };
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error creating activity:', err);
       toast.error('Error al registrar actividad');
       return { data: null, error: err.message };
@@ -72,7 +72,7 @@ export const useProspectActivities = (prospectId?: string) => {
       setActivities(prev => prev.map(a => a.id === id ? data : a));
       toast.success('Actividad actualizada');
       return { data, error: null };
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error updating activity:', err);
       toast.error('Error al actualizar actividad');
       return { data: null, error: err.message };

@@ -51,9 +51,9 @@ interface UserFormData {
 }
 
 interface UserModalProps {
-  user: unknown | null;
+  user: any | null;
   onClose: () => void;
-  onSave: (userData: UserFormData) => Promise<unknown>;
+  onSave: (userData: UserFormData) => Promise<any>;
 }
 
 const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
 
-  const fetchRealTimeStats = useCallback(async () => {
+  const fetchRealTimeStats = async () => {
     setLoading(true);
     try {
       if (!currentOrganization?.id) {
@@ -112,10 +112,10 @@ export const ShopifyRealTimeStats: React.FC = () => {
         ...calculatedStats,
         orders_yesterday: ordersYesterday,
         revenue_yesterday: revenueYesterday
-      } as Record<string, unknown>);
+      } as any);
       setLastSync(new Date().toLocaleTimeString());
 
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error fetching real-time stats:', error);
       toast({
         title: "Error",
@@ -125,7 +125,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization?.id, toast]);
+  };
 
   useEffect(() => {
     if (currentOrganization?.id) {
@@ -136,7 +136,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
       
       return () => clearInterval(interval);
     }
-  }, [currentOrganization?.id, fetchRealTimeStats]);
+  }, [currentOrganization?.id]);
 
   const formatCurrency = (amount: number) => {
     return '$' + new Intl.NumberFormat('es-CO', {

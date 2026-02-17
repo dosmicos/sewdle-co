@@ -101,7 +101,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('📦 Creating shipping label for order:', request.order_number);
 
-      const data = await invokeEdgeFunction<unknown>('create-envia-label', request, { timeoutMs: 10_000 });
+      const data = await invokeEdgeFunction<any>('create-envia-label', request, { timeoutMs: 10_000 });
 
       if (data?.error) {
         console.error('Error creating label:', data);
@@ -152,7 +152,7 @@ export const useEnviaShipping = () => {
         label_url: data.label_url,
         carrier: data.carrier
       };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error in createLabel:', error);
       toast.error('Error al crear la guía: ' + error.message);
       return { success: false, error: error.message };
@@ -169,7 +169,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('💰 Getting shipping quotes for:', request.destination_city);
 
-      const data = await invokeEdgeFunction<unknown>('envia-quote', request, { timeoutMs: 10_000 });
+      const data = await invokeEdgeFunction<any>('envia-quote', request, { timeoutMs: 10_000 });
 
       if (!data.success) {
         console.error('Quote request failed:', data.error);
@@ -186,7 +186,7 @@ export const useEnviaShipping = () => {
       }
       
       return data as QuoteResponse;
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error in getQuotes:', error);
       // Don't show toast - let caller handle errors
       return null;
@@ -233,7 +233,7 @@ export const useEnviaShipping = () => {
         console.log(`🔄 Intento ${attempt}/${maxAttempts} de cotización${orderLabel}`);
 
         try {
-          const data = await invokeEdgeFunction<unknown>('envia-quote', request, {
+          const data = await invokeEdgeFunction<any>('envia-quote', request, {
             timeoutMs,
             signal: options?.signal,
           });
@@ -246,7 +246,7 @@ export const useEnviaShipping = () => {
           setQuotes(data.quotes || []);
           if (data.matchInfo) setMatchInfo(data.matchInfo);
           return data as QuoteResponse;
-        } catch (error: unknown) {
+        } catch (error: any) {
           console.log(`⚠️ Quote intento ${attempt}/${maxAttempts} falló:`, error?.message);
 
           if (attempt < maxAttempts) {
@@ -273,7 +273,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('📍 Tracking shipment:', request.tracking_number);
 
-      const data = await invokeEdgeFunction<unknown>('envia-track', request, { timeoutMs: 10_000 });
+      const data = await invokeEdgeFunction<any>('envia-track', request, { timeoutMs: 10_000 });
 
       if (!data.success) {
         console.error('Tracking request failed:', data.error);
@@ -285,7 +285,7 @@ export const useEnviaShipping = () => {
       setTrackingInfo(data as TrackingResponse);
       
       return data as TrackingResponse;
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error in trackShipment:', error);
       toast.error('Error al rastrear envío: ' + error.message);
       return null;
@@ -323,7 +323,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('🚫 Cancelling shipping label:', labelId);
 
-      const data = await invokeEdgeFunction<unknown>('envia-cancel', { label_id: labelId }, { timeoutMs: 10_000 });
+      const data = await invokeEdgeFunction<any>('envia-cancel', { label_id: labelId }, { timeoutMs: 10_000 });
 
       if (!data.success) {
         console.error('Label cancellation failed:', data.error);
@@ -345,7 +345,7 @@ export const useEnviaShipping = () => {
         shopifyFulfillmentCancelled: data.shopifyFulfillmentCancelled,
         shopifyFulfillmentError: data.shopifyFulfillmentError
       };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error in cancelLabel:', error);
       return { success: false, error: error.message };
     } finally {
@@ -373,7 +373,7 @@ export const useEnviaShipping = () => {
       clearLabel();
       
       return { success: true };
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('Error in deleteFailedLabel:', error);
       return { success: false, error: error.message };
     } finally {

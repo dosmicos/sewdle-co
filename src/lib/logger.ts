@@ -25,25 +25,25 @@ class Logger {
     return true;
   }
 
-  error(message: string, data?: unknown): void {
+  error(message: string, data?: any): void {
     if (this.shouldLog('ERROR')) {
       console.error(`[Sewdle Error] ${message}`, data || '');
     }
   }
 
-  warn(message: string, data?: unknown): void {
+  warn(message: string, data?: any): void {
     if (this.shouldLog('WARN')) {
       console.warn(`[Sewdle Warning] ${message}`, data || '');
     }
   }
 
-  info(message: string, data?: unknown): void {
+  info(message: string, data?: any): void {
     if (this.shouldLog('INFO')) {
       console.info(`[Sewdle Info] ${message}`, data || '');
     }
   }
 
-  debug(message: string, data?: unknown): void {
+  debug(message: string, data?: any): void {
     if (this.shouldLog('DEBUG')) {
       console.log(`[Sewdle Debug] ${message}`, data || '');
     }

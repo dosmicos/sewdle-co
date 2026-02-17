@@ -12,7 +12,7 @@ interface Product {
   description: string;
   base_price: number;
   image_url?: string;
-  variants: unknown[];
+  variants: any[];
 }
 
 interface SearchableProductSelectorProps {

@@ -78,7 +78,7 @@ export const useMessagingFolders = () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-folders'] });
       toast.success('Carpeta creada');
     },
-    onError: (error: unknown) => {
+    onError: (error: any) => {
       toast.error(`Error al crear carpeta: ${error.message}`);
     },
   });
@@ -98,7 +98,7 @@ export const useMessagingFolders = () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-folder-counts'] });
       toast.success('Carpeta eliminada');
     },
-    onError: (error: unknown) => {
+    onError: (error: any) => {
       toast.error(`Error al eliminar carpeta: ${error.message}`);
     },
   });
@@ -119,9 +119,9 @@ export const useMessagingFolders = () => {
       // Optimistic update across all query keys matching messaging-conversations
       queryClient.setQueriesData(
         { queryKey: ['messaging-conversations'] },
-        (old: unknown[] | undefined) => {
+        (old: any[] | undefined) => {
           if (!old) return old;
-          return old.map((c: unknown) =>
+          return old.map((c: any) =>
             c.id === conversationId ? { ...c, folder_id: folderId } : c
           );
         }
@@ -132,7 +132,7 @@ export const useMessagingFolders = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-folder-counts'] });
     },
-    onError: (error: unknown, _, context) => {
+    onError: (error: any, _, context) => {
       if (context?.previous) {
         queryClient.setQueriesData({ queryKey: ['messaging-conversations'] }, context.previous);
       }

@@ -67,8 +67,8 @@ serve(async (req) => {
 
     // Preparar los datos para sincronización
     let approvedItems = deliveryData.delivery_items
-      .filter((item: unknown) => item.quantity_approved > 0)
-      .map((item: unknown) => ({
+      .filter((item: any) => item.quantity_approved > 0)
+      .map((item: any) => ({
         variantId: item.order_items.product_variants.id,
         skuVariant: item.order_items.product_variants.sku_variant,
         quantityApproved: item.quantity_approved
@@ -76,7 +76,7 @@ serve(async (req) => {
 
     // Si solo queremos re-sincronizar SKUs que fallaron
     if (failedSkusOnly && failedSkusOnly.length > 0) {
-      approvedItems = approvedItems.filter((item: unknown) => 
+      approvedItems = approvedItems.filter((item: any) => 
         failedSkusOnly.includes(item.skuVariant)
       )
       console.log(`Filtrando solo SKUs fallidos: ${failedSkusOnly.join(', ')}`)

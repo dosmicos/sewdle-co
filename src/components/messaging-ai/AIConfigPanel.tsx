@@ -104,7 +104,7 @@ Reglas importantes:
             channel_type: 'whatsapp',
             is_active: false,
             ai_enabled: false,
-          } as Record<string, unknown>)
+          } as any)
           .select('id')
           .single();
 
@@ -120,7 +120,7 @@ Reglas importantes:
         .eq('id', effectiveChannelId)
         .maybeSingle();
 
-      const currentConfig = (current?.ai_config as Record<string, unknown>) || {};
+      const currentConfig = (current?.ai_config as any) || {};
 
       // Update with new quick replies
       await supabase
@@ -135,7 +135,7 @@ Reglas importantes:
               imageUrl: q.imageUrl || undefined
             })),
           },
-        } as Record<string, unknown>)
+        } as any)
         .eq('id', effectiveChannelId);
 
       // Invalidate cache so ConversationThread gets updated data
@@ -169,7 +169,7 @@ Reglas importantes:
 
         if (channel) {
           setChannelId(channel.id);
-          const savedConfig = channel.ai_config as Record<string, unknown>;
+          const savedConfig = channel.ai_config as any;
           
           if (savedConfig) {
             setConfig(prev => ({
@@ -229,7 +229,7 @@ Reglas importantes:
             channel_type: 'whatsapp',
             is_active: false,
             ai_enabled: config.autoReply,
-          } as Record<string, unknown>)
+          } as any)
           .select('id')
           .single();
 
@@ -260,7 +260,7 @@ Reglas importantes:
 
       if (currentError) throw currentError;
 
-      const currentConfig = (current?.ai_config as Record<string, unknown>) || {};
+      const currentConfig = (current?.ai_config as any) || {};
 
       const { error } = await supabase
         .from('messaging_channels')
@@ -270,7 +270,7 @@ Reglas importantes:
             ...configToSave,
           },
           ai_enabled: config.autoReply,
-        } as Record<string, unknown>)
+        } as any)
         .eq('id', effectiveChannelId);
 
       if (error) throw error;

@@ -1,50 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireAuthenticatedUser } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-type AIConfigRule = {
-  condition?: string;
-  response?: string;
-};
-
-type AIKnowledgeItem = {
-  category?: string;
-  question?: string;
-  answer?: string;
-  title?: string;
-  content?: string;
-};
-
-type AIConfig = {
-  systemPrompt?: string;
-  tone?: string;
-  rules?: AIConfigRule[];
-  knowledgeBase?: AIKnowledgeItem[];
-};
-
-type ShopifyCredentials = {
-  store_domain?: string;
-  shopDomain?: string;
-  access_token?: string;
-  accessToken?: string;
-};
-
-type LocalProductVariant = {
-  size?: string;
-  color?: string;
-  stock_quantity?: number;
-};
-
-type LocalProduct = {
-  name?: string;
-  base_price?: number | string;
-  product_variants?: LocalProductVariant[];
 };
 
 // Extract ALL product IDs from AI response (up to 10)
@@ -69,7 +29,7 @@ async function cacheImageToStorage(
   imageUrl: string,
   productId: number,
   organizationId: string,
-  supabase: ReturnType<typeof createClient>
+  supabase: any
 ): Promise<string | null> {
   try {
     console.log(`Caching image for product ${productId}...`);
@@ -126,7 +86,7 @@ async function cacheImageToStorage(
 // Fetch product image from Shopify using organization credentials
 async function fetchShopifyProductImage(
   productId: number, 
-  shopifyCredentials: ShopifyCredentials
+  shopifyCredentials: any
 ): Promise<string | null> {
   if (!shopifyCredentials) {
     console.log('No Shopify credentials provided');
@@ -181,12 +141,6 @@ serve(async (req) => {
   }
 
   try {
-    const authResult = await requireAuthenticatedUser(req, corsHeaders);
-    if (!authResult.ok) {
-      return authResult.response;
-    }
-    console.log("✅ Authenticated user for messaging-ai-openai:", authResult.userId);
-
     const body = await req.json();
     const { action, messages, systemPrompt, organizationId } = body;
     
@@ -271,7 +225,7 @@ serve(async (req) => {
         if (channelError) {
           console.error("Error loading channel config:", channelError);
         } else if (channel?.ai_config) {
-          const aiConfig = channel.ai_config as AIConfig;
+          const aiConfig = channel.ai_config as any;
           
           // Get saved system prompt
           if (aiConfig.systemPrompt) {
@@ -294,7 +248,7 @@ serve(async (req) => {
           // Get rules
           if (aiConfig.rules?.length > 0) {
             rulesContext = '\n\n📋 REGLAS ESPECIALES:\n';
-            aiConfig.rules.forEach((rule) => {
+            aiConfig.rules.forEach((rule: any) => {
               if (rule.condition && rule.response) {
                 rulesContext += `- Cuando el usuario mencione "${rule.condition}": ${rule.response}\n`;
               }
@@ -305,7 +259,7 @@ serve(async (req) => {
           // Get knowledge base
           if (aiConfig.knowledgeBase?.length > 0) {
             knowledgeContext = '\n\n📚 CONOCIMIENTO DE LA EMPRESA:\n';
-            aiConfig.knowledgeBase.forEach((item) => {
+            aiConfig.knowledgeBase.forEach((item: any) => {
               if (item.category) {
                 knowledgeContext += `\n[${item.category}]\n`;
               }
@@ -325,8 +279,8 @@ serve(async (req) => {
 
     // Load products with Shopify inventory if organizationId is provided
     let productCatalog = '';
-    let shopifyCredentials: ShopifyCredentials | null = null;
-    const productImageMap: Record<number, { url: string; title: string }> = {}; // Map Shopify ID -> image URL + title
+    let shopifyCredentials: any = null;
+    let productImageMap: Record<number, { url: string; title: string }> = {}; // Map Shopify ID -> image URL + title
     
     if (organizationId) {
       try {
@@ -347,7 +301,7 @@ serve(async (req) => {
           .eq('id', organizationId)
           .single();
 
-        shopifyCredentials = (org?.shopify_credentials as ShopifyCredentials | null) ?? null;
+        shopifyCredentials = org?.shopify_credentials;
 
         interface ShopifyVariant {
           id: number;
@@ -369,7 +323,7 @@ serve(async (req) => {
         
         // Fetch real-time inventory from Shopify if credentials exist
         if (shopifyCredentials) {
-          const creds = shopifyCredentials;
+          const creds = shopifyCredentials as any;
           const shopifyDomain = creds.store_domain || creds.shopDomain;
           const accessToken = creds.access_token || creds.accessToken;
           
@@ -487,14 +441,13 @@ serve(async (req) => {
             productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
             productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible.\n';
             
-            const localProducts = products as LocalProduct[];
-            localProducts.forEach((p) => {
+            products.forEach((p: any) => {
               const price = p.base_price 
                 ? `$${Number(p.base_price).toLocaleString('es-CO')} COP` 
                 : 'Precio: Consultar';
               
               const variants = p.product_variants
-                ?.map((v) => {
+                ?.map((v: any) => {
                   const size = v.size || '';
                   const color = v.color || '';
                   const stock = v.stock_quantity || 0;

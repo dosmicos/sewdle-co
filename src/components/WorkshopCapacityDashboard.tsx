@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -21,16 +21,16 @@ const WorkshopCapacityDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { getWorkshopCapacityStats } = useWorkshopAssignments();
 
-  const loadCapacityStats = useCallback(async () => {
+  useEffect(() => {
+    loadCapacityStats();
+  }, []);
+
+  const loadCapacityStats = async () => {
     setLoading(true);
     const stats = await getWorkshopCapacityStats();
     setCapacityStats(stats);
     setLoading(false);
-  }, [getWorkshopCapacityStats]);
-
-  useEffect(() => {
-    loadCapacityStats();
-  }, [loadCapacityStats]);
+  };
 
   const getCapacityColor = (percentage: number) => {
     if (percentage >= 90) return 'text-red-600';

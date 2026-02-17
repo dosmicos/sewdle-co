@@ -130,9 +130,9 @@ const ProductsPage = () => {
       const shopifyVariantsMap = new Map();
       let totalShopifyVariants = 0;
       
-      data.products.forEach((product: unknown) => {
+      data.products.forEach((product: any) => {
         if (product.variants) {
-          product.variants.forEach((variant: unknown) => {
+          product.variants.forEach((variant: any) => {
             if (variant.sku) {
               shopifyVariantsMap.set(variant.sku, {
                 ...variant,
@@ -215,7 +215,7 @@ const ProductsPage = () => {
 
       // Recargar productos para mostrar los cambios
       refetch();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error('💥 Error updating stock from Shopify:', error);
       toast({
         title: "Error al actualizar stock",

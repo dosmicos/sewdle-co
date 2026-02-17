@@ -72,7 +72,7 @@ serve(async (req) => {
     const currentProcessId = currentLog.process_id
 
     // Función para actualizar el progreso
-    const updateProgress = async (updates: unknown) => {
+    const updateProgress = async (updates: any) => {
       await supabase
         .from('sku_assignment_logs')
         .update({
@@ -84,7 +84,7 @@ serve(async (req) => {
     }
 
     // Función con backoff exponencial para rate limiting
-    const makeShopifyRequest = async (url: string, options: unknown, retries = 3): Promise<Response> => {
+    const makeShopifyRequest = async (url: string, options: any, retries = 3): Promise<Response> => {
       for (let attempt = 1; attempt <= retries; attempt++) {
         console.log(`Shopify API call: ${url}`)
         
@@ -139,8 +139,8 @@ serve(async (req) => {
     }
 
     // NUEVA FUNCIÓN: Verificar si un producto necesita procesamiento
-    const productNeedsProcessing = (product: unknown) => {
-      return product.variants.some((variant: unknown) => isArtificialSku(variant.sku))
+    const productNeedsProcessing = (product: any) => {
+      return product.variants.some((variant: any) => isArtificialSku(variant.sku))
     }
 
     // NUEVA FUNCIÓN: Contar productos que realmente necesitan procesamiento
@@ -172,7 +172,7 @@ serve(async (req) => {
         const data = await response.json()
         
         const filteredProducts = tempCursor 
-          ? data.products.filter((p: unknown) => p.status === 'active' || p.status === 'draft')
+          ? data.products.filter((p: any) => p.status === 'active' || p.status === 'draft')
           : data.products
         
         totalProductsChecked += filteredProducts.length
@@ -180,7 +180,7 @@ serve(async (req) => {
         for (const product of filteredProducts) {
           if (productNeedsProcessing(product)) {
             productsNeedingProcessing++
-            variantsNeedingProcessing += product.variants.filter((v: unknown) => isArtificialSku(v.sku)).length
+            variantsNeedingProcessing += product.variants.filter((v: any) => isArtificialSku(v.sku)).length
           }
         }
 
@@ -230,7 +230,7 @@ serve(async (req) => {
         const data = await response.json()
         
         const filteredProducts = tempCursor 
-          ? data.products.filter((p: unknown) => p.status === 'active' || p.status === 'draft')
+          ? data.products.filter((p: any) => p.status === 'active' || p.status === 'draft')
           : data.products
         
         productsScanned += filteredProducts.length
@@ -239,7 +239,7 @@ serve(async (req) => {
         for (const product of filteredProducts) {
           if (productNeedsProcessing(product)) {
             productsNeedingWork.push(product)
-            console.log(`✓ Producto necesita procesamiento: ${product.title} (${product.variants.filter((v: unknown) => isArtificialSku(v.sku)).length} variantes con SKUs artificiales)`)
+            console.log(`✓ Producto necesita procesamiento: ${product.title} (${product.variants.filter((v: any) => isArtificialSku(v.sku)).length} variantes con SKUs artificiales)`)
           } else {
             productsSkipped++
             console.log(`○ Producto ya procesado: ${product.title} (todas las variantes tienen SKUs reales)`)
@@ -267,7 +267,7 @@ serve(async (req) => {
         let cursor = resumeFromCursor || currentLog.current_cursor
         let processedCount = currentLog.processed_variants || 0
         let updatedCount = currentLog.updated_variants || 0
-        const skippedCount = currentLog.skipped_variants || 0
+        let skippedCount = currentLog.skipped_variants || 0
         let errorCount = currentLog.error_variants || 0
 
         // PASO 1: Si es un proceso nuevo, contar productos que realmente necesitan procesamiento
@@ -354,7 +354,7 @@ serve(async (req) => {
           })
 
           // Solo procesar variantes que realmente necesiten SKU (vacíos o artificiales)
-          const variantsNeedingSku = product.variants.filter((v: unknown) => isArtificialSku(v.sku))
+          const variantsNeedingSku = product.variants.filter((v: any) => isArtificialSku(v.sku))
           console.log(`  → ${variantsNeedingSku.length} variantes necesitan SKU de ${product.variants.length} totales`)
           
           if (variantsNeedingSku.length > 0) {

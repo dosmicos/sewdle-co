@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     const fulfillmentOrders = fulfillmentOrdersData.fulfillment_orders || [];
     
     console.log(`📋 Fulfillment orders encontradas: ${fulfillmentOrders.length}`);
-    fulfillmentOrders.forEach((fo: unknown, index: number) => {
+    fulfillmentOrders.forEach((fo: any, index: number) => {
       console.log(`📋 FO[${index}]:`, { 
         id: fo.id, 
         status: fo.status,
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     });
 
     // Helper to detect if it's a pickup order - handles both string and object formats
-    const isPickupDelivery = (deliveryMethod: unknown): boolean => {
+    const isPickupDelivery = (deliveryMethod: any): boolean => {
       if (!deliveryMethod) return false;
       
       // String format: "pick-up", "PICK_UP", "local", etc.
@@ -86,19 +86,19 @@ Deno.serve(async (req) => {
 
     // Find the pickup fulfillment order
     const pickupFulfillmentOrder = fulfillmentOrders.find(
-      (fo: unknown) => isPickupDelivery(fo.delivery_method) && 
+      (fo: any) => isPickupDelivery(fo.delivery_method) && 
                    (fo.status === 'open' || fo.status === 'in_progress')
     );
 
     // If no pickup order found, look for any open order
     const openFulfillmentOrder = pickupFulfillmentOrder || fulfillmentOrders.find(
-      (fo: unknown) => fo.status === 'open' || fo.status === 'in_progress'
+      (fo: any) => fo.status === 'open' || fo.status === 'in_progress'
     );
 
     if (!openFulfillmentOrder) {
       // Check if already prepared for pickup
       const preparedOrder = fulfillmentOrders.find(
-        (fo: unknown) => fo.status === 'scheduled' || fo.status === 'ready_for_pickup'
+        (fo: any) => fo.status === 'scheduled' || fo.status === 'ready_for_pickup'
       );
       
       if (preparedOrder) {
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
 
       // Check if already fulfilled
       const fulfilledOrder = fulfillmentOrders.find(
-        (fo: unknown) => fo.status === 'closed'
+        (fo: any) => fo.status === 'closed'
       );
       
       if (fulfilledOrder) {
@@ -218,8 +218,8 @@ Deno.serve(async (req) => {
     const userErrors = graphqlData.data?.fulfillmentOrderLineItemsPreparedForPickup?.userErrors || [];
     
     if (userErrors.length > 0 || graphqlData.errors) {
-      const errorMessages = userErrors.map((e: unknown) => e.message).join(', ') || 
-                           graphqlData.errors?.map((e: unknown) => e.message).join(', ');
+      const errorMessages = userErrors.map((e: any) => e.message).join(', ') || 
+                           graphqlData.errors?.map((e: any) => e.message).join(', ');
       console.error(`❌ Errores de Shopify:`, JSON.stringify(userErrors.length > 0 ? userErrors : graphqlData.errors));
       throw new Error(`Errores de Shopify: ${errorMessages}`);
     }
