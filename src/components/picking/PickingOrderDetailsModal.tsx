@@ -129,6 +129,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const packInFlightRef = useRef(false);
   const autoPackTriggeredRef = useRef<string | null>(null);
   const autoPrintTriggeredRef = useRef<string | null>(null);
+  const statusUpdateWatchdogRef = useRef<number | null>(null);
 
   // Use cached order as base, fall back to list order - MUST match current orderId
   const order = orders.find(o => o.id === orderId);
@@ -415,6 +416,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     autoPackTriggeredRef.current = null;
     autoPrintTriggeredRef.current = null;
     packInFlightRef.current = false;
+    if (statusUpdateWatchdogRef.current) {
+      window.clearTimeout(statusUpdateWatchdogRef.current);
+      statusUpdateWatchdogRef.current = null;
+    }
 
     // DON'T reset lineItems here - causes "0 unidades" flash
     // They will be replaced when fetchLineItems completes for the new order
@@ -634,55 +639,97 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     console.log(`🔄 Actualizando estado de orden #${localOrder.shopify_order?.order_number} a ${newStatus}`);
     setUpdatingStatus(true);
-    
+
+    if (statusUpdateWatchdogRef.current) {
+      window.clearTimeout(statusUpdateWatchdogRef.current);
+    }
+    statusUpdateWatchdogRef.current = window.setTimeout(() => {
+      setUpdatingStatus(false);
+      packInFlightRef.current = false;
+      toast.error('La actualización tardó demasiado. Intenta nuevamente.');
+    }, 30000);
+
     // Optimistic update - instant UI feedback with new tag and packed info
-    const statusTagMap = {
+    const statusTagMap: Record<OperationalStatus, string> = {
       pending: 'PENDIENTE',
       picking: 'PICKING_EN_PROCESO',
       packing: 'EMPACANDO',
       ready_to_ship: 'EMPACADO',
+      awaiting_pickup: 'LISTO_PARA_RETIRO',
       shipped: 'ENVIADO'
     };
-    
+
     const existingTags = localOrder.shopify_order?.tags || '';
     const existingTagsArray = existingTags.split(',').map(t => t.trim()).filter(Boolean);
     const newTag = statusTagMap[newStatus];
-    
+
     // Add new tag if not already present
     const updatedTags = existingTagsArray.includes(newTag)
       ? existingTags
       : [...existingTagsArray, newTag].join(', ');
-    
-    // Get current user for optimistic update
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    setLocalOrder({
-      ...localOrder,
-      operational_status: newStatus,
-      // Set packed_at and packed_by for ready_to_ship
-      ...(newStatus === 'ready_to_ship' ? {
-        packed_at: new Date().toISOString(),
-        packed_by: user?.id
-      } : {}),
-      shopify_order: localOrder.shopify_order ? {
-        ...localOrder.shopify_order,
-        tags: updatedTags
-      } : undefined
-    });
-    
-    // Also set current user name optimistically
-    if (newStatus === 'ready_to_ship' && user?.id) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', user.id)
-        .single();
-      setPackedByName(profileData?.name || null);
-    }
-    
+
+    const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, errorMessage: string) =>
+      new Promise<T>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+        promise
+          .then((value) => {
+            window.clearTimeout(timeoutId);
+            resolve(value);
+          })
+          .catch((error) => {
+            window.clearTimeout(timeoutId);
+            reject(error);
+          });
+      });
+
     try {
+      // Get current user for optimistic update (non-blocking timeout fallback)
+      let optimisticUserId: string | undefined;
+      try {
+        const authResult = await withTimeout(
+          supabase.auth.getUser(),
+          5000,
+          'Timeout obteniendo usuario actual'
+        );
+        optimisticUserId = authResult.data.user?.id;
+      } catch (authError) {
+        console.warn('⚠️ No se pudo obtener usuario para actualización optimista:', authError);
+      }
+
+      setLocalOrder({
+        ...localOrder,
+        operational_status: newStatus,
+        ...(newStatus === 'ready_to_ship' ? {
+          packed_at: new Date().toISOString(),
+          packed_by: optimisticUserId
+        } : {}),
+        shopify_order: localOrder.shopify_order ? {
+          ...localOrder.shopify_order,
+          tags: updatedTags
+        } : undefined
+      });
+
+      // Fetch profile name in background (must not block status update)
+      if (newStatus === 'ready_to_ship' && optimisticUserId) {
+        void supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', optimisticUserId)
+          .single()
+          .then(({ data: profileData }) => {
+            setPackedByName(profileData?.name || null);
+          })
+          .catch((profileError) => {
+            console.warn('⚠️ No se pudo obtener nombre de empacador:', profileError);
+          });
+      }
+
       // Update in database and Shopify - pass shopify_order_id directly from localOrder
-      await updateOrderStatus(orderId, newStatus, currentShopifyOrderId);
+      await withTimeout(
+        updateOrderStatus(orderId, newStatus, currentShopifyOrderId),
+        25000,
+        'Timeout al actualizar estado de la orden'
+      );
       
       // SUCCESS: Update React Query cache immediately for consistency
       const updatedOrderForCache: PickingOrder = {
@@ -690,7 +737,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         operational_status: newStatus,
         ...(newStatus === 'ready_to_ship' ? {
           packed_at: new Date().toISOString(),
-          packed_by: user?.id
+          packed_by: optimisticUserId
         } : {}),
         shopify_order: localOrder.shopify_order ? {
           ...localOrder.shopify_order,
@@ -705,6 +752,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       await refetchOrder(orderId);
       throw error; // Propagar error para que handleMarkAsPackedAndPrint lo capture
     } finally {
+      if (statusUpdateWatchdogRef.current) {
+        window.clearTimeout(statusUpdateWatchdogRef.current);
+        statusUpdateWatchdogRef.current = null;
+      }
       setUpdatingStatus(false);
     }
   }, [orderId, localOrder, updateOrderStatus, refetchOrder, updateOrderOptimistically]);
