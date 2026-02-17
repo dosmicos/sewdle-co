@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { logger } from '@/lib/logger';
+import { invokeEdgeFunction } from '@/features/shipping/lib/invokeEdgeFunction';
 
 export type OperationalStatus = 'pending' | 'picking' | 'packing' | 'ready_to_ship' | 'awaiting_pickup' | 'shipped';
 
@@ -76,6 +77,9 @@ export const usePickingOrders = () => {
   const { currentOrganization } = useOrganization();
   
   const pageSize = 100;
+  const isAbortError = (error: unknown) =>
+    error instanceof Error &&
+    (error.name === 'AbortError' || error.message.toLowerCase().includes('abort'));
 
   const autoInitializePickingOrders = async () => {
     if (!currentOrganization?.id) return;
@@ -445,25 +449,37 @@ export const usePickingOrders = () => {
     } catch (error: any) {
       console.error('Error updating order status:', error);
       toast.error('Error al actualizar estado');
+      throw error;
     }
   };
 
   const updateShopifyTags = async (shopifyOrderId: number, newTags: string[]) => {
     try {
       console.log(`🏷️ Agregando tags a orden ${shopifyOrderId} usando merge:`, newTags);
-      
-      // Use add_tags action - reads from Shopify, merges, and updates
-      const { data: shopifyResponse, error: shopifyError } = await supabase.functions.invoke('update-shopify-order', {
-        body: {
-          orderId: shopifyOrderId,
-          action: 'add_tags',
-          data: { tags: newTags }
-        }
-      });
 
-      if (shopifyError) {
-        console.error(`❌ Error Shopify para orden ${shopifyOrderId}:`, shopifyError);
-        throw shopifyError;
+      let shopifyResponse: any = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          shopifyResponse = await invokeEdgeFunction<any>(
+            'update-shopify-order',
+            {
+              orderId: shopifyOrderId,
+              action: 'add_tags',
+              data: { tags: newTags }
+            },
+            { timeoutMs: 15000 }
+          );
+          break;
+        } catch (error) {
+          if (isAbortError(error) && attempt < 2) {
+            console.warn(`⚠️ Timeout Shopify orden ${shopifyOrderId}, reintentando (${attempt}/2)...`);
+            continue;
+          }
+          if (isAbortError(error)) {
+            throw new Error('Timeout al sincronizar con Shopify. Intenta de nuevo.');
+          }
+          throw error;
+        }
       }
       
       if (!shopifyResponse?.success) {
