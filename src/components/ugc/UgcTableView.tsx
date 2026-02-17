@@ -30,6 +30,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
+  const [publicationFilter, setPublicationFilter] = useState<string>('all');
 
   const getActiveCampaign = (creatorId: string) =>
     campaigns.find(
@@ -50,7 +51,23 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
-    return matchesSearch && matchesStatus && matchesCity;
+    const campaignVideos = activeCampaign?.videos || [];
+    const publicationReadyVideos = campaignVideos.filter(
+      (v) => v.status === 'aprobado' || v.status === 'publicado'
+    );
+    const missingOrganic = publicationReadyVideos.some((v) => !(v.published_organic || v.status === 'publicado'));
+    const missingAds = publicationReadyVideos.some((v) => !v.published_ads);
+    const hasOrganicPublished = campaignVideos.some((v) => v.published_organic || v.status === 'publicado');
+    const hasAdsPublished = campaignVideos.some((v) => v.published_ads);
+
+    const matchesPublication =
+      publicationFilter === 'all' ||
+      (publicationFilter === 'missing_organic' && missingOrganic) ||
+      (publicationFilter === 'missing_ads' && missingAds) ||
+      (publicationFilter === 'published_organic' && hasOrganicPublished) ||
+      (publicationFilter === 'published_ads' && hasAdsPublished);
+
+    return matchesSearch && matchesStatus && matchesCity && matchesPublication;
   });
 
   return (
@@ -86,6 +103,18 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
             {cities.map((city) => (
               <SelectItem key={city} value={city}>{city}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={publicationFilter} onValueChange={setPublicationFilter}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Publicación video" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos (publicación)</SelectItem>
+            <SelectItem value="missing_organic">Faltan publicar orgánico</SelectItem>
+            <SelectItem value="missing_ads">Faltan publicar en ads</SelectItem>
+            <SelectItem value="published_organic">Con orgánico publicado</SelectItem>
+            <SelectItem value="published_ads">Con ads publicado</SelectItem>
           </SelectContent>
         </Select>
       </div>

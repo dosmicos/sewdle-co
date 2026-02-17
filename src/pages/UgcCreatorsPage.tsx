@@ -37,7 +37,7 @@ const UgcCreatorsPage: React.FC = () => {
 
   const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator } = useUgcCreators();
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
-  const { createVideo, updateVideoStatus } = useUgcVideos();
+  const { createVideo, updateVideoStatus, updateVideoPublication } = useUgcVideos();
   const { getTagsForCreator } = useAllUgcCreatorTagAssignments();
 
   // Auto-sync campaign statuses based on shipping events
@@ -113,6 +113,10 @@ const UgcCreatorsPage: React.FC = () => {
 
   const handleVideoStatusChange = (videoId: string, status: string, feedback?: string) => {
     updateVideoStatus.mutate({ id: videoId, status, feedback });
+  };
+
+  const handleVideoPublicationChange = (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean) => {
+    updateVideoPublication.mutate({ id: videoId, publishedOrganic, publishedAds });
   };
 
   const handleOrderClick = async (orderNumber: string) => {
@@ -244,6 +248,7 @@ const UgcCreatorsPage: React.FC = () => {
         onNewVideo={handleNewVideo}
         onCampaignStatusChange={handleCampaignStatusChange}
         onVideoStatusChange={handleVideoStatusChange}
+        onVideoPublicationChange={handleVideoPublicationChange}
         onDelete={handleDeleteCreator}
       />
 

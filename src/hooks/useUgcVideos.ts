@@ -66,6 +66,10 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
     mutationFn: async ({ id, status, feedback }: { id: string; status: string; feedback?: string }) => {
       const update: Record<string, any> = { status };
       if (feedback !== undefined) update.feedback = feedback;
+      if (status === 'publicado') {
+        update.published_organic = true;
+        update.published_organic_at = new Date().toISOString();
+      }
       const { error } = await supabase.from('ugc_videos').update(update).eq('id', id);
       if (error) throw error;
     },
@@ -77,5 +81,45 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
     onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
 
-  return { videos, isLoading, createVideo, updateVideoStatus };
+  const updateVideoPublication = useMutation({
+    mutationFn: async ({
+      id,
+      publishedOrganic,
+      publishedAds,
+    }: {
+      id: string;
+      publishedOrganic?: boolean;
+      publishedAds?: boolean;
+    }) => {
+      const update: Record<string, any> = {};
+
+      if (publishedOrganic !== undefined) {
+        update.published_organic = publishedOrganic;
+        update.published_organic_at = publishedOrganic ? new Date().toISOString() : null;
+        if (publishedOrganic) {
+          update.status = 'publicado';
+        }
+      }
+
+      if (publishedAds !== undefined) {
+        update.published_ads = publishedAds;
+        update.published_ads_at = publishedAds ? new Date().toISOString() : null;
+      }
+
+      const { error } = await supabase
+        .from('ugc_videos')
+        .update(update as any)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-videos'] });
+      queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
+      toast.success('Publicación actualizada');
+    },
+    onError: (err: Error) => toast.error(`Error: ${err.message}`),
+  });
+
+  return { videos, isLoading, createVideo, updateVideoStatus, updateVideoPublication };
 };

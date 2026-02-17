@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Calendar, Package, CheckCircle, Trash2, Loader2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -27,6 +27,7 @@ interface UgcCreatorDetailModalProps {
   onNewVideo: (campaignId: string) => void;
   onCampaignStatusChange: (campaignId: string, status: CampaignStatus, extra?: Record<string, any>) => void;
   onVideoStatusChange: (videoId: string, status: string, feedback?: string) => void;
+  onVideoPublicationChange: (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean) => void;
   onDelete?: () => void;
 }
 
@@ -40,12 +41,14 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onNewVideo,
   onCampaignStatusChange,
   onVideoStatusChange,
+  onVideoPublicationChange,
   onDelete,
 }) => {
   const { videos: allVideos } = useUgcVideos(creator?.id);
   const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
   const [loadingPickingOrder, setLoadingPickingOrder] = useState(false);
+  const [videoFilter, setVideoFilter] = useState<'all' | 'pending_organic' | 'pending_ads' | 'published_organic' | 'published_ads'>('all');
 
   const handleOpenPickingOrder = async (orderNumber: string) => {
     const normalized = orderNumber.replace('#', '');
@@ -126,6 +129,28 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const avgLikes = totalVideos > 0 ? Math.round(allVideos.reduce((s, v) => s + v.likes, 0) / totalVideos) : 0;
   const completedCampaigns = historicCampaigns.filter((c) => c.status === 'completado').length;
   const cancelledCampaigns = historicCampaigns.filter((c) => c.status === 'cancelado').length;
+  const videosEligibleForPublication = allVideos.filter((video) => video.status === 'aprobado' || video.status === 'publicado');
+  const pendingOrganicCount = videosEligibleForPublication.filter((video) => !(video.published_organic || video.status === 'publicado')).length;
+  const pendingAdsCount = videosEligibleForPublication.filter((video) => !video.published_ads).length;
+  const publishedOrganicCount = allVideos.filter((video) => video.published_organic || video.status === 'publicado').length;
+  const publishedAdsCount = allVideos.filter((video) => video.published_ads).length;
+  const filteredVideos = allVideos.filter((video) => {
+    const isOrganicPublished = !!(video.published_organic || video.status === 'publicado');
+    const isAdsPublished = !!video.published_ads;
+
+    switch (videoFilter) {
+      case 'pending_organic':
+        return (video.status === 'aprobado' || video.status === 'publicado') && !isOrganicPublished;
+      case 'pending_ads':
+        return (video.status === 'aprobado' || video.status === 'publicado') && !isAdsPublished;
+      case 'published_organic':
+        return isOrganicPublished;
+      case 'published_ads':
+        return isAdsPublished;
+      default:
+        return true;
+    }
+  });
 
   const creatorStatusConfig = CREATOR_STATUS_CONFIG[creator.status as keyof typeof CREATOR_STATUS_CONFIG];
 
@@ -374,8 +399,65 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             {allVideos.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Sin videos registrados</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {allVideos.map((video) => (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <Card className="border border-border">
+                    <CardContent className="p-3">
+                      <p className="text-xs text-muted-foreground">Publicados orgánico</p>
+                      <p className="text-xl font-semibold text-foreground">{publishedOrganicCount}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-border">
+                    <CardContent className="p-3">
+                      <p className="text-xs text-muted-foreground">Publicados en ads</p>
+                      <p className="text-xl font-semibold text-foreground">{publishedAdsCount}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-amber-200 bg-amber-50/50">
+                    <CardContent className="p-3">
+                      <p className="text-xs text-amber-700">Faltan orgánico</p>
+                      <p className="text-xl font-semibold text-amber-800">{pendingOrganicCount}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border border-orange-200 bg-orange-50/50">
+                    <CardContent className="p-3">
+                      <p className="text-xs text-orange-700">Faltan en ads</p>
+                      <p className="text-xl font-semibold text-orange-800">{pendingAdsCount}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={videoFilter === 'all' ? 'default' : 'outline'} onClick={() => setVideoFilter('all')}>
+                    Todos ({allVideos.length})
+                  </Button>
+                  <Button size="sm" variant={videoFilter === 'pending_organic' ? 'default' : 'outline'} onClick={() => setVideoFilter('pending_organic')}>
+                    Faltan orgánico ({pendingOrganicCount})
+                  </Button>
+                  <Button size="sm" variant={videoFilter === 'pending_ads' ? 'default' : 'outline'} onClick={() => setVideoFilter('pending_ads')}>
+                    Faltan ads ({pendingAdsCount})
+                  </Button>
+                  <Button size="sm" variant={videoFilter === 'published_organic' ? 'default' : 'outline'} onClick={() => setVideoFilter('published_organic')}>
+                    Orgánico publicados ({publishedOrganicCount})
+                  </Button>
+                  <Button size="sm" variant={videoFilter === 'published_ads' ? 'default' : 'outline'} onClick={() => setVideoFilter('published_ads')}>
+                    Ads publicados ({publishedAdsCount})
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {filteredVideos.length === 0 && (
+                  <Card className="border border-dashed border-border sm:col-span-2">
+                    <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                      No hay videos para este filtro.
+                    </CardContent>
+                  </Card>
+                )}
+                {filteredVideos.map((video) => {
+                  const isOrganicPublished = !!(video.published_organic || video.status === 'publicado');
+                  const isAdsPublished = !!video.published_ads;
+
+                  return (
                   <Card key={video.id} className="border border-border">
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between mb-2">
@@ -394,6 +476,15 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                           }`}
                         >
                           {video.status.replace('_', ' ')}
+                        </Badge>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        <Badge className={isOrganicPublished ? 'bg-green-100 text-green-700 text-xs' : 'bg-amber-100 text-amber-700 text-xs'}>
+                          {isOrganicPublished ? 'Orgánico publicado' : 'Falta orgánico'}
+                        </Badge>
+                        <Badge className={isAdsPublished ? 'bg-blue-100 text-blue-700 text-xs' : 'bg-orange-100 text-orange-700 text-xs'}>
+                          {isAdsPublished ? 'Ads publicado' : 'Falta ads'}
                         </Badge>
                       </div>
 
@@ -427,14 +518,44 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                             📢 Publicado
                           </Button>
                         )}
+                        {(video.status === 'aprobado' || video.status === 'publicado') && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant={isOrganicPublished ? 'secondary' : 'outline'}
+                              className="text-xs"
+                              onClick={() => onVideoPublicationChange(video.id, !isOrganicPublished, undefined)}
+                            >
+                              {isOrganicPublished ? 'Quitar orgánico' : 'Marcar orgánico'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={isAdsPublished ? 'secondary' : 'outline'}
+                              className="text-xs"
+                              disabled={!isOrganicPublished}
+                              onClick={() => onVideoPublicationChange(video.id, undefined, !isAdsPublished)}
+                            >
+                              {isAdsPublished ? 'Quitar ads' : 'Marcar ads'}
+                            </Button>
+                          </>
+                        )}
                       </div>
+
+                      {(video.published_organic_at || video.published_ads_at) && (
+                        <div className="mt-2 text-[11px] text-muted-foreground space-y-0.5">
+                          {video.published_organic_at && <p>Orgánico: {format(new Date(video.published_organic_at), 'dd MMM yyyy HH:mm', { locale: es })}</p>}
+                          {video.published_ads_at && <p>Ads: {format(new Date(video.published_ads_at), 'dd MMM yyyy HH:mm', { locale: es })}</p>}
+                        </div>
+                      )}
 
                       {video.feedback && (
                         <p className="text-xs text-muted-foreground mt-2 italic">💬 {video.feedback}</p>
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                );
+                })}
+                </div>
               </div>
             )}
           </TabsContent>

@@ -78,6 +78,10 @@ export interface UgcVideo {
   organization_id: string;
   video_url: string | null;
   status: 'pendiente' | 'en_revision' | 'aprobado' | 'rechazado' | 'publicado';
+  published_organic?: boolean;
+  published_organic_at?: string | null;
+  published_ads?: boolean;
+  published_ads_at?: string | null;
   likes: number;
   views: number;
   comments: number;
