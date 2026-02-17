@@ -130,6 +130,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const autoPackTriggeredRef = useRef<string | null>(null);
   const autoPrintTriggeredRef = useRef<string | null>(null);
   const statusUpdateWatchdogRef = useRef<number | null>(null);
+  const pickupInFlightRef = useRef(false);
 
   // Use cached order as base, fall back to list order - MUST match current orderId
   const order = orders.find(o => o.id === orderId);
@@ -416,6 +417,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     autoPackTriggeredRef.current = null;
     autoPrintTriggeredRef.current = null;
     packInFlightRef.current = false;
+    pickupInFlightRef.current = false;
     if (statusUpdateWatchdogRef.current) {
       window.clearTimeout(statusUpdateWatchdogRef.current);
       statusUpdateWatchdogRef.current = null;
@@ -1111,17 +1113,21 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       toast.error('Error: ID de Shopify no disponible');
       return;
     }
+    if (pickupInFlightRef.current) {
+      return;
+    }
 
+    pickupInFlightRef.current = true;
     setIsProcessingPickup(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fulfill-pickup-order', {
-        body: {
+      const data = await invokeEdgeFunction<any>(
+        'fulfill-pickup-order',
+        {
           shopify_order_id: localOrder.shopify_order.shopify_order_id,
           organization_id: localOrder.organization_id
-        }
-      });
-
-      if (error) throw error;
+        },
+        { timeoutMs: 30000 }
+      );
 
       if (data?.success) {
         toast.success(data.message || 'Pedido listo para retiro. Cliente notificado.');
@@ -1141,6 +1147,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       toast.error(error.message || 'Error procesando pedido para retiro');
     } finally {
       setIsProcessingPickup(false);
+      pickupInFlightRef.current = false;
     }
   }, [localOrder, orderId, refetchOrder]);
 
