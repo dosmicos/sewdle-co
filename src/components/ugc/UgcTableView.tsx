@@ -65,7 +65,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const creatorVideos = getCreatorVideos(creator.id);
     const usableVideos = creatorVideos.filter((v) => v.status !== 'rechazado');
-    const publicationGoal = Math.max(activeCampaign?.agreed_videos || 0, usableVideos.length);
+    const publicationGoal =
+      usableVideos.length > 0 ? usableVideos.length : (activeCampaign?.agreed_videos || 0);
     const organicPublished = usableVideos.filter(
       (v) => v.published_organic || v.status === 'publicado'
     ).length;
@@ -174,7 +175,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                   (v) => v.published_organic || v.status === 'publicado'
                 ).length;
                 const adsPublished = usableVideos.filter((v) => v.published_ads).length;
-                const publicationGoal = Math.max(activeCampaign?.agreed_videos || 0, usableVideos.length);
+                const publicationGoal =
+                  usableVideos.length > 0 ? usableVideos.length : (activeCampaign?.agreed_videos || 0);
                 const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (

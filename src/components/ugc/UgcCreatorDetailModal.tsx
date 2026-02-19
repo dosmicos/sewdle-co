@@ -52,6 +52,73 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const [loadingPickingOrder, setLoadingPickingOrder] = useState(false);
   const [videoFilter, setVideoFilter] = useState<'all' | 'pending_organic' | 'pending_ads' | 'published_organic' | 'published_ads'>('all');
 
+  const isDirectVideoAsset = (url: string) => {
+    const normalized = url.toLowerCase().split('?')[0];
+    return (
+      normalized.endsWith('.mp4') ||
+      normalized.endsWith('.mov') ||
+      normalized.endsWith('.webm') ||
+      normalized.endsWith('.m4v') ||
+      normalized.endsWith('.ogg') ||
+      normalized.includes('/storage/v1/object/')
+    );
+  };
+
+  const openVideoPreview = (url: string) => {
+    if (!isDirectVideoAsset(url)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const previewWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!previewWindow) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const escapedUrl = url.replace(/"/g, '&quot;');
+    previewWindow.document.write(`
+      <!doctype html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Vista previa de video</title>
+          <style>
+            html, body {
+              margin: 0;
+              height: 100%;
+              background: #0f172a;
+              color: #e2e8f0;
+              font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            }
+            .wrap {
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 16px;
+              box-sizing: border-box;
+            }
+            video {
+              width: 100%;
+              max-width: 980px;
+              max-height: calc(100vh - 32px);
+              border-radius: 12px;
+              background: black;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <video controls playsinline preload="metadata" src="${escapedUrl}"></video>
+          </div>
+        </body>
+      </html>
+    `);
+    previewWindow.document.close();
+  };
+
   const handleOpenPickingOrder = async (orderNumber: string) => {
     const normalized = orderNumber.replace('#', '');
     setLoadingPickingOrder(true);
@@ -551,7 +618,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                               <TableCell className="align-top">
                                 <div className="flex flex-wrap gap-1">
                                   {video.video_url && (
-                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => window.open(video.video_url!, '_blank')}>
+                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openVideoPreview(video.video_url!)}>
                                       <ExternalLink className="h-3 w-3 mr-1" /> Ver
                                     </Button>
                                   )}
