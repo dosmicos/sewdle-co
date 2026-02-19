@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -84,11 +84,6 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   }, []);
 
   const openVideoPreview = async (url: string) => {
-    if (!isDirectVideoAsset(url)) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
     clearPreviewBlob();
     setVideoPreviewOriginalUrl(url);
     setVideoPreviewSource(null);
@@ -101,6 +96,9 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       if (!blob.size) throw new Error('Archivo vacío');
+      if (!blob.type.startsWith('video/') && !isDirectVideoAsset(url)) {
+        throw new Error('El enlace no apunta a un archivo de video directo');
+      }
       const objectUrl = URL.createObjectURL(blob);
       previewBlobUrlRef.current = objectUrl;
       setVideoPreviewSource(objectUrl);
@@ -112,6 +110,23 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     } finally {
       setVideoPreviewLoading(false);
     }
+  };
+
+  const downloadVideo = () => {
+    if (!videoPreviewOriginalUrl) return;
+
+    const source = previewBlobUrlRef.current || videoPreviewOriginalUrl;
+    const normalizedUrl = videoPreviewOriginalUrl.split('?')[0];
+    const extensionMatch = normalizedUrl.match(/\.(mp4|mov|webm|m4v|ogg)$/i);
+    const extension = extensionMatch?.[1]?.toLowerCase() || 'mp4';
+
+    const link = document.createElement('a');
+    link.href = source;
+    link.download = `ugc-video-${Date.now()}.${extension}`;
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleOpenPickingOrder = async (orderNumber: string) => {
@@ -724,6 +739,9 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
               playsInline
               preload="metadata"
               className="w-full max-h-[70vh] bg-black"
+              onError={() => {
+                setVideoPreviewError('No se pudo reproducir el video en vista previa. Puedes usar el enlace original o descargarlo.');
+              }}
             />
           ) : (
             <p className="text-sm text-white/70">No se pudo cargar el video.</p>
@@ -734,13 +752,19 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
         )}
         {videoPreviewOriginalUrl && (
           <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(videoPreviewOriginalUrl, '_blank', 'noopener,noreferrer')}
-            >
-              Abrir enlace original
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={downloadVideo}>
+                <Download className="h-4 w-4 mr-1" />
+                Descargar video
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(videoPreviewOriginalUrl, '_blank', 'noopener,noreferrer')}
+              >
+                Abrir enlace original
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>

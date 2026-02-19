@@ -54,6 +54,23 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     return videos.filter((v) => v.campaign_id === campaignId);
   };
 
+  const getCampaignPublicationMetrics = (campaignId?: string) => {
+    const campaignVideos = getCampaignVideos(campaignId);
+    const usableVideos = campaignVideos.filter((v) => v.status !== 'rechazado' && hasUploadedAsset(v));
+    const publicationGoal = usableVideos.length;
+    const organicPublished = usableVideos.filter(
+      (v) => v.published_organic || v.status === 'publicado'
+    ).length;
+    const adsPublished = usableVideos.filter((v) => v.published_ads).length;
+
+    return {
+      videosDelivered: usableVideos.length,
+      publicationGoal,
+      organicPublished,
+      adsPublished,
+    };
+  };
+
   const cities = [...new Set(creators.map((c) => c.city).filter(Boolean))] as string[];
 
   const filtered = creators.filter((creator) => {
@@ -68,14 +85,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
-    const campaignVideos = getCampaignVideos(activeCampaign?.id);
-    const usableVideos = campaignVideos.filter((v) => v.status !== 'rechazado' && hasUploadedAsset(v));
-    const publicationGoal =
-      usableVideos.length > 0 ? usableVideos.length : (activeCampaign?.agreed_videos || 0);
-    const organicPublished = usableVideos.filter(
-      (v) => v.published_organic || v.status === 'publicado'
-    ).length;
-    const adsPublished = usableVideos.filter((v) => v.published_ads).length;
+    const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(activeCampaign?.id);
 
     const missingOrganic = publicationGoal > 0 && organicPublished < publicationGoal;
     const missingAds = publicationGoal > 0 && adsPublished < publicationGoal;
@@ -173,15 +183,12 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const avatarUrl = creator.instagram_handle
                   ? `https://unavatar.io/instagram/${creator.instagram_handle}`
                   : null;
-                const campaignVideos = getCampaignVideos(activeCampaign?.id);
-                const usableVideos = campaignVideos.filter((v) => v.status !== 'rechazado' && hasUploadedAsset(v));
-                const videosDelivered = usableVideos.length;
-                const organicPublished = usableVideos.filter(
-                  (v) => v.published_organic || v.status === 'publicado'
-                ).length;
-                const adsPublished = usableVideos.filter((v) => v.published_ads).length;
-                const publicationGoal =
-                  usableVideos.length > 0 ? usableVideos.length : (activeCampaign?.agreed_videos || 0);
+                const {
+                  videosDelivered,
+                  publicationGoal,
+                  organicPublished,
+                  adsPublished,
+                } = getCampaignPublicationMetrics(activeCampaign?.id);
                 const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (
@@ -255,14 +262,30 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                     </TableCell>
                     <TableCell className="text-sm">
                       {activeCampaign ? (
-                        <Badge className={`${organicPublished >= publicationGoal ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'} text-xs`}>
+                        <Badge
+                          className={`${
+                            publicationGoal === 0
+                              ? 'bg-gray-100 text-gray-600'
+                              : organicPublished >= publicationGoal
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-700'
+                          } text-xs`}
+                        >
                           {organicPublished}/{publicationGoal}
                         </Badge>
                       ) : '—'}
                     </TableCell>
                     <TableCell className="text-sm">
                       {activeCampaign ? (
-                        <Badge className={`${adsPublished >= publicationGoal ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'} text-xs`}>
+                        <Badge
+                          className={`${
+                            publicationGoal === 0
+                              ? 'bg-gray-100 text-gray-600'
+                              : adsPublished >= publicationGoal
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-orange-100 text-orange-700'
+                          } text-xs`}
+                        >
                           {adsPublished}/{publicationGoal}
                         </Badge>
                       ) : '—'}
