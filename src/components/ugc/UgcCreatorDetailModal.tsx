@@ -98,6 +98,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const creatorCampaigns = campaigns.filter((c) => c.creator_id === creator.id);
   const activeCampaigns = creatorCampaigns.filter((c) => !['completado', 'cancelado'].includes(c.status));
   const historicCampaigns = creatorCampaigns.filter((c) => ['completado', 'cancelado'].includes(c.status));
+  const latestCampaign = creatorCampaigns[0];
 
   const getStatusActions = (campaign: UgcCampaign): { label: string; nextStatus: CampaignStatus; needsInput?: string }[] => {
     switch (campaign.status) {
@@ -154,7 +155,18 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     }
   });
 
-  const creatorStatusConfig = CREATOR_STATUS_CONFIG[creator.status as keyof typeof CREATOR_STATUS_CONFIG];
+  const getCreatorStatusFromCampaign = (campaignStatus?: CampaignStatus) => {
+    if (!campaignStatus) return creator.status;
+    if (campaignStatus === 'contactado') return 'contactado';
+    if (campaignStatus === 'negociando') return 'negociando';
+    if (['aceptado', 'producto_enviado', 'producto_recibido', 'video_en_revision', 'video_aprobado', 'publicado', 'completado'].includes(campaignStatus)) {
+      return 'activo';
+    }
+    return creator.status;
+  };
+
+  const displayCreatorStatus = getCreatorStatusFromCampaign(latestCampaign?.status as CampaignStatus | undefined);
+  const creatorStatusConfig = CREATOR_STATUS_CONFIG[displayCreatorStatus as keyof typeof CREATOR_STATUS_CONFIG];
 
   return (
     <>

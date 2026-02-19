@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -150,6 +151,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const [labelCreatorName, setLabelCreatorName] = useState<string | null>(null);
   const [historyCreatorNames, setHistoryCreatorNames] = useState<Record<string, string>>({});
   const [showTrackingDetails, setShowTrackingDetails] = useState(false);
+  const [showLabelPreview, setShowLabelPreview] = useState(false);
+  const [labelPreviewUrl, setLabelPreviewUrl] = useState<string | null>(null);
   const [quoteAndCreatePhase, setQuoteAndCreatePhase] = useState<'idle' | 'quoting' | 'creating'>('idle');
   
   // Quote loading state machine - prevents infinite loops
@@ -721,7 +724,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const handleOpenLabel = () => {
     if (existingLabel?.label_url) {
       const proxyUrl = getProxyLabelUrl(existingLabel.label_url);
-      window.open(proxyUrl, '_blank');
+      setLabelPreviewUrl(proxyUrl);
+      setShowLabelPreview(true);
     }
   };
 
@@ -1248,6 +1252,29 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
         {/* History section */}
         <LabelHistorySection />
+
+        <Dialog
+          open={showLabelPreview}
+          onOpenChange={(open) => {
+            setShowLabelPreview(open);
+            if (!open) setLabelPreviewUrl(null);
+          }}
+        >
+          <DialogContent className="max-w-5xl h-[88vh]">
+            <DialogHeader>
+              <DialogTitle>Guía de envío</DialogTitle>
+            </DialogHeader>
+            <div className="h-full min-h-0">
+              {labelPreviewUrl ? (
+                <iframe
+                  title="Guía de envío"
+                  src={`${labelPreviewUrl}#toolbar=1&navpanes=0&view=FitH`}
+                  className="w-full h-[72vh] rounded-md border"
+                />
+              ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
