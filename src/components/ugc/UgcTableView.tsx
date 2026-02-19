@@ -47,12 +47,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     return activeCampaign || creatorCampaigns[0];
   };
 
-  const getCampaignVideos = (creatorId: string, campaignId?: string) => {
-    if (campaignId) {
-      return videos.filter((v) => v.campaign_id === campaignId);
-    }
-    return videos.filter((v) => v.creator_id === creatorId);
-  };
+  const getCreatorVideos = (creatorId: string) => videos.filter((v) => v.creator_id === creatorId);
 
   const cities = [...new Set(creators.map((c) => c.city).filter(Boolean))] as string[];
 
@@ -68,11 +63,9 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
-    const campaignVideos = getCampaignVideos(creator.id, activeCampaign?.id);
-    const usableVideos = campaignVideos.filter(
-      (v) => v.status !== 'rechazado' && (v.status !== 'pendiente' || !!v.video_url)
-    );
-    const publicationGoal = activeCampaign?.agreed_videos || usableVideos.length || 0;
+    const creatorVideos = getCreatorVideos(creator.id);
+    const usableVideos = creatorVideos.filter((v) => v.status !== 'rechazado');
+    const publicationGoal = Math.max(activeCampaign?.agreed_videos || 0, usableVideos.length);
     const organicPublished = usableVideos.filter(
       (v) => v.published_organic || v.status === 'publicado'
     ).length;
@@ -174,16 +167,14 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const avatarUrl = creator.instagram_handle
                   ? `https://unavatar.io/instagram/${creator.instagram_handle}`
                   : null;
-                const campaignVideos = getCampaignVideos(creator.id, activeCampaign?.id);
-                const usableVideos = campaignVideos.filter(
-                  (v) => v.status !== 'rechazado' && (v.status !== 'pendiente' || !!v.video_url)
-                );
+                const creatorVideos = getCreatorVideos(creator.id);
+                const usableVideos = creatorVideos.filter((v) => v.status !== 'rechazado');
                 const videosDelivered = usableVideos.length;
                 const organicPublished = usableVideos.filter(
                   (v) => v.published_organic || v.status === 'publicado'
                 ).length;
                 const adsPublished = usableVideos.filter((v) => v.published_ads).length;
-                const publicationGoal = activeCampaign?.agreed_videos || usableVideos.length;
+                const publicationGoal = Math.max(activeCampaign?.agreed_videos || 0, usableVideos.length);
                 const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (
@@ -253,7 +244,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                       ) : '—'}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {activeCampaign ? `${videosDelivered}/${activeCampaign.agreed_videos}` : '—'}
+                      {activeCampaign ? `${videosDelivered}/${publicationGoal}` : '—'}
                     </TableCell>
                     <TableCell className="text-sm">
                       {activeCampaign ? (
