@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
+import type { UgcCreator, UgcCampaign, CampaignStatus, UgcVideo } from '@/types/ugc';
 import { CAMPAIGN_STATUS_CONFIG } from '@/types/ugc';
 import type { UgcCreatorTag } from '@/hooks/useUgcCreatorTags';
 
 interface UgcTableViewProps {
   creators: UgcCreator[];
   campaigns: UgcCampaign[];
+  videos: UgcVideo[];
   onCreatorClick: (creator: UgcCreator) => void;
   getTagsForCreator?: (creatorId: string) => UgcCreatorTag[];
 }
@@ -23,6 +24,7 @@ interface UgcTableViewProps {
 export const UgcTableView: React.FC<UgcTableViewProps> = ({
   creators,
   campaigns,
+  videos,
   onCreatorClick,
   getTagsForCreator,
 }) => {
@@ -45,6 +47,13 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     return activeCampaign || creatorCampaigns[0];
   };
 
+  const getCampaignVideos = (creatorId: string, campaignId?: string) => {
+    if (campaignId) {
+      return videos.filter((v) => v.campaign_id === campaignId);
+    }
+    return videos.filter((v) => v.creator_id === creatorId);
+  };
+
   const cities = [...new Set(creators.map((c) => c.city).filter(Boolean))] as string[];
 
   const filtered = creators.filter((creator) => {
@@ -59,7 +68,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
-    const campaignVideos = activeCampaign?.videos || [];
+    const campaignVideos = getCampaignVideos(creator.id, activeCampaign?.id);
     const usableVideos = campaignVideos.filter(
       (v) => v.status !== 'rechazado' && (v.status !== 'pendiente' || !!v.video_url)
     );
@@ -165,7 +174,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const avatarUrl = creator.instagram_handle
                   ? `https://unavatar.io/instagram/${creator.instagram_handle}`
                   : null;
-                const campaignVideos = activeCampaign?.videos || [];
+                const campaignVideos = getCampaignVideos(creator.id, activeCampaign?.id);
                 const usableVideos = campaignVideos.filter(
                   (v) => v.status !== 'rechazado' && (v.status !== 'pendiente' || !!v.video_url)
                 );

@@ -37,7 +37,7 @@ const UgcCreatorsPage: React.FC = () => {
 
   const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator } = useUgcCreators();
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
-  const { createVideo, updateVideoStatus, updateVideoPublication } = useUgcVideos();
+  const { videos, createVideo, updateVideoStatus, updateVideoPublication } = useUgcVideos();
   const { getTagsForCreator } = useAllUgcCreatorTagAssignments();
 
   // Auto-sync campaign statuses based on shipping events
@@ -193,7 +193,7 @@ const UgcCreatorsPage: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <UgcStatsCards creators={creators} campaigns={campaigns} />
+      <UgcStatsCards creators={creators} campaigns={campaigns} videos={videos} />
 
       {/* Main Content */}
       {isLoading ? (
@@ -229,6 +229,7 @@ const UgcCreatorsPage: React.FC = () => {
         <UgcTableView
           creators={creators}
           campaigns={campaigns}
+          videos={videos}
           onCreatorClick={handleCreatorClick}
           getTagsForCreator={getTagsForCreator}
         />

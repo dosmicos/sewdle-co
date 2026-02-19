@@ -6,9 +6,10 @@ import type { UgcCreator, UgcCampaign, UgcVideo } from '@/types/ugc';
 interface UgcStatsCardsProps {
   creators: UgcCreator[];
   campaigns: UgcCampaign[];
+  videos: UgcVideo[];
 }
 
-export const UgcStatsCards: React.FC<UgcStatsCardsProps> = ({ creators, campaigns }) => {
+export const UgcStatsCards: React.FC<UgcStatsCardsProps> = ({ creators, campaigns, videos }) => {
   const activeCampaignStatuses = new Set([
     'contactado',
     'negociando',
@@ -28,10 +29,7 @@ export const UgcStatsCards: React.FC<UgcStatsCardsProps> = ({ creators, campaign
   const activeCreators =
     activeCreatorsFromCampaigns || creators.filter((c) => c.status === 'activo').length;
   const pendingShipment = campaigns.filter((c) => c.status === 'aceptado').length;
-  const videosInReview = campaigns.reduce(
-    (count, c) => count + (c.videos?.filter((v) => v.status === 'en_revision').length || 0),
-    0
-  );
+  const videosInReview = videos.filter((v) => v.status === 'en_revision').length;
   const completedThisMonth = campaigns.filter((c) => {
     if (c.status !== 'completado') return false;
     const updated = new Date(c.updated_at);
