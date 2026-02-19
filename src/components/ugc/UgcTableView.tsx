@@ -34,6 +34,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [publicationFilter, setPublicationFilter] = useState<string>('all');
 
+  const hasUploadedAsset = (video: UgcVideo) => !!video.video_url && video.video_url.trim().length > 0;
+
   const getCreatorCampaigns = (creatorId: string) =>
     campaigns
       .filter((c) => c.creator_id === creatorId)
@@ -47,7 +49,10 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     return activeCampaign || creatorCampaigns[0];
   };
 
-  const getCreatorVideos = (creatorId: string) => videos.filter((v) => v.creator_id === creatorId);
+  const getCampaignVideos = (campaignId?: string) => {
+    if (!campaignId) return [];
+    return videos.filter((v) => v.campaign_id === campaignId);
+  };
 
   const cities = [...new Set(creators.map((c) => c.city).filter(Boolean))] as string[];
 
@@ -63,8 +68,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
-    const creatorVideos = getCreatorVideos(creator.id);
-    const usableVideos = creatorVideos.filter((v) => v.status !== 'rechazado');
+    const campaignVideos = getCampaignVideos(activeCampaign?.id);
+    const usableVideos = campaignVideos.filter((v) => v.status !== 'rechazado' && hasUploadedAsset(v));
     const publicationGoal =
       usableVideos.length > 0 ? usableVideos.length : (activeCampaign?.agreed_videos || 0);
     const organicPublished = usableVideos.filter(
@@ -168,8 +173,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const avatarUrl = creator.instagram_handle
                   ? `https://unavatar.io/instagram/${creator.instagram_handle}`
                   : null;
-                const creatorVideos = getCreatorVideos(creator.id);
-                const usableVideos = creatorVideos.filter((v) => v.status !== 'rechazado');
+                const campaignVideos = getCampaignVideos(activeCampaign?.id);
+                const usableVideos = campaignVideos.filter((v) => v.status !== 'rechazado' && hasUploadedAsset(v));
                 const videosDelivered = usableVideos.length;
                 const organicPublished = usableVideos.filter(
                   (v) => v.published_organic || v.status === 'publicado'
