@@ -9,7 +9,24 @@ interface UgcStatsCardsProps {
 }
 
 export const UgcStatsCards: React.FC<UgcStatsCardsProps> = ({ creators, campaigns }) => {
-  const activeCreators = creators.filter((c) => c.status === 'activo').length;
+  const activeCampaignStatuses = new Set([
+    'contactado',
+    'negociando',
+    'aceptado',
+    'producto_enviado',
+    'producto_recibido',
+    'video_en_revision',
+    'video_aprobado',
+    'publicado',
+  ]);
+
+  const activeCreatorsFromCampaigns = new Set(
+    campaigns
+      .filter((c) => activeCampaignStatuses.has(c.status))
+      .map((c) => c.creator_id)
+  ).size;
+  const activeCreators =
+    activeCreatorsFromCampaigns || creators.filter((c) => c.status === 'activo').length;
   const pendingShipment = campaigns.filter((c) => c.status === 'aceptado').length;
   const videosInReview = campaigns.reduce(
     (count, c) => count + (c.videos?.filter((v) => v.status === 'en_revision').length || 0),
