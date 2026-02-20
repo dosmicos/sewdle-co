@@ -54,9 +54,19 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     return videos.filter((v) => v.campaign_id === campaignId);
   };
 
-  const getCampaignPublicationMetrics = (campaignId?: string) => {
-    const campaignVideos = getCampaignVideos(campaignId);
-    const usableVideos = campaignVideos.filter((v) => v.status !== 'rechazado' && hasUploadedAsset(v));
+  const getCreatorVideos = (creatorId: string) =>
+    videos.filter((v) => v.creator_id === creatorId);
+
+  const isCountableVideo = (video: UgcVideo) => {
+    const hasPublicationFlag = !!video.published_ads || !!video.published_organic || video.status === 'publicado';
+    return video.status !== 'rechazado' && (hasUploadedAsset(video) || hasPublicationFlag || video.status !== 'pendiente');
+  };
+
+  const getCampaignPublicationMetrics = (campaignId: string | undefined, creatorId: string) => {
+    const campaignVideos = getCampaignVideos(campaignId).filter(isCountableVideo);
+    const sourceVideos =
+      campaignVideos.length > 0 ? campaignVideos : getCreatorVideos(creatorId).filter(isCountableVideo);
+    const usableVideos = sourceVideos;
     const publicationGoal = usableVideos.length;
     const organicPublished = usableVideos.filter(
       (v) => v.published_organic || v.status === 'publicado'
@@ -85,7 +95,10 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
-    const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(activeCampaign?.id);
+    const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
+      activeCampaign?.id,
+      creator.id
+    );
 
     const missingOrganic = publicationGoal > 0 && organicPublished < publicationGoal;
     const missingAds = publicationGoal > 0 && adsPublished < publicationGoal;
@@ -188,7 +201,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                   publicationGoal,
                   organicPublished,
                   adsPublished,
-                } = getCampaignPublicationMetrics(activeCampaign?.id);
+                } = getCampaignPublicationMetrics(activeCampaign?.id, creator.id);
                 const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (
