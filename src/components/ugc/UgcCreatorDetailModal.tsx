@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -214,22 +213,29 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <DialogHeader>
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-full overflow-hidden bg-muted flex-shrink-0">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-muted flex-shrink-0">
               {avatarUrl ? (
                 <img src={avatarUrl} alt={creator.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-xl font-bold text-muted-foreground">
+                <div className="w-full h-full flex items-center justify-center text-lg font-bold text-muted-foreground">
                   {creator.name.charAt(0)}
                 </div>
               )}
             </div>
-            <div className="flex-1">
-              <DialogTitle className="text-xl">{creator.name}</DialogTitle>
-              <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-lg truncate">{creator.name}</DialogTitle>
+                {creatorStatusConfig && (
+                  <Badge className={`${creatorStatusConfig.bgClass} ${creatorStatusConfig.textClass} text-xs flex-shrink-0`}>
+                    {creatorStatusConfig.label}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
                 {creator.instagram_handle && creator.platform !== 'tiktok' && (
                   <a
                     href={`https://instagram.com/${creator.instagram_handle}`}
@@ -240,7 +246,6 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                     @{creator.instagram_handle} <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
-                {/* TikTok: use tiktok_handle, or fallback to instagram_handle for legacy data */}
                 {(creator.tiktok_handle || (creator.platform === 'tiktok' && creator.instagram_handle)) && (
                   <a
                     href={`https://tiktok.com/@${creator.tiktok_handle || creator.instagram_handle}`}
@@ -251,50 +256,44 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                     TikTok @{creator.tiktok_handle || creator.instagram_handle} <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
+                <span className="text-sm text-muted-foreground">{creator.instagram_followers?.toLocaleString() || 0} seguidores</span>
+                {creator.engagement_rate && <span className="text-sm text-muted-foreground">{creator.engagement_rate}% eng.</span>}
               </div>
-              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                <span>{creator.instagram_followers?.toLocaleString() || 0} seguidores</span>
-                {creator.engagement_rate && <span>{creator.engagement_rate}% engagement</span>}
-                {creatorStatusConfig && (
-                  <Badge className={`${creatorStatusConfig.bgClass} ${creatorStatusConfig.textClass} text-xs`}>
-                    {creatorStatusConfig.label}
-                  </Badge>
-                )}
-              </div>
-              {/* Tags */}
               <div className="mt-2">
                 <UgcCreatorTagsManager creatorId={creator.id} />
               </div>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
-              <Button variant="outline" size="sm" onClick={onEdit}>
-                <Edit className="h-4 w-4 mr-1" /> Editar
+          </div>
+          {/* Action buttons row */}
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
+            <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <Edit className="h-3.5 w-3.5 mr-1" /> Editar
+            </Button>
+            {creator.phone && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`https://wa.me/${creator.phone?.replace(/\D/g, '')}`, '_blank')}
+              >
+                <MessageSquare className="h-3.5 w-3.5 mr-1" /> WhatsApp
               </Button>
-              {creator.phone && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(`https://wa.me/${creator.phone?.replace(/\D/g, '')}`, '_blank')}
-                >
-                  <MessageSquare className="h-4 w-4 mr-1" /> WhatsApp
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    if (confirm(`¿Estás seguro de eliminar a "${creator.name}"? Se eliminarán también sus campañas y videos.`)) {
-                      onDelete();
-                    }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            )}
+            <div className="flex-1" />
+            {onDelete && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  if (confirm(`¿Estás seguro de eliminar a "${creator.name}"? Se eliminarán también sus campañas y videos.`)) {
+                    onDelete();
+                  }
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </DialogHeader>
 
@@ -457,174 +456,157 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
               <p className="text-center text-muted-foreground py-8">Sin videos registrados</p>
             ) : (
               <div className="space-y-3">
-                <Card className="border border-border">
-                  <CardContent className="p-3">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Orgánico publicados</p>
-                        <p className="text-lg font-semibold text-foreground">{publishedOrganicCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Ads publicados</p>
-                        <p className="text-lg font-semibold text-foreground">{publishedAdsCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Faltan orgánico</p>
-                        <p className="text-lg font-semibold text-amber-700">{pendingOrganicCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Faltan ads</p>
-                        <p className="text-lg font-semibold text-orange-700">{pendingAdsCount}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant={videoFilter === 'all' ? 'default' : 'outline'} onClick={() => setVideoFilter('all')}>
-                    Todos ({allVideos.length})
-                  </Button>
-                  <Button size="sm" variant={videoFilter === 'pending_organic' ? 'default' : 'outline'} onClick={() => setVideoFilter('pending_organic')}>
-                    Faltan orgánico ({pendingOrganicCount})
-                  </Button>
-                  <Button size="sm" variant={videoFilter === 'pending_ads' ? 'default' : 'outline'} onClick={() => setVideoFilter('pending_ads')}>
-                    Faltan ads ({pendingAdsCount})
-                  </Button>
-                  <Button size="sm" variant={videoFilter === 'published_organic' ? 'default' : 'outline'} onClick={() => setVideoFilter('published_organic')}>
-                    Orgánico publicados ({publishedOrganicCount})
-                  </Button>
-                  <Button size="sm" variant={videoFilter === 'published_ads' ? 'default' : 'outline'} onClick={() => setVideoFilter('published_ads')}>
-                    Ads publicados ({publishedAdsCount})
-                  </Button>
+                {/* Publication summary */}
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="rounded-lg border border-border p-2.5 text-center">
+                    <p className="text-lg font-semibold text-foreground">{publishedOrganicCount}</p>
+                    <p className="text-[11px] text-muted-foreground">Orgánico</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2.5 text-center">
+                    <p className="text-lg font-semibold text-foreground">{publishedAdsCount}</p>
+                    <p className="text-[11px] text-muted-foreground">Ads</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 text-center">
+                    <p className="text-lg font-semibold text-amber-700">{pendingOrganicCount}</p>
+                    <p className="text-[11px] text-muted-foreground">Faltan org.</p>
+                  </div>
+                  <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-2.5 text-center">
+                    <p className="text-lg font-semibold text-orange-700">{pendingAdsCount}</p>
+                    <p className="text-[11px] text-muted-foreground">Faltan ads</p>
+                  </div>
                 </div>
 
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Video</TableHead>
-                        <TableHead>Revisión</TableHead>
-                        <TableHead>Orgánico</TableHead>
-                        <TableHead>Ads</TableHead>
-                        <TableHead>Métricas</TableHead>
-                        <TableHead>Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredVideos.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            No hay videos para este filtro.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredVideos.map((video) => {
-                          const isOrganicPublished = !!video.published_organic;
-                          const isAdsPublished = !!video.published_ads;
-                          return (
-                            <TableRow key={video.id}>
-                              <TableCell className="align-top">
-                                <div className="space-y-1">
-                                  <Badge variant="outline" className="text-xs capitalize">
-                                    {video.platform?.replace('_', ' ') || 'N/A'}
-                                  </Badge>
-                                  {video.feedback && (
-                                    <p className="text-xs text-muted-foreground line-clamp-2">{video.feedback}</p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="align-top">
-                                <Badge
-                                  className={`text-xs ${
-                                    video.status === 'aprobado' || video.status === 'publicado'
-                                      ? 'bg-green-100 text-green-700'
-                                      : video.status === 'rechazado'
-                                      ? 'bg-red-100 text-red-700'
-                                      : video.status === 'en_revision'
-                                      ? 'bg-orange-100 text-orange-700'
-                                      : 'bg-gray-100 text-gray-700'
-                                  }`}
-                                >
-                                  {video.status.replace('_', ' ')}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="align-top">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <Switch
-                                      checked={isOrganicPublished}
-                                      onCheckedChange={(checked) => onVideoPublicationChange(video.id, checked, undefined, video.status)}
-                                    />
-                                    <span className={`text-xs font-medium ${isOrganicPublished ? 'text-green-700' : 'text-amber-700'}`}>
-                                      {isOrganicPublished ? 'Publicado' : 'Pendiente'}
-                                    </span>
-                                  </div>
-                                  {video.published_organic_at && (
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {format(new Date(video.published_organic_at), 'dd MMM HH:mm', { locale: es })}
-                                    </p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="align-top">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <Switch
-                                      checked={isAdsPublished}
-                                      onCheckedChange={(checked) => onVideoPublicationChange(video.id, undefined, checked, video.status)}
-                                    />
-                                    <span className={`text-xs font-medium ${isAdsPublished ? 'text-blue-700' : 'text-orange-700'}`}>
-                                      {isAdsPublished ? 'Publicado' : 'Pendiente'}
-                                    </span>
-                                  </div>
-                                  {video.published_ads_at && (
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {format(new Date(video.published_ads_at), 'dd MMM HH:mm', { locale: es })}
-                                    </p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="align-top">
-                                <div className="text-xs text-muted-foreground space-y-1">
-                                  <p className="flex items-center gap-1"><Eye className="h-3 w-3" /> {video.views.toLocaleString()}</p>
-                                  <p className="flex items-center gap-1"><Heart className="h-3 w-3" /> {video.likes.toLocaleString()}</p>
-                                  <p className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {video.comments}</p>
-                                </div>
-                              </TableCell>
-                              <TableCell className="align-top">
-                                <div className="flex flex-wrap gap-1">
-                                  {video.video_url && (
-                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openVideoPreview(video.video_url!)}>
-                                      <ExternalLink className="h-3 w-3 mr-1" /> Ver
-                                    </Button>
-                                  )}
-                                  {video.status === 'en_revision' && (
-                                    <>
-                                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onVideoStatusChange(video.id, 'aprobado')}>
-                                        Aprobar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 text-xs"
-                                        onClick={() => {
-                                          const fb = prompt('Feedback:');
-                                          if (fb) onVideoStatusChange(video.id, 'rechazado', fb);
-                                        }}
-                                      >
-                                        Rechazar
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
+                {/* Filter chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: 'all' as const, label: 'Todos', count: allVideos.length },
+                    { key: 'pending_organic' as const, label: 'Falta org.', count: pendingOrganicCount },
+                    { key: 'pending_ads' as const, label: 'Falta ads', count: pendingAdsCount },
+                    { key: 'published_organic' as const, label: 'Org. pub.', count: publishedOrganicCount },
+                    { key: 'published_ads' as const, label: 'Ads pub.', count: publishedAdsCount },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setVideoFilter(f.key)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        videoFilter === f.key
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      {f.label} <span className="opacity-70">{f.count}</span>
+                    </button>
+                  ))}
                 </div>
+
+                {/* Video cards */}
+                {filteredVideos.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6 text-sm">No hay videos para este filtro.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredVideos.map((video) => {
+                      const isOrganicPublished = !!video.published_organic;
+                      const isAdsPublished = !!video.published_ads;
+                      return (
+                        <div key={video.id} className="rounded-lg border border-border p-3">
+                          {/* Row 1: Platform badge, status, and actions */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {video.platform?.replace('_', ' ') || 'N/A'}
+                              </Badge>
+                              <Badge
+                                className={`text-xs ${
+                                  video.status === 'aprobado' || video.status === 'publicado'
+                                    ? 'bg-green-100 text-green-700'
+                                    : video.status === 'rechazado'
+                                    ? 'bg-red-100 text-red-700'
+                                    : video.status === 'en_revision'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {video.status.replace('_', ' ')}
+                              </Badge>
+                              {/* Metrics inline */}
+                              <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground ml-2">
+                                <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {video.views.toLocaleString()}</span>
+                                <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" /> {video.likes.toLocaleString()}</span>
+                                <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" /> {video.comments}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {video.video_url && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openVideoPreview(video.video_url!)}>
+                                  <ExternalLink className="h-3 w-3 mr-1" /> Ver
+                                </Button>
+                              )}
+                              {video.status === 'en_revision' && (
+                                <>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs text-green-700" onClick={() => onVideoStatusChange(video.id, 'aprobado')}>
+                                    Aprobar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs text-red-600"
+                                    onClick={() => {
+                                      const fb = prompt('Feedback:');
+                                      if (fb) onVideoStatusChange(video.id, 'rechazado', fb);
+                                    }}
+                                  >
+                                    Rechazar
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Row 2: Publication toggles */}
+                          <div className="flex items-center gap-6 mt-2.5 pt-2.5 border-t border-border">
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={isOrganicPublished}
+                                onCheckedChange={(checked) => onVideoPublicationChange(video.id, checked, undefined, video.status)}
+                              />
+                              <div>
+                                <span className={`text-xs font-medium ${isOrganicPublished ? 'text-green-700' : 'text-amber-700'}`}>
+                                  Orgánico {isOrganicPublished ? '✓' : '—'}
+                                </span>
+                                {video.published_organic_at && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {format(new Date(video.published_organic_at), 'dd MMM HH:mm', { locale: es })}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={isAdsPublished}
+                                onCheckedChange={(checked) => onVideoPublicationChange(video.id, undefined, checked, video.status)}
+                              />
+                              <div>
+                                <span className={`text-xs font-medium ${isAdsPublished ? 'text-blue-700' : 'text-orange-700'}`}>
+                                  Ads {isAdsPublished ? '✓' : '—'}
+                                </span>
+                                {video.published_ads_at && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {format(new Date(video.published_ads_at), 'dd MMM HH:mm', { locale: es })}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Feedback if any */}
+                          {video.feedback && (
+                            <p className="text-xs text-muted-foreground mt-2 italic">"{video.feedback}"</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
