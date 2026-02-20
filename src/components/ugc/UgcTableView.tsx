@@ -118,19 +118,19 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nombre o @instagram..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Status campaña" />
+          <SelectTrigger className="w-[160px] h-9">
+            <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los estados</SelectItem>
@@ -140,7 +140,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           </SelectContent>
         </Select>
         <Select value={cityFilter} onValueChange={setCityFilter}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[140px] h-9">
             <SelectValue placeholder="Ciudad" />
           </SelectTrigger>
           <SelectContent>
@@ -151,36 +151,36 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           </SelectContent>
         </Select>
         <Select value={publicationFilter} onValueChange={setPublicationFilter}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Publicación video" />
+          <SelectTrigger className="w-[190px] h-9">
+            <SelectValue placeholder="Publicación" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos (publicación)</SelectItem>
-            <SelectItem value="missing_organic">Faltan publicar orgánico</SelectItem>
-            <SelectItem value="missing_ads">Faltan publicar en ads</SelectItem>
-            <SelectItem value="published_organic">Con orgánico publicado</SelectItem>
-            <SelectItem value="published_ads">Con ads publicado</SelectItem>
+            <SelectItem value="missing_organic">Faltan orgánico</SelectItem>
+            <SelectItem value="missing_ads">Faltan ads</SelectItem>
+            <SelectItem value="published_organic">Con orgánico</SelectItem>
+            <SelectItem value="published_ads">Con ads</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
+      <div className="border rounded-lg overflow-x-auto">
+        <Table className="min-w-[900px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Creador</TableHead>
-              <TableHead>Instagram</TableHead>
-              <TableHead className="text-right">Seguidores</TableHead>
-              <TableHead>Ciudad</TableHead>
-              <TableHead>Etiquetas</TableHead>
-              <TableHead>Campaña Activa</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Pedido</TableHead>
-              <TableHead>Videos</TableHead>
-              <TableHead>Orgánico</TableHead>
-              <TableHead>Ads</TableHead>
-              <TableHead>Actualización</TableHead>
+              <TableHead className="sticky left-0 bg-background z-10 min-w-[180px]">Creador</TableHead>
+              <TableHead className="min-w-[130px]">Instagram</TableHead>
+              <TableHead className="text-right w-[90px]">Seguidores</TableHead>
+              <TableHead className="w-[90px]">Ciudad</TableHead>
+              <TableHead className="w-[100px]">Etiquetas</TableHead>
+              <TableHead className="min-w-[130px]">Campaña Activa</TableHead>
+              <TableHead className="w-[130px]">Status</TableHead>
+              <TableHead className="w-[70px]">Pedido</TableHead>
+              <TableHead className="w-[60px] text-center">Videos</TableHead>
+              <TableHead className="w-[70px] text-center">Orgánico</TableHead>
+              <TableHead className="w-[55px] text-center">Ads</TableHead>
+              <TableHead className="w-[90px]">Actualización</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -210,7 +210,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => onCreatorClick(creator)}
                   >
-                    <TableCell>
+                    <TableCell className="sticky left-0 bg-background z-10">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full overflow-hidden bg-muted flex-shrink-0">
                           {avatarUrl ? (
@@ -221,16 +221,16 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                             </div>
                           )}
                         </div>
-                        <span className="font-medium text-sm">{creator.name}</span>
+                        <span className="font-medium text-sm truncate max-w-[140px]">{creator.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-sm whitespace-nowrap">
                       {creator.instagram_handle ? `@${creator.instagram_handle}` : '—'}
                     </TableCell>
-                    <TableCell className="text-right text-sm">
+                    <TableCell className="text-right text-sm whitespace-nowrap">
                       {creator.instagram_followers?.toLocaleString() || '0'}
                     </TableCell>
-                    <TableCell className="text-sm">{creator.city || '—'}</TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">{creator.city || '—'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {creatorTags.length > 0 ? creatorTags.map((tag) => (
@@ -247,10 +247,10 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{activeCampaign?.name || '—'}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm whitespace-nowrap truncate max-w-[150px]">{activeCampaign?.name || '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {activeCampaign ? (
-                        <Badge className={`${CAMPAIGN_STATUS_CONFIG[activeCampaign.status as CampaignStatus]?.bgClass} ${CAMPAIGN_STATUS_CONFIG[activeCampaign.status as CampaignStatus]?.textClass} text-xs`}>
+                        <Badge className={`${CAMPAIGN_STATUS_CONFIG[activeCampaign.status as CampaignStatus]?.bgClass} ${CAMPAIGN_STATUS_CONFIG[activeCampaign.status as CampaignStatus]?.textClass} text-xs whitespace-nowrap`}>
                           {CAMPAIGN_STATUS_CONFIG[activeCampaign.status as CampaignStatus]?.label}
                         </Badge>
                       ) : (
@@ -270,10 +270,10 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         </span>
                       ) : '—'}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-sm text-center">
                       {activeCampaign ? `${videosDelivered}/${publicationGoal}` : '—'}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-center">
                       {activeCampaign ? (
                         <Badge
                           className={`${
@@ -288,7 +288,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         </Badge>
                       ) : '—'}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-center">
                       {activeCampaign ? (
                         <Badge
                           className={`${
@@ -303,7 +303,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         </Badge>
                       ) : '—'}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                       {format(new Date(creator.updated_at), 'dd MMM', { locale: es })}
                     </TableCell>
                   </TableRow>

@@ -28,7 +28,7 @@ const MainLayout = () => {
     <SidebarProvider>
       <div className="min-h-screen flex w-full" style={{ backgroundColor: '#ffffff' }}>
         <AppSidebar />
-        <main className="flex-1" style={{ backgroundColor: '#ffffff' }}>
+        <main className="flex-1 min-w-0 overflow-x-hidden" style={{ backgroundColor: '#ffffff' }}>
           <div className="p-4 border-b" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
             <SidebarTrigger />
           </div>
