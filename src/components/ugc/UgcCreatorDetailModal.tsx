@@ -56,77 +56,43 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const [videoPreviewOriginalUrl, setVideoPreviewOriginalUrl] = useState<string | null>(null);
   const [videoPreviewLoading, setVideoPreviewLoading] = useState(false);
   const [videoPreviewError, setVideoPreviewError] = useState<string | null>(null);
-  const previewBlobUrlRef = useRef<string | null>(null);
-
-  const isDirectVideoAsset = (url: string) => {
-    const normalized = url.toLowerCase().split('?')[0];
-    return (
-      normalized.endsWith('.mp4') ||
-      normalized.endsWith('.mov') ||
-      normalized.endsWith('.webm') ||
-      normalized.endsWith('.m4v') ||
-      normalized.endsWith('.ogg') ||
-      normalized.includes('/storage/v1/object/')
-    );
-  };
-
-  const clearPreviewBlob = () => {
-    if (previewBlobUrlRef.current) {
-      URL.revokeObjectURL(previewBlobUrlRef.current);
-      previewBlobUrlRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      clearPreviewBlob();
-    };
-  }, []);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const openVideoPreview = async (url: string) => {
-    clearPreviewBlob();
     setVideoPreviewOriginalUrl(url);
-    setVideoPreviewSource(null);
+    setVideoPreviewSource(url);
     setVideoPreviewError(null);
     setVideoPreviewLoading(true);
     setVideoPreviewOpen(true);
-
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      if (!blob.size) throw new Error('Archivo vacío');
-      if (!blob.type.startsWith('video/') && !isDirectVideoAsset(url)) {
-        throw new Error('El enlace no apunta a un archivo de video directo');
-      }
-      const objectUrl = URL.createObjectURL(blob);
-      previewBlobUrlRef.current = objectUrl;
-      setVideoPreviewSource(objectUrl);
-    } catch (error) {
-      console.error('Video preview load error:', error);
-      // Fallback: use direct URL if blob fetch fails
-      setVideoPreviewSource(url);
-      setVideoPreviewError('No se pudo cargar por streaming; intentando vista directa.');
-    } finally {
-      setVideoPreviewLoading(false);
-    }
   };
 
-  const downloadVideo = () => {
+  const downloadVideo = async () => {
     if (!videoPreviewOriginalUrl) return;
 
-    const source = previewBlobUrlRef.current || videoPreviewOriginalUrl;
     const normalizedUrl = videoPreviewOriginalUrl.split('?')[0];
     const extensionMatch = normalizedUrl.match(/\.(mp4|mov|webm|m4v|ogg)$/i);
     const extension = extensionMatch?.[1]?.toLowerCase() || 'mp4';
 
-    const link = document.createElement('a');
-    link.href = source;
-    link.download = `ugc-video-${Date.now()}.${extension}`;
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const response = await fetch(videoPreviewOriginalUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const blob = await response.blob();
+      if (!blob.size) throw new Error('Archivo vacío');
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `ugc-video-${Date.now()}.${extension}`;
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Video download error:', error);
+      window.open(videoPreviewOriginalUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleOpenPickingOrder = async (orderNumber: string) => {
@@ -716,7 +682,6 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
       onOpenChange={(open) => {
         setVideoPreviewOpen(open);
         if (!open) {
-          clearPreviewBlob();
           setVideoPreviewSource(null);
           setVideoPreviewOriginalUrl(null);
           setVideoPreviewError(null);
@@ -728,23 +693,31 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
         <DialogHeader>
           <DialogTitle>Vista previa de video</DialogTitle>
         </DialogHeader>
-        <div className="min-h-[360px] bg-black rounded-md overflow-hidden flex items-center justify-center">
-          {videoPreviewLoading ? (
-            <Loader2 className="h-7 w-7 animate-spin text-white/70" />
-          ) : videoPreviewSource ? (
+        <div className="relative min-h-[360px] bg-black rounded-md overflow-hidden flex items-center justify-center">
+          {videoPreviewSource ? (
             <video
+              ref={videoRef}
+              key={videoPreviewSource}
               src={videoPreviewSource}
               controls
-              autoPlay
               playsInline
               preload="metadata"
               className="w-full max-h-[70vh] bg-black"
+              onLoadedData={() => setVideoPreviewLoading(false)}
+              onCanPlay={() => setVideoPreviewLoading(false)}
+              onWaiting={() => setVideoPreviewLoading(true)}
               onError={() => {
+                setVideoPreviewLoading(false);
                 setVideoPreviewError('No se pudo reproducir el video en vista previa. Puedes usar el enlace original o descargarlo.');
               }}
             />
           ) : (
             <p className="text-sm text-white/70">No se pudo cargar el video.</p>
+          )}
+          {videoPreviewLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+              <Loader2 className="h-7 w-7 animate-spin text-white/70" />
+            </div>
           )}
         </div>
         {videoPreviewError && (
