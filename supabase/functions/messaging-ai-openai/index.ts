@@ -493,6 +493,30 @@ serve(async (req) => {
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
 
+    // Function definitions for order creation
+    const functions = [
+      {
+        name: "create_order",
+        description: "Crea un pedido en Shopify cuando el cliente proporciona todos los datos necesarios para la compra",
+        parameters: {
+          type: "object",
+          properties: {
+            customerName: { type: "string", description: "Nombre completo del cliente" },
+            email: { type: "string", description: "Correo electrónico del cliente" },
+            phone: { type: "string", description: "Número de teléfono del cliente" },
+            address: { type: "string", description: "Dirección de envío completa" },
+            city: { type: "string", description: "Ciudad de envío" },
+            department: { type: "string", description: "Departamento de envío" },
+            neighborhood: { type: "string", description: "Barrio (opcional)" },
+            productId: { type: "number", description: "ID del producto en Shopify" },
+            quantity: { type: "number", description: "Cantidad (default 1)" },
+            notes: { type: "string", description: "Notas adicionales (opcional)" }
+          },
+          required: ["customerName", "email", "phone", "address", "city", "department", "productId"]
+        }
+      }
+    ];
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -505,6 +529,8 @@ serve(async (req) => {
           { role: "system", content: fullSystemPrompt },
           ...(messages || []),
         ],
+        functions: functions,
+        function_call: "auto",
         max_tokens: 800,
         temperature: 0.7,
       }),
@@ -535,6 +561,75 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    
+    // Check if AI wants to call a function
+    const functionCall = data.choices?.[0]?.message?.function_call;
+    
+    if (functionCall) {
+      console.log("AI wants to call function:", functionCall.name);
+      
+      if (functionCall.name === "create_order") {
+        try {
+          const orderArgs = JSON.parse(functionCall.arguments);
+          console.log("Creating order with args:", orderArgs);
+          
+          // Call the create-shopify-order function
+          const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
+            body: {
+              orderData: {
+                customerName: orderArgs.customerName,
+                email: orderArgs.email,
+                phone: orderArgs.phone,
+                address: orderArgs.address,
+                city: orderArgs.city,
+                department: orderArgs.department,
+                neighborhood: orderArgs.neighborhood || '',
+                productId: orderArgs.productId,
+                quantity: orderArgs.quantity || 1,
+                notes: orderArgs.notes || ''
+              },
+              organizationId: organizationId
+            }
+          });
+          
+          if (orderError) {
+            console.error("Order creation error:", orderError);
+            return new Response(
+              JSON.stringify({ 
+                response: "Lo siento, hubo un error al crear tu pedido. Por favor intenta de nuevo o contáctanos directamente.",
+                order_created: false,
+                error: orderError.message
+              }), 
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          
+          console.log("Order created successfully:", orderResult);
+          
+          const responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
+            `📋 Número de pedido: #${orderResult.orderNumber}\n` +
+            `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
+            `Para completar tu compra, por favor realiza el pago a:\n` +
+            `🏦 Bancolombia - Cuenta de Ahorros 052 00000568\n` +
+            `   A nombre de: Dosmicos SAS\n\n` +
+            `Una vez realizado el pago, por favor envianos el comprobante aquí.`;
+          
+          return new Response(
+            JSON.stringify({ 
+              response: responseText,
+              order_created: true,
+              orderId: orderResult.orderId,
+              orderNumber: orderResult.orderNumber
+            }), 
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+          
+        } catch (err) {
+          console.error("Error parsing function call:", err);
+        }
+      }
+    }
+    
     const rawAiResponse = data.choices?.[0]?.message?.content || "";
     
     console.log("OpenAI raw response:", rawAiResponse.substring(0, 200) + "...");
