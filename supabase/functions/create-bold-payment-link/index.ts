@@ -67,37 +67,20 @@ serve(async (req) => {
 
     console.log("Creating Bold payment link for:", customerEmail, "amount:", amount);
 
-    // Calculate taxes (IVA 19% for Colombia)
-    const subtotal = Math.round(amount / 1.19);
-    const tax = amount - subtotal;
-
-    // Create payment link request
+    // Create payment link request with correct Bold API format
     const paymentLinkData = {
-      amount_type: "CLOSE",
-      amount: {
-        currency: "COP",
-        subtotal: subtotal,
-        taxes: [
-          {
-            type: "VAT",
-            base: subtotal,
-            value: tax
-          }
-        ],
-        total_amount: amount
-      },
+      amount: String(amount), // Amount as string
+      currency: "COP",
       description: description.substring(0, 100),
       payer_email: customerEmail,
-      // Optional: limit payment methods
-      // payment_methods: ["CREDIT_CARD", "PSE", "NEQUI", "BANCOLOMBIA_TRANSFER"]
     };
 
     console.log("Bold request:", JSON.stringify(paymentLinkData));
 
-    const boldResponse = await fetch("https://integrations.api.bold.co/online/link/v1", {
+    const boldResponse = await fetch("https://payments.api.bold.co/v2/payment-link", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${boldApiKey}`,
+        "x-api-key": boldApiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(paymentLinkData),

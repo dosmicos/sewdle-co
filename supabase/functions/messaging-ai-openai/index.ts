@@ -620,20 +620,43 @@ serve(async (req) => {
           
           console.log("Order created successfully:", orderResult);
           
+          // Auto-create payment link after order creation
+          console.log("Auto-creating payment link...");
+          
+          const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-bold-payment-link', {
+            body: {
+              amount: Math.round(Number(orderResult.totalPrice)),
+              description: `Pedido #${orderResult.orderNumber} - Dosmicos`,
+              customerEmail: orderArgs.email || orderArgs.customerName,
+              orderId: orderResult.orderId,
+              organizationId: organizationId
+            }
+          });
+          
+          let paymentLinkText = "";
+          let paymentUrl = "";
+          
+          if (paymentError) {
+            console.error("Payment link error:", paymentError);
+            paymentLinkText = "\n\n⚠️ El link de pago no pudo ser generado automáticamente. Por favor contacta al soporte.";
+          } else {
+            console.log("Payment link created:", paymentResult);
+            paymentUrl = paymentResult.paymentUrl;
+            paymentLinkText = `\n\n💳 **TU LINK DE PAGO:**\n${paymentUrl}\n\nHaz clic para pagar con tarjeta, PSE, Nequi, Daviplata y más métodos de pago.`;
+          }
+          
           const responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
             `📋 Número de pedido: #${orderResult.orderNumber}\n` +
             `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
-            `Para completar tu compra, por favor realiza el pago a:\n` +
-            `🏦 Bancolombia - Cuenta de Ahorros 052 00000568\n` +
-            `   A nombre de: Dosmicos SAS\n\n` +
-            `Una vez realizado el pago, por favor envianos el comprobante aquí.`;
+            paymentLinkText;
           
           return new Response(
             JSON.stringify({ 
               response: responseText,
               order_created: true,
               orderId: orderResult.orderId,
-              orderNumber: orderResult.orderNumber
+              orderNumber: orderResult.orderNumber,
+              paymentUrl: paymentUrl
             }), 
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
