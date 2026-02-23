@@ -209,8 +209,13 @@ export const AITrainingPanel = () => {
         });
       }
 
-      // Call OpenAI GPT-4o-mini via edge function
-      const { data, error } = await supabase.functions.invoke('messaging-ai-openai', {
+      // Get the AI provider from config (default to minimax)
+      const aiProvider = aiConfig?.aiProvider || 'minimax';
+      const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
+      console.log('Testing AI function:', functionName);
+
+      // Call AI via edge function
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
           messages: [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userMessage }],
           systemPrompt: systemPrompt,
@@ -776,6 +781,10 @@ export const AITrainingPanel = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Tono</span>
               <Badge variant="outline">{aiConfig?.tone || 'friendly'}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Proveedor IA</span>
+              <Badge variant="outline">{aiConfig?.aiProvider === 'minimax' ? '⚡ Minimax' : '🤖 OpenAI'}</Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Reglas</span>

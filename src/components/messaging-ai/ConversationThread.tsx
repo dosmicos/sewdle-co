@@ -542,7 +542,27 @@ export const ConversationThread = ({
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('messaging-ai-openai', {
+      // Get the AI provider from channel config
+      let aiProvider = 'minimax';
+      try {
+        const { data: channelData } = await supabase
+          .from('messaging_channels')
+          .select('ai_config')
+          .eq('organization_id', currentOrganization?.id)
+          .eq('channel_type', 'whatsapp')
+          .maybeSingle();
+        
+        if (channelData?.ai_config?.aiProvider) {
+          aiProvider = channelData.ai_config.aiProvider;
+        }
+      } catch (err) {
+        console.log('Using default AI provider');
+      }
+
+      const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
+      console.log('Using AI function:', functionName);
+
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           systemPrompt: 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',

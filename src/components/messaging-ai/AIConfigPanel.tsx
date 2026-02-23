@@ -36,6 +36,7 @@ interface AIConfig {
   greetingMessage: string;
   rules: AIRule[];
   quickReplies: QuickReply[];
+  aiProvider: 'openai' | 'minimax';
 }
 
 // Default quick replies to seed when none exist in DB
@@ -78,6 +79,7 @@ Reglas importantes:
       { id: '3', condition: 'disponible', response: 'Verificar inventario en tiempo real' },
     ],
     quickReplies: DEFAULT_QUICK_REPLIES,
+    aiProvider: 'minimax',
   });
 
   const [newRule, setNewRule] = useState({ condition: '', response: '' });
@@ -247,6 +249,7 @@ Reglas importantes:
         responseDelay: config.responseDelay,
         businessHours: config.businessHours,
         greetingMessage: config.greetingMessage,
+        aiProvider: config.aiProvider,
         rules: config.rules.map(r => ({ id: r.id, condition: r.condition, response: r.response })),
         quickReplies: config.quickReplies.map(q => ({ id: q.id, title: q.title, content: q.content, imageUrl: q.imageUrl || undefined })),
       };
@@ -478,6 +481,25 @@ Reglas importantes:
                 <SelectItem value="professional">💼 Profesional</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Proveedor de IA</Label>
+            <Select 
+              value={config.aiProvider} 
+              onValueChange={(value: 'openai' | 'minimax') => setConfig({ ...config, aiProvider: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="minimax">⚡ Minimax (Elsa)</SelectItem>
+                <SelectItem value="openai">🤖 OpenAI GPT</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Minimax es más económico y está configurado para Elsa
+            </p>
           </div>
 
           <div className="flex items-center justify-between">

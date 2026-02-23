@@ -223,6 +223,41 @@ const ApisStatusPage = () => {
     }
   }, [currentOrganization?.id]);
 
+  // Minimax AI check (Elsa)
+  const checkMinimaxAPI = useCallback(async (): Promise<APIStatus> => {
+    if (!currentOrganization?.id) {
+      return { status: 'error', error: 'Sin organización' };
+    }
+
+    const startTime = performance.now();
+    try {
+      const { data, error } = await supabase.functions.invoke('messaging-ai-minimax', {
+        body: { 
+          action: 'test-connection',
+          organizationId: currentOrganization.id 
+        }
+      });
+
+      const responseTime = Math.round(performance.now() - startTime);
+
+      if (error) {
+        if (error.message?.includes('MINIMAX_API_KEY')) {
+          return { status: 'error', responseTime, error: 'API Key no configurada' };
+        }
+        return { status: 'error', responseTime, error: error.message };
+      }
+
+      if (data?.connected || data?.success) {
+        return { status: 'connected', responseTime };
+      }
+
+      return { status: 'error', responseTime, error: data?.error || 'Sin conexión' };
+    } catch (err: any) {
+      const responseTime = Math.round(performance.now() - startTime);
+      return { status: 'error', responseTime, error: err.message || 'Error de conexión' };
+    }
+  }, [currentOrganization?.id]);
+
   // Gemini/Lovable AI check
   const checkGeminiAPI = useCallback(async (): Promise<APIStatus> => {
     if (!currentOrganization?.id) {
@@ -298,6 +333,14 @@ const ApisStatusPage = () => {
       icon: MessageSquare,
       checkFn: checkWhatsAppAPI,
       category: 'external'
+    },
+    {
+      id: 'minimax',
+      name: 'Minimax (Elsa)',
+      description: 'IA económica para respuestas automáticas en Mensajería',
+      icon: Brain,
+      checkFn: checkMinimaxAPI,
+      category: 'ai'
     },
     {
       id: 'openai',
