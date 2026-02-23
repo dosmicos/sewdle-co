@@ -182,6 +182,7 @@ Reglas importantes:
               responseDelay: savedConfig.responseDelay ?? prev.responseDelay,
               businessHours: savedConfig.businessHours ?? prev.businessHours,
               greetingMessage: savedConfig.greetingMessage || prev.greetingMessage,
+              aiProvider: savedConfig.aiProvider || prev.aiProvider,
               rules: savedConfig.rules || prev.rules,
               quickReplies: savedConfig.quickReplies || prev.quickReplies,
             }));
