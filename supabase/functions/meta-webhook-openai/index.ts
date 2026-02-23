@@ -1314,6 +1314,68 @@ serve(async (req) => {
                 } else {
                   console.log('No AI response generated');
                 }
+                
+                // AUTO-ORDER: Detect if user is providing order data and create order automatically
+                const orderKeywords = ['quiero comprar', 'me lo llevo', 'lo quiero', 'aqui están mis datos', 'te envío los datos', 'datos para el pedido'];
+                const hasOrderIntent = orderKeywords.some(kw => content.toLowerCase().includes(kw));
+                
+                if (hasOrderIntent) {
+                  console.log('Order intent detected, extracting order data...');
+                  
+                  // Get all conversation messages to extract data
+                  const allMsgs = [...(historyMessages || [])].reverse();
+                  const allText = allMsgs.map(m => m.content).join(' ');
+                  
+                  // Extract email
+                  const emailMatch = allText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+                  // Extract phone (starts with 3, 10-11 digits)
+                  const phoneMatch = allText.match(/(3\d{9})/);
+                  
+                  // Try to extract name (first text that's not email/phone/address)
+                  const nameMatch = allText.match(/(?:me llamo|soy|nombre[:\s]+)([A-Za-z\s]+?)(?:\s*,|\s*correo|\s*email|\s*teléfono|\s*dirección|$)/i);
+                  
+                  // Look for address keywords
+                  const addressMatch = allText.match(/(?:dirección|dir|address)[:\s]+([^,]+,\s*[A-Za-z]+)/i);
+                  
+                  if (emailMatch && phoneMatch) {
+                    console.log('Found order data - creating order automatically');
+                    
+                    // Call create order function
+                    const orderResult = await supabase.functions.invoke('create-shopify-order', {
+                      body: {
+                        orderData: {
+                          customerName: nameMatch ? nameMatch[1].trim() : 'Cliente',
+                          email: emailMatch[1],
+                          phone: phoneMatch[1],
+                          address: addressMatch ? addressMatch[1].trim() : 'Por confirmar',
+                          city: 'Bogotá',
+                          department: 'Cundinamarca',
+                          productId: 8842923606251, // Default product - need to extract from message
+                          quantity: 1
+                        },
+                        organizationId: channel.organization_id
+                      }
+                    });
+                    
+                    if (orderResult.data?.orderId) {
+                      console.log('Auto-order created:', orderResult.data.orderNumber);
+                      
+                      const orderMessage = `¡Pedido creado! #${orderResult.data.orderNumber}\nTotal: $${Number(orderResult.data.totalPrice).toLocaleString('es-CO')}`;
+                      
+                      await sendWhatsAppMessage(senderPhone, orderMessage, channel.meta_phone_number_id || phoneNumberId);
+                      
+                      await supabase.from('messaging_messages').insert({
+                        conversation_id: conversation.id,
+                        channel_type: 'whatsapp',
+                        direction: 'outbound',
+                        sender_type: 'ai',
+                        content: orderMessage,
+                        message_type: 'text',
+                        sent_at: new Date().toISOString(),
+                      });
+                    }
+                  }
+                }
               }
             }
           }
