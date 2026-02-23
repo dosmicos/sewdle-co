@@ -79,7 +79,7 @@ Reglas importantes:
       { id: '3', condition: 'disponible', response: 'Verificar inventario en tiempo real' },
     ],
     quickReplies: DEFAULT_QUICK_REPLIES,
-    aiProvider: 'minimax',
+    aiProvider: 'openai',
   });
 
   const [newRule, setNewRule] = useState({ condition: '', response: '' });
