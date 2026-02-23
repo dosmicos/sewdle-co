@@ -493,7 +493,7 @@ serve(async (req) => {
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
 
-    // Function definitions for order creation
+    // Function definitions for order creation and payment
     const functions = [
       {
         name: "create_order",
@@ -513,6 +513,20 @@ serve(async (req) => {
             notes: { type: "string", description: "Notas adicionales (opcional)" }
           },
           required: ["customerName", "email", "phone", "address", "city", "department", "productId"]
+        }
+      },
+      {
+        name: "create_payment_link",
+        description: "Crea un link de pago con Bold después de que se haya creado un pedido. Usa esta función SOLO después de haber creado el pedido.",
+        parameters: {
+          type: "object",
+          properties: {
+            amount: { type: "number", description: "Monto total del pedido en pesos colombianos (COP)" },
+            description: { type: "string", description: "Descripción del pago (ej: Pedido #123 - Dosmicos)" },
+            customerEmail: { type: "string", description: "Correo electrónico del cliente" },
+            orderId: { type: "number", description: "ID del pedido en Shopify (opcional)" }
+          },
+          required: ["amount", "description", "customerEmail"]
         }
       }
     ];
@@ -626,6 +640,58 @@ serve(async (req) => {
           
         } catch (err) {
           console.error("Error parsing function call:", err);
+        }
+      }
+      
+      // Handle create_payment_link function
+      if (functionCall.name === "create_payment_link") {
+        try {
+          const paymentArgs = JSON.parse(functionCall.arguments);
+          console.log("Creating payment link with args:", paymentArgs);
+          
+          // Call the create-bold-payment-link function
+          const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-bold-payment-link', {
+            body: {
+              amount: paymentArgs.amount,
+              description: paymentArgs.description,
+              customerEmail: paymentArgs.customerEmail,
+              orderId: paymentArgs.orderId,
+              organizationId: organizationId
+            }
+          });
+          
+          if (paymentError) {
+            console.error("Payment link error:", paymentError);
+            return new Response(
+              JSON.stringify({ 
+                response: "Lo siento, hubo un error al crear el link de pago. Por favor intenta de nuevo.",
+                payment_link_created: false,
+                error: paymentError.message
+              }), 
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          
+          console.log("Payment link created:", paymentResult);
+          
+          const responseText = `¡Tu link de pago está listo! 💳\n\n` +
+            `Monto: $${Number(paymentArgs.amount).toLocaleString('es-CO')} COP\n\n` +
+            `Haz clic en el siguiente enlace para pagar:\n${paymentResult.paymentUrl}\n\n` +
+            `🎯 El link de pago incluye todos los métodos de pago: Tarjeta de crédito, PSE, Nequi, Daviplata, y más.\n\n` +
+            `Una vez realizado el pago, recibirás la confirmación automáticamente.`;
+          
+          return new Response(
+            JSON.stringify({ 
+              response: responseText,
+              payment_link_created: true,
+              paymentUrl: paymentResult.paymentUrl,
+              paymentLinkId: paymentResult.paymentLinkId
+            }), 
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+          
+        } catch (err) {
+          console.error("Error parsing payment function call:", err);
         }
       }
     }
