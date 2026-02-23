@@ -1191,17 +1191,53 @@ serve(async (req) => {
                   .order('sent_at', { ascending: false })
                   .limit(10);
 
-                // Generate AI response with multiple product image support
-                const aiResult = await generateAIResponse(
-                  content,
-                  (historyMessages || []).reverse(),
-                  channel.ai_config,
-                  channel.organization_id,
-                  supabase,
-                  shopifyCredentials
-                );
+                // Get AI provider from channel config (default to minimax)
+                const aiConfig = channel.ai_config || {};
+                const aiProvider = aiConfig.aiProvider || 'minimax';
+                const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
+                console.log(`Using AI provider: ${aiProvider}, function: ${functionName}`);
 
-                if (aiResult.text) {
+                // Build messages for the AI function
+                const messagesForAI = [
+                  ...(historyMessages || []).reverse().map((m: any) => ({
+                    role: m.direction === 'inbound' ? 'user' : 'assistant',
+                    content: m.content || ''
+                  })),
+                  { role: 'user', content: content }
+                ];
+
+                // Call the appropriate AI edge function
+                const { data: aiData, error: aiError } = await supabase.functions.invoke(functionName, {
+                  body: {
+                    messages: messagesForAI,
+                    systemPrompt: aiConfig.systemPrompt || 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',
+                    organizationId: channel.organization_id,
+                  }
+                });
+
+                let aiText = '';
+                let aiProductImages: any[] = [];
+                
+                if (aiError) {
+                  console.error('AI function error:', aiError);
+                  // Fallback to local generateAIResponse if edge function fails
+                  console.log('Falling back to local generateAIResponse...');
+                  const aiResult = await generateAIResponse(
+                    content,
+                    (historyMessages || []).reverse(),
+                    channel.ai_config,
+                    channel.organization_id,
+                    supabase,
+                    shopifyCredentials
+                  );
+                  aiText = aiResult.text;
+                  aiProductImages = aiResult.productImages;
+                } else {
+                  aiText = aiData?.response || '';
+                  aiProductImages = aiData?.product_images || [];
+                }
+
+                if (aiText) {
                   // Send the text response via WhatsApp
                   const sent = await sendWhatsAppMessage(
                     senderPhone, 
@@ -1218,7 +1254,7 @@ serve(async (req) => {
                         channel_type: 'whatsapp',
                         direction: 'outbound',
                         sender_type: 'ai',
-                        content: aiResult.text,
+                        content: aiText,
                         message_type: 'text',
                         sent_at: new Date().toISOString(),
                       });
@@ -1228,17 +1264,17 @@ serve(async (req) => {
                       .from('messaging_conversations')
                       .update({
                         last_message_at: new Date().toISOString(),
-                        last_message_preview: aiResult.text.substring(0, 100),
+                        last_message_preview: aiText.substring(0, 100),
                       })
                       .eq('id', conversation.id);
 
                     console.log('AI response sent and saved');
                     
                     // Send ALL product images (up to 10)
-                    if (aiResult.productImages && aiResult.productImages.length > 0) {
-                      console.log(`Sending ${aiResult.productImages.length} product images...`);
+                    if (aiProductImages && aiProductImages.length > 0) {
+                      console.log(`Sending ${aiProductImages.length} product images...`);
                       
-                      for (const img of aiResult.productImages) {
+                      for (const img of aiProductImages) {
                         console.log(`Sending image for product ${img.product_id}: ${img.product_name}`);
                         
                         const imageSent = await sendWhatsAppImage(
@@ -1272,7 +1308,7 @@ serve(async (req) => {
                         await new Promise(resolve => setTimeout(resolve, 500));
                       }
                       
-                      console.log(`All ${aiResult.productImages.length} product images processed`);
+                      console.log(`All ${aiProductImages.length} product images processed`);
                     }
                   }
                 } else {

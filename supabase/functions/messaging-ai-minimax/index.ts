@@ -140,7 +140,12 @@ serve(async (req) => {
     
     // MINIMAX API CONFIGURATION
     const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const MINIMAX_GROUP_ID = Deno.env.get("MINIMAX_GROUP_ID");
     const MINIMAX_BASE_URL = Deno.env.get("MINIMAX_BASE_URL") || "https://api.minimax.chat/v1";
+    const MINIMAX_MODEL = Deno.env.get("MINIMAX_MODEL") || "MiniMax-M2.5";
+    
+    console.log("MINIMAX_API_KEY present:", !!MINIMAX_API_KEY);
+    console.log("MINIMAX_API_KEY prefix:", MINIMAX_API_KEY?.substring(0, 10));
     
     // Handle test-connection action
     if (action === 'test-connection') {
@@ -162,23 +167,35 @@ serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "MiniMax-M2.5-Lightning",
+            model: MINIMAX_MODEL,
             messages: [{ role: "user", content: "Hi" }],
             max_tokens: 10,
           }),
         });
         
-        if (testResponse.ok || testResponse.status === 400) {
-          // 400 is ok - it means the API key works but the request might have issues
+        const testData = await testResponse.json();
+        console.log("Minimax test response:", JSON.stringify(testData));
+        
+        // Check for successful response or specific error codes that mean "key works but something else wrong"
+        if (testResponse.ok && !testData.base_resp?.status_code) {
+          return new Response(
+            JSON.stringify({ connected: true, success: true }), 
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else if (testData.base_resp?.status_code === 2049) {
+          return new Response(
+            JSON.stringify({ connected: false, error: "API Key inválida: " + testData.base_resp.status_msg }), 
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else if (testResponse.ok || testData.base_resp?.status_code === 1000) {
+          // 1000 = success or success-like response
           return new Response(
             JSON.stringify({ connected: true, success: true }), 
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
-          const errorText = await testResponse.text();
-          console.error("Minimax API key validation failed:", testResponse.status, errorText);
           return new Response(
-            JSON.stringify({ connected: false, error: "API Key inválida" }), 
+            JSON.stringify({ connected: false, error: testData.base_resp?.status_msg || "Error en conexión" }), 
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -480,22 +497,29 @@ serve(async (req) => {
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling Minimax MiniMax-M2.5-Lightning with", messages?.length || 0, "messages");
 
-    // Call Minimax API (OpenAI-compatible format)
+    // Call Minimax API
+    const requestBody: any = {
+      model: MINIMAX_MODEL,
+      messages: [
+        { role: "system", content: fullSystemPrompt },
+        ...(messages || []),
+      ],
+      max_tokens: 800,
+      temperature: 0.7,
+    };
+    
+    // Add group_id if provided (required for some accounts)
+    if (MINIMAX_GROUP_ID) {
+      requestBody.group_id = MINIMAX_GROUP_ID;
+    }
+    
     const response = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "MiniMax-M2.5-Lightning",
-        messages: [
-          { role: "system", content: fullSystemPrompt },
-          ...(messages || []),
-        ],
-        max_tokens: 800,
-        temperature: 0.7,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -524,18 +548,28 @@ serve(async (req) => {
 
     const data = await response.json();
     
-    // Handle Minimax response format
+    console.log("Minimax full response:", JSON.stringify(data).substring(0, 500));
+    
+    // Handle Minimax response format - try multiple possible paths
     let rawAiResponse = "";
     if (data.choices && data.choices[0]?.message?.content) {
       rawAiResponse = data.choices[0].message.content;
     } else if (data.choices && data.choices[0]?.message) {
       rawAiResponse = data.choices[0].message;
+    } else if (data.choices && data.choices[0]?.delta?.content) {
+      rawAiResponse = data.choices[0].delta.content;
+    } else if (typeof data === 'string') {
+      rawAiResponse = data;
+    } else if (data.text) {
+      rawAiResponse = data.text;
+    } else if (data.response) {
+      rawAiResponse = data.response;
     }
     
     if (!rawAiResponse) {
-      console.error("Minimax response format unexpected:", JSON.stringify(data).substring(0, 200));
+      console.error("Minimax response format unexpected:", JSON.stringify(data).substring(0, 500));
       return new Response(
-        JSON.stringify({ error: "Formato de respuesta inesperado de Minimax" }), 
+        JSON.stringify({ error: "Formato de respuesta inesperado de Minimax", debug: data }), 
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
