@@ -16,6 +16,7 @@ const MAX_MEDIA_SIZE = 16 * 1024 * 1024;
 
 // Generate AI response using Minimax API (Elsa)
 // Includes Shopify product catalog with prices & inventory + knowledge base
+// OPTIMIZED: Compact catalog format, product limit, fallback on failure
 async function generateAIResponse(
   userMessage: string,
   conversationHistory: any[],
@@ -29,10 +30,23 @@ async function generateAIResponse(
   const MINIMAX_BASE_URL = Deno.env.get('MINIMAX_BASE_URL') || 'https://api.minimax.chat/v1';
   const MINIMAX_MODEL = Deno.env.get('MINIMAX_MODEL') || 'abab6.5s-chat';
 
+  // Maximum characters for the entire system prompt (safe limit for Minimax)
+  const MAX_SYSTEM_PROMPT_CHARS = 12000;
+  // Maximum products to include in catalog
+  const MAX_PRODUCTS = 60;
+
   if (!MINIMAX_API_KEY) {
-    console.log('MINIMAX_API_KEY not configured, skipping AI response');
+    console.error('❌ MINIMAX_API_KEY not configured, cannot generate AI response');
     return '';
   }
+
+  console.log('🤖 [AI-START] generateAIResponse called', {
+    userMessage: userMessage?.substring(0, 50),
+    hasMediaContext: !!mediaContext,
+    mediaType: mediaContext?.type,
+    organizationId,
+    hasAiConfig: !!aiConfig,
+  });
 
   try {
     // ========== 1. BUILD SYSTEM PROMPT ==========
@@ -58,33 +72,31 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       systemPrompt += '\n\n📋 REGLAS ESPECIALES:';
       aiConfig.rules.forEach((rule: any) => {
         if (rule.condition && rule.response) {
-          systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
+          systemPrompt += `\n- Cuando "${rule.condition}": ${rule.response}`;
         }
       });
     }
 
     // Add knowledge base context
     if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length > 0) {
-      systemPrompt += '\n\n📚 CONOCIMIENTO DE LA EMPRESA:\nUSA ESTA INFORMACIÓN para responder a las preguntas de los clientes:';
+      systemPrompt += '\n\n📚 CONOCIMIENTO DE LA EMPRESA:';
       aiConfig.knowledgeBase.forEach((item: any) => {
         if (item.category === 'product') {
           const name = item.productName || item.title || '';
           if (name && item.content) {
-            systemPrompt += `\n\n📦 Producto: ${name}`;
-            if (item.recommendWhen) {
-              systemPrompt += `\n   Recomendar cuando: ${item.recommendWhen}`;
-            }
-            systemPrompt += `\n   Detalles: ${item.content}`;
+            systemPrompt += `\n📦 ${name}: ${item.content}`;
           }
         } else if (item.title && item.content) {
-          systemPrompt += `\n\n📋 ${item.title}:\n   ${item.content}`;
+          systemPrompt += `\n📋 ${item.title}: ${item.content}`;
         } else if (item.question && item.answer) {
-          systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
+          systemPrompt += `\nP: ${item.question} R: ${item.answer}`;
         }
       });
     }
 
-    // ========== 2. LOAD SHOPIFY PRODUCT CATALOG ==========
+    console.log('📝 [AI-PROMPT] Base prompt length:', systemPrompt.length, 'chars');
+
+    // ========== 2. LOAD SHOPIFY PRODUCT CATALOG (COMPACT FORMAT) ==========
     let productCatalog = '';
     if (organizationId) {
       try {
@@ -96,7 +108,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
           .eq('connected', true);
 
         const connectedProductIds = new Set(connections?.map((c: any) => c.shopify_product_id) || []);
-        console.log(`📦 Found ${connectedProductIds.size} connected products for AI`);
+        console.log(`📦 [AI-CATALOG] ${connectedProductIds.size} connected products`);
 
         // Get Shopify credentials
         const { data: org } = await supabaseClient
@@ -113,8 +125,6 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
 
           if (shopifyDomain && accessToken) {
             try {
-              console.log('📦 Fetching Shopify products with inventory...');
-
               const shopifyResponse = await fetch(
                 `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
                 {
@@ -130,59 +140,65 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
                 const shopifyProducts = shopifyData.products || [];
 
                 // Filter to connected products (or all if none specified)
-                const connectedProducts = shopifyProducts.filter(
+                let connectedProducts = shopifyProducts.filter(
                   (p: any) => connectedProductIds.size === 0 || connectedProductIds.has(p.id)
                 );
 
+                // Limit number of products to prevent prompt overflow
+                if (connectedProducts.length > MAX_PRODUCTS) {
+                  console.log(`⚠️ [AI-CATALOG] Limiting from ${connectedProducts.length} to ${MAX_PRODUCTS} products`);
+                  // Prioritize products with stock
+                  connectedProducts.sort((a: any, b: any) => {
+                    const stockA = (a.variants || []).reduce((s: number, v: any) => s + (v.inventory_quantity || 0), 0);
+                    const stockB = (b.variants || []).reduce((s: number, v: any) => s + (v.inventory_quantity || 0), 0);
+                    return stockB - stockA; // More stock first
+                  });
+                  connectedProducts = connectedProducts.slice(0, MAX_PRODUCTS);
+                }
+
                 if (connectedProducts.length > 0) {
-                  productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-                  productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n';
+                  // COMPACT FORMAT: One line per product to save tokens
+                  productCatalog = '\n\n📦 CATÁLOGO (solo ofrece productos con stock>0):\n';
 
                   connectedProducts.forEach((product: any) => {
                     const variants = product.variants || [];
                     const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
 
                     if (totalStock === 0) {
-                      productCatalog += `\n• ${product.title}: ❌ AGOTADO (no ofrecer)`;
+                      productCatalog += `${product.title}: AGOTADO\n`;
                       return;
                     }
 
                     const price = variants[0]?.price
-                      ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP`
-                      : 'Consultar';
+                      ? `$${Number(variants[0].price).toLocaleString('es-CO')}`
+                      : '?';
 
-                    const variantInfo = variants
-                      .map((v: any) => {
-                        const stock = v.inventory_quantity || 0;
-                        const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
-                        return `${v.title}: ${stockStatus}`;
-                      })
-                      .join(' | ');
+                    // Compact variant info: only show variants with stock
+                    const availableVariants = variants
+                      .filter((v: any) => (v.inventory_quantity || 0) > 0)
+                      .map((v: any) => `${v.title}(${v.inventory_quantity})`)
+                      .join(',');
 
-                    const cleanDescription = product.body_html
-                      ? product.body_html.replace(/<[^>]*>/g, '').substring(0, 100)
-                      : '';
-
-                    productCatalog += `\n\n• ${product.title}`;
-                    productCatalog += `\n  Precio: ${price}`;
-                    productCatalog += `\n  Variantes: ${variantInfo}`;
+                    productCatalog += `${product.title}|${price}COP|${availableVariants}`;
                     if (product.product_type) {
-                      productCatalog += `\n  Categoría: ${product.product_type}`;
+                      productCatalog += `|${product.product_type}`;
                     }
-                    if (cleanDescription) {
-                      productCatalog += `\n  ${cleanDescription}`;
-                    }
+                    productCatalog += '\n';
                   });
 
-                  console.log(`📦 Loaded ${connectedProducts.length} products with Shopify inventory`);
+                  console.log(`📦 [AI-CATALOG] Loaded ${connectedProducts.length} products, catalog length: ${productCatalog.length} chars`);
                 }
               } else {
-                console.error('Shopify API error:', shopifyResponse.status);
+                console.error('❌ [AI-CATALOG] Shopify API error:', shopifyResponse.status, await shopifyResponse.text());
               }
             } catch (shopifyErr) {
-              console.error('Error fetching Shopify products:', shopifyErr);
+              console.error('❌ [AI-CATALOG] Shopify fetch error:', shopifyErr);
             }
+          } else {
+            console.log('⚠️ [AI-CATALOG] No Shopify domain/token configured');
           }
+        } else {
+          console.log('⚠️ [AI-CATALOG] No Shopify credentials found');
         }
 
         // Fallback: load from local products table if no Shopify catalog loaded
@@ -190,49 +206,45 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
           const { data: products, error: productsError } = await supabaseClient
             .from('products')
             .select(`
-              name, sku, base_price, category, description,
-              product_variants (id, size, color, stock_quantity, sku_variant)
+              name, sku, base_price, category,
+              product_variants (size, color, stock_quantity)
             `)
             .eq('organization_id', organizationId)
             .eq('status', 'active')
-            .limit(50);
+            .limit(MAX_PRODUCTS);
 
           if (!productsError && products && products.length > 0) {
-            productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-            productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible.\n';
+            productCatalog = '\n\n📦 CATÁLOGO (solo ofrece productos con stock>0):\n';
 
             products.forEach((p: any) => {
-              const price = p.base_price
-                ? `$${Number(p.base_price).toLocaleString('es-CO')} COP`
-                : 'Precio: Consultar';
-
+              const price = p.base_price ? `$${Number(p.base_price).toLocaleString('es-CO')}` : '?';
               const variants = p.product_variants
-                ?.map((v: any) => {
-                  const size = v.size || '';
-                  const color = v.color || '';
-                  const stock = v.stock_quantity || 0;
-                  const stockStatus = stock > 0 ? `✅ ${stock} unidades` : '❌ Agotado';
-                  return `${size}${color ? ` ${color}` : ''}: ${stockStatus}`;
-                })
-                .join(' | ') || 'Sin variantes';
+                ?.filter((v: any) => (v.stock_quantity || 0) > 0)
+                .map((v: any) => `${v.size || ''}${v.color ? ' ' + v.color : ''}(${v.stock_quantity})`)
+                .join(',') || 'sin stock';
 
-              productCatalog += `\n• ${p.name}`;
-              productCatalog += `\n  Precio: ${price}`;
-              productCatalog += `\n  Disponibilidad: ${variants}`;
+              productCatalog += `${p.name}|${price}COP|${variants}\n`;
             });
 
-            console.log(`📦 Loaded ${products.length} local products as fallback`);
+            console.log(`📦 [AI-CATALOG] Loaded ${products.length} local products as fallback`);
           }
         }
       } catch (err) {
-        console.error('Error loading product catalog:', err);
+        console.error('❌ [AI-CATALOG] Error loading product catalog:', err);
       }
     }
 
-    // Append product catalog to system prompt
+    // Append product catalog to system prompt (with size guard)
     if (productCatalog) {
+      const spaceLeft = MAX_SYSTEM_PROMPT_CHARS - systemPrompt.length;
+      if (productCatalog.length > spaceLeft) {
+        console.log(`⚠️ [AI-PROMPT] Catalog too large (${productCatalog.length}), trimming to fit ${spaceLeft} chars`);
+        productCatalog = productCatalog.substring(0, spaceLeft - 50) + '\n... (catálogo recortado por espacio)';
+      }
       systemPrompt += productCatalog;
     }
+
+    console.log('📝 [AI-PROMPT] Final system prompt length:', systemPrompt.length, 'chars');
 
     // ========== 3. BUILD USER MESSAGE ==========
     let finalUserMessage = userMessage;
@@ -250,12 +262,17 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       { role: 'system', content: systemPrompt },
       ...conversationHistory.slice(-10).map((msg: any) => ({
         role: msg.direction === 'inbound' ? 'user' : 'assistant',
-        content: msg.content
+        content: msg.content || ''
       })),
     ];
     messages.push({ role: 'user', content: finalUserMessage });
 
-    console.log('🤖 Calling Minimax – system prompt length:', systemPrompt.length, '| messages:', messages.length);
+    console.log('🤖 [AI-MINIMAX] Calling Minimax', {
+      model: MINIMAX_MODEL,
+      systemPromptLen: systemPrompt.length,
+      messagesCount: messages.length,
+      totalChars: JSON.stringify(messages).length,
+    });
 
     const requestBody: any = {
       model: MINIMAX_MODEL,
@@ -277,13 +294,61 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       body: JSON.stringify(requestBody),
     });
 
+    const responseText = await response.text();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Minimax API error:', response.status, errorText);
+      console.error('❌ [AI-MINIMAX] API error:', response.status, responseText);
+
+      // FALLBACK: If the full prompt is too large, retry WITHOUT the catalog
+      if (response.status === 400 || response.status === 413 || response.status === 422) {
+        console.log('🔄 [AI-FALLBACK] Retrying without product catalog...');
+        const fallbackPrompt = aiConfig?.systemPrompt || systemPrompt.substring(0, 2000);
+        const fallbackMessages = [
+          { role: 'system', content: fallbackPrompt },
+          ...conversationHistory.slice(-5).map((msg: any) => ({
+            role: msg.direction === 'inbound' ? 'user' : 'assistant',
+            content: msg.content || ''
+          })),
+          { role: 'user', content: finalUserMessage }
+        ];
+
+        const fallbackBody: any = {
+          model: MINIMAX_MODEL,
+          messages: fallbackMessages,
+          max_tokens: 500,
+          temperature: 0.7,
+        };
+        if (MINIMAX_GROUP_ID) fallbackBody.group_id = String(MINIMAX_GROUP_ID);
+
+        const fallbackResponse = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${MINIMAX_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(fallbackBody),
+        });
+
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          const fallbackText = fallbackData.choices?.[0]?.message?.content || '';
+          console.log('✅ [AI-FALLBACK] Got response:', fallbackText.substring(0, 80));
+          return fallbackText;
+        } else {
+          console.error('❌ [AI-FALLBACK] Also failed:', fallbackResponse.status, await fallbackResponse.text());
+          return '';
+        }
+      }
       return '';
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error('❌ [AI-MINIMAX] Failed to parse response JSON:', responseText.substring(0, 200));
+      return '';
+    }
 
     // Handle Minimax response format
     let aiResponse = '';
@@ -293,16 +358,23 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       aiResponse = data.choices[0].message;
     } else if (data.choices?.[0]?.delta?.content) {
       aiResponse = data.choices[0].delta.content;
+    } else if (data.reply) {
+      aiResponse = data.reply;
     } else if (data.text) {
       aiResponse = data.text;
     } else if (data.response) {
       aiResponse = data.response;
     }
 
-    console.log('✅ Minimax response:', aiResponse.substring(0, 100) + '...');
+    if (!aiResponse) {
+      console.error('❌ [AI-MINIMAX] No response text found in:', JSON.stringify(data).substring(0, 500));
+      return '';
+    }
+
+    console.log('✅ [AI-MINIMAX] Response received:', aiResponse.substring(0, 100));
     return aiResponse;
   } catch (error) {
-    console.error('Error generating AI response:', error);
+    console.error('❌ [AI-ERROR] Unhandled error in generateAIResponse:', error);
     return '';
   }
 }
@@ -944,6 +1016,18 @@ serve(async (req) => {
                     const aiEnabledOnConversation = (freshConv?.ai_managed ?? conversation.ai_managed) !== false;
                     const shouldAutoReply = aiEnabledOnChannel && aiEnabledOnConversation && autoReplyEnabled;
 
+                    console.log('🔍 [AUTO-REPLY CHECK]', {
+                      aiEnabledOnChannel,
+                      aiEnabledOnConversation,
+                      autoReplyEnabled,
+                      shouldAutoReply,
+                      channelAiEnabled: channel.ai_enabled,
+                      freshAiManaged: freshConv?.ai_managed,
+                      convAiManaged: conversation.ai_managed,
+                      aiConfigAutoReply: aiConfig?.autoReply,
+                      conversationId: conversation.id,
+                    });
+
                     if (shouldAutoReply) {
                       // Check business hours if configured
                       let withinBusinessHours = true;
@@ -956,9 +1040,10 @@ serve(async (req) => {
 
                         withinBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 6 && hour >= 9 && hour < 18;
                         if (!withinBusinessHours) {
-                          console.log('Outside business hours, skipping AI response');
+                          console.log('⏰ [AUTO-REPLY] Outside business hours (Colombia time), skipping');
                         }
                       }
+                      console.log('⏰ [AUTO-REPLY] businessHours config:', aiConfig?.businessHours, '| withinBusinessHours:', withinBusinessHours);
 
                       if (withinBusinessHours) {
                         // Apply response delay if configured
@@ -990,6 +1075,8 @@ serve(async (req) => {
                           }
                         }
 
+                        console.log('🤖 [AUTO-REPLY] Generating AI response for message:', content?.substring(0, 50));
+
                         const aiResponse = await generateAIResponse(
                           content,
                           (historyMessages || []).reverse(),
@@ -1000,9 +1087,11 @@ serve(async (req) => {
                         );
 
                         if (aiResponse) {
+                          console.log('📤 [AUTO-REPLY] Sending AI response via WhatsApp:', aiResponse.substring(0, 80));
                           const sendResult = await sendWhatsAppMessage(phoneNumberId, contactPhone, aiResponse);
 
                           if (sendResult) {
+                            console.log('✅ [AUTO-REPLY] WhatsApp message sent, wamid:', sendResult.messages?.[0]?.id);
                             // Save AI response to database
                             const { error: aiMsgError } = await supabase
                               .from('messaging_messages')
@@ -1017,7 +1106,10 @@ serve(async (req) => {
                                 sent_at: new Date().toISOString()
                               });
 
-                            if (!aiMsgError) {
+                            if (aiMsgError) {
+                              console.error('❌ [AUTO-REPLY] Failed to save AI message to DB:', aiMsgError);
+                            } else {
+                              console.log('✅ [AUTO-REPLY] AI message saved to DB');
                               await supabase
                                 .from('messaging_conversations')
                                 .update({
@@ -1026,7 +1118,11 @@ serve(async (req) => {
                                 })
                                 .eq('id', conversation.id);
                             }
+                          } else {
+                            console.error('❌ [AUTO-REPLY] sendWhatsAppMessage returned null/undefined');
                           }
+                        } else {
+                          console.error('❌ [AUTO-REPLY] generateAIResponse returned empty string - AI did NOT respond');
                         }
                       }
                     }
