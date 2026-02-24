@@ -14,29 +14,49 @@ const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
 // Maximum file size for media downloads (16MB - WhatsApp limit)
 const MAX_MEDIA_SIZE = 16 * 1024 * 1024;
 
-// Generate AI response using Lovable AI Gateway (Gemini)
+// Generate AI response using Minimax API (Elsa)
+// Includes Shopify product catalog with prices & inventory + knowledge base
+// OPTIMIZED: Compact catalog format, product limit, fallback on failure
 async function generateAIResponse(
-  userMessage: string, 
+  userMessage: string,
   conversationHistory: any[],
   aiConfig: any,
+  organizationId: string,
+  supabaseClient: any,
   mediaContext?: { type: string; url?: string }
 ): Promise<string> {
-  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-  
-  if (!lovableApiKey) {
-    console.log('LOVABLE_API_KEY not configured, skipping AI response');
+  const MINIMAX_API_KEY = Deno.env.get('MINIMAX_API_KEY') || '27ab14d788ec95325ca3f166c2b6a6c2';
+  const MINIMAX_GROUP_ID = Deno.env.get('MINIMAX_GROUP_ID');
+  const MINIMAX_BASE_URL = Deno.env.get('MINIMAX_BASE_URL') || 'https://api.minimax.chat/v1';
+  const MINIMAX_MODEL = Deno.env.get('MINIMAX_MODEL') || 'abab6.5s-chat';
+
+  // Maximum characters for the entire system prompt (safe limit for Minimax)
+  const MAX_SYSTEM_PROMPT_CHARS = 12000;
+  // Maximum products to include in catalog
+  const MAX_PRODUCTS = 60;
+
+  if (!MINIMAX_API_KEY) {
+    console.error('❌ MINIMAX_API_KEY not configured, cannot generate AI response');
     return '';
   }
 
+  console.log('🤖 [AI-START] generateAIResponse called', {
+    userMessage: userMessage?.substring(0, 50),
+    hasMediaContext: !!mediaContext,
+    mediaType: mediaContext?.type,
+    organizationId,
+    hasAiConfig: !!aiConfig,
+  });
+
   try {
-    // Build system prompt from aiConfig or use default
-    let systemPrompt = aiConfig?.systemPrompt || `Eres un asistente virtual amigable y profesional para una empresa. 
+    // ========== 1. BUILD SYSTEM PROMPT ==========
+    let systemPrompt = aiConfig?.systemPrompt || `Eres un asistente virtual amigable y profesional para una empresa.
 Tu objetivo es ayudar a los clientes con sus consultas de manera clara y concisa.
 Responde siempre en español.
 Sé amable, útil y mantén las respuestas breves pero informativas.
 Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto.`;
 
-    // Add tone instructions if configured
+    // Add tone instructions
     const toneMap: Record<string, string> = {
       'friendly': 'Usa un tono amigable y cercano. Puedes usar emojis ocasionalmente.',
       'formal': 'Usa un tono formal y respetuoso.',
@@ -47,94 +67,314 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       systemPrompt += `\n\nTono: ${toneMap[aiConfig.tone]}`;
     }
 
-    // Add response rules if configured
+    // Add response rules
     if (aiConfig?.rules && Array.isArray(aiConfig.rules) && aiConfig.rules.length > 0) {
-      systemPrompt += '\n\nReglas especiales:';
+      systemPrompt += '\n\n📋 REGLAS ESPECIALES:';
       aiConfig.rules.forEach((rule: any) => {
         if (rule.condition && rule.response) {
-          systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
+          systemPrompt += `\n- Cuando "${rule.condition}": ${rule.response}`;
         }
       });
     }
 
-    // Add knowledge base context if available
-    if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase)) {
-      systemPrompt += '\n\nConocimiento de la empresa:';
+    // Add knowledge base context
+    if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length > 0) {
+      systemPrompt += '\n\n📚 CONOCIMIENTO DE LA EMPRESA:';
       aiConfig.knowledgeBase.forEach((item: any) => {
-        if (item.question && item.answer) {
-          systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
+        if (item.category === 'product') {
+          const name = item.productName || item.title || '';
+          if (name && item.content) {
+            systemPrompt += `\n📦 ${name}: ${item.content}`;
+          }
+        } else if (item.title && item.content) {
+          systemPrompt += `\n📋 ${item.title}: ${item.content}`;
+        } else if (item.question && item.answer) {
+          systemPrompt += `\nP: ${item.question} R: ${item.answer}`;
         }
       });
     }
 
-    // Build user message with media context
+    console.log('📝 [AI-PROMPT] Base prompt length:', systemPrompt.length, 'chars');
+
+    // ========== 2. LOAD SHOPIFY PRODUCT CATALOG (COMPACT FORMAT) ==========
+    let productCatalog = '';
+    if (organizationId) {
+      try {
+        // Check which products are connected for AI
+        const { data: connections } = await supabaseClient
+          .from('ai_catalog_connections')
+          .select('shopify_product_id')
+          .eq('organization_id', organizationId)
+          .eq('connected', true);
+
+        const connectedProductIds = new Set(connections?.map((c: any) => c.shopify_product_id) || []);
+        console.log(`📦 [AI-CATALOG] ${connectedProductIds.size} connected products`);
+
+        // Get Shopify credentials
+        const { data: org } = await supabaseClient
+          .from('organizations')
+          .select('shopify_credentials')
+          .eq('id', organizationId)
+          .single();
+
+        const shopifyCredentials = org?.shopify_credentials as any;
+
+        if (shopifyCredentials) {
+          const shopifyDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
+          const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
+
+          if (shopifyDomain && accessToken) {
+            try {
+              const shopifyResponse = await fetch(
+                `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
+                {
+                  headers: {
+                    'X-Shopify-Access-Token': accessToken,
+                    'Content-Type': 'application/json',
+                  },
+                }
+              );
+
+              if (shopifyResponse.ok) {
+                const shopifyData = await shopifyResponse.json();
+                const shopifyProducts = shopifyData.products || [];
+
+                // Filter to connected products (or all if none specified)
+                let connectedProducts = shopifyProducts.filter(
+                  (p: any) => connectedProductIds.size === 0 || connectedProductIds.has(p.id)
+                );
+
+                // Limit number of products to prevent prompt overflow
+                if (connectedProducts.length > MAX_PRODUCTS) {
+                  console.log(`⚠️ [AI-CATALOG] Limiting from ${connectedProducts.length} to ${MAX_PRODUCTS} products`);
+                  // Prioritize products with stock
+                  connectedProducts.sort((a: any, b: any) => {
+                    const stockA = (a.variants || []).reduce((s: number, v: any) => s + (v.inventory_quantity || 0), 0);
+                    const stockB = (b.variants || []).reduce((s: number, v: any) => s + (v.inventory_quantity || 0), 0);
+                    return stockB - stockA; // More stock first
+                  });
+                  connectedProducts = connectedProducts.slice(0, MAX_PRODUCTS);
+                }
+
+                if (connectedProducts.length > 0) {
+                  // COMPACT FORMAT: One line per product to save tokens
+                  productCatalog = '\n\n📦 CATÁLOGO (solo ofrece productos con stock>0):\n';
+
+                  connectedProducts.forEach((product: any) => {
+                    const variants = product.variants || [];
+                    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
+
+                    if (totalStock === 0) {
+                      productCatalog += `${product.title}: AGOTADO\n`;
+                      return;
+                    }
+
+                    const price = variants[0]?.price
+                      ? `$${Number(variants[0].price).toLocaleString('es-CO')}`
+                      : '?';
+
+                    // Compact variant info: only show variants with stock
+                    const availableVariants = variants
+                      .filter((v: any) => (v.inventory_quantity || 0) > 0)
+                      .map((v: any) => `${v.title}(${v.inventory_quantity})`)
+                      .join(',');
+
+                    productCatalog += `${product.title}|${price}COP|${availableVariants}`;
+                    if (product.product_type) {
+                      productCatalog += `|${product.product_type}`;
+                    }
+                    productCatalog += '\n';
+                  });
+
+                  console.log(`📦 [AI-CATALOG] Loaded ${connectedProducts.length} products, catalog length: ${productCatalog.length} chars`);
+                }
+              } else {
+                console.error('❌ [AI-CATALOG] Shopify API error:', shopifyResponse.status, await shopifyResponse.text());
+              }
+            } catch (shopifyErr) {
+              console.error('❌ [AI-CATALOG] Shopify fetch error:', shopifyErr);
+            }
+          } else {
+            console.log('⚠️ [AI-CATALOG] No Shopify domain/token configured');
+          }
+        } else {
+          console.log('⚠️ [AI-CATALOG] No Shopify credentials found');
+        }
+
+        // Fallback: load from local products table if no Shopify catalog loaded
+        if (!productCatalog) {
+          const { data: products, error: productsError } = await supabaseClient
+            .from('products')
+            .select(`
+              name, sku, base_price, category,
+              product_variants (size, color, stock_quantity)
+            `)
+            .eq('organization_id', organizationId)
+            .eq('status', 'active')
+            .limit(MAX_PRODUCTS);
+
+          if (!productsError && products && products.length > 0) {
+            productCatalog = '\n\n📦 CATÁLOGO (solo ofrece productos con stock>0):\n';
+
+            products.forEach((p: any) => {
+              const price = p.base_price ? `$${Number(p.base_price).toLocaleString('es-CO')}` : '?';
+              const variants = p.product_variants
+                ?.filter((v: any) => (v.stock_quantity || 0) > 0)
+                .map((v: any) => `${v.size || ''}${v.color ? ' ' + v.color : ''}(${v.stock_quantity})`)
+                .join(',') || 'sin stock';
+
+              productCatalog += `${p.name}|${price}COP|${variants}\n`;
+            });
+
+            console.log(`📦 [AI-CATALOG] Loaded ${products.length} local products as fallback`);
+          }
+        }
+      } catch (err) {
+        console.error('❌ [AI-CATALOG] Error loading product catalog:', err);
+      }
+    }
+
+    // Append product catalog to system prompt (with size guard)
+    if (productCatalog) {
+      const spaceLeft = MAX_SYSTEM_PROMPT_CHARS - systemPrompt.length;
+      if (productCatalog.length > spaceLeft) {
+        console.log(`⚠️ [AI-PROMPT] Catalog too large (${productCatalog.length}), trimming to fit ${spaceLeft} chars`);
+        productCatalog = productCatalog.substring(0, spaceLeft - 50) + '\n... (catálogo recortado por espacio)';
+      }
+      systemPrompt += productCatalog;
+    }
+
+    console.log('📝 [AI-PROMPT] Final system prompt length:', systemPrompt.length, 'chars');
+
+    // ========== 3. BUILD USER MESSAGE ==========
     let finalUserMessage = userMessage;
     if (mediaContext?.type === 'image' && mediaContext.url) {
       finalUserMessage = userMessage || `[El cliente envió una imagen]`;
-      console.log(`🖼️ Enviando imagen a IA: ${mediaContext.url}`);
+      console.log(`🖼️ Imagen recibida: ${mediaContext.url}`);
     } else if (mediaContext?.type === 'audio') {
       finalUserMessage = userMessage || `[El cliente envió un audio/nota de voz]`;
     } else if (mediaContext?.type === 'sticker') {
-      // Don't analyze stickers, just acknowledge
       return '¡Lindo sticker! 😊 ¿En qué puedo ayudarte?';
     }
 
-    // Build messages array with conversation history
+    // ========== 4. CALL MINIMAX ==========
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
       ...conversationHistory.slice(-10).map((msg: any) => ({
         role: msg.direction === 'inbound' ? 'user' : 'assistant',
-        content: msg.content
+        content: msg.content || ''
       })),
     ];
+    messages.push({ role: 'user', content: finalUserMessage });
 
-    // Add the current message - with image if available
-    if (mediaContext?.type === 'image' && mediaContext.url) {
-      // Use vision capabilities with the permanent Supabase URL
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: finalUserMessage },
-          { 
-            type: 'image_url', 
-            image_url: { 
-              url: mediaContext.url,
-              detail: 'auto'
-            } 
-          }
-        ]
-      });
-    } else {
-      messages.push({ role: 'user', content: finalUserMessage });
-    }
-
-    console.log('Calling Lovable AI Gateway with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
-
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages,
-        max_tokens: 500,
-      }),
+    console.log('🤖 [AI-MINIMAX] Calling Minimax', {
+      model: MINIMAX_MODEL,
+      systemPromptLen: systemPrompt.length,
+      messagesCount: messages.length,
+      totalChars: JSON.stringify(messages).length,
     });
 
+    const requestBody: any = {
+      model: MINIMAX_MODEL,
+      messages,
+      max_tokens: 800,
+      temperature: 0.7,
+    };
+
+    if (MINIMAX_GROUP_ID) {
+      requestBody.group_id = String(MINIMAX_GROUP_ID);
+    }
+
+    const response = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${MINIMAX_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Lovable AI Gateway error:', response.status, errorText);
+      console.error('❌ [AI-MINIMAX] API error:', response.status, responseText);
+
+      // FALLBACK: If the full prompt is too large, retry WITHOUT the catalog
+      if (response.status === 400 || response.status === 413 || response.status === 422) {
+        console.log('🔄 [AI-FALLBACK] Retrying without product catalog...');
+        const fallbackPrompt = aiConfig?.systemPrompt || systemPrompt.substring(0, 2000);
+        const fallbackMessages = [
+          { role: 'system', content: fallbackPrompt },
+          ...conversationHistory.slice(-5).map((msg: any) => ({
+            role: msg.direction === 'inbound' ? 'user' : 'assistant',
+            content: msg.content || ''
+          })),
+          { role: 'user', content: finalUserMessage }
+        ];
+
+        const fallbackBody: any = {
+          model: MINIMAX_MODEL,
+          messages: fallbackMessages,
+          max_tokens: 500,
+          temperature: 0.7,
+        };
+        if (MINIMAX_GROUP_ID) fallbackBody.group_id = String(MINIMAX_GROUP_ID);
+
+        const fallbackResponse = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${MINIMAX_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(fallbackBody),
+        });
+
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          const fallbackText = fallbackData.choices?.[0]?.message?.content || '';
+          console.log('✅ [AI-FALLBACK] Got response:', fallbackText.substring(0, 80));
+          return fallbackText;
+        } else {
+          console.error('❌ [AI-FALLBACK] Also failed:', fallbackResponse.status, await fallbackResponse.text());
+          return '';
+        }
+      }
       return '';
     }
 
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || '';
-    console.log('AI response generated:', aiResponse.substring(0, 100) + '...');
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error('❌ [AI-MINIMAX] Failed to parse response JSON:', responseText.substring(0, 200));
+      return '';
+    }
+
+    // Handle Minimax response format
+    let aiResponse = '';
+    if (data.choices?.[0]?.message?.content) {
+      aiResponse = data.choices[0].message.content;
+    } else if (data.choices?.[0]?.message && typeof data.choices[0].message === 'string') {
+      aiResponse = data.choices[0].message;
+    } else if (data.choices?.[0]?.delta?.content) {
+      aiResponse = data.choices[0].delta.content;
+    } else if (data.reply) {
+      aiResponse = data.reply;
+    } else if (data.text) {
+      aiResponse = data.text;
+    } else if (data.response) {
+      aiResponse = data.response;
+    }
+
+    if (!aiResponse) {
+      console.error('❌ [AI-MINIMAX] No response text found in:', JSON.stringify(data).substring(0, 500));
+      return '';
+    }
+
+    console.log('✅ [AI-MINIMAX] Response received:', aiResponse.substring(0, 100));
     return aiResponse;
   } catch (error) {
-    console.error('Error generating AI response:', error);
+    console.error('❌ [AI-ERROR] Unhandled error in generateAIResponse:', error);
     return '';
   }
 }
@@ -189,18 +429,18 @@ function getMediaSubfolder(messageType: string): string {
 
 // Fetch media URL from WhatsApp API using media ID with robust error handling
 async function fetchMediaUrl(
-  mediaId: string, 
+  mediaId: string,
   messageType: string,
   conversationId: string,
   supabase: any
 ): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
-  
+
   if (!accessToken) {
     console.error('❌ META_WHATSAPP_TOKEN not configured');
     return { url: null, mimeType: null, error: 'Token not configured' };
   }
-  
+
   if (!mediaId) {
     console.error('❌ No media ID provided');
     return { url: null, mimeType: null, error: 'No media ID' };
@@ -212,11 +452,11 @@ async function fetchMediaUrl(
 
   try {
     console.log(`📥 Fetching WhatsApp media: ${mediaId} (type: ${messageType})`);
-    
+
     // Step 1: Get media info from Meta API (with 10s timeout)
     const infoController = new AbortController();
     const infoTimeoutId = setTimeout(() => infoController.abort(), 10000);
-    
+
     let infoResponse: Response;
     try {
       infoResponse = await fetch(
@@ -240,12 +480,12 @@ async function fetchMediaUrl(
     }
 
     const mediaInfo = await infoResponse.json();
-    console.log(`📋 Media info received:`, { 
-      url: mediaInfo.url?.substring(0, 50) + '...', 
+    console.log(`📋 Media info received:`, {
+      url: mediaInfo.url?.substring(0, 50) + '...',
       mime_type: mediaInfo.mime_type,
-      file_size: mediaInfo.file_size 
+      file_size: mediaInfo.file_size
     });
-    
+
     if (!mediaInfo.url) {
       console.error('❌ No URL in media info response');
       return { url: null, mimeType: null, error: 'No URL in response' };
@@ -260,7 +500,7 @@ async function fetchMediaUrl(
     // Step 2: Download the media binary (with 30s timeout)
     const downloadController = new AbortController();
     const downloadTimeoutId = setTimeout(() => downloadController.abort(), 30000);
-    
+
     let mediaResponse: Response;
     try {
       mediaResponse = await fetch(mediaInfo.url, {
@@ -282,7 +522,7 @@ async function fetchMediaUrl(
     // Step 3: Read and validate the binary data
     const arrayBuffer = await mediaResponse.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
-    
+
     if (uint8Array.length === 0) {
       console.error('❌ Downloaded file is empty');
       return { url: null, mimeType: mediaInfo.mime_type, error: 'Empty file' };
@@ -296,14 +536,14 @@ async function fetchMediaUrl(
     const subfolder = getMediaSubfolder(messageType);
     const timestamp = Date.now();
     const fileName = `whatsapp-media/${subfolder}/${conversationId}/${timestamp}_${mediaId}.${ext}`;
-    
+
     console.log(`📤 Uploading to Supabase Storage: ${fileName}`);
 
     // Step 5: Upload to Supabase Storage (with retry)
     let uploadSuccess = false;
     let uploadAttempts = 0;
     const maxUploadAttempts = 2;
-    
+
     while (!uploadSuccess && uploadAttempts < maxUploadAttempts) {
       uploadAttempts++;
       const { error: uploadError } = await supabaseClient
@@ -337,7 +577,7 @@ async function fetchMediaUrl(
       .getPublicUrl(fileName);
 
     const publicUrl = publicUrlData?.publicUrl;
-    
+
     if (!publicUrl) {
       console.error('❌ Failed to get public URL');
       return { url: null, mimeType, error: 'No public URL' };
@@ -345,7 +585,7 @@ async function fetchMediaUrl(
 
     console.log(`✅ Media cached successfully: ${publicUrl.substring(0, 80)}...`);
     return { url: publicUrl, mimeType };
-    
+
   } catch (error: any) {
     if (error.name === 'AbortError') {
       console.error('❌ Media fetch timed out');
@@ -359,7 +599,7 @@ async function fetchMediaUrl(
 // Send WhatsApp message via Meta API
 async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string, message: string): Promise<any> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
-  
+
   if (!accessToken) {
     console.error('META_WHATSAPP_TOKEN not configured');
     return null;
@@ -367,7 +607,7 @@ async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string
 
   try {
     console.log('Sending WhatsApp message to:', recipientPhone, 'via phone_number_id:', phoneNumberId);
-    
+
     const response = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
@@ -387,7 +627,7 @@ async function sendWhatsAppMessage(phoneNumberId: string, recipientPhone: string
     );
 
     const data = await response.json();
-    
+
     if (!response.ok) {
       console.error('WhatsApp API error:', data);
       return null;
@@ -408,17 +648,17 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  
+
   // GET: Webhook verification from Meta
   if (req.method === 'GET') {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
-    
+
     const verifyToken = Deno.env.get('META_WEBHOOK_VERIFY_TOKEN');
-    
+
     console.log('Webhook verification request:', { mode, token, challenge });
-    
+
     if (mode === 'subscribe' && token === verifyToken) {
       console.log('Webhook verified successfully');
       return new Response(challenge, { status: 200 });
@@ -432,8 +672,7 @@ serve(async (req) => {
   if (req.method === 'POST') {
     try {
       const body = await req.json();
-      console.log('========== WEBHOOK RECEIVED ==========');
-      console.log('Received webhook payload:', JSON.stringify(body, null, 2));
+      console.log('========== WHATSAPP WEBHOOK RECEIVED ==========', JSON.stringify(body, null, 2));
 
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -454,35 +693,31 @@ serve(async (req) => {
             if (change.field === 'messages') {
               const value = change.value;
               const phoneNumberId = value.metadata?.phone_number_id;
-              
-              console.log('========== PROCESSING MESSAGE ==========');
-              console.log('phone_number_id from Meta:', phoneNumberId);
-              console.log('display_phone_number:', value.metadata?.display_phone_number);
-              
+
+              console.log('========== PROCESSING WHATSAPP MESSAGE ==========', { phoneNumberId });
+
               // Process incoming messages
               for (const message of toArray(value.messages)) {
                 const contactPhone = message.from;
                 const externalMessageId = message.id;
                 const timestamp = new Date(parseInt(message.timestamp) * 1000);
-                
+
                 // Get contact name
                 const contact = toArray(value.contacts)?.find((c: any) => c.wa_id === contactPhone);
                 const contactName = contact?.profile?.name || contactPhone;
-                
-                console.log('Message from:', contactPhone, 'name:', contactName);
-                
+
                 // Get message content
                 let content = '';
                 let messageType = 'text';
                 let mediaId: string | null = null;
                 let mediaMimeType: string | null = null;
                 let replyToMessageId = null;
-                
+
                 // Handle context (replies to previous messages)
                 if (message.context?.id) {
                   replyToMessageId = message.context.id;
                 }
-                
+
                 if (message.type === 'text') {
                   content = message.text?.body || '';
                 } else if (message.type === 'reaction') {
@@ -548,9 +783,9 @@ serve(async (req) => {
 
                 // Find channel by phone number ID - ESTRATEGIA MEJORADA
                 let channel = null;
-                
+
                 // 1. Buscar por phone_number_id exacto
-                const { data: exactChannel, error: exactError } = await supabase
+                const { data: exactChannel } = await supabase
                   .from('messaging_channels')
                   .select('*')
                   .eq('meta_phone_number_id', phoneNumberId)
@@ -558,11 +793,8 @@ serve(async (req) => {
                   .single();
 
                 if (exactChannel) {
-                  console.log('Found exact channel match:', exactChannel.id, exactChannel.channel_name);
                   channel = exactChannel;
                 } else {
-                  console.log('No exact channel match for phone_number_id:', phoneNumberId);
-                  
                   // 2. Buscar cualquier canal WhatsApp activo de Dosmicos
                   const { data: dosmicoChannel } = await supabase
                     .from('messaging_channels')
@@ -572,9 +804,8 @@ serve(async (req) => {
                     .eq('is_active', true)
                     .limit(1)
                     .single();
-                  
+
                   if (dosmicoChannel) {
-                    console.log('Using Dosmicos fallback channel:', dosmicoChannel.id);
                     // Actualizar el phone_number_id del canal existente
                     await supabase
                       .from('messaging_channels')
@@ -583,7 +814,6 @@ serve(async (req) => {
                     channel = dosmicoChannel;
                   } else {
                     // 3. Crear nuevo canal para Dosmicos
-                    console.log('Creating new WhatsApp channel for Dosmicos with phone_number_id:', phoneNumberId);
                     const { data: newChannel, error: createError } = await supabase
                       .from('messaging_channels')
                       .insert({
@@ -592,20 +822,10 @@ serve(async (req) => {
                         channel_name: 'WhatsApp Business',
                         meta_phone_number_id: phoneNumberId,
                         is_active: true,
-                        ai_enabled: true, // Auto-responder activado por defecto
+                        ai_enabled: true,
                         webhook_verified: true,
                         ai_config: {
-                          systemPrompt: `Eres un asistente de ventas amigable para una tienda de artesanías colombianas. 
-Tu rol es:
-- Responder preguntas sobre productos disponibles
-- Proporcionar información de precios y disponibilidad
-- Ayudar a los clientes con sus pedidos
-- Ser amable y usar emojis ocasionalmente
-
-Reglas importantes:
-- Siempre saluda al cliente
-- Si no sabes algo, ofrece conectar con un humano
-- Mantén respuestas concisas pero informativas`,
+                          systemPrompt: `Eres un asistente de ventas amigable para una tienda de artesanías colombianas. \nTu rol es:\n- Responder preguntas sobre productos disponibles\n- Proporcionar información de precios y disponibilidad\n- Ayudar a los clientes con sus pedidos\n- Ser amable y usar emojis ocasionalmente\n\nReglas importantes:\n- Siempre saluda al cliente\n- Si no sabes algo, ofrece conectar con un humano\n- Mantén respuestas concisas pero informativas`,
                           tone: 'friendly',
                           greetingMessage: '¡Hola! 👋 Soy el asistente virtual de la tienda. ¿En qué puedo ayudarte?',
                           autoReply: true,
@@ -614,13 +834,11 @@ Reglas importantes:
                       })
                       .select()
                       .single();
-                    
+
                     if (createError) {
                       console.error('Error creating channel:', createError);
                       continue;
                     }
-                    
-                    console.log('Created new channel:', newChannel.id);
                     channel = newChannel;
                   }
                 }
@@ -634,7 +852,6 @@ Reglas importantes:
                   .single();
 
                 if (convError || !conversation) {
-                  console.log('Creating new conversation for:', contactPhone);
                   const { data: newConv, error: createConvError } = await supabase
                     .from('messaging_conversations')
                     .insert({
@@ -658,18 +875,16 @@ Reglas importantes:
                     continue;
                   }
                   conversation = newConv;
-                  console.log('Created conversation:', conversation.id);
                 } else {
                   // Update existing conversation with preview that includes media info
-                  console.log('Updating existing conversation:', conversation.id);
-                  const previewText = mediaId 
-                    ? (messageType === 'image' ? '📷 Imagen' : 
-                       messageType === 'audio' ? '🎵 Audio' : 
-                       messageType === 'video' ? '🎬 Video' : 
-                       messageType === 'document' ? '📄 Documento' : 
-                       messageType === 'sticker' ? '🎭 Sticker' : content || `[${messageType}]`)
+                  const previewText = mediaId
+                    ? (messageType === 'image' ? '📷 Imagen' :
+                      messageType === 'audio' ? '🎵 Audio' :
+                        messageType === 'video' ? '🎬 Video' :
+                          messageType === 'document' ? '📄 Documento' :
+                            messageType === 'sticker' ? '🎭 Sticker' : content || `[${messageType}]`)
                     : content;
-                  
+
                   await supabase
                     .from('messaging_conversations')
                     .update({
@@ -681,7 +896,7 @@ Reglas importantes:
                     .eq('id', conversation.id);
                 }
 
-                // Fetch real media URL if there's a media ID (with improved error handling)
+                // Fetch real media URL if there's a media ID
                 let mediaUrl: string | null = null;
                 let mediaError: string | undefined;
                 if (mediaId) {
@@ -690,34 +905,28 @@ Reglas importantes:
                   mediaUrl = mediaResult.url;
                   mediaMimeType = mediaResult.mimeType || mediaMimeType;
                   mediaError = mediaResult.error;
-                  
-                  if (mediaUrl) {
-                    console.log(`✅ Media URL resolved: ${mediaUrl.substring(0, 80)}...`);
+                }
+
+                // Resolve reply_to_message_id from WAMID to internal UUID
+                let resolvedReplyToId: string | null = null;
+                if (replyToMessageId) {
+                  console.log(`🔗 Resolving reply WAMID: ${replyToMessageId}`);
+                  const { data: replyMsg } = await supabase
+                    .from('messaging_messages')
+                    .select('id')
+                    .eq('external_message_id', replyToMessageId)
+                    .limit(1)
+                    .single();
+                  if (replyMsg) {
+                    resolvedReplyToId = replyMsg.id;
+                    console.log(`✅ Resolved reply to internal UUID: ${resolvedReplyToId}`);
                   } else {
-                    console.log(`⚠️ Media download failed: ${mediaError}`);
+                    console.log(`⚠️ Reply parent not found in DB, setting reply_to_message_id to null`);
                   }
                 }
 
                 // Insert message (skip for reaction type)
                 if (messageType !== 'reaction') {
-                  // Resolve reply_to_message_id from WAMID to internal UUID
-                  let resolvedReplyToId: string | null = null;
-                  if (replyToMessageId) {
-                    const { data: replyMsg } = await supabase
-                      .from('messaging_messages')
-                      .select('id')
-                      .eq('external_message_id', replyToMessageId)
-                      .limit(1)
-                      .single();
-                    
-                    if (replyMsg) {
-                      resolvedReplyToId = replyMsg.id;
-                      console.log(`✅ Resolved reply WAMID ${replyToMessageId} to internal ID ${resolvedReplyToId}`);
-                    } else {
-                      console.log(`⚠️ Could not resolve reply WAMID ${replyToMessageId}, setting to null`);
-                    }
-                  }
-
                   const { error: msgError } = await supabase
                     .from('messaging_messages')
                     .insert({
@@ -744,10 +953,56 @@ Reglas importantes:
                   if (msgError) {
                     console.error('Error inserting message:', msgError);
                   } else {
-                    console.log('Message saved successfully');
-                    
                     // Generate AI response if AI is enabled (AUTO-RESPONDER)
-                    const aiConfig = channel.ai_config as any;
+                    // Re-read ai_config fresh from DB to pick up any changes
+                    // (e.g. knowledgeBase saved from the UI after the channel was loaded)
+                    let aiConfig = channel.ai_config as any;
+                    try {
+                      const { data: freshChannel } = await supabase
+                        .from('messaging_channels')
+                        .select('ai_config')
+                        .eq('id', channel.id)
+                        .single();
+                      if (freshChannel?.ai_config) {
+                        aiConfig = freshChannel.ai_config as any;
+                      }
+                    } catch (e) {
+                      console.warn('Could not refresh ai_config, using cached version');
+                    }
+
+                    // If this channel has no knowledgeBase, try to find one from
+                    // another WhatsApp channel in the same organization (covers the
+                    // case where the UI saved knowledge to a different channel row).
+                    if (!aiConfig?.knowledgeBase || (Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length === 0)) {
+                      try {
+                        const { data: otherChannels } = await supabase
+                          .from('messaging_channels')
+                          .select('ai_config')
+                          .eq('organization_id', channel.organization_id)
+                          .eq('channel_type', 'whatsapp')
+                          .neq('id', channel.id);
+
+                        const donor = otherChannels?.find((ch: any) => {
+                          const cfg = ch.ai_config as any;
+                          return cfg?.knowledgeBase && Array.isArray(cfg.knowledgeBase) && cfg.knowledgeBase.length > 0;
+                        });
+
+                        if (donor) {
+                          const donorConfig = donor.ai_config as any;
+                          console.log(`📚 Found knowledgeBase (${donorConfig.knowledgeBase.length} items) in another channel, merging`);
+                          aiConfig = { ...aiConfig, knowledgeBase: donorConfig.knowledgeBase };
+
+                          // Persist the merge so we don't have to do this lookup every time
+                          await supabase
+                            .from('messaging_channels')
+                            .update({ ai_config: aiConfig })
+                            .eq('id', channel.id);
+                        }
+                      } catch (e) {
+                        console.warn('Could not check other channels for knowledgeBase');
+                      }
+                    }
+
                     const autoReplyEnabled = aiConfig?.autoReply !== false;
 
                     // Releer el estado de la conversación para respetar el switch
@@ -761,13 +1016,18 @@ Reglas importantes:
                     const aiEnabledOnConversation = (freshConv?.ai_managed ?? conversation.ai_managed) !== false;
                     const shouldAutoReply = aiEnabledOnChannel && aiEnabledOnConversation && autoReplyEnabled;
 
-                    console.log('AI config:', {
-                      channelAiEnabled: channel.ai_enabled,
-                      conversationAiManaged: freshConv?.ai_managed ?? conversation.ai_managed,
+                    console.log('🔍 [AUTO-REPLY CHECK]', {
+                      aiEnabledOnChannel,
+                      aiEnabledOnConversation,
                       autoReplyEnabled,
                       shouldAutoReply,
+                      channelAiEnabled: channel.ai_enabled,
+                      freshAiManaged: freshConv?.ai_managed,
+                      convAiManaged: conversation.ai_managed,
+                      aiConfigAutoReply: aiConfig?.autoReply,
+                      conversationId: conversation.id,
                     });
-                    
+
                     if (shouldAutoReply) {
                       // Check business hours if configured
                       let withinBusinessHours = true;
@@ -777,25 +1037,21 @@ Reglas importantes:
                         const colombiaTime = new Date(now.getTime() + (colombiaOffset - now.getTimezoneOffset()) * 60000);
                         const hour = colombiaTime.getHours();
                         const dayOfWeek = colombiaTime.getDay();
-                        
+
                         withinBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 6 && hour >= 9 && hour < 18;
-                        console.log('Business hours check:', { hour, dayOfWeek, withinBusinessHours });
-                        
                         if (!withinBusinessHours) {
-                          console.log('Outside business hours, skipping AI response');
+                          console.log('⏰ [AUTO-REPLY] Outside business hours (Colombia time), skipping');
                         }
                       }
-                      
+                      console.log('⏰ [AUTO-REPLY] businessHours config:', aiConfig?.businessHours, '| withinBusinessHours:', withinBusinessHours);
+
                       if (withinBusinessHours) {
                         // Apply response delay if configured
                         const responseDelay = parseInt(aiConfig?.responseDelay) || 0;
                         if (responseDelay > 0) {
-                          console.log(`Applying response delay of ${responseDelay} seconds`);
                           await new Promise(resolve => setTimeout(resolve, responseDelay * 1000));
                         }
-                        
-                        console.log('Generating AI response...');
-                        
+
                         // Get recent conversation history
                         const { data: historyMessages } = await supabase
                           .from('messaging_messages')
@@ -803,36 +1059,39 @@ Reglas importantes:
                           .eq('conversation_id', conversation.id)
                           .order('sent_at', { ascending: false })
                           .limit(10);
-                        
+
                         // Prepare media context for AI - ALWAYS use Supabase URL (permanent)
                         const mediaContext = mediaId ? {
                           type: messageType,
-                          url: mediaUrl || undefined, // Only pass if we have a permanent URL
+                          url: mediaUrl || undefined,
                         } : undefined;
-                        
+
                         // Validate that image URL is from Supabase Storage before sending to AI
                         if (mediaContext?.type === 'image' && mediaContext.url) {
-                          const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-                          if (!mediaContext.url.includes(supabaseUrl) && !mediaContext.url.includes('supabase')) {
+                          const sbUrl = Deno.env.get('SUPABASE_URL') || '';
+                          if (!mediaContext.url.includes(sbUrl) && !mediaContext.url.includes('supabase')) {
                             console.warn('⚠️ Image URL is not from Supabase Storage, skipping image analysis');
                             mediaContext.url = undefined;
                           }
                         }
-                        
+
+                        console.log('🤖 [AUTO-REPLY] Generating AI response for message:', content?.substring(0, 50));
+
                         const aiResponse = await generateAIResponse(
-                          content, 
+                          content,
                           (historyMessages || []).reverse(),
                           aiConfig,
+                          channel.organization_id,
+                          supabase,
                           mediaContext
                         );
-                        
+
                         if (aiResponse) {
-                          console.log('AI response:', aiResponse.substring(0, 100) + '...');
-                          
-                          // Send via WhatsApp
+                          console.log('📤 [AUTO-REPLY] Sending AI response via WhatsApp:', aiResponse.substring(0, 80));
                           const sendResult = await sendWhatsAppMessage(phoneNumberId, contactPhone, aiResponse);
-                          
+
                           if (sendResult) {
+                            console.log('✅ [AUTO-REPLY] WhatsApp message sent, wamid:', sendResult.messages?.[0]?.id);
                             // Save AI response to database
                             const { error: aiMsgError } = await supabase
                               .from('messaging_messages')
@@ -846,13 +1105,11 @@ Reglas importantes:
                                 message_type: 'text',
                                 sent_at: new Date().toISOString()
                               });
-                            
+
                             if (aiMsgError) {
-                              console.error('Error saving AI response:', aiMsgError);
+                              console.error('❌ [AUTO-REPLY] Failed to save AI message to DB:', aiMsgError);
                             } else {
-                              console.log('AI response saved successfully');
-                              
-                              // Update conversation preview/time
+                              console.log('✅ [AUTO-REPLY] AI message saved to DB');
                               await supabase
                                 .from('messaging_conversations')
                                 .update({
@@ -861,7 +1118,11 @@ Reglas importantes:
                                 })
                                 .eq('id', conversation.id);
                             }
+                          } else {
+                            console.error('❌ [AUTO-REPLY] sendWhatsAppMessage returned null/undefined');
                           }
+                        } else {
+                          console.error('❌ [AUTO-REPLY] generateAIResponse returned empty string - AI did NOT respond');
                         }
                       }
                     }
@@ -873,19 +1134,12 @@ Reglas importantes:
               for (const status of toArray(value.statuses)) {
                 const messageId = status.id;
                 const statusType = status.status;
-                const timestamp = new Date(parseInt(status.timestamp) * 1000);
-                
-                console.log('Status update:', { messageId, statusType, timestamp });
-                
+                const ts = new Date(parseInt(status.timestamp) * 1000);
+
                 const updateData: any = {};
-                if (statusType === 'sent') {
-                  updateData.sent_at = timestamp.toISOString();
-                } else if (statusType === 'delivered') {
-                  updateData.delivered_at = timestamp.toISOString();
-                } else if (statusType === 'read') {
-                  updateData.read_at = timestamp.toISOString();
-                }
-                
+                if (statusType === 'delivered') updateData.delivered_at = ts.toISOString();
+                if (statusType === 'read') updateData.read_at = ts.toISOString();
+
                 if (Object.keys(updateData).length > 0) {
                   await supabase
                     .from('messaging_messages')
@@ -898,30 +1152,18 @@ Reglas importantes:
         }
       }
 
-      // Process Instagram messages
-      if (body.object === 'instagram') {
-        console.log('Instagram webhook received - processing...');
-        // Similar logic for Instagram
-      }
-
-      // Process Messenger messages  
-      if (body.object === 'page') {
-        console.log('Messenger webhook received - processing...');
-        // Similar logic for Messenger
-      }
-
-      console.log('========== WEBHOOK PROCESSED ==========');
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       });
-    } catch (error) {
-      console.error('Error processing webhook:', error);
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
+    } catch (err: any) {
+      console.error('Webhook POST handler error:', err);
+      return new Response(JSON.stringify({ success: false, error: err?.message || 'Error interno' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
       });
     }
   }
 
-  return new Response('Method not allowed', { status: 405 });
+  return new Response('Method not allowed', { status: 405, headers: corsHeaders });
 });
