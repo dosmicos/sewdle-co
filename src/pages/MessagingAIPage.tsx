@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquareMore, Loader2, Plus } from 'lucide-react';
+import { MessageSquareMore, Loader2, Plus, Mail, Users } from 'lucide-react';
 import { ConversationsList, Conversation, ChannelType } from '@/components/messaging-ai/ConversationsList';
 import { ConversationThread } from '@/components/messaging-ai/ConversationThread';
 import { NewConversationModal } from '@/components/messaging-ai/NewConversationModal';
@@ -38,6 +38,7 @@ const MessagingAIPage = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showCreateFolderFromChat, setShowCreateFolderFromChat] = useState(false);
+  const [quickFilter, setQuickFilter] = useState<'all' | 'unread' | 'groups'>('all');
 
   // Centralized realtime subscription for all messaging
   const { connectionStatus, manualRefresh } = useMessagingRealtime({
@@ -104,6 +105,7 @@ const MessagingAIPage = () => {
       tags: conv.tags || [],
       is_pinned: (conv as any).is_pinned ?? false,
       folder_id: (conv as any).folder_id ?? null,
+      is_group: (conv as any).is_group ?? false,
     }));
   }, [conversations]);
 
@@ -117,10 +119,10 @@ const MessagingAIPage = () => {
     messenger: transformedConversations.filter(c => c.channel === 'messenger').length,
   }), [transformedConversations]);
 
-  // Filter conversations based on active filter and tag
+  // Filter conversations based on active filter, tag, and quick filter
   const filteredConversations = useMemo(() => {
     let result = transformedConversations;
-    
+
     switch (activeFilter) {
       case 'needs-help':
         result = result.filter(c => c.status === 'pending' || c.status === 'active');
@@ -129,7 +131,7 @@ const MessagingAIPage = () => {
         result = result.filter(c => c.status === 'resolved');
         break;
     }
-    
+
     // Filter by tag if selected
     if (activeTagId) {
       result = result.filter(c => c.tags?.some(t => t.id === activeTagId));
@@ -142,9 +144,16 @@ const MessagingAIPage = () => {
     } else {
       result = result.filter(c => !c.folder_id);
     }
-    
+
+    // Quick filters: unread / groups
+    if (quickFilter === 'unread') {
+      result = result.filter(c => c.unread > 0);
+    } else if (quickFilter === 'groups') {
+      result = result.filter(c => c.is_group === true);
+    }
+
     return result;
-  }, [activeFilter, activeTagId, activeFolderId, transformedConversations]);
+  }, [activeFilter, activeTagId, activeFolderId, quickFilter, transformedConversations]);
 
   // Transform messages to UI format with reply info
   const transformedMessages = useMemo(() => {
@@ -364,6 +373,51 @@ const MessagingAIPage = () => {
                       isSearching={isSearching}
                       className="mt-2"
                     />
+
+                    {/* Quick filter chips */}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => setQuickFilter('all')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          quickFilter === 'all'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      <button
+                        onClick={() => setQuickFilter(quickFilter === 'unread' ? 'all' : 'unread')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          quickFilter === 'unread'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        <Mail className="h-3 w-3" />
+                        No leídos
+                        {transformedConversations.filter(c => c.unread > 0).length > 0 && (
+                          <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            quickFilter === 'unread'
+                              ? 'bg-primary-foreground/20 text-primary-foreground'
+                              : 'bg-primary/10 text-primary'
+                          }`}>
+                            {transformedConversations.filter(c => c.unread > 0).length}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setQuickFilter(quickFilter === 'groups' ? 'all' : 'groups')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          quickFilter === 'groups'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        <Users className="h-3 w-3" />
+                        Grupos
+                      </button>
+                    </div>
                   </CardHeader>
                   <CardContent className="p-0 flex-1 overflow-hidden">
                     {isLoadingConversations && !hasSearchTerm ? (

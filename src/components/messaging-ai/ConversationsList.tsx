@@ -38,6 +38,7 @@ export interface Conversation {
   tags?: ConversationTag[];
   is_pinned?: boolean;
   folder_id?: string | null;
+  is_group?: boolean;
 }
 
 interface ConversationsListProps {
