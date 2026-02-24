@@ -66,34 +66,62 @@ export const KnowledgeBaseEditor = () => {
     recommendWhen: '',
   });
 
-  // Load knowledge base from channel ai_config
+  // Load knowledge base from channel ai_config.
+  // Strategy: prefer the active channel with a meta_phone_number_id (the one
+  // the webhook actually uses).  If that channel has no knowledgeBase, look
+  // through all other WhatsApp channels for one that does.
   useEffect(() => {
     const loadKnowledge = async () => {
       if (!currentOrganization?.id) return;
-      
+
       setIsLoading(true);
       try {
-        const { data: channel, error } = await supabase
+        // Fetch ALL WhatsApp channels for this org so we can pick the right one
+        const { data: channels, error } = await supabase
           .from('messaging_channels')
-          .select('id, ai_config, is_active, created_at')
+          .select('id, ai_config, is_active, meta_phone_number_id, created_at')
           .eq('organization_id', currentOrganization.id)
           .eq('channel_type', 'whatsapp')
           .order('is_active', { ascending: false })
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
+          .order('created_at', { ascending: true });
 
         if (error) {
           console.error('Error loading knowledge:', error);
           return;
         }
 
-        if (channel) {
-          setChannelId(channel.id);
-          const config = channel.ai_config as any;
-          
-          if (config?.knowledgeBase && Array.isArray(config.knowledgeBase)) {
-            setItems(config.knowledgeBase);
+        if (!channels || channels.length === 0) return;
+
+        // Pick the primary channel: active + has phone_number_id (webhook target)
+        const primaryChannel = channels.find(
+          (ch: any) => ch.is_active && ch.meta_phone_number_id
+        ) || channels[0];
+
+        setChannelId(primaryChannel.id);
+        const primaryConfig = primaryChannel.ai_config as any;
+
+        // Helper: ensure every item has a unique `id` so edit/delete work correctly.
+        // Items saved before the `id` field existed will be missing it.
+        const ensureIds = (arr: any[]): KnowledgeItem[] =>
+          arr.map((item, index) => ({
+            ...item,
+            id: item.id || `${Date.now()}-${index}`,
+          }));
+
+        if (primaryConfig?.knowledgeBase && Array.isArray(primaryConfig.knowledgeBase) && primaryConfig.knowledgeBase.length > 0) {
+          setItems(ensureIds(primaryConfig.knowledgeBase));
+        } else {
+          // The primary channel has no knowledgeBase – look in other channels
+          const donor = channels.find((ch: any) => {
+            if (ch.id === primaryChannel.id) return false;
+            const cfg = ch.ai_config as any;
+            return cfg?.knowledgeBase && Array.isArray(cfg.knowledgeBase) && cfg.knowledgeBase.length > 0;
+          });
+
+          if (donor) {
+            const donorConfig = donor.ai_config as any;
+            console.log(`📚 Found knowledgeBase in channel ${donor.id}, loading ${donorConfig.knowledgeBase.length} items`);
+            setItems(ensureIds(donorConfig.knowledgeBase));
           }
         }
       } catch (err) {
@@ -154,6 +182,33 @@ export const KnowledgeBaseEditor = () => {
 
       if (error) throw error;
 
+      // Also sync knowledgeBase to ALL other active WhatsApp channels in this
+      // org so the webhook always picks it up regardless of which channel row
+      // it resolves to.
+      try {
+        const { data: otherChannels } = await supabase
+          .from('messaging_channels')
+          .select('id, ai_config')
+          .eq('organization_id', currentOrganization.id)
+          .eq('channel_type', 'whatsapp')
+          .neq('id', effectiveChannelId);
+
+        if (otherChannels && otherChannels.length > 0) {
+          for (const other of otherChannels) {
+            const otherConfig = (other.ai_config as any) || {};
+            await supabase
+              .from('messaging_channels')
+              .update({
+                ai_config: { ...otherConfig, knowledgeBase: items },
+              })
+              .eq('id', other.id);
+          }
+          console.log(`📚 Synced knowledgeBase to ${otherChannels.length} other channel(s)`);
+        }
+      } catch (syncErr) {
+        console.warn('Could not sync knowledgeBase to other channels:', syncErr);
+      }
+
       toast.success('Base de conocimiento guardada');
     } catch (err) {
       console.error('Error saving knowledge:', err);
@@ -210,6 +265,10 @@ export const KnowledgeBaseEditor = () => {
   };
 
   const removeItem = (id: string) => {
+    if (!id) {
+      console.warn('removeItem called with falsy id – ignoring to prevent deleting all items');
+      return;
+    }
     setItems(prev => prev.filter(item => item.id !== id));
     toast.success('Conocimiento eliminado');
   };

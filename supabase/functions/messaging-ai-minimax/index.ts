@@ -290,15 +290,21 @@ serve(async (req) => {
           }
 
           if (aiConfig.knowledgeBase?.length > 0) {
-            knowledgeContext = '\n\n📚 CONOCIMIENTO DE LA EMPRESA:\n';
+            knowledgeContext = '\n\n📚 CONOCIMIENTO DE LA EMPRESA:\nUSA ESTA INFORMACIÓN para responder a las preguntas de los clientes:\n';
             aiConfig.knowledgeBase.forEach((item: any) => {
-              if (item.category) {
-                knowledgeContext += `\n[${item.category}]\n`;
-              }
-              if (item.question && item.answer) {
-                knowledgeContext += `P: ${item.question}\nR: ${item.answer}\n`;
+              if (item.category === 'product') {
+                const name = item.productName || item.title || '';
+                if (name && item.content) {
+                  knowledgeContext += `\n📦 Producto: ${name}`;
+                  if (item.recommendWhen) {
+                    knowledgeContext += `\n   Recomendar cuando: ${item.recommendWhen}`;
+                  }
+                  knowledgeContext += `\n   Detalles: ${item.content}\n`;
+                }
               } else if (item.title && item.content) {
-                knowledgeContext += `${item.title}: ${item.content}\n`;
+                knowledgeContext += `\n📋 ${item.title}:\n   ${item.content}\n`;
+              } else if (item.question && item.answer) {
+                knowledgeContext += `\nP: ${item.question}\nR: ${item.answer}\n`;
               }
             });
             console.log(`Loaded ${aiConfig.knowledgeBase.length} knowledge items`);

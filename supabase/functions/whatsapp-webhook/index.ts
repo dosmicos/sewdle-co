@@ -58,10 +58,25 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
     }
 
     // Add knowledge base context if available
-    if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase)) {
+    if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length > 0) {
       systemPrompt += '\n\nConocimiento de la empresa:';
       aiConfig.knowledgeBase.forEach((item: any) => {
-        if (item.question && item.answer) {
+        // Support both legacy format (question/answer) and new format (title/content/category)
+        if (item.category === 'product') {
+          // Product knowledge
+          const name = item.productName || item.title || '';
+          if (name && item.content) {
+            systemPrompt += `\n\n📦 Producto: ${name}`;
+            if (item.recommendWhen) {
+              systemPrompt += `\n   Recomendar cuando: ${item.recommendWhen}`;
+            }
+            systemPrompt += `\n   Detalles: ${item.content}`;
+          }
+        } else if (item.title && item.content) {
+          // General knowledge (new format)
+          systemPrompt += `\n\n📋 ${item.title}:\n   ${item.content}`;
+        } else if (item.question && item.answer) {
+          // Legacy Q&A format
           systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
         }
       });
@@ -714,7 +729,55 @@ serve(async (req) => {
                     console.error('Error inserting message:', msgError);
                   } else {
                     // Generate AI response if AI is enabled (AUTO-RESPONDER)
-                    const aiConfig = channel.ai_config as any;
+                    // Re-read ai_config fresh from DB to pick up any changes
+                    // (e.g. knowledgeBase saved from the UI after the channel was loaded)
+                    let aiConfig = channel.ai_config as any;
+                    try {
+                      const { data: freshChannel } = await supabase
+                        .from('messaging_channels')
+                        .select('ai_config')
+                        .eq('id', channel.id)
+                        .single();
+                      if (freshChannel?.ai_config) {
+                        aiConfig = freshChannel.ai_config as any;
+                      }
+                    } catch (e) {
+                      console.warn('Could not refresh ai_config, using cached version');
+                    }
+
+                    // If this channel has no knowledgeBase, try to find one from
+                    // another WhatsApp channel in the same organization (covers the
+                    // case where the UI saved knowledge to a different channel row).
+                    if (!aiConfig?.knowledgeBase || (Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length === 0)) {
+                      try {
+                        const { data: otherChannels } = await supabase
+                          .from('messaging_channels')
+                          .select('ai_config')
+                          .eq('organization_id', channel.organization_id)
+                          .eq('channel_type', 'whatsapp')
+                          .neq('id', channel.id);
+
+                        const donor = otherChannels?.find((ch: any) => {
+                          const cfg = ch.ai_config as any;
+                          return cfg?.knowledgeBase && Array.isArray(cfg.knowledgeBase) && cfg.knowledgeBase.length > 0;
+                        });
+
+                        if (donor) {
+                          const donorConfig = donor.ai_config as any;
+                          console.log(`📚 Found knowledgeBase (${donorConfig.knowledgeBase.length} items) in another channel, merging`);
+                          aiConfig = { ...aiConfig, knowledgeBase: donorConfig.knowledgeBase };
+
+                          // Persist the merge so we don't have to do this lookup every time
+                          await supabase
+                            .from('messaging_channels')
+                            .update({ ai_config: aiConfig })
+                            .eq('id', channel.id);
+                        }
+                      } catch (e) {
+                        console.warn('Could not check other channels for knowledgeBase');
+                      }
+                    }
+
                     const autoReplyEnabled = aiConfig?.autoReply !== false;
 
                     // Releer el estado de la conversación para respetar el switch
