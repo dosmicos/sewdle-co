@@ -25,7 +25,7 @@ async function generateAIResponse(
   supabaseClient: any,
   mediaContext?: { type: string; url?: string }
 ): Promise<string> {
-  const MINIMAX_API_KEY = Deno.env.get('MINIMAX_API_KEY') || '27ab14d788ec95325ca3f166c2b6a6c2';
+  const MINIMAX_API_KEY = Deno.env.get('MINIMAX_API_KEY');
   const MINIMAX_GROUP_ID = Deno.env.get('MINIMAX_GROUP_ID');
   const MINIMAX_BASE_URL = Deno.env.get('MINIMAX_BASE_URL') || 'https://api.minimax.chat/v1';
   const MINIMAX_MODEL = Deno.env.get('MINIMAX_MODEL') || 'abab6.5s-chat';
@@ -35,8 +35,11 @@ async function generateAIResponse(
   // Maximum products to include in catalog
   const MAX_PRODUCTS = 60;
 
+  console.log('🔑 [AI-KEY] MINIMAX_API_KEY present:', !!MINIMAX_API_KEY, '| prefix:', MINIMAX_API_KEY?.substring(0, 8) + '...');
+  console.log('🔑 [AI-KEY] MINIMAX_GROUP_ID:', MINIMAX_GROUP_ID);
+
   if (!MINIMAX_API_KEY) {
-    console.error('❌ MINIMAX_API_KEY not configured, cannot generate AI response');
+    console.error('❌ MINIMAX_API_KEY not configured in Supabase secrets, cannot generate AI response');
     return '';
   }
 
