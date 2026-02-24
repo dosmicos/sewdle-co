@@ -15,10 +15,13 @@ const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
 const MAX_MEDIA_SIZE = 16 * 1024 * 1024;
 
 // Generate AI response using Minimax API (Elsa)
+// Includes Shopify product catalog with prices & inventory + knowledge base
 async function generateAIResponse(
   userMessage: string,
   conversationHistory: any[],
   aiConfig: any,
+  organizationId: string,
+  supabaseClient: any,
   mediaContext?: { type: string; url?: string }
 ): Promise<string> {
   const MINIMAX_API_KEY = Deno.env.get('MINIMAX_API_KEY') || '27ab14d788ec95325ca3f166c2b6a6c2';
@@ -32,14 +35,14 @@ async function generateAIResponse(
   }
 
   try {
-    // Build system prompt from aiConfig or use default
+    // ========== 1. BUILD SYSTEM PROMPT ==========
     let systemPrompt = aiConfig?.systemPrompt || `Eres un asistente virtual amigable y profesional para una empresa.
 Tu objetivo es ayudar a los clientes con sus consultas de manera clara y concisa.
 Responde siempre en español.
 Sé amable, útil y mantén las respuestas breves pero informativas.
 Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto.`;
 
-    // Add tone instructions if configured
+    // Add tone instructions
     const toneMap: Record<string, string> = {
       'friendly': 'Usa un tono amigable y cercano. Puedes usar emojis ocasionalmente.',
       'formal': 'Usa un tono formal y respetuoso.',
@@ -50,7 +53,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       systemPrompt += `\n\nTono: ${toneMap[aiConfig.tone]}`;
     }
 
-    // Add response rules if configured
+    // Add response rules
     if (aiConfig?.rules && Array.isArray(aiConfig.rules) && aiConfig.rules.length > 0) {
       systemPrompt += '\n\n📋 REGLAS ESPECIALES:';
       aiConfig.rules.forEach((rule: any) => {
@@ -60,11 +63,10 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       });
     }
 
-    // Add knowledge base context if available
+    // Add knowledge base context
     if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length > 0) {
       systemPrompt += '\n\n📚 CONOCIMIENTO DE LA EMPRESA:\nUSA ESTA INFORMACIÓN para responder a las preguntas de los clientes:';
       aiConfig.knowledgeBase.forEach((item: any) => {
-        // Support both legacy format (question/answer) and new format (title/content/category)
         if (item.category === 'product') {
           const name = item.productName || item.title || '';
           if (name && item.content) {
@@ -82,7 +84,157 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       });
     }
 
-    // Build user message with media context
+    // ========== 2. LOAD SHOPIFY PRODUCT CATALOG ==========
+    let productCatalog = '';
+    if (organizationId) {
+      try {
+        // Check which products are connected for AI
+        const { data: connections } = await supabaseClient
+          .from('ai_catalog_connections')
+          .select('shopify_product_id')
+          .eq('organization_id', organizationId)
+          .eq('connected', true);
+
+        const connectedProductIds = new Set(connections?.map((c: any) => c.shopify_product_id) || []);
+        console.log(`📦 Found ${connectedProductIds.size} connected products for AI`);
+
+        // Get Shopify credentials
+        const { data: org } = await supabaseClient
+          .from('organizations')
+          .select('shopify_credentials')
+          .eq('id', organizationId)
+          .single();
+
+        const shopifyCredentials = org?.shopify_credentials as any;
+
+        if (shopifyCredentials) {
+          const shopifyDomain = shopifyCredentials.store_domain || shopifyCredentials.shopDomain;
+          const accessToken = shopifyCredentials.access_token || shopifyCredentials.accessToken;
+
+          if (shopifyDomain && accessToken) {
+            try {
+              console.log('📦 Fetching Shopify products with inventory...');
+
+              const shopifyResponse = await fetch(
+                `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
+                {
+                  headers: {
+                    'X-Shopify-Access-Token': accessToken,
+                    'Content-Type': 'application/json',
+                  },
+                }
+              );
+
+              if (shopifyResponse.ok) {
+                const shopifyData = await shopifyResponse.json();
+                const shopifyProducts = shopifyData.products || [];
+
+                // Filter to connected products (or all if none specified)
+                const connectedProducts = shopifyProducts.filter(
+                  (p: any) => connectedProductIds.size === 0 || connectedProductIds.has(p.id)
+                );
+
+                if (connectedProducts.length > 0) {
+                  productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
+                  productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n';
+
+                  connectedProducts.forEach((product: any) => {
+                    const variants = product.variants || [];
+                    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
+
+                    if (totalStock === 0) {
+                      productCatalog += `\n• ${product.title}: ❌ AGOTADO (no ofrecer)`;
+                      return;
+                    }
+
+                    const price = variants[0]?.price
+                      ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP`
+                      : 'Consultar';
+
+                    const variantInfo = variants
+                      .map((v: any) => {
+                        const stock = v.inventory_quantity || 0;
+                        const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
+                        return `${v.title}: ${stockStatus}`;
+                      })
+                      .join(' | ');
+
+                    const cleanDescription = product.body_html
+                      ? product.body_html.replace(/<[^>]*>/g, '').substring(0, 100)
+                      : '';
+
+                    productCatalog += `\n\n• ${product.title}`;
+                    productCatalog += `\n  Precio: ${price}`;
+                    productCatalog += `\n  Variantes: ${variantInfo}`;
+                    if (product.product_type) {
+                      productCatalog += `\n  Categoría: ${product.product_type}`;
+                    }
+                    if (cleanDescription) {
+                      productCatalog += `\n  ${cleanDescription}`;
+                    }
+                  });
+
+                  console.log(`📦 Loaded ${connectedProducts.length} products with Shopify inventory`);
+                }
+              } else {
+                console.error('Shopify API error:', shopifyResponse.status);
+              }
+            } catch (shopifyErr) {
+              console.error('Error fetching Shopify products:', shopifyErr);
+            }
+          }
+        }
+
+        // Fallback: load from local products table if no Shopify catalog loaded
+        if (!productCatalog) {
+          const { data: products, error: productsError } = await supabaseClient
+            .from('products')
+            .select(`
+              name, sku, base_price, category, description,
+              product_variants (id, size, color, stock_quantity, sku_variant)
+            `)
+            .eq('organization_id', organizationId)
+            .eq('status', 'active')
+            .limit(50);
+
+          if (!productsError && products && products.length > 0) {
+            productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
+            productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible.\n';
+
+            products.forEach((p: any) => {
+              const price = p.base_price
+                ? `$${Number(p.base_price).toLocaleString('es-CO')} COP`
+                : 'Precio: Consultar';
+
+              const variants = p.product_variants
+                ?.map((v: any) => {
+                  const size = v.size || '';
+                  const color = v.color || '';
+                  const stock = v.stock_quantity || 0;
+                  const stockStatus = stock > 0 ? `✅ ${stock} unidades` : '❌ Agotado';
+                  return `${size}${color ? ` ${color}` : ''}: ${stockStatus}`;
+                })
+                .join(' | ') || 'Sin variantes';
+
+              productCatalog += `\n• ${p.name}`;
+              productCatalog += `\n  Precio: ${price}`;
+              productCatalog += `\n  Disponibilidad: ${variants}`;
+            });
+
+            console.log(`📦 Loaded ${products.length} local products as fallback`);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading product catalog:', err);
+      }
+    }
+
+    // Append product catalog to system prompt
+    if (productCatalog) {
+      systemPrompt += productCatalog;
+    }
+
+    // ========== 3. BUILD USER MESSAGE ==========
     let finalUserMessage = userMessage;
     if (mediaContext?.type === 'image' && mediaContext.url) {
       finalUserMessage = userMessage || `[El cliente envió una imagen]`;
@@ -93,7 +245,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       return '¡Lindo sticker! 😊 ¿En qué puedo ayudarte?';
     }
 
-    // Build messages array with conversation history
+    // ========== 4. CALL MINIMAX ==========
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
       ...conversationHistory.slice(-10).map((msg: any) => ({
@@ -101,13 +253,10 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
         content: msg.content
       })),
     ];
-
-    // Add current message (Minimax doesn't support vision/image_url, send as text)
     messages.push({ role: 'user', content: finalUserMessage });
 
-    console.log('Calling Minimax with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
+    console.log('🤖 Calling Minimax – system prompt length:', systemPrompt.length, '| messages:', messages.length);
 
-    // Build request body
     const requestBody: any = {
       model: MINIMAX_MODEL,
       messages,
@@ -136,7 +285,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
 
     const data = await response.json();
 
-    // Handle Minimax response format - try multiple possible paths
+    // Handle Minimax response format
     let aiResponse = '';
     if (data.choices?.[0]?.message?.content) {
       aiResponse = data.choices[0].message.content;
@@ -150,7 +299,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       aiResponse = data.response;
     }
 
-    console.log('Minimax AI response generated:', aiResponse.substring(0, 100) + '...');
+    console.log('✅ Minimax response:', aiResponse.substring(0, 100) + '...');
     return aiResponse;
   } catch (error) {
     console.error('Error generating AI response:', error);
@@ -845,6 +994,8 @@ serve(async (req) => {
                           content,
                           (historyMessages || []).reverse(),
                           aiConfig,
+                          channel.organization_id,
+                          supabase,
                           mediaContext
                         );
 
