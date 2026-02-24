@@ -14,23 +14,26 @@ const DEFAULT_ORG_ID = 'cb497af2-3f29-4bb4-be53-91b7f19e5ffb';
 // Maximum file size for media downloads (16MB - WhatsApp limit)
 const MAX_MEDIA_SIZE = 16 * 1024 * 1024;
 
-// Generate AI response using Lovable AI Gateway (Gemini)
+// Generate AI response using Minimax API (Elsa)
 async function generateAIResponse(
   userMessage: string,
   conversationHistory: any[],
   aiConfig: any,
   mediaContext?: { type: string; url?: string }
 ): Promise<string> {
-  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+  const MINIMAX_API_KEY = Deno.env.get('MINIMAX_API_KEY') || '27ab14d788ec95325ca3f166c2b6a6c2';
+  const MINIMAX_GROUP_ID = Deno.env.get('MINIMAX_GROUP_ID');
+  const MINIMAX_BASE_URL = Deno.env.get('MINIMAX_BASE_URL') || 'https://api.minimax.chat/v1';
+  const MINIMAX_MODEL = Deno.env.get('MINIMAX_MODEL') || 'abab6.5s-chat';
 
-  if (!lovableApiKey) {
-    console.log('LOVABLE_API_KEY not configured, skipping AI response');
+  if (!MINIMAX_API_KEY) {
+    console.log('MINIMAX_API_KEY not configured, skipping AI response');
     return '';
   }
 
   try {
     // Build system prompt from aiConfig or use default
-    let systemPrompt = aiConfig?.systemPrompt || `Eres un asistente virtual amigable y profesional para una empresa. 
+    let systemPrompt = aiConfig?.systemPrompt || `Eres un asistente virtual amigable y profesional para una empresa.
 Tu objetivo es ayudar a los clientes con sus consultas de manera clara y concisa.
 Responde siempre en español.
 Sé amable, útil y mantén las respuestas breves pero informativas.
@@ -49,7 +52,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
 
     // Add response rules if configured
     if (aiConfig?.rules && Array.isArray(aiConfig.rules) && aiConfig.rules.length > 0) {
-      systemPrompt += '\n\nReglas especiales:';
+      systemPrompt += '\n\n📋 REGLAS ESPECIALES:';
       aiConfig.rules.forEach((rule: any) => {
         if (rule.condition && rule.response) {
           systemPrompt += `\n- Cuando el usuario mencione "${rule.condition}": ${rule.response}`;
@@ -59,11 +62,10 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
 
     // Add knowledge base context if available
     if (aiConfig?.knowledgeBase && Array.isArray(aiConfig.knowledgeBase) && aiConfig.knowledgeBase.length > 0) {
-      systemPrompt += '\n\nConocimiento de la empresa:';
+      systemPrompt += '\n\n📚 CONOCIMIENTO DE LA EMPRESA:\nUSA ESTA INFORMACIÓN para responder a las preguntas de los clientes:';
       aiConfig.knowledgeBase.forEach((item: any) => {
         // Support both legacy format (question/answer) and new format (title/content/category)
         if (item.category === 'product') {
-          // Product knowledge
           const name = item.productName || item.title || '';
           if (name && item.content) {
             systemPrompt += `\n\n📦 Producto: ${name}`;
@@ -73,10 +75,8 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
             systemPrompt += `\n   Detalles: ${item.content}`;
           }
         } else if (item.title && item.content) {
-          // General knowledge (new format)
           systemPrompt += `\n\n📋 ${item.title}:\n   ${item.content}`;
         } else if (item.question && item.answer) {
-          // Legacy Q&A format
           systemPrompt += `\n- P: ${item.question}\n  R: ${item.answer}`;
         }
       });
@@ -86,11 +86,10 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
     let finalUserMessage = userMessage;
     if (mediaContext?.type === 'image' && mediaContext.url) {
       finalUserMessage = userMessage || `[El cliente envió una imagen]`;
-      console.log(`🖼️ Enviando imagen a IA: ${mediaContext.url}`);
+      console.log(`🖼️ Imagen recibida: ${mediaContext.url}`);
     } else if (mediaContext?.type === 'audio') {
       finalUserMessage = userMessage || `[El cliente envió un audio/nota de voz]`;
     } else if (mediaContext?.type === 'sticker') {
-      // Don't analyze stickers, just acknowledge
       return '¡Lindo sticker! 😊 ¿En qué puedo ayudarte?';
     }
 
@@ -103,50 +102,55 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       })),
     ];
 
-    // Add the current message - with image if available
-    if (mediaContext?.type === 'image' && mediaContext.url) {
-      // Use vision capabilities with the permanent Supabase URL
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: finalUserMessage },
-          {
-            type: 'image_url',
-            image_url: {
-              url: mediaContext.url,
-              detail: 'auto'
-            }
-          }
-        ]
-      });
-    } else {
-      messages.push({ role: 'user', content: finalUserMessage });
+    // Add current message (Minimax doesn't support vision/image_url, send as text)
+    messages.push({ role: 'user', content: finalUserMessage });
+
+    console.log('Calling Minimax with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
+
+    // Build request body
+    const requestBody: any = {
+      model: MINIMAX_MODEL,
+      messages,
+      max_tokens: 800,
+      temperature: 0.7,
+    };
+
+    if (MINIMAX_GROUP_ID) {
+      requestBody.group_id = String(MINIMAX_GROUP_ID);
     }
 
-    console.log('Calling Lovable AI Gateway with system prompt length:', systemPrompt.length, 'and', messages.length, 'messages');
-
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${MINIMAX_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages,
-        max_tokens: 500,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Lovable AI Gateway error:', response.status, errorText);
+      console.error('Minimax API error:', response.status, errorText);
       return '';
     }
 
     const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || '';
-    console.log('AI response generated:', aiResponse.substring(0, 100) + '...');
+
+    // Handle Minimax response format - try multiple possible paths
+    let aiResponse = '';
+    if (data.choices?.[0]?.message?.content) {
+      aiResponse = data.choices[0].message.content;
+    } else if (data.choices?.[0]?.message && typeof data.choices[0].message === 'string') {
+      aiResponse = data.choices[0].message;
+    } else if (data.choices?.[0]?.delta?.content) {
+      aiResponse = data.choices[0].delta.content;
+    } else if (data.text) {
+      aiResponse = data.text;
+    } else if (data.response) {
+      aiResponse = data.response;
+    }
+
+    console.log('Minimax AI response generated:', aiResponse.substring(0, 100) + '...');
     return aiResponse;
   } catch (error) {
     console.error('Error generating AI response:', error);
