@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, ArrowLeft, Reply, MessageSquareText, Search, Play, Pause, AlertCircle, RefreshCw, Download, ImagePlus } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -92,6 +92,28 @@ interface ConversationThreadProps {
   onToggleAiManaged?: (aiManaged: boolean) => void;
   isTogglingAiManaged?: boolean;
   onBack?: () => void;
+}
+
+// Format date separator label like Telegram: "Hoy", "Ayer", "lunes", or "25 de febrero de 2025"
+function formatDateSeparator(date: Date): string {
+  if (isToday(date)) return 'Hoy';
+  if (isYesterday(date)) return 'Ayer';
+  if (isThisWeek(date, { weekStartsOn: 1 })) {
+    // Capitalize first letter: "lunes" -> "Lunes"
+    const day = format(date, 'EEEE', { locale: es });
+    return day.charAt(0).toUpperCase() + day.slice(1);
+  }
+  if (isThisYear(date)) {
+    return format(date, "d 'de' MMMM", { locale: es });
+  }
+  return format(date, "d 'de' MMMM 'de' yyyy", { locale: es });
+}
+
+// Check if two dates are on different calendar days
+function isDifferentDay(d1: Date, d2: Date): boolean {
+  return d1.getFullYear() !== d2.getFullYear() ||
+    d1.getMonth() !== d2.getMonth() ||
+    d1.getDate() !== d2.getDate();
 }
 
 // Audio Player Component with WhatsApp-like styling
@@ -1068,15 +1090,27 @@ export const ConversationThread = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={cn(
-                    "flex animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
-                    message.role === 'user' ? 'justify-start' : 'justify-end'
+              {messages.map((message, index) => {
+                // Show date separator if first message or different day from previous
+                const showDateSeparator = index === 0 ||
+                  isDifferentDay(message.timestamp, messages[index - 1].timestamp);
+
+                return (
+                <React.Fragment key={index}>
+                  {showDateSeparator && (
+                    <div className="flex items-center justify-center my-3">
+                      <div className="bg-muted/80 backdrop-blur-sm text-muted-foreground text-xs font-medium px-3 py-1 rounded-full shadow-sm">
+                        {formatDateSeparator(message.timestamp)}
+                      </div>
+                    </div>
                   )}
-                  style={{ animationDelay: `${Math.min(index * 20, 100)}ms` }}
-                >
+                  <div
+                    className={cn(
+                      "flex animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                      message.role === 'user' ? 'justify-start' : 'justify-end'
+                    )}
+                    style={{ animationDelay: `${Math.min(index * 20, 100)}ms` }}
+                  >
                   <div
                     className={cn(
                       "max-w-[80%] rounded-lg p-3 relative group transition-all",
@@ -1150,7 +1184,9 @@ export const ConversationThread = ({
                     </div>
                   </div>
                 </div>
-              ))}
+                </React.Fragment>
+                );
+              })}
 
               {(isGenerating || isSending) && (
                 <div className="flex justify-end">
