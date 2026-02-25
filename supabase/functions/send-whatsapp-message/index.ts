@@ -211,17 +211,19 @@ serve(async (req) => {
     let conversationId = conversation_id;
     let channelType = 'whatsapp';
     let phoneNumberId: string | null = null;
+    let metaPageId: string | null = null;
     
     if (conversation_id) {
       // Get conversation with channel info
       const { data: conversation, error: convError } = await supabase
         .from('messaging_conversations')
         .select(`
-          external_user_id, 
+          external_user_id,
           channel_type,
           channel_id,
           messaging_channels!inner (
-            meta_phone_number_id
+            meta_phone_number_id,
+            meta_page_id
           )
         `)
         .eq('id', conversation_id)
@@ -238,24 +240,136 @@ serve(async (req) => {
       recipientPhone = conversation.external_user_id;
       channelType = conversation.channel_type;
       
-      // Get phone_number_id from the channel
+      // Get phone_number_id and meta_page_id from the channel
       const channel = conversation.messaging_channels as any;
       phoneNumberId = channel?.meta_phone_number_id;
-      
+      metaPageId = channel?.meta_page_id;
+
       console.log('Resolved from conversation:', {
         recipientPhone,
         channelType,
         phoneNumberId,
+        metaPageId,
         channelId: conversation.channel_id
       });
     }
 
     if (!recipientPhone) {
       return new Response(
-        JSON.stringify({ error: 'Recipient phone number is required' }),
+        JSON.stringify({ error: 'Recipient identifier is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // ========== INSTAGRAM / MESSENGER SEND (text only from UI) ==========
+    if (channelType === 'instagram' || channelType === 'messenger') {
+      if (!metaPageId) {
+        return new Response(
+          JSON.stringify({ error: `meta_page_id not configured for ${channelType} channel` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (!message) {
+        return new Response(
+          JSON.stringify({ error: 'Message text is required for Instagram/Messenger' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Use Instagram token for Instagram, WhatsApp token for Messenger
+      const sendToken = channelType === 'instagram'
+        ? (Deno.env.get('META_INSTAGRAM_TOKEN') || whatsappToken)
+        : whatsappToken;
+
+      console.log(`📤 Sending ${channelType} message to ${recipientPhone} via page ${metaPageId}`);
+
+      let apiUrl: string;
+      let apiBody: Record<string, any>;
+
+      if (channelType === 'instagram') {
+        // Resolve Facebook Page ID: prefer env variable, then fallback to GET /me, then metaPageId
+        let fbPageId = Deno.env.get('META_FACEBOOK_PAGE_ID');
+        if (!fbPageId) {
+          try {
+            const meResp = await fetch(`https://graph.facebook.com/v21.0/me?fields=id&access_token=${sendToken}`);
+            const meData = await meResp.json();
+            if (meData?.id && !meData?.error) {
+              fbPageId = meData.id;
+              console.log(`📸 Resolved FB Page ID: ${fbPageId} (from token)`);
+            }
+          } catch (e) {
+            console.log('⚠️ Could not resolve FB Page ID from token');
+          }
+        }
+        if (!fbPageId) {
+          fbPageId = metaPageId;
+          console.log('⚠️ Using metaPageId as fallback:', metaPageId);
+        }
+
+        apiUrl = `https://graph.facebook.com/v21.0/${fbPageId}/messages`;
+        apiBody = {
+          recipient: { id: recipientPhone },
+          message: { text: message },
+        };
+      } else {
+        // messenger
+        apiUrl = `https://graph.facebook.com/v21.0/me/messages`;
+        apiBody = {
+          recipient: { id: recipientPhone },
+          message: { text: message },
+        };
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sendToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiBody),
+      });
+
+      const result = await response.json();
+      console.log(`${channelType} API response:`, result);
+
+      if (!response.ok) {
+        console.error(`${channelType} API error:`, result);
+        return new Response(
+          JSON.stringify({
+            error: result?.error?.message || `Failed to send ${channelType} message`,
+            details: result?.error?.error_data?.details,
+            code: result?.error?.code,
+          }),
+          { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Save message to database
+      if (conversationId) {
+        await supabase.from('messaging_messages').insert({
+          conversation_id: conversationId,
+          external_message_id: result.message_id || result.messages?.[0]?.id || null,
+          channel_type: channelType,
+          direction: 'outbound',
+          sender_type: 'agent',
+          content: message,
+          message_type: 'text',
+          sent_at: new Date().toISOString(),
+        });
+
+        await supabase.from('messaging_conversations').update({
+          last_message_preview: message.substring(0, 100),
+          last_message_at: new Date().toISOString(),
+        }).eq('id', conversationId);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message_id: result.message_id || result.messages?.[0]?.id }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ========== WHATSAPP SEND (original logic) ==========
 
     // Fallback to secret if channel doesn't have phone_number_id
     if (!phoneNumberId) {
