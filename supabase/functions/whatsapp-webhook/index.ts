@@ -1800,6 +1800,19 @@ serve(async (req) => {
                 continue;
               }
               conversation = newConvo;
+            } else {
+              // Conversation exists — update user_name if we resolved a better name (not just numeric ID)
+              const currentName = conversation.user_name || '';
+              const isNumericName = /^\d+$/.test(currentName);
+              const isNumericSenderName = /^\d+$/.test(senderName);
+              if ((isNumericName || !currentName) && !isNumericSenderName && senderName !== senderId) {
+                console.log(`📸 Updating conversation username: "${currentName}" → "${senderName}"`);
+                await supabase.from('messaging_conversations').update({
+                  user_name: senderName,
+                  user_identifier: senderProfile.username || senderId,
+                }).eq('id', conversation.id);
+                conversation.user_name = senderName;
+              }
             }
 
             // Save inbound message (skip if already exists to prevent duplicates from webhook retries)
