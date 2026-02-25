@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, Reply, MessageSquareText, Search, Play, Pause, AlertCircle, RefreshCw, Download } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, ArrowLeft, Reply, MessageSquareText, Search, Play, Pause, AlertCircle, RefreshCw, Download, ImagePlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -91,6 +91,7 @@ interface ConversationThreadProps {
   isLoading?: boolean;
   onToggleAiManaged?: (aiManaged: boolean) => void;
   isTogglingAiManaged?: boolean;
+  onBack?: () => void;
 }
 
 // Audio Player Component with WhatsApp-like styling
@@ -271,14 +272,15 @@ const channelConfig: Record<ChannelType, {
   },
 };
 
-export const ConversationThread = ({ 
-  conversation, 
-  messages, 
+export const ConversationThread = ({
+  conversation,
+  messages,
   onSendMessage,
   isSending = false,
   isLoading = false,
   onToggleAiManaged,
   isTogglingAiManaged = false,
+  onBack,
 }: ConversationThreadProps) => {
   const { currentOrganization } = useOrganization();
   const { quickReplies } = useQuickReplies(currentOrganization?.id);
@@ -296,6 +298,9 @@ export const ConversationThread = ({
   const [selectedQuickReplyIndex, setSelectedQuickReplyIndex] = useState(0);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [retryingMedia, setRetryingMedia] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   const quickReplySearchInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -492,6 +497,100 @@ export const ConversationThread = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
+
+  // Process an image file from drag/drop or paste
+  const processImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Solo se pueden pegar/arrastrar imágenes');
+      return;
+    }
+
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('La imagen es muy grande. Máximo 16MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setFilePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+    toast.success('Imagen lista para enviar');
+    // Focus the input so user can add a caption and press Enter
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
+
+  // ===== DRAG & DROP =====
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    dragCounterRef.current = 0;
+
+    const files = Array.from(e.dataTransfer.files);
+    const imageFile = files.find(f => f.type.startsWith('image/'));
+    if (imageFile) {
+      processImageFile(imageFile);
+    } else if (files.length > 0) {
+      // Handle non-image files as documents
+      const file = files[0];
+      if (file.size > 16 * 1024 * 1024) {
+        toast.error('El archivo es muy grande. Máximo 16MB');
+        return;
+      }
+      setSelectedFile(file);
+      setFilePreview(null);
+      toast.success('Archivo listo para enviar');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [processImageFile]);
+
+  // ===== PASTE IMAGE (Ctrl+V / Cmd+V) =====
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      // Only handle paste if this conversation is active
+      if (!conversation) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            processImageFile(file);
+          }
+          return; // Only process the first image
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [conversation, processImageFile]);
 
   const startRecording = async () => {
     try {
@@ -839,6 +938,11 @@ export const ConversationThread = ({
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
         <div className="text-center">
+          {onBack && (
+            <button onClick={onBack} className="mb-4 p-2 rounded-lg hover:bg-muted transition-colors">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
           <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>Selecciona una conversación para ver los mensajes</p>
         </div>
@@ -851,31 +955,42 @@ export const ConversationThread = ({
 
   return (
     <>
-      <CardHeader className="border-b border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", channelInfo.avatarBg)}>
-              <ChannelIcon className={cn("h-5 w-5", channelInfo.color)} />
+      <CardHeader className="border-b border-border py-2 px-3 lg:py-4 lg:px-6">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 lg:gap-3 min-w-0 flex-1">
+            {/* Mobile back button */}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-1.5 -ml-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0 lg:hidden"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            )}
+            <div className={cn("w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center flex-shrink-0", channelInfo.avatarBg)}>
+              <ChannelIcon className={cn("h-4 w-4 lg:h-5 lg:w-5", channelInfo.color)} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-base">{conversation.name}</CardTitle>
-                <Badge variant="outline" className={cn("text-xs", channelInfo.color)}>
-                  {conversation.channel === 'whatsapp' ? 'WhatsApp' : 
-                   conversation.channel === 'instagram' ? 'Instagram' : 'Messenger'}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 lg:gap-2">
+                <CardTitle className="text-sm lg:text-base truncate">{conversation.name}</CardTitle>
+                <Badge variant="outline" className={cn("text-[10px] lg:text-xs px-1.5 flex-shrink-0", channelInfo.color)}>
+                  {conversation.channel === 'whatsapp' ? 'WA' :
+                   conversation.channel === 'instagram' ? 'IG' : 'MSG'}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">{conversation.phone}</p>
+              <p className="text-xs lg:text-sm text-muted-foreground truncate">{conversation.phone}</p>
             </div>
-            <ChatTagsManager conversationId={conversation.id} />
+            <div className="hidden lg:block">
+              <ChatTagsManager conversationId={conversation.id} />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 lg:gap-3 flex-shrink-0">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 lg:gap-2">
                     <UserCog className={cn(
-                      "h-4 w-4 transition-colors",
+                      "h-3.5 w-3.5 lg:h-4 lg:w-4 transition-colors hidden lg:block",
                       conversation.ai_managed === false ? "text-primary" : "text-muted-foreground"
                     )} />
                     <Switch
@@ -886,27 +1001,30 @@ export const ConversationThread = ({
                         onToggleAiManaged?.(checked);
                       }}
                       disabled={isTogglingAiManaged}
-                      className="data-[state=checked]:bg-emerald-500"
+                      className="data-[state=checked]:bg-emerald-500 scale-90 lg:scale-100"
                     />
                     <Bot className={cn(
-                      "h-4 w-4 transition-colors",
+                      "h-3.5 w-3.5 lg:h-4 lg:w-4 transition-colors",
                       conversation.ai_managed !== false ? "text-emerald-500" : "text-muted-foreground"
                     )} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   <p className="text-xs">
-                    {conversation.ai_managed !== false 
-                      ? "IA activa: Responde automáticamente" 
+                    {conversation.ai_managed !== false
+                      ? "IA activa: Responde automáticamente"
                       : "Control manual: Solo tú respondes"}
                   </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            
-            <Badge 
+
+            <Badge
               variant={conversation.status === 'active' ? 'default' : 'secondary'}
-              className={conversation.status === 'active' ? 'bg-emerald-500' : ''}
+              className={cn(
+                "text-[10px] lg:text-xs hidden sm:inline-flex",
+                conversation.status === 'active' ? 'bg-emerald-500' : ''
+              )}
             >
               {conversation.status === 'active' ? 'Activo' : conversation.status === 'pending' ? 'Pendiente' : 'Resuelto'}
             </Badge>
@@ -914,7 +1032,29 @@ export const ConversationThread = ({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 p-0 flex flex-col min-h-0 overflow-hidden">
+      <CardContent
+        className="flex-1 p-0 flex flex-col min-h-0 overflow-hidden relative"
+        ref={dropZoneRef}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Drag & Drop overlay */}
+        {isDragOver && (
+          <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center border-2 border-dashed border-emerald-500 rounded-lg m-2 pointer-events-none animate-in fade-in duration-200">
+            <div className="flex flex-col items-center gap-3 text-emerald-600">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                <ImagePlus className="h-8 w-8" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-lg">Suelta la imagen aquí</p>
+                <p className="text-sm text-muted-foreground">Se adjuntará al mensaje</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 relative min-h-0" ref={scrollAreaRef}>
           <ScrollArea className="h-full p-4">
           {isLoading ? (
@@ -1040,46 +1180,46 @@ export const ConversationThread = ({
         </div>
 
         {/* Input area */}
-        <div className="p-4 border-t border-border">
+        <div className="p-2 lg:p-4 border-t border-border safe-area-bottom">
           {/* Reply preview */}
           {replyingTo && (
-            <div className="mb-3 p-3 bg-muted/50 rounded-lg border-l-4 border-emerald-500 flex items-start gap-3">
-              <Reply className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+            <div className="mb-2 p-2 lg:p-3 bg-muted/50 rounded-lg border-l-4 border-emerald-500 flex items-start gap-2">
+              <Reply className="h-3.5 w-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-1">
+                <p className="text-[10px] lg:text-xs text-muted-foreground">
                   Respondiendo a {replyingTo.role === 'user' ? 'cliente' : 'ti'}
                 </p>
-                <p className="text-sm line-clamp-2">{replyingTo.content}</p>
+                <p className="text-xs lg:text-sm line-clamp-1">{replyingTo.content}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyingTo(null)}>
-                <X className="h-4 w-4" />
-              </Button>
+              <button className="p-0.5 rounded hover:bg-muted" onClick={() => setReplyingTo(null)}>
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 
           {/* File preview */}
           {selectedFile && (
-            <div className="mb-3 p-3 bg-muted rounded-lg flex items-center gap-3">
+            <div className="mb-2 p-2 lg:p-3 bg-muted rounded-lg flex items-center gap-2">
               {filePreview ? (
-                <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded" />
+                <img src={filePreview} alt="Preview" className="w-12 h-12 lg:w-16 lg:h-16 object-cover rounded" />
               ) : selectedFile.type.startsWith('audio/') ? (
-                <div className="w-16 h-16 bg-primary/10 rounded flex items-center justify-center">
-                  <Mic className="h-8 w-8 text-primary" />
+                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-primary/10 rounded flex items-center justify-center">
+                  <Mic className="h-6 w-6 text-primary" />
                 </div>
               ) : (
-                <div className="w-16 h-16 bg-primary/10 rounded flex items-center justify-center">
-                  <FileText className="h-8 w-8 text-primary" />
+                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-primary/10 rounded flex items-center justify-center">
+                  <FileText className="h-6 w-6 text-primary" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs lg:text-sm font-medium truncate">{selectedFile.name}</p>
+                <p className="text-[10px] lg:text-xs text-muted-foreground">
                   {(selectedFile.size / 1024).toFixed(1)} KB
                 </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={clearSelectedFile}>
+              <button className="p-1 rounded hover:bg-muted" onClick={clearSelectedFile}>
                 <X className="h-4 w-4" />
-              </Button>
+              </button>
             </div>
           )}
 
@@ -1099,26 +1239,19 @@ export const ConversationThread = ({
             onChange={(e) => handleFileSelect(e, 'document')}
           />
 
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleGenerateResponse}
-              disabled={isGenerating || isSending}
-              className="flex items-center gap-1"
-            >
-              <Sparkles className="h-4 w-4" />
-              Generar con IA
-            </Button>
-
+          {/* Mobile: compact input row like WhatsApp/Telegram */}
+          <div className="flex items-end gap-1.5 lg:gap-2">
             {/* Attachment dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" disabled={isSending}>
-                  <Paperclip className="h-4 w-4" />
-                </Button>
+                <button
+                  className="p-2 rounded-full hover:bg-muted transition-colors flex-shrink-0 text-muted-foreground"
+                  disabled={isSending}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent align="start" side="top">
                 <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
                   <Image className="h-4 w-4 mr-2" />
                   Imagen
@@ -1130,20 +1263,32 @@ export const ConversationThread = ({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Quick replies button with popover panel */}
+            {/* Input field - grows to fill space */}
+            <div className="flex-1 relative">
+              <Input
+                ref={inputRef}
+                placeholder="Escribe un mensaje..."
+                value={inputMessage}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyPress}
+                className="w-full pr-10 rounded-full bg-muted/50 border-muted lg:rounded-md lg:bg-background"
+                disabled={isSending}
+              />
+            </div>
+
+            {/* Quick replies button */}
             <Popover open={showQuickRepliesPanel} onOpenChange={setShowQuickRepliesPanel}>
               <PopoverTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <button
+                  className="p-2 rounded-full hover:bg-muted transition-colors flex-shrink-0 text-muted-foreground hidden lg:flex"
                   disabled={isSending}
                   onClick={openQuickRepliesPanel}
                 >
-                  <MessageSquareText className="h-4 w-4" />
-                </Button>
+                  <MessageSquareText className="h-5 w-5" />
+                </button>
               </PopoverTrigger>
-              <PopoverContent 
-                className="w-80 p-0 bg-popover border border-border shadow-xl z-[60]" 
+              <PopoverContent
+                className="w-80 p-0 bg-popover border border-border shadow-xl z-[60]"
                 align="start"
                 side="top"
                 sideOffset={8}
@@ -1151,9 +1296,9 @@ export const ConversationThread = ({
                 <div className="p-3 border-b border-border">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-sm">Respuestas rápidas</h4>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-6 w-6"
                       onClick={() => setShowQuickRepliesPanel(false)}
                     >
@@ -1192,8 +1337,8 @@ export const ConversationThread = ({
                           onClick={() => handleQuickReplySelect(reply)}
                           className={cn(
                             "w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-start gap-2",
-                            index === selectedQuickReplyIndex 
-                              ? "bg-accent text-accent-foreground" 
+                            index === selectedQuickReplyIndex
+                              ? "bg-accent text-accent-foreground"
                               : "hover:bg-muted"
                           )}
                         >
@@ -1226,43 +1371,51 @@ export const ConversationThread = ({
               </PopoverContent>
             </Popover>
 
-            {/* Audio recording button */}
-            <Button 
-              variant={isRecording ? "destructive" : "outline"} 
-              size="icon"
+            {/* Audio recording button - hidden on mobile when there's text */}
+            <button
+              className={cn(
+                "p-2 rounded-full transition-colors flex-shrink-0",
+                isRecording
+                  ? "bg-red-500 text-white"
+                  : "hover:bg-muted text-muted-foreground",
+                inputMessage.trim() && "hidden lg:flex"
+              )}
               onClick={isRecording ? stopRecording : startRecording}
               disabled={isSending}
             >
-              <Mic className={cn("h-4 w-4", isRecording && "animate-pulse")} />
-            </Button>
+              <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")} />
+            </button>
 
-            {/* Input field */}
-            <div className="flex-1">
-              <Input
-                ref={inputRef}
-                placeholder="Escribe un mensaje..."
-                value={inputMessage}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyPress}
-                className="w-full"
-                disabled={isSending}
-              />
-            </div>
-            <Button 
-              size="icon" 
-              className={channelInfo.buttonColor}
+            {/* AI Generate button - compact on mobile */}
+            <button
+              className="p-2 rounded-full hover:bg-muted transition-colors flex-shrink-0 text-muted-foreground"
+              onClick={handleGenerateResponse}
+              disabled={isGenerating || isSending}
+              title="Generar con IA"
+            >
+              <Sparkles className={cn("h-5 w-5", isGenerating && "animate-pulse text-amber-500")} />
+            </button>
+
+            {/* Send button - WhatsApp style circular */}
+            <button
+              className={cn(
+                "p-2.5 rounded-full flex-shrink-0 transition-all",
+                (!inputMessage.trim() && !selectedFile) || isSending
+                  ? "bg-muted text-muted-foreground"
+                  : cn(channelInfo.buttonColor, "text-white shadow-md")
+              )}
               onClick={handleSendMessage}
               disabled={(!inputMessage.trim() && !selectedFile) || isSending}
             >
               {isSending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
-                <Send className="h-4 w-4" />
+                <Send className="h-5 w-5" />
               )}
-            </Button>
+            </button>
           </div>
-          <p className="text-xs mt-2 text-muted-foreground">
-            💡 La IA generará respuestas basadas en tu catálogo de productos y configuración
+          <p className="text-xs mt-1.5 text-muted-foreground hidden lg:block">
+            La IA genera respuestas basadas en tu catálogo y configuración
           </p>
         </div>
       </CardContent>
