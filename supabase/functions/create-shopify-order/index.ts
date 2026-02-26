@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface OrderData {
   customerName: string;
+  cedula?: string;
   email: string;
   phone: string;
   address: string;
@@ -112,6 +113,7 @@ serve(async (req) => {
             province: orderData.department,
             country: 'CO',
             zip: '',
+            company: orderData.cedula || '',
             first_name: orderData.customerName.split(' ')[0],
             last_name: orderData.customerName.split(' ').slice(1).join(' ') || '',
             phone: orderData.phone,
@@ -170,6 +172,7 @@ serve(async (req) => {
         shipping_address: {
           first_name: orderData.customerName.split(' ')[0],
           last_name: orderData.customerName.split(' ').slice(1).join(' ') || '',
+          company: orderData.cedula || '',
           address1: orderData.address,
           city: orderData.city,
           province: orderData.department,
@@ -179,6 +182,7 @@ serve(async (req) => {
         billing_address: {
           first_name: orderData.customerName.split(' ')[0],
           last_name: orderData.customerName.split(' ').slice(1).join(' ') || '',
+          company: orderData.cedula || '',
           address1: orderData.address,
           city: orderData.city,
           province: orderData.department,

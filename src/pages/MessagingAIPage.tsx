@@ -24,6 +24,7 @@ import { useMessagingRealtime } from '@/hooks/useMessagingRealtime';
 import { useMessagingSearch } from '@/hooks/useMessagingSearch';
 import { useMessagingFolders } from '@/hooks/useMessagingFolders';
 import { FolderCreateDialog } from '@/components/messaging-ai/FolderCreateDialog';
+import { OrderConfirmationPanel } from '@/components/messaging-ai/OrderConfirmationPanel';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -735,15 +736,7 @@ const MessagingAIPage = () => {
 
           {activeView === 'campaigns' && (
             <div className="p-4 lg:p-0">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Campañas</CardTitle>
-                  <CardDescription>Gestiona tus campañas de mensajes</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">Próximamente: Herramientas de campañas</p>
-                </CardContent>
-              </Card>
+              <OrderConfirmationPanel />
             </div>
           )}
 

@@ -402,6 +402,41 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     console.log('ℹ️ No se detectaron tags automáticos para este pedido');
   }
 
+  // COD ORDER CONFIRMATION: Auto-trigger WhatsApp confirmation for contra entrega orders
+  const allTags = [...(order.tags || '').split(',').map((t: string) => t.trim().toLowerCase()), ...autoTags.map(t => t.toLowerCase())];
+  const isCOD = allTags.includes('contraentrega');
+  const isConfirmed = allTags.includes('confirmado');
+
+  if (isCOD && !isConfirmed && organizationId) {
+    const phone = order.shipping_address?.phone || order.customer?.phone;
+    if (phone) {
+      console.log('📱 Pedido COD detectado, enviando confirmacion por WhatsApp...');
+      try {
+        const confirmUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-order-confirmation`;
+        fetch(confirmUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            action: 'send_single',
+            organizationId,
+            shopifyOrderId: order.id
+          })
+        }).then(r => r.json()).then(res => {
+          console.log('📱 Confirmation trigger result:', res);
+        }).catch(err => {
+          console.error('⚠️ Confirmation trigger error:', err);
+        });
+      } catch (err) {
+        console.error('⚠️ Error triggering confirmation:', err);
+      }
+    } else {
+      console.log('⚠️ Pedido COD sin telefono, no se puede enviar confirmacion');
+    }
+  }
+
   // AUTO-INVOICING: Solo log - el cron batch procesará pedidos elegibles cada 2 minutos
   if (await checkAutoInvoiceEligibility(order, supabase, organizationId)) {
     console.log('🧾 Pedido elegible para facturación automática (se procesará por cron batch)');

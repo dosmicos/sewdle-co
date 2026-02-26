@@ -71,7 +71,7 @@ Reglas importantes:
     includeCatalog: true,
     autoReply: true,
     responseDelay: 3,
-    businessHours: true,
+    businessHours: false,
     greetingMessage: '¡Hola! 👋 Soy el asistente virtual de la tienda. ¿En qué puedo ayudarte?',
     rules: [
       { id: '1', condition: 'precio', response: 'Consultar catálogo de productos' },

@@ -28,7 +28,7 @@ Reglas importantes:
     includeCatalog: true,
     autoReply: false,
     responseDelay: 3,
-    businessHours: true,
+    businessHours: false,
     greetingMessage: '¡Hola! 👋 Soy el asistente virtual de la tienda. ¿En qué puedo ayudarte?',
   });
 

@@ -139,12 +139,10 @@ serve(async (req) => {
     const { action, messages, systemPrompt, organizationId } = body;
 
     // MINIMAX API CONFIGURATION
-    // FOR TESTING - hardcoded key, remove after debug
-    const TEST_MINIMAX_KEY = "27ab14d788ec95325ca3f166c2b6a6c2"; 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY") || TEST_MINIMAX_KEY;
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
     const MINIMAX_GROUP_ID = Deno.env.get("MINIMAX_GROUP_ID");
-    const MINIMAX_BASE_URL = Deno.env.get("MINIMAX_BASE_URL") || "https://api.minimax.chat/v1";
-    const MINIMAX_MODEL = Deno.env.get("MINIMAX_MODEL") || "abab6.5s-chat";
+    const MINIMAX_BASE_URL = Deno.env.get("MINIMAX_BASE_URL") || "https://api.minimax.io/v1";
+    const MINIMAX_MODEL = Deno.env.get("MINIMAX_MODEL") || "MiniMax-M2";
 
     console.log("MINIMAX_API_KEY present:", !!MINIMAX_API_KEY);
     console.log("MINIMAX_API_KEY prefix:", MINIMAX_API_KEY?.substring(0, 10));
@@ -179,7 +177,7 @@ serve(async (req) => {
         
         console.log("Test request body:", JSON.stringify(testRequestBody));
         
-        const testResponse = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+        const testResponse = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${MINIMAX_API_KEY}`,
@@ -535,7 +533,7 @@ serve(async (req) => {
       requestBody.group_id = MINIMAX_GROUP_ID;
     }
 
-    const response = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+    const response = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${MINIMAX_API_KEY}`,
@@ -595,6 +593,9 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Strip <think>...</think> blocks that some models include as internal reasoning
+    rawAiResponse = rawAiResponse.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
 
     console.log("Minimax raw response:", rawAiResponse.substring(0, 200) + "...");
 

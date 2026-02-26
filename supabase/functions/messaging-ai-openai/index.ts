@@ -397,7 +397,7 @@ serve(async (req) => {
                       .map(v => {
                         const stock = v.inventory_quantity || 0;
                         const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
-                        return `${v.title}: ${stockStatus}`;
+                        return `${v.title} (variantId:${v.id}): ${stockStatus}`;
                       })
                       .join(' | ');
                     
@@ -531,8 +531,43 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 6. Pasar el campo shippingCost con el valor correcto al llamar create_order
 7. Si el cliente NO especifica express, asumir envío estándar`;
 
+    // Add size/talla validation rules
+    fullSystemPrompt += `\n\n👕 REGLA DE TALLAS — OBLIGATORIO ANTES DE CREAR PEDIDO:
+1. NUNCA crear un pedido sin confirmar la talla/variante con el cliente
+2. Si el producto tiene variantes/tallas (aparecen en el catálogo como "Talla X (variantId:123)"), SIEMPRE preguntar cuál quiere ANTES de crear el pedido
+3. Si el cliente dice solo la edad del bebé/niño, recomienda la talla apropiada y CONFIRMA con el cliente antes de proceder
+4. Usa el variantId correcto del catálogo al llamar create_order — el variantId es el número que aparece entre paréntesis junto a cada talla
+5. Si el cliente no menciona talla y el producto tiene múltiples tallas, PREGUNTA antes de continuar
+6. Si el producto solo tiene una variante (ej: "Default Title"), puedes usar esa directamente sin preguntar
+7. FLUJO CORRECTO: Recopilar datos del cliente → Preguntar talla → Confirmar pedido → Crear pedido con variantId correcto`;
+
+    // Add data collection rules for orders (cedula + no IDs)
+    fullSystemPrompt += `\n\n🆔 REGLA DE DATOS PARA PEDIDOS — OBLIGATORIO:
+- NUNCA pidas al cliente el ID del producto ni el variantId, ellos NO conocen estos datos técnicos
+- TÚ debes identificar el productId y variantId del catálogo usando el NOMBRE del producto que el cliente menciona
+- Ejemplo: si dice "quiero la ruana del caballo talla M", busca "Ruana Caballo" en el catálogo, usa su ID y el variantId de Talla M
+- SIEMPRE pide la cédula de ciudadanía del cliente antes de crear el pedido
+
+📝 DATOS OBLIGATORIOS que debes recopilar antes de crear un pedido:
+1. Nombre completo
+2. Cédula de ciudadanía
+3. Correo electrónico
+4. Teléfono
+5. Dirección completa
+6. Ciudad y departamento
+7. Producto y talla confirmados (TÚ resuelves los IDs internamente del catálogo, NUNCA se los pidas al cliente)`;
+
+    // Add order status lookup instructions
+    fullSystemPrompt += `\n\n📋 CONSULTA DE ESTADO DE PEDIDOS:
+- Si el cliente pregunta por el estado de su pedido, envío o compra, usa la función lookup_order_status
+- PRIMERO pide al cliente su número de pedido O el correo electrónico con el que hizo la compra
+- Si el cliente no proporciona ninguno de los dos, PREGUNTA antes de buscar
+- Muestra toda la información relevante: estado de pago, estado de envío, y tracking si existe
+- Si hay número de seguimiento, compártelo junto con la transportadora
+- Sé empático y claro al comunicar el estado del pedido`;
+
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
-    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones.\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
@@ -546,18 +581,20 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           type: "object",
           properties: {
             customerName: { type: "string", description: "Nombre completo del cliente" },
+            cedula: { type: "string", description: "Número de cédula de ciudadanía del cliente" },
             email: { type: "string", description: "Correo electrónico del cliente" },
             phone: { type: "string", description: "Número de teléfono del cliente" },
             address: { type: "string", description: "Dirección de envío completa" },
             city: { type: "string", description: "Ciudad de envío" },
             department: { type: "string", description: "Departamento de envío" },
             neighborhood: { type: "string", description: "Barrio (opcional)" },
-            productId: { type: "number", description: "ID del producto en Shopify" },
+            productId: { type: "number", description: "ID numérico del producto en Shopify. NO pedir al cliente. Obtener del catálogo usando el nombre del producto que el cliente menciona." },
+            variantId: { type: "number", description: "ID numérico del variante/talla en Shopify. NO pedir al cliente. Obtener del catálogo usando la talla que el cliente elige." },
             quantity: { type: "number", description: "Cantidad (default 1)" },
             notes: { type: "string", description: "Notas adicionales (opcional)" },
             shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." }
           },
-          required: ["customerName", "email", "phone", "address", "city", "department", "productId", "shippingCost"]
+          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "productId", "variantId", "shippingCost"]
         }
       },
       {
@@ -572,6 +609,17 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             orderId: { type: "number", description: "ID del pedido en Shopify (opcional)" }
           },
           required: ["amount", "description", "customerEmail"]
+        }
+      },
+      {
+        name: "lookup_order_status",
+        description: "Busca el estado de un pedido existente por número de pedido o correo electrónico del cliente. Devuelve estado de pago, envío y tracking si existe.",
+        parameters: {
+          type: "object",
+          properties: {
+            orderNumber: { type: "string", description: "Número de pedido (ej: 1234 o #1234)" },
+            email: { type: "string", description: "Correo electrónico del cliente para buscar su pedido más reciente" }
+          }
         }
       }
     ];
@@ -637,6 +685,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             body: {
               orderData: {
                 customerName: orderArgs.customerName,
+                cedula: orderArgs.cedula || '',
                 email: orderArgs.email,
                 phone: orderArgs.phone,
                 address: orderArgs.address,
@@ -644,6 +693,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                 department: orderArgs.department,
                 neighborhood: orderArgs.neighborhood || '',
                 productId: orderArgs.productId,
+                variantId: orderArgs.variantId || undefined,
                 quantity: orderArgs.quantity || 1,
                 notes: orderArgs.notes || '',
                 shippingCost: orderArgs.shippingCost || 0
@@ -763,8 +813,255 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           console.error("Error parsing payment function call:", err);
         }
       }
+
+      // Handle order status lookup
+      if (functionCall.name === "lookup_order_status") {
+        try {
+          const lookupArgs = JSON.parse(functionCall.arguments);
+          console.log("Looking up order status with args:", lookupArgs);
+
+          if (!lookupArgs.orderNumber && !lookupArgs.email) {
+            return new Response(
+              JSON.stringify({
+                response: "Para consultar el estado de tu pedido necesito tu número de pedido o el correo electrónico con el que realizaste la compra. ¿Podrías proporcionarme alguno de los dos?"
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          let orderData: any = null;
+
+          // Step A: Search in local shopify_orders table first
+          if (lookupArgs.orderNumber) {
+            const normalized = lookupArgs.orderNumber.replace('#', '').trim();
+            console.log(`🔍 Searching order by number: ${normalized}`);
+
+            const { data: orders } = await supabase
+              .from('shopify_orders')
+              .select('shopify_order_id, order_number, financial_status, fulfillment_status, total_price, created_at_shopify, customer_email, customer_first_name, customer_last_name, shipping_address, order_status_url')
+              .eq('organization_id', organizationId)
+              .or(`order_number.eq.${normalized},order_number.eq.#${normalized}`)
+              .limit(1);
+
+            if (orders && orders.length > 0) {
+              orderData = orders[0];
+              console.log(`✅ Found order in local DB: #${orderData.order_number}`);
+            }
+          } else if (lookupArgs.email) {
+            console.log(`🔍 Searching order by email: ${lookupArgs.email}`);
+
+            const { data: orders } = await supabase
+              .from('shopify_orders')
+              .select('shopify_order_id, order_number, financial_status, fulfillment_status, total_price, created_at_shopify, customer_email, customer_first_name, customer_last_name, shipping_address, order_status_url')
+              .eq('organization_id', organizationId)
+              .eq('customer_email', lookupArgs.email.toLowerCase().trim())
+              .order('created_at_shopify', { ascending: false })
+              .limit(1);
+
+            if (orders && orders.length > 0) {
+              orderData = orders[0];
+              console.log(`✅ Found order in local DB by email: #${orderData.order_number}`);
+            }
+          }
+
+          // Step B: Fallback to Shopify API if not found locally
+          if (!orderData && shopifyCredentials) {
+            const creds = shopifyCredentials as any;
+            const shopifyDomain = creds.store_domain || creds.shopDomain;
+            const shopifyToken = creds.access_token || creds.accessToken;
+
+            if (shopifyDomain && shopifyToken) {
+              try {
+                let shopifyUrl = '';
+                if (lookupArgs.orderNumber) {
+                  const normalized = lookupArgs.orderNumber.replace('#', '').trim();
+                  shopifyUrl = `https://${shopifyDomain}/admin/api/2024-01/orders.json?name=%23${normalized}&status=any&limit=1`;
+                } else if (lookupArgs.email) {
+                  shopifyUrl = `https://${shopifyDomain}/admin/api/2024-01/orders.json?email=${encodeURIComponent(lookupArgs.email.trim())}&status=any&limit=1`;
+                }
+
+                console.log(`🔍 Fallback: Searching Shopify API: ${shopifyUrl}`);
+                const shopifyResp = await fetch(shopifyUrl, {
+                  headers: {
+                    'X-Shopify-Access-Token': shopifyToken,
+                    'Content-Type': 'application/json',
+                  },
+                });
+
+                if (shopifyResp.ok) {
+                  const shopifyData = await shopifyResp.json();
+                  const shopifyOrders = shopifyData.orders || [];
+                  if (shopifyOrders.length > 0) {
+                    const o = shopifyOrders[0];
+                    orderData = {
+                      shopify_order_id: o.id,
+                      order_number: o.order_number || o.name,
+                      financial_status: o.financial_status,
+                      fulfillment_status: o.fulfillment_status,
+                      total_price: o.total_price,
+                      created_at_shopify: o.created_at,
+                      customer_email: o.email,
+                      customer_first_name: o.customer?.first_name || '',
+                      customer_last_name: o.customer?.last_name || '',
+                      shipping_address: o.shipping_address,
+                      order_status_url: o.order_status_url,
+                      // Extract fulfillment tracking from Shopify directly
+                      fulfillments: o.fulfillments || [],
+                    };
+                    console.log(`✅ Found order via Shopify API: #${orderData.order_number}`);
+                  }
+                } else {
+                  console.error(`❌ Shopify API error: ${shopifyResp.status}`);
+                }
+              } catch (shopifyErr) {
+                console.error("Error fetching from Shopify API:", shopifyErr);
+              }
+            }
+          }
+
+          // Step C: If still no order found
+          if (!orderData) {
+            const searchTerm = lookupArgs.orderNumber ? `número #${lookupArgs.orderNumber}` : `correo ${lookupArgs.email}`;
+            return new Response(
+              JSON.stringify({
+                response: `No encontré ningún pedido con ${searchTerm}. ¿Podrías verificar el dato e intentar de nuevo? También puedes probar con tu ${lookupArgs.orderNumber ? 'correo electrónico' : 'número de pedido'}.`
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          // Step D: Search for tracking info in shipping_labels
+          let trackingInfo: any = null;
+          const { data: label } = await supabase
+            .from('shipping_labels')
+            .select('tracking_number, carrier, status')
+            .eq('shopify_order_id', orderData.shopify_order_id)
+            .eq('organization_id', organizationId)
+            .maybeSingle();
+
+          if (label?.tracking_number) {
+            trackingInfo = { ...label };
+
+            // Step E: Get live tracking from Envia
+            try {
+              console.log(`📍 Getting live tracking for ${label.tracking_number}...`);
+              const { data: trackResult, error: trackError } = await supabase.functions.invoke('envia-track', {
+                body: {
+                  tracking_number: label.tracking_number,
+                  carrier: label.carrier
+                }
+              });
+
+              if (!trackError && trackResult?.success) {
+                trackingInfo.live_status = trackResult.status;
+                trackingInfo.last_event = trackResult.events?.[trackResult.events.length - 1]?.description || null;
+                trackingInfo.estimated_delivery = trackResult.estimated_delivery || null;
+                console.log(`✅ Live tracking: ${trackResult.status}`);
+              }
+            } catch (trackErr) {
+              console.error("Error getting live tracking:", trackErr);
+            }
+          }
+
+          // Also check Shopify fulfillment tracking (from API fallback)
+          if (!trackingInfo && orderData.fulfillments?.length > 0) {
+            const fulfillment = orderData.fulfillments[orderData.fulfillments.length - 1];
+            if (fulfillment.tracking_number) {
+              trackingInfo = {
+                tracking_number: fulfillment.tracking_number,
+                carrier: fulfillment.tracking_company || 'Transportadora',
+                status: fulfillment.status || 'in_transit',
+                tracking_url: fulfillment.tracking_url || null,
+              };
+            }
+          }
+
+          // Step F: Build formatted response
+          const orderNum = String(orderData.order_number).replace('#', '');
+          const financialMap: Record<string, string> = {
+            'paid': '✅ Pagado',
+            'pending': '⏳ Pendiente de pago',
+            'partially_paid': '⚠️ Parcialmente pagado',
+            'refunded': '↩️ Reembolsado',
+            'voided': '❌ Anulado',
+            'authorized': '🔄 Autorizado (pendiente de captura)',
+          };
+          const fulfillmentMap: Record<string, string> = {
+            'fulfilled': '📦 Enviado',
+            'partial': '📦 Parcialmente enviado',
+            'unfulfilled': '🏭 En preparación',
+            'null': '🏭 En preparación',
+          };
+
+          const paymentStatus = financialMap[orderData.financial_status] || `Estado: ${orderData.financial_status || 'desconocido'}`;
+          const fulfillmentStatus = fulfillmentMap[orderData.fulfillment_status || 'null'] || fulfillmentMap['null'];
+          const total = orderData.total_price ? `$${Number(orderData.total_price).toLocaleString('es-CO')} COP` : 'N/A';
+
+          let responseText = `📦 *Pedido #${orderNum}*\n\n`;
+          responseText += `💰 Pago: ${paymentStatus}\n`;
+          responseText += `🚚 Envío: ${fulfillmentStatus}\n`;
+          responseText += `💵 Total: ${total}\n`;
+
+          if (trackingInfo) {
+            const trackingStatusMap: Record<string, string> = {
+              'delivered': '✅ Entregado',
+              'in_transit': '🚚 En tránsito',
+              'created': '📋 Guía creada',
+              'returned': '↩️ Devuelto',
+              'exception': '⚠️ Novedad',
+              'pending': '⏳ Pendiente de recolección',
+              'cancelled': '❌ Cancelado',
+            };
+            const liveStatus = trackingInfo.live_status || trackingInfo.status;
+            const statusText = trackingStatusMap[liveStatus] || `Estado: ${liveStatus}`;
+
+            responseText += `\n📍 *Tracking:*\n`;
+            responseText += `- Guía: ${trackingInfo.tracking_number}\n`;
+            responseText += `- Transportadora: ${trackingInfo.carrier}\n`;
+            responseText += `- Estado: ${statusText}\n`;
+
+            if (trackingInfo.last_event) {
+              responseText += `- Último evento: ${trackingInfo.last_event}\n`;
+            }
+            if (trackingInfo.estimated_delivery) {
+              responseText += `- Entrega estimada: ${trackingInfo.estimated_delivery}\n`;
+            }
+            if (trackingInfo.tracking_url) {
+              responseText += `\n🔗 Rastrea tu envío aquí: ${trackingInfo.tracking_url}\n`;
+            }
+          } else if (orderData.fulfillment_status !== 'fulfilled') {
+            responseText += `\n📌 Tu pedido aún no ha sido despachado. Te notificaremos cuando sea enviado con el número de seguimiento.`;
+          }
+
+          if (orderData.order_status_url) {
+            responseText += `\n\n🔗 Ver detalles completos: ${orderData.order_status_url}`;
+          }
+
+          console.log(`✅ Order status response built for #${orderNum}`);
+
+          return new Response(
+            JSON.stringify({
+              response: responseText,
+              order_lookup: true,
+              orderNumber: orderNum,
+              financialStatus: orderData.financial_status,
+              fulfillmentStatus: orderData.fulfillment_status
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+
+        } catch (err) {
+          console.error("Error in lookup_order_status:", err);
+          return new Response(
+            JSON.stringify({
+              response: "Lo siento, hubo un error al consultar el estado de tu pedido. Por favor intenta de nuevo en unos momentos."
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
     }
-    
+
     const rawAiResponse = data.choices?.[0]?.message?.content || "";
     
     console.log("OpenAI raw response:", rawAiResponse.substring(0, 200) + "...");

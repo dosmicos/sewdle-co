@@ -1506,6 +1506,150 @@ serve(async (req) => {
                 console.log('Message saved to database');
               }
 
+              // ========== COD ORDER CONFIRMATION DETECTION ==========
+              const pendingConfirmation = conversation?.metadata?.pending_order_confirmation;
+              if (pendingConfirmation?.status === 'pending' && content && messageType === 'text') {
+                console.log(`📋 Pending order confirmation detected for order ${pendingConfirmation.order_number}`);
+
+                // Normalize response: lowercase, remove accents, trim
+                const normalized = content.toLowerCase().trim()
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+                const confirmWords = ['si', 'sí', 'confirmo', 'dale', 'listo', 'ok', 'correcto', 'afirmativo', 'claro', 'va', 'vale', 'perfecto', 'bien'];
+                const isConfirmation = confirmWords.some(w => normalized === w || normalized.startsWith(w + ' ') || normalized.startsWith(w + ',') || normalized.startsWith(w + '.'));
+
+                if (isConfirmation) {
+                  console.log(`✅ Customer CONFIRMED order ${pendingConfirmation.order_number}`);
+
+                  try {
+                    // 1. Add "Confirmado" tag to Shopify order
+                    await supabase.functions.invoke('update-shopify-order', {
+                      body: {
+                        action: 'add_tags',
+                        shopifyOrderId: pendingConfirmation.shopify_order_id,
+                        tags: ['Confirmado'],
+                        organizationId: channel.organization_id
+                      }
+                    });
+                    console.log('🏷️ Added "Confirmado" tag to Shopify');
+
+                    // 2. Update local shopify_orders tags
+                    const { data: localOrder } = await supabase
+                      .from('shopify_orders')
+                      .select('tags')
+                      .eq('shopify_order_id', pendingConfirmation.shopify_order_id)
+                      .single();
+                    if (localOrder) {
+                      const currentTags = (localOrder.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+                      if (!currentTags.includes('Confirmado')) {
+                        currentTags.push('Confirmado');
+                        await supabase.from('shopify_orders').update({ tags: currentTags.join(', ') }).eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+                      }
+                    }
+
+                    // 3. Update order_confirmations
+                    await supabase
+                      .from('order_confirmations')
+                      .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                      .eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+
+                    // 4. Update conversation metadata
+                    const updatedMetadata = { ...conversation.metadata, pending_order_confirmation: { ...pendingConfirmation, status: 'confirmed' } };
+                    await supabase.from('messaging_conversations').update({ metadata: updatedMetadata }).eq('id', conversation.id);
+
+                    // 5. Remove "Confirmacion pendiente" tag
+                    const { data: pendingTag } = await supabase
+                      .from('messaging_conversation_tags')
+                      .select('id')
+                      .eq('organization_id', channel.organization_id)
+                      .eq('name', 'Confirmacion pendiente')
+                      .maybeSingle();
+                    if (pendingTag) {
+                      await supabase.from('messaging_conversation_tag_assignments').delete().eq('conversation_id', conversation.id).eq('tag_id', pendingTag.id);
+                    }
+
+                    // 6. Send confirmation response
+                    const confirmMsg = `Gracias por confirmar tu pedido #${String(pendingConfirmation.order_number).replace('#', '')}! 🎉 Lo estamos preparando para envio.`;
+                    const phoneId = channel.meta_phone_number_id || Deno.env.get('META_PHONE_NUMBER_ID');
+                    const waToken = Deno.env.get('META_WHATSAPP_TOKEN');
+                    if (phoneId && waToken) {
+                      const sendResp = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${waToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          messaging_product: 'whatsapp', recipient_type: 'individual', to: senderPhone,
+                          type: 'text', text: { preview_url: false, body: confirmMsg }
+                        })
+                      });
+                      const sendData = await sendResp.json();
+
+                      // Save confirmation response message
+                      await supabase.from('messaging_messages').insert({
+                        conversation_id: conversation.id,
+                        external_message_id: sendData?.messages?.[0]?.id,
+                        channel_type: 'whatsapp', direction: 'outbound', sender_type: 'agent',
+                        content: confirmMsg, message_type: 'text', sent_at: new Date().toISOString()
+                      });
+                      await supabase.from('messaging_conversations').update({
+                        last_message_preview: confirmMsg.substring(0, 100),
+                        last_message_at: new Date().toISOString()
+                      }).eq('id', conversation.id);
+                    }
+
+                    console.log(`✅ Order ${pendingConfirmation.order_number} fully confirmed`);
+                  } catch (confirmErr) {
+                    console.error('❌ Error processing confirmation:', confirmErr);
+                  }
+
+                  continue; // Skip AI auto-reply
+
+                } else {
+                  // Not a confirmation — route to human attention
+                  console.log(`🔴 Customer response needs attention for order ${pendingConfirmation.order_number}: "${content.substring(0, 50)}"`);
+
+                  try {
+                    // 1. Update order_confirmations
+                    await supabase
+                      .from('order_confirmations')
+                      .update({ status: 'needs_attention', updated_at: new Date().toISOString() })
+                      .eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+
+                    // 2. Update conversation metadata
+                    const updatedMetadata = { ...conversation.metadata, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
+                    await supabase.from('messaging_conversations').update({ metadata: updatedMetadata, ai_managed: false }).eq('id', conversation.id);
+
+                    // 3. Swap tags: remove "Confirmacion pendiente", add "Requiere atencion"
+                    const { data: pendingTag } = await supabase
+                      .from('messaging_conversation_tags')
+                      .select('id')
+                      .eq('organization_id', channel.organization_id)
+                      .eq('name', 'Confirmacion pendiente')
+                      .maybeSingle();
+                    if (pendingTag) {
+                      await supabase.from('messaging_conversation_tag_assignments').delete().eq('conversation_id', conversation.id).eq('tag_id', pendingTag.id);
+                    }
+
+                    const { data: attentionTag } = await supabase
+                      .from('messaging_conversation_tags')
+                      .select('id')
+                      .eq('organization_id', channel.organization_id)
+                      .eq('name', 'Requiere atencion')
+                      .maybeSingle();
+                    if (attentionTag) {
+                      await supabase.from('messaging_conversation_tag_assignments')
+                        .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
+                    }
+
+                    console.log(`🔴 Order ${pendingConfirmation.order_number} routed to human attention`);
+                  } catch (attErr) {
+                    console.error('❌ Error routing to attention:', attErr);
+                  }
+
+                  continue; // Skip AI auto-reply, human agent handles this
+                }
+              }
+              // ========== END COD ORDER CONFIRMATION ==========
+
               // Generate and send AI response if enabled (check both channel and conversation level)
               const aiEnabledOnChannel = channel.ai_enabled !== false;
               // ai_managed: true = AI responds, false = manual control, null = default to channel setting
