@@ -1850,19 +1850,21 @@ serve(async (req) => {
                 last_message_preview: content.substring(0, 100),
                 status: 'active',
               }).eq('id', conversation.id);
+
+              console.log(`📸 Instagram DM saved to conversation ${conversation.id}`);
+
+              // AI auto-reply (ONLY for non-duplicate messages to prevent multiple AI responses)
+              await handleAIAutoReply(
+                channel,
+                conversation,
+                content,
+                'instagram',
+                supabase,
+                (text: string) => sendInstagramMessage(instagramPageId, senderId, text)
+              );
+            } else {
+              console.log(`📸 Skipping AI reply for duplicate message ${igMessageId}`);
             }
-
-            console.log(`📸 Instagram DM saved to conversation ${conversation.id}`);
-
-            // AI auto-reply
-            await handleAIAutoReply(
-              channel,
-              conversation,
-              content,
-              'instagram',
-              supabase,
-              (text: string) => sendInstagramMessage(instagramPageId, senderId, text)
-            );
           }
         }
 
@@ -2099,37 +2101,56 @@ serve(async (req) => {
             conversation = newConvo;
           }
 
-          // Save inbound message
-          await supabase.from('messaging_messages').insert({
-            conversation_id: conversation.id,
-            channel_type: 'messenger',
-            direction: 'inbound',
-            sender_type: 'user',
-            content,
-            message_type: messageType,
-            external_message_id: event.message?.mid || null,
-            media_url: mediaUrl || null,
-            sent_at: messageTimestamp,
-          });
+          // Save inbound message (skip if already exists to prevent duplicates from webhook retries)
+          const msgMessageId = event.message?.mid || null;
+          let skipMsgMessage = false;
 
-          // Update conversation
-          await supabase.from('messaging_conversations').update({
-            last_message_at: messageTimestamp,
-            last_message_preview: content.substring(0, 100),
-            status: 'active',
-          }).eq('id', conversation.id);
+          if (msgMessageId) {
+            const { data: existingMsgMsg } = await supabase
+              .from('messaging_messages')
+              .select('id')
+              .eq('external_message_id', msgMessageId)
+              .maybeSingle();
+            if (existingMsgMsg) {
+              console.log(`💬 Skipping duplicate Messenger message: ${msgMessageId}`);
+              skipMsgMessage = true;
+            }
+          }
 
-          console.log(`💬 Messenger message saved to conversation ${conversation.id}`);
+          if (!skipMsgMessage) {
+            await supabase.from('messaging_messages').insert({
+              conversation_id: conversation.id,
+              channel_type: 'messenger',
+              direction: 'inbound',
+              sender_type: 'user',
+              content,
+              message_type: messageType,
+              external_message_id: msgMessageId,
+              media_url: mediaUrl || null,
+              sent_at: messageTimestamp,
+            });
 
-          // AI auto-reply
-          await handleAIAutoReply(
-            channel,
-            conversation,
-            content,
-            'messenger',
-            supabase,
-            (text: string) => sendMessengerMessage(senderPsid, text)
-          );
+            // Update conversation
+            await supabase.from('messaging_conversations').update({
+              last_message_at: messageTimestamp,
+              last_message_preview: content.substring(0, 100),
+              status: 'active',
+            }).eq('id', conversation.id);
+
+            console.log(`💬 Messenger message saved to conversation ${conversation.id}`);
+
+            // AI auto-reply (ONLY for non-duplicate messages)
+            await handleAIAutoReply(
+              channel,
+              conversation,
+              content,
+              'messenger',
+              supabase,
+              (text: string) => sendMessengerMessage(senderPsid, text)
+            );
+          } else {
+            console.log(`💬 Skipping AI reply for duplicate Messenger message ${msgMessageId}`);
+          }
         }
 
         // ---------- Facebook Page Comments (feed) ----------
