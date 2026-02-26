@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquareMore, Loader2, Plus, Mail, Users } from 'lucide-react';
+import { MessageSquareMore, Loader2, Plus, Mail, Users, Menu, ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ConversationsList, Conversation, ChannelType } from '@/components/messaging-ai/ConversationsList';
 import { ConversationThread } from '@/components/messaging-ai/ConversationThread';
 import { NewConversationModal } from '@/components/messaging-ai/NewConversationModal';
@@ -15,6 +16,7 @@ import { TagsSettingsPanel } from '@/components/messaging-ai/TagsSettingsPanel';
 import { RealtimeConnectionBanner } from '@/components/messaging-ai/RealtimeConnectionBanner';
 import { MessagingSearchBar } from '@/components/messaging-ai/MessagingSearchBar';
 import { SearchResultsList } from '@/components/messaging-ai/SearchResultsList';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useMessagingConversations } from '@/hooks/useMessagingConversations';
 import { useMessagingMessages } from '@/hooks/useMessagingMessages';
 import { useMessagingTags } from '@/hooks/useMessagingTags';
@@ -39,6 +41,8 @@ const MessagingAIPage = () => {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showCreateFolderFromChat, setShowCreateFolderFromChat] = useState(false);
   const [quickFilter, setQuickFilter] = useState<'all' | 'unread' | 'groups'>('all');
+  const [mobileShowThread, setMobileShowThread] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Centralized realtime subscription for all messaging
   const { connectionStatus, manualRefresh } = useMessagingRealtime({
@@ -235,6 +239,17 @@ const MessagingAIPage = () => {
     }
   }, [selectedConversation, markAsRead]);
 
+  // Handle selecting a conversation (show thread on mobile)
+  const handleSelectConversation = (id: string) => {
+    setSelectedConversation(id);
+    setMobileShowThread(true);
+  };
+
+  // Handle going back to list on mobile
+  const handleMobileBack = () => {
+    setMobileShowThread(false);
+  };
+
   const handleNavigate = (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags') => {
     setActiveView(section);
   };
@@ -280,57 +295,240 @@ const MessagingAIPage = () => {
     }
   };
 
+  // Shared sidebar props
+  const sidebarProps = {
+    activeFilter,
+    activeChannel,
+    activeTagId,
+    activeFolderId,
+    onFilterChange: handleFilterChange,
+    onChannelChange: handleChannelChange,
+    onTagChange: handleTagChange,
+    onFolderChange: handleFolderChange,
+    onNavigate: handleNavigate,
+    counts,
+    tags,
+    tagCounts,
+    folders,
+    folderCounts,
+    onCreateFolder: createFolder,
+    isCreatingFolder,
+    onDeleteFolder: deleteFolder,
+    collapsed: sidebarCollapsed,
+    onToggleCollapse: () => setSidebarCollapsed(!sidebarCollapsed),
+  };
+
+  // Conversations list content (shared between mobile & desktop)
+  const renderConversationsList = () => (
+    <>
+      <CardHeader className="pb-2 flex-shrink-0">
+        <CardTitle className="text-lg">
+          {activeFilter === 'inbox' && 'Todos los chats'}
+          {activeFilter === 'needs-help' && 'Necesita ayuda'}
+          {activeFilter === 'ai-managed' && 'IA gestionada'}
+          {activeChannel !== 'all' && ` - ${activeChannel === 'whatsapp' ? 'WhatsApp' : activeChannel === 'instagram' ? 'Instagram' : 'Messenger'}`}
+        </CardTitle>
+        <CardDescription>
+          {isLoadingConversations ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando...
+            </span>
+          ) : hasSearchTerm ? (
+            `${searchResults.length} resultado${searchResults.length !== 1 ? 's' : ''} encontrado${searchResults.length !== 1 ? 's' : ''}`
+          ) : (
+            `${filteredConversations.filter(c => c.unread > 0).length} conversaciones sin leer`
+          )}
+        </CardDescription>
+
+        {/* Search bar */}
+        <MessagingSearchBar
+          value={searchTerm}
+          onChange={setSearchTerm}
+          onClear={clearSearch}
+          isSearching={isSearching}
+          className="mt-2"
+        />
+
+        {/* Quick filter chips */}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setQuickFilter('all')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              quickFilter === 'all'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setQuickFilter(quickFilter === 'unread' ? 'all' : 'unread')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              quickFilter === 'unread'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <Mail className="h-3 w-3" />
+            No leídos
+            {transformedConversations.filter(c => c.unread > 0).length > 0 && (
+              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                quickFilter === 'unread'
+                  ? 'bg-primary-foreground/20 text-primary-foreground'
+                  : 'bg-primary/10 text-primary'
+              }`}>
+                {transformedConversations.filter(c => c.unread > 0).length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setQuickFilter(quickFilter === 'groups' ? 'all' : 'groups')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              quickFilter === 'groups'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <Users className="h-3 w-3" />
+            Grupos
+          </button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0 flex-1 overflow-hidden">
+        {isLoadingConversations && !hasSearchTerm ? (
+          <div className="flex items-center justify-center h-[400px]">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : hasSearchTerm ? (
+          <SearchResultsList
+            results={searchResults}
+            selectedId={selectedConversation}
+            onSelect={handleSelectConversation}
+            searchTerm={searchTerm}
+          />
+        ) : filteredConversations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+            <MessageSquareMore className="h-12 w-12 mb-4 opacity-50" />
+            <p>No hay conversaciones</p>
+            <p className="text-sm text-center px-4">Los mensajes entrantes aparecerán aquí</p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => setShowNewConversation(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Iniciar nuevo chat
+            </Button>
+          </div>
+        ) : (
+          <ConversationsList
+            conversations={filteredConversations}
+            selectedId={selectedConversation}
+            onSelect={handleSelectConversation}
+            onDelete={(id) => {
+              deleteConversation(id);
+              if (selectedConversation === id) {
+                setSelectedConversation(null);
+                setMobileShowThread(false);
+              }
+            }}
+            isDeleting={isDeletingConversation}
+            onMarkAsUnread={markAsUnread}
+            onMarkAsRead={markAsRead}
+            onTogglePin={(id, isPinned) => togglePin({ conversationId: id, isPinned })}
+            onMoveToFolder={(id, folderId) => moveToFolder({ conversationId: id, folderId })}
+            folders={folders}
+            onCreateFolder={() => setShowCreateFolderFromChat(true)}
+          />
+        )}
+      </CardContent>
+    </>
+  );
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
-      <MessagingSidebar
-        activeFilter={activeFilter}
-        activeChannel={activeChannel}
-        activeTagId={activeTagId}
-        activeFolderId={activeFolderId}
-        onFilterChange={handleFilterChange}
-        onChannelChange={handleChannelChange}
-        onTagChange={handleTagChange}
-        onFolderChange={handleFolderChange}
-        onNavigate={handleNavigate}
-        counts={counts}
-        tags={tags}
-        tagCounts={tagCounts}
-        folders={folders}
-        folderCounts={folderCounts}
-        onCreateFolder={createFolder}
-        isCreatingFolder={isCreatingFolder}
-        onDeleteFolder={deleteFolder}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      {/* Desktop Sidebar - hidden on mobile */}
+      <div className="hidden lg:flex">
+        <MessagingSidebar {...sidebarProps} />
+      </div>
+
+      {/* Mobile Sidebar Sheet */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="p-0 w-[280px] bg-slate-900 border-slate-700">
+          <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
+          <MessagingSidebar
+            {...sidebarProps}
+            collapsed={false}
+            onToggleCollapse={() => setMobileSidebarOpen(false)}
+            onFilterChange={(filter) => {
+              handleFilterChange(filter);
+              setMobileSidebarOpen(false);
+            }}
+            onChannelChange={(channel) => {
+              handleChannelChange(channel);
+              setMobileSidebarOpen(false);
+            }}
+            onNavigate={(section) => {
+              handleNavigate(section);
+              setMobileSidebarOpen(false);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b bg-background">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-100">
+        {/* Header - hidden on mobile for conversations view (Telegram-style) */}
+        <div className={cn(
+          "flex items-center justify-between p-3 lg:p-6 border-b bg-background",
+          activeView === 'conversations' && "hidden lg:flex"
+        )}>
+          <div className="flex items-center gap-2 lg:gap-3">
+            {/* Mobile hamburger menu */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="hidden lg:block p-2 rounded-lg bg-indigo-100">
               <MessageSquareMore className="h-6 w-6 text-indigo-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Mensajería IA</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-lg lg:text-2xl font-bold text-foreground">Mensajería IA</h1>
+              <p className="text-xs lg:text-sm text-muted-foreground hidden sm:block">
                 Gestiona conversaciones de WhatsApp, Instagram y Messenger con IA
               </p>
             </div>
           </div>
-          
+
           {activeView === 'conversations' && (
-            <Button 
+            <Button
               onClick={() => setShowNewConversation(true)}
               className="bg-emerald-500 hover:bg-emerald-600"
+              size="sm"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo chat
+              <Plus className="h-4 w-4 lg:mr-2" />
+              <span className="hidden lg:inline">Nuevo chat</span>
             </Button>
           )}
         </div>
+
+        {/* Non-conversations views: show mobile header */}
+        {activeView !== 'conversations' && (
+          <div className="flex items-center justify-between p-3 border-b bg-background lg:hidden">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMobileSidebarOpen(true)}
+                className="p-2 rounded-lg hover:bg-muted transition-colors"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <h1 className="text-lg font-bold text-foreground">Mensajería IA</h1>
+            </div>
+          </div>
+        )}
 
         {/* Connection status banner */}
         {activeView === 'conversations' && currentOrganization?.id && (
@@ -338,140 +536,179 @@ const MessagingAIPage = () => {
         )}
 
         {/* Content area */}
-        <div className="flex-1 overflow-auto p-6 space-y-6">
+        <div className="flex-1 overflow-hidden lg:overflow-auto lg:p-6 lg:space-y-6">
           {activeView === 'conversations' && (
             <>
-              {/* Conversations grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px] h-[calc(100vh-220px)]">
-                {/* Conversations List */}
-                <Card className="lg:col-span-1 overflow-hidden flex flex-col">
-                  <CardHeader className="pb-2 flex-shrink-0">
-                    <CardTitle className="text-lg">
-                      {activeFilter === 'inbox' && 'Todos los chats'}
-                      {activeFilter === 'needs-help' && 'Necesita ayuda'}
-                      {activeFilter === 'ai-managed' && 'IA gestionada'}
-                      {activeChannel !== 'all' && ` - ${activeChannel === 'whatsapp' ? 'WhatsApp' : activeChannel === 'instagram' ? 'Instagram' : 'Messenger'}`}
-                    </CardTitle>
-                    <CardDescription>
-                      {isLoadingConversations ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Cargando...
-                        </span>
-                      ) : hasSearchTerm ? (
-                        `${searchResults.length} resultado${searchResults.length !== 1 ? 's' : ''} encontrado${searchResults.length !== 1 ? 's' : ''}`
-                      ) : (
-                        `${filteredConversations.filter(c => c.unread > 0).length} conversaciones sin leer`
-                      )}
-                    </CardDescription>
-                    
+              {/* === MOBILE LAYOUT === */}
+              <div className="lg:hidden flex flex-col h-full">
+                {/* Mobile: Show list OR thread - full screen like Telegram */}
+                {!mobileShowThread ? (
+                  /* Mobile Conversation List - full screen, no card wrapper */
+                  <div className="flex flex-col h-full overflow-hidden">
+                    {/* Mobile-specific header bar */}
+                    <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-background safe-area-top">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setMobileSidebarOpen(true)}
+                          className="p-1.5 -ml-1.5 rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <Menu className="h-5 w-5" />
+                        </button>
+                        <h1 className="text-xl font-bold text-foreground">
+                          {activeFilter === 'inbox' && 'Chats'}
+                          {activeFilter === 'needs-help' && 'Necesita ayuda'}
+                          {activeFilter === 'ai-managed' && 'IA gestionada'}
+                          {activeChannel !== 'all' && ` · ${activeChannel === 'whatsapp' ? 'WhatsApp' : activeChannel === 'instagram' ? 'Instagram' : 'Messenger'}`}
+                        </h1>
+                      </div>
+                      <button
+                        onClick={() => setShowNewConversation(true)}
+                        className="p-2 rounded-full bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 transition-colors"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </div>
+
                     {/* Search bar */}
-                    <MessagingSearchBar
-                      value={searchTerm}
-                      onChange={setSearchTerm}
-                      onClear={clearSearch}
-                      isSearching={isSearching}
-                      className="mt-2"
-                    />
+                    <div className="px-4 pt-2 pb-1">
+                      <MessagingSearchBar
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        onClear={clearSearch}
+                        isSearching={isSearching}
+                      />
+                    </div>
 
                     {/* Quick filter chips */}
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2 px-4 py-2">
                       <button
                         onClick={() => setQuickFilter('all')}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                           quickFilter === 'all'
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        }`}
+                        )}
                       >
                         Todos
                       </button>
                       <button
                         onClick={() => setQuickFilter(quickFilter === 'unread' ? 'all' : 'unread')}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                           quickFilter === 'unread'
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        }`}
+                        )}
                       >
                         <Mail className="h-3 w-3" />
                         No leídos
                         {transformedConversations.filter(c => c.unread > 0).length > 0 && (
-                          <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          <span className={cn("ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
                             quickFilter === 'unread'
                               ? 'bg-primary-foreground/20 text-primary-foreground'
                               : 'bg-primary/10 text-primary'
-                          }`}>
+                          )}>
                             {transformedConversations.filter(c => c.unread > 0).length}
                           </span>
                         )}
                       </button>
                       <button
                         onClick={() => setQuickFilter(quickFilter === 'groups' ? 'all' : 'groups')}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                           quickFilter === 'groups'
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        }`}
+                        )}
                       >
                         <Users className="h-3 w-3" />
                         Grupos
                       </button>
                     </div>
-                  </CardHeader>
-                  <CardContent className="p-0 flex-1 overflow-hidden">
-                    {isLoadingConversations && !hasSearchTerm ? (
-                      <div className="flex items-center justify-center h-[400px]">
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : hasSearchTerm ? (
-                      // Show search results
-                      <SearchResultsList
-                        results={searchResults}
-                        selectedId={selectedConversation}
-                        onSelect={setSelectedConversation}
-                        searchTerm={searchTerm}
-                      />
-                    ) : filteredConversations.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                        <MessageSquareMore className="h-12 w-12 mb-4 opacity-50" />
-                        <p>No hay conversaciones</p>
-                        <p className="text-sm text-center px-4">Los mensajes entrantes aparecerán aquí</p>
-                        <Button 
-                          variant="outline" 
-                          className="mt-4"
-                          onClick={() => setShowNewConversation(true)}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Iniciar nuevo chat
-                        </Button>
-                      </div>
-                    ) : (
-                      <ConversationsList 
-                        conversations={filteredConversations}
-                        selectedId={selectedConversation}
-                        onSelect={setSelectedConversation}
-                        onDelete={(id) => {
-                          deleteConversation(id);
-                          if (selectedConversation === id) {
-                            setSelectedConversation(null);
-                          }
-                        }}
-                        isDeleting={isDeletingConversation}
-                        onMarkAsUnread={markAsUnread}
-                        onMarkAsRead={markAsRead}
-                        onTogglePin={(id, isPinned) => togglePin({ conversationId: id, isPinned })}
-                        onMoveToFolder={(id, folderId) => moveToFolder({ conversationId: id, folderId })}
-                        folders={folders}
-                        onCreateFolder={() => setShowCreateFolderFromChat(true)}
-                      />
-                    )}
-                  </CardContent>
+
+                    {/* Conversation list - fills remaining space */}
+                    <div className="flex-1 overflow-hidden">
+                      {isLoadingConversations && !hasSearchTerm ? (
+                        <div className="flex items-center justify-center h-full">
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : hasSearchTerm ? (
+                        <SearchResultsList
+                          results={searchResults}
+                          selectedId={selectedConversation}
+                          onSelect={handleSelectConversation}
+                          searchTerm={searchTerm}
+                        />
+                      ) : filteredConversations.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                          <MessageSquareMore className="h-12 w-12 mb-4 opacity-50" />
+                          <p>No hay conversaciones</p>
+                          <p className="text-sm text-center px-4">Los mensajes entrantes aparecerán aquí</p>
+                          <Button
+                            variant="outline"
+                            className="mt-4"
+                            onClick={() => setShowNewConversation(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Iniciar nuevo chat
+                          </Button>
+                        </div>
+                      ) : (
+                        <ConversationsList
+                          conversations={filteredConversations}
+                          selectedId={selectedConversation}
+                          onSelect={handleSelectConversation}
+                          onDelete={(id) => {
+                            deleteConversation(id);
+                            if (selectedConversation === id) {
+                              setSelectedConversation(null);
+                              setMobileShowThread(false);
+                            }
+                          }}
+                          isDeleting={isDeletingConversation}
+                          onMarkAsUnread={markAsUnread}
+                          onMarkAsRead={markAsRead}
+                          onTogglePin={(id, isPinned) => togglePin({ conversationId: id, isPinned })}
+                          onMoveToFolder={(id, folderId) => moveToFolder({ conversationId: id, folderId })}
+                          folders={folders}
+                          onCreateFolder={() => setShowCreateFolderFromChat(true)}
+                          isMobile
+                        />
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Mobile Conversation Thread - full screen */
+                  <div className="flex flex-col h-full overflow-hidden">
+                    <ConversationThread
+                      conversation={currentConversation}
+                      messages={transformedMessages}
+                      onSendMessage={handleSendMessage}
+                      isSending={isSending}
+                      isLoading={isLoadingMessages}
+                      onToggleAiManaged={(aiManaged) => {
+                        if (selectedConversation) {
+                          toggleAiManaged({ conversationId: selectedConversation, aiManaged });
+                        }
+                      }}
+                      isTogglingAiManaged={isTogglingAiManaged}
+                      onBack={handleMobileBack}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* === DESKTOP LAYOUT === */}
+              <div className="hidden lg:grid grid-cols-3 gap-4 min-h-[500px] h-[calc(100vh-220px)]">
+                {/* Conversations List */}
+                <Card className="col-span-1 overflow-hidden flex flex-col">
+                  {renderConversationsList()}
                 </Card>
 
                 {/* Conversation Thread */}
-                <Card className="lg:col-span-2 overflow-hidden flex flex-col">
-                  <ConversationThread 
+                <Card className="col-span-2 overflow-hidden flex flex-col">
+                  <ConversationThread
                     conversation={currentConversation}
                     messages={transformedMessages}
                     onSendMessage={handleSendMessage}
@@ -489,28 +726,30 @@ const MessagingAIPage = () => {
             </>
           )}
 
-          {activeView === 'config' && <AIConfigPanel />}
-          {activeView === 'catalog' && <ProductCatalogConnection />}
-          
-          {activeView === 'train' && <AITrainingPanel />}
-          
-          {activeView === 'knowledge' && <KnowledgeBaseEditor />}
-          
+          {activeView === 'config' && <div className="p-4 lg:p-0"><AIConfigPanel /></div>}
+          {activeView === 'catalog' && <div className="p-4 lg:p-0"><ProductCatalogConnection /></div>}
+
+          {activeView === 'train' && <div className="p-4 lg:p-0"><AITrainingPanel /></div>}
+
+          {activeView === 'knowledge' && <div className="p-4 lg:p-0"><KnowledgeBaseEditor /></div>}
+
           {activeView === 'campaigns' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Campañas</CardTitle>
-                <CardDescription>Gestiona tus campañas de mensajes</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Próximamente: Herramientas de campañas</p>
-              </CardContent>
-            </Card>
+            <div className="p-4 lg:p-0">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Campañas</CardTitle>
+                  <CardDescription>Gestiona tus campañas de mensajes</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">Próximamente: Herramientas de campañas</p>
+                </CardContent>
+              </Card>
+            </div>
           )}
-          
-          {activeView === 'stats' && <MessagingStats />}
-          
-          {activeView === 'tags' && <TagsSettingsPanel />}
+
+          {activeView === 'stats' && <div className="p-4 lg:p-0"><MessagingStats /></div>}
+
+          {activeView === 'tags' && <div className="p-4 lg:p-0"><TagsSettingsPanel /></div>}
         </div>
       </div>
 

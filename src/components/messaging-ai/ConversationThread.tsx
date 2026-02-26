@@ -977,24 +977,27 @@ export const ConversationThread = ({
 
   return (
     <>
-      <CardHeader className="border-b border-border py-2 px-3 lg:py-4 lg:px-6">
+      <CardHeader className={cn(
+        "border-b border-border",
+        onBack ? "py-2 px-2 lg:py-4 lg:px-6 safe-area-top" : "py-2 px-3 lg:py-4 lg:px-6"
+      )}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 lg:gap-3 min-w-0 flex-1">
             {/* Mobile back button */}
             {onBack && (
               <button
                 onClick={onBack}
-                className="p-1.5 -ml-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0 lg:hidden"
+                className="p-2 rounded-lg hover:bg-muted transition-colors flex-shrink-0 lg:hidden"
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
             )}
-            <div className={cn("w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center flex-shrink-0", channelInfo.avatarBg)}>
-              <ChannelIcon className={cn("h-4 w-4 lg:h-5 lg:w-5", channelInfo.color)} />
+            <div className={cn("w-9 h-9 lg:w-10 lg:h-10 rounded-full flex items-center justify-center flex-shrink-0", channelInfo.avatarBg)}>
+              <ChannelIcon className={cn("h-5 w-5 lg:h-5 lg:w-5", channelInfo.color)} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 lg:gap-2">
-                <CardTitle className="text-sm lg:text-base truncate">{conversation.name}</CardTitle>
+                <CardTitle className="text-[15px] lg:text-base truncate">{conversation.name}</CardTitle>
                 <Badge variant="outline" className={cn("text-[10px] lg:text-xs px-1.5 flex-shrink-0", channelInfo.color)}>
                   {conversation.channel === 'whatsapp' ? 'WA' :
                    conversation.channel === 'instagram' ? 'IG' : 'MSG'}

@@ -53,6 +53,7 @@ interface ConversationsListProps {
   onMoveToFolder?: (id: string, folderId: string | null) => void;
   folders?: MessagingFolder[];
   onCreateFolder?: () => void;
+  isMobile?: boolean;
 }
 
 const channelConfig: Record<ChannelType, { icon: React.ElementType; color: string; bgColor: string }> = {
@@ -61,10 +62,10 @@ const channelConfig: Record<ChannelType, { icon: React.ElementType; color: strin
   messenger: { icon: Facebook, color: 'text-blue-500', bgColor: 'bg-blue-500' },
 };
 
-export const ConversationsList = ({ 
-  conversations, 
-  selectedId, 
-  onSelect, 
+export const ConversationsList = ({
+  conversations,
+  selectedId,
+  onSelect,
   onDelete,
   isDeleting = false,
   onMarkAsUnread,
@@ -73,6 +74,7 @@ export const ConversationsList = ({
   onMoveToFolder,
   folders = [],
   onCreateFolder,
+  isMobile = false,
 }: ConversationsListProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
@@ -118,7 +120,90 @@ export const ConversationsList = ({
     const ChannelIcon = channelInfo.icon;
     const isPinned = conversation.is_pinned || false;
     const isUnread = (conversation.unread || 0) > 0;
-    
+
+    if (isMobile) {
+      // Telegram-style mobile layout: avatar + content + time/badge
+      return (
+        <div
+          key={conversation.id}
+          onClick={() => onSelect(conversation.id)}
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer active:bg-muted/60 transition-colors"
+        >
+          {/* Channel avatar */}
+          <div className={cn(
+            "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+            conversation.channel === 'whatsapp' ? 'bg-emerald-100' :
+            conversation.channel === 'instagram' ? 'bg-pink-100' : 'bg-blue-100'
+          )}>
+            <ChannelIcon className={cn("h-6 w-6", channelInfo.color)} />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className={cn(
+                  "text-[15px] truncate",
+                  isUnread ? "font-semibold text-foreground" : "font-medium text-foreground"
+                )}>
+                  {conversation.name}
+                </span>
+                {isPinned && <Pin className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+              </div>
+              <span className={cn(
+                "text-xs flex-shrink-0",
+                isUnread ? "text-emerald-600 font-medium" : "text-muted-foreground"
+              )}>
+                {formatDistanceToNow(conversation.lastMessageTime, { addSuffix: false, locale: es })}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <p className={cn(
+                "text-sm truncate flex-1",
+                isUnread ? "text-foreground font-medium" : "text-muted-foreground"
+              )}>
+                {conversation.lastMessage || conversation.phone}
+              </p>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* Tags - show first tag as dot on mobile */}
+                {conversation.tags && conversation.tags.length > 0 && (
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: conversation.tags[0].color }}
+                  />
+                )}
+                {isUnread && (
+                  <Badge className={cn("text-white text-[11px] px-1.5 py-0 min-w-[20px] h-5 flex items-center justify-center rounded-full", channelInfo.bgColor)}>
+                    {conversation.unread}
+                  </Badge>
+                )}
+                <ConversationContextMenu
+                  conversationId={conversation.id}
+                  isPinned={isPinned}
+                  isUnread={isUnread}
+                  folderId={conversation.folder_id || null}
+                  folders={folders}
+                  isDeleting={isDeleting && conversationToDelete === conversation.id}
+                  onTogglePin={() => onTogglePin?.(conversation.id, !isPinned)}
+                  onToggleUnread={() => {
+                    if (isUnread) {
+                      onMarkAsRead?.(conversation.id);
+                    } else {
+                      onMarkAsUnread?.(conversation.id);
+                    }
+                  }}
+                  onMoveToFolder={(folderId) => onMoveToFolder?.(conversation.id, folderId)}
+                  onDelete={() => handleDeleteClick(conversation.id)}
+                  onCreateFolder={onCreateFolder}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Desktop layout (unchanged)
     return (
       <div
         key={conversation.id}
@@ -175,7 +260,7 @@ export const ConversationsList = ({
             )}
           </div>
         </div>
-        <p 
+        <p
           className={cn(
             "text-xs mt-1 truncate",
             isUnread ? "text-foreground font-medium" : "text-muted-foreground"
@@ -191,7 +276,7 @@ export const ConversationsList = ({
                 key={tag.id}
                 variant="secondary"
                 className="text-[10px] px-1.5 py-0 h-4"
-                style={{ 
+                style={{
                   backgroundColor: `${tag.color}20`,
                   color: tag.color,
                   borderColor: `${tag.color}40`,
@@ -213,12 +298,12 @@ export const ConversationsList = ({
 
   return (
     <>
-      <ScrollArea className="flex-1 h-[calc(100vh-280px)]">
-        <div className="divide-y divide-border">
+      <ScrollArea className={cn("flex-1", isMobile ? "h-full" : "h-[calc(100vh-280px)]")}>
+        <div className={cn("divide-y divide-border", isMobile && "divide-y-0")}>
           {/* Pinned section */}
           {pinned.length > 0 && (
             <>
-              <div className="px-3 py-1.5 bg-muted/30">
+              <div className={cn("px-3 py-1.5 bg-muted/30", isMobile && "px-4")}>
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                   <Pin className="h-3 w-3" />
                   Fijados
@@ -229,7 +314,7 @@ export const ConversationsList = ({
           )}
           {/* Unpinned section */}
           {pinned.length > 0 && unpinned.length > 0 && (
-            <div className="px-3 py-1.5 bg-muted/30">
+            <div className={cn("px-3 py-1.5 bg-muted/30", isMobile && "px-4")}>
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Todos los mensajes
               </span>

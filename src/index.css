@@ -469,6 +469,23 @@
     }
   }
 
+  /* Safe area for mobile devices (iPhone notch, etc.) */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Mobile messaging sidebar sheet override - dark background */
+  @media (max-width: 1023px) {
+    [data-radix-sheet-content][class*="bg-slate-900"] {
+      background-color: #0f172a !important;
+      color: #ffffff !important;
+    }
+  }
+
   /* Modal overrides for mobile */
   @media (max-width: 768px) {
     [data-radix-dialog-content],
