@@ -496,6 +496,41 @@ serve(async (req) => {
     fullSystemPrompt += rulesContext;
     fullSystemPrompt += productCatalog;
     
+    // Add shipping policy (critical for correct order creation)
+    fullSystemPrompt += `\n\n📦 POLÍTICA DE ENVÍOS DOSMICOS — DEBES calcular y agregar el costo de envío a CADA pedido:
+
+ENVÍO GRATIS desde $150.000 en casi todo Colombia (excepto zonas remotas).
+
+BOGOTÁ:
+- Estándar: $3.000 (1-3 días hábiles) → GRATIS si pedido ≥ $150.000
+- Express: $14.000 (12 horas) → NO aplica envío gratis, NO pago contra entrega, solo pago anticipado
+
+MEDELLÍN Y RESTO DE ANTIOQUIA: $5.000 → GRATIS desde $150.000
+
+ZONA 1 — $5.000 / GRATIS desde $150.000:
+Atlántico, Bolívar, Boyacá, Caldas, Cauca, Cesar, Córdoba, Cundinamarca, Guaviare, Huila, Magdalena, Meta, Nariño, Norte de Santander, Putumayo, Quindío, Risaralda, Santander, Sucre, Tolima, Valle del Cauca
+
+ZONA 2 — $6.000 / GRATIS desde $150.000:
+Arauca, Caquetá, Casanare
+
+ZONA 3 — $10.000 (SIN envío gratis):
+La Guajira
+
+ZONA 4 — $22.000 (SIN envío gratis):
+Amazonas, Vaupés, Vichada
+
+ZONA 5 — $30.000 (SIN envío gratis):
+Guainía, Archipiélago de San Andrés, Providencia y Santa Catalina
+
+REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
+1. SIEMPRE preguntar la ciudad y departamento ANTES de crear el pedido
+2. Calcular el costo de envío según la zona del departamento
+3. Si el total de productos ≥ $150.000 Y la zona aplica envío gratis → shippingCost = 0
+4. SIEMPRE informar al cliente el desglose (productos + envío = total) ANTES de crear el pedido
+5. Express Bogotá: NO acepta pago contra entrega, debe pagar anticipadamente
+6. Pasar el campo shippingCost con el valor correcto al llamar create_order
+7. Si el cliente NO especifica express, asumir envío estándar`;
+
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
     fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
 
@@ -519,9 +554,10 @@ serve(async (req) => {
             neighborhood: { type: "string", description: "Barrio (opcional)" },
             productId: { type: "number", description: "ID del producto en Shopify" },
             quantity: { type: "number", description: "Cantidad (default 1)" },
-            notes: { type: "string", description: "Notas adicionales (opcional)" }
+            notes: { type: "string", description: "Notas adicionales (opcional)" },
+            shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." }
           },
-          required: ["customerName", "email", "phone", "address", "city", "department", "productId"]
+          required: ["customerName", "email", "phone", "address", "city", "department", "productId", "shippingCost"]
         }
       },
       {
@@ -609,7 +645,8 @@ serve(async (req) => {
                 neighborhood: orderArgs.neighborhood || '',
                 productId: orderArgs.productId,
                 quantity: orderArgs.quantity || 1,
-                notes: orderArgs.notes || ''
+                notes: orderArgs.notes || '',
+                shippingCost: orderArgs.shippingCost || 0
               },
               organizationId: organizationId
             }

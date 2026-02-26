@@ -18,6 +18,7 @@ interface OrderData {
   quantity: number;
   variantId?: number;
   notes?: string;
+  shippingCost?: number;
 }
 
 serve(async (req) => {
@@ -184,6 +185,11 @@ serve(async (req) => {
           country: 'CO',
           phone: orderData.phone,
         },
+        shipping_lines: orderData.shippingCost && orderData.shippingCost > 0 ? [{
+          title: "Envío",
+          price: String(orderData.shippingCost),
+          code: "SHIPPING",
+        }] : [],
         note: orderData.notes || 'Pedido creado desde WhatsApp',
         tags: ['whatsapp', 'messaging'],
         financial_status: 'pending',
