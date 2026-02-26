@@ -405,6 +405,37 @@ export const ConversationThread = ({
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // When in slash mode, handle navigation and selection
+    if (isSlashMode && slashFilteredReplies.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashSelectedIndex(prev =>
+          prev < slashFilteredReplies.length - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashSelectedIndex(prev =>
+          prev > 0 ? prev - 1 : slashFilteredReplies.length - 1
+        );
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const selected = slashFilteredReplies[slashSelectedIndex];
+        if (selected) {
+          handleQuickReplySelect(selected);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setInputMessage('');
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -437,6 +468,24 @@ export const ConversationThread = ({
       inputRef.current?.focus();
     }
   };
+
+  // Inline quick replies triggered by "/" prefix
+  const isSlashMode = inputMessage.startsWith('/');
+  const slashSearch = isSlashMode ? inputMessage.slice(1).toLowerCase().trim() : '';
+  const slashFilteredReplies = useMemo(() => {
+    if (!isSlashMode) return [];
+    if (!slashSearch) return quickReplies;
+    return quickReplies.filter(r =>
+      r.title.toLowerCase().includes(slashSearch) ||
+      r.content.toLowerCase().includes(slashSearch)
+    );
+  }, [isSlashMode, slashSearch, quickReplies]);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+
+  // Reset selection when slash filtered results change
+  useEffect(() => {
+    setSlashSelectedIndex(0);
+  }, [slashFilteredReplies.length]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputMessage(e.target.value);
@@ -1277,6 +1326,52 @@ export const ConversationThread = ({
             className="hidden"
             onChange={(e) => handleFileSelect(e, 'document')}
           />
+
+          {/* Inline quick replies panel triggered by "/" */}
+          {isSlashMode && slashFilteredReplies.length > 0 && (
+            <div className="mb-2 bg-popover border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <div className="px-3 py-2 border-b border-border bg-muted/30">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Respuestas rápidas · <span className="text-foreground">{slashFilteredReplies.length}</span>
+                </p>
+              </div>
+              <ScrollArea className="max-h-48">
+                <div className="p-1">
+                  {slashFilteredReplies.map((reply, index) => (
+                    <button
+                      key={reply.id}
+                      onClick={() => handleQuickReplySelect(reply)}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 rounded-md text-sm transition-colors flex items-start gap-2.5",
+                        index === slashSelectedIndex
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-muted active:bg-muted"
+                      )}
+                    >
+                      {reply.imageUrl && (
+                        <img
+                          src={reply.imageUrl}
+                          alt=""
+                          className="h-9 w-9 object-cover rounded flex-shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium block text-[13px]">/{reply.title}</span>
+                        <span className="text-xs text-muted-foreground line-clamp-1">{reply.content}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+          {isSlashMode && slashFilteredReplies.length === 0 && slashSearch && (
+            <div className="mb-2 bg-popover border border-border rounded-lg shadow-lg p-3 animate-in fade-in duration-150">
+              <p className="text-xs text-muted-foreground text-center">
+                No hay respuestas para "/{slashSearch}"
+              </p>
+            </div>
+          )}
 
           {/* Mobile: compact input row like WhatsApp/Telegram */}
           <div className="flex items-end gap-1.5 lg:gap-2">
