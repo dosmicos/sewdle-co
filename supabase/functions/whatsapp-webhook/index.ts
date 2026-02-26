@@ -1156,6 +1156,12 @@ async function handleAIAutoReply(
   sendReplyFn: (text: string) => Promise<boolean>,
   shopifyCredentials?: any
 ): Promise<void> {
+  // Skip AI for Instagram and Messenger until Advanced Access is approved (to avoid wasting tokens)
+  if (channelType === 'instagram' || channelType === 'messenger') {
+    console.log(`🤖 [${channelType}] AI auto-reply DISABLED — Advanced Access not yet approved, skipping to save tokens`);
+    return;
+  }
+
   const aiEnabledOnChannel = channel.ai_enabled !== false;
   const aiEnabledOnConversation = conversation.ai_managed !== false;
 
