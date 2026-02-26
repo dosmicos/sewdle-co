@@ -65,8 +65,18 @@ export const useMessagingMessages = (conversationId: string | null) => {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
         body
       });
-      
-      if (error) throw error;
+
+      if (error) {
+        // supabase.functions.invoke returns generic error message for non-2xx responses
+        // but the actual error details are in the data object
+        if (data?.error) {
+          throw new Error(data.error);
+        }
+        throw error;
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
       return data;
     },
     onSuccess: () => {

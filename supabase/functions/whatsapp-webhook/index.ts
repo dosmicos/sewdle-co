@@ -1052,39 +1052,46 @@ async function fetchUserProfile(userId: string, _igAccountId?: string): Promise<
   const accessToken = Deno.env.get('META_INSTAGRAM_TOKEN') || Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken) return { name: userId };
 
-  // Strategy 1: Use Facebook Page conversations endpoint (works WITHOUT Advanced Access)
-  // Use META_FACEBOOK_PAGE_ID env variable, with fallback to GET /me
-  try {
-    // Step 1: Get Facebook Page ID from env or token
-    let fbPageId = Deno.env.get('META_FACEBOOK_PAGE_ID');
-    if (!fbPageId) {
-      try {
-        const meResp = await fetch(`https://graph.facebook.com/v21.0/me?fields=id&access_token=${accessToken}`);
-        const meData = await meResp.json();
-        if (meData?.id && !meData?.error) fbPageId = meData.id;
-      } catch (_e) { /* ignore */ }
-    }
+  const fbPageId = Deno.env.get('META_FACEBOOK_PAGE_ID');
+  if (!fbPageId) {
+    console.log(`⚠️ [IG-PROFILE] META_FACEBOOK_PAGE_ID not set, cannot resolve username`);
+    return { name: userId };
+  }
 
-    if (fbPageId) {
-      // Step 2: List recent Instagram conversations (without user_id filter to avoid permissions issue)
-      // Fetch enough conversations to find the user (most recent first)
-      const convUrl = `https://graph.facebook.com/v21.0/${fbPageId}/conversations?platform=instagram&fields=participants&limit=20&access_token=${accessToken}`;
-      console.log(`🔍 [IG-PROFILE] Searching username in Page ${fbPageId} conversations for user ${userId}`);
-      const convResponse = await fetch(convUrl);
+  // Strategy 1: Use Facebook Page conversations endpoint (works WITHOUT Advanced Access)
+  // Paginate through conversations to find the user's username
+  try {
+    let nextUrl: string | null = `https://graph.facebook.com/v21.0/${fbPageId}/conversations?platform=instagram&fields=participants&limit=50&access_token=${accessToken}`;
+    let pagesChecked = 0;
+    const maxPages = 3; // Check up to 150 conversations (3 pages x 50)
+
+    console.log(`🔍 [IG-PROFILE] Searching username in Page ${fbPageId} conversations for user ${userId}`);
+
+    while (nextUrl && pagesChecked < maxPages) {
+      const convResponse = await fetch(nextUrl);
       const convData = await convResponse.json();
 
       if (convResponse.ok && convData.data) {
         for (const conv of convData.data) {
           const participants = conv?.participants?.data || [];
           const userParticipant = participants.find((p: any) => String(p.id) === String(userId));
-          if (userParticipant?.username) {
-            console.log(`✅ [IG-PROFILE] Found username via conversations: @${userParticipant.username}`);
-            return { name: userParticipant.username, username: userParticipant.username };
+          if (userParticipant) {
+            const username = userParticipant.username || userParticipant.name;
+            if (username) {
+              console.log(`✅ [IG-PROFILE] Found username via conversations (page ${pagesChecked + 1}): @${username}`);
+              return { name: username, username };
+            }
           }
         }
+        // Get next page URL
+        nextUrl = convData.paging?.next || null;
+      } else {
+        console.log(`⚠️ [IG-PROFILE] Conversations API error:`, JSON.stringify(convData?.error || {}).substring(0, 200));
+        break;
       }
-      console.log(`⚠️ [IG-PROFILE] User ${userId} not found in recent 20 conversations`);
+      pagesChecked++;
     }
+    console.log(`⚠️ [IG-PROFILE] User ${userId} not found in ${pagesChecked * 50} conversations`);
   } catch (err) {
     console.error(`⚠️ [IG-PROFILE] Conversations strategy error:`, err);
   }
