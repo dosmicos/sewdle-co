@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppTemplate } from "../_shared/whatsapp-template.ts";
+import { normalizeColombianPhone } from "../_shared/phone-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -347,8 +349,29 @@ Gracias por tu compra!`;
     }
   }
 
-  // 10. Send WhatsApp message
-  const sendResult = await sendWhatsAppText(phoneNumberId, whatsappToken, phone, message);
+  // 10. Send WhatsApp message (template or fallback to text)
+  const templateName = Deno.env.get('WHATSAPP_COD_TEMPLATE_NAME') || '';
+  let sendResult: { ok: boolean; messageId?: string; error?: any };
+
+  if (templateName) {
+    // Send as WhatsApp Template Message (works outside 24h window)
+    sendResult = await sendWhatsAppTemplate(
+      phoneNumberId, whatsappToken, phone,
+      templateName, 'es',
+      [
+        { type: 'text', text: customerName },
+        { type: 'text', text: orderNum },
+        { type: 'text', text: products },
+        { type: 'text', text: total },
+        { type: 'text', text: address },
+        { type: 'text', text: addr.city || 'N/A' },
+      ]
+    );
+  } else {
+    // Fallback to text (only works within 24h window)
+    console.log('⚠️ No WHATSAPP_COD_TEMPLATE_NAME set, using text fallback');
+    sendResult = await sendWhatsAppText(phoneNumberId, whatsappToken, phone, message);
+  }
 
   if (!sendResult.ok) {
     console.error('WhatsApp send failed:', sendResult.error);
@@ -433,41 +456,7 @@ Gracias por tu compra!`;
 }
 
 
-function normalizeColombianPhone(raw: string): string | null {
-  // Remove all non-digits
-  let phone = (raw || '').replace(/\D/g, '');
-
-  // If starts with + already stripped
-  // Colombian mobiles: 3xx xxx xxxx (10 digits)
-  // With country code: 57 3xx xxx xxxx (12 digits)
-
-  if (phone.startsWith('57') && phone.length === 12) {
-    return phone; // already correct
-  }
-
-  if (phone.startsWith('3') && phone.length === 10) {
-    return '57' + phone;
-  }
-
-  // If it's 11+ digits and starts with 57, keep as-is
-  if (phone.startsWith('57') && phone.length >= 11) {
-    return phone;
-  }
-
-  // For other formats, try adding 57 if it looks like a local number
-  if (phone.length === 10) {
-    return '57' + phone;
-  }
-
-  // Already international (not Colombian maybe)
-  if (phone.length >= 10) {
-    return phone;
-  }
-
-  return null; // invalid
-}
-
-
+// Fallback text sender (used when no template name is configured)
 async function sendWhatsAppText(
   phoneNumberId: string,
   token: string,

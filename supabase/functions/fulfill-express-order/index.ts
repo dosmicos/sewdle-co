@@ -186,11 +186,53 @@ Deno.serve(async (req) => {
       console.log('✅ Estado local actualizado a shipped');
     }
 
+    // Step 5: Auto-send express delivery notification via WhatsApp
+    // The delivery code is extracted from order notes (empacador writes it there)
+    let notificationSent = false;
+    try {
+      const { data: orderNoteData } = await supabase
+        .from('shopify_orders')
+        .select('note')
+        .eq('shopify_order_id', shopify_order_id)
+        .single();
+
+      const note = orderNoteData?.note || '';
+      const codeMatch = note.match(/c[oó]digo[:\s]*\s*([a-zA-Z0-9]+)/i);
+      const deliveryCode = codeMatch?.[1];
+
+      if (deliveryCode) {
+        console.log(`📱 Codigo de entrega encontrado: ${deliveryCode}, enviando notificacion...`);
+        fetch(`${supabaseUrl}/functions/v1/send-express-notification`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'send_single',
+            organizationId: organization_id,
+            shopifyOrderId: shopify_order_id,
+            deliveryCode
+          })
+        }).then(r => r.json()).then(res => {
+          console.log('📱 Express notification result:', res);
+        }).catch(err => {
+          console.error('⚠️ Express notification error:', err);
+        });
+        notificationSent = true;
+      } else {
+        console.log('⚠️ No se encontro codigo de entrega en las notas del pedido');
+      }
+    } catch (notifErr) {
+      console.error('⚠️ Error checking for delivery code:', notifErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Pedido Express procesado exitosamente',
         fulfillment_created: fulfillmentCreated,
+        notification_triggered: notificationSent,
         status: 'shipped'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

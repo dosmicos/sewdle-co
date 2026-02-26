@@ -25,6 +25,8 @@ import { useMessagingSearch } from '@/hooks/useMessagingSearch';
 import { useMessagingFolders } from '@/hooks/useMessagingFolders';
 import { FolderCreateDialog } from '@/components/messaging-ai/FolderCreateDialog';
 import { OrderConfirmationPanel } from '@/components/messaging-ai/OrderConfirmationPanel';
+import { ExpressNotificationPanel } from '@/components/messaging-ai/ExpressNotificationPanel';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -736,7 +738,14 @@ const MessagingAIPage = () => {
 
           {activeView === 'campaigns' && (
             <div className="p-4 lg:p-0">
-              <OrderConfirmationPanel />
+              <Tabs defaultValue="cod" className="w-full">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="cod">Confirmaciones COD</TabsTrigger>
+                  <TabsTrigger value="express">Express</TabsTrigger>
+                </TabsList>
+                <TabsContent value="cod"><OrderConfirmationPanel /></TabsContent>
+                <TabsContent value="express"><ExpressNotificationPanel /></TabsContent>
+              </Tabs>
             </div>
           )}
 
