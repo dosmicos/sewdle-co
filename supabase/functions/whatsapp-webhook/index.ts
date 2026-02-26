@@ -1464,6 +1464,19 @@ serve(async (req) => {
                 }
               }
 
+              // Check for duplicate messages (prevent re-processing on webhook retries)
+              if (messageId) {
+                const { data: existingWaMsg } = await supabase
+                  .from('messaging_messages')
+                  .select('id')
+                  .eq('external_message_id', messageId)
+                  .maybeSingle();
+                if (existingWaMsg) {
+                  console.log(`⚠️ Skipping duplicate WhatsApp message: ${messageId}`);
+                  continue;
+                }
+              }
+
               // Save incoming message with media URL if available
               const { error: msgError } = await supabase
                 .from('messaging_messages')

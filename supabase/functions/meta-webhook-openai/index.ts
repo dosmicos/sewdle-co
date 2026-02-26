@@ -968,8 +968,18 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Process WhatsApp messages
+    // WhatsApp messages are now handled exclusively by whatsapp-webhook function
+    // Skip here to prevent duplicate AI responses
     if (body.object === 'whatsapp_business_account') {
+      console.log('⚠️ [meta-webhook-openai] WhatsApp now handled by whatsapp-webhook. Skipping.');
+      return new Response(JSON.stringify({ success: true, skipped: 'whatsapp handled by whatsapp-webhook' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    // LEGACY: Original WhatsApp processing (disabled)
+    if (false && body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
           if (change.field === 'messages' && change.value?.messages) {
@@ -1240,8 +1250,8 @@ serve(async (req) => {
                 if (aiText) {
                   // Send the text response via WhatsApp
                   const sent = await sendWhatsAppMessage(
-                    senderPhone, 
-                    aiResult.text, 
+                    senderPhone,
+                    aiText,
                     channel.meta_phone_number_id || phoneNumberId
                   );
 

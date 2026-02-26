@@ -27,8 +27,8 @@ async function generateAIResponse(
 ): Promise<string> {
   const MINIMAX_API_KEY = Deno.env.get('MINIMAX_API_KEY');
   const MINIMAX_GROUP_ID = Deno.env.get('MINIMAX_GROUP_ID');
-  const MINIMAX_BASE_URL = Deno.env.get('MINIMAX_BASE_URL') || 'https://api.minimax.chat/v1';
-  const MINIMAX_MODEL = Deno.env.get('MINIMAX_MODEL') || 'abab6.5s-chat';
+  const MINIMAX_BASE_URL = Deno.env.get('MINIMAX_BASE_URL') || 'https://api.minimax.io/v1';
+  const MINIMAX_MODEL = Deno.env.get('MINIMAX_MODEL') || 'MiniMax-M2';
 
   // Maximum characters for the entire system prompt (safe limit for Minimax)
   const MAX_SYSTEM_PROMPT_CHARS = 12000;
@@ -288,7 +288,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       requestBody.group_id = String(MINIMAX_GROUP_ID);
     }
 
-    const response = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+    const response = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MINIMAX_API_KEY}`,
@@ -323,7 +323,7 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
         };
         if (MINIMAX_GROUP_ID) fallbackBody.group_id = String(MINIMAX_GROUP_ID);
 
-        const fallbackResponse = await fetch(`${MINIMAX_BASE_URL}/text/chatcompletion_v2`, {
+        const fallbackResponse = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${MINIMAX_API_KEY}`,
@@ -373,6 +373,9 @@ Si no puedes ayudar con algo, indica que un humano se pondrá en contacto pronto
       console.error('❌ [AI-MINIMAX] No response text found in:', JSON.stringify(data).substring(0, 500));
       return '';
     }
+
+    // Strip <think>...</think> blocks that some models include as internal reasoning
+    aiResponse = aiResponse.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
 
     console.log('✅ [AI-MINIMAX] Response received:', aiResponse.substring(0, 100));
     return aiResponse;
@@ -689,8 +692,18 @@ serve(async (req) => {
         return Object.values(obj);
       };
 
-      // Process WhatsApp messages
+      // WhatsApp messages are now handled exclusively by whatsapp-webhook function
+      // Skip here to prevent duplicate AI responses
       if (body.object === 'whatsapp_business_account') {
+        console.log('⚠️ [meta-webhook] WhatsApp now handled by whatsapp-webhook. Skipping.');
+        return new Response(JSON.stringify({ success: true, skipped: 'whatsapp handled by whatsapp-webhook' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+
+      // LEGACY: Original WhatsApp processing (disabled)
+      if (false && body.object === 'whatsapp_business_account') {
         for (const entry of toArray(body.entry)) {
           for (const change of toArray(entry.changes)) {
             if (change.field === 'messages') {
