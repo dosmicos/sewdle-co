@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Upload, FileText, Image, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Upload, FileText, Image, CheckCircle, AlertCircle, Trash2, Package } from 'lucide-react';
 import { useDeliveryOrders } from '@/hooks/useDeliveryOrders';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useOrderDeliveryStats } from '@/hooks/useOrderDeliveryStats';
@@ -324,12 +324,25 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
                 <h4 className="font-medium mb-3">Items en la orden:</h4>
                 <div className="space-y-3">
                   {selectedOrder.order_items?.map((item: any) => (
-                    <div key={item.id} className="border-l-4 border-blue-500 pl-3">
-                      <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
-                      <div className="text-sm text-gray-600">
-                        <span>Variante: {item.product_variants?.size} - {item.product_variants?.color}</span>
-                        <br />
-                        <span className="font-medium">Cantidad: {item.quantity}</span>
+                    <div key={item.id} className="border-l-4 border-blue-500 pl-3 flex items-center gap-3">
+                      {item.product_variants?.products?.image_url ? (
+                        <img
+                          src={item.product_variants.products.image_url}
+                          alt={item.product_variants.products.name || ''}
+                          className="w-10 h-10 rounded object-cover flex-shrink-0 border border-border"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                          <Package className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div>
+                        <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
+                        <div className="text-sm text-gray-600">
+                          <span>Variante: {item.product_variants?.size} - {item.product_variants?.color}</span>
+                          <br />
+                          <span className="font-medium">Cantidad: {item.quantity}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -349,14 +362,27 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
                   const pendingQuantity = getPendingQuantityForVariant(item);
                   return (
                     <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h4 className="font-semibold">{item.product_variants?.products?.name}</h4>
-                          <p className="text-sm text-gray-600">
-                            {item.product_variants?.size} - {item.product_variants?.color}
-                          </p>
+                      <div className="flex items-center justify-between mb-4 gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {item.product_variants?.products?.image_url ? (
+                            <img
+                              src={item.product_variants.products.image_url}
+                              alt={item.product_variants.products.name || ''}
+                              className="w-12 h-12 rounded object-cover flex-shrink-0 border border-border"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                              <Package className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div>
+                            <h4 className="font-semibold">{item.product_variants?.products?.name}</h4>
+                            <p className="text-sm text-gray-600">
+                              {item.product_variants?.size} - {item.product_variants?.color}
+                            </p>
+                          </div>
                         </div>
-                        <span className="text-sm font-medium bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                        <span className="text-sm font-medium bg-orange-100 text-orange-800 px-2 py-1 rounded flex-shrink-0">
                           Pendientes: {pendingQuantity}
                         </span>
                       </div>
@@ -492,14 +518,27 @@ const DeliveryForm: React.FC<DeliveryFormProps> = ({ onClose, onDeliveryCreated,
                     
                     return (
                       <div key={item.id} className="border-l-4 border-blue-500 pl-3">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
-                            <p className="text-sm text-gray-600">
-                              {item.product_variants?.size} - {item.product_variants?.color}
-                            </p>
+                        <div className="flex justify-between items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {item.product_variants?.products?.image_url ? (
+                              <img
+                                src={item.product_variants.products.image_url}
+                                alt={item.product_variants.products.name || ''}
+                                className="w-10 h-10 rounded object-cover flex-shrink-0 border border-border"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                                <Package className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div>
+                              <h5 className="font-medium">{item.product_variants?.products?.name}</h5>
+                              <p className="text-sm text-gray-600">
+                                {item.product_variants?.size} - {item.product_variants?.color}
+                              </p>
+                            </div>
                           </div>
-                          <span className="font-semibold text-blue-700">{quantity} unidades</span>
+                          <span className="font-semibold text-blue-700 flex-shrink-0">{quantity} unidades</span>
                         </div>
                       </div>
                     );

@@ -268,8 +268,19 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                   <CardContent>
                     <div className="space-y-3">
                       {order.order_items.map((item: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
+                        <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                          {item.product_variants?.products?.image_url ? (
+                            <img
+                              src={item.product_variants.products.image_url}
+                              alt={item.product_variants.products.name || ''}
+                              className="w-12 h-12 rounded object-cover flex-shrink-0 border border-border"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                              <Package className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
                             <h4 className="font-medium text-black">
                               {item.product_variants?.products?.name || 'Producto'}
                             </h4>
@@ -280,7 +291,7 @@ const OrderDetailsModal = ({ order, open, onClose, onEdit, onDelete }: OrderDeta
                               SKU: {item.product_variants?.sku}
                             </p>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right flex-shrink-0">
                             <p className="font-medium text-lg text-blue-600">Cantidad: {item.quantity}</p>
                           </div>
                         </div>
