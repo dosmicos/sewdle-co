@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
+import { Plus, Search, RefreshCw, Package, Settings, Wifi, WifiOff, Clock, ToggleLeft, ToggleRight, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import ProductForm from '@/components/ProductForm';
 import ProductsList from '@/components/ProductsList';
 import ShopifySkuAssignment from '@/components/ShopifySkuAssignment';
 import { VariantConsolidator } from '@/components/VariantConsolidator';
 import { VariantSyncManager } from '@/components/VariantSyncManager';
+import { InventoryStatsPanel } from '@/components/InventoryStatsPanel';
 
 import { useProducts } from '@/hooks/useProducts';
 import { useToast } from '@/hooks/use-toast';
@@ -258,10 +259,14 @@ const ProductsPage = () => {
 
         {/* Sistema de pestañas */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="catalog" className="flex items-center space-x-2">
               <Package className="w-4 h-4" />
               <span>Catálogo</span>
+            </TabsTrigger>
+            <TabsTrigger value="estadisticas" className="flex items-center space-x-2">
+              <BarChart3 className="w-4 h-4" />
+              <span>Estadísticas</span>
             </TabsTrigger>
             <TabsTrigger value="shopify-sync" className="flex items-center space-x-2">
               <Settings className="w-4 h-4" />
@@ -314,6 +319,10 @@ const ProductsPage = () => {
               showDiagnosticTools={false}
               showInactive={showInactive}
             />
+          </TabsContent>
+
+          <TabsContent value="estadisticas" className="space-y-6 mt-6">
+            <InventoryStatsPanel />
           </TabsContent>
 
           <TabsContent value="shopify-sync" className="space-y-6 mt-6">
