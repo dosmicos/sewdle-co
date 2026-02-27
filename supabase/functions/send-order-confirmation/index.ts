@@ -240,29 +240,34 @@ async function sendConfirmation(
     .join(' ') || 'Cliente';
 
   // 5. Build product list
-  const products = (lineItems || [])
+  const productsList = (lineItems || [])
     .map((item: any) => {
       const variant = item.variant_title ? ` (${item.variant_title})` : '';
       return `- ${item.title}${variant} x${item.quantity}`;
-    })
-    .join('\n');
+    });
+  // For template params: Meta rejects newlines/tabs in template parameters (error #132018)
+  // Use ", " separator for template and "\n" for text fallback
+  const productsForTemplate = productsList.join(', ');
+  const productsForText = productsList.join('\n');
 
-  // 6. Build address
+  // 6. Build address (also sanitize for template: no newlines)
   const addr = order.shipping_address || {};
   const address = [addr.address1, addr.address2, addr.city, addr.province]
     .filter(Boolean)
-    .join(', ');
+    .join(', ')
+    .replace(/[\n\t\r]/g, ' ')
+    .replace(/\s{4,}/g, '   ');
 
   // 7. Format total
   const total = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
     .format(order.total_price);
 
-  // 8. Build confirmation message
+  // 8. Build confirmation message (text fallback uses newlines, template uses comma-separated)
   const orderNum = String(order.order_number).replace('#', '');
   const message = `Hola ${customerName}! Te escribimos de *Dosmicos.co* para confirmar tu pedido contra entrega.
 
 *Pedido #${orderNum}*
-${products}
+${productsForText}
 
 *Total:* ${total}
 *Direccion de envio:* ${address}
@@ -369,10 +374,10 @@ Gracias por tu compra!`;
       [
         { type: 'text', text: customerName },
         { type: 'text', text: orderNum },
-        { type: 'text', text: products },
+        { type: 'text', text: productsForTemplate },
         { type: 'text', text: total },
         { type: 'text', text: address },
-        { type: 'text', text: addr.city || 'N/A' },
+        { type: 'text', text: (addr.city || 'N/A').replace(/[\n\t\r]/g, ' ') },
       ]
     );
   } else {
