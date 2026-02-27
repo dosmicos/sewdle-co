@@ -299,41 +299,14 @@ const MessagingAIPage = () => {
       const result = await createConversation({ phone, name, message, useTemplate });
       setShowNewConversation(false);
       if (result?.conversationId) {
-        // Pre-poblar el cache de mensajes con el mensaje enviado
-        // ANTES de seleccionar la conversación, para que useQuery lo use como initialData
-        const optimisticMessage = {
-          id: `temp-${Date.now()}`,
-          conversation_id: result.conversationId,
-          external_message_id: result.message_id || null,
-          channel_type: 'whatsapp',
-          direction: 'outbound',
-          sender_type: 'agent',
-          content: message,
-          message_type: useTemplate ? 'template' : 'text',
-          media_url: null,
-          media_mime_type: null,
-          reply_to_message_id: null,
-          metadata: useTemplate ? { template_name: 'saludo_inicial', template_language: 'es_CO' } : null,
-          sent_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-        };
-
-        // Insertar en cache Y configurar como no-stale para que useQuery no lo sobreescriba inmediatamente
-        queryClient.setQueryData(
-          ['messaging-messages', result.conversationId],
-          [optimisticMessage]
-        );
-
-        // Seleccionar la conversación (esto activa useQuery, pero el cache ya tiene datos)
         setSelectedConversation(result.conversationId);
-
-        // Refetch real después de 2s para obtener el registro real de la DB
+        // Small delay to let the DB insert complete, then fetch messages
         setTimeout(() => {
           queryClient.invalidateQueries({
             queryKey: ['messaging-messages', result.conversationId],
             refetchType: 'all'
           });
-        }, 2000);
+        }, 1000);
       }
     } catch (error) {
       // Error is handled in the hook

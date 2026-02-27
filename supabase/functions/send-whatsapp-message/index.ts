@@ -440,7 +440,7 @@ serve(async (req) => {
 
       // Guardar en DB
       if (conversationId) {
-        await supabase.from('messaging_messages').insert({
+        const { error: templateMsgError } = await supabase.from('messaging_messages').insert({
           conversation_id: conversationId,
           external_message_id: templateResult.messageId,
           channel_type: channelType,
@@ -451,6 +451,10 @@ serve(async (req) => {
           metadata: { template_name, template_language: lang },
           sent_at: new Date().toISOString()
         });
+
+        if (templateMsgError) {
+          console.error('Error saving template message to DB:', templateMsgError);
+        }
 
         await supabase.from('messaging_conversations').update({
           last_message_preview: templateText.substring(0, 100),
