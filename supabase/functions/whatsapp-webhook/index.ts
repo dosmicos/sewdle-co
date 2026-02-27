@@ -1536,7 +1536,8 @@ serve(async (req) => {
 
                   try {
                     // 1. Add "Confirmado" tag to Shopify order
-                    await supabase.functions.invoke('update-shopify-order', {
+                    let shopifyTagSuccess = false;
+                    const tagResult = await supabase.functions.invoke('update-shopify-order', {
                       body: {
                         action: 'add_tags',
                         orderId: pendingConfirmation.shopify_order_id,
@@ -1544,20 +1545,46 @@ serve(async (req) => {
                         organizationId: channel.organization_id
                       }
                     });
-                    console.log('🏷️ Added "Confirmado" tag to Shopify');
 
-                    // 2. Update local shopify_orders tags
-                    const { data: localOrder } = await supabase
-                      .from('shopify_orders')
-                      .select('tags')
-                      .eq('shopify_order_id', pendingConfirmation.shopify_order_id)
-                      .single();
-                    if (localOrder) {
-                      const currentTags = (localOrder.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-                      if (!currentTags.includes('Confirmado')) {
-                        currentTags.push('Confirmado');
-                        await supabase.from('shopify_orders').update({ tags: currentTags.join(', ') }).eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+                    if (tagResult.error) {
+                      console.error('⚠️ First attempt to add Confirmado tag failed:', tagResult.error);
+                      // Retry once after 2 seconds
+                      await new Promise(r => setTimeout(r, 2000));
+                      const retryResult = await supabase.functions.invoke('update-shopify-order', {
+                        body: {
+                          action: 'add_tags',
+                          orderId: pendingConfirmation.shopify_order_id,
+                          data: { tags: ['Confirmado'] },
+                          organizationId: channel.organization_id
+                        }
+                      });
+                      if (retryResult.error) {
+                        console.error('❌ Retry also failed to add Confirmado tag to Shopify:', retryResult.error);
+                      } else {
+                        shopifyTagSuccess = true;
+                        console.log('🏷️ Added "Confirmado" tag to Shopify (on retry)');
                       }
+                    } else {
+                      shopifyTagSuccess = true;
+                      console.log('🏷️ Added "Confirmado" tag to Shopify');
+                    }
+
+                    // 2. Update local shopify_orders tags ONLY if Shopify confirmed
+                    if (shopifyTagSuccess) {
+                      const { data: localOrder } = await supabase
+                        .from('shopify_orders')
+                        .select('tags')
+                        .eq('shopify_order_id', pendingConfirmation.shopify_order_id)
+                        .single();
+                      if (localOrder) {
+                        const currentTags = (localOrder.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+                        if (!currentTags.includes('Confirmado')) {
+                          currentTags.push('Confirmado');
+                          await supabase.from('shopify_orders').update({ tags: currentTags.join(', ') }).eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+                        }
+                      }
+                    } else {
+                      console.error(`❌ Shopify tag NOT applied for order ${pendingConfirmation.order_number} - local DB NOT updated to avoid inconsistency`);
                     }
 
                     // 3. Update order_confirmations
