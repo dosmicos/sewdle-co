@@ -1330,6 +1330,19 @@ serve(async (req) => {
                 mediaId = message.sticker?.id || null;
                 content = '[sticker]';
                 messageType = 'sticker';
+              } else if (message.type === 'button') {
+                content = message.button?.text || '[Botón]';
+                messageType = 'button';
+              } else if (message.type === 'interactive') {
+                const interactive = message.interactive;
+                if (interactive?.type === 'button_reply') {
+                  content = interactive.button_reply?.title || '[Respuesta de botón]';
+                } else if (interactive?.type === 'list_reply') {
+                  content = interactive.list_reply?.title || '[Selección de lista]';
+                } else {
+                  content = '[Interactivo]';
+                }
+                messageType = 'interactive';
               } else {
                 content = `[${message.type} recibido]`;
                 messageType = message.type;
@@ -1508,7 +1521,7 @@ serve(async (req) => {
 
               // ========== COD ORDER CONFIRMATION DETECTION ==========
               const pendingConfirmation = conversation?.metadata?.pending_order_confirmation;
-              if (pendingConfirmation?.status === 'pending' && content && messageType === 'text') {
+              if (pendingConfirmation?.status === 'pending' && content && (messageType === 'text' || messageType === 'button' || messageType === 'interactive')) {
                 console.log(`📋 Pending order confirmation detected for order ${pendingConfirmation.order_number}`);
 
                 // Normalize response: lowercase, remove accents, trim
@@ -1526,8 +1539,8 @@ serve(async (req) => {
                     await supabase.functions.invoke('update-shopify-order', {
                       body: {
                         action: 'add_tags',
-                        shopifyOrderId: pendingConfirmation.shopify_order_id,
-                        tags: ['Confirmado'],
+                        orderId: pendingConfirmation.shopify_order_id,
+                        data: { tags: ['Confirmado'] },
                         organizationId: channel.organization_id
                       }
                     });
@@ -1569,7 +1582,7 @@ serve(async (req) => {
                     }
 
                     // 6. Send confirmation response
-                    const confirmMsg = `Gracias por confirmar tu pedido #${String(pendingConfirmation.order_number).replace('#', '')}! 🎉 Lo estamos preparando para envio.`;
+                    const confirmMsg = `Gracias por tu compra, tu pedido será despachado en las próximas horas`;
                     const phoneId = channel.meta_phone_number_id || Deno.env.get('META_PHONE_NUMBER_ID');
                     const waToken = Deno.env.get('META_WHATSAPP_TOKEN');
                     if (phoneId && waToken) {
@@ -1746,7 +1759,45 @@ serve(async (req) => {
                       .eq('id', conversation.id);
 
                     console.log('AI response sent and saved');
-                    
+
+                    // ========== AI ESCALATION DETECTION ==========
+                    const escalationPhrases = [
+                      'conecto con el equipo', 'conecto con un asesor',
+                      'no tengo esa información', 'no cuento con esa información',
+                      'no puedo ayudarte con eso', 'contactar a nuestro equipo',
+                      'comunícate con nosotros', 'escribenos al'
+                    ];
+                    const aiTextLower = aiText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const isEscalation = escalationPhrases.some(phrase => {
+                      const normalizedPhrase = phrase.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                      return aiTextLower.includes(normalizedPhrase);
+                    });
+
+                    if (isEscalation) {
+                      console.log('🔴 AI escalation detected, assigning "Requiere atencion" tag');
+                      try {
+                        // 1. Assign "Requiere atencion" tag
+                        const { data: attentionTag } = await supabase
+                          .from('messaging_conversation_tags')
+                          .select('id')
+                          .eq('organization_id', channel.organization_id)
+                          .eq('name', 'Requiere atencion')
+                          .maybeSingle();
+                        if (attentionTag) {
+                          await supabase.from('messaging_conversation_tag_assignments')
+                            .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
+                        }
+                        // 2. Disable AI on this conversation
+                        await supabase.from('messaging_conversations')
+                          .update({ ai_managed: false })
+                          .eq('id', conversation.id);
+                        console.log('🔴 Conversation tagged and AI disabled for human handoff');
+                      } catch (escErr) {
+                        console.error('❌ Error handling AI escalation:', escErr);
+                      }
+                    }
+                    // ========== END AI ESCALATION DETECTION ==========
+
                     // Send ALL product images (up to 10)
                     if (aiProductImages && aiProductImages.length > 0) {
                       console.log(`Sending ${aiProductImages.length} product images...`);

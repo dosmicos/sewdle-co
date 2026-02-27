@@ -71,6 +71,8 @@ interface Message {
   mediaMimeType?: string;
   replyToMessageId?: string;
   replyToContent?: string;
+  replyToMediaUrl?: string;
+  replyToMediaType?: string;
   metadata?: MessageMetadata;
 }
 
@@ -1157,8 +1159,9 @@ export const ConversationThread = ({
                     </div>
                   )}
                   <div
+                    id={message.id ? `msg-${message.id}` : undefined}
                     className={cn(
-                      "flex animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                      "flex animate-in fade-in-0 slide-in-from-bottom-2 duration-300 transition-all",
                       message.role === 'user' ? 'justify-start' : 'justify-end'
                     )}
                     style={{ animationDelay: `${Math.min(index * 20, 100)}ms` }}
@@ -1174,14 +1177,35 @@ export const ConversationThread = ({
                     )}
                   >
                     {/* Reply preview if this message is replying to another */}
-                    {message.replyToContent && (
-                      <div className={cn(
-                        "text-xs mb-2 p-2 rounded border-l-2",
-                        message.role === 'user' 
-                          ? 'bg-background/50 border-muted-foreground/30' 
-                          : 'bg-white/10 border-white/30'
-                      )}>
-                        <p className="opacity-70 line-clamp-2">{message.replyToContent}</p>
+                    {(message.replyToContent || message.replyToMediaUrl) && (
+                      <div
+                        className={cn(
+                          "text-xs mb-2 p-2 rounded border-l-2 cursor-pointer hover:opacity-80 transition-opacity",
+                          message.role === 'user'
+                            ? 'bg-background/50 border-muted-foreground/30'
+                            : 'bg-white/10 border-white/30'
+                        )}
+                        onClick={() => {
+                          if (message.replyToMessageId) {
+                            const el = document.getElementById(`msg-${message.replyToMessageId}`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              el.classList.add('ring-2', 'ring-emerald-400', 'ring-opacity-75');
+                              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-400', 'ring-opacity-75'), 2000);
+                            }
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          {message.replyToMediaUrl && message.replyToMediaType === 'image' && (
+                            <img src={message.replyToMediaUrl} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
+                          )}
+                          <p className="opacity-70 line-clamp-2">
+                            {message.replyToContent && !/^\[(imagen|image)\]$/i.test(message.replyToContent)
+                              ? message.replyToContent
+                              : message.replyToMediaUrl ? '📷 Imagen' : message.replyToContent}
+                          </p>
+                        </div>
                       </div>
                     )}
                     

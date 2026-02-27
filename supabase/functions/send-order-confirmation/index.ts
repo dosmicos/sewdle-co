@@ -357,7 +357,7 @@ Gracias por tu compra!`;
     // Send as WhatsApp Template Message (works outside 24h window)
     sendResult = await sendWhatsAppTemplate(
       phoneNumberId, whatsappToken, phone,
-      templateName, 'es_MX',
+      templateName, 'es_CO',
       [
         { type: 'text', text: customerName },
         { type: 'text', text: orderNum },

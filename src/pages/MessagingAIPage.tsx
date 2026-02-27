@@ -169,9 +169,13 @@ const MessagingAIPage = () => {
     return messages.map(msg => {
       // Find replied message content if exists
       let replyToContent: string | undefined;
+      let replyToMediaUrl: string | undefined;
+      let replyToMediaType: string | undefined;
       if (msg.reply_to_message_id) {
         const repliedMsg = messages.find(m => m.id === msg.reply_to_message_id);
         replyToContent = repliedMsg?.content || undefined;
+        replyToMediaUrl = repliedMsg?.media_url || undefined;
+        replyToMediaType = repliedMsg?.message_type || undefined;
       }
       
       // Map message_type to mediaType
@@ -228,6 +232,8 @@ const MessagingAIPage = () => {
         mediaMimeType: msg.media_mime_type || undefined,
         replyToMessageId: msg.reply_to_message_id || undefined,
         replyToContent,
+        replyToMediaUrl,
+        replyToMediaType,
         metadata,
       };
     });
