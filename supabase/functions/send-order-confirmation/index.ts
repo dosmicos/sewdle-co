@@ -308,7 +308,7 @@ Gracias por tu compra!`;
       organization_id: organizationId,
       external_user_id: phone,
       channel_type: 'whatsapp',
-      contact_name: customerName,
+      user_name: customerName,
       ai_managed: false,
       status: 'active',
       metadata: {
@@ -357,7 +357,7 @@ Gracias por tu compra!`;
     // Send as WhatsApp Template Message (works outside 24h window)
     sendResult = await sendWhatsAppTemplate(
       phoneNumberId, whatsappToken, phone,
-      templateName, 'es',
+      templateName, 'es_MX',
       [
         { type: 'text', text: customerName },
         { type: 'text', text: orderNum },
