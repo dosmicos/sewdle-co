@@ -11,11 +11,19 @@ export interface InventorySummary {
   estimatedInventoryValue: number;
 }
 
+export interface CategoryProduct {
+  name: string;
+  sku: string;
+  totalUnits: number;
+  inventoryValue: number;
+}
+
 export interface CategoryInventory {
   category: string;
   productCount: number;
   totalUnits: number;
   inventoryValue: number;
+  products: CategoryProduct[];
 }
 
 export interface CategorySales {
@@ -149,22 +157,48 @@ function computeSummary(products: ProductWithVariants[]): InventorySummary {
 }
 
 function computeCategoryInventory(products: ProductWithVariants[]): CategoryInventory[] {
-  const categoryMap = new Map<string, { productIds: Set<string>; totalUnits: number; inventoryValue: number }>();
+  const categoryMap = new Map<string, {
+    productIds: Set<string>;
+    totalUnits: number;
+    inventoryValue: number;
+    productDetails: Map<string, CategoryProduct>;
+  }>();
 
   for (const product of products) {
     const cat = extractCategory(product);
     if (!categoryMap.has(cat)) {
-      categoryMap.set(cat, { productIds: new Set(), totalUnits: 0, inventoryValue: 0 });
+      categoryMap.set(cat, { productIds: new Set(), totalUnits: 0, inventoryValue: 0, productDetails: new Map() });
     }
     const entry = categoryMap.get(cat)!;
     entry.productIds.add(product.id);
 
+    // Acumular stock del producto
+    let productUnits = 0;
+    let productValue = 0;
+
     for (const v of product.product_variants || []) {
       const qty = v.stock_quantity || 0;
       entry.totalUnits += qty;
+      productUnits += qty;
       if (qty > 0) {
-        entry.inventoryValue += qty * (product.base_price || 0);
+        const val = qty * (product.base_price || 0);
+        entry.inventoryValue += val;
+        productValue += val;
       }
+    }
+
+    // Agregar o actualizar detalle del producto
+    if (!entry.productDetails.has(product.id)) {
+      entry.productDetails.set(product.id, {
+        name: product.name,
+        sku: product.sku,
+        totalUnits: productUnits,
+        inventoryValue: productValue,
+      });
+    } else {
+      const existing = entry.productDetails.get(product.id)!;
+      existing.totalUnits += productUnits;
+      existing.inventoryValue += productValue;
     }
   }
 
@@ -174,6 +208,7 @@ function computeCategoryInventory(products: ProductWithVariants[]): CategoryInve
       productCount: data.productIds.size,
       totalUnits: data.totalUnits,
       inventoryValue: data.inventoryValue,
+      products: Array.from(data.productDetails.values()).sort((a, b) => b.totalUnits - a.totalUnits),
     }))
     .sort((a, b) => b.totalUnits - a.totalUnits);
 }

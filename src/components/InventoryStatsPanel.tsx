@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -22,6 +22,8 @@ import {
   Ruler,
   RefreshCw,
   PackageX,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { useInventoryStats, formatCurrency } from '@/hooks/useInventoryStats';
 
@@ -29,6 +31,19 @@ import { useInventoryStats, formatCurrency } from '@/hooks/useInventoryStats';
 
 export const InventoryStatsPanel: React.FC = () => {
   const { data, loading, error, refetch } = useInventoryStats();
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
 
   if (loading) {
     return (
@@ -174,14 +189,42 @@ export const InventoryStatsPanel: React.FC = () => {
                   </TableRow>
                 ) : (
                   <>
-                    {categoryInventory.map((cat, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{cat.category}</TableCell>
-                        <TableCell className="text-right">{cat.productCount}</TableCell>
-                        <TableCell className="text-right font-medium">{cat.totalUnits.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(cat.inventoryValue)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {categoryInventory.map((cat, idx) => {
+                      const isExpanded = expandedCategories.has(cat.category);
+                      return (
+                        <React.Fragment key={idx}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => toggleCategory(cat.category)}
+                          >
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                )}
+                                {cat.category}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">{cat.productCount}</TableCell>
+                            <TableCell className="text-right font-medium">{cat.totalUnits.toLocaleString()}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(cat.inventoryValue)}</TableCell>
+                          </TableRow>
+                          {isExpanded && cat.products.map((prod, pIdx) => (
+                            <TableRow key={`${idx}-${pIdx}`} className="bg-gray-50/50">
+                              <TableCell className="pl-10">
+                                <div className="text-sm">{prod.name}</div>
+                                <div className="text-xs text-muted-foreground font-mono">{prod.sku}</div>
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">—</TableCell>
+                              <TableCell className="text-right text-sm">{prod.totalUnits.toLocaleString()}</TableCell>
+                              <TableCell className="text-right text-sm">{formatCurrency(prod.inventoryValue)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                     <TableRow className="bg-gray-50 font-bold border-t-2">
                       <TableCell>Total</TableCell>
                       <TableCell className="text-right">{catTotals.products}</TableCell>
