@@ -282,13 +282,16 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
-      // Invalidar mensajes de la nueva conversación para que se carguen
       if (data?.conversationId) {
-        queryClient.invalidateQueries({ queryKey: ['messaging-messages', data.conversationId] });
-        // Refetch con delay para asegurar que la DB ya tiene el mensaje
+        // Remover cache vacío y forzar refetch de mensajes
+        queryClient.removeQueries({ queryKey: ['messaging-messages', data.conversationId] });
+        // Refetches adicionales para asegurar que el mensaje aparezca
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['messaging-messages', data.conversationId] });
-        }, 1000);
+          queryClient.invalidateQueries({ queryKey: ['messaging-messages', data.conversationId], refetchType: 'all' });
+        }, 800);
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['messaging-messages', data.conversationId], refetchType: 'all' });
+        }, 2000);
       }
       toast.success('Conversación iniciada correctamente');
       return data.conversationId;
