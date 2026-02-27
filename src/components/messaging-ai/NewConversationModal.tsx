@@ -56,7 +56,7 @@ const COUNTRIES = [
 
 const DEFAULT_COUNTRY = COUNTRIES[0]; // Colombia
 
-const TEMPLATE_TEXT = 'Hola! Nos comunicamos de parte de Dosmicos. ¿En qué te podemos ayudar?';
+const TEMPLATE_TEXT = 'Hola! Nos comunicamos de parte de Dosmicos.';
 
 interface NewConversationModalProps {
   open: boolean;

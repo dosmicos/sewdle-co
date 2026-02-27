@@ -436,7 +436,7 @@ serve(async (req) => {
       }
 
       result = { messages: [{ id: templateResult.messageId }] };
-      const templateText = message || 'Hola! Nos comunicamos de parte de Dosmicos. ¿En qué te podemos ayudar?';
+      const templateText = message || 'Hola! Nos comunicamos de parte de Dosmicos.';
 
       // Guardar en DB
       if (conversationId) {
