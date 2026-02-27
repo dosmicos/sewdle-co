@@ -292,9 +292,9 @@ const MessagingAIPage = () => {
     sendMessage({ message, mediaFile, mediaType, replyToMessageId });
   };
 
-  const handleCreateConversation = async (phone: string, name: string, message: string) => {
+  const handleCreateConversation = async (phone: string, name: string, message: string, useTemplate?: boolean) => {
     try {
-      const result = await createConversation({ phone, name, message });
+      const result = await createConversation({ phone, name, message, useTemplate });
       setShowNewConversation(false);
       if (result?.conversationId) {
         setSelectedConversation(result.conversationId);

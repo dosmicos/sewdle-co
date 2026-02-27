@@ -309,7 +309,7 @@ async function sendExpressNotification(
   }
 
   // 8. Build human-readable message for DB storage
-  const readableMessage = `Hola, buen dia! Te escribimos desde dosmicos.co para informarte que tu pedido ya se encuentra en camino. Por favor, comparte el siguiente codigo con el/la repartidor/a al momento de la entrega: ${deliveryCode}. Gracias por confiar en nosotros!`;
+  const readableMessage = `Hola! Te escribimos desde dosmicos.co para informarte que tu pedido ya se encuentra en camino 🚀\n\nPor favor, comparte el siguiente número de verificación con el/la repartidor/a al momento de la entrega: ${deliveryCode}\n\nGracias por confiar en nosotros!`;
 
   // 9. Save message to messaging_messages
   let messageId: string | null = null;

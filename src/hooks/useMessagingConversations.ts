@@ -196,7 +196,7 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
 
   // Create new conversation and send first message
   const createConversation = useMutation({
-    mutationFn: async ({ phone, name, message }: { phone: string; name: string; message: string }) => {
+    mutationFn: async ({ phone, name, message, useTemplate }: { phone: string; name: string; message: string; useTemplate?: boolean }) => {
       // Clean phone number
       const cleanPhone = phone.replace(/[\s+]/g, '');
       
@@ -249,9 +249,17 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
       }
 
        // Send the message via edge function
-       const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
-         body: { conversation_id: conversationId, message }
-       });
+       const body: Record<string, any> = { conversation_id: conversationId };
+
+       if (useTemplate) {
+         body.template_name = 'saludo_inicial';
+         body.template_language = 'es_CO';
+         body.message = message; // texto para guardar en DB
+       } else {
+         body.message = message;
+       }
+
+       const { data, error } = await supabase.functions.invoke('send-whatsapp-message', { body });
 
        if (error) {
          const anyError: any = error;

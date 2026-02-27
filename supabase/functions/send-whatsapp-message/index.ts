@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppTemplate } from "../_shared/whatsapp-template.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -173,21 +174,23 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      conversation_id, 
-      message, 
+    const {
+      conversation_id,
+      message,
       phone_number,
       media_base64,
       media_type,
       media_mime_type,
       media_filename,
-      reply_to_message_id  // UUID interno del mensaje al que se responde
+      reply_to_message_id,  // UUID interno del mensaje al que se responde
+      template_name,        // Nombre de plantilla de WhatsApp (opcional)
+      template_language     // Código de idioma de la plantilla (opcional, default: es_CO)
     } = await req.json();
     
-    // Either message or media is required
-    if (!message && !media_base64) {
+    // Either message, media, or template is required
+    if (!message && !media_base64 && !template_name) {
       return new Response(
-        JSON.stringify({ error: 'Message or media is required' }),
+        JSON.stringify({ error: 'Message, media, or template_name is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -411,6 +414,55 @@ serve(async (req) => {
     let result: any;
     let savedMediaUrl: string | null = null;
     let messageTypeForDb = 'text';
+
+    // ========== WHATSAPP TEMPLATE SEND ==========
+    if (template_name) {
+      const lang = template_language || 'es_CO';
+      console.log(`📤 Sending template "${template_name}" (${lang}) to ${cleanPhone}`);
+
+      const templateResult = await sendWhatsAppTemplate(
+        phoneNumberId, whatsappToken, cleanPhone,
+        template_name, lang,
+        [] // sin parámetros de body
+      );
+
+      if (!templateResult.ok) {
+        console.error('Template send error:', templateResult.error);
+        const errDetail = templateResult.error?.error?.message || 'Failed to send template';
+        return new Response(
+          JSON.stringify({ error: errDetail, details: templateResult.error }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      result = { messages: [{ id: templateResult.messageId }] };
+      const templateText = message || 'Hola! Nos comunicamos de parte de Dosmicos. ¿En qué te podemos ayudar?';
+
+      // Guardar en DB
+      if (conversationId) {
+        await supabase.from('messaging_messages').insert({
+          conversation_id: conversationId,
+          external_message_id: templateResult.messageId,
+          channel_type: channelType,
+          direction: 'outbound',
+          sender_type: 'agent',
+          content: templateText,
+          message_type: 'template',
+          metadata: { template_name, template_language: lang },
+          sent_at: new Date().toISOString()
+        });
+
+        await supabase.from('messaging_conversations').update({
+          last_message_preview: templateText.substring(0, 100),
+          last_message_at: new Date().toISOString(),
+        }).eq('id', conversationId);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message_id: templateResult.messageId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Handle media upload if present
     if (media_base64 && media_type) {
