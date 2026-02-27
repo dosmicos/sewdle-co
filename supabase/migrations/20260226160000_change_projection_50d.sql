@@ -1,5 +1,5 @@
 
--- Cambiar proyección de demanda de 30 a 50 días
+-- Cambiar proyección de demanda de 30 a 55 días
 CREATE OR REPLACE FUNCTION public.refresh_inventory_replenishment(org_id uuid)
 RETURNS json
 LANGUAGE plpgsql
@@ -170,18 +170,18 @@ BEGIN
         THEN ROUND(sd.current_stock::numeric / lv.saved_velocity, 1)
         ELSE NULL
       END as days_of_supply,
-      -- Proyección a 50 días (antes 30)
+      -- Proyección a 55 días (antes 30)
       CASE
         WHEN COALESCE(stk.days_with_stock_30d, 0) >= 5 AND COALESCE(sales.sales_30d, 0) > 0
-        THEN ROUND((sales.sales_30d::numeric / stk.days_with_stock_30d) * 50, 0)
+        THEN ROUND((sales.sales_30d::numeric / stk.days_with_stock_30d) * 55, 0)
         WHEN COALESCE(stk.days_with_stock_90d, 0) >= 5 AND COALESCE(s90.sales_90d, 0) > 0
-        THEN ROUND((s90.sales_90d::numeric / stk.days_with_stock_90d) * 50, 0)
+        THEN ROUND((s90.sales_90d::numeric / stk.days_with_stock_90d) * 55, 0)
         WHEN COALESCE(sales.sales_30d, 0) > 0
-        THEN ROUND((sales.sales_30d::numeric / 30) * 50, 0)
+        THEN ROUND((sales.sales_30d::numeric / 30) * 55, 0)
         WHEN COALESCE(lv.saved_velocity, 0) > 0
-        THEN ROUND(lv.saved_velocity * 50, 0)
+        THEN ROUND(lv.saved_velocity * 55, 0)
         ELSE 0
-      END as projected_demand_50d,
+      END as projected_demand_55d,
       CASE
         WHEN COALESCE(stk.days_with_stock_30d, 0) >= 5 AND COALESCE(sales.sales_30d, 0) > 0
         THEN 'Vel. 30d ajustada (' || stk.days_with_stock_30d || 'd con stock)'
@@ -243,8 +243,8 @@ BEGIN
     rc.orders_count_30d,
     rc.avg_daily_sales,
     rc.days_of_supply,
-    rc.projected_demand_50d,
-    GREATEST(0, rc.projected_demand_50d - rc.current_stock - rc.pending_production - rc.in_transit) as suggested_quantity,
+    rc.projected_demand_55d,
+    GREATEST(0, rc.projected_demand_55d - rc.current_stock - rc.pending_production - rc.in_transit) as suggested_quantity,
     CASE
       WHEN rc.days_of_supply IS NULL OR rc.days_of_supply <= 0 THEN
         CASE WHEN rc.avg_daily_sales > 0 THEN 'critical' ELSE 'low' END
