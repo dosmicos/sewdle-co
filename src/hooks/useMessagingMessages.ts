@@ -13,17 +13,20 @@ export const useMessagingMessages = (conversationId: string | null) => {
     queryKey: ['messaging-messages', conversationId],
     queryFn: async () => {
       if (!conversationId) return [];
-      
+
       const { data, error } = await supabase
         .from('messaging_messages')
         .select('*')
         .eq('conversation_id', conversationId)
         .order('sent_at', { ascending: true });
-      
+
       if (error) throw error;
       return data as MessagingMessage[];
     },
     enabled: !!conversationId,
+    // Si ya hay datos en cache (ej: optimistic insert), mostrarlos primero
+    // y hacer refetch en background sin borrar los datos existentes
+    placeholderData: (previousData) => previousData,
   });
 
   // Realtime is now handled by useMessagingRealtime hook in MessagingAIPage

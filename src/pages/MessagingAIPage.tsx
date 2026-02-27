@@ -17,6 +17,7 @@ import { RealtimeConnectionBanner } from '@/components/messaging-ai/RealtimeConn
 import { MessagingSearchBar } from '@/components/messaging-ai/MessagingSearchBar';
 import { SearchResultsList } from '@/components/messaging-ai/SearchResultsList';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMessagingConversations } from '@/hooks/useMessagingConversations';
 import { useMessagingMessages } from '@/hooks/useMessagingMessages';
 import { useMessagingTags } from '@/hooks/useMessagingTags';
@@ -34,6 +35,7 @@ type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' |
 
 const MessagingAIPage = () => {
   const { currentOrganization } = useOrganization();
+  const queryClient = useQueryClient();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
   const [activeChannel, setActiveChannel] = useState<ChannelType | 'all'>('all');
@@ -297,7 +299,41 @@ const MessagingAIPage = () => {
       const result = await createConversation({ phone, name, message, useTemplate });
       setShowNewConversation(false);
       if (result?.conversationId) {
+        // Pre-poblar el cache de mensajes con el mensaje enviado
+        // ANTES de seleccionar la conversación, para que useQuery lo use como initialData
+        const optimisticMessage = {
+          id: `temp-${Date.now()}`,
+          conversation_id: result.conversationId,
+          external_message_id: result.message_id || null,
+          channel_type: 'whatsapp',
+          direction: 'outbound',
+          sender_type: 'agent',
+          content: message,
+          message_type: useTemplate ? 'template' : 'text',
+          media_url: null,
+          media_mime_type: null,
+          reply_to_message_id: null,
+          metadata: useTemplate ? { template_name: 'saludo_inicial', template_language: 'es_CO' } : null,
+          sent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        };
+
+        // Insertar en cache Y configurar como no-stale para que useQuery no lo sobreescriba inmediatamente
+        queryClient.setQueryData(
+          ['messaging-messages', result.conversationId],
+          [optimisticMessage]
+        );
+
+        // Seleccionar la conversación (esto activa useQuery, pero el cache ya tiene datos)
         setSelectedConversation(result.conversationId);
+
+        // Refetch real después de 2s para obtener el registro real de la DB
+        setTimeout(() => {
+          queryClient.invalidateQueries({
+            queryKey: ['messaging-messages', result.conversationId],
+            refetchType: 'all'
+          });
+        }, 2000);
       }
     } catch (error) {
       // Error is handled in the hook
