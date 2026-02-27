@@ -6,7 +6,8 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, ArrowLeft, Reply, MessageSquareText, Search, Play, Pause, AlertCircle, RefreshCw, Download, ImagePlus } from 'lucide-react';
+import { Send, Bot, User, Phone, Sparkles, Copy, Check, MessageCircle, Instagram, Facebook, Loader2, Paperclip, Image, Mic, X, FileText, UserCog, ArrowDown, ArrowLeft, Reply, MessageSquareText, Search, Play, Pause, AlertCircle, RefreshCw, Download, ImagePlus, Smile } from 'lucide-react';
+import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -318,6 +319,7 @@ export const ConversationThread = ({
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [quickReplySearch, setQuickReplySearch] = useState('');
   const [selectedQuickReplyIndex, setSelectedQuickReplyIndex] = useState(0);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -535,6 +537,12 @@ export const ConversationThread = ({
     }
 
     setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleEmojiSelect = (emojiData: { emoji: string }) => {
+    setInputMessage(prev => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+    inputRef.current?.focus();
   };
 
   const openQuickRepliesPanel = () => {
@@ -1433,6 +1441,33 @@ export const ConversationThread = ({
                 disabled={isSending}
               />
             </div>
+
+            {/* Emoji picker button */}
+            <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+              <PopoverTrigger asChild>
+                <button
+                  className="p-2 rounded-full hover:bg-muted transition-colors flex-shrink-0 text-muted-foreground"
+                  disabled={isSending}
+                >
+                  <Smile className="h-5 w-5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-full p-0 border-none shadow-xl z-[60]"
+                align="end"
+                side="top"
+                sideOffset={8}
+              >
+                <EmojiPicker
+                  onEmojiClick={handleEmojiSelect}
+                  width="100%"
+                  height={350}
+                  searchPlaceholder="Buscar emoji..."
+                  theme={Theme.AUTO}
+                  lazyLoadEmojis
+                />
+              </PopoverContent>
+            </Popover>
 
             {/* Quick replies button */}
             <Popover open={showQuickRepliesPanel} onOpenChange={setShowQuickRepliesPanel}>
