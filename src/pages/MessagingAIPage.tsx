@@ -297,8 +297,6 @@ const MessagingAIPage = () => {
       const result = await createConversation({ phone, name, message, useTemplate });
       setShowNewConversation(false);
       if (result?.conversationId) {
-        // Pequeño delay para que la DB procese el insert del mensaje antes de cargar el hilo
-        await new Promise(resolve => setTimeout(resolve, 500));
         setSelectedConversation(result.conversationId);
       }
     } catch (error) {

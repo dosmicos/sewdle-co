@@ -278,20 +278,34 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
          throw new Error(messageText);
        }
 
+       // Insertar mensaje optimísticamente en el cache de React Query
+       // para que aparezca inmediatamente al abrir la conversación
+       queryClient.setQueryData(['messaging-messages', conversationId], [{
+         id: `temp-${Date.now()}`,
+         conversation_id: conversationId,
+         external_message_id: data?.message_id || null,
+         channel_type: 'whatsapp',
+         direction: 'outbound',
+         sender_type: 'agent',
+         content: message,
+         message_type: useTemplate ? 'template' : 'text',
+         media_url: null,
+         media_mime_type: null,
+         reply_to_message_id: null,
+         metadata: useTemplate ? { template_name: 'saludo_inicial', template_language: 'es_CO' } : null,
+         sent_at: new Date().toISOString(),
+         created_at: new Date().toISOString(),
+       }]);
+
        return { conversationId, ...data };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['messaging-conversations'] });
+      // Refetch real de la DB para reemplazar el mensaje optimístico con el real
       if (data?.conversationId) {
-        // Remover cache vacío y forzar refetch de mensajes
-        queryClient.removeQueries({ queryKey: ['messaging-messages', data.conversationId] });
-        // Refetches adicionales para asegurar que el mensaje aparezca
         setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: ['messaging-messages', data.conversationId], refetchType: 'all' });
-        }, 800);
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['messaging-messages', data.conversationId], refetchType: 'all' });
-        }, 2000);
+        }, 1500);
       }
       toast.success('Conversación iniciada correctamente');
       return data.conversationId;
