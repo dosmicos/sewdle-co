@@ -1229,34 +1229,48 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                   return (
                     <TableRow key={item.id} className="hover:bg-muted/25">
                       <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">
-                              {item.order_items?.product_variants?.products?.name}
+                        <div className="flex items-start gap-3">
+                          {/* Variant thumbnail */}
+                          {item.order_items?.product_variants?.products?.image_url ? (
+                            <img
+                              src={item.order_items.product_variants.products.image_url}
+                              alt={item.order_items.product_variants.products.name || ''}
+                              className="w-10 h-10 rounded object-cover flex-shrink-0 border border-border"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                              <Package className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">
+                                {item.order_items?.product_variants?.products?.name}
+                              </p>
+                              {(() => {
+                                const status = getItemSyncStatus(item);
+                                return (
+                                  <Badge
+                                    variant={status.variant}
+                                    className={`text-xs ${status.color}`}
+                                  >
+                                    {status.text}
+                                  </Badge>
+                                );
+                              })()}
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span className="bg-gray-100 px-2 py-1 rounded">
+                                {item.order_items?.product_variants?.size}
+                              </span>
+                              <span className="bg-gray-100 px-2 py-1 rounded">
+                                {item.order_items?.product_variants?.color}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground font-mono">
+                              {item.order_items?.product_variants?.sku_variant}
                             </p>
-                            {(() => {
-                              const status = getItemSyncStatus(item);
-                              return (
-                                <Badge 
-                                  variant={status.variant} 
-                                  className={`text-xs ${status.color}`}
-                                >
-                                  {status.text}
-                                </Badge>
-                              );
-                            })()}
                           </div>
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            <span className="bg-gray-100 px-2 py-1 rounded">
-                              {item.order_items?.product_variants?.size}
-                            </span>
-                            <span className="bg-gray-100 px-2 py-1 rounded">
-                              {item.order_items?.product_variants?.color}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground font-mono">
-                            {item.order_items?.product_variants?.sku_variant}
-                          </p>
                         </div>
                       </TableCell>
                       
