@@ -275,33 +275,41 @@ Gracias por tu compra!`;
   let conversationId: string | null = null;
 
   // Look for existing conversation with this phone
-  const { data: existingConv } = await supabase
+  // Use channel_id filter when available to match webhook's lookup path
+  let convQuery = supabase
     .from('messaging_conversations')
-    .select('id')
+    .select('id, metadata')
     .eq('organization_id', organizationId)
     .eq('external_user_id', phone)
-    .eq('channel_type', 'whatsapp')
+    .eq('channel_type', 'whatsapp');
+  if (channelId) {
+    convQuery = convQuery.eq('channel_id', channelId);
+  }
+  const { data: existingConv } = await convQuery
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (existingConv) {
     conversationId = existingConv.id;
-    // Update conversation: disable AI, set metadata
+    // Update conversation: disable AI, merge metadata (preserve existing fields)
+    const existingMetadata = existingConv.metadata || {};
     await supabase
       .from('messaging_conversations')
       .update({
         ai_managed: false,
         metadata: {
+          ...existingMetadata,
           pending_order_confirmation: {
             shopify_order_id: shopifyOrderId,
             order_number: order.order_number,
-            status: 'pending'
+            status: 'pending',
+            set_at: new Date().toISOString()
           }
         }
       })
       .eq('id', conversationId);
-    console.log(`📝 Updated existing conversation ${conversationId}`);
+    console.log(`📝 Updated existing conversation ${conversationId} with pending confirmation for order ${order.order_number}`);
   } else {
     // Create new conversation
     const insertData: any = {

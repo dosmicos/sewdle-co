@@ -1520,7 +1520,58 @@ serve(async (req) => {
               }
 
               // ========== COD ORDER CONFIRMATION DETECTION ==========
-              const pendingConfirmation = conversation?.metadata?.pending_order_confirmation;
+              // Re-fetch conversation metadata fresh to avoid stale data from the
+              // initial fetch (metadata may have been written by send-order-confirmation
+              // between the initial fetch and now)
+              let pendingConfirmation: any = null;
+
+              if (conversation?.id) {
+                const { data: freshConv } = await supabase
+                  .from('messaging_conversations')
+                  .select('metadata')
+                  .eq('id', conversation.id)
+                  .single();
+
+                pendingConfirmation = freshConv?.metadata?.pending_order_confirmation;
+                console.log(`[COD-CONFIRM] Fresh metadata for conv ${conversation.id}: pending=${JSON.stringify(pendingConfirmation?.status || null)}`);
+              }
+
+              // FALLBACK: If conversation metadata doesn't have a pending confirmation,
+              // check the order_confirmations table directly by customer phone + pending status
+              if (!pendingConfirmation || pendingConfirmation.status !== 'pending') {
+                console.log(`[COD-CONFIRM] No pending in metadata, checking order_confirmations table for phone ${senderPhone}`);
+
+                const { data: dbConfirmation } = await supabase
+                  .from('order_confirmations')
+                  .select('shopify_order_id, order_number, status, conversation_id')
+                  .eq('customer_phone', senderPhone)
+                  .eq('status', 'pending')
+                  .eq('organization_id', channel.organization_id)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (dbConfirmation) {
+                  console.log(`[COD-CONFIRM] FALLBACK HIT: Found pending confirmation in DB for order ${dbConfirmation.order_number}`);
+                  pendingConfirmation = {
+                    shopify_order_id: dbConfirmation.shopify_order_id,
+                    order_number: dbConfirmation.order_number,
+                    status: 'pending'
+                  };
+
+                  // Fix conversation_id mismatch if needed
+                  if (dbConfirmation.conversation_id !== conversation.id) {
+                    console.log(`[COD-CONFIRM] Conversation mismatch! DB has ${dbConfirmation.conversation_id}, webhook has ${conversation.id}. Updating...`);
+                    await supabase
+                      .from('order_confirmations')
+                      .update({ conversation_id: conversation.id, updated_at: new Date().toISOString() })
+                      .eq('shopify_order_id', dbConfirmation.shopify_order_id);
+                  }
+                } else {
+                  console.log(`[COD-CONFIRM] No pending confirmation found in DB either for phone ${senderPhone}`);
+                }
+              }
+
               if (pendingConfirmation?.status === 'pending' && content && (messageType === 'text' || messageType === 'button' || messageType === 'interactive')) {
                 console.log(`📋 Pending order confirmation detected for order ${pendingConfirmation.order_number}`);
 
@@ -1687,6 +1738,9 @@ serve(async (req) => {
 
                   continue; // Skip AI auto-reply, human agent handles this
                 }
+              } else if (!pendingConfirmation || pendingConfirmation.status !== 'pending') {
+                // No pending confirmation found anywhere — proceeding to AI auto-reply
+                console.log(`[COD-CONFIRM] No actionable confirmation for phone ${senderPhone} (status=${pendingConfirmation?.status || 'none'}) — proceeding to AI`);
               }
               // ========== END COD ORDER CONFIRMATION ==========
 
