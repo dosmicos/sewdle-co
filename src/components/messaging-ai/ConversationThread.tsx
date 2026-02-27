@@ -331,7 +331,7 @@ export const ConversationThread = ({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Filter quick replies based on search
   const filteredQuickReplies = useMemo(() => {
@@ -406,9 +406,13 @@ export const ConversationThread = ({
     }
     setInputMessage('');
     setReplyingTo(null);
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // When in slash mode, handle navigation and selection
     if (isSlashMode && slashFilteredReplies.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -491,8 +495,12 @@ export const ConversationThread = ({
     setSlashSelectedIndex(0);
   }, [slashFilteredReplies.length]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
+    // Auto-resize textarea
+    const textarea = e.target;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
   };
 
   const handleQuickReplySelect = async (reply: { title: string; content: string; imageUrl?: string }) => {
@@ -1431,14 +1439,16 @@ export const ConversationThread = ({
 
             {/* Input field - grows to fill space */}
             <div className="flex-1 relative">
-              <Input
+              <textarea
                 ref={inputRef}
                 placeholder="Escribe un mensaje..."
                 value={inputMessage}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyPress}
-                className="w-full pr-10 rounded-full bg-muted/50 border-muted lg:rounded-md lg:bg-background"
+                className="w-full pr-10 rounded-full bg-muted/50 border-muted lg:rounded-md lg:bg-background flex items-center px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden"
                 disabled={isSending}
+                rows={1}
+                style={{ minHeight: '40px', maxHeight: '120px' }}
               />
             </div>
 
