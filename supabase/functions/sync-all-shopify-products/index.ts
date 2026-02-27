@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
       title: string
       status: string
       productType: string
+      imageUrl: string | null
       variants: ShopifyVariantData[]
     }
 
@@ -62,6 +63,9 @@ Deno.serve(async (req) => {
                 title
                 status
                 productType
+                featuredImage {
+                  url
+                }
                 variants(first: 100) {
                   edges {
                     node {
@@ -128,6 +132,7 @@ Deno.serve(async (req) => {
           title: node.title,
           status: node.status,
           productType: node.productType || '',
+          imageUrl: node.featuredImage?.url || null,
           variants,
         })
       }
@@ -142,7 +147,7 @@ Deno.serve(async (req) => {
     // 2. Fetch all existing Sewdle products and variants
     const { data: sewdleProducts, error: prodErr } = await supabase
       .from('products')
-      .select('id, name, sku, base_price, category, status')
+      .select('id, name, sku, base_price, category, status, image_url')
 
     if (prodErr) throw prodErr
 
@@ -188,6 +193,7 @@ Deno.serve(async (req) => {
             category: shopProduct.productType || 'Shopify',
             status: shopProduct.status === 'ACTIVE' ? 'active' : 'inactive',
             ...(organization_id ? { organization_id } : {}),
+            ...(shopProduct.imageUrl ? { image_url: shopProduct.imageUrl } : {}),
           }
 
           const { data: created, error: createErr } = await supabase
@@ -207,6 +213,13 @@ Deno.serve(async (req) => {
           productByName.set(shopProduct.title.toLowerCase().trim(), created)
           productsCreated++
           console.log(`✅ Created product: ${shopProduct.title}`)
+        } else if (shopProduct.imageUrl && !sewdleProduct.image_url) {
+          // Update existing product with missing image
+          await supabase
+            .from('products')
+            .update({ image_url: shopProduct.imageUrl })
+            .eq('id', sewdleProduct.id)
+          console.log(`🖼️ Updated image for: ${shopProduct.title}`)
         }
 
         // Process each variant

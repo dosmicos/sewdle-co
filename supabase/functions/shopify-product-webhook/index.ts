@@ -23,6 +23,8 @@ interface ShopifyProduct {
   created_at: string
   updated_at: string
   variants: ShopifyVariant[]
+  image?: { src: string } | null
+  images?: { src: string }[]
 }
 
 Deno.serve(async (req) => {
@@ -145,15 +147,26 @@ Deno.serve(async (req) => {
         if (existingProducts && existingProducts.length > 0) {
           targetProductId = existingProducts[0].id
           console.log(`📦 Producto existente encontrado: ${existingProducts[0].name}`)
+          // Update image if missing
+          const webhookImageUrl = productData.image?.src || productData.images?.[0]?.src || null
+          if (webhookImageUrl) {
+            await supabase
+              .from('products')
+              .update({ image_url: webhookImageUrl })
+              .eq('id', targetProductId)
+              .is('image_url', null)
+          }
         } else {
           // Create new product
           console.log(`🆕 Creando nuevo producto: ${productData.title}`)
+          const productImageUrl = productData.image?.src || productData.images?.[0]?.src || null
           const { data: newProduct, error: createProductError } = await supabase
             .from('products')
             .insert({
               name: productData.title,
               description: `Producto sincronizado desde Shopify - ${productData.handle}`,
-              status: 'active'
+              status: 'active',
+              ...(productImageUrl ? { image_url: productImageUrl } : {}),
             })
             .select()
             .single()
