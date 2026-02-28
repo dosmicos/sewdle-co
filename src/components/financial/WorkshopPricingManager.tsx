@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Edit, Trash2, Filter, Percent, DollarSign, Check } from "lucide-react";
+import { Plus, Edit, Trash2, Filter, Percent, DollarSign, Check, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useWorkshopPricing, WorkshopPricingInsert } from "@/hooks/useWorkshopPricing";
 import { useWorkshops } from "@/hooks/useWorkshops";
 import { useProducts } from "@/hooks/useProducts";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface PricingFormData {
   workshop_id: string;
@@ -46,6 +49,7 @@ export const WorkshopPricingManager = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPricing, setEditingPricing] = useState<string | null>(null);
   const [formData, setFormData] = useState<PricingFormData>(initialFormData);
+  const [productPopoverOpen, setProductPopoverOpen] = useState(false);
   
   // Filter state
   const [filterWorkshopId, setFilterWorkshopId] = useState<string>("all");
@@ -315,21 +319,44 @@ export const WorkshopPricingManager = () => {
 
                   <div>
                     <Label htmlFor="product_id">Producto</Label>
-                    <Select
-                      value={formData.product_id}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, product_id: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar producto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getFilteredProducts().map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={productPopoverOpen}
+                          className="w-full justify-between font-normal"
+                        >
+                          {formData.product_id
+                            ? products.find(p => p.id === formData.product_id)?.name || "Seleccionar producto"
+                            : "Seleccionar producto"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar producto..." />
+                          <CommandList className="max-h-[200px]">
+                            <CommandEmpty>No se encontró producto.</CommandEmpty>
+                            <CommandGroup>
+                              {getFilteredProducts().map((product) => (
+                                <CommandItem
+                                  key={product.id}
+                                  value={product.name}
+                                  onSelect={() => {
+                                    setFormData(prev => ({ ...prev, product_id: product.id }));
+                                    setProductPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", formData.product_id === product.id ? "opacity-100" : "opacity-0")} />
+                                  {product.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   <div>
