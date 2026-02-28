@@ -46,7 +46,6 @@ export const WorkshopPricingManager = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPricing, setEditingPricing] = useState<string | null>(null);
   const [formData, setFormData] = useState<PricingFormData>(initialFormData);
-  const [workshopProductIds, setWorkshopProductIds] = useState<string[]>([]);
   
   // Filter state
   const [filterWorkshopId, setFilterWorkshopId] = useState<string>("all");
@@ -185,89 +184,10 @@ export const WorkshopPricingManager = () => {
     );
   };
 
-  // Obtener productos relacionados con el taller (via asignaciones o entregas)
-  const getProductsForWorkshop = async (workshopId: string) => {
-    try {
-      const productIds = new Set<string>();
-
-      // 1. Products from workshop_assignments
-      const { data: workshopAssignments, error: assignError } = await supabase
-        .from('workshop_assignments')
-        .select(`
-          order_id,
-          orders!inner(
-            id,
-            order_items!inner(
-              product_variant_id,
-              product_variants!inner(
-                product_id,
-                products!inner(id, name)
-              )
-            )
-          )
-        `)
-        .eq('workshop_id', workshopId);
-
-      if (!assignError) {
-        workshopAssignments?.forEach(assignment => {
-          assignment.orders?.order_items?.forEach((item: any) => {
-            if (item.product_variants?.products?.id) {
-              productIds.add(item.product_variants.products.id);
-            }
-          });
-        });
-      }
-
-      // 2. Products from actual deliveries (covers cases without workshop_assignments)
-      const { data: deliveryProducts, error: deliveryError } = await supabase
-        .from('delivery_items')
-        .select(`
-          deliveries!inner(workshop_id),
-          order_items!inner(
-            product_variants!inner(
-              product_id,
-              products!inner(id, name)
-            )
-          )
-        `)
-        .eq('deliveries.workshop_id', workshopId);
-
-      if (!deliveryError) {
-        deliveryProducts?.forEach((item: any) => {
-          if (item.order_items?.product_variants?.products?.id) {
-            productIds.add(item.order_items.product_variants.products.id);
-          }
-        });
-      }
-
-      return Array.from(productIds);
-    } catch (error) {
-      console.error('Error fetching products for workshop:', error);
-      return [];
-    }
-  };
-
-  // Cargar productos cuando se selecciona un taller
-  useEffect(() => {
-    if (formData.workshop_id) {
-      getProductsForWorkshop(formData.workshop_id).then((productIds) => {
-        setWorkshopProductIds(productIds as string[]);
-      });
-    } else {
-      setWorkshopProductIds([]);
-    }
-  }, [formData.workshop_id]);
-
-  // Filtrar productos finales considerando ambos criterios
+  // Mostrar todos los productos que no tienen precio vigente para este taller
   const getFilteredProducts = () => {
     if (!formData.workshop_id) return [];
-
-    const availableProducts = getAvailableProducts();
-
-    // Mostrar productos que el taller tiene asignados o ha entregado
-    return availableProducts.filter(product =>
-      workshopProductIds.includes(product.id)
-    );
+    return getAvailableProducts();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
