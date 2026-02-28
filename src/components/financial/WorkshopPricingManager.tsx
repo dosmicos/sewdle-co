@@ -44,7 +44,7 @@ type BulkUpdateMode = 'percentage' | 'fixed' | 'absolute';
 export const WorkshopPricingManager = () => {
   const { pricing, loading, createPricing, updatePricing, deletePricing, refetch } = useWorkshopPricing();
   const { workshops } = useWorkshops();
-  const { products } = useProducts();
+  const { products } = useProducts(true);
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPricing, setEditingPricing] = useState<string | null>(null);
