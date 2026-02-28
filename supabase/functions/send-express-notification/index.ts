@@ -285,7 +285,7 @@ async function sendExpressNotification(
   // 7. Send WhatsApp template
   const sendResult = await sendWhatsAppTemplate(
     phoneNumberId, whatsappToken, phone,
-    templateName, 'es_CO',
+    templateName, 'en',
     [{ type: 'text', text: deliveryCode }]
   );
 
