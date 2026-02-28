@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calculator, DollarSign, Receipt, CheckCircle } from "lucide-react";
+import { Calculator, DollarSign, Receipt, CheckCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,6 +177,18 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                 <span className="text-muted-foreground">Monto Bruto:</span>
                 <span className="ml-2 font-medium">{formatCurrency(calculation.gross_amount)}</span>
               </div>
+              {calculation.items_without_workshop_price > 0 && (
+                <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="text-sm text-amber-800">
+                    <p className="font-medium">Precio de taller no configurado</p>
+                    <p className="text-amber-700">
+                      {calculation.items_without_workshop_price} {calculation.items_without_workshop_price === 1 ? 'producto usa' : 'productos usan'} el precio de venta en lugar del precio del taller.
+                      Configure los precios en el Módulo Financiero → Precios por Taller.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div>
                 <span className="text-muted-foreground">Deducción Anticipos:</span>
                 <span className="ml-2 font-medium">-{formatCurrency(calculation.advance_deduction)}</span>

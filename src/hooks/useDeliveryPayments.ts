@@ -39,6 +39,7 @@ export interface DeliveryPaymentCalculation {
   workshop_payment_method: string;
   total_advance_available: number;
   advance_already_used: number;
+  items_without_workshop_price: number;
 }
 
 export const useDeliveryPayments = () => {

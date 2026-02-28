@@ -185,10 +185,13 @@ export const WorkshopPricingManager = () => {
     );
   };
 
-  // Obtener productos con órdenes asignadas al taller
-  const getProductsWithOrders = async (workshopId: string) => {
+  // Obtener productos relacionados con el taller (via asignaciones o entregas)
+  const getProductsForWorkshop = async (workshopId: string) => {
     try {
-      const { data: workshopAssignments, error } = await supabase
+      const productIds = new Set<string>();
+
+      // 1. Products from workshop_assignments
+      const { data: workshopAssignments, error: assignError } = await supabase
         .from('workshop_assignments')
         .select(`
           order_id,
@@ -198,38 +201,56 @@ export const WorkshopPricingManager = () => {
               product_variant_id,
               product_variants!inner(
                 product_id,
-                products!inner(
-                  id,
-                  name
-                )
+                products!inner(id, name)
               )
             )
           )
         `)
         .eq('workshop_id', workshopId);
-      
-      if (error) throw error;
-      
-      const productIds = new Set();
-      workshopAssignments?.forEach(assignment => {
-        assignment.orders?.order_items?.forEach(item => {
-          if (item.product_variants?.products?.id) {
-            productIds.add(item.product_variants.products.id);
+
+      if (!assignError) {
+        workshopAssignments?.forEach(assignment => {
+          assignment.orders?.order_items?.forEach((item: any) => {
+            if (item.product_variants?.products?.id) {
+              productIds.add(item.product_variants.products.id);
+            }
+          });
+        });
+      }
+
+      // 2. Products from actual deliveries (covers cases without workshop_assignments)
+      const { data: deliveryProducts, error: deliveryError } = await supabase
+        .from('delivery_items')
+        .select(`
+          deliveries!inner(workshop_id),
+          order_items!inner(
+            product_variants!inner(
+              product_id,
+              products!inner(id, name)
+            )
+          )
+        `)
+        .eq('deliveries.workshop_id', workshopId);
+
+      if (!deliveryError) {
+        deliveryProducts?.forEach((item: any) => {
+          if (item.order_items?.product_variants?.products?.id) {
+            productIds.add(item.order_items.product_variants.products.id);
           }
         });
-      });
-      
+      }
+
       return Array.from(productIds);
     } catch (error) {
-      console.error('Error fetching products with orders:', error);
+      console.error('Error fetching products for workshop:', error);
       return [];
     }
   };
 
-  // Cargar productos con órdenes cuando se selecciona un taller
+  // Cargar productos cuando se selecciona un taller
   useEffect(() => {
     if (formData.workshop_id) {
-      getProductsWithOrders(formData.workshop_id).then((productIds) => {
+      getProductsForWorkshop(formData.workshop_id).then((productIds) => {
         setWorkshopProductIds(productIds as string[]);
       });
     } else {
@@ -240,11 +261,11 @@ export const WorkshopPricingManager = () => {
   // Filtrar productos finales considerando ambos criterios
   const getFilteredProducts = () => {
     if (!formData.workshop_id) return [];
-    
+
     const availableProducts = getAvailableProducts();
-    
-    // Solo mostrar productos que el taller tiene órdenes asignadas
-    return availableProducts.filter(product => 
+
+    // Mostrar productos que el taller tiene asignados o ha entregado
+    return availableProducts.filter(product =>
       workshopProductIds.includes(product.id)
     );
   };
