@@ -77,26 +77,33 @@ export interface InventoryStatsData {
 // ── Helpers ─────────────────────────────────────────────────
 
 function extractCategory(product: { category: string | null; name: string }): string {
-  if (product.category && product.category.trim() !== '') {
-    return product.category.trim();
+  const nameLower = product.name.toLowerCase();
+
+  if (nameLower.includes('ruana') || nameLower.includes('ruanas')) {
+    return 'Ruanas';
   }
-  // Fallback: primera palabra del nombre (funciona bien con "Ruana X", "Chaqueta Y", "Combo Z")
-  const firstWord = product.name.split(' ')[0];
-  if (firstWord && firstWord.length > 2) {
-    return firstWord;
+  if (nameLower.includes('sleeping')) {
+    return 'Sleepings';
   }
-  return 'Sin categorizar';
+  if (nameLower.includes('chaqueta') || nameLower.includes('parka') || nameLower.includes('buso')) {
+    return 'Chaquetas';
+  }
+  return 'Otros';
 }
 
 function extractCategoryFromLineItem(item: { product_type: string | null; title: string }): string {
-  if (item.product_type && item.product_type.trim() !== '') {
-    return item.product_type.trim();
+  const titleLower = item.title.toLowerCase();
+
+  if (titleLower.includes('ruana') || titleLower.includes('ruanas')) {
+    return 'Ruanas';
   }
-  const firstWord = item.title.split(' ')[0];
-  if (firstWord && firstWord.length > 2) {
-    return firstWord;
+  if (titleLower.includes('sleeping')) {
+    return 'Sleepings';
   }
-  return 'Sin categorizar';
+  if (titleLower.includes('chaqueta') || titleLower.includes('parka') || titleLower.includes('buso')) {
+    return 'Chaquetas';
+  }
+  return 'Otros';
 }
 
 export const formatCurrency = (amount: number): string => {
@@ -369,11 +376,14 @@ export const useInventoryStats = () => {
         }),
       ]);
 
-      // Procesar productos
-      const products = (productsResult.data as ProductWithVariants[]) || [];
+      // Procesar productos - solo los que tienen categoría "Shopify Import" (productos importados de Shopify)
+      const allProducts = (productsResult.data as ProductWithVariants[]) || [];
       if (productsResult.error) {
         console.error('Error fetching products:', productsResult.error);
       }
+      const products = allProducts.filter(
+        (p) => p.category?.trim().toLowerCase() === 'shopify import'
+      );
 
       // Query 2b: Line items (depende de Query 2)
       const orderIds = (recentOrdersResult.data || []).map((o) => o.shopify_order_id);
