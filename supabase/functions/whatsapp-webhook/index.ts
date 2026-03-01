@@ -1588,6 +1588,7 @@ serve(async (req) => {
                   try {
                     // 1. Add "Confirmado" tag to Shopify order
                     let shopifyTagSuccess = false;
+                    console.log(`🏷️ Attempting to add Confirmado tag - shopify_order_id: ${pendingConfirmation.shopify_order_id}, order_number: ${pendingConfirmation.order_number}`);
                     const tagResult = await supabase.functions.invoke('update-shopify-order', {
                       body: {
                         action: 'add_tags',
@@ -1597,8 +1598,11 @@ serve(async (req) => {
                       }
                     });
 
-                    if (tagResult.error) {
-                      console.error('⚠️ First attempt to add Confirmado tag failed:', tagResult.error);
+                    // Check both HTTP error AND response body success flag
+                    const tagDataSuccess = tagResult.data?.success !== false;
+                    if (tagResult.error || !tagDataSuccess) {
+                      const errorDetail = tagResult.error?.message || tagResult.data?.error || JSON.stringify(tagResult.error) || 'Unknown error';
+                      console.error(`⚠️ First attempt to add Confirmado tag failed for order ${pendingConfirmation.order_number}: ${errorDetail}`);
                       // Retry once after 2 seconds
                       await new Promise(r => setTimeout(r, 2000));
                       const retryResult = await supabase.functions.invoke('update-shopify-order', {
@@ -1609,8 +1613,10 @@ serve(async (req) => {
                           organizationId: channel.organization_id
                         }
                       });
-                      if (retryResult.error) {
-                        console.error('❌ Retry also failed to add Confirmado tag to Shopify:', retryResult.error);
+                      const retryDataSuccess = retryResult.data?.success !== false;
+                      if (retryResult.error || !retryDataSuccess) {
+                        const retryErrorDetail = retryResult.error?.message || retryResult.data?.error || JSON.stringify(retryResult.error) || 'Unknown error';
+                        console.error(`❌ Retry also failed to add Confirmado tag for order ${pendingConfirmation.order_number}: ${retryErrorDetail}`);
                       } else {
                         shopifyTagSuccess = true;
                         console.log('🏷️ Added "Confirmado" tag to Shopify (on retry)');
@@ -1752,15 +1758,70 @@ serve(async (req) => {
               console.log(`AI status check - Channel: ${aiEnabledOnChannel}, Conversation ai_managed: ${conversation.ai_managed}, Will respond: ${aiEnabledOnChannel && aiEnabledOnConversation}`);
               
               if (aiEnabledOnChannel && aiEnabledOnConversation && content && messageType === 'text') {
-                console.log('AI is enabled (channel + conversation), generating response...');
-                
-                // Get conversation history for context
+                console.log('AI is enabled (channel + conversation), applying debounce...');
+
+                // ========== DEBOUNCE LOGIC ==========
+                // Set ai_pending_since to NOW so we can detect if another message arrives during the wait
+                const debounceTimestamp = new Date().toISOString();
+                await supabase
+                  .from('messaging_conversations')
+                  .update({ ai_pending_since: debounceTimestamp })
+                  .eq('id', conversation.id);
+
+                // Wait 6 seconds to accumulate multiple messages from the user
+                const DEBOUNCE_DELAY_MS = 6000;
+                console.log(`Debounce: waiting ${DEBOUNCE_DELAY_MS}ms for more messages...`);
+                await new Promise(resolve => setTimeout(resolve, DEBOUNCE_DELAY_MS));
+
+                // After waiting, check if ai_pending_since was updated by a newer message
+                const { data: freshConversation } = await supabase
+                  .from('messaging_conversations')
+                  .select('ai_pending_since')
+                  .eq('id', conversation.id)
+                  .single();
+
+                if (freshConversation?.ai_pending_since !== debounceTimestamp) {
+                  // A newer message arrived and set a new timestamp — this invocation should NOT respond
+                  console.log(`Debounce: newer message detected (my=${debounceTimestamp}, current=${freshConversation?.ai_pending_since}). Skipping AI response — the newer invocation will handle it.`);
+                  // Clear ai_pending_since is NOT done here; the latest invocation will handle it
+                } else {
+                  // No newer message arrived — this is the latest invocation, proceed with AI
+                  console.log('Debounce: no newer messages detected, proceeding with AI response...');
+
+                  // Clear the pending flag
+                  await supabase
+                    .from('messaging_conversations')
+                    .update({ ai_pending_since: null })
+                    .eq('id', conversation.id);
+
+                // ========== END DEBOUNCE LOGIC ==========
+
+                // ========== DUPLICATE AI RESPONSE GUARD ==========
+                // Check if an AI response was already sent very recently (within 10 seconds)
+                // This prevents race conditions where two webhook invocations both pass the debounce check
+                const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+                const { data: recentAiResponse } = await supabase
+                  .from('messaging_messages')
+                  .select('id')
+                  .eq('conversation_id', conversation.id)
+                  .eq('direction', 'outbound')
+                  .eq('sender_type', 'ai')
+                  .gte('sent_at', tenSecondsAgo)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (recentAiResponse) {
+                  console.log(`⚠️ Duplicate guard: AI response already sent within last 10 seconds. Skipping to prevent duplicate.`);
+                } else {
+                // ========== END DUPLICATE GUARD ==========
+
+                // Get conversation history for context (includes all messages accumulated during debounce)
                 const { data: historyMessages } = await supabase
                   .from('messaging_messages')
                   .select('*')
                   .eq('conversation_id', conversation.id)
                   .order('sent_at', { ascending: false })
-                  .limit(10);
+                  .limit(15);
 
                 // Get AI provider from channel config (default to minimax)
                 const aiConfig = channel.ai_config || {};
@@ -1768,14 +1829,11 @@ serve(async (req) => {
                 const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
                 console.log(`Using AI provider: ${aiProvider}, function: ${functionName}`);
 
-                // Build messages for the AI function
-                const messagesForAI = [
-                  ...(historyMessages || []).reverse().map((m: any) => ({
-                    role: m.direction === 'inbound' ? 'user' : 'assistant',
-                    content: m.content || ''
-                  })),
-                  { role: 'user', content: content }
-                ];
+                // Build messages for the AI function — all accumulated messages are already in the DB
+                const messagesForAI = (historyMessages || []).reverse().map((m: any) => ({
+                  role: m.direction === 'inbound' ? 'user' : 'assistant',
+                  content: m.content || ''
+                }));
 
                 // Call the appropriate AI edge function
                 const { data: aiData, error: aiError } = await supabase.functions.invoke(functionName, {
@@ -1985,6 +2043,8 @@ serve(async (req) => {
                     }
                   }
                 }
+                } // end else (duplicate guard - no recent AI response found)
+                } // end else (debounce - this invocation handles the AI response)
               }
             }
           }
