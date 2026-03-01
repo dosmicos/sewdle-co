@@ -36,7 +36,7 @@ interface AIConfig {
   greetingMessage: string;
   rules: AIRule[];
   quickReplies: QuickReply[];
-  aiProvider: 'openai' | 'minimax';
+  aiProvider: 'openai';
 }
 
 // Default quick replies to seed when none exist in DB
@@ -486,20 +486,11 @@ Reglas importantes:
 
           <div className="space-y-2">
             <Label>Proveedor de IA</Label>
-            <Select 
-              value={config.aiProvider} 
-              onValueChange={(value: 'openai' | 'minimax') => setConfig({ ...config, aiProvider: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minimax">⚡ Minimax (Elsa)</SelectItem>
-                <SelectItem value="openai">🤖 OpenAI GPT</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 h-10 px-3 rounded-md border bg-muted/50">
+              <span>🤖 OpenAI GPT-4o mini</span>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Minimax es más económico y está configurado para Elsa
+              Modelo con soporte de texto y visión (imágenes)
             </p>
           </div>
 

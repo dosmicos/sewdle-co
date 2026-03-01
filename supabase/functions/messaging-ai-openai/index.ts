@@ -21,7 +21,7 @@ function extractProductIdsFromResponse(aiResponse: string): number[] {
 
 // Remove product image tags from response
 function cleanAIResponse(aiResponse: string): string {
-  return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').trim();
+  return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').replace(/\[NO_IMAGES\]/g, '').trim();
 }
 
 // Cache external image to Supabase Storage and return public URL
@@ -485,8 +485,8 @@ serve(async (req) => {
     
     let fullSystemPrompt = basePrompt;
     
-    // Add MANDATORY image instruction at the beginning - very emphatic
-    fullSystemPrompt += '\n\n⚠️ REGLA CRÍTICA - SIEMPRE INCLUIR IMÁGENES:\nCada vez que menciones CUALQUIER producto por su nombre, DEBES agregar inmediatamente después el tag [PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO].\nEsto es OBLIGATORIO para TODOS los productos que menciones, sin excepción.\nEjemplo correcto: "La Ruana Caballo [PRODUCT_IMAGE_ID:123] tiene un precio de $94.900 COP"\nSi no incluyes los tags, los clientes NO podrán ver las fotos de los productos.';
+    // Add smart product recommendation strategy
+    fullSystemPrompt += '\n\n🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:\nCuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):\n- PRIMERO recomienda la talla adecuada si mencionan edad/estatura\n- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento\n- NO envíes fotos individuales de cada producto, el link les permite ver TODOS los diseños\n- Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección\n\n🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:\n- SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico\n- Si el cliente pregunta por un producto ESPECÍFICO por nombre, ahí sí puedes incluir la foto\n- Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"\n- NUNCA digas que no puedes mostrar imágenes\n\n🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS:\n- Si preguntan por un color específico, revisa las variantes y nombres de productos del catálogo\n- Si no estás seguro, envía el link de la colección para que vean todas las opciones';
     
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
@@ -567,7 +567,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 - Sé empático y claro al comunicar el estado del pedido`;
 
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
-    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones.\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.';
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
@@ -1066,9 +1066,16 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     
     console.log("OpenAI raw response:", rawAiResponse.substring(0, 200) + "...");
 
+    // Check if AI opted to send collection link instead of individual images
+    const noImagesRequested = rawAiResponse.includes('[NO_IMAGES]');
+
     // Extract ALL product IDs and clean response
-    const productIds = extractProductIdsFromResponse(rawAiResponse);
+    const productIds = noImagesRequested ? [] : extractProductIdsFromResponse(rawAiResponse);
     const cleanedResponse = cleanAIResponse(rawAiResponse);
+
+    if (noImagesRequested) {
+      console.log('📎 AI sent collection link — skipping individual product images');
+    }
     
     console.log(`Found ${productIds.length} product IDs in response:`, productIds);
     

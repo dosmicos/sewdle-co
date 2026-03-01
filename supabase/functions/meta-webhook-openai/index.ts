@@ -167,6 +167,13 @@ TU ROL PRINCIPAL:
 - Recomendar la talla correcta según la edad del bebé/niño
 - Guiar en el proceso de compra y resolver dudas
 
+📷 RECONOCIMIENTO DE IMÁGENES:
+- Puedes VER las imágenes que los clientes te envían
+- Si un cliente envía una foto o screenshot de un producto, identifícalo comparándolo con los productos del catálogo
+- Busca coincidencias por nombre, diseño, animal o patrón visible en la imagen
+- Si reconoces el producto, responde directamente con su nombre, precio y disponibilidad
+- Si no estás seguro de cuál es, menciona las opciones más probables del catálogo
+
 INFORMACIÓN DE DOSMICOS:
 - Tienda online: dosmicos.com
 - Todos los productos son fabricados en Colombia 🇨🇴
@@ -194,12 +201,24 @@ REGLAS DE COMUNICACIÓN:
 - Responde siempre en español
 - Sé conciso pero completo en tus respuestas
 
-🖼️ ENVÍO DE IMÁGENES - MUY IMPORTANTE:
-SÍ puedes y DEBES enviar fotos de productos. Cuando recomiendes productos o el cliente pida ver fotos:
-- Incluye UN tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones
-- Puedes incluir hasta 10 productos con imágenes
-- Ejemplo: "Te recomiendo el Sleeping Bag Pollito [PRODUCT_IMAGE_ID:123] y la Ruana Pony [PRODUCT_IMAGE_ID:456]"
-- NUNCA digas que no puedes mostrar imágenes.`,
+🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:
+Cuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):
+- PRIMERO recomienda la talla adecuada si mencionan edad/estatura
+- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento (ej: "Aquí puedes ver todos los diseños disponibles en talla 10: [link]")
+- NO envíes fotos individuales de cada producto, ya que son muchos diseños y el link les permite ver TODOS
+- Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección
+
+🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:
+- SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico (ej: "muéstrame la ruana caballo", "quiero ver la foto del sleeping pollito", "tienes foto de ese?")
+- Si el cliente pregunta por un producto ESPECÍFICO por nombre, ahí sí puedes incluir la foto
+- Puedes incluir hasta 5 productos con imágenes cuando el cliente las pida
+- Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"
+- NUNCA digas que no puedes mostrar imágenes, siempre puedes si te las piden
+
+🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS:
+- Si el cliente pregunta por un color específico (ej: "tienen en rosado?"), revisa las variantes de los productos en el catálogo
+- Los nombres de los productos y sus variantes pueden indicar colores disponibles
+- Si encuentras productos que coinciden, recomiéndalos. Si no estás seguro, envía el link de la colección para que el cliente vea todas las opciones disponibles`,
 
   tone: 'friendly',
   autoReply: true,
@@ -256,6 +275,7 @@ function cleanAIResponse(aiResponse: string): string {
     .replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '')
     .replace(/\[PRODUCT_IMAGE:.+?\]/g, '')
     .replace(/\[IMAGE:.+?\]/gi, '')
+    .replace(/\[NO_IMAGES\]/g, '')
     .trim();
 }
 
@@ -566,7 +586,7 @@ function formatProductsForContext(products: any[]): string {
 
   let context = '\n\n📦 PRODUCTOS RELEVANTES ENCONTRADOS:\n';
   context += '⚠️ IMPORTANTE: Usa SOLO estos productos para responder. NO inventes otros.\n';
-  context += '🔔 RECUERDA: Incluye [PRODUCT_IMAGE_ID:ID] después de CADA producto que menciones.\n\n';
+  context += '🔔 RECUERDA: Si el cliente pregunta por una categoría/talla, envía el LINK de la colección. Solo incluye [PRODUCT_IMAGE_ID:ID] si el cliente pide ver fotos de un producto específico.\n\n';
 
   products.forEach((product: any, index: number) => {
     const variants = product.variants || [];
@@ -786,17 +806,28 @@ async function generateAIResponse(
     
     // Add final reminder at the end of prompt
     if (isProductRelated && relevantProducts.length > 0) {
-      systemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
+      systemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para consultas de COLOR u otros atributos: revisa variantes del catálogo y si no estás seguro, envía el link de la colección.';
     }
 
     // 🤖 LOG: Context sent to AI
     console.log(`🤖 Contexto enviado a IA: ${systemPrompt.substring(0, 500)}...`);
 
-    // Build conversation history for context
-    const historyMessages = conversationHistory.slice(-10).map((msg: any) => ({
-      role: msg.direction === 'inbound' ? 'user' : 'assistant',
-      content: msg.content || ''
-    }));
+    // Build conversation history for context (include images for vision)
+    const historyMessages = conversationHistory.slice(-10).map((msg: any) => {
+      const role = msg.direction === 'inbound' ? 'user' : 'assistant';
+
+      if (role === 'user' && msg.message_type === 'image' && msg.media_url) {
+        return {
+          role,
+          content: [
+            { type: 'text', text: msg.content || 'El cliente envió esta imagen.' },
+            { type: 'image_url', image_url: { url: msg.media_url, detail: 'low' } }
+          ]
+        };
+      }
+
+      return { role, content: msg.content || '' };
+    });
 
     console.log('Calling OpenAI GPT-4o-mini for WhatsApp response');
 
@@ -830,15 +861,24 @@ async function generateAIResponse(
     // 💬 LOG: AI response
     console.log(`💬 Respuesta de IA: ${rawAiResponse.substring(0, 200)}...`);
     
-    // Extract product IDs from explicit tags, and fallback to matching titles
-    let productIds = extractProductIdsFromResponse(rawAiResponse);
+    // Check if AI opted to send collection link instead of individual images
+    const noImagesRequested = rawAiResponse.includes('[NO_IMAGES]');
 
-    if (productIds.length === 0) {
-      const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
-      if (inferred.length > 0) {
-        console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
-        productIds = inferred;
+    // Extract product IDs from explicit tags, and fallback to matching titles
+    let productIds: number[] = [];
+
+    if (!noImagesRequested) {
+      productIds = extractProductIdsFromResponse(rawAiResponse);
+
+      if (productIds.length === 0) {
+        const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
+        if (inferred.length > 0) {
+          console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
+          productIds = inferred;
+        }
       }
+    } else {
+      console.log('📎 AI sent collection link — skipping individual product images');
     }
 
     console.log(`Found ${productIds.length} product IDs in response:`, productIds);
@@ -1190,7 +1230,9 @@ serve(async (req) => {
               
               console.log(`AI status check - Channel: ${aiEnabledOnChannel}, Conversation ai_managed: ${conversation.ai_managed}, Will respond: ${aiEnabledOnChannel && aiEnabledOnConversation}`);
               
-              if (aiEnabledOnChannel && aiEnabledOnConversation && content && messageType === 'text') {
+              // AI responds to text, image (with caption or for vision), button, and interactive messages
+              const aiRespondableTypes = ['text', 'image', 'button', 'interactive'];
+              if (aiEnabledOnChannel && aiEnabledOnConversation && content && aiRespondableTypes.includes(messageType)) {
                 console.log('AI is enabled (channel + conversation), generating response...');
                 
                 // Get conversation history for context
@@ -1207,12 +1249,23 @@ serve(async (req) => {
                 const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
                 console.log(`Using AI provider: ${aiProvider}, function: ${functionName}`);
 
-                // Build messages for the AI function
+                // Build messages for the AI function (include images for vision)
                 const messagesForAI = [
-                  ...(historyMessages || []).reverse().map((m: any) => ({
-                    role: m.direction === 'inbound' ? 'user' : 'assistant',
-                    content: m.content || ''
-                  })),
+                  ...(historyMessages || []).reverse().map((m: any) => {
+                    const role = m.direction === 'inbound' ? 'user' : 'assistant';
+
+                    if (role === 'user' && m.message_type === 'image' && m.media_url) {
+                      return {
+                        role,
+                        content: [
+                          { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
+                          { type: 'image_url', image_url: { url: m.media_url, detail: 'low' } }
+                        ]
+                      };
+                    }
+
+                    return { role, content: m.content || '' };
+                  }),
                   { role: 'user', content: content }
                 ];
 

@@ -167,6 +167,13 @@ TU ROL PRINCIPAL:
 - Recomendar la talla correcta según la edad del bebé/niño
 - Guiar en el proceso de compra y resolver dudas
 
+📷 RECONOCIMIENTO DE IMÁGENES:
+- Puedes VER las imágenes que los clientes te envían
+- Si un cliente envía una foto o screenshot de un producto, identifícalo comparándolo con los productos del catálogo
+- Busca coincidencias por nombre, diseño, animal o patrón visible en la imagen
+- Si reconoces el producto, responde directamente con su nombre, precio y disponibilidad
+- Si no estás seguro de cuál es, menciona las opciones más probables del catálogo
+
 INFORMACIÓN DE DOSMICOS:
 - Tienda online: dosmicos.com
 - Todos los productos son fabricados en Colombia 🇨🇴
@@ -194,12 +201,24 @@ REGLAS DE COMUNICACIÓN:
 - Responde siempre en español
 - Sé conciso pero completo en tus respuestas
 
-🖼️ ENVÍO DE IMÁGENES - MUY IMPORTANTE:
-SÍ puedes y DEBES enviar fotos de productos. Cuando recomiendes productos o el cliente pida ver fotos:
-- Incluye UN tag [PRODUCT_IMAGE_ID:ID] por CADA producto que menciones
-- Puedes incluir hasta 10 productos con imágenes
-- Ejemplo: "Te recomiendo el Sleeping Bag Pollito [PRODUCT_IMAGE_ID:123] y la Ruana Pony [PRODUCT_IMAGE_ID:456]"
-- NUNCA digas que no puedes mostrar imágenes.`,
+🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:
+Cuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):
+- PRIMERO recomienda la talla adecuada si mencionan edad/estatura
+- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento (ej: "Aquí puedes ver todos los diseños disponibles en talla 10: [link]")
+- NO envíes fotos individuales de cada producto, ya que son muchos diseños y el link les permite ver TODOS
+- Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección
+
+🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:
+- SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico (ej: "muéstrame la ruana caballo", "quiero ver la foto del sleeping pollito", "tienes foto de ese?")
+- Si el cliente pregunta por un producto ESPECÍFICO por nombre, ahí sí puedes incluir la foto
+- Puedes incluir hasta 5 productos con imágenes cuando el cliente las pida
+- Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"
+- NUNCA digas que no puedes mostrar imágenes, siempre puedes si te las piden
+
+🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS:
+- Si el cliente pregunta por un color específico (ej: "tienen en rosado?"), revisa las variantes de los productos en el catálogo
+- Los nombres de los productos y sus variantes pueden indicar colores disponibles
+- Si encuentras productos que coinciden, recomiéndalos. Si no estás seguro, envía el link de la colección para que el cliente vea todas las opciones disponibles`,
 
   tone: 'friendly',
   autoReply: true,
@@ -256,6 +275,7 @@ function cleanAIResponse(aiResponse: string): string {
     .replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '')
     .replace(/\[PRODUCT_IMAGE:.+?\]/g, '')
     .replace(/\[IMAGE:.+?\]/gi, '')
+    .replace(/\[NO_IMAGES\]/g, '')
     .trim();
 }
 
@@ -566,7 +586,7 @@ function formatProductsForContext(products: any[]): string {
 
   let context = '\n\n📦 PRODUCTOS RELEVANTES ENCONTRADOS:\n';
   context += '⚠️ IMPORTANTE: Usa SOLO estos productos para responder. NO inventes otros.\n';
-  context += '🔔 RECUERDA: Incluye [PRODUCT_IMAGE_ID:ID] después de CADA producto que menciones.\n\n';
+  context += '🔔 RECUERDA: Si el cliente pregunta por una categoría/talla, envía el LINK de la colección. Solo incluye [PRODUCT_IMAGE_ID:ID] si el cliente pide ver fotos de un producto específico.\n\n';
 
   products.forEach((product: any, index: number) => {
     const variants = product.variants || [];
@@ -786,17 +806,28 @@ async function generateAIResponse(
     
     // Add final reminder at the end of prompt
     if (isProductRelated && relevantProducts.length > 0) {
-      systemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
+      systemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para consultas de COLOR u otros atributos: revisa variantes del catálogo y si no estás seguro, envía el link de la colección.';
     }
 
     // 🤖 LOG: Context sent to AI
     console.log(`🤖 Contexto enviado a IA: ${systemPrompt.substring(0, 500)}...`);
 
-    // Build conversation history for context
-    const historyMessages = conversationHistory.slice(-10).map((msg: any) => ({
-      role: msg.direction === 'inbound' ? 'user' : 'assistant',
-      content: msg.content || ''
-    }));
+    // Build conversation history for context (include images for vision)
+    const historyMessages = conversationHistory.slice(-10).map((msg: any) => {
+      const role = msg.direction === 'inbound' ? 'user' : 'assistant';
+
+      if (role === 'user' && msg.message_type === 'image' && msg.media_url) {
+        return {
+          role,
+          content: [
+            { type: 'text', text: msg.content || 'El cliente envió esta imagen.' },
+            { type: 'image_url', image_url: { url: msg.media_url, detail: 'low' } }
+          ]
+        };
+      }
+
+      return { role, content: msg.content || '' };
+    });
 
     console.log('Calling OpenAI GPT-4o-mini for WhatsApp response');
 
@@ -830,15 +861,24 @@ async function generateAIResponse(
     // 💬 LOG: AI response
     console.log(`💬 Respuesta de IA: ${rawAiResponse.substring(0, 200)}...`);
     
-    // Extract product IDs from explicit tags, and fallback to matching titles
-    let productIds = extractProductIdsFromResponse(rawAiResponse);
+    // Check if AI opted to send collection link instead of individual images
+    const noImagesRequested = rawAiResponse.includes('[NO_IMAGES]');
 
-    if (productIds.length === 0) {
-      const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
-      if (inferred.length > 0) {
-        console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
-        productIds = inferred;
+    // Extract product IDs from explicit tags, and fallback to matching titles
+    let productIds: number[] = [];
+
+    if (!noImagesRequested) {
+      productIds = extractProductIdsFromResponse(rawAiResponse);
+
+      if (productIds.length === 0) {
+        const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
+        if (inferred.length > 0) {
+          console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
+          productIds = inferred;
+        }
       }
+    } else {
+      console.log('📎 AI sent collection link — skipping individual product images');
     }
 
     console.log(`Found ${productIds.length} product IDs in response:`, productIds);
@@ -1586,62 +1626,54 @@ serve(async (req) => {
                   console.log(`✅ Customer CONFIRMED order ${pendingConfirmation.order_number}`);
 
                   try {
-                    // 1. Add "Confirmado" tag to Shopify order
-                    let shopifyTagSuccess = false;
-                    console.log(`🏷️ Attempting to add Confirmado tag - shopify_order_id: ${pendingConfirmation.shopify_order_id}, order_number: ${pendingConfirmation.order_number}`);
-                    const tagResult = await supabase.functions.invoke('update-shopify-order', {
-                      body: {
-                        action: 'add_tags',
-                        orderId: pendingConfirmation.shopify_order_id,
-                        data: { tags: ['Confirmado'] },
-                        organizationId: channel.organization_id
+                    // 1. ALWAYS update local shopify_orders tags first (ensures consistency)
+                    const { data: localOrder } = await supabase
+                      .from('shopify_orders')
+                      .select('tags')
+                      .eq('shopify_order_id', pendingConfirmation.shopify_order_id)
+                      .single();
+                    if (localOrder) {
+                      const currentTags = (localOrder.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+                      if (!currentTags.includes('Confirmado')) {
+                        currentTags.push('Confirmado');
+                        await supabase.from('shopify_orders').update({ tags: currentTags.join(', ') }).eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+                        console.log(`🏷️ Local DB tag "Confirmado" applied for order ${pendingConfirmation.order_number}`);
                       }
-                    });
-
-                    // Check both HTTP error AND response body success flag
-                    const tagDataSuccess = tagResult.data?.success !== false;
-                    if (tagResult.error || !tagDataSuccess) {
-                      const errorDetail = tagResult.error?.message || tagResult.data?.error || JSON.stringify(tagResult.error) || 'Unknown error';
-                      console.error(`⚠️ First attempt to add Confirmado tag failed for order ${pendingConfirmation.order_number}: ${errorDetail}`);
-                      // Retry once after 2 seconds
-                      await new Promise(r => setTimeout(r, 2000));
-                      const retryResult = await supabase.functions.invoke('update-shopify-order', {
-                        body: {
-                          action: 'add_tags',
-                          orderId: pendingConfirmation.shopify_order_id,
-                          data: { tags: ['Confirmado'] },
-                          organizationId: channel.organization_id
-                        }
-                      });
-                      const retryDataSuccess = retryResult.data?.success !== false;
-                      if (retryResult.error || !retryDataSuccess) {
-                        const retryErrorDetail = retryResult.error?.message || retryResult.data?.error || JSON.stringify(retryResult.error) || 'Unknown error';
-                        console.error(`❌ Retry also failed to add Confirmado tag for order ${pendingConfirmation.order_number}: ${retryErrorDetail}`);
-                      } else {
-                        shopifyTagSuccess = true;
-                        console.log('🏷️ Added "Confirmado" tag to Shopify (on retry)');
-                      }
-                    } else {
-                      shopifyTagSuccess = true;
-                      console.log('🏷️ Added "Confirmado" tag to Shopify');
                     }
 
-                    // 2. Update local shopify_orders tags ONLY if Shopify confirmed
-                    if (shopifyTagSuccess) {
-                      const { data: localOrder } = await supabase
-                        .from('shopify_orders')
-                        .select('tags')
-                        .eq('shopify_order_id', pendingConfirmation.shopify_order_id)
-                        .single();
-                      if (localOrder) {
-                        const currentTags = (localOrder.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
-                        if (!currentTags.includes('Confirmado')) {
-                          currentTags.push('Confirmado');
-                          await supabase.from('shopify_orders').update({ tags: currentTags.join(', ') }).eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+                    // 2. Try to add "Confirmado" tag to Shopify (with retries)
+                    let shopifyTagSuccess = false;
+                    console.log(`🏷️ Attempting to add Confirmado tag to Shopify - shopify_order_id: ${pendingConfirmation.shopify_order_id}, order_number: ${pendingConfirmation.order_number}`);
+
+                    for (let attempt = 1; attempt <= 3; attempt++) {
+                      try {
+                        if (attempt > 1) await new Promise(r => setTimeout(r, 2000));
+
+                        const tagResult = await supabase.functions.invoke('update-shopify-order', {
+                          body: {
+                            action: 'add_tags',
+                            orderId: pendingConfirmation.shopify_order_id,
+                            data: { tags: ['Confirmado'] },
+                            organizationId: channel.organization_id
+                          }
+                        });
+
+                        const tagDataSuccess = tagResult.data?.success !== false;
+                        if (tagResult.error || !tagDataSuccess) {
+                          const errorDetail = tagResult.error?.message || tagResult.data?.error || JSON.stringify(tagResult.error) || 'Unknown error';
+                          console.error(`⚠️ Attempt ${attempt}/3 to add Confirmado tag failed for order ${pendingConfirmation.order_number}: ${errorDetail}`);
+                        } else {
+                          shopifyTagSuccess = true;
+                          console.log(`🏷️ Added "Confirmado" tag to Shopify (attempt ${attempt})`);
+                          break;
                         }
+                      } catch (tagErr) {
+                        console.error(`⚠️ Attempt ${attempt}/3 threw error for order ${pendingConfirmation.order_number}:`, tagErr);
                       }
-                    } else {
-                      console.error(`❌ Shopify tag NOT applied for order ${pendingConfirmation.order_number} - local DB NOT updated to avoid inconsistency`);
+                    }
+
+                    if (!shopifyTagSuccess) {
+                      console.error(`❌ All 3 attempts failed to add Confirmado tag to Shopify for order ${pendingConfirmation.order_number}. Local DB was updated. Shopify will need manual sync.`);
                     }
 
                     // 3. Update order_confirmations
@@ -1747,6 +1779,18 @@ serve(async (req) => {
               } else if (!pendingConfirmation || pendingConfirmation.status !== 'pending') {
                 // No pending confirmation found anywhere — proceeding to AI auto-reply
                 console.log(`[COD-CONFIRM] No actionable confirmation for phone ${senderPhone} (status=${pendingConfirmation?.status || 'none'}) — proceeding to AI`);
+
+                // If ai_managed was disabled by a previous COD needs_attention flow, re-enable it
+                // so the AI can respond to subsequent messages (the confirmation is no longer pending)
+                const codStatus = conversation.metadata?.pending_order_confirmation?.status;
+                if (conversation.ai_managed === false && (codStatus === 'needs_attention' || codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
+                  console.log(`[COD-CONFIRM] Re-enabling AI for conversation ${conversation.id} (COD status: ${codStatus}, no longer pending)`);
+                  await supabase
+                    .from('messaging_conversations')
+                    .update({ ai_managed: true })
+                    .eq('id', conversation.id);
+                  conversation.ai_managed = true; // Update local reference too
+                }
               }
               // ========== END COD ORDER CONFIRMATION ==========
 
@@ -1757,15 +1801,18 @@ serve(async (req) => {
               
               console.log(`AI status check - Channel: ${aiEnabledOnChannel}, Conversation ai_managed: ${conversation.ai_managed}, Will respond: ${aiEnabledOnChannel && aiEnabledOnConversation}`);
               
-              if (aiEnabledOnChannel && aiEnabledOnConversation && content && messageType === 'text') {
+              // AI responds to text, image (with caption or for vision), button, and interactive messages
+              const aiRespondableTypes = ['text', 'image', 'button', 'interactive'];
+              if (aiEnabledOnChannel && aiEnabledOnConversation && content && aiRespondableTypes.includes(messageType)) {
                 console.log('AI is enabled (channel + conversation), applying debounce...');
 
                 // ========== DEBOUNCE LOGIC ==========
-                // Set ai_pending_since to NOW so we can detect if another message arrives during the wait
+                // Use metadata.ai_pending_since to track debounce (stored in JSONB metadata field)
                 const debounceTimestamp = new Date().toISOString();
+                const currentMetadata = conversation.metadata || {};
                 await supabase
                   .from('messaging_conversations')
-                  .update({ ai_pending_since: debounceTimestamp })
+                  .update({ metadata: { ...currentMetadata, ai_pending_since: debounceTimestamp } })
                   .eq('id', conversation.id);
 
                 // Wait 6 seconds to accumulate multiple messages from the user
@@ -1776,22 +1823,25 @@ serve(async (req) => {
                 // After waiting, check if ai_pending_since was updated by a newer message
                 const { data: freshConversation } = await supabase
                   .from('messaging_conversations')
-                  .select('ai_pending_since')
+                  .select('metadata')
                   .eq('id', conversation.id)
                   .single();
 
-                if (freshConversation?.ai_pending_since !== debounceTimestamp) {
+                const currentPending = freshConversation?.metadata?.ai_pending_since;
+                if (currentPending !== debounceTimestamp) {
                   // A newer message arrived and set a new timestamp — this invocation should NOT respond
-                  console.log(`Debounce: newer message detected (my=${debounceTimestamp}, current=${freshConversation?.ai_pending_since}). Skipping AI response — the newer invocation will handle it.`);
+                  console.log(`Debounce: newer message detected (my=${debounceTimestamp}, current=${currentPending}). Skipping AI response — the newer invocation will handle it.`);
                   // Clear ai_pending_since is NOT done here; the latest invocation will handle it
                 } else {
                   // No newer message arrived — this is the latest invocation, proceed with AI
                   console.log('Debounce: no newer messages detected, proceeding with AI response...');
 
-                  // Clear the pending flag
+                  // Clear the pending flag from metadata
+                  const cleanMetadata = { ...freshConversation?.metadata };
+                  delete cleanMetadata.ai_pending_since;
                   await supabase
                     .from('messaging_conversations')
-                    .update({ ai_pending_since: null })
+                    .update({ metadata: cleanMetadata })
                     .eq('id', conversation.id);
 
                 // ========== END DEBOUNCE LOGIC ==========
@@ -1823,17 +1873,28 @@ serve(async (req) => {
                   .order('sent_at', { ascending: false })
                   .limit(15);
 
-                // Get AI provider from channel config (default to minimax)
-                const aiConfig = channel.ai_config || {};
-                const aiProvider = aiConfig.aiProvider || 'minimax';
-                const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
-                console.log(`Using AI provider: ${aiProvider}, function: ${functionName}`);
+                // Always use OpenAI (GPT-4o-mini) — supports text + vision
+                const functionName = 'messaging-ai-openai';
+                console.log(`Using AI provider: openai, function: ${functionName}`);
 
                 // Build messages for the AI function — all accumulated messages are already in the DB
-                const messagesForAI = (historyMessages || []).reverse().map((m: any) => ({
-                  role: m.direction === 'inbound' ? 'user' : 'assistant',
-                  content: m.content || ''
-                }));
+                // Include image URLs for vision analysis when available
+                const messagesForAI = (historyMessages || []).reverse().map((m: any) => {
+                  const role = m.direction === 'inbound' ? 'user' : 'assistant';
+
+                  // For user image messages with a stored media URL, include the image for vision
+                  if (role === 'user' && m.message_type === 'image' && m.media_url) {
+                    return {
+                      role,
+                      content: [
+                        { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
+                        { type: 'image_url', image_url: { url: m.media_url, detail: 'low' } }
+                      ]
+                    };
+                  }
+
+                  return { role, content: m.content || '' };
+                });
 
                 // Call the appropriate AI edge function
                 const { data: aiData, error: aiError } = await supabase.functions.invoke(functionName, {

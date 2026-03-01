@@ -209,9 +209,8 @@ export const AITrainingPanel = () => {
         });
       }
 
-      // Get the AI provider from config (default to minimax)
-      const aiProvider = aiConfig?.aiProvider || 'minimax';
-      const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
+      // Always use OpenAI
+      const functionName = 'messaging-ai-openai';
       console.log('Testing AI function:', functionName);
 
       // Call AI via edge function
@@ -784,7 +783,7 @@ export const AITrainingPanel = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Proveedor IA</span>
-              <Badge variant="outline">{aiConfig?.aiProvider === 'minimax' ? '⚡ Minimax' : '🤖 OpenAI'}</Badge>
+              <Badge variant="outline">🤖 OpenAI GPT-4o mini</Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Reglas</span>

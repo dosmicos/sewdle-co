@@ -103,7 +103,7 @@ serve(async (req) => {
       // Find all COD orders without confirmation
       const { data: codOrders, error: ordersError } = await supabase
         .from('shopify_orders')
-        .select('shopify_order_id, order_number, customer_first_name, customer_last_name, customer_phone, shipping_address, total_price, tags')
+        .select('shopify_order_id, order_number, customer_first_name, customer_last_name, customer_phone, shipping_address, billing_address, total_price, tags')
         .eq('organization_id', body.organizationId)
         .ilike('tags', '%Contraentrega%')
         .not('tags', 'ilike', '%Confirmado%')
@@ -206,7 +206,7 @@ async function sendConfirmation(
   // 1. Get order data
   const { data: order, error: orderError } = await supabase
     .from('shopify_orders')
-    .select('shopify_order_id, order_number, customer_first_name, customer_last_name, customer_phone, shipping_address, total_price, tags')
+    .select('shopify_order_id, order_number, customer_first_name, customer_last_name, customer_phone, shipping_address, billing_address, total_price, tags')
     .eq('shopify_order_id', shopifyOrderId)
     .eq('organization_id', organizationId)
     .single();
@@ -222,11 +222,17 @@ async function sendConfirmation(
     .select('title, variant_title, quantity')
     .eq('shopify_order_id', shopifyOrderId);
 
-  // 3. Extract phone number
-  const rawPhone = order.shipping_address?.phone || order.customer_phone;
+  // 3. Extract phone number (try shipping address, then customer phone, then billing phone)
+  const rawPhone = order.shipping_address?.phone || order.customer_phone || order.billing_address?.phone;
   if (!rawPhone) {
-    console.error('No phone number for order:', order.order_number);
-    return { success: false, error: `Sin telefono para pedido ${order.order_number}` };
+    // Check if it's a store pickup order (no shipping address or local pickup)
+    const tags = (order.tags || '').toLowerCase();
+    const isPickup = tags.includes('retiro') || tags.includes('pickup') || tags.includes('recoge');
+    const reason = isPickup
+      ? `Pedido #${order.order_number} es retiro en tienda y no tiene teléfono registrado`
+      : `Sin teléfono para pedido #${order.order_number}`;
+    console.error('No phone number for order:', order.order_number, isPickup ? '(store pickup)' : '');
+    return { success: false, error: reason };
   }
 
   const phone = normalizeColombianPhone(rawPhone);

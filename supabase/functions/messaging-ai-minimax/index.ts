@@ -21,7 +21,7 @@ function extractProductIdsFromResponse(aiResponse: string): number[] {
 
 // Remove product image tags from response
 function cleanAIResponse(aiResponse: string): string {
-  return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').trim();
+  return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').replace(/\[NO_IMAGES\]/g, '').trim();
 }
 
 // Cache external image to Supabase Storage and return public URL
@@ -385,15 +385,14 @@ serve(async (req) => {
                 if (connectedProducts.length > 0) {
                   productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
                   productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
-                  productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
-                  productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
-                  productCatalog += 'Esto es OBLIGATORIO, no opcional. Los clientes esperan ver fotos de los productos.\n\n';
-                  productCatalog += 'Formato correcto (SIEMPRE usa este formato):\n';
-                  productCatalog += '"1. Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251] - Precio: $94.900 COP"\n';
-                  productCatalog += '"2. Ruana Capibara [PRODUCT_IMAGE_ID:8842934517995] - Precio: $94.900 COP"\n\n';
-                  productCatalog += 'Formato INCORRECTO (NO hagas esto):\n';
-                  productCatalog += '"1. Ruana Caballo - Precio: $94.900 COP" (falta el tag de imagen)\n\n';
-                  productCatalog += 'Puedes incluir hasta 10 productos con imágenes en una sola respuesta.\n\n';
+                  productCatalog += '🔗 ESTRATEGIA DE RECOMENDACIÓN:\n';
+                  productCatalog += '- Si el cliente pregunta por CATEGORÍA o TALLA: envía el LINK de la colección filtrada de tu base de conocimiento. Agrega [NO_IMAGES] al final.\n';
+                  productCatalog += '- Si el cliente pide ver FOTOS de un producto específico: incluye [PRODUCT_IMAGE_ID:ID] por cada producto.\n';
+                  productCatalog += '- Si preguntan por COLOR: revisa variantes y nombres. Si no estás seguro, envía el link de la colección.\n\n';
+                  productCatalog += 'Formato cuando el cliente PIDE fotos:\n';
+                  productCatalog += '"Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251]"\n\n';
+                  productCatalog += 'Formato cuando preguntan por talla/categoría:\n';
+                  productCatalog += '"Te recomiendo la talla 10. Aquí puedes ver todos los diseños: [link] [NO_IMAGES]"\n\n';
 
                   connectedProducts.forEach((product) => {
                     const variants = product.variants || [];
@@ -502,7 +501,7 @@ serve(async (req) => {
 
     let fullSystemPrompt = basePrompt;
 
-    fullSystemPrompt += '\n\n⚠️ REGLA CRÍTICA - SIEMPRE INCLUIR IMÁGENES:\nCada vez que menciones CUALQUIER producto por su nombre, DEBES agregar inmediatamente después el tag [PRODUCT_IMAGE_ID:ID_DEL_PRODUCTO].\nEsto es OBLIGATORIO para TODOS los productos que menciones, sin excepción.\nEjemplo correcto: "La Ruana Caballo [PRODUCT_IMAGE_ID:123] tiene un precio de $94.900 COP"\nSi no incluyes los tags, los clientes NO podrán ver las fotos de los productos.';
+    fullSystemPrompt += '\n\n🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS:\nCuando el cliente pregunte por CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\nCuando el cliente PIDA FOTOS de un producto específico: incluye [PRODUCT_IMAGE_ID:ID].\nPara consultas de COLOR: revisa variantes del catálogo. Si no estás seguro, envía el link de la colección.';
 
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
@@ -512,17 +511,36 @@ serve(async (req) => {
     fullSystemPrompt += rulesContext;
     fullSystemPrompt += productCatalog;
 
-    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL: NO olvides incluir [PRODUCT_IMAGE_ID:ID] después de CADA nombre de producto que menciones. Esta es tu función más importante para ayudar a los clientes a ver los productos.';
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para CATEGORÍA/TALLA: envía el LINK de la colección, NO fotos individuales. Agrega [NO_IMAGES].\n- Para PRODUCTO ESPECÍFICO o cuando PIDAN fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para COLOR: revisa variantes y si no estás seguro, envía el link de la colección.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling Minimax MiniMax-M2.5-Lightning with", messages?.length || 0, "messages");
+
+    // Sanitize messages for Minimax: convert multimodal content arrays to text-only
+    // Minimax doesn't support OpenAI's multimodal format (content as array of objects)
+    const sanitizedMessages = (messages || []).map((msg: any) => {
+      if (Array.isArray(msg.content)) {
+        // Extract only text parts from multimodal content
+        const textParts = msg.content
+          .filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text || '')
+          .join('\n');
+        // Note if an image was included so the AI knows
+        const hasImage = msg.content.some((part: any) => part.type === 'image_url');
+        const finalText = hasImage
+          ? `${textParts}\n[El cliente envió una imagen adjunta]`
+          : textParts;
+        return { role: msg.role, content: finalText || '[Mensaje del cliente]' };
+      }
+      return { role: msg.role, content: msg.content || '' };
+    });
 
     // Call Minimax API
     const requestBody: any = {
       model: MINIMAX_MODEL,
       messages: [
         { role: "system", content: fullSystemPrompt },
-        ...(messages || []),
+        ...sanitizedMessages,
       ],
       max_tokens: 800,
       temperature: 0.7,
@@ -599,8 +617,14 @@ serve(async (req) => {
 
     console.log("Minimax raw response:", rawAiResponse.substring(0, 200) + "...");
 
-    const productIds = extractProductIdsFromResponse(rawAiResponse);
+    // Check if AI opted to send collection link instead of individual images
+    const noImagesRequested = rawAiResponse.includes('[NO_IMAGES]');
+    const productIds = noImagesRequested ? [] : extractProductIdsFromResponse(rawAiResponse);
     const cleanedResponse = cleanAIResponse(rawAiResponse);
+
+    if (noImagesRequested) {
+      console.log('📎 AI sent collection link — skipping individual product images');
+    }
 
     console.log(`Found ${productIds.length} product IDs in response:`, productIds);
 
