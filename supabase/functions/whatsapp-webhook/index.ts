@@ -1896,11 +1896,12 @@ serve(async (req) => {
                   return { role, content: m.content || '' };
                 });
 
-                // Call the appropriate AI edge function
+                // Call the AI edge function
+                const channelAiConfig = channel.ai_config || {};
                 const { data: aiData, error: aiError } = await supabase.functions.invoke(functionName, {
                   body: {
                     messages: messagesForAI,
-                    systemPrompt: aiConfig.systemPrompt || 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',
+                    systemPrompt: channelAiConfig.systemPrompt || 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',
                     organizationId: channel.organization_id,
                   }
                 });

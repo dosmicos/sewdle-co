@@ -1009,10 +1009,23 @@ serve(async (req) => {
     );
 
     // WhatsApp messages are now handled exclusively by whatsapp-webhook function
-    // Skip here to prevent duplicate AI responses
+    // Forward the payload to whatsapp-webhook and return its response
     if (body.object === 'whatsapp_business_account') {
-      console.log('⚠️ [meta-webhook-openai] WhatsApp now handled by whatsapp-webhook. Skipping.');
-      return new Response(JSON.stringify({ success: true, skipped: 'whatsapp handled by whatsapp-webhook' }), {
+      console.log('📨 [meta-webhook-openai] Forwarding WhatsApp payload to whatsapp-webhook...');
+      try {
+        const { data, error } = await supabase.functions.invoke('whatsapp-webhook', {
+          body: body,
+        });
+        if (error) {
+          console.error('❌ [meta-webhook-openai] Error forwarding to whatsapp-webhook:', error);
+        } else {
+          console.log('✅ [meta-webhook-openai] Successfully forwarded to whatsapp-webhook');
+        }
+      } catch (fwdError) {
+        console.error('❌ [meta-webhook-openai] Exception forwarding to whatsapp-webhook:', fwdError);
+      }
+      // Always return 200 to Meta so it doesn't retry
+      return new Response(JSON.stringify({ success: true, forwarded: 'whatsapp-webhook' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
