@@ -50,6 +50,32 @@ const queryClient = new QueryClient({
   },
 });
 
+// Smart redirect: sends user to the right page based on their permissions
+const SmartRedirect = () => {
+  const { hasPermission, isLoading } = usePermissions();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If user has dashboard permission, go to dashboard (normal flow)
+  if (hasPermission('dashboard', 'view')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If user only has messaging permission, go directly to whatsapp-ai
+  if (hasPermission('messaging', 'view')) {
+    return <Navigate to="/whatsapp-ai" replace />;
+  }
+
+  // Fallback to dashboard
+  return <Navigate to="/dashboard" replace />;
+};
+
 // Componente para rutas que requieren rol de administrador
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -67,25 +93,25 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   if (user?.role !== 'Administrador') {
-    return <Navigate to="/dashboard" replace />;
+    return <SmartRedirect />;
   }
   
   return <>{children}</>;
 };
 
 // Componente para rutas según permisos específicos
-const PermissionRoute = ({ 
-  children, 
-  module, 
-  action 
-}: { 
+const PermissionRoute = ({
+  children,
+  module,
+  action
+}: {
   children: React.ReactNode;
   module: string;
   action: string;
 }) => {
   const { user, loading: authLoading } = useAuth();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
-  
+
   if (authLoading || permissionsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -93,15 +119,16 @@ const PermissionRoute = ({
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
-  
+
   if (!hasPermission(module, action)) {
-    return <Navigate to="/dashboard" replace />;
+    // Use SmartRedirect to avoid infinite loops (e.g., dashboard → dashboard)
+    return <SmartRedirect />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -119,11 +146,11 @@ const AppContent = () => {
   return (
     <Routes>
       {/* Rutas públicas */}
-      <Route path="/auth" element={!user ? <AuthPage /> : <Navigate to="/dashboard" replace />} />
-      <Route path="/signup" element={!user ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/auth" element={!user ? <AuthPage /> : <SmartRedirect />} />
+      <Route path="/signup" element={!user ? <SignupPage /> : <SmartRedirect />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={<Navigate to="/auth" replace />} />
-      <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/" element={!user ? <LandingPage /> : <SmartRedirect />} />
       <Route path="/upload/:token" element={<UgcUploadPage />} />
       
       {/* Ruta de cambio de contraseña obligatorio - NO protegida por PasswordChangeRouteGuard */}
@@ -137,7 +164,11 @@ const AppContent = () => {
           <MainLayout />
         </PasswordChangeRouteGuard>
       }>
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="dashboard" element={
+          <PermissionRoute module="dashboard" action="view">
+            <DashboardPage />
+          </PermissionRoute>
+        } />
         
         <Route path="orders" element={
           <PermissionRoute module="orders" action="view">
