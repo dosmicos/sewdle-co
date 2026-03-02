@@ -39,6 +39,9 @@ import PrintableOrderView from "@/pages/PrintableOrderView";
 import PasswordChangeRouteGuard from "@/components/PasswordChangeRouteGuard";
 import UgcCreatorsPage from "@/pages/UgcCreatorsPage";
 import UgcUploadPage from "@/pages/UgcUploadPage";
+import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
+import TermsOfServicePage from "@/pages/TermsOfServicePage";
+import DataDeletionPage from "@/pages/DataDeletionPage";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -152,6 +155,9 @@ const AppContent = () => {
       <Route path="/login" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={!user ? <LandingPage /> : <SmartRedirect />} />
       <Route path="/upload/:token" element={<UgcUploadPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+      <Route path="/data-deletion" element={<DataDeletionPage />} />
       
       {/* Ruta de cambio de contraseña obligatorio - NO protegida por PasswordChangeRouteGuard */}
       <Route path="/password-change" element={

@@ -608,8 +608,8 @@ const LandingPage = () => {
               <ul className="space-y-2">
                 <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">{t('footer.documentation')}</a></li>
                 <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">{t('footer.support')}</a></li>
-                <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">{t('footer.privacy')}</a></li>
-                <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">{t('footer.terms')}</a></li>
+                <li><a href="/privacy-policy" className="text-muted-foreground hover:text-foreground text-sm transition-colors">{t('footer.privacy')}</a></li>
+                <li><a href="/terms-of-service" className="text-muted-foreground hover:text-foreground text-sm transition-colors">{t('footer.terms')}</a></li>
               </ul>
             </div>
           </div>
