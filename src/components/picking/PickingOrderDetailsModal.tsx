@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle, Store, RefreshCw, AlertCircle } from 'lucide-react';
+import { Printer, Package, User, MapPin, FileText, Loader2, Tags, CheckCircle, ChevronUp, ChevronDown, Truck, ScanLine, XCircle, Store, RefreshCw, AlertCircle, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { OrderTagsManager } from '@/components/OrderTagsManager';
 import { usePickingOrders, OperationalStatus, PickingOrder } from '@/hooks/usePickingOrders';
@@ -92,6 +92,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [selectedCarrierName, setSelectedCarrierName] = useState<string | null>(null);
   const [isProcessingExpressFulfillment, setIsProcessingExpressFulfillment] = useState(false);
   const [isSyncingFromShopify, setIsSyncingFromShopify] = useState(false);
+  const [showExpressCodeDialog, setShowExpressCodeDialog] = useState(false);
+  const [expressDeliveryCode, setExpressDeliveryCode] = useState('');
 
   // Shopify note sync UX (auto-save + background sync)
   const [shopifyNoteSaveState, setShopifyNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'pending_sync'>('idle');
@@ -412,6 +414,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setVerificationResult(null);
     setVerifiedCounts(new Map());
     setShowScrollHint(false);
+    setShowExpressCodeDialog(false);
+    setExpressDeliveryCode('');
 
     // Reset guards for new order (allow pack/print for the new order)
     autoPackTriggeredRef.current = null;
@@ -991,8 +995,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   }, [orderId, localOrder, handlePrint, handleStatusChange]);
 
-  // Handler for Express orders - auto-fulfill without shipping label
-  const handleMarkAsPackedExpress = useCallback(async () => {
+  // Handler for Express orders - fulfill with delivery code
+  const handleMarkAsPackedExpress = useCallback(async (deliveryCode?: string) => {
     // Guard: prevent duplicate execution
     if (packInFlightRef.current) {
       console.log('⚠️ handleMarkAsPackedExpress: Already in flight, skipping');
@@ -1030,15 +1034,20 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         body: {
           shopify_order_id: localOrder.shopify_order.shopify_order_id,
           organization_id: localOrder.organization_id,
-          user_id: user?.id
+          user_id: user?.id,
+          delivery_code: deliveryCode || undefined
         }
       });
 
       if (error) throw error;
 
       if (data?.success) {
-        toast.success('Pedido Express enviado. Cliente notificado.');
-        
+        toast.success(deliveryCode
+          ? 'Pedido Express enviado. Notificacion enviada al cliente.'
+          : 'Pedido Express enviado.');
+        setShowExpressCodeDialog(false);
+        setExpressDeliveryCode('');
+
         // Optimistic update
         const updatedOrder: PickingOrder = {
           ...localOrder,
@@ -1095,8 +1104,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       // Small delay to show the green verification before auto-packing
       const timer = setTimeout(() => {
         if (isExpressShipping) {
-          // Express: auto-fulfill without shipping label
-          handleMarkAsPackedExpress();
+          // Express: show delivery code dialog instead of auto-fulfilling
+          setShowExpressCodeDialog(true);
         } else {
           // Standard: mark as ready_to_ship
           handleMarkAsPackedAndPrint();
@@ -1319,6 +1328,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     (isPendingPayment && hasContraentregaTag);
 
   return (
+    <>
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
         {/* Scrollable content area */}
@@ -2052,5 +2062,57 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Express Delivery Code Dialog */}
+    <Dialog open={showExpressCodeDialog} onOpenChange={(open) => {
+      if (!open && !isProcessingExpressFulfillment) {
+        setShowExpressCodeDialog(false);
+        setExpressDeliveryCode('');
+      }
+    }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Truck className="w-5 h-5 text-red-500" />
+            Codigo de Entrega Express
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <p className="text-sm text-muted-foreground">
+            Pedido <span className="font-semibold text-foreground">#{effectiveOrder.shopify_order?.order_number}</span> — {effectiveOrder.shopify_order?.customer_first_name} {effectiveOrder.shopify_order?.customer_last_name}
+          </p>
+          <Input
+            autoFocus
+            value={expressDeliveryCode}
+            onChange={(e) => setExpressDeliveryCode(e.target.value.toUpperCase())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && expressDeliveryCode.trim() && !isProcessingExpressFulfillment) {
+                handleMarkAsPackedExpress(expressDeliveryCode.trim());
+              }
+            }}
+            placeholder="Ingresa el codigo de entrega..."
+            className="text-center text-lg font-mono tracking-wider"
+          />
+          <Button
+            onClick={() => handleMarkAsPackedExpress(expressDeliveryCode.trim())}
+            disabled={!expressDeliveryCode.trim() || isProcessingExpressFulfillment}
+            className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold"
+          >
+            {isProcessingExpressFulfillment ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Procesando...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4 mr-2" />
+                Confirmar y Enviar
+              </>
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

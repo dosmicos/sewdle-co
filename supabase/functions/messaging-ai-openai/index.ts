@@ -555,7 +555,8 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 4. Teléfono
 5. Dirección completa
 6. Ciudad y departamento
-7. Producto y talla confirmados (TÚ resuelves los IDs internamente del catálogo, NUNCA se los pidas al cliente)`;
+7. Producto y talla confirmados (TÚ resuelves los IDs internamente del catálogo, NUNCA se los pidas al cliente)
+8. Método de pago (link de pago o contra entrega) — SIEMPRE preguntar antes de crear el pedido`;
 
     // Add order status lookup instructions
     fullSystemPrompt += `\n\n📋 CONSULTA DE ESTADO DE PEDIDOS:
@@ -565,6 +566,17 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 - Muestra toda la información relevante: estado de pago, estado de envío, y tracking si existe
 - Si hay número de seguimiento, compártelo junto con la transportadora
 - Sé empático y claro al comunicar el estado del pedido`;
+
+    // Add payment method rules
+    fullSystemPrompt += `\n\n💳 REGLA DE MÉTODO DE PAGO — OBLIGATORIO ANTES DE CREAR PEDIDO:
+1. SIEMPRE preguntar al cliente cómo desea pagar ANTES de crear el pedido
+2. Ofrecer SOLO estas dos opciones:
+   - 📲 Link de pago (pago online con tarjeta, PSE, Nequi, Daviplata, etc.)
+   - 💵 Contra entrega (pago en efectivo al recibir el pedido)
+3. NO crear el pedido hasta que el cliente haya elegido su método de pago
+4. Si el cliente elige "contra entrega", pasar paymentMethod="contra_entrega" al llamar create_order
+5. Si el cliente elige "link de pago" o pago online, pasar paymentMethod="link_de_pago" al llamar create_order
+6. NUNCA asumir el método de pago, SIEMPRE preguntar`;
 
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
     fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.';
@@ -592,9 +604,10 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             variantId: { type: "number", description: "ID numérico del variante/talla en Shopify. NO pedir al cliente. Obtener del catálogo usando la talla que el cliente elige." },
             quantity: { type: "number", description: "Cantidad (default 1)" },
             notes: { type: "string", description: "Notas adicionales (opcional)" },
-            shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." }
+            shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." },
+            paymentMethod: { type: "string", enum: ["link_de_pago", "contra_entrega"], description: "Método de pago elegido por el cliente. 'link_de_pago' genera un link de pago online. 'contra_entrega' es pago contra entrega (COD)." }
           },
-          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "productId", "variantId", "shippingCost"]
+          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "productId", "variantId", "shippingCost", "paymentMethod"]
         }
       },
       {
@@ -678,8 +691,9 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
       if (functionCall.name === "create_order") {
         try {
           const orderArgs = JSON.parse(functionCall.arguments);
-          console.log("Creating order with args:", orderArgs);
-          
+          const paymentMethod = orderArgs.paymentMethod || 'link_de_pago';
+          console.log("Creating order with args:", orderArgs, "Payment method:", paymentMethod);
+
           // Call the create-shopify-order function
           const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
             body: {
@@ -696,67 +710,80 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                 variantId: orderArgs.variantId || undefined,
                 quantity: orderArgs.quantity || 1,
                 notes: orderArgs.notes || '',
-                shippingCost: orderArgs.shippingCost || 0
+                shippingCost: orderArgs.shippingCost || 0,
+                paymentMethod: paymentMethod
               },
               organizationId: organizationId
             }
           });
-          
+
           if (orderError) {
             console.error("Order creation error:", orderError);
             return new Response(
-              JSON.stringify({ 
+              JSON.stringify({
                 response: "Lo siento, hubo un error al crear tu pedido. Por favor intenta de nuevo o contáctanos directamente.",
                 order_created: false,
                 error: orderError.message
-              }), 
+              }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
-          
+
           console.log("Order created successfully:", orderResult);
-          
-          // Auto-create payment link after order creation
-          console.log("Auto-creating payment link...");
-          
-          const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-bold-payment-link', {
-            body: {
-              amount: Math.round(Number(orderResult.totalPrice)),
-              description: `Pedido #${orderResult.orderNumber} - Dosmicos`,
-              customerEmail: orderArgs.email || orderArgs.customerName,
-              orderId: orderResult.orderId,
-              organizationId: organizationId
-            }
-          });
-          
-          let paymentLinkText = "";
-          let paymentUrl = "";
-          
-          if (paymentError) {
-            console.error("Payment link error:", paymentError);
-            paymentLinkText = "\n\n⚠️ El link de pago no pudo ser generado automáticamente. Por favor contacta al soporte.";
+
+          let responseText = '';
+          let paymentUrl = '';
+
+          if (paymentMethod === 'contra_entrega') {
+            // Contra entrega - no payment link needed
+            responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
+              `📋 Número de pedido: #${orderResult.orderNumber}\n` +
+              `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
+              `💵 Método de pago: Contra entrega\n` +
+              `Pagarás el total al momento de recibir tu pedido.\n\n` +
+              `Te enviaremos la información de seguimiento cuando tu pedido sea despachado. ¡Gracias por tu compra!`;
           } else {
-            console.log("Payment link created:", paymentResult);
-            paymentUrl = paymentResult.paymentUrl;
-            paymentLinkText = `\n\n💳 **TU LINK DE PAGO:**\n${paymentUrl}\n\nHaz clic para pagar con tarjeta, PSE, Nequi, Daviplata y más métodos de pago.`;
+            // Link de pago - generate Bold payment link
+            console.log("Creating payment link...");
+
+            const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-bold-payment-link', {
+              body: {
+                amount: Math.round(Number(orderResult.totalPrice)),
+                description: `Pedido #${orderResult.orderNumber} - Dosmicos`,
+                customerEmail: orderArgs.email || orderArgs.customerName,
+                orderId: orderResult.orderId,
+                organizationId: organizationId
+              }
+            });
+
+            let paymentLinkText = "";
+
+            if (paymentError) {
+              console.error("Payment link error:", paymentError);
+              paymentLinkText = "\n\n⚠️ El link de pago no pudo ser generado automáticamente. Por favor contacta al soporte.";
+            } else {
+              console.log("Payment link created:", paymentResult);
+              paymentUrl = paymentResult.paymentUrl;
+              paymentLinkText = `\n\n💳 **TU LINK DE PAGO:**\n${paymentUrl}\n\nHaz clic para pagar con tarjeta, PSE, Nequi, Daviplata y más métodos de pago.`;
+            }
+
+            responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
+              `📋 Número de pedido: #${orderResult.orderNumber}\n` +
+              `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
+              paymentLinkText;
           }
-          
-          const responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
-            `📋 Número de pedido: #${orderResult.orderNumber}\n` +
-            `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
-            paymentLinkText;
-          
+
           return new Response(
-            JSON.stringify({ 
+            JSON.stringify({
               response: responseText,
               order_created: true,
               orderId: orderResult.orderId,
               orderNumber: orderResult.orderNumber,
               paymentUrl: paymentUrl
-            }), 
+            }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
-          
+
         } catch (err) {
           console.error("Error parsing function call:", err);
         }

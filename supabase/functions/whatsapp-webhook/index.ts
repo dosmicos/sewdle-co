@@ -1641,39 +1641,64 @@ serve(async (req) => {
                       }
                     }
 
-                    // 2. Try to add "Confirmado" tag to Shopify (with retries)
+                    // 2. Add "Confirmado" tag DIRECTLY to Shopify (no intermediary function)
                     let shopifyTagSuccess = false;
-                    console.log(`🏷️ Attempting to add Confirmado tag to Shopify - shopify_order_id: ${pendingConfirmation.shopify_order_id}, order_number: ${pendingConfirmation.order_number}`);
+                    const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+                    const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+                    const shopifyOrderId = pendingConfirmation.shopify_order_id;
+                    console.log(`🏷️ Adding Confirmado tag DIRECTLY to Shopify - shopify_order_id: ${shopifyOrderId}, order_number: ${pendingConfirmation.order_number}`);
 
-                    for (let attempt = 1; attempt <= 3; attempt++) {
-                      try {
-                        if (attempt > 1) await new Promise(r => setTimeout(r, 2000));
+                    if (!shopifyDomain || !shopifyAccessToken) {
+                      console.error(`❌ Shopify credentials not configured! SHOPIFY_STORE_DOMAIN=${!!shopifyDomain}, SHOPIFY_ACCESS_TOKEN=${!!shopifyAccessToken}`);
+                    } else {
+                      for (let attempt = 1; attempt <= 3; attempt++) {
+                        try {
+                          if (attempt > 1) await new Promise(r => setTimeout(r, 1500));
 
-                        const tagResult = await supabase.functions.invoke('update-shopify-order', {
-                          body: {
-                            action: 'add_tags',
-                            orderId: pendingConfirmation.shopify_order_id,
-                            data: { tags: ['Confirmado'] },
-                            organizationId: channel.organization_id
+                          // Fetch current tags from Shopify
+                          const getResp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json?fields=id,tags`, {
+                            method: 'GET',
+                            headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+                          });
+
+                          if (!getResp.ok) {
+                            const errText = await getResp.text();
+                            console.error(`⚠️ Attempt ${attempt}/3 GET order failed (${getResp.status}) for order ${pendingConfirmation.order_number}: ${errText}`);
+                            continue;
                           }
-                        });
 
-                        const tagDataSuccess = tagResult.data?.success !== false;
-                        if (tagResult.error || !tagDataSuccess) {
-                          const errorDetail = tagResult.error?.message || tagResult.data?.error || JSON.stringify(tagResult.error) || 'Unknown error';
-                          console.error(`⚠️ Attempt ${attempt}/3 to add Confirmado tag failed for order ${pendingConfirmation.order_number}: ${errorDetail}`);
-                        } else {
+                          const orderData = await getResp.json();
+                          const currentTags = (orderData.order?.tags || '').split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+
+                          // Merge "Confirmado" tag (case-insensitive dedup)
+                          if (!currentTags.some((t: string) => t.toLowerCase() === 'confirmado')) {
+                            currentTags.push('Confirmado');
+                          }
+
+                          // Update tags in Shopify
+                          const putResp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`, {
+                            method: 'PUT',
+                            headers: { 'X-Shopify-Access-Token': shopifyAccessToken, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ order: { tags: currentTags.join(', ') } }),
+                          });
+
+                          if (!putResp.ok) {
+                            const errText = await putResp.text();
+                            console.error(`⚠️ Attempt ${attempt}/3 PUT tags failed (${putResp.status}) for order ${pendingConfirmation.order_number}: ${errText}`);
+                            continue;
+                          }
+
                           shopifyTagSuccess = true;
-                          console.log(`🏷️ Added "Confirmado" tag to Shopify (attempt ${attempt})`);
+                          console.log(`🏷️ ✅ Added "Confirmado" tag to Shopify DIRECTLY (attempt ${attempt}) for order ${pendingConfirmation.order_number}`);
                           break;
+                        } catch (tagErr) {
+                          console.error(`⚠️ Attempt ${attempt}/3 threw error for order ${pendingConfirmation.order_number}:`, tagErr);
                         }
-                      } catch (tagErr) {
-                        console.error(`⚠️ Attempt ${attempt}/3 threw error for order ${pendingConfirmation.order_number}:`, tagErr);
                       }
-                    }
 
-                    if (!shopifyTagSuccess) {
-                      console.error(`❌ All 3 attempts failed to add Confirmado tag to Shopify for order ${pendingConfirmation.order_number}. Local DB was updated. Shopify will need manual sync.`);
+                      if (!shopifyTagSuccess) {
+                        console.error(`❌ All 3 attempts failed to add Confirmado tag to Shopify for order ${pendingConfirmation.order_number}. Local DB was updated.`);
+                      }
                     }
 
                     // 3. Update order_confirmations

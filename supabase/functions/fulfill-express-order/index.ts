@@ -5,6 +5,7 @@ interface FulfillExpressRequest {
   shopify_order_id: number;
   organization_id: string;
   user_id?: string;
+  delivery_code?: string;
 }
 
 Deno.serve(async (req) => {
@@ -13,9 +14,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { shopify_order_id, organization_id, user_id } = await req.json() as FulfillExpressRequest;
-    
-    console.log(`🚀 fulfill-express-order: Procesando orden Express ${shopify_order_id}`);
+    const { shopify_order_id, organization_id, user_id, delivery_code } = await req.json() as FulfillExpressRequest;
+
+    console.log(`🚀 fulfill-express-order: Procesando orden Express ${shopify_order_id}${delivery_code ? ` (codigo: ${delivery_code})` : ''}`);
 
     if (!shopify_order_id || !organization_id) {
       throw new Error('shopify_order_id y organization_id son requeridos');
@@ -186,22 +187,54 @@ Deno.serve(async (req) => {
       console.log('✅ Estado local actualizado a shipped');
     }
 
-    // Step 5: Auto-send express delivery notification via WhatsApp
-    // The delivery code is extracted from order notes (empacador writes it there)
+    // Step 5: Save delivery code to Shopify notes and send WhatsApp notification
     let notificationSent = false;
-    try {
-      const { data: orderNoteData } = await supabase
-        .from('shopify_orders')
-        .select('note')
-        .eq('shopify_order_id', shopify_order_id)
-        .single();
+    if (delivery_code) {
+      console.log(`📱 Codigo de entrega proporcionado: ${delivery_code}`);
 
-      const note = orderNoteData?.note || '';
-      const codeMatch = note.match(/c[oó]digo[:\s]*\s*([a-zA-Z0-9]+)/i);
-      const deliveryCode = codeMatch?.[1];
+      // Save delivery code to Shopify order notes
+      try {
+        // Get current note from Shopify
+        const noteOrderUrl = `https://${normalizedDomain}/admin/api/2024-01/orders/${shopify_order_id}.json`;
+        const noteResponse = await fetch(noteOrderUrl, {
+          headers: {
+            'X-Shopify-Access-Token': shopifyToken,
+            'Content-Type': 'application/json',
+          },
+        });
 
-      if (deliveryCode) {
-        console.log(`📱 Codigo de entrega encontrado: ${deliveryCode}, enviando notificacion...`);
+        if (noteResponse.ok) {
+          const noteData = await noteResponse.json();
+          const currentNote = noteData.order?.note || '';
+          const updatedNote = currentNote
+            ? `${currentNote}\nCódigo: ${delivery_code}`
+            : `Código: ${delivery_code}`;
+
+          // Update note in Shopify
+          await fetch(noteOrderUrl, {
+            method: 'PUT',
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ order: { note: updatedNote } }),
+          });
+
+          // Update note in local DB
+          await supabase
+            .from('shopify_orders')
+            .update({ note: updatedNote })
+            .eq('shopify_order_id', shopify_order_id)
+            .eq('organization_id', organization_id);
+
+          console.log('✅ Codigo guardado en notas del pedido');
+        }
+      } catch (noteErr) {
+        console.error('⚠️ Error guardando codigo en notas:', noteErr);
+      }
+
+      // Send WhatsApp notification
+      try {
         fetch(`${supabaseUrl}/functions/v1/send-express-notification`, {
           method: 'POST',
           headers: {
@@ -212,7 +245,7 @@ Deno.serve(async (req) => {
             action: 'send_single',
             organizationId: organization_id,
             shopifyOrderId: shopify_order_id,
-            deliveryCode
+            deliveryCode: delivery_code
           })
         }).then(r => r.json()).then(res => {
           console.log('📱 Express notification result:', res);
@@ -220,11 +253,11 @@ Deno.serve(async (req) => {
           console.error('⚠️ Express notification error:', err);
         });
         notificationSent = true;
-      } else {
-        console.log('⚠️ No se encontro codigo de entrega en las notas del pedido');
+      } catch (notifErr) {
+        console.error('⚠️ Error sending express notification:', notifErr);
       }
-    } catch (notifErr) {
-      console.error('⚠️ Error checking for delivery code:', notifErr);
+    } else {
+      console.log('⚠️ No se proporcionó codigo de entrega');
     }
 
     return new Response(

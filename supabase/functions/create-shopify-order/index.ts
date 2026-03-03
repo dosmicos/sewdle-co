@@ -20,6 +20,7 @@ interface OrderData {
   variantId?: number;
   notes?: string;
   shippingCost?: number;
+  paymentMethod?: string;
 }
 
 serve(async (req) => {
@@ -158,8 +159,15 @@ serve(async (req) => {
       }
     }
 
+    // Build tags based on payment method
+    const isContraEntrega = orderData.paymentMethod === 'contra_entrega';
+    const orderTags = ['whatsapp', 'messaging'];
+    if (isContraEntrega) {
+      orderTags.push('Contraentrega');
+    }
+
     // Create the order
-    const orderPayload = {
+    const orderPayload: any = {
       order: {
         line_items: [
           {
@@ -195,10 +203,16 @@ serve(async (req) => {
           code: "SHIPPING",
         }] : [],
         note: orderData.notes || 'Pedido creado desde WhatsApp',
-        tags: ['whatsapp', 'messaging'],
+        tags: orderTags.join(', '),
         financial_status: 'pending',
       }
     };
+
+    // For contra entrega, set the payment gateway to Cash on Delivery (COD)
+    if (isContraEntrega) {
+      orderPayload.order.gateway = 'Cash on Delivery (COD)';
+      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pago contra entrega';
+    }
 
     const orderResponse = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders.json`, {
       method: 'POST',
