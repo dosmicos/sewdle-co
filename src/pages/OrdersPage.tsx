@@ -20,7 +20,7 @@ import OrdersEmptyState from '@/components/OrdersEmptyState';
 const OrdersPage = () => {
   const navigate = useNavigate();
   const { orders, loading, refetch } = useFilteredOrders();
-  const { isAdmin } = useUserContext();
+  const { isAdmin, isWorkshopUser, workshopFilter } = useUserContext();
   const { hasPermission } = usePermissions();
   const { workshops } = useWorkshops();
   const { deleteOrder } = useOrderActions();
@@ -37,7 +37,8 @@ const OrdersPage = () => {
   // Query params for filters
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
-  const selectedWorkshop = searchParams.get('workshop') || 'all';
+  const selectedWorkshopParam = searchParams.get('workshop') || 'all';
+  const selectedWorkshop = isWorkshopUser ? (workshopFilter || 'all') : selectedWorkshopParam;
   const selectedStatus = searchParams.get('status') || 'all';
 
   const updateFilters = (updates: { search?: string; workshop?: string; status?: string }) => {
@@ -51,7 +52,7 @@ const OrdersPage = () => {
       }
     }
     
-    if (updates.workshop !== undefined) {
+    if (!isWorkshopUser && updates.workshop !== undefined) {
       if (updates.workshop && updates.workshop !== 'all') {
         newParams.set('workshop', updates.workshop);
       } else {
@@ -163,13 +164,23 @@ const OrdersPage = () => {
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    if (selectedWorkshop !== 'all') count++;
+    if (!isWorkshopUser && selectedWorkshop !== 'all') count++;
     if (selectedStatus !== 'all') count++;
     return count;
   };
 
   // Filter orders
-  const filteredOrders = orders.filter(order => {
+  const scopedOrders = isWorkshopUser
+    ? (
+      workshopFilter
+        ? orders.filter(order =>
+          order.workshop_assignments?.some((assignment: any) => assignment.workshop_id === workshopFilter)
+        )
+        : []
+    )
+    : orders;
+
+  const filteredOrders = scopedOrders.filter(order => {
     const matchesSearch = 
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -182,14 +193,17 @@ const OrdersPage = () => {
       order.order_items?.some((item: any) => 
         item.product_variants?.variant_title?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-    const matchesWorkshop = selectedWorkshop === 'all' || 
-                           (selectedWorkshop === 'unassigned' && !order.workshop_assignments?.length) ||
-                           order.workshop_assignments?.some((assignment: any) => assignment.workshop_id === selectedWorkshop);
+    const matchesWorkshop = isWorkshopUser
+      ? true
+      : selectedWorkshop === 'all' ||
+        (selectedWorkshop === 'unassigned' && !order.workshop_assignments?.length) ||
+        order.workshop_assignments?.some((assignment: any) => assignment.workshop_id === selectedWorkshop);
     const matchesStatus = selectedStatus === 'all' || order.status === selectedStatus;
     return matchesSearch && matchesWorkshop && matchesStatus;
   });
 
   const pendingSummary = useMemo(() => {
+    const actionableOrderStatuses = new Set(['pending', 'assigned', 'in_progress']);
     const variantsMap = new Map<string, {
       variantKey: string;
       productName: string;
@@ -208,6 +222,10 @@ const OrdersPage = () => {
     let totalPendingUnits = 0;
 
     filteredOrders.forEach((order: any) => {
+      if (!actionableOrderStatuses.has(order.status)) {
+        return;
+      }
+
       const orderItems = order.order_items || [];
 
       orderItems.forEach((item: any) => {
@@ -445,6 +463,7 @@ const OrdersPage = () => {
         getActiveFiltersCount={getActiveFiltersCount}
         canCreateOrders={canCreateOrders}
         onCreateOrder={() => setShowCreateForm(true)}
+        hideWorkshopFilter={isWorkshopUser}
       />
 
       {showCreateForm && canCreateOrders && (
@@ -467,7 +486,7 @@ const OrdersPage = () => {
           {filteredOrders.length === 0 ? (
             <OrdersEmptyState
               searchTerm={searchTerm}
-              selectedWorkshop={selectedWorkshop}
+              selectedWorkshop={isWorkshopUser ? (workshopFilter || 'all') : selectedWorkshop}
               selectedStatus={selectedStatus}
               isAdmin={isAdmin}
             />

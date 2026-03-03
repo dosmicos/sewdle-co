@@ -21,6 +21,7 @@ interface OrderFiltersProps {
   getActiveFiltersCount: () => number;
   canCreateOrders: boolean;
   onCreateOrder: () => void;
+  hideWorkshopFilter?: boolean;
 }
 const OrderFilters = ({
   searchTerm,
@@ -36,28 +37,32 @@ const OrderFilters = ({
   onClearFilters,
   getActiveFiltersCount,
   canCreateOrders,
-  onCreateOrder
+  onCreateOrder,
+  hideWorkshopFilter = false
 }: OrderFiltersProps) => {
   const isMobile = useIsMobile();
+  const desktopGridClass = hideWorkshopFilter
+    ? "flex-1 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-4"
+    : "flex-1 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-4";
 
   // Componente para el contenido de filtros
   const FiltersContent = () => <div className="space-y-4">
       {/* Filtro por taller */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Taller</label>
-        <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Todos los talleres" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los talleres</SelectItem>
-            {workshops.map(workshop => <SelectItem key={workshop.id} value={workshop.id}>
-                {workshop.name}
-              </SelectItem>)}
-            <SelectItem value="unassigned">Sin asignar</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {!hideWorkshopFilter && <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Taller</label>
+          <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Todos los talleres" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los talleres</SelectItem>
+              {workshops.map(workshop => <SelectItem key={workshop.id} value={workshop.id}>
+                  {workshop.name}
+                </SelectItem>)}
+              <SelectItem value="unassigned">Sin asignar</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>}
 
       {/* Filtro por estado */}
       <div className="space-y-2">
@@ -137,15 +142,15 @@ const OrderFilters = ({
           </div> :
       // Vista desktop original
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-4">
-              {/* Búsqueda */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input type="text" placeholder="Buscar por orden, SKU o producto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-              </div>
+          <div className={desktopGridClass}>
+            {/* Búsqueda */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input type="text" placeholder="Buscar por orden, SKU o producto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            </div>
 
-              {/* Filtro por taller */}
-              <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
+            {/* Filtro por taller */}
+            {!hideWorkshopFilter && <Select value={selectedWorkshop} onValueChange={setSelectedWorkshop}>
                 <SelectTrigger className="h-12 rounded-xl border-gray-200">
                   <SelectValue placeholder="Todos los talleres" />
                 </SelectTrigger>
@@ -156,7 +161,7 @@ const OrderFilters = ({
                     </SelectItem>)}
                   <SelectItem value="unassigned">Sin asignar</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select>}
 
               {/* Filtro por estado */}
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
