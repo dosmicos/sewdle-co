@@ -42,6 +42,7 @@ import UgcUploadPage from "@/pages/UgcUploadPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import TermsOfServicePage from "@/pages/TermsOfServicePage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
+import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -135,8 +136,56 @@ const PermissionRoute = ({
   return <>{children}</>;
 };
 
+// Detect if we're on the finance subdomain
+const isFinanceSubdomain = () => {
+  const hostname = window.location.hostname;
+  return hostname === 'finance.sewdle.co' || hostname.startsWith('finance.');
+};
+
+// Finance Dashboard - layout independiente para finance.sewdle.co
+const FinanceAppContent = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="*" element={<Navigate to="/auth" replace />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="finances" action="view">
+            <FinanceDashboardPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/auth" element={<Navigate to="/" replace />} />
+      <Route path="/password-change" element={<PasswordChangePage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
 const AppContent = () => {
   const { user, loading } = useAuth();
+
+  // Si estamos en finance.sewdle.co, mostrar el dashboard financiero
+  if (isFinanceSubdomain()) {
+    return <FinanceAppContent />;
+  }
 
   if (loading) {
     return (
@@ -158,12 +207,12 @@ const AppContent = () => {
       <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
       <Route path="/terms-of-service" element={<TermsOfServicePage />} />
       <Route path="/data-deletion" element={<DataDeletionPage />} />
-      
+
       {/* Ruta de cambio de contraseña obligatorio - NO protegida por PasswordChangeRouteGuard */}
       <Route path="/password-change" element={
         user ? <PasswordChangePage /> : <Navigate to="/auth" replace />
       } />
-      
+
       {/* Rutas protegidas con enforcement de cambio de contraseña */}
       <Route path="/" element={
         <PasswordChangeRouteGuard>
@@ -175,99 +224,105 @@ const AppContent = () => {
             <DashboardPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="orders" element={
           <PermissionRoute module="orders" action="view">
             <OrdersPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="orders/:orderId" element={<OrderDetailsPage />} />
-        
+
         <Route path="supplies" element={
           <PermissionRoute module="insumos" action="view">
             <SuppliesPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="workshops" element={
           <PermissionRoute module="workshops" action="view">
             <WorkshopsPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="products" element={
           <PermissionRoute module="products" action="view">
             <ProductsPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="deliveries" element={
           <PermissionRoute module="deliveries" action="view">
             <DeliveriesPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="deliveries/:deliveryId" element={
           <PermissionRoute module="deliveries" action="view">
             <DeliveryDetailsPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="financial" element={
           <PermissionRoute module="finances" action="view">
             <FinancialPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="replenishment" element={
           <PermissionRoute module="replenishment" action="view">
             <ReplenishmentPage />
           </PermissionRoute>
         } />
-        
-        
+
+        {/* Finance Dashboard - accesible también desde la app principal */}
+        <Route path="finance-dashboard" element={
+          <PermissionRoute module="finances" action="view">
+            <FinanceDashboardPage />
+          </PermissionRoute>
+        } />
+
         <Route path="shopify" element={
           <PermissionRoute module="shopify" action="view">
             <ShopifyDashboardPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="users-roles" element={
           <PermissionRoute module="users" action="view">
             <UsersRolesPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="settings/billing" element={<BillingPage />} />
-        
+
         <Route path="prospects" element={
           <PermissionRoute module="prospects" action="view">
             <ProspectsPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="okrs/*" element={<OKRsPage />} />
-        
+
         <Route path="ugc-creators" element={
           <PermissionRoute module="ugc" action="view">
             <UgcCreatorsPage />
           </PermissionRoute>
         } />
-        
+
         <Route path="alegra" element={
           <AdminRoute>
             <AlegraPage />
           </AdminRoute>
         } />
-        
+
         <Route path="apis" element={
           <AdminRoute>
             <ApisStatusPage />
           </AdminRoute>
         } />
       </Route>
-      
+
       {/* Mensajería IA - Layout independiente con guard de permisos */}
       <Route path="whatsapp-ai" element={
         <PasswordChangeRouteGuard>
@@ -276,7 +331,7 @@ const AppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
-      
+
       {/* Picking & Packing - Layout independiente con guard */}
       <Route path="picking-packing" element={
         <PasswordChangeRouteGuard>
@@ -285,7 +340,7 @@ const AppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
-      
+
       <Route path="picking-packing/print/:orderId" element={
         <PasswordChangeRouteGuard>
           <PermissionRoute module="picking y packing" action="view">
@@ -293,7 +348,7 @@ const AppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
-      
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
