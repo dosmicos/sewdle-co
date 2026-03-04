@@ -43,6 +43,7 @@ import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import TermsOfServicePage from "@/pages/TermsOfServicePage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
 import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
+import MetaAdsCallbackPage from "@/pages/MetaAdsCallbackPage";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -172,6 +173,7 @@ const FinanceAppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
+      <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="/password-change" element={<PasswordChangePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -281,6 +283,9 @@ const AppContent = () => {
             <FinanceDashboardPage />
           </PermissionRoute>
         } />
+
+        {/* Meta Ads OAuth callback */}
+        <Route path="meta-callback" element={<MetaAdsCallbackPage />} />
 
         <Route path="shopify" element={
           <PermissionRoute module="shopify" action="view">

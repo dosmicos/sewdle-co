@@ -11,6 +11,7 @@ import {
   Plus,
   ChevronLeft,
   LogOut,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,12 +37,14 @@ interface FinanceSidebarProps {
   activeSection?: string;
   collapsed?: boolean;
   onToggle?: () => void;
+  onOpenSettings?: () => void;
 }
 
 const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
   activeSection = 'summary',
   collapsed = false,
   onToggle,
+  onOpenSettings,
 }) => {
   const { user, logout } = useAuth();
 
@@ -65,6 +68,15 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
             {item.icon}
           </button>
         ))}
+        <div className="flex-1" />
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="p-2 rounded-lg mb-1 text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        )}
       </div>
     );
   }
@@ -144,7 +156,16 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
         </nav>
       </div>
 
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 space-y-1">
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+            Configuración
+          </button>
+        )}
         <button
           onClick={logout}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-red-500 transition-colors"

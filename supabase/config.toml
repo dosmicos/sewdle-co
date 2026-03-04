@@ -104,3 +104,9 @@ verify_jwt = false
 
 [functions.messaging-ai-minimax]
 verify_jwt = false
+
+[functions.meta-ads-oauth]
+verify_jwt = false
+
+[functions.sync-meta-ads]
+verify_jwt = false

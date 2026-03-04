@@ -3,9 +3,10 @@ import FinanceSidebar from './FinanceSidebar';
 
 interface FinanceDashboardLayoutProps {
   children: React.ReactNode;
+  onOpenSettings?: () => void;
 }
 
-const FinanceDashboardLayout: React.FC<FinanceDashboardLayoutProps> = ({ children }) => {
+const FinanceDashboardLayout: React.FC<FinanceDashboardLayoutProps> = ({ children, onOpenSettings }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
@@ -13,6 +14,7 @@ const FinanceDashboardLayout: React.FC<FinanceDashboardLayoutProps> = ({ childre
       <FinanceSidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onOpenSettings={onOpenSettings}
       />
       <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
         {children}
