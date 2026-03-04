@@ -230,10 +230,16 @@ const OrdersPage = () => {
 
       orderItems.forEach((item: any) => {
         const orderedUnits = Number(item.quantity || 0);
-        const approvedUnits = (item.delivery_items || []).reduce(
-          (sum: number, deliveryItem: any) => sum + Number(deliveryItem.quantity_approved || 0),
-          0
-        );
+        const approvedUnits = (item.delivery_items || []).reduce((sum: number, deliveryItem: any) => {
+          const deliveryWorkshopId = deliveryItem?.deliveries?.workshop_id || null;
+
+          // En vista de taller solo restamos lo aprobado por ese mismo taller
+          if (isWorkshopUser && workshopFilter && deliveryWorkshopId !== workshopFilter) {
+            return sum;
+          }
+
+          return sum + Number(deliveryItem.quantity_approved || 0);
+        }, 0);
         const pendingUnits = Math.max(orderedUnits - approvedUnits, 0);
 
         if (pendingUnits <= 0) {
