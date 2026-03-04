@@ -189,6 +189,31 @@ GUÍA DE TALLAS SLEEPING BAGS:
 - Talla 4: 18 a 24 meses
 - Tallas mayores: Consultar disponibilidad
 
+GUÍA DE TALLAS RUANAS — OBLIGATORIO SEGUIR ESTA TABLA:
+⚠️ REGLA #1: El número de talla NO es igual a la edad. NUNCA asumas que "4 años = talla 4". SIEMPRE busca la edad en esta tabla:
+| Talla | Estatura     | Edad          |
+| 2     | 60-76 cm     | 3 a 12 meses  |
+| 4     | 77-88 cm     | 1 a 2 años    |
+| 6     | 90-100 cm    | 3 a 4 años    |
+| 8     | 100-110 cm   | 4 a 5 años    |
+| 10    | 115-123 cm   | 6 a 7 años    |
+| 12    | 125-133 cm   | 8 a 9 años    |
+
+REGLA #2: Si la edad está en el LÍMITE entre dos tallas, recomienda la talla MAYOR para que le dure más tiempo.
+REGLA #3: Si el cliente da edad Y estatura, prioriza la estatura para mayor precisión.
+REGLA #4: Si solo da edad, pregunta la estatura para ser más preciso, o recomienda según la tabla.
+
+EJEMPLOS DE RECOMENDACIÓN CORRECTA:
+- Bebé de 6 meses → Talla 2 (NO talla 6)
+- Niño de 1 año → Talla 4 (NO talla 1)
+- Niño de 2 años → Talla 4 (NO talla 2)
+- Niño de 3 años → Talla 6 (NO talla 3)
+- Niño de 4 años → Talla 8 (está en el límite 6/8, se recomienda la mayor)
+- Niño de 5 años → Talla 8 (NO talla 5)
+- Niño de 6 años → Talla 10 (NO talla 6)
+- Niño de 7 años → Talla 10 (NO talla 7)
+- Niño de 8 años → Talla 12 (NO talla 8)
+
 GUÍA TOG (nivel de abrigo):
 - TOG 0.5: Clima cálido (20-24°C) - Material: Algodón ligero
 - TOG 1.0-1.5: Temperatura intermedia (16-20°C) - Material mixto
@@ -204,9 +229,20 @@ REGLAS DE COMUNICACIÓN:
 🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:
 Cuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):
 - PRIMERO recomienda la talla adecuada si mencionan edad/estatura
-- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento (ej: "Aquí puedes ver todos los diseños disponibles en talla 10: [link]")
+- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento
 - NO envíes fotos individuales de cada producto, ya que son muchos diseños y el link les permite ver TODOS
 - Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección
+
+🔗 REGLA OBLIGATORIA DE LINKS — NUNCA MODIFICAR URLs:
+- SIEMPRE copia el link EXACTO de tu base de conocimiento, carácter por carácter. NUNCA modifiques, reconstruyas ni inventes URLs.
+- NUNCA uses formato markdown para links. NO escribas [texto](url). WhatsApp NO soporta markdown.
+- Envía el link como texto plano en una línea separada.
+- Formato CORRECTO:
+  Aquí puedes ver los diseños disponibles en talla 2:
+  https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29
+- Formato INCORRECTO (NO hagas esto):
+  [Ruanas talla 2](https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29)
+- Si no encuentras el link exacto en tu base de conocimiento para una talla, indica al cliente que visite dosmicos.co y filtre por talla.
 
 🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:
 - SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico (ej: "muéstrame la ruana caballo", "quiero ver la foto del sleeping pollito", "tienes foto de ese?")
@@ -806,7 +842,7 @@ async function generateAIResponse(
     
     // Add final reminder at the end of prompt
     if (isProductRelated && relevantProducts.length > 0) {
-      systemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para consultas de COLOR u otros atributos: revisa variantes del catálogo y si no estás seguro, envía el link de la colección.';
+      systemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para consultas de COLOR u otros atributos: revisa variantes del catálogo y si no estás seguro, envía el link de la colección.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.';
     }
 
     // 🤖 LOG: Context sent to AI
@@ -1024,9 +1060,9 @@ async function sendInstagramMessage(_igAccountId: string, recipientId: string, m
 
 // Send Messenger message via Meta Graph API
 async function sendMessengerMessage(recipientPsid: string, message: string): Promise<boolean> {
-  const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
+  const accessToken = Deno.env.get('META_INSTAGRAM_TOKEN') || Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken) {
-    console.error('META_WHATSAPP_TOKEN not configured for Messenger');
+    console.error('META_INSTAGRAM_TOKEN/META_WHATSAPP_TOKEN not configured for Messenger');
     return false;
   }
   try {
@@ -1196,11 +1232,7 @@ async function handleAIAutoReply(
   sendReplyFn: (text: string) => Promise<boolean>,
   shopifyCredentials?: any
 ): Promise<void> {
-  // Skip AI for Instagram and Messenger until Advanced Access is approved (to avoid wasting tokens)
-  if (channelType === 'instagram' || channelType === 'messenger') {
-    console.log(`🤖 [${channelType}] AI auto-reply DISABLED — Advanced Access not yet approved, skipping to save tokens`);
-    return;
-  }
+  // Instagram and Messenger AI auto-reply enabled
 
   const aiEnabledOnChannel = channel.ai_enabled !== false;
   const aiEnabledOnConversation = conversation.ai_managed !== false;
@@ -2069,67 +2101,8 @@ serve(async (req) => {
                   console.log('No AI response generated');
                 }
                 
-                // AUTO-ORDER: Detect if user is providing order data and create order automatically
-                const orderKeywords = ['quiero comprar', 'me lo llevo', 'lo quiero', 'aqui están mis datos', 'te envío los datos', 'datos para el pedido'];
-                const hasOrderIntent = orderKeywords.some(kw => content.toLowerCase().includes(kw));
-                
-                if (hasOrderIntent) {
-                  console.log('Order intent detected, extracting order data...');
-                  
-                  // Get all conversation messages to extract data
-                  const allMsgs = [...(historyMessages || [])].reverse();
-                  const allText = allMsgs.map(m => m.content).join(' ');
-                  
-                  // Extract email
-                  const emailMatch = allText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
-                  // Extract phone (starts with 3, 10-11 digits)
-                  const phoneMatch = allText.match(/(3\d{9})/);
-                  
-                  // Try to extract name (first text that's not email/phone/address)
-                  const nameMatch = allText.match(/(?:me llamo|soy|nombre[:\s]+)([A-Za-z\s]+?)(?:\s*,|\s*correo|\s*email|\s*teléfono|\s*dirección|$)/i);
-                  
-                  // Look for address keywords
-                  const addressMatch = allText.match(/(?:dirección|dir|address)[:\s]+([^,]+,\s*[A-Za-z]+)/i);
-                  
-                  if (emailMatch && phoneMatch) {
-                    console.log('Found order data - creating order automatically');
-                    
-                    // Call create order function
-                    const orderResult = await supabase.functions.invoke('create-shopify-order', {
-                      body: {
-                        orderData: {
-                          customerName: nameMatch ? nameMatch[1].trim() : 'Cliente',
-                          email: emailMatch[1],
-                          phone: phoneMatch[1],
-                          address: addressMatch ? addressMatch[1].trim() : 'Por confirmar',
-                          city: 'Bogotá',
-                          department: 'Cundinamarca',
-                          productId: 8842923606251, // Default product - need to extract from message
-                          quantity: 1
-                        },
-                        organizationId: channel.organization_id
-                      }
-                    });
-                    
-                    if (orderResult.data?.orderId) {
-                      console.log('Auto-order created:', orderResult.data.orderNumber);
-                      
-                      const orderMessage = `¡Pedido creado! #${orderResult.data.orderNumber}\nTotal: $${Number(orderResult.data.totalPrice).toLocaleString('es-CO')}`;
-                      
-                      await sendWhatsAppMessage(senderPhone, orderMessage, channel.meta_phone_number_id || phoneNumberId);
-                      
-                      await supabase.from('messaging_messages').insert({
-                        conversation_id: conversation.id,
-                        channel_type: 'whatsapp',
-                        direction: 'outbound',
-                        sender_type: 'ai',
-                        content: orderMessage,
-                        message_type: 'text',
-                        sent_at: new Date().toISOString(),
-                      });
-                    }
-                  }
-                }
+                // NOTE: Order creation is handled by messaging-ai-openai via OpenAI function calling (create_order).
+                // No separate auto-order detection needed here.
                 } // end else (duplicate guard - no recent AI response found)
                 } // end else (debounce - this invocation handles the AI response)
               }
@@ -2484,7 +2457,23 @@ serve(async (req) => {
 
           if (!senderPsid || !content) continue;
 
-          console.log(`💬 Messenger message from PSID ${senderPsid}: ${content.substring(0, 80)}`);
+          // Fetch Messenger user profile name
+          let senderName = senderPsid;
+          try {
+            const pageToken = Deno.env.get('META_INSTAGRAM_TOKEN') || Deno.env.get('META_WHATSAPP_TOKEN');
+            if (pageToken) {
+              const profileResp = await fetch(`https://graph.facebook.com/v21.0/${senderPsid}?fields=name,first_name,last_name&access_token=${pageToken}`);
+              const profileData = await profileResp.json();
+              if (profileData?.name) {
+                senderName = profileData.name;
+                console.log(`💬 Messenger user profile: ${senderName}`);
+              }
+            }
+          } catch (e) {
+            console.log('⚠️ Could not fetch Messenger user profile:', e);
+          }
+
+          console.log(`💬 Messenger message from ${senderName} (${senderPsid}): ${content.substring(0, 80)}`);
 
           // Find or create channel by meta_page_id
           let { data: channel } = await supabase
@@ -2534,7 +2523,7 @@ serve(async (req) => {
                 organization_id: channel.organization_id,
                 channel_type: 'messenger',
                 external_user_id: senderPsid,
-                user_name: senderPsid,
+                user_name: senderName,
                 status: 'active',
                 ai_managed: true,
                 last_message_at: messageTimestamp,
@@ -2548,6 +2537,15 @@ serve(async (req) => {
               continue;
             }
             conversation = newConvo;
+          } else {
+            // Update name if conversation exists but has numeric ID as name
+            const currentName = conversation.user_name;
+            const isNumericName = /^\d+$/.test(currentName || '');
+            if (isNumericName && senderName !== senderPsid) {
+              console.log(`💬 Updating Messenger conversation username: "${currentName}" → "${senderName}"`);
+              await supabase.from('messaging_conversations').update({ user_name: senderName }).eq('id', conversation.id);
+              conversation.user_name = senderName;
+            }
           }
 
           // Save inbound message (skip if already exists to prevent duplicates from webhook retries)

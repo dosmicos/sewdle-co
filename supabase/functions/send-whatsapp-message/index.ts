@@ -279,10 +279,8 @@ serve(async (req) => {
         );
       }
 
-      // Use Instagram token for Instagram, WhatsApp token for Messenger
-      const sendToken = channelType === 'instagram'
-        ? (Deno.env.get('META_INSTAGRAM_TOKEN') || whatsappToken)
-        : whatsappToken;
+      // Use Page Access Token for Instagram and Messenger (required by Meta API)
+      const sendToken = Deno.env.get('META_INSTAGRAM_TOKEN') || whatsappToken;
 
       console.log(`📤 Sending ${channelType} message to ${recipientPhone} via page ${metaPageId}`);
 

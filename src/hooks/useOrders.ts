@@ -346,6 +346,9 @@ export const useOrders = () => {
           *,
           order_items (
             *,
+            delivery_items!left (
+              quantity_approved
+            ),
             product_variants (
               *,
               products (*)

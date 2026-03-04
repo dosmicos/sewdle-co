@@ -90,15 +90,27 @@ serve(async (req) => {
     const productData = await productResponse.json();
     const product = productData.product;
 
-    // Find the variant to use (use first variant or specific one)
+    // Validate variant - MUST be provided and exist in product
     let variantId = orderData.variantId;
-    let variant = product.variants?.[0];
-
-    if (!variantId && product.variants?.length > 0) {
-      // Find first available variant
-      variant = product.variants.find((v: any) => v.inventory_quantity > 0) || product.variants[0];
-      variantId = variant.id;
+    if (!variantId) {
+      console.error(`❌ variantId is missing! orderData.variantId=${orderData.variantId}`);
+      return new Response(
+        JSON.stringify({ error: "Falta el variantId (talla). No se puede crear el pedido sin especificar la talla correcta." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    // Verify the variantId actually belongs to this product
+    const variant = product.variants?.find((v: any) => String(v.id) === String(variantId));
+    if (!variant) {
+      console.error(`❌ variantId ${variantId} NOT FOUND in product ${orderData.productId}. Available variants: ${product.variants?.map((v: any) => `${v.title}(${v.id})`).join(', ')}`);
+      return new Response(
+        JSON.stringify({ error: `El variantId ${variantId} no pertenece al producto ${product.title}. Variantes disponibles: ${product.variants?.map((v: any) => `${v.title}(id:${v.id})`).join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`✅ Variant validated: ${variant.title} (${variantId}) for product ${product.title}`);
 
     // Create customer in Shopify
     const customerData = {
