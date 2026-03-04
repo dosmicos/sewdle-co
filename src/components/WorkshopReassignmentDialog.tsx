@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Factory, AlertTriangle } from "lucide-react";
+import { CalendarIcon, Factory, AlertTriangle, Check, ChevronsUpDown } from "lucide-react";
 import { useWorkshops } from "@/hooks/useWorkshops";
 import { useWorkshopAssignments } from "@/hooks/useWorkshopAssignments";
 import { useOrderMaterialConsumptions } from "@/hooks/useOrderMaterialConsumptions";
@@ -40,6 +41,8 @@ export const WorkshopReassignmentDialog = ({
   const [expectedDate, setExpectedDate] = useState<Date | undefined>();
   const [notes, setNotes] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [workshopSelectorOpen, setWorkshopSelectorOpen] = useState(false);
+  const [workshopSearch, setWorkshopSearch] = useState("");
 
   const { workshops, loading: loadingWorkshops } = useWorkshops();
   const { reassignWorkshop, loading: reassigning } = useWorkshopAssignments(false);
@@ -48,6 +51,10 @@ export const WorkshopReassignmentDialog = ({
   // Filter out current workshop from available options
   const availableWorkshops = workshops.filter(
     (w) => w.id !== currentAssignment.workshop_id
+  );
+  const selectedWorkshop = availableWorkshops.find((w) => w.id === selectedWorkshopId);
+  const filteredWorkshops = availableWorkshops.filter((workshop) =>
+    workshop.name.toLowerCase().includes(workshopSearch.toLowerCase())
   );
 
   // Check for material consumptions
@@ -74,6 +81,8 @@ export const WorkshopReassignmentDialog = ({
     setExpectedDate(undefined);
     setNotes("");
     setShowConfirmation(false);
+    setWorkshopSelectorOpen(false);
+    setWorkshopSearch("");
     onClose();
   };
 
@@ -131,22 +140,61 @@ export const WorkshopReassignmentDialog = ({
           {/* New Workshop Selector */}
           <div className="space-y-2">
             <Label htmlFor="new-workshop">Nuevo Taller *</Label>
-            <Select
-              value={selectedWorkshopId}
-              onValueChange={setSelectedWorkshopId}
-              disabled={loadingWorkshops || reassigning}
-            >
-              <SelectTrigger id="new-workshop">
-                <SelectValue placeholder="Selecciona un taller" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableWorkshops.map((workshop) => (
-                  <SelectItem key={workshop.id} value={workshop.id}>
-                    {workshop.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={workshopSelectorOpen} onOpenChange={setWorkshopSelectorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="new-workshop"
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={workshopSelectorOpen}
+                  className="w-full justify-between"
+                  disabled={loadingWorkshops || reassigning}
+                >
+                  <span className="truncate">
+                    {selectedWorkshop ? selectedWorkshop.name : "Selecciona un taller"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[var(--radix-popover-trigger-width)] p-0"
+                align="start"
+              >
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Buscar taller..."
+                    value={workshopSearch}
+                    onValueChange={setWorkshopSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No se encontraron talleres.</CommandEmpty>
+                    <ScrollArea className="h-64">
+                      <CommandGroup>
+                        {filteredWorkshops.map((workshop) => (
+                          <CommandItem
+                            key={workshop.id}
+                            value={workshop.name}
+                            onSelect={() => {
+                              setSelectedWorkshopId(workshop.id);
+                              setWorkshopSelectorOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedWorkshopId === workshop.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="truncate">{workshop.name}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </ScrollArea>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Expected Completion Date */}
