@@ -111,7 +111,7 @@ const ProductsPage = () => {
           product_id,
           size,
           color,
-          products!inner(name)
+          products!inner(id, name, image_url)
         `);
 
       if (variantsError) {
@@ -129,6 +129,7 @@ const ProductsPage = () => {
 
       // Crear un mapa de todas las variantes de Shopify para búsqueda eficiente
       const shopifyVariantsMap = new Map();
+      const productImageUpdates = new Map<string, string>();
       let totalShopifyVariants = 0;
       
       data.products.forEach((product: any) => {
@@ -137,7 +138,8 @@ const ProductsPage = () => {
             if (variant.sku) {
               shopifyVariantsMap.set(variant.sku, {
                 ...variant,
-                productTitle: product.title
+                productTitle: product.title,
+                productImageUrl: product.image?.src || product.images?.[0]?.src || null
               });
               totalShopifyVariants++;
               
@@ -167,6 +169,17 @@ const ProductsPage = () => {
           matchedCount++;
           const shopifyStock = shopifyVariant.inventory_quantity || shopifyVariant.stock_quantity || 0;
           const currentStock = localVariant.stock_quantity || 0;
+          const localProductId = localVariant.products?.id as string | undefined;
+          const localProductImage = (localVariant.products?.image_url as string | null) || null;
+          const shopifyProductImage = shopifyVariant.productImageUrl as string | null;
+
+          // Backfill/refresh product main image from Shopify when available
+          if (localProductId && shopifyProductImage && localProductImage !== shopifyProductImage) {
+            // Keep only one update per product
+            if (!productImageUpdates.has(localProductId)) {
+              productImageUpdates.set(localProductId, shopifyProductImage);
+            }
+          }
 
           console.log(`🔍 Coincidencia encontrada:`);
           console.log(`   📋 SKU: ${localVariant.sku_variant}`);
@@ -200,14 +213,30 @@ const ProductsPage = () => {
         }
       }
 
+      // Sincronizar imágenes principales de productos
+      let imagesUpdatedCount = 0;
+      for (const [productId, imageUrl] of productImageUpdates.entries()) {
+        const { error: imageUpdateError } = await supabase
+          .from('products')
+          .update({ image_url: imageUrl })
+          .eq('id', productId);
+
+        if (imageUpdateError) {
+          console.error(`❌ Error actualizando imagen de producto ${productId}:`, imageUpdateError);
+        } else {
+          imagesUpdatedCount++;
+        }
+      }
+
       console.log(`📊 Resumen completo de actualización:`);
       console.log(`   🔗 Coincidencias encontradas: ${matchedCount}`);
       console.log(`   ✅ Variantes actualizadas: ${updatedCount}`);
       console.log(`   ℹ️ Sin cambios: ${noChangeCount}`);
       console.log(`   ⚠️ No encontradas: ${notFoundCount}`);
+      console.log(`   🖼️ Imágenes de producto actualizadas: ${imagesUpdatedCount}`);
       console.log(`   📝 Detalles de actualizaciones:`, updateDetails);
 
-      const message = `Actualizadas: ${updatedCount}, Sin cambios: ${noChangeCount}, No encontradas: ${notFoundCount}`;
+      const message = `Stock actualizado: ${updatedCount}, sin cambios: ${noChangeCount}, no encontradas: ${notFoundCount}, imágenes: ${imagesUpdatedCount}`;
       
       toast({
         title: "Stock actualizado",

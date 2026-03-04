@@ -147,14 +147,13 @@ Deno.serve(async (req) => {
         if (existingProducts && existingProducts.length > 0) {
           targetProductId = existingProducts[0].id
           console.log(`📦 Producto existente encontrado: ${existingProducts[0].name}`)
-          // Update image if missing
+          // Keep product main image in sync with Shopify
           const webhookImageUrl = productData.image?.src || productData.images?.[0]?.src || null
           if (webhookImageUrl) {
             await supabase
               .from('products')
               .update({ image_url: webhookImageUrl })
               .eq('id', targetProductId)
-              .is('image_url', null)
           }
         } else {
           // Create new product
