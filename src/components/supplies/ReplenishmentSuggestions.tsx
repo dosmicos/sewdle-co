@@ -416,11 +416,11 @@ export const ReplenishmentSuggestions: React.FC = () => {
                               <TooltipTrigger>
                                 <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300 text-[10px] px-1 py-0">
                                   <History className="h-3 w-3 mr-0.5" />
-                                  Hist.
+                                  Lote prueba
                                 </Badge>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Velocidad histórica guardada: sin ventas recientes en 30d ni 90d</p>
+                                <p>{suggestion.reason || 'Velocidad histórica con decaimiento aplicado (lote de prueba 20d)'}</p>
                               </TooltipContent>
                             </Tooltip>
                           )}

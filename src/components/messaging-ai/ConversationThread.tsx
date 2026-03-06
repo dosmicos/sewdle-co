@@ -1607,19 +1607,40 @@ export const ConversationThread = ({
         </div>
       </CardContent>
 
-      {/* Image Lightbox */}
-      <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-          <DialogTitle className="sr-only">Vista de imagen</DialogTitle>
-          {lightboxImage && (
-            <img 
-              src={lightboxImage} 
-              alt="Imagen ampliada" 
-              className="w-full h-full object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Image Lightbox - Full screen overlay */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          {/* Close button */}
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white z-10"
+            onClick={() => setLightboxImage(null)}
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {/* Image */}
+          <img
+            src={lightboxImage}
+            alt="Imagen ampliada"
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {/* Download button */}
+          <a
+            href={lightboxImage}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download className="h-4 w-4" />
+            Descargar imagen
+          </a>
+        </div>
+      )}
     </>
   );
 };

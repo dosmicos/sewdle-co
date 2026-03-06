@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
+import { validateCityDepartment } from '../_shared/colombian-geography.ts'
 
 // Helper function to verify Shopify webhook signature
 async function verifyShopifyWebhook(body: string, signature: string, secret: string): Promise<boolean> {
@@ -436,6 +437,59 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
       console.log('⚠️ Pedido COD sin telefono, no se puede enviar confirmacion');
     }
   }
+
+  // ========== ADDRESS VALIDATION (Colombia city-department mismatch) ==========
+  const shippingAddr = order.shipping_address;
+  if (shippingAddr && shippingAddr.country_code === 'CO' && shippingAddr.city && shippingAddr.province) {
+    console.log(`📍 Validando dirección colombiana: ${shippingAddr.city}, ${shippingAddr.province}`);
+    const validation = validateCityDepartment(shippingAddr.city, shippingAddr.province, shippingAddr.province_code);
+
+    if (!validation.valid && validation.expectedDepartment) {
+      console.log(`⚠️ Mismatch detectado: ${shippingAddr.city} deberia ser ${validation.expectedDepartment}, no ${shippingAddr.province}`);
+
+      // Apply "Revisar Dirección" tag
+      await applyAutoTagsToShopify(order.id, ['Revisar Dirección'], order.tags, shopDomain, supabase);
+      console.log('🏷️ Tag "Revisar Dirección" aplicado');
+
+      // Fire-and-forget: send WhatsApp address verification
+      if (organizationId) {
+        const phone = shippingAddr.phone || order.customer?.phone;
+        if (phone) {
+          console.log('📱 Enviando verificación de dirección por WhatsApp...');
+          try {
+            const verifyUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-address-verification`;
+            fetch(verifyUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+              },
+              body: JSON.stringify({
+                organizationId,
+                shopifyOrderId: order.id,
+                mismatch: {
+                  city: shippingAddr.city,
+                  province: shippingAddr.province,
+                  expectedDepartment: validation.expectedDepartment
+                }
+              })
+            }).then(r => r.json()).then(res => {
+              console.log('📍 Address verification trigger result:', res);
+            }).catch(err => {
+              console.error('⚠️ Address verification trigger error:', err);
+            });
+          } catch (err) {
+            console.error('⚠️ Error triggering address verification:', err);
+          }
+        } else {
+          console.log('⚠️ Sin teléfono para verificación de dirección');
+        }
+      }
+    } else {
+      console.log(`✅ Dirección válida: ${shippingAddr.city}, ${shippingAddr.province}`);
+    }
+  }
+  // ========== END ADDRESS VALIDATION ==========
 
   // AUTO-INVOICING: Solo log - el cron batch procesará pedidos elegibles cada 2 minutos
   if (await checkAutoInvoiceEligibility(order, supabase, organizationId)) {

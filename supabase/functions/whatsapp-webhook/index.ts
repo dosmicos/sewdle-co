@@ -1034,16 +1034,16 @@ async function sendInstagramMessage(_igAccountId: string, recipientId: string, m
 
     const url = `https://graph.facebook.com/v21.0/${fbPageId}/messages`;
     console.log(`📸 Sending Instagram DM to ${recipientId} via FB Page ${fbPageId}`);
+    const formBody = new URLSearchParams();
+    formBody.append('recipient', JSON.stringify({ id: recipientId }));
+    formBody.append('message', JSON.stringify({ text: message }));
+    formBody.append('access_token', accessToken);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
-        recipient: { id: recipientId },
-        message: { text: message },
-      }),
+      body: formBody.toString(),
     });
     const responseData = await response.json();
     if (!response.ok) {
@@ -1123,25 +1123,29 @@ async function replyToInstagramComment(commentId: string, message: string): Prom
   }
 }
 
-// Fetch Instagram/Facebook user profile name via Meta Graph API
-async function fetchUserProfile(userId: string, _igAccountId?: string): Promise<{ name: string; username?: string }> {
+// Fetch Instagram/Facebook/Messenger user profile name via Meta Graph API
+// platform: 'instagram' | 'messenger' | undefined (searches both)
+async function fetchUserProfile(userId: string, _igAccountId?: string, platform?: string): Promise<{ name: string; username?: string }> {
   const accessToken = Deno.env.get('META_INSTAGRAM_TOKEN') || Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken) return { name: userId };
 
   const fbPageId = Deno.env.get('META_FACEBOOK_PAGE_ID');
   if (!fbPageId) {
-    console.log(`⚠️ [IG-PROFILE] META_FACEBOOK_PAGE_ID not set, cannot resolve username`);
+    console.log(`⚠️ [PROFILE] META_FACEBOOK_PAGE_ID not set, cannot resolve username`);
     return { name: userId };
   }
 
+  const label = platform || 'all';
+
   // Strategy 1: Use Facebook Page conversations endpoint (works WITHOUT Advanced Access)
-  // Paginate through conversations to find the user's username
+  // Paginate through conversations to find the user's name/username
   try {
-    let nextUrl: string | null = `https://graph.facebook.com/v21.0/${fbPageId}/conversations?platform=instagram&fields=participants&limit=50&access_token=${accessToken}`;
+    const platformParam = platform ? `&platform=${platform}` : '';
+    let nextUrl: string | null = `https://graph.facebook.com/v21.0/${fbPageId}/conversations?fields=participants&limit=50${platformParam}&access_token=${accessToken}`;
     let pagesChecked = 0;
     const maxPages = 3; // Check up to 150 conversations (3 pages x 50)
 
-    console.log(`🔍 [IG-PROFILE] Searching username in Page ${fbPageId} conversations for user ${userId}`);
+    console.log(`🔍 [PROFILE:${label}] Searching name in Page ${fbPageId} conversations for user ${userId}`);
 
     while (nextUrl && pagesChecked < maxPages) {
       const convResponse = await fetch(nextUrl);
@@ -1152,39 +1156,40 @@ async function fetchUserProfile(userId: string, _igAccountId?: string): Promise<
           const participants = conv?.participants?.data || [];
           const userParticipant = participants.find((p: any) => String(p.id) === String(userId));
           if (userParticipant) {
-            const username = userParticipant.username || userParticipant.name;
-            if (username) {
-              console.log(`✅ [IG-PROFILE] Found username via conversations (page ${pagesChecked + 1}): @${username}`);
-              return { name: username, username };
+            const username = userParticipant.username || undefined;
+            const name = userParticipant.name || userParticipant.username || userId;
+            if (name && name !== userId) {
+              console.log(`✅ [PROFILE:${label}] Found name via conversations (page ${pagesChecked + 1}): ${name}${username ? ` (@${username})` : ''}`);
+              return { name, username };
             }
           }
         }
         // Get next page URL
         nextUrl = convData.paging?.next || null;
       } else {
-        console.log(`⚠️ [IG-PROFILE] Conversations API error:`, JSON.stringify(convData?.error || {}).substring(0, 200));
+        console.log(`⚠️ [PROFILE:${label}] Conversations API error:`, JSON.stringify(convData?.error || {}).substring(0, 200));
         break;
       }
       pagesChecked++;
     }
-    console.log(`⚠️ [IG-PROFILE] User ${userId} not found in ${pagesChecked * 50} conversations`);
+    console.log(`⚠️ [PROFILE:${label}] User ${userId} not found in ${pagesChecked * 50} conversations`);
   } catch (err) {
-    console.error(`⚠️ [IG-PROFILE] Conversations strategy error:`, err);
+    console.error(`⚠️ [PROFILE:${label}] Conversations strategy error:`, err);
   }
 
   // Strategy 2: Direct user profile query (requires Advanced Access for external users, fallback)
   try {
     const url = `https://graph.facebook.com/v21.0/${userId}?fields=name,username,profile_pic&access_token=${accessToken}`;
-    console.log(`🔍 [IG-PROFILE] Trying direct profile query for ${userId}`);
+    console.log(`🔍 [PROFILE:${label}] Trying direct profile query for ${userId}`);
     const response = await fetch(url);
     const data = await response.json();
     if (response.ok && !data.error) {
-      const name = data.username || data.name || userId;
-      console.log(`✅ [IG-PROFILE] Direct profile found: ${name}`);
+      const name = data.name || data.username || userId;
+      console.log(`✅ [PROFILE:${label}] Direct profile found: ${name}`);
       return { name, username: data.username };
     }
   } catch (error) {
-    console.error('[IG-PROFILE] Direct profile error:', error);
+    console.error(`[PROFILE:${label}] Direct profile error:`, error);
   }
 
   return { name: userId };
@@ -1590,6 +1595,284 @@ serve(async (req) => {
               } else {
                 console.log('Message saved to database');
               }
+
+              // ========== ADDRESS VERIFICATION DETECTION ==========
+              let pendingAddressVerification: any = null;
+              let skipAiForAddress = false;
+
+              if (conversation?.id) {
+                const { data: freshAddrConv } = await supabase
+                  .from('messaging_conversations')
+                  .select('metadata')
+                  .eq('id', conversation.id)
+                  .single();
+
+                pendingAddressVerification = freshAddrConv?.metadata?.pending_address_verification;
+                console.log(`[ADDR-VERIFY] Fresh metadata for conv ${conversation.id}: pending=${JSON.stringify(pendingAddressVerification?.status || null)}`);
+              }
+
+              if (pendingAddressVerification?.status === 'pending' && content && (messageType === 'text' || messageType === 'button' || messageType === 'interactive')) {
+                console.log(`📍 Pending address verification for order ${pendingAddressVerification.order_number}`);
+
+                // Check button payload first (from template quick reply buttons)
+                const buttonPayload = message.button?.payload || '';
+                const isButtonCorrect = buttonPayload === 'ADDRESS_CORRECT';
+                const isButtonWrong = buttonPayload === 'ADDRESS_WRONG';
+
+                const normalized = content.toLowerCase().trim()
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+                const confirmWords = ['correcto', 'correcta', 'si', 'ok', 'bien', 'esta bien', 'esta correcta', 'esta correcto', 'dale', 'listo', 'perfecto', 'claro'];
+                const isConfirmation = isButtonCorrect || confirmWords.some(w => normalized === w || normalized.startsWith(w + ' ') || normalized.startsWith(w + ',') || normalized.startsWith(w + '.'));
+
+                if (isConfirmation) {
+                  console.log(`✅ Customer CONFIRMED address for order ${pendingAddressVerification.order_number}`);
+                  skipAiForAddress = true;
+
+                  try {
+                    // Remove "Revisar Dirección" tag from Shopify order
+                    const shopifyOrderId = pendingAddressVerification.shopify_order_id;
+                    const { data: localOrder } = await supabase
+                      .from('shopify_orders')
+                      .select('tags')
+                      .eq('shopify_order_id', shopifyOrderId)
+                      .single();
+
+                    if (localOrder) {
+                      const currentTags = (localOrder.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+                      const updatedTags = currentTags.filter((t: string) => t !== 'Revisar Dirección');
+                      if (updatedTags.length !== currentTags.length) {
+                        await supabase.from('shopify_orders').update({ tags: updatedTags.join(', ') }).eq('shopify_order_id', shopifyOrderId);
+                        console.log(`🏷️ Removed "Revisar Dirección" tag from local order`);
+
+                        // Also remove from Shopify
+                        const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+                        const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+                        if (shopifyDomain && shopifyAccessToken) {
+                          try {
+                            const shopifyResp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders/${shopifyOrderId}.json`, {
+                              method: 'PUT',
+                              headers: {
+                                'X-Shopify-Access-Token': shopifyAccessToken,
+                                'Content-Type': 'application/json'
+                              },
+                              body: JSON.stringify({ order: { id: shopifyOrderId, tags: updatedTags.join(', ') } })
+                            });
+                            console.log(`🏷️ Shopify tag update: ${shopifyResp.status}`);
+                          } catch (e) {
+                            console.error('⚠️ Error updating Shopify tags:', e);
+                          }
+                        }
+                      }
+                    }
+
+                    // Update metadata: mark as confirmed
+                    const existingMeta = conversation.metadata || {};
+                    await supabase
+                      .from('messaging_conversations')
+                      .update({
+                        ai_managed: true,
+                        metadata: {
+                          ...existingMeta,
+                          pending_address_verification: {
+                            ...pendingAddressVerification,
+                            status: 'confirmed',
+                            confirmed_at: new Date().toISOString()
+                          }
+                        }
+                      })
+                      .eq('id', conversation.id);
+
+                    // Send confirmation reply
+                    const confirmMessage = `¡Perfecto, gracias por confirmar tu dirección! 🎉 Tu pedido #${pendingAddressVerification.order_number} será enviado sin problemas.`;
+                    const confirmResp = await fetch(`https://graph.facebook.com/v21.0/${channel.meta_phone_number_id}/messages`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${Deno.env.get('META_WHATSAPP_TOKEN')}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        messaging_product: 'whatsapp',
+                        recipient_type: 'individual',
+                        to: senderPhone,
+                        type: 'text',
+                        text: { preview_url: false, body: confirmMessage }
+                      })
+                    });
+                    const confirmData = await confirmResp.json();
+
+                    // Save reply to DB
+                    if (conversation.id) {
+                      await supabase.from('messaging_messages').insert({
+                        conversation_id: conversation.id,
+                        external_message_id: confirmData?.messages?.[0]?.id,
+                        channel_type: 'whatsapp',
+                        direction: 'outbound',
+                        sender_type: 'agent',
+                        content: confirmMessage,
+                        message_type: 'text',
+                        sent_at: new Date().toISOString()
+                      });
+                      await supabase.from('messaging_conversations').update({
+                        last_message_preview: confirmMessage.substring(0, 100),
+                        last_message_at: new Date().toISOString()
+                      }).eq('id', conversation.id);
+                    }
+
+                    console.log(`✅ Address verification confirmed for order ${pendingAddressVerification.order_number}`);
+                  } catch (err) {
+                    console.error('❌ Error processing address confirmation:', err);
+                  }
+
+                } else if (isButtonWrong) {
+                  // Customer clicked "Corregir Dirección" button — ask for correct address
+                  console.log(`📝 Customer wants to correct address for order ${pendingAddressVerification.order_number}`);
+                  skipAiForAddress = true;
+
+                  try {
+                    const askMessage = `Por favor escribenos tu direccion completa correcta (direccion, ciudad y departamento) para actualizar tu pedido #${pendingAddressVerification.order_number} 📝`;
+                    const askResp = await fetch(`https://graph.facebook.com/v21.0/${channel.meta_phone_number_id}/messages`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${Deno.env.get('META_WHATSAPP_TOKEN')}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        messaging_product: 'whatsapp',
+                        recipient_type: 'individual',
+                        to: senderPhone,
+                        type: 'text',
+                        text: { preview_url: false, body: askMessage }
+                      })
+                    });
+                    const askData = await askResp.json();
+
+                    if (conversation.id) {
+                      await supabase.from('messaging_messages').insert({
+                        conversation_id: conversation.id,
+                        external_message_id: askData?.messages?.[0]?.id,
+                        channel_type: 'whatsapp',
+                        direction: 'outbound',
+                        sender_type: 'agent',
+                        content: askMessage,
+                        message_type: 'text',
+                        sent_at: new Date().toISOString()
+                      });
+                      await supabase.from('messaging_conversations').update({
+                        last_message_preview: askMessage.substring(0, 100),
+                        last_message_at: new Date().toISOString()
+                      }).eq('id', conversation.id);
+                    }
+
+                    // Keep status as 'pending' — wait for the actual address in next message
+                    console.log(`📝 Asked customer for correct address, keeping pending status`);
+                  } catch (err) {
+                    console.error('❌ Error asking for address correction:', err);
+                  }
+
+                } else {
+                  // Customer wrote something else (new address or question)
+                  console.log(`📝 Customer sent address correction for order ${pendingAddressVerification.order_number}: "${content}"`);
+                  skipAiForAddress = true;
+
+                  try {
+                    // Update metadata: mark needs_attention with customer response
+                    const existingMeta = conversation.metadata || {};
+                    await supabase
+                      .from('messaging_conversations')
+                      .update({
+                        ai_managed: false,
+                        metadata: {
+                          ...existingMeta,
+                          pending_address_verification: {
+                            ...pendingAddressVerification,
+                            status: 'needs_attention',
+                            customer_response: content,
+                            responded_at: new Date().toISOString()
+                          }
+                        }
+                      })
+                      .eq('id', conversation.id);
+
+                    // Assign "Requiere atencion" tag to conversation
+                    const { data: attnTag } = await supabase
+                      .from('messaging_conversation_tags')
+                      .select('id')
+                      .eq('organization_id', channel.organization_id)
+                      .eq('name', 'Requiere atencion')
+                      .maybeSingle();
+
+                    if (attnTag && conversation.id) {
+                      await supabase
+                        .from('messaging_conversation_tag_assignments')
+                        .upsert({
+                          conversation_id: conversation.id,
+                          tag_id: attnTag.id
+                        }, { onConflict: 'conversation_id,tag_id' });
+                      console.log(`🏷️ Tag "Requiere atencion" assigned`);
+                    }
+
+                    // Send acknowledgment
+                    const ackMessage = `Gracias por tu respuesta. Nuestro equipo revisará tu dirección y actualizará tu pedido #${pendingAddressVerification.order_number}. Te confirmaremos pronto! 📦`;
+                    const ackResp = await fetch(`https://graph.facebook.com/v21.0/${channel.meta_phone_number_id}/messages`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${Deno.env.get('META_WHATSAPP_TOKEN')}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        messaging_product: 'whatsapp',
+                        recipient_type: 'individual',
+                        to: senderPhone,
+                        type: 'text',
+                        text: { preview_url: false, body: ackMessage }
+                      })
+                    });
+                    const ackData = await ackResp.json();
+
+                    if (conversation.id) {
+                      await supabase.from('messaging_messages').insert({
+                        conversation_id: conversation.id,
+                        external_message_id: ackData?.messages?.[0]?.id,
+                        channel_type: 'whatsapp',
+                        direction: 'outbound',
+                        sender_type: 'agent',
+                        content: ackMessage,
+                        message_type: 'text',
+                        sent_at: new Date().toISOString()
+                      });
+                      await supabase.from('messaging_conversations').update({
+                        last_message_preview: ackMessage.substring(0, 100),
+                        last_message_at: new Date().toISOString()
+                      }).eq('id', conversation.id);
+                    }
+
+                    console.log(`📝 Address needs attention for order ${pendingAddressVerification.order_number}`);
+                  } catch (err) {
+                    console.error('❌ Error processing address correction:', err);
+                  }
+                }
+              } else if (pendingAddressVerification && pendingAddressVerification.status !== 'pending') {
+                // Address verification is no longer pending — re-enable AI if it was disabled
+                const addrStatus = conversation.metadata?.pending_address_verification?.status;
+                if (conversation.ai_managed === false && (addrStatus === 'confirmed' || addrStatus === 'needs_attention')) {
+                  // Only re-enable for confirmed; needs_attention stays manual
+                  if (addrStatus === 'confirmed') {
+                    console.log(`[ADDR-VERIFY] Re-enabling AI for conversation ${conversation.id} (address status: ${addrStatus})`);
+                    await supabase
+                      .from('messaging_conversations')
+                      .update({ ai_managed: true })
+                      .eq('id', conversation.id);
+                    conversation.ai_managed = true;
+                  }
+                }
+              }
+              // If address verification was handled, skip AI for this message
+              if (skipAiForAddress) {
+                conversation.ai_managed = false;
+                console.log(`[ADDR-VERIFY] Skipping AI response — address verification handled this message`);
+              }
+              // ========== END ADDRESS VERIFICATION ==========
 
               // ========== COD ORDER CONFIRMATION DETECTION ==========
               // Re-fetch conversation metadata fresh to avoid stale data from the
@@ -2153,7 +2436,7 @@ serve(async (req) => {
             if (!senderId || !content) continue;
 
             // Fetch sender's Instagram profile name (pass IG account ID to resolve via Page conversations)
-            const senderProfile = await fetchUserProfile(senderId, instagramPageId);
+            const senderProfile = await fetchUserProfile(senderId, instagramPageId, 'instagram');
             const senderName = senderProfile.username || senderProfile.name || senderId;
 
             console.log(`📸 Instagram DM from ${senderName} (${senderId}): ${content.substring(0, 80)}`);
@@ -2457,17 +2740,13 @@ serve(async (req) => {
 
           if (!senderPsid || !content) continue;
 
-          // Fetch Messenger user profile name
+          // Fetch Messenger user profile name via Conversations API
           let senderName = senderPsid;
           try {
-            const pageToken = Deno.env.get('META_INSTAGRAM_TOKEN') || Deno.env.get('META_WHATSAPP_TOKEN');
-            if (pageToken) {
-              const profileResp = await fetch(`https://graph.facebook.com/v21.0/${senderPsid}?fields=name,first_name,last_name&access_token=${pageToken}`);
-              const profileData = await profileResp.json();
-              if (profileData?.name) {
-                senderName = profileData.name;
-                console.log(`💬 Messenger user profile: ${senderName}`);
-              }
+            const senderProfile = await fetchUserProfile(senderPsid, undefined, 'messenger');
+            if (senderProfile.name && senderProfile.name !== senderPsid) {
+              senderName = senderProfile.name;
+              console.log(`💬 Messenger user profile: ${senderName}`);
             }
           } catch (e) {
             console.log('⚠️ Could not fetch Messenger user profile:', e);
