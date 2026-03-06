@@ -288,6 +288,7 @@ serve(async (req) => {
 
     // Load products with Shopify inventory if organizationId is provided
     let productCatalog = '';
+    let allShopifyProducts: any[] = []; // Store for product ID validation
     let shopifyCredentials: any = null;
     let productImageMap: Record<number, { url: string; title: string }> = {}; // Map Shopify ID -> image URL + title
     
@@ -361,6 +362,7 @@ serve(async (req) => {
                 );
                 
                 if (connectedProducts.length > 0) {
+                  allShopifyProducts = connectedProducts; // Store for validation
                   productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
                   productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
                   productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
@@ -486,17 +488,38 @@ serve(async (req) => {
     let fullSystemPrompt = basePrompt;
 
     // Add current date/time context so AI knows what day it is
+    // Use Intl.DateTimeFormat.formatToParts for reliable timezone conversion in Deno
     const now = new Date();
-    const colombiaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-    const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const diaSemana = diasSemana[colombiaTime.getDay()];
-    const dia = colombiaTime.getDate();
-    const mes = meses[colombiaTime.getMonth()];
-    const anio = colombiaTime.getFullYear();
-    const hora = colombiaTime.getHours();
-    const minutos = colombiaTime.getMinutes().toString().padStart(2, '0');
-    fullSystemPrompt += `\n\n📅 FECHA Y HORA ACTUAL: Hoy es ${diaSemana} ${dia} de ${mes} de ${anio}, son las ${hora}:${minutos} (hora Colombia). Usa esta información para responder correctamente sobre días de despacho, tiempos de entrega y disponibilidad.`;
+    const colombiaFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      weekday: 'long',
+      hour12: false,
+    });
+    const parts = colombiaFormatter.formatToParts(now);
+    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+    const colYear = getPart('year');
+    const colMonth = parseInt(getPart('month'));
+    const colDay = parseInt(getPart('day'));
+    const colHour = getPart('hour');
+    const colMinute = getPart('minute');
+    const colWeekday = getPart('weekday').toLowerCase();
+
+    // Map English weekday to Spanish
+    const weekdayMap: Record<string, string> = {
+      'sunday': 'domingo', 'monday': 'lunes', 'tuesday': 'martes',
+      'wednesday': 'miércoles', 'thursday': 'jueves', 'friday': 'viernes', 'saturday': 'sábado'
+    };
+    const meses = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const diaSemana = weekdayMap[colWeekday] || colWeekday;
+    const mes = meses[colMonth] || '';
+
+    console.log(`📅 Colombia time: ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} (raw weekday: ${colWeekday})`);
+    fullSystemPrompt += `\n\n📅 FECHA Y HORA ACTUAL: Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). Usa esta información para responder correctamente sobre días de despacho, tiempos de entrega y disponibilidad.`;
 
     // Add smart product recommendation strategy
     fullSystemPrompt += '\n\n👕 GUÍA DE TALLAS RUANAS — OBLIGATORIO SEGUIR ESTA TABLA:\n⚠️ REGLA #1: El número de talla NO es igual a la edad. NUNCA asumas que "4 años = talla 4". SIEMPRE busca la edad en esta tabla:\n| Talla | Estatura     | Edad          |\n| 2     | 60-76 cm     | 3 a 12 meses  |\n| 4     | 77-88 cm     | 1 a 2 años    |\n| 6     | 90-100 cm    | 3 a 4 años    |\n| 8     | 100-110 cm   | 4 a 5 años    |\n| 10    | 115-123 cm   | 6 a 7 años    |\n| 12    | 125-133 cm   | 8 a 9 años    |\n\nREGLA #2: Si la edad está en el LÍMITE entre dos tallas, recomienda la talla MAYOR para que le dure más tiempo.\nREGLA #3: Si el cliente da edad Y estatura, prioriza la estatura para mayor precisión.\nREGLA #4: Si solo da edad, pregunta la estatura para ser más preciso, o recomienda según la tabla.\n\nEJEMPLOS DE RECOMENDACIÓN CORRECTA:\n- Bebé de 6 meses → Talla 2 (NO talla 6)\n- Niño de 1 año → Talla 4 (NO talla 1)\n- Niño de 2 años → Talla 4 (NO talla 2)\n- Niño de 3 años → Talla 6 (NO talla 3)\n- Niño de 4 años → Talla 8 (está en el límite 6/8, se recomienda la mayor)\n- Niño de 5 años → Talla 8 (NO talla 5)\n- Niño de 6 años → Talla 10 (NO talla 6)\n- Niño de 7 años → Talla 10 (NO talla 7)\n- Niño de 8 años → Talla 12 (NO talla 8)';
@@ -594,7 +617,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 6. NUNCA asumir el método de pago, SIEMPRE preguntar`;
 
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
-    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.';
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.\n- ⚠️ CRÍTICO al llamar create_order: El campo productName debe ser el nombre EXACTO del catálogo, y productId/variantId deben corresponder a ESE producto. NUNCA confundas IDs de un producto con otro. Verifica SIEMPRE que el ID corresponda al nombre correcto.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
@@ -616,13 +639,15 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             department: { type: "string", description: "Departamento de envío" },
             neighborhood: { type: "string", description: "Barrio (opcional)" },
             productId: { type: "number", description: "ID numérico del producto en Shopify. NO pedir al cliente. Obtener del catálogo usando el nombre del producto que el cliente menciona." },
+            productName: { type: "string", description: "Nombre EXACTO del producto tal como aparece en el catálogo (ej: 'Ruana Pollito'). Se usa para validar que el productId sea correcto." },
             variantId: { type: "number", description: "ID numérico del variante/talla en Shopify. NO pedir al cliente. Obtener del catálogo usando la talla que el cliente elige." },
+            variantName: { type: "string", description: "Nombre de la talla/variante elegida (ej: '4 (1 a 2 años)'). Se usa para validar que el variantId sea correcto." },
             quantity: { type: "number", description: "Cantidad (default 1)" },
             notes: { type: "string", description: "Notas adicionales (opcional)" },
             shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." },
             paymentMethod: { type: "string", enum: ["link_de_pago", "contra_entrega"], description: "Método de pago elegido por el cliente. 'link_de_pago' genera un link de pago online. 'contra_entrega' es pago contra entrega (COD)." }
           },
-          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "productId", "variantId", "shippingCost", "paymentMethod"]
+          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "productId", "productName", "variantId", "variantName", "shippingCost", "paymentMethod"]
         }
       },
       {
@@ -708,6 +733,63 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           const orderArgs = JSON.parse(functionCall.arguments);
           const paymentMethod = orderArgs.paymentMethod || 'link_de_pago';
           console.log("Creating order with args:", orderArgs, "Payment method:", paymentMethod);
+
+          // 🛡️ PRODUCT ID VALIDATION: Verify productId matches productName
+          // GPT-4o-mini sometimes confuses IDs between similar products
+          if (orderArgs.productName && allShopifyProducts.length > 0) {
+            const declaredProduct = allShopifyProducts.find((p: any) => p.id === orderArgs.productId);
+            const declaredProductTitle = declaredProduct?.title?.toLowerCase() || '';
+            const aiProductName = orderArgs.productName.toLowerCase();
+
+            // Check if the productId actually matches the product name the AI claims
+            const titleMatch = declaredProductTitle.includes(aiProductName) || aiProductName.includes(declaredProductTitle);
+
+            if (!titleMatch && declaredProduct) {
+              console.warn(`⚠️ PRODUCT MISMATCH DETECTED! AI said "${orderArgs.productName}" but productId ${orderArgs.productId} is "${declaredProduct.title}"`);
+
+              // Find the correct product by name
+              const correctProduct = allShopifyProducts.find((p: any) => {
+                const pTitle = p.title.toLowerCase();
+                return pTitle.includes(aiProductName) || aiProductName.includes(pTitle);
+              });
+
+              if (correctProduct) {
+                console.log(`🔄 Auto-correcting: "${declaredProduct.title}" (${orderArgs.productId}) → "${correctProduct.title}" (${correctProduct.id})`);
+                orderArgs.productId = correctProduct.id;
+
+                // Also fix the variantId if we have a variant name
+                if (orderArgs.variantName) {
+                  const correctVariant = (correctProduct.variants || []).find((v: any) => {
+                    const vTitle = (v.title || '').toLowerCase();
+                    const aiVariant = orderArgs.variantName.toLowerCase();
+                    return vTitle.includes(aiVariant) || aiVariant.includes(vTitle) ||
+                      vTitle.replace(/\s*\(.*?\)\s*/g, '').trim() === aiVariant.replace(/\s*\(.*?\)\s*/g, '').trim();
+                  });
+                  if (correctVariant) {
+                    console.log(`🔄 Auto-correcting variant: ${orderArgs.variantId} → ${correctVariant.id} (${correctVariant.title})`);
+                    orderArgs.variantId = correctVariant.id;
+                  } else {
+                    // Fuzzy match: try matching just the size number
+                    const sizeMatch = orderArgs.variantName.match(/(\d+)/);
+                    if (sizeMatch) {
+                      const sizeNum = sizeMatch[1];
+                      const sizeVariant = (correctProduct.variants || []).find((v: any) =>
+                        (v.title || '').includes(sizeNum)
+                      );
+                      if (sizeVariant) {
+                        console.log(`🔄 Auto-correcting variant by size "${sizeNum}": ${orderArgs.variantId} → ${sizeVariant.id} (${sizeVariant.title})`);
+                        orderArgs.variantId = sizeVariant.id;
+                      }
+                    }
+                  }
+                }
+              } else {
+                console.warn(`⚠️ Could not find correct product for "${orderArgs.productName}" in catalog`);
+              }
+            } else {
+              console.log(`✅ Product ID validated: "${orderArgs.productName}" matches productId ${orderArgs.productId}`);
+            }
+          }
 
           // Call the create-shopify-order function
           const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {

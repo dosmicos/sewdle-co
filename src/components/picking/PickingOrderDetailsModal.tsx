@@ -1245,30 +1245,39 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // Calculate financial summary dynamically based on active lineItems
   // This fixes the issue where Shopify doesn't update totals when items are deleted
   const calculatedSubtotal = lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
+
   // Get original values for tax rate calculation
   const originalSubtotal = parseFloat(rawFinancialData.subtotal_price) || 0;
   const originalTax = parseFloat(rawFinancialData.total_tax) || 0;
   const taxRate = originalSubtotal > 0 ? (originalTax / originalSubtotal) : 0;
-  
+
   // Calculate tax proportionally based on new subtotal
   const calculatedTax = calculatedSubtotal * taxRate;
-  
+
   // Shipping stays the same (not affected by deleted items)
   const shippingAmount = parseFloat(rawFinancialData.total_shipping_price_set?.shop_money?.amount) || 0;
-  
+
+  // Discount amount from Shopify (discount codes, automatic discounts, etc.)
+  const totalDiscounts = parseFloat(rawFinancialData.total_discounts) || parseFloat(effectiveOrder.shopify_order?.total_discounts as any) || 0;
+  const discountCodes: { code: string; amount: string; type: string }[] = rawFinancialData.discount_codes || [];
+  const discountLabel = discountCodes.length > 0
+    ? `Descuento (${discountCodes.map((d: any) => d.code).join(', ')})`
+    : 'Descuento';
+
   // Check if taxes are included in prices (Shopify setting)
   const taxesIncluded = rawFinancialData.taxes_included === true;
-  
+
   // Calculate total - if taxes are included, don't add them again
-  const calculatedTotal = taxesIncluded 
-    ? calculatedSubtotal + shippingAmount  // Taxes already in subtotal
-    : calculatedSubtotal + calculatedTax + shippingAmount;
-  
+  // Subtract discounts from total
+  const calculatedTotal = taxesIncluded
+    ? calculatedSubtotal - totalDiscounts + shippingAmount  // Taxes already in subtotal
+    : calculatedSubtotal - totalDiscounts + calculatedTax + shippingAmount;
+
   // Create financial summary with calculated values
   const financialSummary = {
     subtotal_price: calculatedSubtotal,
     total_tax: calculatedTax,
+    total_discounts: totalDiscounts,
     total_price: calculatedTotal,
     total_shipping_price_set: rawFinancialData.total_shipping_price_set
   };
@@ -1554,6 +1563,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="font-medium">{formatCurrency(financialSummary.subtotal_price, effectiveOrder.shopify_order?.currency)}</span>
                   </div>
+                  {totalDiscounts > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-green-600">{discountLabel}</span>
+                      <span className="font-medium text-green-600">-{formatCurrency(totalDiscounts, effectiveOrder.shopify_order?.currency)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Envío</span>
                     <span className="font-medium">{formatCurrency(shippingAmount, effectiveOrder.shopify_order?.currency)}</span>

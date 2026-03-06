@@ -321,13 +321,18 @@ serve(async (req) => {
         };
       }
 
+      // Use URL-encoded format for Instagram/Messenger (required by Meta API)
+      const formBody = new URLSearchParams();
+      formBody.append('recipient', JSON.stringify(apiBody.recipient));
+      formBody.append('message', JSON.stringify(apiBody.message));
+      formBody.append('access_token', sendToken);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${sendToken}`,
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify(apiBody),
+        body: formBody.toString(),
       });
 
       const result = await response.json();
