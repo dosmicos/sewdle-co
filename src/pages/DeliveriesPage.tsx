@@ -151,13 +151,20 @@ const DeliveriesPage = () => {
   // Filter deliveries based on search term and active filters
   const filteredDeliveries = useMemo(() => {
     let filtered = deliveries;
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
     // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(delivery => 
-        delivery.tracking_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        delivery.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        delivery.workshop_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    if (normalizedSearchTerm) {
+      filtered = filtered.filter(delivery =>
+        [
+          delivery.tracking_number,
+          delivery.order_number,
+          delivery.workshop_name,
+          delivery.product_names,
+          delivery.product_skus,
+        ]
+          .filter(Boolean)
+          .some(value => String(value).toLowerCase().includes(normalizedSearchTerm))
       );
     }
 
@@ -511,7 +518,7 @@ const DeliveriesPage = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
-                placeholder="Buscar por número de seguimiento, orden o taller..."
+                placeholder="Buscar por seguimiento, orden, taller, producto o SKU..."
                 value={searchTerm}
                 onChange={(e) => updateFilters({ search: e.target.value })}
                 className="pl-10"

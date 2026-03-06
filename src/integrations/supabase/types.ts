@@ -5691,6 +5691,8 @@ export type Database = {
           recipient_name: string
           recipient_phone: string
           status: string
+          product_names: string
+          product_skus: string
           sync_attempts: number
           sync_error_message: string
           synced_to_shopify: boolean
