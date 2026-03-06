@@ -122,10 +122,10 @@ export const WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
     name: 'notificacion_envio_express',
     displayName: 'Notificación envío express',
     language: 'en',
-    description: 'Notificación de envío con código de entrega',
-    previewText: 'Your express delivery code is: {{1}}',
+    description: 'Informar al cliente que su pedido va en camino con dato de entrega',
+    previewText: 'Hola! Te escribimos desde Dosmicos para informarte que tu pedido ya se encuentra en camino 🚀\n\nAl momento de la entrega, por favor comparte este dato con el/la repartidor/a: {{1}}\n\nGracias por confiar en nosotros!',
     params: [
-      { key: '1', label: 'Código de entrega', placeholder: 'ABC-1234' },
+      { key: '1', label: 'Dato de entrega', placeholder: 'ABC-1234' },
     ],
   },
 ];
