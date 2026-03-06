@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, X, CheckCircle, AlertCircle, Loader2, Plus, Film } from 'lucide-react';
+import { Upload, X, CheckCircle, AlertCircle, Loader2, Plus, Film, ImageIcon } from 'lucide-react';
 
-type Platform = 'instagram_reel' | 'instagram_story' | 'tiktok';
+type Platform = 'instagram_reel' | 'instagram_story' | 'tiktok' | 'instagram_post' | 'instagram_carousel';
 
 interface VideoQueueItem {
   id: string;
@@ -36,20 +36,30 @@ interface TokenData {
   expires_at?: string | null;
 }
 
-const VALID_EXTENSIONS = ['mp4', 'mov', 'webm', 'avi', 'mkv', 'm4v', '3gp'];
+const VALID_VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'avi', 'mkv', 'm4v', '3gp'];
+const VALID_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'avif'];
+const VALID_EXTENSIONS = [...VALID_VIDEO_EXTENSIONS, ...VALID_IMAGE_EXTENSIONS];
 
-const isValidVideoFile = (file: File): boolean => {
-  if (file.type && file.type.startsWith('video/')) return true;
+const isValidFile = (file: File): boolean => {
+  if (file.type && (file.type.startsWith('video/') || file.type.startsWith('image/'))) return true;
   const ext = file.name.split('.').pop()?.toLowerCase();
   return !!ext && VALID_EXTENSIONS.includes(ext);
 };
 
+const isImageFile = (file: File): boolean => {
+  if (file.type && file.type.startsWith('image/')) return true;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  return !!ext && VALID_IMAGE_EXTENSIONS.includes(ext);
+};
+
 const getMimeType = (file: File): string => {
-  if (file.type && file.type.startsWith('video/')) return file.type;
+  if (file.type && (file.type.startsWith('video/') || file.type.startsWith('image/'))) return file.type;
   const ext = file.name.split('.').pop()?.toLowerCase();
   const mimeMap: Record<string, string> = {
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
     avi: 'video/x-msvideo', mkv: 'video/x-matroska', m4v: 'video/x-m4v', '3gp': 'video/3gpp',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
   };
   return (ext && mimeMap[ext]) || 'application/octet-stream';
 };
@@ -92,14 +102,14 @@ const UgcUploadPage: React.FC = () => {
   const addFiles = useCallback((files: FileList | File[]) => {
     const newItems: VideoQueueItem[] = Array.from(files)
       .filter(f => {
-        if (!isValidVideoFile(f)) { return false; }
+        if (!isValidFile(f)) { return false; }
         if (f.size > 1073741824) { return false; }
         return true;
       })
       .map(f => ({
         id: crypto.randomUUID(),
         file: f,
-        platform: 'instagram_reel' as Platform,
+        platform: (isImageFile(f) ? 'instagram_post' : 'instagram_reel') as Platform,
         notes: '',
         status: 'pending' as const,
         progress: 0,
@@ -226,7 +236,7 @@ const UgcUploadPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-gray-900">Hola, {creator.name} 👋</h1>
-            <p className="text-sm text-gray-500">Sube tus videos de contenido aquí</p>
+            <p className="text-sm text-gray-500">Sube tus videos y fotos aquí</p>
           </div>
         </div>
 
@@ -234,14 +244,14 @@ const UgcUploadPage: React.FC = () => {
           <Card className="border border-green-200 bg-green-50">
             <CardContent className="p-6 text-center space-y-3">
               <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-              <h2 className="text-lg font-semibold text-gray-900">¡Videos subidos con éxito!</h2>
-              <p className="text-sm text-gray-600">El equipo de Dosmicos revisará tu contenido pronto. 🎬</p>
+              <h2 className="text-lg font-semibold text-gray-900">¡Contenido subido con éxito!</h2>
+              <p className="text-sm text-gray-600">El equipo de Dosmicos revisará tu contenido pronto.</p>
               <Button
                 variant="outline"
                 onClick={() => { setQueue([]); setAllDone(false); }}
                 className="mt-2"
               >
-                Subir más videos
+                Subir más contenido
               </Button>
             </CardContent>
           </Card>
@@ -267,7 +277,7 @@ const UgcUploadPage: React.FC = () => {
             {campaigns.length === 0 && (
               <Card className="border border-yellow-200 bg-yellow-50">
                 <CardContent className="p-4 text-center">
-                  <p className="text-sm text-yellow-700">No hay campañas activas para subir videos.</p>
+                  <p className="text-sm text-yellow-700">No hay campañas activas para subir contenido.</p>
                 </CardContent>
               </Card>
             )}
@@ -282,13 +292,13 @@ const UgcUploadPage: React.FC = () => {
                   className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center cursor-pointer hover:border-gray-400 transition-colors"
                 >
                   <Upload className="h-8 w-8 text-gray-400 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-gray-700">Toca para seleccionar videos</p>
+                  <p className="text-sm font-medium text-gray-700">Toca para seleccionar archivos</p>
                   <p className="text-xs text-gray-400 mt-1">o arrastra y suelta aquí</p>
-                  <p className="text-xs text-gray-400 mt-1">MP4, MOV, WebM, AVI, MKV • Máx 1GB</p>
+                  <p className="text-xs text-gray-400 mt-1">Videos (MP4, MOV, WebM) o Fotos (JPG, PNG, WebP) • Máx 1GB</p>
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="video/*"
+                    accept="video/*,image/*"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -306,7 +316,7 @@ const UgcUploadPage: React.FC = () => {
                         <CardContent className="p-3 space-y-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 min-w-0">
-                              <Film className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              {isImageFile(item.file) ? <ImageIcon className="h-4 w-4 text-gray-400 flex-shrink-0" /> : <Film className="h-4 w-4 text-gray-400 flex-shrink-0" />}
                               <span className="text-sm text-gray-700 truncate">{item.file.name}</span>
                               <span className="text-xs text-gray-400 flex-shrink-0">{formatSize(item.file.size)}</span>
                             </div>
@@ -326,6 +336,8 @@ const UgcUploadPage: React.FC = () => {
                               {([
                                 { value: 'instagram_reel', label: 'Reel' },
                                 { value: 'instagram_story', label: 'Story' },
+                                { value: 'instagram_post', label: 'Post' },
+                                { value: 'instagram_carousel', label: 'Carousel' },
                                 { value: 'tiktok', label: 'TikTok' },
                               ] as { value: Platform; label: string }[]).map(p => (
                                 <button
@@ -379,7 +391,7 @@ const UgcUploadPage: React.FC = () => {
                         className="w-full"
                         onClick={() => fileInputRef.current?.click()}
                       >
-                        <Plus className="h-4 w-4 mr-1" /> Agregar más videos
+                        <Plus className="h-4 w-4 mr-1" /> Agregar más archivos
                       </Button>
                     )}
 
@@ -394,7 +406,7 @@ const UgcUploadPage: React.FC = () => {
                         {isUploading ? (
                           <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Subiendo...</>
                         ) : (
-                          <><Upload className="h-5 w-5 mr-2" /> Subir {pendingCount} video{pendingCount !== 1 ? 's' : ''}</>
+                          <><Upload className="h-5 w-5 mr-2" /> Subir {pendingCount} archivo{pendingCount !== 1 ? 's' : ''}</>
                         )}
                       </Button>
                     )}

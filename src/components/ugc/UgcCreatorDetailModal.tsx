@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -46,34 +46,47 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onDelete,
 }) => {
   const { videos: allVideos } = useUgcVideos(creator?.id);
+
+  const isPhotoContent = (platform: string | null, url: string | null): boolean => {
+    if (platform === 'instagram_post' || platform === 'instagram_carousel') return true;
+    if (url) {
+      const clean = url.split('?')[0].toLowerCase();
+      if (/\.(jpg|jpeg|png|gif|webp|heic|heif|avif)$/i.test(clean)) return true;
+    }
+    return false;
+  };
+
   const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
   const [loadingPickingOrder, setLoadingPickingOrder] = useState(false);
   const [videoFilter, setVideoFilter] = useState<'all' | 'pending_organic' | 'pending_ads' | 'published_organic' | 'published_ads'>('all');
-  const [videoPreviewOpen, setVideoPreviewOpen] = useState(false);
-  const [videoPreviewSource, setVideoPreviewSource] = useState<string | null>(null);
-  const [videoPreviewOriginalUrl, setVideoPreviewOriginalUrl] = useState<string | null>(null);
-  const [videoPreviewLoading, setVideoPreviewLoading] = useState(false);
-  const [videoPreviewError, setVideoPreviewError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSource, setPreviewSource] = useState<string | null>(null);
+  const [previewOriginalUrl, setPreviewOriginalUrl] = useState<string | null>(null);
+  const [previewIsPhoto, setPreviewIsPhoto] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const openVideoPreview = async (url: string) => {
-    setVideoPreviewOriginalUrl(url);
-    setVideoPreviewSource(url);
-    setVideoPreviewError(null);
-    setVideoPreviewLoading(true);
-    setVideoPreviewOpen(true);
+  const openContentPreview = (url: string, platform: string | null) => {
+    setPreviewOriginalUrl(url);
+    setPreviewSource(url);
+    setPreviewIsPhoto(isPhotoContent(platform, url));
+    setPreviewError(null);
+    setPreviewLoading(true);
+    setPreviewOpen(true);
   };
 
-  const downloadVideo = async () => {
-    if (!videoPreviewOriginalUrl) return;
+  const downloadContent = async () => {
+    if (!previewOriginalUrl) return;
 
-    const normalizedUrl = videoPreviewOriginalUrl.split('?')[0];
-    const extensionMatch = normalizedUrl.match(/\.(mp4|mov|webm|m4v|ogg)$/i);
-    const extension = extensionMatch?.[1]?.toLowerCase() || 'mp4';
+    const normalizedUrl = previewOriginalUrl.split('?')[0];
+    const extensionMatch = normalizedUrl.match(/\.(mp4|mov|webm|m4v|ogg|jpg|jpeg|png|gif|webp|heic|avif)$/i);
+    const extension = extensionMatch?.[1]?.toLowerCase() || (previewIsPhoto ? 'jpg' : 'mp4');
+    const prefix = previewIsPhoto ? 'ugc-foto' : 'ugc-video';
 
     try {
-      const response = await fetch(videoPreviewOriginalUrl);
+      const response = await fetch(previewOriginalUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const blob = await response.blob();
@@ -82,15 +95,15 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = `ugc-video-${Date.now()}.${extension}`;
+      link.download = `${prefix}-${Date.now()}.${extension}`;
       link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(objectUrl);
     } catch (error) {
-      console.error('Video download error:', error);
-      window.open(videoPreviewOriginalUrl, '_blank', 'noopener,noreferrer');
+      console.error('Download error:', error);
+      window.open(previewOriginalUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -301,7 +314,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           <TabsList className="w-full grid grid-cols-4">
             <TabsTrigger value="info">Información</TabsTrigger>
             <TabsTrigger value="campaigns">Campañas</TabsTrigger>
-            <TabsTrigger value="videos">Videos</TabsTrigger>
+            <TabsTrigger value="videos">Contenido</TabsTrigger>
             <TabsTrigger value="metrics">Métricas</TabsTrigger>
           </TabsList>
 
@@ -382,7 +395,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                           </div>
                           {!['completado', 'cancelado'].includes(campaign.status) && (
                             <Button size="sm" variant="outline" onClick={() => onNewVideo(campaign.id)}>
-                              <Video className="h-3 w-3 mr-1" /> Subir Video
+                              <Plus className="h-3 w-3 mr-1" /> Subir Contenido
                             </Button>
                           )}
                         </div>
@@ -453,7 +466,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           {/* Tab: Videos */}
           <TabsContent value="videos" className="mt-4">
             {allVideos.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">Sin videos registrados</p>
+              <p className="text-center text-muted-foreground py-8">Sin contenido registrado</p>
             ) : (
               <div className="space-y-3">
                 {/* Publication summary */}
@@ -501,7 +514,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
 
                 {/* Video cards */}
                 {filteredVideos.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-6 text-sm">No hay videos para este filtro.</p>
+                  <p className="text-center text-muted-foreground py-6 text-sm">No hay contenido para este filtro.</p>
                 ) : (
                   <div className="space-y-2">
                     {filteredVideos.map((video) => {
@@ -513,7 +526,12 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-xs capitalize">
-                                {video.platform?.replace('_', ' ') || 'N/A'}
+                                {video.platform === 'instagram_reel' ? 'Instagram Reel'
+                                  : video.platform === 'instagram_story' ? 'Instagram Story'
+                                  : video.platform === 'instagram_post' ? 'Instagram Post'
+                                  : video.platform === 'instagram_carousel' ? 'Instagram Carousel'
+                                  : video.platform === 'tiktok' ? 'TikTok'
+                                  : 'N/A'}
                               </Badge>
                               <Badge
                                 className={`text-xs ${
@@ -537,7 +555,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {video.video_url && (
-                                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openVideoPreview(video.video_url!)}>
+                                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openContentPreview(video.video_url!, video.platform)}>
                                   <ExternalLink className="h-3 w-3 mr-1" /> Ver
                                 </Button>
                               )}
@@ -617,7 +635,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
               <Card className="border border-border">
                 <CardContent className="p-4 text-center">
                   <p className="text-3xl font-bold text-foreground">{totalVideos}</p>
-                  <p className="text-xs text-muted-foreground">Videos Totales</p>
+                  <p className="text-xs text-muted-foreground">Contenido Total</p>
                 </CardContent>
               </Card>
               <Card className="border border-border">
@@ -660,62 +678,77 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     )}
 
     <Dialog
-      open={videoPreviewOpen}
+      open={previewOpen}
       onOpenChange={(open) => {
-        setVideoPreviewOpen(open);
+        setPreviewOpen(open);
         if (!open) {
-          setVideoPreviewSource(null);
-          setVideoPreviewOriginalUrl(null);
-          setVideoPreviewError(null);
-          setVideoPreviewLoading(false);
+          setPreviewSource(null);
+          setPreviewOriginalUrl(null);
+          setPreviewIsPhoto(false);
+          setPreviewError(null);
+          setPreviewLoading(false);
         }
       }}
     >
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Vista previa de video</DialogTitle>
+          <DialogTitle>Vista previa {previewIsPhoto ? 'de foto' : 'de video'}</DialogTitle>
         </DialogHeader>
         <div className="relative min-h-[360px] bg-black rounded-md overflow-hidden flex items-center justify-center">
-          {videoPreviewSource ? (
-            <video
-              ref={videoRef}
-              key={videoPreviewSource}
-              src={videoPreviewSource}
-              controls
-              playsInline
-              preload="metadata"
-              className="w-full max-h-[70vh] bg-black"
-              onLoadedData={() => setVideoPreviewLoading(false)}
-              onCanPlay={() => setVideoPreviewLoading(false)}
-              onWaiting={() => setVideoPreviewLoading(true)}
-              onError={() => {
-                setVideoPreviewLoading(false);
-                setVideoPreviewError('No se pudo reproducir el video en vista previa. Puedes usar el enlace original o descargarlo.');
-              }}
-            />
+          {previewSource ? (
+            previewIsPhoto ? (
+              <img
+                key={previewSource}
+                src={previewSource}
+                alt="UGC content"
+                className="w-full max-h-[70vh] object-contain bg-black"
+                onLoad={() => setPreviewLoading(false)}
+                onError={() => {
+                  setPreviewLoading(false);
+                  setPreviewError('No se pudo cargar la imagen. Puedes usar el enlace original o descargarla.');
+                }}
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                key={previewSource}
+                src={previewSource}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full max-h-[70vh] bg-black"
+                onLoadedData={() => setPreviewLoading(false)}
+                onCanPlay={() => setPreviewLoading(false)}
+                onWaiting={() => setPreviewLoading(true)}
+                onError={() => {
+                  setPreviewLoading(false);
+                  setPreviewError('No se pudo reproducir el video en vista previa. Puedes usar el enlace original o descargarlo.');
+                }}
+              />
+            )
           ) : (
-            <p className="text-sm text-white/70">No se pudo cargar el video.</p>
+            <p className="text-sm text-white/70">No se pudo cargar el contenido.</p>
           )}
-          {videoPreviewLoading && (
+          {previewLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
               <Loader2 className="h-7 w-7 animate-spin text-white/70" />
             </div>
           )}
         </div>
-        {videoPreviewError && (
-          <p className="text-xs text-amber-600">{videoPreviewError}</p>
+        {previewError && (
+          <p className="text-xs text-amber-600">{previewError}</p>
         )}
-        {videoPreviewOriginalUrl && (
+        {previewOriginalUrl && (
           <div className="flex justify-end">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={downloadVideo}>
+              <Button variant="outline" size="sm" onClick={downloadContent}>
                 <Download className="h-4 w-4 mr-1" />
-                Descargar video
+                Descargar {previewIsPhoto ? 'foto' : 'video'}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.open(videoPreviewOriginalUrl, '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open(previewOriginalUrl, '_blank', 'noopener,noreferrer')}
               >
                 Abrir enlace original
               </Button>

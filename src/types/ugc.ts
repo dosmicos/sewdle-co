@@ -85,7 +85,7 @@ export interface UgcVideo {
   likes: number;
   views: number;
   comments: number;
-  platform: 'instagram_reel' | 'instagram_story' | 'tiktok' | null;
+  platform: 'instagram_reel' | 'instagram_story' | 'tiktok' | 'instagram_post' | 'instagram_carousel' | null;
   published_date: string | null;
   feedback: string | null;
   created_at: string;
@@ -117,7 +117,7 @@ export interface UgcCampaignFormData {
 
 export interface UgcVideoFormData {
   video_url: string;
-  platform: 'instagram_reel' | 'instagram_story' | 'tiktok';
+  platform: 'instagram_reel' | 'instagram_story' | 'tiktok' | 'instagram_post' | 'instagram_carousel';
   likes?: number;
   views?: number;
   comments?: number;

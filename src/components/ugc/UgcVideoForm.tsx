@@ -22,7 +22,7 @@ export const UgcVideoForm: React.FC<UgcVideoFormProps> = ({
   isLoading,
 }) => {
   const [url, setUrl] = useState('');
-  const [platform, setPlatform] = useState<'instagram_reel' | 'instagram_story' | 'tiktok'>('instagram_reel');
+  const [platform, setPlatform] = useState<'instagram_reel' | 'instagram_story' | 'tiktok' | 'instagram_post' | 'instagram_carousel'>('instagram_reel');
   const [views, setViews] = useState('');
   const [likes, setLikes] = useState('');
   const [comments, setComments] = useState('');
@@ -53,12 +53,12 @@ export const UgcVideoForm: React.FC<UgcVideoFormProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Registrar Video — {campaignName}</DialogTitle>
+          <DialogTitle>Registrar Contenido — {campaignName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="video-url">URL del video *</Label>
-            <Input id="video-url" value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://instagram.com/reel/..." />
+            <Label htmlFor="video-url">URL del contenido *</Label>
+            <Input id="video-url" value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://instagram.com/reel/... o /p/..." />
           </div>
           <div className="space-y-2">
             <Label>Plataforma</Label>
@@ -69,6 +69,8 @@ export const UgcVideoForm: React.FC<UgcVideoFormProps> = ({
               <SelectContent>
                 <SelectItem value="instagram_reel">Instagram Reel</SelectItem>
                 <SelectItem value="instagram_story">Instagram Story</SelectItem>
+                <SelectItem value="instagram_post">Instagram Post (Foto)</SelectItem>
+                <SelectItem value="instagram_carousel">Instagram Carousel</SelectItem>
                 <SelectItem value="tiktok">TikTok</SelectItem>
               </SelectContent>
             </Select>
@@ -90,7 +92,7 @@ export const UgcVideoForm: React.FC<UgcVideoFormProps> = ({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={isLoading || !url.trim()}>
-              {isLoading ? 'Guardando...' : 'Registrar Video'}
+              {isLoading ? 'Guardando...' : 'Registrar Contenido'}
             </Button>
           </DialogFooter>
         </form>

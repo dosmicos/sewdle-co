@@ -57,7 +57,7 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ugc-videos'] });
       queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
-      toast.success('Video registrado');
+      toast.success('Contenido registrado');
     },
     onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
@@ -76,7 +76,7 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ugc-videos'] });
       queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
-      toast.success('Video actualizado');
+      toast.success('Contenido actualizado');
     },
     onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
