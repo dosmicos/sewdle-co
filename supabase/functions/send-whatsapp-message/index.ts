@@ -184,7 +184,8 @@ serve(async (req) => {
       media_filename,
       reply_to_message_id,  // UUID interno del mensaje al que se responde
       template_name,        // Nombre de plantilla de WhatsApp (opcional)
-      template_language     // Código de idioma de la plantilla (opcional, default: es_CO)
+      template_language,    // Código de idioma de la plantilla (opcional, default: es_CO)
+      template_parameters   // Array de parámetros de body para la plantilla (opcional)
     } = await req.json();
     
     // Either message, media, or template is required
@@ -423,10 +424,17 @@ serve(async (req) => {
       const lang = template_language || 'es_CO';
       console.log(`📤 Sending template "${template_name}" (${lang}) to ${cleanPhone}`);
 
+      // Forward body parameters if provided, otherwise empty
+      const bodyParams = Array.isArray(template_parameters) && template_parameters.length > 0
+        ? template_parameters.map((p: any) => ({ type: 'text' as const, text: String(p.text || '') }))
+        : [];
+
+      console.log(`Template body params: ${JSON.stringify(bodyParams)}`);
+
       const templateResult = await sendWhatsAppTemplate(
         phoneNumberId, whatsappToken, cleanPhone,
         template_name, lang,
-        [] // sin parámetros de body
+        bodyParams
       );
 
       if (!templateResult.ok) {

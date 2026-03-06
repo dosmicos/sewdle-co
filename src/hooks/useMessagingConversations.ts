@@ -219,7 +219,15 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
 
   // Create new conversation and send first message
   const createConversation = useMutation({
-    mutationFn: async ({ phone, name, message, useTemplate }: { phone: string; name: string; message: string; useTemplate?: boolean }) => {
+    mutationFn: async ({ phone, name, message, useTemplate, templateName, templateLanguage, templateParams }: {
+      phone: string;
+      name: string;
+      message: string;
+      useTemplate?: boolean;
+      templateName?: string;
+      templateLanguage?: string;
+      templateParams?: Array<{ type: 'text'; text: string }>;
+    }) => {
       // Clean phone number
       const cleanPhone = phone.replace(/[\s+]/g, '');
       
@@ -275,9 +283,12 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
        const body: Record<string, any> = { conversation_id: conversationId };
 
        if (useTemplate) {
-         body.template_name = 'saludo_inicial';
-         body.template_language = 'es_CO';
+         body.template_name = templateName || 'saludo_inicial';
+         body.template_language = templateLanguage || 'es_CO';
          body.message = message; // texto para guardar en DB
+         if (templateParams && templateParams.length > 0) {
+           body.template_parameters = templateParams;
+         }
        } else {
          body.message = message;
        }
