@@ -142,6 +142,7 @@ serve(async (req) => {
           ai_managed: false,
           metadata: {
             ...existingMetadata,
+            ai_disabled_by_automation: true,
             pending_address_verification: {
               shopify_order_id: body.shopifyOrderId,
               order_number: order.order_number,
@@ -162,6 +163,7 @@ serve(async (req) => {
         ai_managed: false,
         status: 'active',
         metadata: {
+          ai_disabled_by_automation: true,
           pending_address_verification: {
             shopify_order_id: body.shopifyOrderId,
             order_number: order.order_number,

@@ -1669,9 +1669,9 @@ serve(async (req) => {
                     }
 
                     // Update metadata: mark as confirmed
-                    // Use fresh metadata from the recent fetch (line ~1604) to avoid overwriting concurrent changes
+                    // Use fresh metadata from the recent fetch to avoid overwriting concurrent changes
                     const freshMeta = freshAddrConv?.metadata || conversation.metadata || {};
-                    const wasManuallyDisabled = freshMeta.ai_disabled_manually === true;
+                    const wasDisabledByAutomation = freshMeta.ai_disabled_by_automation === true;
                     const addrUpdateData: any = {
                       metadata: {
                         ...freshMeta,
@@ -1682,11 +1682,13 @@ serve(async (req) => {
                         }
                       }
                     };
-                    // Only re-enable AI if it wasn't manually disabled by the user
-                    if (!wasManuallyDisabled) {
+                    // Only re-enable AI if it was disabled by automation (not manually by user)
+                    if (wasDisabledByAutomation) {
                       addrUpdateData.ai_managed = true;
+                      delete addrUpdateData.metadata.ai_disabled_by_automation;
+                      console.log(`[ADDR-VERIFY] Re-enabling AI after address confirmation (was disabled by automation)`);
                     } else {
-                      console.log(`[ADDR-VERIFY] AI manually disabled by user — NOT re-enabling after address confirmation`);
+                      console.log(`[ADDR-VERIFY] AI was NOT disabled by automation — NOT re-enabling after address confirmation`);
                     }
                     await supabase
                       .from('messaging_conversations')
@@ -1787,13 +1789,14 @@ serve(async (req) => {
 
                   try {
                     // Update metadata: mark needs_attention with customer response
-                    const existingMeta = conversation.metadata || {};
+                    const existingMeta = freshAddrConv?.metadata || conversation.metadata || {};
                     await supabase
                       .from('messaging_conversations')
                       .update({
                         ai_managed: false,
                         metadata: {
                           ...existingMeta,
+                          ai_disabled_by_automation: true,
                           pending_address_verification: {
                             ...pendingAddressVerification,
                             status: 'needs_attention',
@@ -1863,22 +1866,20 @@ serve(async (req) => {
                   }
                 }
               } else if (pendingAddressVerification && pendingAddressVerification.status !== 'pending') {
-                // Address verification is no longer pending — re-enable AI if it was disabled
-                // BUT: respect manual user override — if ai_disabled_manually flag is set, don't re-enable
-                const addrStatus = conversation.metadata?.pending_address_verification?.status;
-                const manuallyDisabledByAddr = conversation.metadata?.ai_disabled_manually === true;
-                if (conversation.ai_managed === false && !manuallyDisabledByAddr && (addrStatus === 'confirmed' || addrStatus === 'needs_attention')) {
-                  // Only re-enable for confirmed; needs_attention stays manual
-                  if (addrStatus === 'confirmed') {
-                    console.log(`[ADDR-VERIFY] Re-enabling AI for conversation ${conversation.id} (address status: ${addrStatus}, not manually disabled)`);
-                    await supabase
-                      .from('messaging_conversations')
-                      .update({ ai_managed: true })
-                      .eq('id', conversation.id);
-                    conversation.ai_managed = true;
-                  }
-                } else if (manuallyDisabledByAddr) {
-                  console.log(`[ADDR-VERIFY] AI manually disabled by user for conversation ${conversation.id} — NOT re-enabling`);
+                // Address verification is no longer pending — re-enable AI only if automation disabled it
+                const addrStatus = freshAddrConv?.metadata?.pending_address_verification?.status;
+                const disabledByAutomationAddr = freshAddrConv?.metadata?.ai_disabled_by_automation === true;
+                if (conversation.ai_managed === false && disabledByAutomationAddr && addrStatus === 'confirmed') {
+                  console.log(`[ADDR-VERIFY] Re-enabling AI for conversation ${conversation.id} (address confirmed, was disabled by automation)`);
+                  const addrMeta = freshAddrConv?.metadata || {};
+                  delete addrMeta.ai_disabled_by_automation;
+                  await supabase
+                    .from('messaging_conversations')
+                    .update({ ai_managed: true, metadata: addrMeta })
+                    .eq('id', conversation.id);
+                  conversation.ai_managed = true;
+                } else if (conversation.ai_managed === false && !disabledByAutomationAddr) {
+                  console.log(`[ADDR-VERIFY] AI not disabled by automation for conversation ${conversation.id} — NOT re-enabling`);
                 }
               }
               // If address verification was handled, skip AI for this message
@@ -2102,7 +2103,7 @@ serve(async (req) => {
 
                     // 2. Update conversation metadata (use fresh metadata to avoid overwriting concurrent changes)
                     const freshCodMetaNA = freshCodConv?.metadata || conversation.metadata || {};
-                    const updatedMetadata = { ...freshCodMetaNA, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
+                    const updatedMetadata = { ...freshCodMetaNA, ai_disabled_by_automation: true, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
                     await supabase.from('messaging_conversations').update({ metadata: updatedMetadata, ai_managed: false }).eq('id', conversation.id);
 
                     // 3. Swap tags: remove "Confirmacion pendiente", add "Requiere atencion"
@@ -2138,20 +2139,21 @@ serve(async (req) => {
                 // No pending confirmation found anywhere — proceeding to AI auto-reply
                 console.log(`[COD-CONFIRM] No actionable confirmation for phone ${senderPhone} (status=${pendingConfirmation?.status || 'none'}) — proceeding to AI`);
 
-                // If ai_managed was disabled by a previous COD needs_attention flow, re-enable it
-                // so the AI can respond to subsequent messages (the confirmation is no longer pending)
-                // BUT: respect manual user override — if ai_disabled_manually flag is set, don't re-enable
-                const codStatus = conversation.metadata?.pending_order_confirmation?.status;
-                const manuallyDisabledByCOD = conversation.metadata?.ai_disabled_manually === true;
-                if (conversation.ai_managed === false && !manuallyDisabledByCOD && (codStatus === 'needs_attention' || codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
-                  console.log(`[COD-CONFIRM] Re-enabling AI for conversation ${conversation.id} (COD status: ${codStatus}, no longer pending, not manually disabled)`);
+                // If ai_managed was disabled by automation (COD/address flow), re-enable it
+                // Only re-enable if ai_disabled_by_automation flag is set — never re-enable manually disabled conversations
+                const codStatus = freshCodConv?.metadata?.pending_order_confirmation?.status;
+                const disabledByAutomationCOD = freshCodConv?.metadata?.ai_disabled_by_automation === true;
+                if (conversation.ai_managed === false && disabledByAutomationCOD && (codStatus === 'needs_attention' || codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
+                  console.log(`[COD-CONFIRM] Re-enabling AI for conversation ${conversation.id} (COD status: ${codStatus}, was disabled by automation)`);
+                  const codMeta = freshCodConv?.metadata || {};
+                  delete codMeta.ai_disabled_by_automation;
                   await supabase
                     .from('messaging_conversations')
-                    .update({ ai_managed: true })
+                    .update({ ai_managed: true, metadata: codMeta })
                     .eq('id', conversation.id);
-                  conversation.ai_managed = true; // Update local reference too
-                } else if (manuallyDisabledByCOD) {
-                  console.log(`[COD-CONFIRM] AI manually disabled by user for conversation ${conversation.id} — NOT re-enabling`);
+                  conversation.ai_managed = true;
+                } else if (conversation.ai_managed === false && !disabledByAutomationCOD) {
+                  console.log(`[COD-CONFIRM] AI not disabled by automation for conversation ${conversation.id} — NOT re-enabling`);
                 }
               }
               // ========== END COD ORDER CONFIRMATION ==========
@@ -2350,9 +2352,11 @@ serve(async (req) => {
                           await supabase.from('messaging_conversation_tag_assignments')
                             .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
                         }
-                        // 2. Disable AI on this conversation
+                        // 2. Disable AI on this conversation (mark as automation-disabled so it can be re-enabled later)
+                        const { data: escConv } = await supabase.from('messaging_conversations').select('metadata').eq('id', conversation.id).single();
+                        const escMeta = escConv?.metadata || {};
                         await supabase.from('messaging_conversations')
-                          .update({ ai_managed: false })
+                          .update({ ai_managed: false, metadata: { ...escMeta, ai_disabled_by_automation: true } })
                           .eq('id', conversation.id);
                         console.log('🔴 Conversation tagged and AI disabled for human handoff');
                       } catch (escErr) {

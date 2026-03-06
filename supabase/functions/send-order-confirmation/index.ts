@@ -311,6 +311,7 @@ Gracias por tu compra!`;
         ai_managed: false,
         metadata: {
           ...existingMetadata,
+          ai_disabled_by_automation: true,
           pending_order_confirmation: {
             shopify_order_id: shopifyOrderId,
             order_number: order.order_number,
@@ -331,6 +332,7 @@ Gracias por tu compra!`;
       ai_managed: false,
       status: 'active',
       metadata: {
+        ai_disabled_by_automation: true,
         pending_order_confirmation: {
           shopify_order_id: shopifyOrderId,
           order_number: order.order_number,

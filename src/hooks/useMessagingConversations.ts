@@ -129,12 +129,15 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
       const currentMetadata = (currentConv?.metadata as Record<string, any>) || {};
       const updatedMetadata = { ...currentMetadata };
 
+      // Clear automation flag — manual toggle always takes precedence
+      delete updatedMetadata.ai_disabled_by_automation;
+
       if (!aiManaged) {
         // User manually disabled AI — set flag so webhook won't re-enable it
         updatedMetadata.ai_disabled_manually = true;
         updatedMetadata.ai_disabled_manually_at = new Date().toISOString();
       } else {
-        // User manually re-enabled AI — clear the flag
+        // User manually re-enabled AI — clear the manual flag
         delete updatedMetadata.ai_disabled_manually;
         delete updatedMetadata.ai_disabled_manually_at;
       }
