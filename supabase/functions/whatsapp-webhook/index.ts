@@ -1599,14 +1599,16 @@ serve(async (req) => {
               // ========== ADDRESS VERIFICATION DETECTION ==========
               let pendingAddressVerification: any = null;
               let skipAiForAddress = false;
+              let freshAddrConv: any = null;
 
               if (conversation?.id) {
-                const { data: freshAddrConv } = await supabase
+                const { data: freshAddrData } = await supabase
                   .from('messaging_conversations')
                   .select('metadata')
                   .eq('id', conversation.id)
                   .single();
 
+                freshAddrConv = freshAddrData;
                 pendingAddressVerification = freshAddrConv?.metadata?.pending_address_verification;
                 console.log(`[ADDR-VERIFY] Fresh metadata for conv ${conversation.id}: pending=${JSON.stringify(pendingAddressVerification?.status || null)}`);
               }
@@ -1667,20 +1669,28 @@ serve(async (req) => {
                     }
 
                     // Update metadata: mark as confirmed
-                    const existingMeta = conversation.metadata || {};
+                    // Use fresh metadata from the recent fetch (line ~1604) to avoid overwriting concurrent changes
+                    const freshMeta = freshAddrConv?.metadata || conversation.metadata || {};
+                    const wasManuallyDisabled = freshMeta.ai_disabled_manually === true;
+                    const addrUpdateData: any = {
+                      metadata: {
+                        ...freshMeta,
+                        pending_address_verification: {
+                          ...pendingAddressVerification,
+                          status: 'confirmed',
+                          confirmed_at: new Date().toISOString()
+                        }
+                      }
+                    };
+                    // Only re-enable AI if it wasn't manually disabled by the user
+                    if (!wasManuallyDisabled) {
+                      addrUpdateData.ai_managed = true;
+                    } else {
+                      console.log(`[ADDR-VERIFY] AI manually disabled by user — NOT re-enabling after address confirmation`);
+                    }
                     await supabase
                       .from('messaging_conversations')
-                      .update({
-                        ai_managed: true,
-                        metadata: {
-                          ...existingMeta,
-                          pending_address_verification: {
-                            ...pendingAddressVerification,
-                            status: 'confirmed',
-                            confirmed_at: new Date().toISOString()
-                          }
-                        }
-                      })
+                      .update(addrUpdateData)
                       .eq('id', conversation.id);
 
                     // Send confirmation reply
@@ -1883,15 +1893,17 @@ serve(async (req) => {
               // initial fetch (metadata may have been written by send-order-confirmation
               // between the initial fetch and now)
               let pendingConfirmation: any = null;
+              let freshCodConv: any = null;
 
               if (conversation?.id) {
-                const { data: freshConv } = await supabase
+                const { data: freshCodData } = await supabase
                   .from('messaging_conversations')
                   .select('metadata')
                   .eq('id', conversation.id)
                   .single();
 
-                pendingConfirmation = freshConv?.metadata?.pending_order_confirmation;
+                freshCodConv = freshCodData;
+                pendingConfirmation = freshCodConv?.metadata?.pending_order_confirmation;
                 console.log(`[COD-CONFIRM] Fresh metadata for conv ${conversation.id}: pending=${JSON.stringify(pendingConfirmation?.status || null)}`);
               }
 
@@ -2026,8 +2038,9 @@ serve(async (req) => {
                       .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
                       .eq('shopify_order_id', pendingConfirmation.shopify_order_id);
 
-                    // 4. Update conversation metadata
-                    const updatedMetadata = { ...conversation.metadata, pending_order_confirmation: { ...pendingConfirmation, status: 'confirmed' } };
+                    // 4. Update conversation metadata (use fresh metadata to avoid overwriting concurrent changes)
+                    const freshCodMeta = freshCodConv?.metadata || conversation.metadata || {};
+                    const updatedMetadata = { ...freshCodMeta, pending_order_confirmation: { ...pendingConfirmation, status: 'confirmed' } };
                     await supabase.from('messaging_conversations').update({ metadata: updatedMetadata }).eq('id', conversation.id);
 
                     // 5. Remove "Confirmacion pendiente" tag
@@ -2087,8 +2100,9 @@ serve(async (req) => {
                       .update({ status: 'needs_attention', updated_at: new Date().toISOString() })
                       .eq('shopify_order_id', pendingConfirmation.shopify_order_id);
 
-                    // 2. Update conversation metadata
-                    const updatedMetadata = { ...conversation.metadata, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
+                    // 2. Update conversation metadata (use fresh metadata to avoid overwriting concurrent changes)
+                    const freshCodMetaNA = freshCodConv?.metadata || conversation.metadata || {};
+                    const updatedMetadata = { ...freshCodMetaNA, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
                     await supabase.from('messaging_conversations').update({ metadata: updatedMetadata, ai_managed: false }).eq('id', conversation.id);
 
                     // 3. Swap tags: remove "Confirmacion pendiente", add "Requiere atencion"
