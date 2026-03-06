@@ -828,7 +828,7 @@ async function generateAIResponse(
     const colHour = getDatePart('hour');
     const colMinute = getDatePart('minute');
     console.log(`📅 [Fallback AI] Colombia time: ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute}`);
-    systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL: Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). Usa esta información para responder correctamente sobre días de despacho, tiempos de entrega y disponibilidad.`;
+    systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
     // Add tone instructions
     const toneMap: Record<string, string> = {
