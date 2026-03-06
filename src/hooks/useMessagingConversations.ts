@@ -118,12 +118,32 @@ export const useMessagingConversations = (channelFilter?: ChannelType | 'all') =
   const toggleAiManaged = useMutation({
     mutationFn: async ({ conversationId, aiManaged }: { conversationId: string; aiManaged: boolean }) => {
       console.log(`Toggling ai_managed to ${aiManaged} for conversation ${conversationId}`);
-      
+
+      // First fetch current metadata so we can set/clear the manual override flag
+      const { data: currentConv } = await supabase
+        .from('messaging_conversations')
+        .select('metadata')
+        .eq('id', conversationId)
+        .single();
+
+      const currentMetadata = (currentConv?.metadata as Record<string, any>) || {};
+      const updatedMetadata = { ...currentMetadata };
+
+      if (!aiManaged) {
+        // User manually disabled AI — set flag so webhook won't re-enable it
+        updatedMetadata.ai_disabled_manually = true;
+        updatedMetadata.ai_disabled_manually_at = new Date().toISOString();
+      } else {
+        // User manually re-enabled AI — clear the flag
+        delete updatedMetadata.ai_disabled_manually;
+        delete updatedMetadata.ai_disabled_manually_at;
+      }
+
       const { error } = await supabase
         .from('messaging_conversations')
-        .update({ ai_managed: aiManaged })
+        .update({ ai_managed: aiManaged, metadata: updatedMetadata })
         .eq('id', conversationId);
-      
+
       if (error) throw error;
       return { conversationId, aiManaged };
     },

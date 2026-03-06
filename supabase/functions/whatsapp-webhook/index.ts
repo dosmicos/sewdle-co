@@ -1854,17 +1854,21 @@ serve(async (req) => {
                 }
               } else if (pendingAddressVerification && pendingAddressVerification.status !== 'pending') {
                 // Address verification is no longer pending — re-enable AI if it was disabled
+                // BUT: respect manual user override — if ai_disabled_manually flag is set, don't re-enable
                 const addrStatus = conversation.metadata?.pending_address_verification?.status;
-                if (conversation.ai_managed === false && (addrStatus === 'confirmed' || addrStatus === 'needs_attention')) {
+                const manuallyDisabledByAddr = conversation.metadata?.ai_disabled_manually === true;
+                if (conversation.ai_managed === false && !manuallyDisabledByAddr && (addrStatus === 'confirmed' || addrStatus === 'needs_attention')) {
                   // Only re-enable for confirmed; needs_attention stays manual
                   if (addrStatus === 'confirmed') {
-                    console.log(`[ADDR-VERIFY] Re-enabling AI for conversation ${conversation.id} (address status: ${addrStatus})`);
+                    console.log(`[ADDR-VERIFY] Re-enabling AI for conversation ${conversation.id} (address status: ${addrStatus}, not manually disabled)`);
                     await supabase
                       .from('messaging_conversations')
                       .update({ ai_managed: true })
                       .eq('id', conversation.id);
                     conversation.ai_managed = true;
                   }
+                } else if (manuallyDisabledByAddr) {
+                  console.log(`[ADDR-VERIFY] AI manually disabled by user for conversation ${conversation.id} — NOT re-enabling`);
                 }
               }
               // If address verification was handled, skip AI for this message
@@ -2122,14 +2126,18 @@ serve(async (req) => {
 
                 // If ai_managed was disabled by a previous COD needs_attention flow, re-enable it
                 // so the AI can respond to subsequent messages (the confirmation is no longer pending)
+                // BUT: respect manual user override — if ai_disabled_manually flag is set, don't re-enable
                 const codStatus = conversation.metadata?.pending_order_confirmation?.status;
-                if (conversation.ai_managed === false && (codStatus === 'needs_attention' || codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
-                  console.log(`[COD-CONFIRM] Re-enabling AI for conversation ${conversation.id} (COD status: ${codStatus}, no longer pending)`);
+                const manuallyDisabledByCOD = conversation.metadata?.ai_disabled_manually === true;
+                if (conversation.ai_managed === false && !manuallyDisabledByCOD && (codStatus === 'needs_attention' || codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
+                  console.log(`[COD-CONFIRM] Re-enabling AI for conversation ${conversation.id} (COD status: ${codStatus}, no longer pending, not manually disabled)`);
                   await supabase
                     .from('messaging_conversations')
                     .update({ ai_managed: true })
                     .eq('id', conversation.id);
                   conversation.ai_managed = true; // Update local reference too
+                } else if (manuallyDisabledByCOD) {
+                  console.log(`[COD-CONFIRM] AI manually disabled by user for conversation ${conversation.id} — NOT re-enabling`);
                 }
               }
               // ========== END COD ORDER CONFIRMATION ==========
