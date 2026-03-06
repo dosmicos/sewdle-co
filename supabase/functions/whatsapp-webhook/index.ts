@@ -805,6 +805,31 @@ async function generateAIResponse(
     const config = aiConfig && Object.keys(aiConfig).length > 0 ? aiConfig : defaultAiConfig;
     let systemPrompt = config.systemPrompt || defaultAiConfig.systemPrompt;
 
+    // Add current date/time context so AI knows what day it is
+    const now = new Date();
+    const colombiaFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Bogota',
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', weekday: 'long', hour12: false,
+    });
+    const dateParts = colombiaFormatter.formatToParts(now);
+    const getDatePart = (type: string) => dateParts.find(p => p.type === type)?.value || '';
+    const colWeekday = getDatePart('weekday').toLowerCase();
+    const weekdayMap: Record<string, string> = {
+      'sunday': 'domingo', 'monday': 'lunes', 'tuesday': 'martes',
+      'wednesday': 'miércoles', 'thursday': 'jueves', 'friday': 'viernes', 'saturday': 'sábado'
+    };
+    const mesesMap = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const diaSemana = weekdayMap[colWeekday] || colWeekday;
+    const colDay = parseInt(getDatePart('day'));
+    const colMonth = parseInt(getDatePart('month'));
+    const mes = mesesMap[colMonth] || '';
+    const colYear = getDatePart('year');
+    const colHour = getDatePart('hour');
+    const colMinute = getDatePart('minute');
+    console.log(`📅 [Fallback AI] Colombia time: ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute}`);
+    systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL: Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). Usa esta información para responder correctamente sobre días de despacho, tiempos de entrega y disponibilidad.`;
+
     // Add tone instructions
     const toneMap: Record<string, string> = {
       'friendly': 'Usa un tono amigable y cercano. Puedes usar emojis ocasionalmente.',
