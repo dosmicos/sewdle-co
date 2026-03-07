@@ -1247,7 +1247,7 @@ serve(async (req) => {
               const aiRespondableTypes = ['text', 'image', 'button', 'interactive'];
               if (aiEnabledOnChannel && aiEnabledOnConversation && content && aiRespondableTypes.includes(messageType)) {
                 console.log('AI is enabled (channel + conversation), generating response...');
-                
+
                 // Get conversation history for context
                 const { data: historyMessages } = await supabase
                   .from('messaging_messages')
@@ -1256,6 +1256,32 @@ serve(async (req) => {
                   .order('sent_at', { ascending: false })
                   .limit(10);
 
+                // 🛡️ ANTI-DUPLICATION: Check if an order was recently created in this conversation
+                // Look for order confirmation messages in recent history (last 5 outbound messages)
+                const recentOutbound = (historyMessages || []).filter((m: any) => m.direction === 'outbound');
+                const hasRecentOrder = recentOutbound.some((m: any) => {
+                  const msgContent = (m.content || '').toLowerCase();
+                  return msgContent.includes('pedido ha sido creado') ||
+                         msgContent.includes('número de pedido') ||
+                         msgContent.includes('pedido creado exitosamente');
+                });
+
+                // Check if this message looks like a simple confirmation or auto-reply
+                const lowerContent = (content || '').toLowerCase().trim();
+                const isSimpleConfirmation = /^(si|sí|ok|okay|gracias|perfecto|dale|listo|bueno|genial|vale|claro|entendido|👍|🙏|❤️|😊)$/i.test(lowerContent);
+                const isAutoReply = lowerContent.includes('gracias por comunicarte') ||
+                                    lowerContent.includes('respuesta automática') ||
+                                    lowerContent.includes('mensaje automático') ||
+                                    lowerContent.includes('horario de atención') ||
+                                    lowerContent.includes('nos comunicaremos') ||
+                                    lowerContent.includes('auto-reply') ||
+                                    lowerContent.includes('fuera del horario');
+
+                if (isAutoReply) {
+                  console.log('⚠️ Detected auto-reply message, skipping AI response:', content.substring(0, 80));
+                  // Don't process auto-replies at all - skip AI
+                } else {
+
                 // Get AI provider from channel config (default to minimax)
                 const aiConfig = channel.ai_config || {};
                 const aiProvider = aiConfig.aiProvider || 'minimax';
@@ -1263,6 +1289,18 @@ serve(async (req) => {
                 console.log(`Using AI provider: ${aiProvider}, function: ${functionName}`);
 
                 // Build messages for the AI function (include images for vision)
+                let contentForAI = content;
+
+                // If there's a recent order and the message is a simple confirmation,
+                // add context to prevent the AI from creating a duplicate order
+                if (hasRecentOrder && isSimpleConfirmation) {
+                  console.log('⚠️ Recent order detected + simple confirmation. Adding anti-duplication context.');
+                  contentForAI = `${content}\n\n[SISTEMA: El cliente está respondiendo a la confirmación de un pedido que YA fue creado. NO crees otro pedido. Solo responde amablemente.]`;
+                } else if (hasRecentOrder) {
+                  console.log('⚠️ Recent order detected in conversation history. Adding anti-duplication context.');
+                  contentForAI = `${content}\n\n[SISTEMA: Ya se creó un pedido en esta conversación. NO crees otro pedido a menos que el cliente EXPLÍCITAMENTE pida un producto diferente para una compra adicional.]`;
+                }
+
                 const messagesForAI = [
                   ...(historyMessages || []).reverse().map((m: any) => {
                     const role = m.direction === 'inbound' ? 'user' : 'assistant';
@@ -1279,7 +1317,7 @@ serve(async (req) => {
 
                     return { role, content: m.content || '' };
                   }),
-                  { role: 'user', content: content }
+                  { role: 'user', content: contentForAI }
                 ];
 
                 // Call the appropriate AI edge function
@@ -1392,66 +1430,72 @@ serve(async (req) => {
                 }
                 
                 // AUTO-ORDER: Detect if user is providing order data and create order automatically
-                const orderKeywords = ['quiero comprar', 'me lo llevo', 'lo quiero', 'aqui están mis datos', 'te envío los datos', 'datos para el pedido'];
-                const hasOrderIntent = orderKeywords.some(kw => content.toLowerCase().includes(kw));
-                
-                if (hasOrderIntent) {
-                  console.log('Order intent detected, extracting order data...');
-                  
-                  // Get all conversation messages to extract data
-                  const allMsgs = [...(historyMessages || [])].reverse();
-                  const allText = allMsgs.map(m => m.content).join(' ');
-                  
-                  // Extract email
-                  const emailMatch = allText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
-                  // Extract phone (starts with 3, 10-11 digits)
-                  const phoneMatch = allText.match(/(3\d{9})/);
-                  
-                  // Try to extract name (first text that's not email/phone/address)
-                  const nameMatch = allText.match(/(?:me llamo|soy|nombre[:\s]+)([A-Za-z\s]+?)(?:\s*,|\s*correo|\s*email|\s*teléfono|\s*dirección|$)/i);
-                  
-                  // Look for address keywords
-                  const addressMatch = allText.match(/(?:dirección|dir|address)[:\s]+([^,]+,\s*[A-Za-z]+)/i);
-                  
-                  if (emailMatch && phoneMatch) {
-                    console.log('Found order data - creating order automatically');
-                    
-                    // Call create order function
-                    const orderResult = await supabase.functions.invoke('create-shopify-order', {
-                      body: {
-                        orderData: {
-                          customerName: nameMatch ? nameMatch[1].trim() : 'Cliente',
-                          email: emailMatch[1],
-                          phone: phoneMatch[1],
-                          address: addressMatch ? addressMatch[1].trim() : 'Por confirmar',
-                          city: 'Bogotá',
-                          department: 'Cundinamarca',
-                          productId: 8842923606251, // Default product - need to extract from message
-                          quantity: 1
-                        },
-                        organizationId: channel.organization_id
-                      }
-                    });
-                    
-                    if (orderResult.data?.orderId) {
-                      console.log('Auto-order created:', orderResult.data.orderNumber);
-                      
-                      const orderMessage = `¡Pedido creado! #${orderResult.data.orderNumber}\nTotal: $${Number(orderResult.data.totalPrice).toLocaleString('es-CO')}`;
-                      
-                      await sendWhatsAppMessage(senderPhone, orderMessage, channel.meta_phone_number_id || phoneNumberId);
-                      
-                      await supabase.from('messaging_messages').insert({
-                        conversation_id: conversation.id,
-                        channel_type: 'whatsapp',
-                        direction: 'outbound',
-                        sender_type: 'ai',
-                        content: orderMessage,
-                        message_type: 'text',
-                        sent_at: new Date().toISOString(),
+                // ⚠️ SKIP if an order was already created recently in this conversation
+                if (!hasRecentOrder) {
+                  const orderKeywords = ['quiero comprar', 'me lo llevo', 'lo quiero', 'aqui están mis datos', 'te envío los datos', 'datos para el pedido'];
+                  const hasOrderIntent = orderKeywords.some(kw => content.toLowerCase().includes(kw));
+
+                  if (hasOrderIntent) {
+                    console.log('Order intent detected, extracting order data...');
+
+                    // Get all conversation messages to extract data
+                    const allMsgs = [...(historyMessages || [])].reverse();
+                    const allText = allMsgs.map(m => m.content).join(' ');
+
+                    // Extract email
+                    const emailMatch = allText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+                    // Extract phone (starts with 3, 10-11 digits)
+                    const phoneMatch = allText.match(/(3\d{9})/);
+
+                    // Try to extract name (first text that's not email/phone/address)
+                    const nameMatch = allText.match(/(?:me llamo|soy|nombre[:\s]+)([A-Za-z\s]+?)(?:\s*,|\s*correo|\s*email|\s*teléfono|\s*dirección|$)/i);
+
+                    // Look for address keywords
+                    const addressMatch = allText.match(/(?:dirección|dir|address)[:\s]+([^,]+,\s*[A-Za-z]+)/i);
+
+                    if (emailMatch && phoneMatch) {
+                      console.log('Found order data - creating order automatically');
+
+                      // Call create order function
+                      const orderResult = await supabase.functions.invoke('create-shopify-order', {
+                        body: {
+                          orderData: {
+                            customerName: nameMatch ? nameMatch[1].trim() : 'Cliente',
+                            email: emailMatch[1],
+                            phone: phoneMatch[1],
+                            address: addressMatch ? addressMatch[1].trim() : 'Por confirmar',
+                            city: 'Bogotá',
+                            department: 'Cundinamarca',
+                            productId: 8842923606251, // Default product - need to extract from message
+                            quantity: 1
+                          },
+                          organizationId: channel.organization_id
+                        }
                       });
+
+                      if (orderResult.data?.orderId) {
+                        console.log('Auto-order created:', orderResult.data.orderNumber);
+
+                        const orderMessage = `¡Pedido creado! #${orderResult.data.orderNumber}\nTotal: $${Number(orderResult.data.totalPrice).toLocaleString('es-CO')}`;
+
+                        await sendWhatsAppMessage(senderPhone, orderMessage, channel.meta_phone_number_id || phoneNumberId);
+
+                        await supabase.from('messaging_messages').insert({
+                          conversation_id: conversation.id,
+                          channel_type: 'whatsapp',
+                          direction: 'outbound',
+                          sender_type: 'ai',
+                          content: orderMessage,
+                          message_type: 'text',
+                          sent_at: new Date().toISOString(),
+                        });
+                      }
                     }
                   }
+                } else {
+                  console.log('⚠️ Skipping AUTO-ORDER: recent order already exists in conversation');
                 }
+              } // end of isAutoReply else block
               }
             }
           }
