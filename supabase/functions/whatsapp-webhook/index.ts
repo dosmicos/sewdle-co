@@ -1914,6 +1914,42 @@ serve(async (req) => {
               }
               // ========== END ADDRESS VERIFICATION ==========
 
+              // ========== AUTO-REPLY DETECTION ==========
+              // Detect automated WhatsApp Business auto-replies (e.g., out-of-hours messages)
+              // These should NOT affect COD confirmation flow or trigger AI responses
+              if (content && messageType === 'text') {
+                const normalizedForAutoReply = content.toLowerCase().trim()
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const autoReplyPatterns = [
+                  'gracias por contactarnos',
+                  'gracias por escribirnos',
+                  'gracias por comunicarte',
+                  'gracias por tu mensaje',
+                  'nuestro horario',
+                  'fuera de horario',
+                  'fuera del horario',
+                  'horario de atencion',
+                  'le responderemos',
+                  'te responderemos',
+                  'respuesta automatica',
+                  'mensaje automatico',
+                  'no estamos disponibles',
+                  'en este momento no podemos',
+                  'nos comunicaremos contigo',
+                  'pronto te responderemos',
+                  'hemos recibido tu mensaje',
+                  'recibimos tu mensaje',
+                  'en breve te',
+                  'a la brevedad',
+                ];
+                const isAutoReply = autoReplyPatterns.some(p => normalizedForAutoReply.includes(p));
+                if (isAutoReply) {
+                  console.log(`🤖 [AUTO-REPLY] Detected automated business reply from ${senderPhone}: "${content.substring(0, 80)}". Skipping COD flow and AI.`);
+                  continue; // Skip entire processing — don't corrupt COD status, don't trigger AI
+                }
+              }
+              // ========== END AUTO-REPLY DETECTION ==========
+
               // ========== COD ORDER CONFIRMATION DETECTION ==========
               // Re-fetch conversation metadata fresh to avoid stale data from the
               // initial fetch (metadata may have been written by send-order-confirmation
@@ -1933,27 +1969,27 @@ serve(async (req) => {
                 console.log(`[COD-CONFIRM] Fresh metadata for conv ${conversation.id}: pending=${JSON.stringify(pendingConfirmation?.status || null)}`);
               }
 
-              // FALLBACK: If conversation metadata doesn't have a pending confirmation,
-              // check the order_confirmations table directly by customer phone + pending status
-              if (!pendingConfirmation || pendingConfirmation.status !== 'pending') {
-                console.log(`[COD-CONFIRM] No pending in metadata, checking order_confirmations table for phone ${senderPhone}`);
+              // FALLBACK: If conversation metadata doesn't have a pending/needs_attention confirmation,
+              // check the order_confirmations table directly by customer phone + pending/needs_attention status
+              if (!pendingConfirmation || (pendingConfirmation.status !== 'pending' && pendingConfirmation.status !== 'needs_attention')) {
+                console.log(`[COD-CONFIRM] No pending/active in metadata, checking order_confirmations table for phone ${senderPhone}`);
 
                 const { data: dbConfirmation } = await supabase
                   .from('order_confirmations')
                   .select('shopify_order_id, order_number, status, conversation_id')
                   .eq('customer_phone', senderPhone)
-                  .eq('status', 'pending')
+                  .in('status', ['pending', 'needs_attention'])
                   .eq('organization_id', channel.organization_id)
                   .order('created_at', { ascending: false })
                   .limit(1)
                   .maybeSingle();
 
                 if (dbConfirmation) {
-                  console.log(`[COD-CONFIRM] FALLBACK HIT: Found pending confirmation in DB for order ${dbConfirmation.order_number}`);
+                  console.log(`[COD-CONFIRM] FALLBACK HIT: Found ${dbConfirmation.status} confirmation in DB for order ${dbConfirmation.order_number}`);
                   pendingConfirmation = {
                     shopify_order_id: dbConfirmation.shopify_order_id,
                     order_number: dbConfirmation.order_number,
-                    status: 'pending'
+                    status: dbConfirmation.status
                   };
 
                   // Fix conversation_id mismatch if needed
@@ -1969,8 +2005,9 @@ serve(async (req) => {
                 }
               }
 
-              if (pendingConfirmation?.status === 'pending' && content && (messageType === 'text' || messageType === 'button' || messageType === 'interactive')) {
-                console.log(`📋 Pending order confirmation detected for order ${pendingConfirmation.order_number}`);
+              const codStatusActive = pendingConfirmation?.status === 'pending' || pendingConfirmation?.status === 'needs_attention';
+              if (codStatusActive && content && (messageType === 'text' || messageType === 'button' || messageType === 'interactive')) {
+                console.log(`📋 Order confirmation detected for order ${pendingConfirmation.order_number} (status: ${pendingConfirmation.status})`);
 
                 // Normalize response: lowercase, remove accents, trim
                 const normalized = content.toLowerCase().trim()
@@ -2117,58 +2154,64 @@ serve(async (req) => {
 
                 } else {
                   // Not a confirmation — route to human attention
-                  console.log(`🔴 Customer response needs attention for order ${pendingConfirmation.order_number}: "${content.substring(0, 50)}"`);
+                  // But only update status if it's still 'pending' (avoid re-processing if already 'needs_attention')
+                  if (pendingConfirmation.status === 'pending') {
+                    console.log(`🔴 Customer response needs attention for order ${pendingConfirmation.order_number}: "${content.substring(0, 50)}"`);
 
-                  try {
-                    // 1. Update order_confirmations
-                    await supabase
-                      .from('order_confirmations')
-                      .update({ status: 'needs_attention', updated_at: new Date().toISOString() })
-                      .eq('shopify_order_id', pendingConfirmation.shopify_order_id);
+                    try {
+                      // 1. Update order_confirmations
+                      await supabase
+                        .from('order_confirmations')
+                        .update({ status: 'needs_attention', updated_at: new Date().toISOString() })
+                        .eq('shopify_order_id', pendingConfirmation.shopify_order_id);
 
-                    // 2. Update conversation metadata (use fresh metadata to avoid overwriting concurrent changes)
-                    const freshCodMetaNA = freshCodConv?.metadata || conversation.metadata || {};
-                    const updatedMetadata = { ...freshCodMetaNA, ai_disabled_by_automation: true, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
-                    await supabase.from('messaging_conversations').update({ metadata: updatedMetadata, ai_managed: false }).eq('id', conversation.id);
+                      // 2. Update conversation metadata (use fresh metadata to avoid overwriting concurrent changes)
+                      const freshCodMetaNA = freshCodConv?.metadata || conversation.metadata || {};
+                      const updatedMetadata = { ...freshCodMetaNA, ai_disabled_by_automation: true, pending_order_confirmation: { ...pendingConfirmation, status: 'needs_attention' } };
+                      await supabase.from('messaging_conversations').update({ metadata: updatedMetadata, ai_managed: false }).eq('id', conversation.id);
 
-                    // 3. Swap tags: remove "Confirmacion pendiente", add "Requiere atencion"
-                    const { data: pendingTag } = await supabase
-                      .from('messaging_conversation_tags')
-                      .select('id')
-                      .eq('organization_id', channel.organization_id)
-                      .eq('name', 'Confirmacion pendiente')
-                      .maybeSingle();
-                    if (pendingTag) {
-                      await supabase.from('messaging_conversation_tag_assignments').delete().eq('conversation_id', conversation.id).eq('tag_id', pendingTag.id);
+                      // 3. Swap tags: remove "Confirmacion pendiente", add "Requiere atencion"
+                      const { data: pendingTag } = await supabase
+                        .from('messaging_conversation_tags')
+                        .select('id')
+                        .eq('organization_id', channel.organization_id)
+                        .eq('name', 'Confirmacion pendiente')
+                        .maybeSingle();
+                      if (pendingTag) {
+                        await supabase.from('messaging_conversation_tag_assignments').delete().eq('conversation_id', conversation.id).eq('tag_id', pendingTag.id);
+                      }
+
+                      const { data: attentionTag } = await supabase
+                        .from('messaging_conversation_tags')
+                        .select('id')
+                        .eq('organization_id', channel.organization_id)
+                        .eq('name', 'Requiere atencion')
+                        .maybeSingle();
+                      if (attentionTag) {
+                        await supabase.from('messaging_conversation_tag_assignments')
+                          .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
+                      }
+
+                      console.log(`🔴 Order ${pendingConfirmation.order_number} routed to human attention`);
+                    } catch (attErr) {
+                      console.error('❌ Error routing to attention:', attErr);
                     }
-
-                    const { data: attentionTag } = await supabase
-                      .from('messaging_conversation_tags')
-                      .select('id')
-                      .eq('organization_id', channel.organization_id)
-                      .eq('name', 'Requiere atencion')
-                      .maybeSingle();
-                    if (attentionTag) {
-                      await supabase.from('messaging_conversation_tag_assignments')
-                        .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
-                    }
-
-                    console.log(`🔴 Order ${pendingConfirmation.order_number} routed to human attention`);
-                  } catch (attErr) {
-                    console.error('❌ Error routing to attention:', attErr);
+                  } else {
+                    console.log(`🔴 [COD-CONFIRM] Non-confirmation message for order ${pendingConfirmation.order_number} (already ${pendingConfirmation.status}): "${content.substring(0, 50)}". Skipping AI.`);
                   }
 
                   continue; // Skip AI auto-reply, human agent handles this
                 }
-              } else if (!pendingConfirmation || pendingConfirmation.status !== 'pending') {
-                // No pending confirmation found anywhere — proceeding to AI auto-reply
+              } else if (!codStatusActive) {
+                // No pending/active confirmation found anywhere — proceeding to AI auto-reply
                 console.log(`[COD-CONFIRM] No actionable confirmation for phone ${senderPhone} (status=${pendingConfirmation?.status || 'none'}) — proceeding to AI`);
 
                 // If ai_managed was disabled by automation (COD/address flow), re-enable it
                 // Only re-enable if ai_disabled_by_automation flag is set — never re-enable manually disabled conversations
+                // NOTE: 'needs_attention' is NOT included here — it means human review is needed, NOT AI re-activation
                 const codStatus = freshCodConv?.metadata?.pending_order_confirmation?.status;
                 const disabledByAutomationCOD = freshCodConv?.metadata?.ai_disabled_by_automation === true;
-                if (conversation.ai_managed === false && disabledByAutomationCOD && (codStatus === 'needs_attention' || codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
+                if (conversation.ai_managed === false && disabledByAutomationCOD && (codStatus === 'confirmed' || codStatus === 'expired' || codStatus === 'cancelled')) {
                   console.log(`[COD-CONFIRM] Re-enabling AI for conversation ${conversation.id} (COD status: ${codStatus}, was disabled by automation)`);
                   const codMeta = freshCodConv?.metadata || {};
                   delete codMeta.ai_disabled_by_automation;
