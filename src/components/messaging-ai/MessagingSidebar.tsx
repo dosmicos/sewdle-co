@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { 
-  Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, 
+  Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight,
   GraduationCap, Brain, Megaphone, BarChart3, ArrowLeft,
-  MessageSquare, Instagram, Facebook, FolderPlus, Trash2, Folder
+  MessageSquare, Instagram, Facebook, FolderPlus, Trash2, Folder, LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MessagingTag } from '@/hooks/useMessagingTags';
@@ -22,6 +22,7 @@ interface MessagingSidebarProps {
   onTagChange?: (tagId: string | null) => void;
   onFolderChange?: (folderId: string | null) => void;
   onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags') => void;
+  onLogout?: () => void;
   counts: {
     total: number;
     pending: number;
@@ -94,6 +95,7 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
   onDeleteFolder,
   collapsed,
   onToggleCollapse,
+  onLogout,
 }) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
 
@@ -416,6 +418,15 @@ export const MessagingSidebar: React.FC<MessagingSidebarProps> = ({
             <Package className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span className="text-sm font-medium">Catálogo</span>}
           </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors"
+            >
+              <LogOut className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Cerrar sesión</span>}
+            </button>
+          )}
         </div>
       </div>
 

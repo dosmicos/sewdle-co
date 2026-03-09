@@ -29,12 +29,16 @@ import { OrderConfirmationPanel } from '@/components/messaging-ai/OrderConfirmat
 import { ExpressNotificationPanel } from '@/components/messaging-ai/ExpressNotificationPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
 type ViewType = 'conversations' | 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats' | 'tags';
 
 const MessagingAIPage = () => {
   const { currentOrganization } = useOrganization();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
@@ -313,6 +317,11 @@ const MessagingAIPage = () => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   // Shared sidebar props
   const sidebarProps = {
     activeFilter,
@@ -334,6 +343,7 @@ const MessagingAIPage = () => {
     onDeleteFolder: deleteFolder,
     collapsed: sidebarCollapsed,
     onToggleCollapse: () => setSidebarCollapsed(!sidebarCollapsed),
+    onLogout: handleLogout,
   };
 
   // Conversations list content (shared between mobile & desktop)
