@@ -1,5 +1,5 @@
 import React from 'react';
-import { Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, GraduationCap, Brain, Megaphone, BarChart3, ArrowLeft } from 'lucide-react';
+import { Inbox, HelpCircle, Bot, Settings, Package, ChevronLeft, ChevronRight, GraduationCap, Brain, Megaphone, BarChart3, ArrowLeft, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FilterType = 'inbox' | 'needs-help' | 'ai-managed';
@@ -8,6 +8,7 @@ interface WhatsAppSidebarProps {
   activeFilter: FilterType;
   onFilterChange: (filter: FilterType) => void;
   onNavigate: (section: 'config' | 'catalog' | 'train' | 'knowledge' | 'campaigns' | 'stats') => void;
+  onLogout: () => void;
   counts: {
     total: number;
     pending: number;
@@ -35,6 +36,7 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
   counts,
   collapsed,
   onToggleCollapse,
+  onLogout,
 }) => {
   return (
     <div
@@ -173,6 +175,13 @@ export const WhatsAppSidebar: React.FC<WhatsAppSidebarProps> = ({
           >
             <Package className="h-5 w-5 flex-shrink-0" />
             {!collapsed && <span className="text-sm font-medium">Catálogo</span>}
+          </button>
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-300 hover:bg-red-900/40 hover:text-red-200 transition-colors"
+          >
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            {!collapsed && <span className="text-sm font-medium">Cerrar sesión</span>}
           </button>
         </div>
       </div>

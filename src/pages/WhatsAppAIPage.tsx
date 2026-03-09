@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot } from 'lucide-react';
 import { ConversationsList } from '@/components/whatsapp-ai/ConversationsList';
@@ -116,10 +118,17 @@ const mockMessages: Record<string, Array<{ role: 'user' | 'assistant'; content: 
 };
 
 const WhatsAppAIPage = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [selectedConversation, setSelectedConversation] = useState<string | null>('1');
   const [activeFilter, setActiveFilter] = useState<FilterType>('inbox');
   const [activeView, setActiveView] = useState<ViewType>('conversations');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   // Calculate counts for each filter
   const counts = useMemo(() => ({
@@ -165,6 +174,7 @@ const WhatsAppAIPage = () => {
         counts={counts}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onLogout={handleLogout}
       />
 
       {/* Main content */}
