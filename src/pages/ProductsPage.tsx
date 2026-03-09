@@ -213,7 +213,7 @@ const ProductsPage = () => {
         }
       }
 
-      // Sincronizar imágenes principales de productos
+      // Sincronizar imágenes principales de productos (por SKU match)
       let imagesUpdatedCount = 0;
       for (const [productId, imageUrl] of productImageUpdates.entries()) {
         const { error: imageUpdateError } = await supabase
@@ -226,6 +226,45 @@ const ProductsPage = () => {
         } else {
           imagesUpdatedCount++;
         }
+      }
+
+      // Sincronizar imágenes por SKU para productos sin imagen
+      console.log('🖼️ Iniciando sincronización de imágenes por SKU...');
+      const { data: variantsWithoutImage } = await supabase
+        .from('product_variants')
+        .select('sku_variant, product_id, products!inner(id, name, image_url)')
+        .is('products.image_url', null)
+        .eq('products.organization_id', currentOrganization?.id || '');
+
+      if (variantsWithoutImage && variantsWithoutImage.length > 0) {
+        const productsToUpdate = new Map<string, string>();
+
+        for (const variant of variantsWithoutImage) {
+          if (productsToUpdate.has(variant.product_id)) continue;
+
+          const shopifyMatch = shopifyVariantsMap.get(variant.sku_variant);
+          if (shopifyMatch?.productImageUrl) {
+            productsToUpdate.set(variant.product_id, shopifyMatch.productImageUrl);
+          }
+        }
+
+        console.log(`🖼️ Productos sin imagen con match de SKU: ${productsToUpdate.size}`);
+
+        let skuMatchImages = 0;
+        for (const [productId, imageUrl] of productsToUpdate.entries()) {
+          const { error: imgError } = await supabase
+            .from('products')
+            .update({ image_url: imageUrl })
+            .eq('id', productId);
+
+          if (!imgError) {
+            skuMatchImages++;
+          } else {
+            console.error(`❌ Error actualizando imagen para producto ${productId}:`, imgError);
+          }
+        }
+        imagesUpdatedCount += skuMatchImages;
+        console.log(`🖼️ Imágenes actualizadas por SKU: ${skuMatchImages}`);
       }
 
       console.log(`📊 Resumen completo de actualización:`);
