@@ -803,7 +803,38 @@ async function generateAIResponse(
 
     // Add product catalog
     systemPrompt += productCatalog;
-    
+
+    // Add current date/time so AI knows what day it is
+    const now = new Date();
+    const colombiaFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      weekday: 'long',
+      hour12: false,
+    });
+    const parts = colombiaFormatter.formatToParts(now);
+    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+    const colYear = getPart('year');
+    const colMonth = parseInt(getPart('month'));
+    const colDay = parseInt(getPart('day'));
+    const colHour = getPart('hour');
+    const colMinute = getPart('minute');
+    const colWeekday = getPart('weekday').toLowerCase();
+
+    const weekdayMapLocal: Record<string, string> = {
+      'sunday': 'domingo', 'monday': 'lunes', 'tuesday': 'martes',
+      'wednesday': 'miércoles', 'thursday': 'jueves', 'friday': 'viernes', 'saturday': 'sábado'
+    };
+    const mesesLocal = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const diaSemana = weekdayMapLocal[colWeekday] || colWeekday;
+    const mes = mesesLocal[colMonth] || '';
+
+    systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL: Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
+
     // Add final reminder at the end of prompt
     if (isProductRelated && relevantProducts.length > 0) {
       systemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para consultas de COLOR u otros atributos: revisa variantes del catálogo y si no estás seguro, envía el link de la colección.';
