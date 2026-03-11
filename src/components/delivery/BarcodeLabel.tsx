@@ -9,14 +9,11 @@ interface BarcodeLabelProps {
 }
 
 const BarcodeLabel = ({ sku, productName, variant, index }: BarcodeLabelProps) => {
-  // Combinar nombre y variante en una sola línea compacta
-  const compactText = variant ? `${productName} - ${variant}` : productName;
-  
   return (
     <div className="barcode-label flex flex-col items-center justify-center p-1 border border-dashed border-border rounded bg-background" style={{ width: '240px', height: '94px' }}>
       <div className="w-full overflow-hidden flex justify-center">
-        <Barcode 
-          value={sku} 
+        <Barcode
+          value={sku}
           format="CODE128"
           width={4}
           height={45}
@@ -26,9 +23,14 @@ const BarcodeLabel = ({ sku, productName, variant, index }: BarcodeLabelProps) =
           textMargin={0}
         />
       </div>
-      <p className="text-center w-full truncate" style={{ fontSize: '12px', lineHeight: 1, marginTop: '1px' }} title={compactText}>
-        {compactText}
+      <p className="text-center w-full truncate" style={{ fontSize: '12px', lineHeight: 1, marginTop: '1px' }} title={productName}>
+        {productName}
       </p>
+      {variant && (
+        <p className="text-center w-full truncate text-muted-foreground" style={{ fontSize: '11px', lineHeight: 1, marginTop: '1px' }} title={variant}>
+          {variant}
+        </p>
+      )}
     </div>
   );
 };
