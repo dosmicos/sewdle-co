@@ -554,10 +554,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   const printBarcodeLabels = (labels: Array<{sku: string; productName: string; variant: string; unitIndex: number}>) => {
     if (labels.length === 0) return;
 
-    const labelsWithCompactText = labels.map(label => ({
-      ...label,
-      compactText: label.variant ? `${label.productName} - ${label.variant}` : label.productName
-    }));
+    const labelsWithCompactText = labels;
 
     const printWindow = window.open('', '_blank', 'width=600,height=400');
     if (!printWindow) return;
@@ -617,6 +614,17 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
             max-width: 46mm;
             color: #333;
           }
+          .variant-info {
+            font-size: 11px;
+            font-weight: 400;
+            margin-top: 1px;
+            line-height: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 46mm;
+            color: #666;
+          }
           @media print {
             @page { 
               size: 100mm 20mm;
@@ -645,7 +653,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
           ${labelsWithCompactText.map(label => `
             <div class="barcode-label">
               <svg id="barcode-${label.sku.replace(/[^a-zA-Z0-9]/g, '')}-${label.unitIndex}"></svg>
-              <div class="product-info">${label.compactText}</div>
+              <div class="product-info">${label.productName}</div>
+              ${label.variant ? `<div class="variant-info">${label.variant}</div>` : ''}
             </div>
           `).join('')}
         </div>
