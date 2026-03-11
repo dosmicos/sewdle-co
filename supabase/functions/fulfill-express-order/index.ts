@@ -233,9 +233,9 @@ Deno.serve(async (req) => {
         console.error('⚠️ Error guardando codigo en notas:', noteErr);
       }
 
-      // Send WhatsApp notification
+      // Send WhatsApp notification (await to get actual result)
       try {
-        fetch(`${supabaseUrl}/functions/v1/send-express-notification`, {
+        const notifResponse = await fetch(`${supabaseUrl}/functions/v1/send-express-notification`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${supabaseServiceKey}`,
@@ -247,12 +247,13 @@ Deno.serve(async (req) => {
             shopifyOrderId: shopify_order_id,
             deliveryCode: delivery_code
           })
-        }).then(r => r.json()).then(res => {
-          console.log('📱 Express notification result:', res);
-        }).catch(err => {
-          console.error('⚠️ Express notification error:', err);
         });
-        notificationSent = true;
+        const notifResult = await notifResponse.json();
+        console.log('📱 Express notification result:', notifResult);
+        notificationSent = notifResult?.success === true;
+        if (!notificationSent) {
+          console.error('⚠️ Express notification failed:', notifResult?.error);
+        }
       } catch (notifErr) {
         console.error('⚠️ Error sending express notification:', notifErr);
       }

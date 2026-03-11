@@ -399,7 +399,7 @@ serve(async (req) => {
                       .map(v => {
                         const stock = v.inventory_quantity || 0;
                         const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
-                        return `${v.title} (variantId:${v.id}): ${stockStatus}`;
+                        return `${v.title} (variantId:${v.id}, SKU:${v.sku || 'N/A'}): ${stockStatus}`;
                       })
                       .join(' | ');
                     
@@ -564,20 +564,29 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 1. SIEMPRE preguntar la ciudad y departamento ANTES de crear el pedido
 2. Calcular el costo de envío según la zona del departamento
 3. Si el total de productos ≥ $150.000 Y la zona aplica envío gratis → shippingCost = 0
-4. SIEMPRE informar al cliente el desglose (productos + envío = total) ANTES de crear el pedido
+4. ⚠️ CRÍTICO — FLUJO OBLIGATORIO EN 2 PASOS:
+   PASO 1: ANTES de llamar create_order, envía UN MENSAJE al cliente con el desglose completo:
+   - Producto(s) y precio(s)
+   - Costo de envío según la zona (ej: "Envío estándar Bogotá: $3.000")
+   - Total final (productos + envío)
+   - Pregunta: "¿Confirmas el pedido?"
+   PASO 2: SOLO después de que el cliente CONFIRME, llama create_order con el shippingCost correcto.
+   NUNCA llames create_order en el mismo turno que presentas el desglose. SIEMPRE espera confirmación.
 5. Express Bogotá: NO acepta pago contra entrega, debe pagar anticipadamente
-6. Pasar el campo shippingCost con el valor correcto al llamar create_order
-7. Si el cliente NO especifica express, asumir envío estándar`;
+6. Pasar el campo shippingCost con el valor correcto al llamar create_order (DEBE coincidir con lo que le mostraste al cliente en el desglose)
+7. Si el cliente NO especifica express, asumir envío estándar
+8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($14.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.`;
 
     // Add size/talla validation rules
     fullSystemPrompt += `\n\n👕 REGLA DE TALLAS — OBLIGATORIO ANTES DE CREAR PEDIDO:
 1. NUNCA crear un pedido sin confirmar la talla/variante con el cliente
-2. Si el producto tiene variantes/tallas (aparecen en el catálogo como "Talla X (variantId:123)"), SIEMPRE preguntar cuál quiere ANTES de crear el pedido
+2. Si el producto tiene variantes/tallas (aparecen en el catálogo como "Talla X (variantId:123, SKU:ABC)"), SIEMPRE preguntar cuál quiere ANTES de crear el pedido
 3. Si el cliente dice solo la edad del bebé/niño, recomienda la talla apropiada y CONFIRMA con el cliente antes de proceder
-4. Usa el variantId correcto del catálogo al llamar create_order — el variantId es el número que aparece entre paréntesis junto a cada talla
-5. Si el cliente no menciona talla y el producto tiene múltiples tallas, PREGUNTA antes de continuar
-6. Si el producto solo tiene una variante (ej: "Default Title"), puedes usar esa directamente sin preguntar
-7. FLUJO CORRECTO: Recopilar datos del cliente → Preguntar talla → Confirmar pedido → Crear pedido con variantId correcto`;
+4. Al llamar create_order, SIEMPRE incluye el SKU de la variante elegida (aparece en el catálogo como "SKU:XXX"). El SKU es ÚNICO por variante y es el identificador más confiable.
+5. Usa el variantId Y el SKU correctos del catálogo al llamar create_order
+6. Si el cliente no menciona talla y el producto tiene múltiples tallas, PREGUNTA antes de continuar
+7. Si el producto solo tiene una variante (ej: "Default Title"), puedes usar esa directamente sin preguntar
+8. FLUJO CORRECTO: Recopilar datos del cliente → Preguntar talla → Confirmar pedido → Crear pedido con variantId + SKU correctos`;
 
     // Add data collection rules for orders (cedula + no IDs)
     fullSystemPrompt += `\n\n🆔 REGLA DE DATOS PARA PEDIDOS — OBLIGATORIO:
@@ -616,6 +625,12 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 5. Si el cliente elige "link de pago" o pago online, pasar paymentMethod="link_de_pago" al llamar create_order
 6. NUNCA asumir el método de pago, SIEMPRE preguntar`;
 
+    // Add multi-product order rules
+    fullSystemPrompt += `\n\n📦 REGLA DE PEDIDOS CON MÚLTIPLES PRODUCTOS — CRÍTICO, OBLIGATORIO:
+1. Cuando el cliente pide VARIOS productos, SIEMPRE crea UN SOLO pedido con TODOS los productos en el array "lineItems".
+2. NUNCA llames create_order múltiples veces para el mismo pedido. Incluye TODOS los productos en UNA SOLA llamada.
+3. Ejemplo: Si el cliente pide "Ruana de Mico talla 4 y Ruana de Canguro talla 4", llama create_order UNA VEZ con lineItems que contenga ambos productos.`;
+
     // Add anti-duplication order rules
     fullSystemPrompt += `\n\n🚫 REGLA ANTI-DUPLICACIÓN DE PEDIDOS — CRÍTICO, OBLIGATORIO:
 1. NUNCA crees un pedido duplicado. Si en el historial de esta conversación ya existe un mensaje tuyo que confirma la creación de un pedido (ej: "Tu pedido ha sido creado exitosamente", "Número de pedido: #"), NO llames create_order de nuevo.
@@ -625,7 +640,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 5. Antes de llamar create_order, SIEMPRE verifica en el historial de la conversación si ya creaste un pedido. Si ya hay uno, NO crees otro.`;
 
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
-    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId correcto del catálogo al crear el pedido.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId y variantId del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.\n- ⚠️ CRÍTICO al llamar create_order: El campo productName debe ser el nombre EXACTO del catálogo, y productId/variantId deben corresponder a ESE producto. NUNCA confundas IDs de un producto con otro. Verifica SIEMPRE que el ID corresponda al nombre correcto.\n- ⚠️ ANTI-DUPLICACIÓN: Si ya creaste un pedido en esta conversación, NO crees otro a menos que el cliente EXPLÍCITAMENTE pida una compra adicional diferente.';
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- ⚠️ PRECIOS — REGLA CRÍTICA: SIEMPRE tienes los precios de TODOS los productos en tu catálogo. NUNCA digas "no tengo esa información" sobre precios. Si el cliente pregunta "qué precio tiene" o "cuánto cuesta", busca el producto en el catálogo arriba y responde con el precio. Todos los precios están en COP. Si el cliente pregunta el precio después de que enviaste un link de colección, indica el precio general de la categoría (ej: "Las ruanas tienen un precio de $94.900 COP") o lista los precios si varían.\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId Y el SKU correctos del catálogo al crear el pedido. El SKU es único por variante y es el más confiable.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId, variantId y SKU del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.\n- ⚠️ CRÍTICO al llamar create_order: El campo productName debe ser el nombre EXACTO del catálogo, productId/variantId deben corresponder a ESE producto, y el SKU debe ser el de la variante elegida. NUNCA confundas IDs de un producto con otro. El SKU es el identificador más confiable.\n- ⚠️ ANTI-DUPLICACIÓN: Si ya creaste un pedido en esta conversación, NO crees otro a menos que el cliente EXPLÍCITAMENTE pida una compra adicional diferente.\n- ⚠️ MÚLTIPLES PRODUCTOS: Si el cliente pide varios productos, incluye TODOS en el array lineItems en UNA SOLA llamada a create_order. NUNCA hagas múltiples llamadas.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
@@ -634,7 +649,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     const functions = [
       {
         name: "create_order",
-        description: "Crea un pedido en Shopify cuando el cliente proporciona todos los datos necesarios para la compra",
+        description: "Crea UN SOLO pedido en Shopify con TODOS los productos que el cliente quiere comprar. SIEMPRE incluye TODOS los productos en el array lineItems en UNA SOLA llamada. NUNCA llames esta función múltiples veces para el mismo pedido.",
         parameters: {
           type: "object",
           properties: {
@@ -646,16 +661,28 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             city: { type: "string", description: "Ciudad de envío" },
             department: { type: "string", description: "Departamento de envío" },
             neighborhood: { type: "string", description: "Barrio (opcional)" },
-            productId: { type: "number", description: "ID numérico del producto en Shopify. NO pedir al cliente. Obtener del catálogo usando el nombre del producto que el cliente menciona." },
-            productName: { type: "string", description: "Nombre EXACTO del producto tal como aparece en el catálogo (ej: 'Ruana Pollito'). Se usa para validar que el productId sea correcto." },
-            variantId: { type: "number", description: "ID numérico del variante/talla en Shopify. NO pedir al cliente. Obtener del catálogo usando la talla que el cliente elige." },
-            variantName: { type: "string", description: "Nombre de la talla/variante elegida (ej: '4 (1 a 2 años)'). Se usa para validar que el variantId sea correcto." },
-            quantity: { type: "number", description: "Cantidad (default 1)" },
+            lineItems: {
+              type: "array",
+              description: "Lista de TODOS los productos del pedido. Incluye TODOS los productos en este array. NUNCA hagas múltiples llamadas a create_order.",
+              items: {
+                type: "object",
+                properties: {
+                  productId: { type: "number", description: "ID numérico del producto en Shopify. Obtener del catálogo." },
+                  productName: { type: "string", description: "Nombre EXACTO del producto tal como aparece en el catálogo." },
+                  variantId: { type: "number", description: "ID numérico del variante/talla en Shopify. Obtener del catálogo." },
+                  variantName: { type: "string", description: "Nombre de la talla/variante elegida." },
+                  sku: { type: "string", description: "SKU único de la variante elegida. Obtener del catálogo (ej: SKU:RUANA-POLLITO-4). Es el identificador más confiable para la variante." },
+                  quantity: { type: "number", description: "Cantidad de este producto (default 1)" }
+                },
+                required: ["productId", "productName", "variantId", "variantName", "sku"]
+              },
+              minItems: 1
+            },
             notes: { type: "string", description: "Notas adicionales (opcional)" },
             shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." },
             paymentMethod: { type: "string", enum: ["link_de_pago", "contra_entrega"], description: "Método de pago elegido por el cliente. 'link_de_pago' genera un link de pago online. 'contra_entrega' es pago contra entrega (COD)." }
           },
-          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "productId", "productName", "variantId", "variantName", "shippingCost", "paymentMethod"]
+          required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "lineItems", "shippingCost", "paymentMethod"]
         }
       },
       {
@@ -742,152 +769,402 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           const paymentMethod = orderArgs.paymentMethod || 'link_de_pago';
           console.log("Creating order with args:", orderArgs, "Payment method:", paymentMethod);
 
-          // 🛡️ PRODUCT ID VALIDATION: Verify productId matches productName
-          // GPT-4o-mini sometimes confuses IDs between similar products
-          if (orderArgs.productName && allShopifyProducts.length > 0) {
-            const declaredProduct = allShopifyProducts.find((p: any) => p.id === orderArgs.productId);
-            const declaredProductTitle = declaredProduct?.title?.toLowerCase() || '';
-            const aiProductName = orderArgs.productName.toLowerCase();
+          // Build lineItems array - support both new format (lineItems) and legacy single-product format
+          let lineItems: Array<{productId: number; productName: string; variantId: number; variantName: string; sku?: string; quantity: number}> = [];
 
-            // Check if the productId actually matches the product name the AI claims
-            const titleMatch = declaredProductTitle.includes(aiProductName) || aiProductName.includes(declaredProductTitle);
-
-            if (!titleMatch && declaredProduct) {
-              console.warn(`⚠️ PRODUCT MISMATCH DETECTED! AI said "${orderArgs.productName}" but productId ${orderArgs.productId} is "${declaredProduct.title}"`);
-
-              // Find the correct product by name
-              const correctProduct = allShopifyProducts.find((p: any) => {
-                const pTitle = p.title.toLowerCase();
-                return pTitle.includes(aiProductName) || aiProductName.includes(pTitle);
-              });
-
-              if (correctProduct) {
-                console.log(`🔄 Auto-correcting: "${declaredProduct.title}" (${orderArgs.productId}) → "${correctProduct.title}" (${correctProduct.id})`);
-                orderArgs.productId = correctProduct.id;
-
-                // Also fix the variantId if we have a variant name
-                if (orderArgs.variantName) {
-                  const correctVariant = (correctProduct.variants || []).find((v: any) => {
-                    const vTitle = (v.title || '').toLowerCase();
-                    const aiVariant = orderArgs.variantName.toLowerCase();
-                    return vTitle.includes(aiVariant) || aiVariant.includes(vTitle) ||
-                      vTitle.replace(/\s*\(.*?\)\s*/g, '').trim() === aiVariant.replace(/\s*\(.*?\)\s*/g, '').trim();
-                  });
-                  if (correctVariant) {
-                    console.log(`🔄 Auto-correcting variant: ${orderArgs.variantId} → ${correctVariant.id} (${correctVariant.title})`);
-                    orderArgs.variantId = correctVariant.id;
-                  } else {
-                    // Fuzzy match: try matching just the size number
-                    const sizeMatch = orderArgs.variantName.match(/(\d+)/);
-                    if (sizeMatch) {
-                      const sizeNum = sizeMatch[1];
-                      const sizeVariant = (correctProduct.variants || []).find((v: any) =>
-                        (v.title || '').includes(sizeNum)
-                      );
-                      if (sizeVariant) {
-                        console.log(`🔄 Auto-correcting variant by size "${sizeNum}": ${orderArgs.variantId} → ${sizeVariant.id} (${sizeVariant.title})`);
-                        orderArgs.variantId = sizeVariant.id;
-                      }
-                    }
-                  }
-                }
-              } else {
-                console.warn(`⚠️ Could not find correct product for "${orderArgs.productName}" in catalog`);
-              }
-            } else {
-              console.log(`✅ Product ID validated: "${orderArgs.productName}" matches productId ${orderArgs.productId}`);
-            }
+          if (orderArgs.lineItems && Array.isArray(orderArgs.lineItems) && orderArgs.lineItems.length > 0) {
+            lineItems = orderArgs.lineItems;
+          } else if (orderArgs.productId) {
+            // Legacy single-product format - convert to lineItems
+            lineItems = [{
+              productId: orderArgs.productId,
+              productName: orderArgs.productName || '',
+              variantId: orderArgs.variantId,
+              variantName: orderArgs.variantName || '',
+              quantity: orderArgs.quantity || 1
+            }];
           }
 
-          // Call the create-shopify-order function
-          const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
-            body: {
-              orderData: {
-                customerName: orderArgs.customerName,
-                cedula: orderArgs.cedula || '',
-                email: orderArgs.email,
-                phone: orderArgs.phone,
-                address: orderArgs.address,
-                city: orderArgs.city,
-                department: orderArgs.department,
-                neighborhood: orderArgs.neighborhood || '',
-                productId: orderArgs.productId,
-                variantId: orderArgs.variantId || undefined,
-                quantity: orderArgs.quantity || 1,
-                notes: orderArgs.notes || '',
-                shippingCost: orderArgs.shippingCost || 0,
-                paymentMethod: paymentMethod
-              },
-              organizationId: organizationId
-            }
-          });
-
-          if (orderError) {
-            console.error("Order creation error:", orderError);
+          if (lineItems.length === 0) {
+            console.error("❌ No line items provided in order");
             return new Response(
               JSON.stringify({
-                response: "Lo siento, hubo un error al crear tu pedido. Por favor intenta de nuevo o contáctanos directamente.",
+                response: "Lo siento, hubo un error al crear tu pedido. No se encontraron productos. Por favor intenta de nuevo.",
                 order_created: false,
-                error: orderError.message
+                error: "No line items"
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
 
-          console.log("Order created successfully:", orderResult);
+          // 🛡️ PRODUCT ID VALIDATION: Verify each lineItem's productId matches productName
+          // GPT-4o-mini sometimes confuses IDs between similar products
+          for (const item of lineItems) {
+            if (item.productName && allShopifyProducts.length > 0) {
+              const declaredProduct = allShopifyProducts.find((p: any) => p.id === item.productId);
+              const declaredProductTitle = declaredProduct?.title?.toLowerCase() || '';
+              const aiProductName = item.productName.toLowerCase();
+
+              const titleMatch = declaredProductTitle.includes(aiProductName) || aiProductName.includes(declaredProductTitle);
+
+              if (!titleMatch && declaredProduct) {
+                console.warn(`⚠️ PRODUCT MISMATCH DETECTED! AI said "${item.productName}" but productId ${item.productId} is "${declaredProduct.title}"`);
+
+                const correctProduct = allShopifyProducts.find((p: any) => {
+                  const pTitle = p.title.toLowerCase();
+                  return pTitle.includes(aiProductName) || aiProductName.includes(pTitle);
+                });
+
+                if (correctProduct) {
+                  console.log(`🔄 Auto-correcting: "${declaredProduct.title}" (${item.productId}) → "${correctProduct.title}" (${correctProduct.id})`);
+                  item.productId = correctProduct.id;
+
+                  if (item.variantName) {
+                    const correctVariant = (correctProduct.variants || []).find((v: any) => {
+                      const vTitle = (v.title || '').toLowerCase();
+                      const aiVariant = item.variantName.toLowerCase();
+                      return vTitle.includes(aiVariant) || aiVariant.includes(vTitle) ||
+                        vTitle.replace(/\s*\(.*?\)\s*/g, '').trim() === aiVariant.replace(/\s*\(.*?\)\s*/g, '').trim();
+                    });
+                    if (correctVariant) {
+                      console.log(`🔄 Auto-correcting variant: ${item.variantId} → ${correctVariant.id} (${correctVariant.title})`);
+                      item.variantId = correctVariant.id;
+                    } else {
+                      const sizeMatch = item.variantName.match(/(\d+)/);
+                      if (sizeMatch) {
+                        const sizeNum = sizeMatch[1];
+                        const sizeVariant = (correctProduct.variants || []).find((v: any) =>
+                          (v.title || '').includes(sizeNum)
+                        );
+                        if (sizeVariant) {
+                          console.log(`🔄 Auto-correcting variant by size "${sizeNum}": ${item.variantId} → ${sizeVariant.id} (${sizeVariant.title})`);
+                          item.variantId = sizeVariant.id;
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  console.warn(`⚠️ Could not find correct product for "${item.productName}" in catalog`);
+                }
+              } else {
+                console.log(`✅ Product ID validated: "${item.productName}" matches productId ${item.productId}`);
+              }
+            }
+          }
+
+          // 🛡️ VARIANT RESOLUTION: Use SKU as the single source of truth
+          // SKU is unique per variant — resolve productId + variantId from SKU across entire catalog
+          for (const item of lineItems) {
+            if (!allShopifyProducts.length) continue;
+
+            let resolved = false;
+
+            // 1. PRIMARY: Resolve by SKU (searches entire catalog since SKU is globally unique)
+            if (item.sku) {
+              let foundVariant: any = null;
+              let foundProduct: any = null;
+
+              for (const p of allShopifyProducts) {
+                const v = (p.variants || []).find((v: any) => String(v.sku) === String(item.sku) || String(v.id) === String(item.sku));
+                if (v) {
+                  foundVariant = v;
+                  foundProduct = p;
+                  break;
+                }
+              }
+
+              if (foundVariant && foundProduct) {
+                const pidChanged = foundProduct.id !== item.productId;
+                const vidChanged = String(foundVariant.id) !== String(item.variantId);
+
+                if (pidChanged || vidChanged) {
+                  console.log(`🔄 SKU-based resolution: "${item.productName}" (pid:${item.productId}, vid:${item.variantId}) → "${foundProduct.title}" / "${foundVariant.title}" (pid:${foundProduct.id}, vid:${foundVariant.id}) [SKU: ${item.sku}]`);
+                  item.productId = foundProduct.id;
+                  item.variantId = foundVariant.id;
+                } else {
+                  console.log(`✅ Variant validated by SKU: "${foundVariant.title}" (pid:${item.productId}, vid:${item.variantId}, SKU: ${item.sku})`);
+                }
+                resolved = true;
+              } else {
+                console.warn(`⚠️ SKU "${item.sku}" not found in catalog, falling back to name matching`);
+              }
+            }
+
+            // 2. FALLBACK: Verify variantId matches variantName (catches errors when SKU missing)
+            if (!resolved && item.variantName) {
+              const product = allShopifyProducts.find((p: any) => p.id === item.productId);
+              if (!product || !product.variants || product.variants.length <= 1) continue;
+
+              const declaredVariant = product.variants.find((v: any) => String(v.id) === String(item.variantId));
+              if (!declaredVariant) continue;
+
+              const declaredTitle = (declaredVariant.title || '').toLowerCase();
+              const aiVariantName = item.variantName.toLowerCase();
+
+              const aiSizeMatch = aiVariantName.match(/(\d+)/);
+              const declaredSizeMatch = declaredTitle.match(/(\d+)/);
+
+              const nameMatch = declaredTitle.includes(aiVariantName) || aiVariantName.includes(declaredTitle);
+              const sizeMatch = aiSizeMatch && declaredSizeMatch && aiSizeMatch[1] === declaredSizeMatch[1];
+
+              if (!nameMatch && !sizeMatch) {
+                console.warn(`⚠️ VARIANT MISMATCH! AI said "${item.variantName}" but variantId ${item.variantId} is "${declaredVariant.title}"`);
+
+                let correctVariant = product.variants.find((v: any) => {
+                  const vTitle = (v.title || '').toLowerCase();
+                  return vTitle.includes(aiVariantName) || aiVariantName.includes(vTitle);
+                });
+
+                if (!correctVariant && aiSizeMatch) {
+                  correctVariant = product.variants.find((v: any) => {
+                    const vTitle = (v.title || '').toLowerCase();
+                    const vSizeMatch = vTitle.match(/(\d+)/);
+                    return vSizeMatch && vSizeMatch[1] === aiSizeMatch[1];
+                  });
+                }
+
+                if (correctVariant) {
+                  console.log(`🔄 Name-based variant correction: "${declaredVariant.title}" (${item.variantId}) → "${correctVariant.title}" (${correctVariant.id})`);
+                  item.variantId = correctVariant.id;
+                }
+              } else {
+                console.log(`✅ Variant validated by name: "${item.variantName}" matches variantId ${item.variantId} ("${declaredTitle}")`);
+              }
+            }
+          }
+
+          console.log(`📦 Processing order with ${lineItems.length} line item(s):`, lineItems.map(i => `${i.productName} (pid:${i.productId}, vid:${i.variantId}, sku:${i.sku || 'N/A'})`).join(', '));
 
           let responseText = '';
           let paymentUrl = '';
 
+          // ======= SHIPPING COST: ALWAYS calculate server-side (AI math is unreliable) =======
+          const rawAiShipping = orderArgs.shippingCost;
+          console.log(`  📦 SHIPPING DEBUG: AI sent shippingCost="${rawAiShipping}" (type=${typeof rawAiShipping}) — IGNORING, calculating server-side`);
+
+          // Helper: find variant price with fallback
+          const getVariantPrice = (item: any): number => {
+            const product = allShopifyProducts.find((p: any) => p.id === item.productId);
+            if (!product) {
+              console.warn(`  ⚠️ Product ${item.productId} (${item.productName}) NOT found in allShopifyProducts`);
+              return 0;
+            }
+            // Try exact variant match first
+            const variant = product.variants?.find((v: any) => String(v.id) === String(item.variantId));
+            if (variant?.price) {
+              return Number(variant.price);
+            }
+            // Fallback: try matching variant by name/size
+            if (item.variantName) {
+              const variantByName = product.variants?.find((v: any) => {
+                const vTitle = (v.title || '').toLowerCase();
+                const aiVariant = item.variantName.toLowerCase();
+                return vTitle.includes(aiVariant) || aiVariant.includes(vTitle);
+              });
+              if (variantByName?.price) {
+                console.log(`  🔄 Variant price fallback by name: "${item.variantName}" → variant ${variantByName.id} @ $${variantByName.price}`);
+                return Number(variantByName.price);
+              }
+            }
+            // Last fallback: use first variant price (all variants usually same price)
+            if (product.variants?.length > 0 && product.variants[0]?.price) {
+              console.log(`  🔄 Variant price fallback: using first variant of "${product.title}" @ $${product.variants[0].price}`);
+              return Number(product.variants[0].price);
+            }
+            console.warn(`  ⚠️ Could not find ANY price for product ${item.productId} (${item.productName})`);
+            return 0;
+          };
+
+          // Calculate product total for shipping determination
+          let productTotalForShipping = 0;
+          for (const item of lineItems) {
+            const price = getVariantPrice(item);
+            productTotalForShipping += price * (item.quantity || 1);
+          }
+          console.log(`  💵 Product total for shipping calc: $${productTotalForShipping}`);
+
+          // Always calculate shipping from department
+          let calculatedShippingCost = 0;
+          const dept = (orderArgs.department || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const city = (orderArgs.city || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+          const shippingZones: Record<string, number> = {
+            'bogota': 3000, 'antioquia': 5000,
+            'atlantico': 5000, 'bolivar': 5000, 'boyaca': 5000, 'caldas': 5000, 'cauca': 5000,
+            'cesar': 5000, 'cordoba': 5000, 'cundinamarca': 5000, 'guaviare': 5000, 'huila': 5000,
+            'magdalena': 5000, 'meta': 5000, 'narino': 5000, 'norte de santander': 5000,
+            'putumayo': 5000, 'quindio': 5000, 'risaralda': 5000, 'santander': 5000,
+            'sucre': 5000, 'tolima': 5000, 'valle del cauca': 5000,
+            'arauca': 6000, 'caqueta': 6000, 'casanare': 6000,
+            'la guajira': 10000, 'guajira': 10000,
+            'amazonas': 22000, 'vaupes': 22000, 'vichada': 22000,
+            'guainia': 30000, 'san andres': 30000, 'san andres y providencia': 30000,
+            'archipielago de san andres': 30000, 'providencia': 30000,
+          };
+
+          const noFreeShippingZones = ['la guajira', 'guajira', 'amazonas', 'vaupes', 'vichada', 'guainia', 'san andres', 'san andres y providencia', 'archipielago de san andres', 'providencia'];
+
+          // Check Bogotá first (city or department)
+          const isBogota = city.includes('bogota') || dept.includes('bogota');
+          const matchedZone = isBogota ? 'bogota' : Object.keys(shippingZones).find(zone => dept.includes(zone));
+
+          if (matchedZone) {
+            const isNoFreeShipping = noFreeShippingZones.some(z => dept.includes(z));
+
+            if (productTotalForShipping >= 150000 && !isNoFreeShipping) {
+              calculatedShippingCost = 0;
+              console.log(`  🎉 Free shipping: product total $${productTotalForShipping} >= $150,000`);
+            } else {
+              calculatedShippingCost = shippingZones[matchedZone];
+              console.log(`  📦 Shipping: $${calculatedShippingCost} (product total $${productTotalForShipping} < $150,000, zone="${matchedZone}")`);
+            }
+          } else {
+            calculatedShippingCost = 5000;
+            console.log(`  ⚠️ No zone match for dept="${orderArgs.department}", city="${orderArgs.city}", using default $5,000`);
+          }
+          console.log(`  📦 FINAL calculatedShippingCost: $${calculatedShippingCost}`);
+
           if (paymentMethod === 'contra_entrega') {
-            // Contra entrega - no payment link needed
+            // ======= CONTRA ENTREGA: Create Shopify order immediately =======
+            const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
+              body: {
+                orderData: {
+                  customerName: orderArgs.customerName,
+                  cedula: orderArgs.cedula || '',
+                  email: orderArgs.email,
+                  phone: orderArgs.phone,
+                  address: orderArgs.address,
+                  city: orderArgs.city,
+                  department: orderArgs.department,
+                  neighborhood: orderArgs.neighborhood || '',
+                  lineItems: lineItems,
+                  notes: orderArgs.notes || '',
+                  shippingCost: calculatedShippingCost,
+                  paymentMethod: paymentMethod
+                },
+                organizationId: organizationId
+              }
+            });
+
+            if (orderError) {
+              console.error("Order creation error:", orderError);
+              return new Response(
+                JSON.stringify({
+                  response: "Lo siento, hubo un inconveniente al crear tu pedido. No te preocupes, ya te conecto con un asesor que te ayudará a completar tu compra. 😊",
+                  order_created: false,
+                  needs_attention: true,
+                  error: orderError.message
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
+            console.log("Order created successfully:", orderResult);
+
             responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
               `📋 Número de pedido: #${orderResult.orderNumber}\n` +
               `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
               `💵 Método de pago: Contra entrega\n` +
               `Pagarás el total al momento de recibir tu pedido.\n\n` +
               `Te enviaremos la información de seguimiento cuando tu pedido sea despachado. ¡Gracias por tu compra!`;
-          } else {
-            // Link de pago - generate Bold payment link
-            console.log("Creating payment link...");
 
+            return new Response(
+              JSON.stringify({
+                response: responseText,
+                order_created: true,
+                orderId: orderResult.orderId,
+                orderNumber: orderResult.orderNumber,
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+
+          } else {
+            // ======= LINK DE PAGO: Generate payment link FIRST, order created after payment =======
+            console.log("💳 Link de pago flow: generating payment link before creating order...");
+
+            // Calculate total from product variant prices (reuse getVariantPrice helper)
+            let productTotal = 0;
+            for (const item of lineItems) {
+              const price = getVariantPrice(item);
+              const itemTotal = price * (item.quantity || 1);
+              productTotal += itemTotal;
+              console.log(`  💵 ${item.productName} x${item.quantity || 1} @ $${price} = $${itemTotal}`);
+            }
+
+            // Validate product total before proceeding
+            if (productTotal <= 0) {
+              console.error(`❌ Product total is $0 — could not resolve variant prices for: ${lineItems.map(i => `${i.productName}(pid:${i.productId},vid:${i.variantId})`).join(', ')}`);
+              console.error(`  allShopifyProducts has ${allShopifyProducts.length} products`);
+              return new Response(
+                JSON.stringify({
+                  response: "Lo siento, hubo un inconveniente al calcular el total de tu pedido. No te preocupes, ya te conecto con un asesor que te ayudará a completar tu compra. 😊",
+                  order_created: false,
+                  needs_attention: true,
+                  error: "Could not calculate product total — variant price lookup failed"
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
+            // Use shared shipping calculation from above
+            const shippingCost = calculatedShippingCost;
+            const totalAmount = productTotal + shippingCost;
+            console.log(`  📦 Products: $${productTotal} + Shipping: $${shippingCost} = Total: $${totalAmount}`);
+
+            // Generate Bold payment link and store pending order
             const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-bold-payment-link', {
               body: {
-                amount: Math.round(Number(orderResult.totalPrice)),
-                description: `Pedido #${orderResult.orderNumber} - Dosmicos`,
-                customerEmail: orderArgs.email || orderArgs.customerName,
-                orderId: orderResult.orderId,
-                organizationId: organizationId
+                amount: Math.round(totalAmount),
+                description: `Pedido Dosmicos - ${lineItems.map(i => i.productName).join(', ')}`.substring(0, 100),
+                customerEmail: orderArgs.email,
+                customerName: orderArgs.customerName,
+                customerPhone: orderArgs.phone,
+                organizationId: organizationId,
+                orderData: {
+                  cedula: orderArgs.cedula || '',
+                  address: orderArgs.address,
+                  city: orderArgs.city,
+                  department: orderArgs.department,
+                  neighborhood: orderArgs.neighborhood || '',
+                  lineItems: lineItems,
+                  notes: orderArgs.notes || '',
+                  shippingCost: shippingCost,
+                }
               }
             });
 
-            let paymentLinkText = "";
-
             if (paymentError) {
               console.error("Payment link error:", paymentError);
-              paymentLinkText = "\n\n⚠️ El link de pago no pudo ser generado automáticamente. Por favor contacta al soporte.";
-            } else {
-              console.log("Payment link created:", paymentResult);
-              paymentUrl = paymentResult.paymentUrl;
-              paymentLinkText = `\n\n💳 **TU LINK DE PAGO:**\n${paymentUrl}\n\nHaz clic para pagar con tarjeta, PSE, Nequi, Daviplata y más métodos de pago.`;
+              return new Response(
+                JSON.stringify({
+                  response: "Lo siento, hubo un inconveniente al generar tu link de pago. No te preocupes, ya te conecto con un asesor que te ayudará a completar tu compra. 😊",
+                  order_created: false,
+                  needs_attention: true,
+                  error: paymentError.message
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
             }
 
-            responseText = `¡Perfecto! Tu pedido ha sido creado exitosamente! 🎉\n\n` +
-              `📋 Número de pedido: #${orderResult.orderNumber}\n` +
-              `💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
-              paymentLinkText;
-          }
+            console.log("Payment link created:", paymentResult);
+            paymentUrl = paymentResult.paymentUrl;
 
-          return new Response(
-            JSON.stringify({
-              response: responseText,
-              order_created: true,
-              orderId: orderResult.orderId,
-              orderNumber: orderResult.orderNumber,
-              paymentUrl: paymentUrl
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            responseText = `¡Perfecto! Hemos generado tu link de pago 🎉\n\n` +
+              `💰 Total: $${totalAmount.toLocaleString('es-CO')} COP\n\n` +
+              `💳 *TU LINK DE PAGO:*\n${paymentUrl}\n\n` +
+              `Haz clic para pagar con tarjeta, PSE, Nequi, Bancolombia y más métodos de pago.\n\n` +
+              `Una vez confirmemos tu pago, crearemos tu pedido y te enviaremos la confirmación. ¡Gracias! 😊`;
+
+            return new Response(
+              JSON.stringify({
+                response: responseText,
+                order_created: false,
+                payment_link_generated: true,
+                paymentUrl: paymentUrl
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
 
         } catch (err) {
           console.error("Error parsing function call:", err);

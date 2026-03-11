@@ -6,6 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface LineItem {
+  productId: number;
+  productName?: string;
+  variantId: number;
+  variantName?: string;
+  quantity?: number;
+}
+
 interface OrderData {
   customerName: string;
   cedula?: string;
@@ -15,8 +23,11 @@ interface OrderData {
   city: string;
   department: string;
   neighborhood: string;
-  productId: number;
-  quantity: number;
+  // New multi-product format
+  lineItems?: LineItem[];
+  // Legacy single-product format (backward compatible)
+  productId?: number;
+  quantity?: number;
   variantId?: number;
   notes?: string;
   shippingCost?: number;
@@ -71,46 +82,74 @@ serve(async (req) => {
 
     console.log("Creating Shopify order for:", orderData.email);
 
-    // First, get product details to verify it exists and get variant info
-    const productUrl = `https://${shopifyDomain}/admin/api/2024-01/products/${orderData.productId}.json`;
-    const productResponse = await fetch(productUrl, {
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-    });
+    // Build lineItems array - support both new multi-product and legacy single-product format
+    let lineItems: LineItem[] = [];
+    if (orderData.lineItems && Array.isArray(orderData.lineItems) && orderData.lineItems.length > 0) {
+      lineItems = orderData.lineItems;
+    } else if (orderData.productId) {
+      // Legacy single-product format
+      lineItems = [{
+        productId: orderData.productId,
+        variantId: orderData.variantId!,
+        quantity: orderData.quantity || 1
+      }];
+    }
 
-    if (!productResponse.ok) {
+    if (lineItems.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Producto no encontrado en Shopify" }),
+        JSON.stringify({ error: "No se proporcionaron productos para el pedido" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const productData = await productResponse.json();
-    const product = productData.product;
+    // Validate each line item's product and variant
+    const validatedLineItems: Array<{ variant_id: number; quantity: number }> = [];
 
-    // Validate variant - MUST be provided and exist in product
-    let variantId = orderData.variantId;
-    if (!variantId) {
-      console.error(`❌ variantId is missing! orderData.variantId=${orderData.variantId}`);
-      return new Response(
-        JSON.stringify({ error: "Falta el variantId (talla). No se puede crear el pedido sin especificar la talla correcta." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    for (const item of lineItems) {
+      const productUrl = `https://${shopifyDomain}/admin/api/2024-01/products/${item.productId}.json`;
+      const productResponse = await fetch(productUrl, {
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!productResponse.ok) {
+        console.error(`❌ Product ${item.productId} (${item.productName || 'unknown'}) not found in Shopify`);
+        return new Response(
+          JSON.stringify({ error: `Producto "${item.productName || item.productId}" no encontrado en Shopify` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const productData = await productResponse.json();
+      const product = productData.product;
+
+      if (!item.variantId) {
+        console.error(`❌ variantId is missing for product ${item.productId} (${item.productName || product.title})`);
+        return new Response(
+          JSON.stringify({ error: `Falta el variantId (talla) para el producto "${item.productName || product.title}".` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const variant = product.variants?.find((v: any) => String(v.id) === String(item.variantId));
+      if (!variant) {
+        console.error(`❌ variantId ${item.variantId} NOT FOUND in product ${item.productId}. Available: ${product.variants?.map((v: any) => `${v.title}(${v.id})`).join(', ')}`);
+        return new Response(
+          JSON.stringify({ error: `El variantId ${item.variantId} no pertenece al producto ${product.title}. Variantes disponibles: ${product.variants?.map((v: any) => `${v.title}(id:${v.id})`).join(', ')}` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`✅ Variant validated: ${variant.title} (${item.variantId}) for product ${product.title}`);
+      validatedLineItems.push({
+        variant_id: item.variantId,
+        quantity: item.quantity || 1
+      });
     }
 
-    // Verify the variantId actually belongs to this product
-    const variant = product.variants?.find((v: any) => String(v.id) === String(variantId));
-    if (!variant) {
-      console.error(`❌ variantId ${variantId} NOT FOUND in product ${orderData.productId}. Available variants: ${product.variants?.map((v: any) => `${v.title}(${v.id})`).join(', ')}`);
-      return new Response(
-        JSON.stringify({ error: `El variantId ${variantId} no pertenece al producto ${product.title}. Variantes disponibles: ${product.variants?.map((v: any) => `${v.title}(id:${v.id})`).join(', ')}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`✅ Variant validated: ${variant.title} (${variantId}) for product ${product.title}`);
+    console.log(`📦 All ${validatedLineItems.length} line items validated`);
 
     // Create customer in Shopify
     const customerData = {
@@ -173,20 +212,19 @@ serve(async (req) => {
 
     // Build tags based on payment method
     const isContraEntrega = orderData.paymentMethod === 'contra_entrega';
+    const isLinkDePago = orderData.paymentMethod === 'link_de_pago';
     const orderTags = ['whatsapp', 'messaging'];
     if (isContraEntrega) {
       orderTags.push('Contraentrega');
+    }
+    if (isLinkDePago) {
+      orderTags.push('Link de pago', 'Bold');
     }
 
     // Create the order
     const orderPayload: any = {
       order: {
-        line_items: [
-          {
-            variant_id: variantId,
-            quantity: orderData.quantity || 1,
-          }
-        ],
+        line_items: validatedLineItems,
         customer: customerId ? { id: customerId } : undefined,
         email: orderData.email,
         shipping_address: {
@@ -216,7 +254,7 @@ serve(async (req) => {
         }] : [],
         note: orderData.notes || 'Pedido creado desde WhatsApp',
         tags: orderTags.join(', '),
-        financial_status: 'pending',
+        financial_status: isLinkDePago ? 'paid' : 'pending',
       }
     };
 
@@ -224,6 +262,12 @@ serve(async (req) => {
     if (isContraEntrega) {
       orderPayload.order.gateway = 'Cash on Delivery (COD)';
       orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pago contra entrega';
+    }
+
+    // For link de pago (Bold), mark as paid
+    if (isLinkDePago) {
+      orderPayload.order.gateway = 'Bold';
+      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pagado via Bold';
     }
 
     const orderResponse = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders.json`, {

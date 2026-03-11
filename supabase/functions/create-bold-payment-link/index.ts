@@ -6,12 +6,33 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface LineItem {
+  productId: number;
+  productName: string;
+  variantId: number;
+  variantName: string;
+  quantity: number;
+}
+
 interface PaymentLinkRequest {
   amount: number;
   description: string;
   customerEmail: string;
-  customerName?: string;
-  orderId?: string;
+  customerName: string;
+  customerPhone: string;
+  organizationId: string;
+  conversationId?: string;
+  // Order data to store as pending
+  orderData?: {
+    cedula?: string;
+    address: string;
+    city: string;
+    department: string;
+    neighborhood?: string;
+    lineItems: LineItem[];
+    notes?: string;
+    shippingCost?: number;
+  };
 }
 
 serve(async (req) => {
@@ -20,12 +41,12 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    const { amount, description, customerEmail, customerName, orderId } = body as PaymentLinkRequest;
+    const body = await req.json() as PaymentLinkRequest;
+    const { amount, description, customerEmail, customerName, customerPhone, organizationId, conversationId, orderData } = body;
 
-    if (!amount || !customerEmail) {
+    if (!amount || !customerEmail || !organizationId) {
       return new Response(
-        JSON.stringify({ error: "Monto y correo del cliente son requeridos" }),
+        JSON.stringify({ error: "Monto, correo del cliente y organizationId son requeridos" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -35,25 +56,18 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get Bold API key from organizations
-    // First try to get from request body (organizationId)
-    const organizationId = body.organizationId;
-    let boldApiKey = null;
-    
-    if (organizationId) {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('bold_credentials')
-        .eq('id', organizationId)
-        .single();
-      
-      if (org?.bold_credentials) {
-        const creds = org.bold_credentials as any;
-        boldApiKey = creds.api_key || creds.apiKey;
-      }
-    }
+    // Get Bold API key from organization
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('bold_credentials')
+      .eq('id', organizationId)
+      .single();
 
-    // Fallback: try to get from secrets
+    let boldApiKey = org?.bold_credentials
+      ? ((org.bold_credentials as any).api_key || (org.bold_credentials as any).apiKey)
+      : null;
+
+    // Fallback to env
     if (!boldApiKey) {
       boldApiKey = Deno.env.get('BOLD_API_KEY');
     }
@@ -65,23 +79,41 @@ serve(async (req) => {
       );
     }
 
-    console.log("Creating Bold payment link for:", customerEmail, "amount:", amount);
+    console.log("Bold API key (first 10 chars):", boldApiKey.substring(0, 10) + "...");
+    console.log("Bold credentials source:", org?.bold_credentials ? "database" : "env");
 
-    // Create payment link request with correct Bold API format
-    const paymentLinkData = {
-      amount: String(amount), // Amount as string
-      currency: "COP",
+    // Generate unique reference with timestamp to avoid duplicates
+    const reference = `order_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+    // Expiration: 24 hours from now (in nanoseconds)
+    const expirationDate = Date.now() * 1e6 + (24 * 60 * 60 * 1e9);
+
+    console.log("Creating Bold payment link for:", customerEmail, "amount:", amount, "reference:", reference);
+
+    // Bold API Link de Pagos - POST /online/link/v1
+    // Docs: https://developers.bold.co/pagos-en-linea/api-link-de-pagos
+    const paymentLinkData: any = {
+      amount_type: "CLOSE",
+      amount: {
+        currency: "COP",
+        total_amount: Math.round(amount),
+        tip_amount: 0,
+        taxes: [],
+      },
+      reference: reference,
       description: description.substring(0, 100),
+      expiration_date: expirationDate,
       payer_email: customerEmail,
+      payment_methods: ["CREDIT_CARD", "PSE", "NEQUI", "BOTON_BANCOLOMBIA"],
     };
 
     console.log("Bold request:", JSON.stringify(paymentLinkData));
 
-    const boldResponse = await fetch("https://payments.api.bold.co/v2/payment-link", {
+    const boldResponse = await fetch("https://integrations.api.bold.co/online/link/v1", {
       method: "POST",
       headers: {
-        "x-api-key": boldApiKey,
         "Content-Type": "application/json",
+        "Authorization": `x-api-key ${boldApiKey}`,
       },
       body: JSON.stringify(paymentLinkData),
     });
@@ -98,20 +130,41 @@ serve(async (req) => {
     const boldData = await boldResponse.json();
     console.log("Bold response:", JSON.stringify(boldData));
 
-    // The response contains the payment link
-    const paymentLinkId = boldData.id || boldData.payment_link;
-    const paymentUrl = boldData.url || `https://pay.bold.co/${paymentLinkId}`;
+    // Response: { payload: { payment_link: "LNK_xxx", url: "https://checkout.bold.co/LNK_xxx" } }
+    const paymentLinkId = boldData.payload?.payment_link || boldData.payment_link || boldData.id;
+    const paymentUrl = boldData.payload?.url || boldData.url || `https://checkout.bold.co/${paymentLinkId}`;
 
-    // If we have an orderId, save the payment link to the database
-    if (orderId && organizationId) {
-      await supabase
-        .from('orders')
-        .update({
-          payment_link: paymentUrl,
-          payment_link_id: String(paymentLinkId)
-        })
-        .eq('shopify_order_id', orderId)
-        .eq('organization_id', organizationId);
+    // Save pending order to database if order data is provided
+    if (orderData) {
+      const { error: insertError } = await supabase
+        .from('pending_orders')
+        .insert({
+          organization_id: organizationId,
+          conversation_id: conversationId || null,
+          customer_phone: customerPhone,
+          customer_name: customerName,
+          customer_email: customerEmail,
+          cedula: orderData.cedula || null,
+          address: orderData.address,
+          city: orderData.city,
+          department: orderData.department,
+          neighborhood: orderData.neighborhood || null,
+          line_items: orderData.lineItems,
+          notes: orderData.notes || null,
+          shipping_cost: orderData.shippingCost || 0,
+          total_amount: amount,
+          bold_payment_link_id: paymentLinkId,
+          bold_payment_url: paymentUrl,
+          bold_reference: reference,
+          status: 'pending_payment',
+        });
+
+      if (insertError) {
+        console.error("Error saving pending order:", insertError);
+        // Don't fail the request - the payment link was already created
+      } else {
+        console.log("Pending order saved with reference:", reference);
+      }
     }
 
     return new Response(
@@ -119,6 +172,7 @@ serve(async (req) => {
         success: true,
         paymentLinkId: paymentLinkId,
         paymentUrl: paymentUrl,
+        reference: reference,
         amount: amount,
         description: description,
       }),

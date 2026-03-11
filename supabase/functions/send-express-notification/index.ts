@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
 import { sendWhatsAppTemplate } from "../_shared/whatsapp-template.ts";
 import { normalizeColombianPhone, extractDeliveryCode } from "../_shared/phone-utils.ts";
 
@@ -16,7 +15,7 @@ interface ExpressNotificationRequest {
   deliveryCode?: string; // If not provided, extracted from order notes
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -25,18 +24,11 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const META_WHATSAPP_TOKEN = Deno.env.get('META_WHATSAPP_TOKEN');
-    const TEMPLATE_NAME = Deno.env.get('WHATSAPP_EXPRESS_TEMPLATE_NAME') || '';
+    const TEMPLATE_NAME = Deno.env.get('WHATSAPP_EXPRESS_TEMPLATE_NAME') || 'notificacion_envio_express';
 
     if (!META_WHATSAPP_TOKEN) {
       return new Response(
         JSON.stringify({ success: false, error: 'META_WHATSAPP_TOKEN no configurado' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    if (!TEMPLATE_NAME) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'WHATSAPP_EXPRESS_TEMPLATE_NAME no configurado' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }

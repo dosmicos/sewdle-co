@@ -1042,9 +1042,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       if (error) throw error;
 
       if (data?.success) {
-        toast.success(deliveryCode
-          ? 'Pedido Express enviado. Notificacion enviada al cliente.'
-          : 'Pedido Express enviado.');
+        if (deliveryCode && data?.notification_triggered) {
+          toast.success('Pedido Express enviado. Notificacion WhatsApp enviada al cliente.');
+        } else if (deliveryCode && !data?.notification_triggered) {
+          toast.warning('Pedido Express enviado, pero la notificacion WhatsApp NO se pudo enviar. Revisa el panel de notificaciones Express.');
+        } else {
+          toast.success('Pedido Express enviado.');
+        }
         setShowExpressCodeDialog(false);
         setExpressDeliveryCode('');
 
