@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import {
   Home,
-  BarChart3,
+  Target,
   Monitor,
   Users,
   Compass,
@@ -15,22 +15,24 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NavItem {
   label: string;
   icon: React.ReactNode;
   id: string;
+  path: string;
 }
 
 const coreItems: NavItem[] = [
-  { label: 'Summary', icon: <Home className="h-4 w-4" />, id: 'summary' },
+  { label: 'Summary', icon: <Home className="h-4 w-4" />, id: 'summary', path: '/' },
 ];
 
 const workspaceItems: NavItem[] = [
-  { label: 'Marketing Acquisition', icon: <BarChart3 className="h-4 w-4" />, id: 'marketing' },
-  { label: 'Website Conversion', icon: <Monitor className="h-4 w-4" />, id: 'web' },
-  { label: 'Customer Retention', icon: <Users className="h-4 w-4" />, id: 'retention' },
-  { label: 'Discovery', icon: <Compass className="h-4 w-4" />, id: 'discovery' },
+  { label: 'Ad Performance', icon: <Target className="h-4 w-4" />, id: 'ad-performance', path: '/ad-performance' },
+  { label: 'Website Conversion', icon: <Monitor className="h-4 w-4" />, id: 'web', path: '' },
+  { label: 'Customer Retention', icon: <Users className="h-4 w-4" />, id: 'retention', path: '' },
+  { label: 'Discovery', icon: <Compass className="h-4 w-4" />, id: 'discovery', path: '' },
 ];
 
 interface FinanceSidebarProps {
@@ -41,12 +43,25 @@ interface FinanceSidebarProps {
 }
 
 const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
-  activeSection = 'summary',
+  activeSection,
   collapsed = false,
   onToggle,
   onOpenSettings,
 }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive active section from URL if not explicitly provided
+  const currentSection = activeSection ?? (
+    location.pathname === '/ad-performance' ? 'ad-performance' : 'summary'
+  );
+
+  const handleNav = (item: NavItem) => {
+    if (item.path) {
+      navigate(item.path);
+    }
+  };
 
   if (collapsed) {
     return (
@@ -57,12 +72,13 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
         >
           <ChevronLeft className="h-4 w-4 rotate-180 text-gray-500" />
         </button>
-        {coreItems.map((item) => (
+        {[...coreItems, ...workspaceItems].filter(i => i.path).map((item) => (
           <button
             key={item.id}
+            onClick={() => handleNav(item)}
             className={cn(
               'p-2 rounded-lg mb-1 transition-colors',
-              activeSection === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-100'
+              currentSection === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-100'
             )}
           >
             {item.icon}
@@ -100,9 +116,10 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
           {coreItems.map((item) => (
             <button
               key={item.id}
+              onClick={() => handleNav(item)}
               className={cn(
                 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
-                activeSection === item.id
+                currentSection === item.id
                   ? 'bg-blue-50 text-blue-600 font-medium'
                   : 'text-gray-600 hover:bg-gray-100'
               )}
@@ -142,11 +159,13 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
           {workspaceItems.map((item) => (
             <button
               key={item.id}
+              onClick={() => handleNav(item)}
               className={cn(
                 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
-                activeSection === item.id
+                currentSection === item.id
                   ? 'bg-blue-50 text-blue-600 font-medium'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  : 'text-gray-600 hover:bg-gray-100',
+                !item.path && 'opacity-50 cursor-default'
               )}
             >
               {item.icon}

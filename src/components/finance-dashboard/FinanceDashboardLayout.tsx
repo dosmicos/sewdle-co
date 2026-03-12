@@ -3,15 +3,17 @@ import FinanceSidebar from './FinanceSidebar';
 
 interface FinanceDashboardLayoutProps {
   children: React.ReactNode;
+  activeSection?: string;
   onOpenSettings?: () => void;
 }
 
-const FinanceDashboardLayout: React.FC<FinanceDashboardLayoutProps> = ({ children, onOpenSettings }) => {
+const FinanceDashboardLayout: React.FC<FinanceDashboardLayoutProps> = ({ children, activeSection, onOpenSettings }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen flex w-full bg-[#fafbfc]">
       <FinanceSidebar
+        activeSection={activeSection}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         onOpenSettings={onOpenSettings}
