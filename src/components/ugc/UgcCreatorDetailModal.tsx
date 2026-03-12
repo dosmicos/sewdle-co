@@ -9,7 +9,8 @@ import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCirc
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
-import { CAMPAIGN_STATUS_CONFIG, CREATOR_STATUS_CONFIG } from '@/types/ugc';
+import { CAMPAIGN_STATUS_CONFIG, CREATOR_STATUS_CONFIG, RECOMMENDATION_CONFIG } from '@/types/ugc';
+import { TierBadge } from '@/components/finance-dashboard/TierBadge';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { UgcChildrenManager } from './UgcChildrenManager';
 import { UgcCreatorTagsManager } from './UgcCreatorTagsManager';
@@ -630,7 +631,53 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           </TabsContent>
 
           {/* Tab: Metrics */}
-          <TabsContent value="metrics" className="mt-4">
+          <TabsContent value="metrics" className="mt-4 space-y-4">
+            {/* Ad Performance Summary (from finance dashboard) */}
+            {creator?.tier && (
+              <Card className="border border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <TierBadge tier={creator.tier} size="lg" showLabel />
+                      <span className="text-lg font-bold">{creator.overall_score?.toFixed(0) ?? '—'}/100</span>
+                    </div>
+                    {creator.recommendation && RECOMMENDATION_CONFIG[creator.recommendation] && (
+                      <Badge className={`${RECOMMENDATION_CONFIG[creator.recommendation].bgClass} ${RECOMMENDATION_CONFIG[creator.recommendation].textClass} text-xs`}>
+                        {RECOMMENDATION_CONFIG[creator.recommendation].label}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[
+                      { label: 'ROAS', value: creator.roas_score },
+                      { label: 'Engagement', value: creator.engagement_score },
+                      { label: 'Conversion', value: creator.conversion_score },
+                      { label: 'Consistency', value: creator.consistency_score },
+                      { label: 'ROI', value: creator.roi_score },
+                    ].map((s) => (
+                      <div key={s.label} className="text-center">
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1">
+                          <div
+                            className="h-full bg-primary rounded-full"
+                            style={{ width: `${Math.min(100, s.value ?? 0)}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                        <p className="text-xs font-medium">{s.value?.toFixed(0) ?? '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {creator.lifetime_roas != null && (
+                    <div className="flex items-center gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                      <span>ROAS: <strong className="text-foreground">{creator.lifetime_roas.toFixed(2)}x</strong></span>
+                      <span>Spend: <strong className="text-foreground">COP {Math.round(creator.lifetime_spend ?? 0).toLocaleString()}</strong></span>
+                      <span>Ads: <strong className="text-foreground">{creator.total_ads ?? 0}</strong></span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <Card className="border border-border">
                 <CardContent className="p-4 text-center">

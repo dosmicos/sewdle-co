@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { UgcCreator, UgcCampaign, CampaignStatus, UgcVideo } from '@/types/ugc';
+import type { UgcCreator, UgcCampaign, CampaignStatus, UgcVideo, CreatorTier } from '@/types/ugc';
 import { CAMPAIGN_STATUS_CONFIG } from '@/types/ugc';
+import { TierBadge } from '@/components/finance-dashboard/TierBadge';
 import type { UgcCreatorTag } from '@/hooks/useUgcCreatorTags';
 
 interface UgcTableViewProps {
@@ -33,6 +34,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [publicationFilter, setPublicationFilter] = useState<string>('all');
+  const [tierFilter, setTierFilter] = useState<string>('all');
 
   const hasUploadedAsset = (video: UgcVideo) => !!video.video_url && video.video_url.trim().length > 0;
 
@@ -95,6 +97,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
+    const matchesTier = tierFilter === 'all' || (creator.tier ?? 'none') === tierFilter;
+
     const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
       activeCampaign?.id,
       creator.id
@@ -112,7 +116,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
       (publicationFilter === 'published_organic' && hasOrganicPublished) ||
       (publicationFilter === 'published_ads' && hasAdsPublished);
 
-    return matchesSearch && matchesStatus && matchesCity && matchesPublication;
+    return matchesSearch && matchesStatus && matchesCity && matchesPublication && matchesTier;
   });
 
   return (
@@ -162,6 +166,21 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
             <SelectItem value="published_ads">Con ads</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={tierFilter} onValueChange={setTierFilter}>
+          <SelectTrigger className="w-[120px] h-9">
+            <SelectValue placeholder="Tier" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos (tier)</SelectItem>
+            <SelectItem value="S">🟣 S — Elite</SelectItem>
+            <SelectItem value="A">🔵 A — Excelente</SelectItem>
+            <SelectItem value="B">🟢 B — Buena</SelectItem>
+            <SelectItem value="C">🟡 C — Regular</SelectItem>
+            <SelectItem value="D">🔴 D — Bajo</SelectItem>
+            <SelectItem value="new">⚪ New</SelectItem>
+            <SelectItem value="none">Sin tier</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -170,6 +189,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           <TableHeader>
             <TableRow>
               <TableHead className="sticky left-0 bg-background z-10 min-w-[180px]">Creador</TableHead>
+              <TableHead className="w-[60px] text-center">Tier</TableHead>
               <TableHead className="min-w-[130px]">Instagram</TableHead>
               <TableHead className="text-right w-[90px]">Seguidores</TableHead>
               <TableHead className="w-[90px]">Ciudad</TableHead>
@@ -186,7 +206,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
                   No se encontraron creadores
                 </TableCell>
               </TableRow>
@@ -223,6 +243,13 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                         </div>
                         <span className="font-medium text-sm truncate max-w-[140px]">{creator.name}</span>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {creator.tier ? (
+                        <TierBadge tier={creator.tier as CreatorTier} size="sm" />
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm whitespace-nowrap">
                       {creator.instagram_handle ? `@${creator.instagram_handle}` : '—'}

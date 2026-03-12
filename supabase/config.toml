@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.compute-ad-intelligence]
 verify_jwt = false
+
+[functions.compute-ugc-scores]
+verify_jwt = false

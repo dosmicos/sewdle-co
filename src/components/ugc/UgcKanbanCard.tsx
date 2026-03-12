@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Video } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
-import type { UgcCampaign } from '@/types/ugc';
+import type { UgcCampaign, CreatorTier } from '@/types/ugc';
+import { TierBadge } from '@/components/finance-dashboard/TierBadge';
 
 interface UgcKanbanCardProps {
   campaign: UgcCampaign;
@@ -66,9 +67,14 @@ export const UgcKanbanCard: React.FC<UgcKanbanCardProps> = ({
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">
-            {creator?.name || 'Sin nombre'}
-          </p>
+          <div className="flex items-center gap-1">
+            <p className="text-sm font-medium text-foreground truncate">
+              {creator?.name || 'Sin nombre'}
+            </p>
+            {creator?.tier && (
+              <TierBadge tier={creator.tier as CreatorTier} size="sm" />
+            )}
+          </div>
           {creator?.instagram_handle && (
             <p className="text-xs text-muted-foreground truncate">
               @{creator.instagram_handle}
