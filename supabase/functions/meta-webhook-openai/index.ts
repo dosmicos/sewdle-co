@@ -215,10 +215,12 @@ Cuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (
 - Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"
 - NUNCA digas que no puedes mostrar imágenes, siempre puedes si te las piden
 
-🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS:
-- Si el cliente pregunta por un color específico (ej: "tienen en rosado?"), revisa las variantes de los productos en el catálogo
-- Los nombres de los productos y sus variantes pueden indicar colores disponibles
-- Si encuentras productos que coinciden, recomiéndalos. Si no estás seguro, envía el link de la colección para que el cliente vea todas las opciones disponibles`,
+🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS — REGLA CRÍTICA:
+- Los productos de Dosmicos tienen SOLO variantes de TALLA (2, 4, 6, 8, 10, 12), NO variantes de color.
+- El color es parte del DISEÑO del producto. Ejemplo: "Ruana Unicornio" ES morada/lila por diseño, "Ruana Dinosaurio" ES verde, etc.
+- Cuando un cliente dice "unicornio morada", "la rosada", "el azul", está describiendo el producto por su apariencia visual. Busca el producto por NOMBRE (ignorando el color) y verifica la TALLA.
+- NUNCA digas que un producto "no está disponible" solo porque el cliente mencionó un color que no aparece como variante. Los colores NO son variantes.
+- Si no puedes identificar qué producto quiere por el color, pregunta cuál diseño/animal le interesa, o envía el link de la colección.`,
 
   tone: 'friendly',
   autoReply: true,
