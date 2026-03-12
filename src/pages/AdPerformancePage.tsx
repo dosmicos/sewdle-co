@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Target, RefreshCw, Loader2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Target, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
 import AdPerformanceDiagnostics from '@/components/finance-dashboard/AdPerformanceDiagnostics';
@@ -8,6 +8,8 @@ import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnec
 import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
 import { useAdPerformance } from '@/hooks/useAdPerformance';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
+import { useAdCreativeSync } from '@/hooks/useAdCreativeSync';
+import { useAdTags } from '@/hooks/useAdTags';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format, subDays } from 'date-fns';
@@ -32,7 +34,16 @@ const AdPerformancePage: React.FC = () => {
   const dateRange = useFinanceDateRange();
   const adPerformance = useAdPerformance(dateRange.current);
   const metaConnection = useMetaAdsConnection();
+  const creativeSync = useAdCreativeSync();
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Get ad IDs for fetching tags/creative/lifecycle
+  const adIds = useMemo(
+    () => adPerformance.ads.map((a) => a.ad_id),
+    [adPerformance.ads]
+  );
+
+  const { tags: tagsMap, creatives: creativesMap, lifecycle: lifecycleMap } = useAdTags(adIds);
 
   const handleSync = async () => {
     const sevenDaysAgo = format(subDays(dateRange.current.end, 6), 'yyyy-MM-dd');
@@ -56,6 +67,21 @@ const AdPerformancePage: React.FC = () => {
             <FinanceDatePicker dateRange={dateRange} />
           </div>
           <div className="flex items-center gap-2">
+            {metaConnection.isConnected && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => creativeSync.syncCreativeAndTags()}
+                disabled={creativeSync.syncing}
+              >
+                {creativeSync.syncing ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Sync Creative + Tags
+              </Button>
+            )}
             {metaConnection.isConnected ? (
               <Button
                 variant="outline"
@@ -98,6 +124,9 @@ const AdPerformancePage: React.FC = () => {
             formatCurrency={formatCOP}
             formatNumber={formatNumber}
             formatPercent={formatPercent}
+            tagsMap={tagsMap.size > 0 ? tagsMap : undefined}
+            creativesMap={creativesMap.size > 0 ? creativesMap : undefined}
+            lifecycleMap={lifecycleMap.size > 0 ? lifecycleMap : undefined}
           />
         ) : (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">

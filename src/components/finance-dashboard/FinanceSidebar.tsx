@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   LogOut,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +31,7 @@ const coreItems: NavItem[] = [
 
 const workspaceItems: NavItem[] = [
   { label: 'Ad Performance', icon: <Target className="h-4 w-4" />, id: 'ad-performance', path: '/ad-performance' },
+  { label: 'Intelligence', icon: <Sparkles className="h-4 w-4" />, id: 'intelligence', path: '/intelligence' },
   { label: 'Website Conversion', icon: <Monitor className="h-4 w-4" />, id: 'web', path: '' },
   { label: 'Customer Retention', icon: <Users className="h-4 w-4" />, id: 'retention', path: '' },
   { label: 'Discovery', icon: <Compass className="h-4 w-4" />, id: 'discovery', path: '' },
@@ -53,9 +55,11 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
   const location = useLocation();
 
   // Derive active section from URL if not explicitly provided
-  const currentSection = activeSection ?? (
-    location.pathname === '/ad-performance' ? 'ad-performance' : 'summary'
-  );
+  const currentSection = activeSection ?? (() => {
+    if (location.pathname === '/ad-performance') return 'ad-performance';
+    if (location.pathname === '/intelligence') return 'intelligence';
+    return 'summary';
+  })();
 
   const handleNav = (item: NavItem) => {
     if (item.path) {

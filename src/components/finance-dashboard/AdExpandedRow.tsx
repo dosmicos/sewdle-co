@@ -10,12 +10,17 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
 } from 'recharts';
+import { Badge } from '@/components/ui/badge';
 import { type AdPerformanceRow } from '@/hooks/useAdPerformance';
+import { type AdTagData, type AdCreativeData, type AdLifecycleData } from '@/hooks/useAdTags';
 
 interface Props {
   ad: AdPerformanceRow;
   formatCurrency: (n: number) => string;
   formatNumber: (n: number) => string;
+  tagData?: AdTagData;
+  creativeData?: AdCreativeData;
+  lifecycleData?: AdLifecycleData;
 }
 
 // ── Funnel Step ───────────────────────────────────────────────────
@@ -23,7 +28,7 @@ interface Props {
 interface FunnelStep {
   label: string;
   value: number;
-  rate?: string; // conversion rate to next step
+  rate?: string;
 }
 
 const FunnelBar: React.FC<{ step: FunnelStep; maxValue: number; isLast: boolean }> = ({
@@ -66,11 +71,31 @@ function getVideoCompletionData(ad: AdPerformanceRow) {
   ];
 }
 
+// ── Info Item ─────────────────────────────────────────────────────
+
+const InfoItem: React.FC<{ label: string; value: string | null | undefined }> = ({ label, value }) => {
+  if (!value) return null;
+  return (
+    <div>
+      <span className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</span>
+      <p className="text-xs text-gray-700 mt-0.5">{value}</p>
+    </div>
+  );
+};
+
 // ── Component ─────────────────────────────────────────────────────
 
-const AdExpandedRow: React.FC<Props> = ({ ad, formatCurrency, formatNumber }) => {
+const AdExpandedRow: React.FC<Props> = ({
+  ad,
+  formatCurrency,
+  formatNumber,
+  tagData,
+  creativeData,
+  lifecycleData,
+}) => {
   const hasVideo = ad.video_thruplay != null;
   const videoData = getVideoCompletionData(ad);
+  const hasIntelligence = !!tagData || !!creativeData || !!lifecycleData;
 
   // Build funnel steps
   const funnelSteps: FunnelStep[] = [
@@ -116,12 +141,141 @@ const AdExpandedRow: React.FC<Props> = ({ ad, formatCurrency, formatNumber }) =>
 
   // ROAS trend chart data
   const roasTrendData = (ad.dailyData || []).map((d) => ({
-    date: d.date.slice(5), // MM-DD
+    date: d.date.slice(5),
     roas: Number(d.roas.toFixed(2)),
   }));
 
   return (
     <div className="bg-gray-50 border-t border-gray-200 px-4 py-4 space-y-5">
+      {/* Intelligence Section */}
+      {hasIntelligence && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Creative Content */}
+          {creativeData && (
+            <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+              <h4 className="text-xs font-semibold text-gray-600">Creative Content</h4>
+              {creativeData.primary_text && (
+                <p className="text-xs text-gray-700 line-clamp-3">{creativeData.primary_text}</p>
+              )}
+              <InfoItem label="Headline" value={creativeData.headline} />
+              <InfoItem label="CTA" value={creativeData.call_to_action?.replace(/_/g, ' ')} />
+              {creativeData.destination_url && (
+                <div>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">URL</span>
+                  <p className="text-xs text-blue-600 mt-0.5 truncate">{creativeData.destination_url}</p>
+                </div>
+              )}
+              {creativeData.media_type && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {creativeData.media_type}
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Tags */}
+          {tagData && (
+            <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+              <h4 className="text-xs font-semibold text-gray-600">Tags & Classification</h4>
+              <div className="flex flex-wrap gap-1">
+                {tagData.creative_type && (
+                  <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-700">
+                    {tagData.creative_type}
+                  </Badge>
+                )}
+                {tagData.sales_angle && (
+                  <Badge variant="secondary" className="text-[10px] bg-purple-50 text-purple-700">
+                    {tagData.sales_angle.replace(/_/g, ' ')}
+                  </Badge>
+                )}
+                {tagData.copy_type && (
+                  <Badge variant="secondary" className="text-[10px] bg-indigo-50 text-indigo-700">
+                    {tagData.copy_type.replace(/_/g, ' ')}
+                  </Badge>
+                )}
+                {tagData.funnel_stage && (
+                  <Badge variant="secondary" className="text-[10px] bg-amber-50 text-amber-700">
+                    {tagData.funnel_stage.toUpperCase()}
+                  </Badge>
+                )}
+                {tagData.offer_type && (
+                  <Badge variant="secondary" className="text-[10px] bg-green-50 text-green-700">
+                    {tagData.offer_value || tagData.offer_type}
+                  </Badge>
+                )}
+                {tagData.product_name && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {tagData.product_name}
+                  </Badge>
+                )}
+                {tagData.ugc_creator_handle && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {tagData.ugc_creator_handle}
+                  </Badge>
+                )}
+              </div>
+              {tagData.hook_description && (
+                <InfoItem label="Hook" value={tagData.hook_description} />
+              )}
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] text-gray-400">
+                  {tagData.tagged_by === 'ai_auto' ? '🤖 AI + Rules' : '📏 Rules only'}
+                </span>
+                {tagData.confidence && (
+                  <span className={`text-[10px] ${
+                    tagData.confidence === 'alto' ? 'text-green-600' :
+                    tagData.confidence === 'medio' ? 'text-amber-600' : 'text-red-600'
+                  }`}>
+                    Confidence: {tagData.confidence}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Audience + Lifecycle */}
+          <div className="space-y-3">
+            {tagData?.audience_type && (
+              <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+                <h4 className="text-xs font-semibold text-gray-600">Audience</h4>
+                <InfoItem label="Type" value={tagData.audience_type_detail || tagData.audience_type} />
+                <InfoItem label="Gender" value={tagData.audience_gender} />
+                <InfoItem label="Age" value={tagData.audience_age_range} />
+                <InfoItem label="Location" value={tagData.audience_location} />
+                <InfoItem label="Country" value={tagData.target_country} />
+                {tagData.is_advantage_plus && (
+                  <Badge variant="secondary" className="text-[10px] bg-gray-100 text-gray-600">
+                    Advantage+
+                  </Badge>
+                )}
+              </div>
+            )}
+
+            {lifecycleData && (
+              <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+                <h4 className="text-xs font-semibold text-gray-600">Lifecycle</h4>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <InfoItem label="Status" value={lifecycleData.current_status} />
+                  <InfoItem label="Days Active" value={lifecycleData.days_active?.toString()} />
+                  <InfoItem label="Lifetime ROAS" value={lifecycleData.lifetime_roas?.toFixed(2) + 'x'} />
+                  <InfoItem label="Lifetime CPA" value={
+                    lifecycleData.lifetime_cpa != null
+                      ? formatCurrency(lifecycleData.lifetime_cpa)
+                      : null
+                  } />
+                  {lifecycleData.fatigue_start_date && (
+                    <InfoItem label="Fatigue Start" value={lifecycleData.fatigue_start_date} />
+                  )}
+                  {lifecycleData.days_to_fatigue != null && (
+                    <InfoItem label="Days to Fatigue" value={lifecycleData.days_to_fatigue.toString()} />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Funnel */}
       <div>
         <h4 className="text-xs font-semibold text-gray-600 mb-2">
