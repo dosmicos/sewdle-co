@@ -47,6 +47,26 @@ export interface AdPerformanceRow {
   trend?: 'up' | 'down' | 'stable';
   // Daily data for expanded row charts
   dailyData?: { date: string; roas: number; spend: number }[];
+  // Intelligence data (merged from ad_tags / ad_creative_content / ad_lifecycle)
+  tags?: {
+    creative_type?: string | null;
+    sales_angle?: string | null;
+    copy_type?: string | null;
+    hook_description?: string | null;
+    product?: string | null;
+    product_name?: string | null;
+    offer_type?: string | null;
+    offer_value?: string | null;
+    funnel_stage?: string | null;
+    audience_type?: string | null;
+    audience_type_detail?: string | null;
+    is_advantage_plus?: boolean | null;
+    target_country?: string | null;
+    ugc_creator_handle?: string | null;
+    confidence?: string | null;
+  };
+  media_type?: string | null;
+  phase?: string | null;
 }
 
 export interface AdPerformanceResult {

@@ -110,3 +110,12 @@ verify_jwt = false
 
 [functions.sync-meta-ads]
 verify_jwt = false
+
+[functions.sync-meta-ad-performance]
+verify_jwt = false
+
+[functions.sync-meta-ad-creative]
+verify_jwt = false
+
+[functions.compute-ad-intelligence]
+verify_jwt = false
