@@ -43,6 +43,7 @@ import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import TermsOfServicePage from "@/pages/TermsOfServicePage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
 import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
+import AdPerformancePage from "@/pages/AdPerformancePage";
 import MetaAdsCallbackPage from "@/pages/MetaAdsCallbackPage";
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -170,6 +171,13 @@ const FinanceAppContent = () => {
         <PasswordChangeRouteGuard>
           <PermissionRoute module="finances" action="view">
             <FinanceDashboardPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/ad-performance" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="finances" action="view">
+            <AdPerformancePage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />

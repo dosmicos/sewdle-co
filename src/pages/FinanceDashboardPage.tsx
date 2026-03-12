@@ -1,21 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Pin, DollarSign, BarChart3, ShoppingBag, Globe, CreditCard, RefreshCw, Loader2, Settings, Target } from 'lucide-react';
+import { Pin, DollarSign, BarChart3, ShoppingBag, Globe, CreditCard, RefreshCw, Loader2, Settings } from 'lucide-react';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
 import MetricCard from '@/components/finance-dashboard/MetricCard';
 import MetricSection from '@/components/finance-dashboard/MetricSection';
 import AttributionTable, { type AttributionRow } from '@/components/finance-dashboard/AttributionTable';
-import AdPerformanceDiagnostics from '@/components/finance-dashboard/AdPerformanceDiagnostics';
-import AdPerformanceTable from '@/components/finance-dashboard/AdPerformanceTable';
 import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnectionModal';
 import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
 import { useStoreMetrics } from '@/hooks/useStoreMetrics';
 import { useAdMetrics } from '@/hooks/useAdMetrics';
-import { useAdPerformance } from '@/hooks/useAdPerformance';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 
 const formatCOP = (amount: number) => {
   return `COP ${new Intl.NumberFormat('es-CO', {
@@ -60,7 +57,6 @@ const FinanceDashboardPage: React.FC = () => {
   const { current, changes, isLoading } = useStoreMetrics(dateRange.current, dateRange.previous);
   const metaAds = useAdMetrics(dateRange.current, dateRange.previous, 'meta');
   const metaConnection = useMetaAdsConnection();
-  const adPerformance = useAdPerformance(dateRange.current);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -119,16 +115,10 @@ const FinanceDashboardPage: React.FC = () => {
     },
   ];
 
-  // Sync handler — syncs both account-level and ad-level data
   const handleSync = async () => {
     const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
     const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
-    // Also sync 7 days back for trend data
-    const sevenDaysAgo = format(subDays(dateRange.current.end, 6), 'yyyy-MM-dd');
-    await Promise.all([
-      metaConnection.syncMetrics(startStr, endStr),
-      adPerformance.syncAdPerformance(sevenDaysAgo, endStr),
-    ]);
+    await metaConnection.syncMetrics(startStr, endStr);
   };
 
   if (isLoading) {
@@ -158,9 +148,9 @@ const FinanceDashboardPage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleSync}
-                disabled={metaConnection.syncing || adPerformance.syncing}
+                disabled={metaConnection.syncing}
               >
-                {metaConnection.syncing || adPerformance.syncing ? (
+                {metaConnection.syncing ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 ) : (
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -303,32 +293,6 @@ const FinanceDashboardPage: React.FC = () => {
             </p>
           )}
         </div>
-
-        {/* Ad Performance */}
-        {metaConnection.isConnected && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-indigo-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Ad Performance</h2>
-              <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-100 text-xs">
-                {adPerformance.ads.length} ads
-              </Badge>
-              {adPerformance.syncing && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
-              )}
-            </div>
-            <AdPerformanceDiagnostics
-              ads={adPerformance.ads}
-              formatCurrency={formatCOP}
-            />
-            <AdPerformanceTable
-              ads={adPerformance.ads}
-              formatCurrency={formatCOP}
-              formatNumber={formatNumber}
-              formatPercent={formatPercent}
-            />
-          </div>
-        )}
 
         {/* Web Analytics */}
         <MetricSection title="Web Analytics" icon={<AnalyticsIcon />}>
