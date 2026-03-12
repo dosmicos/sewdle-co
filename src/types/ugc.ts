@@ -19,7 +19,38 @@ export interface UgcCreator {
   last_contact_date: string | null;
   created_at: string;
   updated_at: string;
+
+  // Performance tracking (computed by compute-ugc-scores)
+  overall_score?: number | null;
+  roas_score?: number | null;
+  engagement_score?: number | null;
+  conversion_score?: number | null;
+  consistency_score?: number | null;
+  roi_score?: number | null;
+  tier?: CreatorTier | null;
+  lifetime_spend?: number | null;
+  lifetime_revenue?: number | null;
+  lifetime_roas?: number | null;
+  lifetime_purchases?: number | null;
+  total_ads?: number | null;
+  avg_ctr?: number | null;
+  avg_cpa?: number | null;
+  avg_hook_rate?: number | null;
+  avg_hold_rate?: number | null;
+  avg_lp_conv_rate?: number | null;
+  best_ad_id?: string | null;
+  best_ad_roas?: number | null;
+  worst_ad_id?: string | null;
+  worst_ad_roas?: number | null;
+  best_product?: string | null;
+  best_product_roas?: number | null;
+  best_angle?: string | null;
+  best_angle_roas?: number | null;
+  recommendation?: string | null;
+  scores_computed_at?: string | null;
 }
+
+export type CreatorTier = 'S' | 'A' | 'B' | 'C' | 'D' | 'new';
 
 export type CreatorStatus = 'prospecto' | 'contactado' | 'respondio_no' | 'respondio_si' | 'negociando' | 'activo' | 'inactivo';
 
@@ -159,3 +190,47 @@ export const KANBAN_COLUMNS: CampaignStatus[] = [
   'video_en_revision',
   'completado',
 ];
+
+// ─── Performance Tracking Types ──────────────────────────────────
+
+export const TIER_CONFIG: Record<CreatorTier, { label: string; color: string; bgClass: string; textClass: string; emoji: string }> = {
+  S: { label: 'S — Elite', color: '#8b5cf6', bgClass: 'bg-purple-100', textClass: 'text-purple-700', emoji: '🟣' },
+  A: { label: 'A — Excelente', color: '#3b82f6', bgClass: 'bg-blue-100', textClass: 'text-blue-700', emoji: '🔵' },
+  B: { label: 'B — Buena', color: '#22c55e', bgClass: 'bg-green-100', textClass: 'text-green-700', emoji: '🟢' },
+  C: { label: 'C — Regular', color: '#eab308', bgClass: 'bg-yellow-100', textClass: 'text-yellow-700', emoji: '🟡' },
+  D: { label: 'D — Bajo', color: '#ef4444', bgClass: 'bg-red-100', textClass: 'text-red-700', emoji: '🔴' },
+  new: { label: 'New', color: '#9ca3af', bgClass: 'bg-gray-100', textClass: 'text-gray-600', emoji: '⚪' },
+};
+
+export const RECOMMENDATION_CONFIG: Record<string, { label: string; description: string; bgClass: string; textClass: string }> = {
+  assign_more_work: { label: 'Asignar Mas Trabajo', description: 'Top performer, prioridad para nuevo contenido', bgClass: 'bg-green-100', textClass: 'text-green-700' },
+  test_new_product: { label: 'Probar Producto', description: 'Buen rendimiento, ampliar rango de productos', bgClass: 'bg-blue-100', textClass: 'text-blue-700' },
+  pause_collaboration: { label: 'Pausar', description: 'Rendimiento bajo consistente', bgClass: 'bg-red-100', textClass: 'text-red-700' },
+  needs_direction: { label: 'Necesita Direccion', description: 'Buen hook pero baja conversion', bgClass: 'bg-amber-100', textClass: 'text-amber-700' },
+  new_creator_watch: { label: 'Observar', description: 'Datos insuficientes, monitorear', bgClass: 'bg-gray-100', textClass: 'text-gray-600' },
+};
+
+export interface UgcCreatorAd {
+  id: string;
+  organization_id: string;
+  creator_id: string;
+  ad_id: string;
+  ad_name: string | null;
+  total_spend: number;
+  total_revenue: number;
+  total_purchases: number;
+  roas: number;
+  cpa: number;
+  avg_ctr: number | null;
+  avg_hook_rate: number | null;
+  avg_hold_rate: number | null;
+  avg_lp_conv_rate: number | null;
+  product: string | null;
+  sales_angle: string | null;
+  creative_type: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+  days_active: number | null;
+  current_status: string | null;
+  computed_at: string | null;
+}
