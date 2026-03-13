@@ -13,19 +13,21 @@ CREATE TABLE IF NOT EXISTS product_costs (
   product_cost NUMERIC(14,2) DEFAULT 0,
   handling_fee NUMERIC(14,2) DEFAULT 0,
   source TEXT DEFAULT 'manual' CHECK (source IN ('shopify', 'manual')),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(organization_id, product_id, COALESCE(variant_id, 0))
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_costs_org_product_variant
+  ON product_costs(organization_id, product_id, COALESCE(variant_id, 0));
 
 CREATE INDEX IF NOT EXISTS idx_product_costs_org ON product_costs(organization_id);
 
 ALTER TABLE product_costs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "product_costs_org_policy" ON product_costs
+CREATE POLICY product_costs_org_policy ON product_costs
   FOR ALL USING (
     organization_id IN (
-      SELECT om.organization_id FROM organization_members om
-      WHERE om.user_id = auth.uid()
+      SELECT ou.organization_id FROM organization_users ou
+      WHERE ou.user_id = auth.uid()
     )
   );
 
@@ -45,11 +47,11 @@ CREATE INDEX IF NOT EXISTS idx_gateway_costs_org ON gateway_cost_settings(organi
 
 ALTER TABLE gateway_cost_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "gateway_costs_org_policy" ON gateway_cost_settings
+CREATE POLICY gateway_costs_org_policy ON gateway_cost_settings
   FOR ALL USING (
     organization_id IN (
-      SELECT om.organization_id FROM organization_members om
-      WHERE om.user_id = auth.uid()
+      SELECT ou.organization_id FROM organization_users ou
+      WHERE ou.user_id = auth.uid()
     )
   );
 
