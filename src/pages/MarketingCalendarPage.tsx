@@ -14,7 +14,9 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
+import ActivityRevenueChart from '@/components/finance-dashboard/ActivityRevenueChart';
 import { useMarketingEvents } from '@/hooks/useMarketingEvents';
+import { useMarketingActivity } from '@/hooks/useMarketingActivity';
 import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel } from '@/hooks/useMarketingEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -178,6 +180,15 @@ const MarketingCalendarPage: React.FC = () => {
     useMarketingEvents();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Activity vs Revenue data for the current month
+  const activityStart = useMemo(() => startOfMonth(currentMonth), [currentMonth]);
+  const activityEnd = useMemo(() => {
+    const monthEnd = endOfMonth(currentMonth);
+    const today = new Date();
+    return monthEnd < today ? monthEnd : today;
+  }, [currentMonth]);
+  const activity = useMarketingActivity(activityStart, activityEnd);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -411,6 +422,13 @@ const MarketingCalendarPage: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Activity vs Revenue */}
+        <ActivityRevenueChart
+          dailyData={activity.dailyData}
+          summary={activity.summary}
+          isLoading={activity.isLoading}
+        />
 
         {/* Selected date events */}
         {selectedDate && selectedDateEvents.length > 0 && (
