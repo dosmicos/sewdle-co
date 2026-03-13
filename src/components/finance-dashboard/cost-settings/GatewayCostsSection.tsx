@@ -91,10 +91,16 @@ export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
 
   // Merge detected gateways with saved settings
   const gatewayMap = new Map(gateways.map((g) => [g.gateway_name, g]));
-  const allGateways = detectedGateways.map((name) => ({
+  const detectedRows = detectedGateways.map((name) => ({
     name,
     settings: gatewayMap.get(name) || null,
+    isUniversal: false,
   }));
+  // Also include universal fees (applies_to_all) that aren't in detected gateways
+  const universalRows = gateways
+    .filter((g) => g.applies_to_all && !detectedGateways.includes(g.gateway_name))
+    .map((g) => ({ name: g.gateway_name, settings: g, isUniversal: true }));
+  const allGateways = [...detectedRows, ...universalRows];
 
   // Auto-create settings for newly detected gateways
   useEffect(() => {
@@ -195,9 +201,16 @@ export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {allGateways.map(({ name, settings }) => (
+                        {allGateways.map(({ name, settings, isUniversal }) => (
                           <tr key={name} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 font-medium">{name}</td>
+                            <td className="px-3 py-2 font-medium">
+                              {name}
+                              {isUniversal && (
+                                <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-normal">
+                                  Todas las órdenes
+                                </span>
+                              )}
+                            </td>
                             <td className="px-3 py-2 text-right">
                               <BlurSaveInput
                                 value={settings?.percent_fee ?? 0}
