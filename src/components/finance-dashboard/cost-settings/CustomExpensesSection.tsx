@@ -106,6 +106,22 @@ export const CustomExpensesSection: React.FC<CustomExpensesSectionProps> = ({
   const formatCOP = (value: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value);
 
+  const formatCOPDecimal = (value: number) =>
+    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 }).format(value);
+
+  /** Calculate cost per day based on recurrence */
+  const costPerDay = (expense: FinanceExpense): number => {
+    switch (expense.recurrence) {
+      case 'daily': return expense.amount;
+      case 'weekly': return expense.amount / 7;
+      case 'monthly': return expense.amount / 30.44; // avg days/month
+      case 'one_time': return expense.amount; // one-time = that single day
+      default: return 0;
+    }
+  };
+
+  const totalDailyCost = expenses.reduce((sum, e) => sum + costPerDay(e), 0);
+
   const updateForm = <K extends keyof ExpenseInput>(key: K, value: ExpenseInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -148,37 +164,58 @@ export const CustomExpensesSection: React.FC<CustomExpensesSectionProps> = ({
                 No custom expenses added yet.
               </div>
             ) : (
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="text-left px-3 py-2 font-medium text-gray-600">Description</th>
-                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-24">Category</th>
-                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Amount</th>
-                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-24">Recurrence</th>
-                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-20">Ad Spend</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">Descripción</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Costo</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-28">Desde</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-28">Hasta</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-28">Recurrencia</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-16">Ad Spend</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Costo/Día</th>
                       <th className="w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {expenses.map((expense) => (
                       <tr key={expense.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2">{expense.description || '—'}</td>
                         <td className="px-3 py-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                            {expense.category}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                            <span>{expense.description || '—'}</span>
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-right font-medium">
                           {formatCOP(expense.amount)}
                         </td>
-                        <td className="px-3 py-2 text-center text-gray-500 capitalize">
-                          {expense.recurrence.replace('_', ' ')}
+                        <td className="px-3 py-2 text-center text-gray-500 text-xs">
+                          {expense.recurrence === 'one_time'
+                            ? expense.date
+                            : expense.start_date || expense.date}
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-500 text-xs">
+                          {expense.recurrence === 'one_time'
+                            ? '—'
+                            : expense.end_date || 'Sin fin'}
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-500 text-xs capitalize">
+                          {expense.recurrence === 'one_time'
+                            ? 'Único'
+                            : expense.recurrence === 'monthly'
+                              ? 'Mensual'
+                              : expense.recurrence === 'weekly'
+                                ? 'Semanal'
+                                : 'Diario'}
                         </td>
                         <td className="px-3 py-2 text-center">
                           {expense.is_ad_spend && (
                             <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
                           )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium text-gray-700">
+                          {formatCOPDecimal(costPerDay(expense))}
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex gap-1 justify-end">
@@ -209,14 +246,18 @@ export const CustomExpensesSection: React.FC<CustomExpensesSectionProps> = ({
 
             {/* Summary */}
             {expenses.length > 0 && (
-              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 space-y-1">
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 space-y-1.5">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Total Monthly Expenses</span>
+                  <span className="text-gray-600">Total mensual</span>
                   <span className="font-semibold">{formatCOP(totalMonthly)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Non-ad expenses: {nonAdExpenses.length}</span>
-                  <span>Ad spend expenses: {adSpendExpenses.length}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Total costo/día</span>
+                  <span className="font-semibold">{formatCOPDecimal(totalDailyCost)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 pt-1 border-t border-gray-200">
+                  <span>Gastos regulares: {nonAdExpenses.length}</span>
+                  <span>Gastos de ads: {adSpendExpenses.length}</span>
                 </div>
               </div>
             )}
