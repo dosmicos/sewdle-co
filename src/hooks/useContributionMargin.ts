@@ -99,7 +99,7 @@ export function useContributionMargin(
       monthly_opex: 0,
       return_rate_percent: 5,
       cm_target_percent: 25,
-      cogs_mode: 'percent' as const,
+      cogs_mode: 'per_product' as const,
       shipping_mode: 'percent' as const,
       gateway_mode: 'percent' as const,
     };

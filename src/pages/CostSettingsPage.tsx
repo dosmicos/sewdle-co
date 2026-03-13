@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import { CostOfGoodsSection } from '@/components/finance-dashboard/cost-settings/CostOfGoodsSection';
 import { ShippingSection } from '@/components/finance-dashboard/cost-settings/ShippingSection';
@@ -34,6 +34,29 @@ const CostSettingsPage: React.FC = () => {
     updateExpense,
     deleteExpense,
   } = useFinanceExpenses();
+
+  // Auto-sync products from Shopify on first visit when no products loaded
+  const autoSyncDone = useRef(false);
+  useEffect(() => {
+    if (
+      !autoSyncDone.current &&
+      !productsLoading &&
+      !isSyncing &&
+      products.length === 0 &&
+      settings?.cogs_mode === 'per_product'
+    ) {
+      autoSyncDone.current = true;
+      syncFromShopify()
+        .then((result) => {
+          if (result?.costs_synced > 0) {
+            toast.success(`Synced ${result.costs_synced} product costs from Shopify`);
+          }
+        })
+        .catch(() => {
+          // Silent — user can manually retry
+        });
+    }
+  }, [productsLoading, products.length, settings?.cogs_mode]);
 
   const handleModeChange = async (
     key: 'cogs_mode' | 'shipping_mode' | 'gateway_mode',
@@ -131,7 +154,7 @@ const CostSettingsPage: React.FC = () => {
 
           {/* COGS Section */}
           <CostOfGoodsSection
-            mode={settings?.cogs_mode || 'percent'}
+            mode={settings?.cogs_mode || 'per_product'}
             cogsPercent={settings?.cogs_percent || 20}
             products={products}
             isLoading={productsLoading}

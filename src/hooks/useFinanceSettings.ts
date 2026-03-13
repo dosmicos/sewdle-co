@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS: Omit<FinanceSettings, 'id' | 'organization_id' | 'create
   monthly_opex: 0,
   return_rate_percent: 5,
   cm_target_percent: 25,
-  cogs_mode: 'percent',
+  cogs_mode: 'per_product',
   shipping_mode: 'percent',
   gateway_mode: 'percent',
 };
