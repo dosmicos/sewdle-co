@@ -2,21 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-interface ShopifyVariant {
-  id: number;
-  product_id: number;
-  title: string;
-  sku: string | null;
-  price: string;
-  inventory_item_id: number;
-}
-
-interface ShopifyProduct {
-  id: number;
-  title: string;
-  variants: ShopifyVariant[];
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -51,94 +36,148 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    const graphqlUrl = `https://${storeDomain}.myshopify.com/admin/api/2024-10/graphql.json`;
     const shopifyHeaders = {
       "X-Shopify-Access-Token": accessToken,
       "Content-Type": "application/json",
     };
 
-    const baseUrl = `https://${storeDomain}.myshopify.com/admin/api/2024-01`;
+    // Step 1: Fetch all ACTIVE products with variant costs via GraphQL
+    interface VariantData {
+      productId: number;
+      productTitle: string;
+      variantId: number;
+      variantTitle: string;
+      sku: string | null;
+      price: number;
+      cost: number;
+    }
 
-    // Step 1: Fetch all products (paginated)
-    let allProducts: ShopifyProduct[] = [];
-    let pageUrl: string | null = `${baseUrl}/products.json?limit=250&fields=id,title,variants`;
+    const allVariants: VariantData[] = [];
+    let cursor: string | null = null;
+    let hasNextPage = true;
+    let productCount = 0;
 
-    while (pageUrl) {
-      const response = await fetch(pageUrl, { headers: shopifyHeaders });
+    while (hasNextPage) {
+      const query = `
+        query getProductCosts($first: Int!, $after: String) {
+          products(first: $first, after: $after, query: "status:active") {
+            edges {
+              node {
+                id
+                title
+                variants(first: 100) {
+                  edges {
+                    node {
+                      id
+                      title
+                      sku
+                      price
+                      inventoryItem {
+                        unitCost {
+                          amount
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `;
+
+      const response = await fetch(graphqlUrl, {
+        method: "POST",
+        headers: shopifyHeaders,
+        body: JSON.stringify({
+          query,
+          variables: { first: 50, after: cursor },
+        }),
+      });
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Shopify products API error: ${response.status} - ${errorText}`);
+        const errText = await response.text();
+        throw new Error(`Shopify GraphQL error: ${response.status} - ${errText}`);
       }
 
       const data = await response.json();
-      allProducts = allProducts.concat(data.products || []);
 
-      // Pagination via Link header
-      const linkHeader = response.headers.get("Link");
-      pageUrl = null;
-      if (linkHeader) {
-        const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        if (nextMatch) {
-          pageUrl = nextMatch[1];
+      if (data.errors) {
+        console.error("❌ Shopify GraphQL errors:", JSON.stringify(data.errors));
+        throw new Error(`Shopify API error: ${data.errors[0].message}`);
+      }
+
+      const edges = data.data.products.edges;
+      for (const edge of edges) {
+        const node = edge.node;
+        const productId = parseInt(node.id.replace("gid://shopify/Product/", ""));
+        productCount++;
+
+        for (const ve of node.variants.edges) {
+          const v = ve.node;
+          const variantId = parseInt(v.id.replace("gid://shopify/ProductVariant/", ""));
+          const cost = v.inventoryItem?.unitCost?.amount
+            ? parseFloat(v.inventoryItem.unitCost.amount)
+            : 0;
+
+          allVariants.push({
+            productId,
+            productTitle: node.title,
+            variantId,
+            variantTitle: v.title,
+            sku: v.sku || null,
+            price: parseFloat(v.price) || 0,
+            cost,
+          });
         }
       }
+
+      hasNextPage = data.data.products.pageInfo.hasNextPage;
+      cursor = data.data.products.pageInfo.endCursor;
     }
 
-    console.log(`📦 Fetched ${allProducts.length} products from Shopify`);
+    const withCostCount = allVariants.filter((v) => v.cost > 0).length;
+    console.log(
+      `📦 Fetched ${productCount} active products, ${allVariants.length} variants (${withCostCount} with cost)`
+    );
 
-    // Step 2: Collect all inventory_item_ids
-    const variantMap = new Map<number, { product: ShopifyProduct; variant: ShopifyVariant }>();
-    for (const product of allProducts) {
-      for (const variant of product.variants) {
-        variantMap.set(variant.inventory_item_id, { product, variant });
+    // Step 2: Build upsert rows
+    const upsertRows = allVariants.map((v) => ({
+      organization_id,
+      product_id: v.productId,
+      variant_id: v.variantId,
+      title:
+        v.variantTitle !== "Default Title"
+          ? `${v.productTitle} - ${v.variantTitle}`
+          : v.productTitle,
+      sku: v.sku,
+      price: v.price,
+      product_cost: v.cost,
+      source: "shopify",
+      updated_at: new Date().toISOString(),
+    }));
+
+    // Step 3: Delete products no longer active (archived/deleted in Shopify)
+    const activeProductIds = [...new Set(allVariants.map((v) => v.productId))];
+    if (activeProductIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("product_costs")
+        .delete()
+        .eq("organization_id", organization_id)
+        .eq("source", "shopify")
+        .not("product_id", "in", `(${activeProductIds.join(",")})`);
+
+      if (deleteError) {
+        console.warn("⚠️ Failed to clean up archived products:", deleteError.message);
       }
     }
 
-    // Step 3: Fetch inventory item costs in batches of 100
-    const inventoryItemIds = Array.from(variantMap.keys());
-    const costMap = new Map<number, number>(); // inventory_item_id -> cost
-
-    for (let i = 0; i < inventoryItemIds.length; i += 100) {
-      const batch = inventoryItemIds.slice(i, i + 100);
-      const idsParam = batch.join(",");
-      const invResponse = await fetch(
-        `${baseUrl}/inventory_items.json?ids=${idsParam}`,
-        { headers: shopifyHeaders }
-      );
-
-      if (invResponse.ok) {
-        const invData = await invResponse.json();
-        for (const item of invData.inventory_items || []) {
-          if (item.cost !== null && item.cost !== undefined) {
-            costMap.set(item.id, parseFloat(item.cost));
-          }
-        }
-      } else {
-        console.warn(`⚠️ Failed to fetch inventory items batch starting at ${i}`);
-      }
-    }
-
-    console.log(`💰 Fetched costs for ${costMap.size} inventory items`);
-
-    // Step 4: Upsert into product_costs (only update shopify-sourced costs)
-    const upsertRows = [];
-    for (const [invItemId, { product, variant }] of variantMap) {
-      const cost = costMap.get(invItemId) ?? 0;
-      upsertRows.push({
-        organization_id,
-        product_id: product.id,
-        variant_id: variant.id,
-        title: variant.title !== "Default Title"
-          ? `${product.title} - ${variant.title}`
-          : product.title,
-        sku: variant.sku || null,
-        price: parseFloat(variant.price) || 0,
-        product_cost: cost,
-        source: "shopify",
-        updated_at: new Date().toISOString(),
-      });
-    }
-
-    // Batch upsert in chunks of 500
+    // Step 4: Batch upsert in chunks of 500
     let upserted = 0;
     for (let i = 0; i < upsertRows.length; i += 500) {
       const batch = upsertRows.slice(i, i + 500);
@@ -151,21 +190,21 @@ serve(async (req) => {
 
       if (upsertError) {
         console.error(`❌ Upsert error batch ${i}:`, JSON.stringify(upsertError));
-        // Don't silently fail — throw so the user knows
         throw new Error(`Upsert failed at batch ${i}: ${upsertError.message}`);
       } else {
         upserted += batch.length;
       }
     }
 
-    console.log(`✅ Synced ${upserted} product costs from Shopify`);
+    console.log(`✅ Synced ${upserted} product costs (${withCostCount} with cost > 0)`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        products_fetched: allProducts.length,
-        costs_synced: upserted,
-        inventory_costs_found: costMap.size,
+        products_fetched: productCount,
+        variants_synced: upserted,
+        with_cost: withCostCount,
+        without_cost: allVariants.length - withCostCount,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
