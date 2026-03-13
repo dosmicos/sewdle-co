@@ -1,10 +1,19 @@
 import { useMemo } from 'react';
-import { getDaysInMonth, differenceInCalendarDays, startOfMonth, format } from 'date-fns';
+import { getDaysInMonth, differenceInCalendarDays, startOfMonth } from 'date-fns';
 import type { StoreMetricsResult } from './useStoreMetrics';
 import type { AdMetricsResult } from './useAdMetrics';
 import type { FinanceSettings } from './useFinanceSettings';
 import type { MonthlyTarget } from './useMonthlyTargets';
 import type { DateRange } from './useFinanceDateRange';
+
+/** Pre-computed cost overrides from cost settings hooks (per-product, per-gateway, etc.) */
+export interface CostOverrides {
+  productCost?: number;        // from useProductCosts.computeCOGS()
+  shippingCost?: number;       // from storeMetrics.totalShipping when mode='shopify_charges'
+  paymentGatewayFees?: number; // from useGatewayCosts.computeGatewayFees()
+  handlingCost?: number;       // included in productCost when per-product mode
+  customExpenses?: number;     // from useFinanceExpenses.totalForPeriod()
+}
 
 export type Semaphore = 'green' | 'yellow' | 'red';
 
@@ -78,7 +87,8 @@ export function useContributionMargin(
   adMetrics: AdMetricsResult,
   settings: FinanceSettings | null,
   target: MonthlyTarget | null,
-  currentRange: DateRange
+  currentRange: DateRange,
+  costOverrides?: CostOverrides
 ): ContributionMarginData {
   return useMemo(() => {
     const s = settings ?? {
@@ -89,6 +99,9 @@ export function useContributionMargin(
       monthly_opex: 0,
       return_rate_percent: 5,
       cm_target_percent: 25,
+      cogs_mode: 'percent' as const,
+      shipping_mode: 'percent' as const,
+      gateway_mode: 'percent' as const,
     };
 
     // Revenue
@@ -96,11 +109,24 @@ export function useContributionMargin(
     const returnsAccrual = grossRevenue * (s.return_rate_percent / 100);
     const netSales = grossRevenue - returnsAccrual;
 
-    // Variable costs as % of net sales
-    const productCost = netSales * (s.cogs_percent / 100);
-    const shippingCost = netSales * (s.shipping_cost_percent / 100);
-    const paymentGatewayFees = netSales * (s.payment_gateway_percent / 100);
-    const handlingCost = netSales * (s.handling_cost_percent / 100);
+    // Dual-mode cost calculation: use overrides when mode is not 'percent'
+    const productCost = (s.cogs_mode === 'per_product' && costOverrides?.productCost !== undefined)
+      ? costOverrides.productCost
+      : netSales * (s.cogs_percent / 100);
+
+    const shippingCost = (s.shipping_mode === 'shopify_charges' && costOverrides?.shippingCost !== undefined)
+      ? costOverrides.shippingCost
+      : netSales * (s.shipping_cost_percent / 100);
+
+    const paymentGatewayFees = (s.gateway_mode === 'per_gateway' && costOverrides?.paymentGatewayFees !== undefined)
+      ? costOverrides.paymentGatewayFees
+      : netSales * (s.payment_gateway_percent / 100);
+
+    // Handling is included in per-product COGS (handling_fee per variant), so 0 when per_product
+    const handlingCost = (s.cogs_mode === 'per_product' && costOverrides?.productCost !== undefined)
+      ? 0
+      : netSales * (s.handling_cost_percent / 100);
+
     const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost;
 
     // Ad spend
@@ -179,13 +205,16 @@ export function useContributionMargin(
     let cumulativeCm = 0;
     let cumulativeNetSales = 0;
 
+    // For daily breakdown, derive effective variable cost rate from period totals
+    const effectiveVarRate = netSales > 0 ? variableExpenses / netSales : (
+      (s.cogs_percent + s.shipping_cost_percent + s.payment_gateway_percent + s.handling_cost_percent) / 100
+    );
+
     const dailyData: DailyBreakdown[] = sortedDates.map(date => {
       const dayGross = storeDailyMap.get(date) ?? 0;
       const dayReturns = dayGross * (s.return_rate_percent / 100);
       const dayNet = dayGross - dayReturns;
-      const dayVariable = dayNet * (
-        (s.cogs_percent + s.shipping_cost_percent + s.payment_gateway_percent + s.handling_cost_percent) / 100
-      );
+      const dayVariable = dayNet * effectiveVarRate;
       const dayAd = adDailyMap.get(date) ?? 0;
       const dayCm = dayNet - dayVariable - dayAd;
       cumulativeCm += dayCm;
@@ -233,5 +262,5 @@ export function useContributionMargin(
       dailyData,
       mer,
     };
-  }, [storeMetrics.current, adMetrics.current, settings, target, currentRange]);
+  }, [storeMetrics.current, adMetrics.current, settings, target, currentRange, costOverrides]);
 }

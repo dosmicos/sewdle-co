@@ -2,6 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
+export type CostMode = 'percent' | 'per_product';
+export type ShippingMode = 'percent' | 'shopify_charges';
+export type GatewayMode = 'percent' | 'per_gateway';
+
 export interface FinanceSettings {
   id: string;
   organization_id: string;
@@ -12,6 +16,9 @@ export interface FinanceSettings {
   monthly_opex: number;
   return_rate_percent: number;
   cm_target_percent: number;
+  cogs_mode: CostMode;
+  shipping_mode: ShippingMode;
+  gateway_mode: GatewayMode;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +31,9 @@ const DEFAULT_SETTINGS: Omit<FinanceSettings, 'id' | 'organization_id' | 'create
   monthly_opex: 0,
   return_rate_percent: 5,
   cm_target_percent: 25,
+  cogs_mode: 'percent',
+  shipping_mode: 'percent',
+  gateway_mode: 'percent',
 };
 
 export interface UseFinanceSettingsResult {
