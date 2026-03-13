@@ -268,7 +268,7 @@ export const CustomExpensesSection: React.FC<CustomExpensesSectionProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-sm">Recurrence</Label>
+                <Label className="text-sm">Recurrencia</Label>
                 <select
                   value={form.recurrence}
                   onChange={(e) => updateForm('recurrence', e.target.value as ExpenseInput['recurrence'])}
@@ -279,34 +279,41 @@ export const CustomExpensesSection: React.FC<CustomExpensesSectionProps> = ({
                   ))}
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Date</Label>
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => updateForm('date', e.target.value)}
-                />
-              </div>
-            </div>
 
-            {form.recurrence !== 'one_time' && (
-              <div className="grid grid-cols-2 gap-3">
+              {form.recurrence === 'one_time' ? (
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Start Date</Label>
+                  <Label className="text-sm">Fecha</Label>
+                  <Input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => updateForm('date', e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Desde</Label>
                   <Input
                     type="date"
                     value={form.start_date || ''}
-                    onChange={(e) => updateForm('start_date', e.target.value || null)}
+                    onChange={(e) => {
+                      const val = e.target.value || null;
+                      updateForm('start_date', val);
+                      // Keep date in sync for backwards compat
+                      if (val) updateForm('date', val);
+                    }}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm">End Date (optional)</Label>
-                  <Input
-                    type="date"
-                    value={form.end_date || ''}
-                    onChange={(e) => updateForm('end_date', e.target.value || null)}
-                  />
-                </div>
+              )}
+            </div>
+
+            {form.recurrence !== 'one_time' && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">Hasta (opcional — vacío = indefinido)</Label>
+                <Input
+                  type="date"
+                  value={form.end_date || ''}
+                  onChange={(e) => updateForm('end_date', e.target.value || null)}
+                />
               </div>
             )}
 
