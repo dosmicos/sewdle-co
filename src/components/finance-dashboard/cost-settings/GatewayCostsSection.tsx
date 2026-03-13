@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -10,7 +9,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronUp, CreditCard } from 'lucide-react';
+import { ChevronDown, ChevronUp, CreditCard, Check } from 'lucide-react';
 import type { GatewayCostSetting } from '@/hooks/useGatewayCosts';
 import type { GatewayMode } from '@/hooks/useFinanceSettings';
 
@@ -29,6 +28,54 @@ interface GatewayCostsSectionProps {
     is_active?: boolean;
   }) => Promise<void>;
 }
+
+/** Small input that saves on blur instead of every keystroke */
+const BlurSaveInput: React.FC<{
+  value: number;
+  onSave: (value: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+  className?: string;
+}> = ({ value, onSave, step = 0.1, min = 0, max, className }) => {
+  const [localValue, setLocalValue] = useState(value);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onSave(localValue);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    }
+  };
+
+  return (
+    <div className="relative inline-flex items-center">
+      <Input
+        type="number"
+        value={localValue}
+        onChange={(e) => setLocalValue(Number(e.target.value))}
+        onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className={className}
+        step={step}
+        min={min}
+        max={max}
+      />
+      {saved && (
+        <Check className="h-3.5 w-3.5 text-green-500 absolute -right-5" />
+      )}
+    </div>
+  );
+};
 
 export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
   mode,
@@ -58,9 +105,6 @@ export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
       }
     }
   }, [detectedGateways, mode]);
-
-  const formatCOP = (value: number) =>
-    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value);
 
   return (
     <Card>
@@ -106,14 +150,13 @@ export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">Payment Gateway %</Label>
                   <div className="flex items-center gap-1.5">
-                    <Input
-                      type="number"
+                    <BlurSaveInput
                       value={gatewayPercent}
-                      onChange={(e) => onPercentChange(Number(e.target.value))}
-                      className="w-20 h-7 text-sm text-right"
+                      onSave={onPercentChange}
                       step={0.1}
                       min={0}
                       max={100}
+                      className="w-20 h-7 text-sm text-right"
                     />
                     <span className="text-sm text-gray-400">%</span>
                   </div>
@@ -156,34 +199,26 @@ export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
                           <tr key={name} className="hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium">{name}</td>
                             <td className="px-3 py-2 text-right">
-                              <Input
-                                type="number"
+                              <BlurSaveInput
                                 value={settings?.percent_fee ?? 0}
-                                onChange={(e) =>
-                                  onUpsertGateway({
-                                    gateway_name: name,
-                                    percent_fee: Number(e.target.value),
-                                  })
+                                onSave={(v) =>
+                                  onUpsertGateway({ gateway_name: name, percent_fee: v })
                                 }
-                                className="w-24 h-7 text-sm text-right ml-auto"
                                 step={0.1}
                                 min={0}
                                 max={100}
+                                className="w-24 h-7 text-sm text-right ml-auto"
                               />
                             </td>
                             <td className="px-3 py-2 text-right">
-                              <Input
-                                type="number"
+                              <BlurSaveInput
                                 value={settings?.flat_fee ?? 0}
-                                onChange={(e) =>
-                                  onUpsertGateway({
-                                    gateway_name: name,
-                                    flat_fee: Number(e.target.value),
-                                  })
+                                onSave={(v) =>
+                                  onUpsertGateway({ gateway_name: name, flat_fee: v })
                                 }
-                                className="w-28 h-7 text-sm text-right ml-auto"
                                 step={100}
                                 min={0}
+                                className="w-28 h-7 text-sm text-right ml-auto"
                               />
                             </td>
                             <td className="px-3 py-2 text-center">
@@ -205,8 +240,8 @@ export const GatewayCostsSection: React.FC<GatewayCostsSectionProps> = ({
                 )}
 
                 <p className="text-xs text-gray-400">
-                  Gateways are auto-detected from your recent Shopify orders. Configure the fee
-                  structure for each one.
+                  Los gateways se auto-detectan de tus órdenes recientes de Shopify.
+                  Edita los valores y sal del campo para guardar. ✓ indica que se guardó.
                 </p>
               </div>
             )}

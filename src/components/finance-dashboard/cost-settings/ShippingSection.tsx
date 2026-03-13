@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronUp, Truck } from 'lucide-react';
+import { ChevronDown, ChevronUp, Truck, Check } from 'lucide-react';
 import type { ShippingMode } from '@/hooks/useFinanceSettings';
 
 interface ShippingSectionProps {
@@ -33,6 +33,78 @@ const MODE_OPTIONS: { value: ShippingMode; label: string; description: string }[
   },
 ];
 
+/** Input that saves on blur, not on every keystroke */
+const ShippingCostInput: React.FC<{
+  value: number;
+  onSave: (value: number) => void;
+}> = ({ value, onSave }) => {
+  const [localValue, setLocalValue] = useState(value);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onSave(localValue);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  };
+
+  const formatCOP = (v: number) =>
+    new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(v);
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Costo promedio real por envío (COP)</Label>
+        <div className="relative">
+          <Input
+            type="number"
+            value={localValue}
+            onChange={(e) => setLocalValue(Number(e.target.value))}
+            onBlur={handleBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
+            className="h-9 pr-8"
+            step={100}
+            min={0}
+            placeholder="9421"
+          />
+          {saved && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-600">
+              <Check className="h-4 w-4" />
+              <span className="text-xs">Guardado</span>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-gray-400">
+          Lo que te cobra el carrier (Envia, Servientrega, etc.) en promedio por envío.
+          Edita y sal del campo para guardar.
+        </p>
+      </div>
+
+      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+        <p className="text-sm text-green-800">
+          <strong>Cálculo:</strong> (Costo real × # órdenes) − Shipping cobrado al cliente
+        </p>
+        <p className="text-xs text-green-600 mt-1">
+          Si cobras {formatCOP(12000)} de envío al cliente pero tu costo real es {formatCOP(localValue || 9421)},
+          el costo neto de shipping es {formatCOP((localValue || 9421) - 12000)} por orden
+          {(localValue || 9421) < 12000 && ' (ganancia en shipping)'}
+        </p>
+      </div>
+    </>
+  );
+};
+
 export const ShippingSection: React.FC<ShippingSectionProps> = ({
   mode,
   shippingPercent,
@@ -42,13 +114,6 @@ export const ShippingSection: React.FC<ShippingSectionProps> = ({
   onCostPerOrderChange,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
-
-  const formatCOP = (value: number) =>
-    new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0,
-    }).format(value);
 
   return (
     <Card>
@@ -106,32 +171,10 @@ export const ShippingSection: React.FC<ShippingSectionProps> = ({
 
             {mode === 'per_order_cost' ? (
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Costo promedio real por envío (COP)</Label>
-                  <Input
-                    type="number"
-                    value={shippingCostPerOrder}
-                    onChange={(e) => onCostPerOrderChange(Number(e.target.value))}
-                    className="h-9"
-                    step={100}
-                    min={0}
-                    placeholder="9421"
-                  />
-                  <p className="text-xs text-gray-400">
-                    Lo que te cobra el carrier (Envia, Servientrega, etc.) en promedio por envío
-                  </p>
-                </div>
-
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-sm text-green-800">
-                    <strong>Cálculo:</strong> (Costo real × # órdenes) − Shipping cobrado al cliente
-                  </p>
-                  <p className="text-xs text-green-600 mt-1">
-                    Si cobras {formatCOP(12000)} de envío al cliente pero tu costo real es {formatCOP(shippingCostPerOrder || 9421)},
-                    el costo neto de shipping es {formatCOP((shippingCostPerOrder || 9421) - 12000)} por orden
-                    {(shippingCostPerOrder || 9421) < 12000 && ' (ganancia en shipping)'}
-                  </p>
-                </div>
+                <ShippingCostInput
+                  value={shippingCostPerOrder}
+                  onSave={onCostPerOrderChange}
+                />
               </div>
             ) : (
               <div className="space-y-2">
