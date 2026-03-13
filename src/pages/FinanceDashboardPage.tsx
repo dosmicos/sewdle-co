@@ -20,6 +20,9 @@ import { useFinanceSettings } from '@/hooks/useFinanceSettings';
 import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
 import { useContributionMargin } from '@/hooks/useContributionMargin';
 import { useCustomerHealth } from '@/hooks/useCustomerHealth';
+import { useProductCosts } from '@/hooks/useProductCosts';
+import { useGatewayCosts } from '@/hooks/useGatewayCosts';
+import { useCostOverrides } from '@/hooks/useCostOverrides';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,13 +58,25 @@ const FinanceDashboardPage: React.FC = () => {
   const metaConnection = useMetaAdsConnection();
   const financeSettings = useFinanceSettings();
   const monthlyTargets = useMonthlyTargets(dateRange.current.start);
+  const { products: productCostsList } = useProductCosts();
+  const { gateways: gatewayCostsList } = useGatewayCosts();
+
+  // Compute per-product COGS and per-gateway fees for the selected date range
+  const { overrides: costOverrides } = useCostOverrides(
+    dateRange.current,
+    productCostsList,
+    gatewayCostsList,
+    financeSettings.settings?.cogs_mode || 'percent',
+    financeSettings.settings?.gateway_mode || 'percent',
+  );
 
   const cmData = useContributionMargin(
     storeMetrics,
     metaAds,
     financeSettings.settings,
     monthlyTargets.target,
-    dateRange.current
+    dateRange.current,
+    costOverrides
   );
 
   const customerHealth = useCustomerHealth(
