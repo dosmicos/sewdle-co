@@ -4,15 +4,11 @@ import {
   Home,
   Target,
   Users,
-  Star,
-  Search,
-  Plus,
   ChevronLeft,
   LogOut,
   Settings,
   Sparkles,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -129,27 +125,7 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
               {item.label}
             </button>
           ))}
-          <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">
-            <Star className="h-4 w-4" />
-            Favorites
-          </button>
         </nav>
-      </div>
-
-      <div className="px-4 mb-3">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search"
-              className="w-full h-8 pl-8 pr-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-          <Button size="icon" className="h-8 w-8 bg-blue-600 hover:bg-blue-700 rounded-lg">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
 
       <div className="px-4 flex-1 overflow-y-auto">
