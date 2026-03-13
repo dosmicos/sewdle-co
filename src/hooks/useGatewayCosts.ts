@@ -10,6 +10,7 @@ export interface GatewayCostSetting {
   percent_fee: number;
   flat_fee: number;
   is_active: boolean;
+  applies_to_all: boolean;
   created_at: string;
 }
 

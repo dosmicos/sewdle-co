@@ -111,18 +111,25 @@ export function useCostOverrides(
     // Per-gateway fees
     if (gatewayMode === 'per_gateway' && ordersQuery.data && gatewayCosts.length > 0) {
       const gatewayMap = new Map(gatewayCosts.map(g => [g.gateway_name, g]));
+      // Separate universal fees (applies_to_all, e.g. Shopify Transaction Fee)
+      const universalFees = gatewayCosts.filter(g => g.applies_to_all && g.is_active);
       let total = 0;
 
       for (const order of ordersQuery.data) {
+        // Apply universal fees to ALL orders (e.g. Shopify 1% transaction fee)
+        for (const uf of universalFees) {
+          total += order.total_price * (uf.percent_fee / 100) + uf.flat_fee;
+        }
+
+        // Apply per-gateway fees based on payment_gateway_names
         const raw = order.raw_data;
         if (!raw) continue;
         const names = (raw.payment_gateway_names as string[]) || [];
-        // Use the last (effective) gateway name
         const effectiveGateway = names.length > 0 ? names[names.length - 1] : null;
         if (!effectiveGateway) continue;
 
         const setting = gatewayMap.get(effectiveGateway);
-        if (setting && setting.is_active) {
+        if (setting && setting.is_active && !setting.applies_to_all) {
           total += order.total_price * (setting.percent_fee / 100) + setting.flat_fee;
         }
       }
