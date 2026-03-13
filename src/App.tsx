@@ -47,6 +47,7 @@ import AdPerformancePage from "@/pages/AdPerformancePage";
 import AdIntelligencePage from "@/pages/AdIntelligencePage";
 import UgcPerformancePage from "@/pages/UgcPerformancePage";
 import CostSettingsPage from "@/pages/CostSettingsPage";
+import MarketingCalendarPage from "@/pages/MarketingCalendarPage";
 import MetaAdsCallbackPage from "@/pages/MetaAdsCallbackPage";
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -205,6 +206,13 @@ const FinanceAppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
+      <Route path="/marketing-calendar" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="finances" action="view">
+            <MarketingCalendarPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
       <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="/password-change" element={<PasswordChangePage />} />
@@ -320,6 +328,13 @@ const AppContent = () => {
         <Route path="cost-settings" element={
           <PermissionRoute module="finances" action="view">
             <CostSettingsPage />
+          </PermissionRoute>
+        } />
+
+        {/* Marketing Calendar - accesible desde la app principal */}
+        <Route path="marketing-calendar" element={
+          <PermissionRoute module="finances" action="view">
+            <MarketingCalendarPage />
           </PermissionRoute>
         } />
 

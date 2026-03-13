@@ -23,6 +23,7 @@ import { useCustomerHealth } from '@/hooks/useCustomerHealth';
 import { useProductCosts } from '@/hooks/useProductCosts';
 import { useGatewayCosts } from '@/hooks/useGatewayCosts';
 import { useCostOverrides } from '@/hooks/useCostOverrides';
+import { useFinanceExpenses } from '@/hooks/useFinanceExpenses';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -60,6 +61,7 @@ const FinanceDashboardPage: React.FC = () => {
   const monthlyTargets = useMonthlyTargets(dateRange.current.start);
   const { products: productCostsList } = useProductCosts();
   const { gateways: gatewayCostsList } = useGatewayCosts();
+  const { expenses } = useFinanceExpenses();
 
   // Compute per-product COGS and per-gateway fees for the selected date range
   const { overrides: costOverrides } = useCostOverrides(
@@ -70,13 +72,35 @@ const FinanceDashboardPage: React.FC = () => {
     financeSettings.settings?.gateway_mode || 'percent',
   );
 
+  // Compute monthly OpEx from individual expenses (replaces flat monthly_opex)
+  // Sum all monthly expense amounts to get the monthly total, then let CM hook prorate
+  const monthlyExpenseTotal = React.useMemo(() => {
+    if (expenses.length === 0) return undefined;
+    let monthlyTotal = 0;
+    for (const expense of expenses) {
+      switch (expense.recurrence) {
+        case 'monthly': monthlyTotal += expense.amount; break;
+        case 'weekly': monthlyTotal += expense.amount * (30.44 / 7); break;
+        case 'daily': monthlyTotal += expense.amount * 30.44; break;
+        case 'one_time': break; // One-time expenses not included in monthly OpEx
+      }
+    }
+    return monthlyTotal > 0 ? monthlyTotal : undefined;
+  }, [expenses]);
+
+  // Merge cost overrides: per-product COGS + per-gateway fees + computed expenses
+  const fullOverrides = React.useMemo(() => ({
+    ...costOverrides,
+    ...(monthlyExpenseTotal !== undefined && { customExpenses: monthlyExpenseTotal }),
+  }), [costOverrides, monthlyExpenseTotal]);
+
   const cmData = useContributionMargin(
     storeMetrics,
     metaAds,
     financeSettings.settings,
     monthlyTargets.target,
     dateRange.current,
-    costOverrides
+    fullOverrides
   );
 
   const customerHealth = useCustomerHealth(

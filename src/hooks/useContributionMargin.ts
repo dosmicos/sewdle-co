@@ -151,10 +151,12 @@ export function useContributionMargin(
     const cacCost = adSpend;
     const cacPct = netSales > 0 ? (cacCost / netSales) * 100 : 0;
 
-    // OpEx: prorate from monthly_opex to the number of days in range
+    // OpEx: prorate from monthly total to the number of days in range
+    // Use computed expenses total when available, otherwise fall back to flat monthly_opex
     const daysInPeriod = differenceInCalendarDays(currentRange.end, currentRange.start) + 1;
     const monthDaysTotal = getDaysInMonth(currentRange.start);
-    const opexCost = (s.monthly_opex / monthDaysTotal) * daysInPeriod;
+    const monthlyOpex = costOverrides?.customExpenses ?? s.monthly_opex;
+    const opexCost = (monthlyOpex / monthDaysTotal) * daysInPeriod;
     const opexPct = netSales > 0 ? (opexCost / netSales) * 100 : 0;
 
     // Profit = what remains after CoD, CAC, OpEx
