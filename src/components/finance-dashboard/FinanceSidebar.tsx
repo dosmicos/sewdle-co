@@ -3,9 +3,7 @@ import { cn } from '@/lib/utils';
 import {
   Home,
   Target,
-  Monitor,
   Users,
-  Compass,
   Star,
   Search,
   Plus,
@@ -33,9 +31,6 @@ const workspaceItems: NavItem[] = [
   { label: 'Ad Performance', icon: <Target className="h-4 w-4" />, id: 'ad-performance', path: '/ad-performance' },
   { label: 'Intelligence', icon: <Sparkles className="h-4 w-4" />, id: 'intelligence', path: '/intelligence' },
   { label: 'UGC Performance', icon: <Users className="h-4 w-4" />, id: 'ugc-performance', path: '/ugc-performance' },
-  { label: 'Website Conversion', icon: <Monitor className="h-4 w-4" />, id: 'web', path: '' },
-  { label: 'Customer Retention', icon: <Compass className="h-4 w-4" />, id: 'retention', path: '' },
-  { label: 'Discovery', icon: <Star className="h-4 w-4" />, id: 'discovery', path: '' },
 ];
 
 interface FinanceSidebarProps {
