@@ -1,29 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Pin, DollarSign, BarChart3, ShoppingBag, Globe, CreditCard, RefreshCw, Loader2, Settings } from 'lucide-react';
+import { RefreshCw, Loader2, Settings, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
-import MetricCard from '@/components/finance-dashboard/MetricCard';
-import MetricSection from '@/components/finance-dashboard/MetricSection';
 import AttributionTable, { type AttributionRow } from '@/components/finance-dashboard/AttributionTable';
 import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnectionModal';
+import FinanceSettingsModal from '@/components/finance-dashboard/FinanceSettingsModal';
+import ContributionMarginCard from '@/components/finance-dashboard/ContributionMarginCard';
+import ContributionMarginBreakdown from '@/components/finance-dashboard/ContributionMarginBreakdown';
+import FourQuarterChart from '@/components/finance-dashboard/FourQuarterChart';
+import BusinessMetricsRow from '@/components/finance-dashboard/BusinessMetricsRow';
+import CustomerHealthSection from '@/components/finance-dashboard/CustomerHealthSection';
+import ForecastChart from '@/components/finance-dashboard/ForecastChart';
 import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
 import { useStoreMetrics } from '@/hooks/useStoreMetrics';
 import { useAdMetrics } from '@/hooks/useAdMetrics';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
+import { useFinanceSettings } from '@/hooks/useFinanceSettings';
+import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
+import { useContributionMargin } from '@/hooks/useContributionMargin';
+import { useCustomerHealth } from '@/hooks/useCustomerHealth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
 
 const formatCOP = (amount: number) => {
   return `COP ${new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)}`;
+  }).format(Math.round(amount))}`;
 };
-
-const formatNumber = (n: number) => new Intl.NumberFormat('es-CO').format(n);
-
-const formatPercent = (n: number) => `${n.toFixed(2)}%`;
 
 const MetaIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -40,58 +47,43 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const AnalyticsIcon = () => (
-  <BarChart3 className="h-4 w-4 text-blue-500" />
-);
-
-const StoreIcon = () => (
-  <ShoppingBag className="h-4 w-4 text-green-500" />
-);
-
-const ExpensesIcon = () => (
-  <CreditCard className="h-4 w-4 text-purple-500" />
-);
-
 const FinanceDashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const dateRange = useFinanceDateRange();
-  const { current, changes, isLoading } = useStoreMetrics(dateRange.current, dateRange.previous);
+  const storeMetrics = useStoreMetrics(dateRange.current, dateRange.previous);
   const metaAds = useAdMetrics(dateRange.current, dateRange.previous, 'meta');
   const metaConnection = useMetaAdsConnection();
+  const financeSettings = useFinanceSettings();
+  const monthlyTargets = useMonthlyTargets(dateRange.current.start);
+
+  const cmData = useContributionMargin(
+    storeMetrics,
+    metaAds,
+    financeSettings.settings,
+    monthlyTargets.target,
+    dateRange.current
+  );
+
+  const customerHealth = useCustomerHealth(
+    storeMetrics.current.newCustomerRevenue,
+    storeMetrics.current.returningCustomerRevenue,
+    storeMetrics.current.newCustomerOrders,
+    storeMetrics.current.orders,
+    metaAds.current.spend
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [metaModalOpen, setMetaModalOpen] = useState(false);
 
-  // Auto-open settings modal if returning from OAuth callback
+  // Auto-open meta modal if returning from OAuth callback
   useEffect(() => {
     const oauthResult = sessionStorage.getItem('meta_oauth_result');
     if (oauthResult) {
-      setSettingsOpen(true);
+      setMetaModalOpen(true);
     }
   }, []);
 
-  const dailySales = current.dailyData.map(d => d.totalSales);
-  const dailyOrders = current.dailyData.map(d => d.orders);
-  const dailyMetaSpend = metaAds.current.dailyData.map(d => d.spend);
-  const dailyMetaRoas = metaAds.current.dailyData.map(d => d.roas);
-
-  // Total ad spend (Meta + Google when available)
-  const totalAdSpend = metaAds.current.spend;
-  const totalAdRoas = totalAdSpend > 0 ? metaAds.current.conversionValue / totalAdSpend : 0;
-
-  // MER = Total Revenue / Total Ad Spend
-  const mer = totalAdSpend > 0 ? current.totalSales / totalAdSpend : 0;
-
-  // Net Profit (simplified: Revenue - Ad Spend)
-  const netProfit = current.totalSales - totalAdSpend;
-  const prevNetProfit = (changes.totalSales !== undefined ? current.totalSales / (1 + changes.totalSales / 100) : 0) - metaAds.previous.spend;
-  const netProfitChange = prevNetProfit !== 0 ? ((netProfit - prevNetProfit) / Math.abs(prevNetProfit)) * 100 : (netProfit > 0 ? 100 : 0);
-
-  // NCPA = Ad Spend / New Customer Orders
-  const ncpa = current.newCustomerOrders > 0 ? totalAdSpend / current.newCustomerOrders : 0;
-
-  // NC-ROAS = New Customer Revenue / Ad Spend
-  const ncRoas = totalAdSpend > 0 ? current.newCustomerRevenue / totalAdSpend : 0;
-
-  // Attribution rows with real Meta data
+  // Attribution rows
   const attributionRows: AttributionRow[] = [
     {
       source: 'Meta',
@@ -121,7 +113,7 @@ const FinanceDashboardPage: React.FC = () => {
     await metaConnection.syncMetrics(startStr, endStr);
   };
 
-  if (isLoading) {
+  if (storeMetrics.isLoading) {
     return (
       <FinanceDashboardLayout onOpenSettings={() => setSettingsOpen(true)}>
         <div className="min-h-screen flex items-center justify-center">
@@ -134,12 +126,10 @@ const FinanceDashboardPage: React.FC = () => {
   return (
     <FinanceDashboardLayout onOpenSettings={() => setSettingsOpen(true)}>
       <div className="p-6 max-w-[1400px] mx-auto space-y-8">
-        {/* Header */}
+        {/* ===================== HEADER ===================== */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <span className="text-lg">🏠</span> Summary
-            </h1>
+            <h1 className="text-xl font-bold text-gray-900">Prophit Dashboard</h1>
             <FinanceDatePicker dateRange={dateRange} />
           </div>
           <div className="flex items-center gap-2">
@@ -161,543 +151,128 @@ const FinanceDashboardPage: React.FC = () => {
               <Button
                 size="sm"
                 className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => setMetaModalOpen(true)}
               >
                 <MetaIcon />
-                <span className="ml-1.5">Conectar Meta Ads</span>
+                <span className="ml-1.5">Conectar Meta</span>
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings className="h-3.5 w-3.5 mr-1.5" />
+              Settings
+            </Button>
           </div>
         </div>
 
-        {/* Pins Section */}
-        <MetricSection title="Pins" icon={<Pin className="h-4 w-4" />}>
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Total Sales"
-            value={formatCOP(current.totalSales)}
-            changePercent={changes.totalSales}
-            sparklineData={dailySales}
-            isPinned
+        {/* ========== SECTION 1: THE SCOREBOARD ========== */}
+        <section className="space-y-4">
+          <ContributionMarginCard data={cmData} formatCOP={formatCOP} />
+          <ContributionMarginBreakdown
+            data={cmData}
+            targetPercents={{
+              cogs: financeSettings.settings?.cogs_percent ?? 20,
+              shipping: financeSettings.settings?.shipping_cost_percent ?? 10,
+              gateway: financeSettings.settings?.payment_gateway_percent ?? 3.5,
+              handling: financeSettings.settings?.handling_cost_percent ?? 2,
+              adSpend: 30,
+            }}
+            formatCOP={formatCOP}
           />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Ads"
-            value={formatCOP(totalAdSpend)}
-            changePercent={metaAds.changes.spend}
-            sparklineData={dailyMetaSpend}
+          <ForecastChart
+            cmData={cmData}
+            target={monthlyTargets.target}
+            formatCOP={formatCOP}
           />
-          <MetricCard
-            label="ROAS"
-            value={totalAdRoas.toFixed(2)}
-            changePercent={metaAds.changes.roas}
-            sparklineData={dailyMetaRoas}
-          />
-        </MetricSection>
+        </section>
 
-        {/* Custom Metrics */}
-        <MetricSection title="Custom Metrics" icon={<BarChart3 className="h-4 w-4" />}>
-          <MetricCard
-            label="Net Profit"
-            value={formatCOP(netProfit)}
-            changePercent={netProfitChange}
-            sparklineData={dailySales}
-          />
-          <MetricCard
-            label="ROAS"
-            value={totalAdRoas.toFixed(2)}
-            changePercent={metaAds.changes.roas}
-            sparklineData={dailyMetaRoas}
-            isPinned
-          />
-          <MetricCard
-            label="MER"
-            value={mer.toFixed(2)}
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            label="Net Margin"
-            value={current.totalSales > 0 ? formatPercent((netProfit / current.totalSales) * 100) : '0%'}
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Ads"
-            value={formatCOP(totalAdSpend)}
-            changePercent={metaAds.changes.spend}
-            sparklineData={dailyMetaSpend}
-            isPinned
-          />
-          <MetricCard
-            label="NCPA"
-            value={formatCOP(ncpa)}
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            label="NC-ROAS"
-            value={ncRoas.toFixed(2)}
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            label="Contraentrega"
-            value="0%"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Taxes"
-            value={formatCOP(current.taxes)}
-            changePercent={changes.taxes}
-            sparklineData={[]}
-          />
-          <MetricCard
-            label="BA-ROAS"
-            value={totalAdRoas.toFixed(2)}
-            changePercent={metaAds.changes.roas}
-            sparklineData={[]}
-          />
-          <MetricCard
-            label="Cash Turnover"
-            value={formatCOP(current.totalSales - current.taxes)}
-            changePercent={changes.totalSales}
-            sparklineData={[]}
-          />
-          <MetricCard
-            label="POAS"
-            value={totalAdSpend > 0 ? (netProfit / totalAdSpend).toFixed(2) : '0.00'}
-            changePercent={0}
-            sparklineData={[]}
-          />
-        </MetricSection>
+        {/* ========== SECTION 2: FOUR QUARTER VIEW ========== */}
+        <section>
+          <FourQuarterChart data={cmData} formatCOP={formatCOP} />
+        </section>
 
-        {/* Attribution */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">📊</span>
-            <h2 className="text-lg font-semibold text-gray-900">Attribution</h2>
-            {metaConnection.isConnected && (
-              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
-                Meta conectado
-              </Badge>
-            )}
+        {/* ========== SECTION 3: BUSINESS METRICS ========== */}
+        <section>
+          <BusinessMetricsRow
+            cmData={cmData}
+            storeMetrics={storeMetrics}
+            adMetrics={metaAds}
+            formatCOP={formatCOP}
+          />
+        </section>
+
+        {/* ========== SECTION 4: CUSTOMER HEALTH ========== */}
+        <section>
+          <CustomerHealthSection
+            data={customerHealth.data}
+            isLoading={customerHealth.isLoading}
+            formatCOP={formatCOP}
+          />
+        </section>
+
+        {/* ========== SECTION 5: AD PERFORMANCE ========== */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                Attribution
+              </h3>
+              {metaConnection.isConnected && (
+                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
+                  Meta conectado
+                </Badge>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-blue-600 hover:text-blue-700"
+              onClick={() => navigate('/ad-performance')}
+            >
+              Ver detalle
+              <ExternalLink className="h-3 w-3 ml-1" />
+            </Button>
           </div>
           <AttributionTable rows={attributionRows} formatCurrency={formatCOP} />
           {!metaConnection.isConnected && (
-            <p className="text-sm text-gray-400 italic">
-              Conecta Meta Ads y Google Ads en configuración para ver datos reales.
-            </p>
-          )}
-        </div>
-
-        {/* Web Analytics */}
-        <MetricSection title="Web Analytics" icon={<AnalyticsIcon />}>
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Conversion Rate"
-            value="0%"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Users"
-            value="0"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Sessions"
-            value="0"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Pages per Session"
-            value="0"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Session Duration"
-            value="00:00:00"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Bounce Rate"
-            value="0%"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="New Users"
-            value="0"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="New Users %"
-            value="0%"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Sessions with Add to Carts"
-            value="0"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Add to Cart %"
-            value="0%"
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Cost per Add to Cart"
-            value={formatCOP(0)}
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<AnalyticsIcon />}
-            label="Cost per Session"
-            value={formatCOP(0)}
-            changePercent={0}
-            sparklineData={[]}
-          />
-        </MetricSection>
-
-        {/* Store */}
-        <MetricSection title="Store" icon={<StoreIcon />}>
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Order Revenue"
-            value={formatCOP(current.totalSales)}
-            changePercent={changes.totalSales}
-            sparklineData={dailySales}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Orders > $0"
-            value={formatNumber(current.orders)}
-            changePercent={changes.orders}
-            sparklineData={dailyOrders}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="New Customer Orders"
-            value={formatNumber(current.newCustomerOrders)}
-            changePercent={changes.newCustomerOrders}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Units Sold"
-            value={formatNumber(current.unitsSold)}
-            changePercent={changes.unitsSold}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="New Customer Revenue"
-            value={formatCOP(current.newCustomerRevenue)}
-            changePercent={changes.newCustomerRevenue}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Returning Customer Revenue"
-            value={formatCOP(current.returningCustomerRevenue)}
-            changePercent={changes.returningCustomerRevenue}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Discounts"
-            value={formatCOP(current.discounts)}
-            changePercent={changes.discounts}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Total Sales"
-            value={formatCOP(current.totalSales)}
-            changePercent={changes.totalSales}
-            sparklineData={dailySales}
-            isPinned
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Sale Taxes"
-            value={formatCOP(current.saleTaxes)}
-            changePercent={changes.saleTaxes}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="AOV"
-            value={formatCOP(current.aov)}
-            changePercent={changes.aov}
-            sparklineData={[]}
-          />
-        </MetricSection>
-
-        {/* Meta Ads */}
-        <MetricSection title="Meta Ads" icon={<MetaIcon />}>
-          {!metaConnection.isConnected && (
-            <div className="col-span-full">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+            <Card className="border-dashed border-blue-200 bg-blue-50/50">
+              <CardContent className="p-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-blue-900">Meta Ads no conectado</p>
-                  <p className="text-xs text-blue-700 mt-0.5">Conecta tu cuenta para ver métricas reales</p>
+                  <p className="text-xs text-blue-700 mt-0.5">Conecta tu cuenta para ver métricas reales de ads</p>
                 </div>
                 <Button
                   size="sm"
                   className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => setMetaModalOpen(true)}
                 >
                   Conectar
                 </Button>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Facebook Ads"
-            value={formatCOP(metaAds.current.spend)}
-            changePercent={metaAds.changes.spend}
-            sparklineData={dailyMetaSpend}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="ROAS"
-            value={metaAds.current.roas.toFixed(2)}
-            changePercent={metaAds.changes.roas}
-            sparklineData={dailyMetaRoas}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="CPC"
-            value={formatCOP(metaAds.current.cpc)}
-            changePercent={metaAds.changes.cpc}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="CPM"
-            value={formatCOP(metaAds.current.cpm)}
-            changePercent={metaAds.changes.cpm}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Meta Purchases"
-            value={formatNumber(metaAds.current.purchases)}
-            changePercent={metaAds.changes.purchases}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Web Purchases"
-            value={formatNumber(metaAds.current.purchases)}
-            changePercent={metaAds.changes.purchases}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Web Conversion Value"
-            value={formatCOP(metaAds.current.conversionValue)}
-            changePercent={metaAds.changes.conversionValue}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="CTR"
-            value={formatPercent(metaAds.current.ctr)}
-            changePercent={metaAds.changes.ctr}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="CPOC"
-            value={formatCOP(metaAds.current.cpa)}
-            changePercent={metaAds.changes.cpa}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Revenue Per Link Click"
-            value={metaAds.current.clicks > 0 ? formatCOP(metaAds.current.conversionValue / metaAds.current.clicks) : formatCOP(0)}
-            changePercent={0}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="Purchases"
-            value={formatNumber(metaAds.current.purchases)}
-            changePercent={metaAds.changes.purchases}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<MetaIcon />}
-            label="CPA"
-            value={formatCOP(metaAds.current.cpa)}
-            changePercent={metaAds.changes.cpa}
-            sparklineData={[]}
-          />
-        </MetricSection>
-
-        {/* Google Ads */}
-        <MetricSection title="Google Ads" icon={<GoogleIcon />}>
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="Google Ads"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="ROAS"
-            value="0.00"
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="CPC"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="Conversions"
-            value="0"
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="CTR"
-            value="0%"
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="CPA"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="CPM"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="Clicks"
-            value="0"
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="Impressions"
-            value="0"
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="All Conversions Value"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="All ROAS"
-            value="0.00"
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<GoogleIcon />}
-            label="All Conversions"
-            value="0"
-            sparklineData={[]}
-          />
-        </MetricSection>
-
-        {/* Expenses */}
-        <MetricSection title="Expenses" icon={<ExpensesIcon />}>
-          <MetricCard
-            icon={<ExpensesIcon />}
-            label="Payment Gateways"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="COGS"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Handling Fees"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Shipping"
-            value={formatCOP(current.totalShipping)}
-            changePercent={changes.totalShipping}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<ExpensesIcon />}
-            label="Custom Expenses"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<ExpensesIcon />}
-            label="Custom Expense Ad Spend"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<ExpensesIcon />}
-            label="Custom Expenses excl. Ad Spend"
-            value={formatCOP(0)}
-            sparklineData={[]}
-          />
-          <MetricCard
-            icon={<StoreIcon />}
-            label="Shipping Price"
-            value={formatCOP(current.totalShipping)}
-            changePercent={changes.totalShipping}
-            sparklineData={[]}
-          />
-        </MetricSection>
+        </section>
       </div>
 
-      {/* Meta Ads Connection Modal */}
-      <MetaAdsConnectionModal
+      {/* Modals */}
+      <FinanceSettingsModal
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        onSuccess={() => setSettingsOpen(false)}
+        settings={financeSettings.settings}
+        target={monthlyTargets.target}
+        onSaveSettings={financeSettings.updateSettings}
+        onSaveTarget={monthlyTargets.upsertTarget}
+        isUpdating={financeSettings.isUpdating}
+        isUpserting={monthlyTargets.isUpserting}
+      />
+      <MetaAdsConnectionModal
+        open={metaModalOpen}
+        onOpenChange={setMetaModalOpen}
+        onSuccess={() => setMetaModalOpen(false)}
       />
     </FinanceDashboardLayout>
   );
