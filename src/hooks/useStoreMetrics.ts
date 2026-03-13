@@ -52,17 +52,19 @@ async function fetchMetrics(
   orgId: string,
   range: DateRange
 ): Promise<StoreMetrics> {
-  const startStr = format(range.start, 'yyyy-MM-dd');
-  const endStr = format(range.end, "yyyy-MM-dd'T'23:59:59");
+  // Use ISO strings to preserve timezone (fixes UTC-5 offset issue)
+  const startStr = range.start.toISOString();
+  const endStr = range.end.toISOString();
 
-  // Fetch orders in range
+  // Fetch orders in range — exclude voided, cancelled, and pending (unpaid) orders
   const { data: orders, error } = await supabase
     .from('shopify_orders')
-    .select('shopify_order_id, total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status')
+    .select('shopify_order_id, total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
     .eq('organization_id', orgId)
     .gte('created_at_shopify', startStr)
     .lte('created_at_shopify', endStr)
-    .not('financial_status', 'eq', 'voided');
+    .not('financial_status', 'eq', 'voided')
+    .is('cancelled_at', null);
 
   if (error) throw error;
   if (!orders || orders.length === 0) return emptyMetrics;
@@ -86,6 +88,7 @@ async function fetchMetrics(
     }
   }
 
+  // Exclude fully refunded orders from revenue (keep pending/COD — Shopify counts them)
   const validOrders = orders.filter(o => o.financial_status !== 'refunded');
   const refundedOrders = orders.filter(o => o.financial_status === 'refunded');
 

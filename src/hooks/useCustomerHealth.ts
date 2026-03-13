@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { format, subMonths, startOfMonth, endOfMonth, subDays } from 'date-fns';
+import { subMonths, startOfMonth, endOfMonth, subDays, format } from 'date-fns';
 
 export interface MonthlyLayer {
   month: string;
@@ -42,10 +42,10 @@ interface ActiveFileQueryResult {
 
 async function fetchActiveFile(orgId: string): Promise<ActiveFileQueryResult> {
   const now = new Date();
-  const sixMonthsAgo = format(subMonths(now, 6), 'yyyy-MM-dd');
+  const sixMonthsAgo = subMonths(now, 6).toISOString();
   const thirtyDaysAgo = subDays(now, 30);
-  const sixMonthsBeforeThat = format(subMonths(thirtyDaysAgo, 6), 'yyyy-MM-dd');
-  const thirtyDaysAgoStr = format(thirtyDaysAgo, 'yyyy-MM-dd');
+  const sixMonthsBeforeThat = subMonths(thirtyDaysAgo, 6).toISOString();
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
 
   // Current active file: distinct customers in last 6 months
   const { data: currentData, error: currentError } = await supabase
@@ -53,6 +53,7 @@ async function fetchActiveFile(orgId: string): Promise<ActiveFileQueryResult> {
     .select('customer_email')
     .eq('organization_id', orgId)
     .gte('created_at_shopify', sixMonthsAgo)
+    .is('cancelled_at', null)
     .not('financial_status', 'eq', 'voided')
     .not('financial_status', 'eq', 'refunded');
 
@@ -69,6 +70,7 @@ async function fetchActiveFile(orgId: string): Promise<ActiveFileQueryResult> {
     .eq('organization_id', orgId)
     .gte('created_at_shopify', sixMonthsBeforeThat)
     .lte('created_at_shopify', thirtyDaysAgoStr)
+    .is('cancelled_at', null)
     .not('financial_status', 'eq', 'voided')
     .not('financial_status', 'eq', 'refunded');
 
@@ -87,8 +89,8 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
 
   for (let i = 5; i >= 0; i--) {
     const monthDate = subMonths(now, i);
-    const monthStart = format(startOfMonth(monthDate), 'yyyy-MM-dd');
-    const monthEnd = format(endOfMonth(monthDate), "yyyy-MM-dd'T'23:59:59");
+    const monthStart = startOfMonth(monthDate).toISOString();
+    const monthEnd = endOfMonth(monthDate).toISOString();
     const monthLabel = format(monthDate, 'yyyy-MM');
 
     const { data, error } = await supabase
@@ -97,6 +99,7 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
       .eq('organization_id', orgId)
       .gte('created_at_shopify', monthStart)
       .lte('created_at_shopify', monthEnd)
+      .is('cancelled_at', null)
       .not('financial_status', 'eq', 'voided')
       .not('financial_status', 'eq', 'refunded');
 
