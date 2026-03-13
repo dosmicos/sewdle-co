@@ -150,7 +150,9 @@ serve(async (req) => {
         });
 
       if (upsertError) {
-        console.error(`❌ Upsert error batch ${i}:`, upsertError);
+        console.error(`❌ Upsert error batch ${i}:`, JSON.stringify(upsertError));
+        // Don't silently fail — throw so the user knows
+        throw new Error(`Upsert failed at batch ${i}: ${upsertError.message}`);
       } else {
         upserted += batch.length;
       }

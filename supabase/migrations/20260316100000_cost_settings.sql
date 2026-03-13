@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS product_costs (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_product_costs_org_product_variant
-  ON product_costs(organization_id, product_id, COALESCE(variant_id, 0));
+ALTER TABLE product_costs ADD CONSTRAINT product_costs_org_product_variant_unique
+  UNIQUE(organization_id, product_id, variant_id);
 
 CREATE INDEX IF NOT EXISTS idx_product_costs_org ON product_costs(organization_id);
 
