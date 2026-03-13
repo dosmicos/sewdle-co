@@ -85,7 +85,6 @@ export const useMessagingMessages = (conversationId: string | null) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-messages', conversationId], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['messaging-conversations'], exact: false, refetchType: 'all' });
-      toast.success('Mensaje enviado');
     },
     onError: (error: any) => {
       console.error('Error sending message:', error);
@@ -98,6 +97,7 @@ export const useMessagingMessages = (conversationId: string | null) => {
     isLoading,
     error,
     sendMessage: sendMessage.mutate,
+    sendMessageAsync: sendMessage.mutateAsync,
     isSending: sendMessage.isPending,
   };
 };
