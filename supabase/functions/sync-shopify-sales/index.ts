@@ -342,7 +342,7 @@ async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organi
     subtotal_price: parseFloat(order.subtotal_price || '0'),
     total_tax: parseFloat(order.total_tax || '0'),
     total_discounts: parseFloat(order.total_discounts || '0'),
-    total_shipping: parseFloat(order.total_shipping || '0'),
+    total_shipping: parseFloat(order.total_shipping_price_set?.shop_money?.amount || order.total_shipping || '0'),
     total_line_items_price: parseFloat(order.total_line_items_price || '0'),
     
     // Información adicional
