@@ -60,7 +60,10 @@ ALTER TABLE finance_settings
   ADD COLUMN IF NOT EXISTS cogs_mode TEXT DEFAULT 'per_product' CHECK (cogs_mode IN ('percent', 'per_product')),
   ADD COLUMN IF NOT EXISTS shipping_mode TEXT DEFAULT 'per_order_cost' CHECK (shipping_mode IN ('percent', 'shopify_charges', 'per_order_cost')),
   ADD COLUMN IF NOT EXISTS gateway_mode TEXT DEFAULT 'percent' CHECK (gateway_mode IN ('percent', 'per_gateway')),
-  ADD COLUMN IF NOT EXISTS shipping_cost_per_order NUMERIC(10,2) DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS shipping_cost_per_order NUMERIC(10,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS handling_mode TEXT DEFAULT 'per_order' CHECK (handling_mode IN ('percent', 'per_order', 'per_item')),
+  ADD COLUMN IF NOT EXISTS handling_fee_per_order NUMERIC(10,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS handling_fee_per_item NUMERIC(10,2) DEFAULT 0;
 
 -- 4. Extend finance_expenses for recurring expense support
 ALTER TABLE finance_expenses

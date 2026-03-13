@@ -5,6 +5,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 export type CostMode = 'percent' | 'per_product';
 export type ShippingMode = 'percent' | 'shopify_charges' | 'per_order_cost';
 export type GatewayMode = 'percent' | 'per_gateway';
+export type HandlingMode = 'percent' | 'per_order' | 'per_item';
 
 export interface FinanceSettings {
   id: string;
@@ -19,7 +20,10 @@ export interface FinanceSettings {
   cogs_mode: CostMode;
   shipping_mode: ShippingMode;
   gateway_mode: GatewayMode;
+  handling_mode: HandlingMode;
   shipping_cost_per_order: number;
+  handling_fee_per_order: number;
+  handling_fee_per_item: number;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +39,10 @@ const DEFAULT_SETTINGS: Omit<FinanceSettings, 'id' | 'organization_id' | 'create
   cogs_mode: 'per_product',
   shipping_mode: 'per_order_cost',
   gateway_mode: 'percent',
+  handling_mode: 'per_order',
   shipping_cost_per_order: 0,
+  handling_fee_per_order: 0,
+  handling_fee_per_item: 0,
 };
 
 export interface UseFinanceSettingsResult {

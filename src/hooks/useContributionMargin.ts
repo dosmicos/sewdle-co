@@ -103,6 +103,9 @@ export function useContributionMargin(
       shipping_mode: 'per_order_cost' as const,
       shipping_cost_per_order: 0,
       gateway_mode: 'percent' as const,
+      handling_mode: 'per_order' as const,
+      handling_fee_per_order: 0,
+      handling_fee_per_item: 0,
     };
 
     // Revenue
@@ -126,10 +129,12 @@ export function useContributionMargin(
       ? costOverrides.paymentGatewayFees
       : netSales * (s.payment_gateway_percent / 100);
 
-    // Handling is included in per-product COGS (handling_fee per variant), so 0 when per_product
-    const handlingCost = (s.cogs_mode === 'per_product' && costOverrides?.productCost !== undefined)
-      ? 0
-      : netSales * (s.handling_cost_percent / 100);
+    // Handling: per_order = fee × orders, per_item = fee × units sold, percent = % of net sales
+    const handlingCost = s.handling_mode === 'per_order'
+      ? (s.handling_fee_per_order ?? 0) * storeMetrics.current.orders
+      : s.handling_mode === 'per_item'
+        ? (s.handling_fee_per_item ?? 0) * storeMetrics.current.unitsSold
+        : netSales * (s.handling_cost_percent / 100);
 
     const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost;
 

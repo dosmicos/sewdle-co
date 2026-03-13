@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import { CostOfGoodsSection } from '@/components/finance-dashboard/cost-settings/CostOfGoodsSection';
 import { ShippingSection } from '@/components/finance-dashboard/cost-settings/ShippingSection';
+import { HandlingSection } from '@/components/finance-dashboard/cost-settings/HandlingSection';
 import { GatewayCostsSection } from '@/components/finance-dashboard/cost-settings/GatewayCostsSection';
 import { CustomExpensesSection } from '@/components/finance-dashboard/cost-settings/CustomExpensesSection';
 import { useFinanceSettings } from '@/hooks/useFinanceSettings';
@@ -9,7 +10,7 @@ import { useProductCosts } from '@/hooks/useProductCosts';
 import { useGatewayCosts } from '@/hooks/useGatewayCosts';
 import { useFinanceExpenses } from '@/hooks/useFinanceExpenses';
 import { toast } from 'sonner';
-import type { CostMode, ShippingMode, GatewayMode } from '@/hooks/useFinanceSettings';
+import type { CostMode, ShippingMode, GatewayMode, HandlingMode } from '@/hooks/useFinanceSettings';
 
 const CostSettingsPage: React.FC = () => {
   const { settings, updateSettings } = useFinanceSettings();
@@ -59,8 +60,8 @@ const CostSettingsPage: React.FC = () => {
   }, [productsLoading, products.length, settings?.cogs_mode]);
 
   const handleModeChange = async (
-    key: 'cogs_mode' | 'shipping_mode' | 'gateway_mode',
-    value: CostMode | ShippingMode | GatewayMode
+    key: 'cogs_mode' | 'shipping_mode' | 'gateway_mode' | 'handling_mode',
+    value: CostMode | ShippingMode | GatewayMode | HandlingMode
   ) => {
     try {
       await updateSettings({ [key]: value });
@@ -173,6 +174,18 @@ const CostSettingsPage: React.FC = () => {
             onModeChange={(mode) => handleModeChange('shipping_mode', mode)}
             onPercentChange={(v) => handlePercentChange('shipping_cost_percent', v)}
             onCostPerOrderChange={(v) => handlePercentChange('shipping_cost_per_order', v)}
+          />
+
+          {/* Handling Fee Section */}
+          <HandlingSection
+            mode={settings?.handling_mode || 'per_order'}
+            handlingPercent={settings?.handling_cost_percent || 2}
+            handlingFeePerOrder={settings?.handling_fee_per_order || 0}
+            handlingFeePerItem={settings?.handling_fee_per_item || 0}
+            onModeChange={(mode) => handleModeChange('handling_mode', mode)}
+            onPercentChange={(v) => handlePercentChange('handling_cost_percent', v)}
+            onFeePerOrderChange={(v) => handlePercentChange('handling_fee_per_order', v)}
+            onFeePerItemChange={(v) => handlePercentChange('handling_fee_per_item', v)}
           />
 
           {/* Gateway Costs Section */}
