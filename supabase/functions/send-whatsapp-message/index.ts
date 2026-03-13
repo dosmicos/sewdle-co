@@ -482,22 +482,37 @@ serve(async (req) => {
     // Handle media upload if present
     if (media_base64 && media_type) {
       console.log('Processing media upload:', { media_type, media_mime_type, media_filename });
-      
+
+      // Calculate raw file size from base64
+      const rawFileSizeBytes = Math.ceil((media_base64.length * 3) / 4);
+      const rawFileSizeMB = (rawFileSizeBytes / (1024 * 1024)).toFixed(2);
+      console.log(`📏 File size: ${rawFileSizeMB}MB (${rawFileSizeBytes} bytes)`);
+
+      // WhatsApp image limit is 5MB. If image exceeds this, auto-switch to document
+      // to preserve full quality and avoid rejection.
+      let effectiveMediaType = media_type;
+      const WA_IMAGE_LIMIT = 5 * 1024 * 1024; // 5MB
+
+      if (media_type === 'image' && rawFileSizeBytes > WA_IMAGE_LIMIT) {
+        console.log(`⚡ Image size ${rawFileSizeMB}MB exceeds WhatsApp 5MB image limit. Sending as document for full quality.`);
+        effectiveMediaType = 'document';
+      }
+
       // First save to Supabase Storage for persistent URL (so UI can display it)
       try {
         const binaryData = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
         const ext = getExtensionFromMime(media_mime_type || 'image/jpeg');
         const storagePath = `outbound/${conversationId || 'unknown'}/${Date.now()}.${ext}`;
-        
+
         console.log('Saving media to Supabase Storage:', storagePath);
-        
+
         const { error: uploadError } = await supabase.storage
           .from('messaging-media')
-          .upload(storagePath, binaryData, { 
-            contentType: media_mime_type || 'image/jpeg', 
-            upsert: true 
+          .upload(storagePath, binaryData, {
+            contentType: media_mime_type || 'image/jpeg',
+            upsert: true
           });
-        
+
         if (!uploadError) {
           const { data: urlData } = supabase.storage.from('messaging-media').getPublicUrl(storagePath);
           savedMediaUrl = urlData?.publicUrl || null;
@@ -509,12 +524,12 @@ serve(async (req) => {
         console.error('Exception saving media to storage:', storageError);
         // Continue anyway - WhatsApp send is more important than storage
       }
-      
+
       // Then upload media to WhatsApp
       const mediaUploadResponse = await uploadMediaToWhatsApp(
-        phoneNumberId, 
-        whatsappToken, 
-        media_base64, 
+        phoneNumberId,
+        whatsappToken,
+        media_base64,
         media_mime_type
       );
 
@@ -529,8 +544,9 @@ serve(async (req) => {
       console.log('Media uploaded to WhatsApp, ID:', mediaId);
 
       // Send message with media (incluyendo context si es respuesta)
-      const messagePayload = buildMediaMessagePayload(cleanPhone, media_type, mediaId, message, replyToExternalId);
-      messageTypeForDb = media_type;
+      // Use effectiveMediaType which may have been switched to 'document' for large images
+      const messagePayload = buildMediaMessagePayload(cleanPhone, effectiveMediaType, mediaId, message, replyToExternalId, media_filename);
+      messageTypeForDb = media_type; // Keep original type for DB (still 'image' for UI display)
 
       console.log('Sending media message:', JSON.stringify(messagePayload));
 
@@ -721,11 +737,12 @@ async function uploadMediaToWhatsApp(
 
 // Helper function to build media message payload
 function buildMediaMessagePayload(
-  to: string, 
-  mediaType: string, 
-  mediaId: string, 
+  to: string,
+  mediaType: string,
+  mediaId: string,
   caption?: string,
-  replyToExternalId?: string | null  // WAMID del mensaje al que se responde
+  replyToExternalId?: string | null,  // WAMID del mensaje al que se responde
+  filename?: string | null  // Filename for document type
 ): Record<string, any> {
   const payload: Record<string, any> = {
     messaging_product: 'whatsapp',
@@ -748,6 +765,13 @@ function buildMediaMessagePayload(
   // Only image and document support captions
   if (caption && (mediaType === 'image' || mediaType === 'document')) {
     mediaObject.caption = caption;
+  }
+
+  // Documents require a filename for proper display
+  if (mediaType === 'document' && filename) {
+    mediaObject.filename = filename;
+  } else if (mediaType === 'document' && !filename) {
+    mediaObject.filename = `imagen_${Date.now()}.jpg`;
   }
 
   payload[mediaType] = mediaObject;

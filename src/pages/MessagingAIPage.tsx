@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MessageSquareMore, Loader2, Plus, Mail, Users, Menu, ArrowLeft } from 'lucide-react';
@@ -101,7 +102,7 @@ const MessagingAIPage = () => {
     moveToFolder,
   } = useMessagingFolders();
 
-  const { messages, isLoading: isLoadingMessages, sendMessage, isSending } = useMessagingMessages(selectedConversation);
+  const { messages, isLoading: isLoadingMessages, sendMessage, sendMessageAsync, isSending } = useMessagingMessages(selectedConversation);
 
   // Transform DB conversations to UI format
   const transformedConversations: Conversation[] = useMemo(() => {
@@ -294,8 +295,48 @@ const MessagingAIPage = () => {
     setSelectedConversation(null);
   };
 
-  const handleSendMessage = (message: string, mediaFile?: File, mediaType?: string, replyToMessageId?: string) => {
-    sendMessage({ message, mediaFile, mediaType, replyToMessageId });
+  const handleSendMessage = async (message: string, mediaFiles?: File[], mediaType?: string, replyToMessageId?: string) => {
+    if (!mediaFiles || mediaFiles.length === 0) {
+      // Text-only message
+      sendMessage({ message, mediaType, replyToMessageId });
+      toast.success('Mensaje enviado');
+      return;
+    }
+
+    if (mediaFiles.length === 1) {
+      // Single file — use normal mutate
+      sendMessage({ message, mediaFile: mediaFiles[0], mediaType, replyToMessageId });
+      toast.success('Mensaje enviado');
+      return;
+    }
+
+    // Multiple files — send sequentially to avoid WhatsApp rate limits
+    let successCount = 0;
+    const totalCount = mediaFiles.length;
+    toast.info(`Enviando ${totalCount} archivos...`);
+
+    for (let i = 0; i < mediaFiles.length; i++) {
+      const file = mediaFiles[i];
+      const fileMediaType = file.type.startsWith('image/')
+        ? 'image'
+        : file.type.startsWith('audio/')
+          ? 'audio'
+          : 'document';
+      // Caption only on first message
+      const caption = i === 0 ? message : '';
+      try {
+        await sendMessageAsync({ message: caption, mediaFile: file, mediaType: fileMediaType, replyToMessageId });
+        successCount++;
+      } catch (err) {
+        console.error(`Error sending file ${i + 1}/${totalCount}:`, err);
+        // Continue sending remaining files
+      }
+    }
+    if (successCount === totalCount) {
+      toast.success(`${successCount} archivos enviados`);
+    } else if (successCount > 0) {
+      toast.warning(`${successCount} de ${totalCount} archivos enviados`);
+    }
   };
 
   const handleCreateConversation = async (data: { phone: string; name: string; message: string; useTemplate?: boolean; templateName?: string; templateLanguage?: string; templateParams?: Array<{ type: 'text'; text: string }> }) => {

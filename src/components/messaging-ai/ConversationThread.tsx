@@ -89,7 +89,7 @@ interface Conversation {
 interface ConversationThreadProps {
   conversation?: Conversation;
   messages: Message[];
-  onSendMessage?: (message: string, mediaFile?: File, mediaType?: string, replyToMessageId?: string) => void;
+  onSendMessage?: (message: string, mediaFiles?: File[], mediaType?: string, replyToMessageId?: string) => void;
   isSending?: boolean;
   isLoading?: boolean;
   onToggleAiManaged?: (aiManaged: boolean) => void;
@@ -312,8 +312,8 @@ export const ConversationThread = ({
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -391,16 +391,19 @@ export const ConversationThread = ({
   }, [conversation?.id, messages.length]);
 
   const handleSendMessage = () => {
-    if ((!inputMessage.trim() && !selectedFile) || !onSendMessage) return;
-    
-    if (selectedFile) {
-      const mediaType = selectedFile.type.startsWith('image/') 
-        ? 'image' 
-        : selectedFile.type.startsWith('audio/') 
-          ? 'audio' 
+    if ((!inputMessage.trim() && selectedFiles.length === 0) || !onSendMessage) return;
+
+    if (selectedFiles.length > 0) {
+      // Determine media type from first file (all should be same category via input)
+      const firstFile = selectedFiles[0];
+      const mediaType = firstFile.type.startsWith('image/')
+        ? 'image'
+        : firstFile.type.startsWith('audio/')
+          ? 'audio'
           : 'document';
-      onSendMessage(inputMessage.trim(), selectedFile, mediaType, replyingTo?.id);
-      clearSelectedFile();
+      // Pass all files to parent for sequential sending
+      onSendMessage(inputMessage.trim(), selectedFiles, mediaType, replyingTo?.id);
+      clearSelectedFiles();
     } else {
       onSendMessage(inputMessage.trim(), undefined, undefined, replyingTo?.id);
     }
@@ -510,8 +513,8 @@ export const ConversationThread = ({
 
     setInputMessage(reply.content);
 
-    setSelectedFile(null);
-    setFilePreview(null);
+    setSelectedFiles([]);
+    setFilePreviews([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (imageInputRef.current) imageInputRef.current.value = '';
 
@@ -530,8 +533,8 @@ export const ConversationThread = ({
         const reader = new FileReader();
         reader.onload = (e) => {
           console.log('Image preview loaded');
-          setFilePreview(e.target?.result as string);
-          setSelectedFile(file);
+          setFilePreviews([e.target?.result as string]);
+          setSelectedFiles([file]);
         };
         reader.onerror = () => {
           console.error('FileReader error');
@@ -561,33 +564,61 @@ export const ConversationThread = ({
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error('El archivo es muy grande. Máximo 16MB');
-      return;
+    const newFiles: File[] = [];
+    const tooLarge: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 16 * 1024 * 1024) {
+        tooLarge.push(file.name);
+      } else {
+        newFiles.push(file);
+      }
     }
 
-    setSelectedFile(file);
+    if (tooLarge.length > 0) {
+      toast.error(`${tooLarge.length} archivo(s) superan el máximo de 16MB`);
+    }
 
+    if (newFiles.length === 0) return;
+
+    // Append to existing selections
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+
+    // Generate previews for images
     if (type === 'image') {
-      const reader = new FileReader();
-      reader.onload = (e) => setFilePreview(e.target?.result as string);
-      reader.readAsDataURL(file);
+      newFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          setFilePreviews(prev => [...prev, ev.target?.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
     } else {
-      setFilePreview(null);
+      // For documents, add null placeholders to keep indexes aligned
+      setFilePreviews(prev => [...prev, ...newFiles.map(() => '')]);
     }
+
+    // Reset input so the same file(s) can be selected again
+    e.target.value = '';
   };
 
-  const clearSelectedFile = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
+  const clearSelectedFiles = () => {
+    setSelectedFiles([]);
+    setFilePreviews([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
-  // Process an image file from drag/drop or paste
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setFilePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Process image files from drag/drop or paste (supports multiple)
   const processImageFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       toast.error('Solo se pueden pegar/arrastrar imágenes');
@@ -599,9 +630,9 @@ export const ConversationThread = ({
       return;
     }
 
-    setSelectedFile(file);
+    setSelectedFiles(prev => [...prev, file]);
     const reader = new FileReader();
-    reader.onload = (e) => setFilePreview(e.target?.result as string);
+    reader.onload = (e) => setFilePreviews(prev => [...prev, e.target?.result as string]);
     reader.readAsDataURL(file);
     toast.success('Imagen lista para enviar');
     // Focus the input so user can add a caption and press Enter
@@ -638,23 +669,43 @@ export const ConversationThread = ({
     setIsDragOver(false);
     dragCounterRef.current = 0;
 
-    const files = Array.from(e.dataTransfer.files);
-    const imageFile = files.find(f => f.type.startsWith('image/'));
-    if (imageFile) {
-      processImageFile(imageFile);
-    } else if (files.length > 0) {
-      // Handle non-image files as documents
-      const file = files[0];
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    if (droppedFiles.length === 0) return;
+
+    const validFiles: File[] = [];
+    let tooLargeCount = 0;
+
+    for (const file of droppedFiles) {
       if (file.size > 16 * 1024 * 1024) {
-        toast.error('El archivo es muy grande. Máximo 16MB');
-        return;
+        tooLargeCount++;
+      } else {
+        validFiles.push(file);
       }
-      setSelectedFile(file);
-      setFilePreview(null);
-      toast.success('Archivo listo para enviar');
-      setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [processImageFile]);
+
+    if (tooLargeCount > 0) {
+      toast.error(`${tooLargeCount} archivo(s) superan el máximo de 16MB`);
+    }
+
+    if (validFiles.length === 0) return;
+
+    // Add all valid files
+    setSelectedFiles(prev => [...prev, ...validFiles]);
+
+    // Generate previews for images
+    validFiles.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setFilePreviews(prev => [...prev, ev.target?.result as string]);
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreviews(prev => [...prev, '']);
+      }
+    });
+
+    toast.success(`${validFiles.length} archivo${validFiles.length > 1 ? 's' : ''} listo${validFiles.length > 1 ? 's' : ''} para enviar`);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
 
   // ===== PASTE IMAGE (Ctrl+V / Cmd+V) =====
   useEffect(() => {
@@ -665,14 +716,17 @@ export const ConversationThread = ({
       const items = e.clipboardData?.items;
       if (!items) return;
 
+      let handled = false;
       for (const item of Array.from(items)) {
         if (item.type.startsWith('image/')) {
-          e.preventDefault();
+          if (!handled) {
+            e.preventDefault();
+            handled = true;
+          }
           const file = item.getAsFile();
           if (file) {
             processImageFile(file);
           }
-          return; // Only process the first image
         }
       }
     };
@@ -691,7 +745,9 @@ export const ConversationThread = ({
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
         const file = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
-        setSelectedFile(file);
+        // Audio replaces all selected files (you send audio alone)
+        setSelectedFiles([file]);
+        setFilePreviews(['']);
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -1309,37 +1365,61 @@ export const ConversationThread = ({
             </div>
           )}
 
-          {/* File preview */}
-          {selectedFile && (
-            <div className="mb-2 p-2 lg:p-3 bg-muted rounded-lg flex items-center gap-2">
-              {filePreview ? (
-                <img src={filePreview} alt="Preview" className="w-12 h-12 lg:w-16 lg:h-16 object-cover rounded" />
-              ) : selectedFile.type.startsWith('audio/') ? (
-                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-primary/10 rounded flex items-center justify-center">
-                  <Mic className="h-6 w-6 text-primary" />
-                </div>
-              ) : (
-                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-primary/10 rounded flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-primary" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs lg:text-sm font-medium truncate">{selectedFile.name}</p>
-                <p className="text-[10px] lg:text-xs text-muted-foreground">
-                  {(selectedFile.size / 1024).toFixed(1)} KB
-                </p>
+          {/* File previews (multiple) */}
+          {selectedFiles.length > 0 && (
+            <div className="mb-2 p-2 lg:p-3 bg-muted rounded-lg">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] lg:text-xs text-muted-foreground font-medium">
+                  {selectedFiles.length} archivo{selectedFiles.length > 1 ? 's' : ''} seleccionado{selectedFiles.length > 1 ? 's' : ''}
+                </span>
+                <button className="text-[10px] lg:text-xs text-muted-foreground hover:text-foreground transition-colors" onClick={clearSelectedFiles}>
+                  Quitar todos
+                </button>
               </div>
-              <button className="p-1 rounded hover:bg-muted" onClick={clearSelectedFile}>
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {selectedFiles.map((file, index) => (
+                  <div key={index} className="relative group">
+                    {filePreviews[index] && file.type.startsWith('image/') ? (
+                      <img src={filePreviews[index]} alt={file.name} className="w-14 h-14 lg:w-16 lg:h-16 object-cover rounded border border-border" />
+                    ) : file.type.startsWith('audio/') ? (
+                      <div className="w-14 h-14 lg:w-16 lg:h-16 bg-primary/10 rounded border border-border flex flex-col items-center justify-center">
+                        <Mic className="h-5 w-5 text-primary" />
+                        <span className="text-[8px] text-muted-foreground mt-0.5 truncate max-w-[3rem]">{file.name.split('.').pop()}</span>
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 lg:w-16 lg:h-16 bg-primary/10 rounded border border-border flex flex-col items-center justify-center">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <span className="text-[8px] text-muted-foreground mt-0.5 truncate max-w-[3rem]">{file.name.split('.').pop()}</span>
+                      </div>
+                    )}
+                    <button
+                      className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                      onClick={() => removeSelectedFile(index)}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[7px] text-center py-0.5 rounded-b truncate px-0.5">
+                      {file.size >= 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)}MB` : `${(file.size / 1024).toFixed(0)}KB`}
+                    </div>
+                  </div>
+                ))}
+                {/* Add more button */}
+                <button
+                  className="w-14 h-14 lg:w-16 lg:h-16 border-2 border-dashed border-border rounded flex items-center justify-center hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Hidden file inputs */}
+          {/* Hidden file inputs (multiple) */}
           <input
             ref={imageInputRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             onChange={(e) => handleFileSelect(e, 'image')}
           />
@@ -1347,6 +1427,7 @@ export const ConversationThread = ({
             ref={fileInputRef}
             type="file"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+            multiple
             className="hidden"
             onChange={(e) => handleFileSelect(e, 'document')}
           />
@@ -1587,12 +1668,12 @@ export const ConversationThread = ({
             <button
               className={cn(
                 "p-2.5 rounded-full flex-shrink-0 transition-all",
-                (!inputMessage.trim() && !selectedFile) || isSending
+                (!inputMessage.trim() && selectedFiles.length === 0) || isSending
                   ? "bg-muted text-muted-foreground"
                   : cn(channelInfo.buttonColor, "text-white shadow-md")
               )}
               onClick={handleSendMessage}
-              disabled={(!inputMessage.trim() && !selectedFile) || isSending}
+              disabled={(!inputMessage.trim() && selectedFiles.length === 0) || isSending}
             >
               {isSending ? (
                 <Loader2 className="h-5 w-5 animate-spin" />

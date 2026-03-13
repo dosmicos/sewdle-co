@@ -797,139 +797,128 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             );
           }
 
-          // 🛡️ PRODUCT ID VALIDATION: Verify each lineItem's productId matches productName
-          // GPT-4o-mini sometimes confuses IDs between similar products
+          // 🛡️ NAME-FIRST PRODUCT RESOLUTION: The AI gets names right but IDs wrong.
+          // ALWAYS resolve productId + variantId from productName + variantName.
+          // This overrides whatever IDs the AI provided since names are reliable, IDs are not.
+          const normalizeForMatch = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+          const scoreProductMatch = (catalogTitle: string, aiName: string): number => {
+            const a = normalizeForMatch(catalogTitle);
+            const b = normalizeForMatch(aiName);
+            // Exact match
+            if (a === b) return 100;
+            // One contains the other fully
+            if (a.includes(b) || b.includes(a)) return 80;
+            // Word overlap scoring — count how many words from AI name appear in catalog title
+            const aWords = a.split(/\s+/).filter(w => w.length > 2); // skip tiny words like "de"
+            const bWords = b.split(/\s+/).filter(w => w.length > 2);
+            if (bWords.length === 0) return 0;
+            const matches = bWords.filter(bw => aWords.some(aw => aw.includes(bw) || bw.includes(aw)));
+            return Math.round((matches.length / bWords.length) * 70);
+          };
+
           for (const item of lineItems) {
-            if (item.productName && allShopifyProducts.length > 0) {
-              const declaredProduct = allShopifyProducts.find((p: any) => p.id === item.productId);
-              const declaredProductTitle = declaredProduct?.title?.toLowerCase() || '';
-              const aiProductName = item.productName.toLowerCase();
+            if (!item.productName || allShopifyProducts.length === 0) continue;
 
-              const titleMatch = declaredProductTitle.includes(aiProductName) || aiProductName.includes(declaredProductTitle);
+            const origPid = item.productId;
+            const origVid = item.variantId;
+            const origSku = item.sku;
 
-              if (!titleMatch && declaredProduct) {
-                console.warn(`⚠️ PRODUCT MISMATCH DETECTED! AI said "${item.productName}" but productId ${item.productId} is "${declaredProduct.title}"`);
+            // Step 1: Find best matching product by name (score-based)
+            let bestProduct: any = null;
+            let bestScore = 0;
 
-                const correctProduct = allShopifyProducts.find((p: any) => {
-                  const pTitle = p.title.toLowerCase();
-                  return pTitle.includes(aiProductName) || aiProductName.includes(pTitle);
-                });
-
-                if (correctProduct) {
-                  console.log(`🔄 Auto-correcting: "${declaredProduct.title}" (${item.productId}) → "${correctProduct.title}" (${correctProduct.id})`);
-                  item.productId = correctProduct.id;
-
-                  if (item.variantName) {
-                    const correctVariant = (correctProduct.variants || []).find((v: any) => {
-                      const vTitle = (v.title || '').toLowerCase();
-                      const aiVariant = item.variantName.toLowerCase();
-                      return vTitle.includes(aiVariant) || aiVariant.includes(vTitle) ||
-                        vTitle.replace(/\s*\(.*?\)\s*/g, '').trim() === aiVariant.replace(/\s*\(.*?\)\s*/g, '').trim();
-                    });
-                    if (correctVariant) {
-                      console.log(`🔄 Auto-correcting variant: ${item.variantId} → ${correctVariant.id} (${correctVariant.title})`);
-                      item.variantId = correctVariant.id;
-                    } else {
-                      const sizeMatch = item.variantName.match(/(\d+)/);
-                      if (sizeMatch) {
-                        const sizeNum = sizeMatch[1];
-                        const sizeVariant = (correctProduct.variants || []).find((v: any) =>
-                          (v.title || '').includes(sizeNum)
-                        );
-                        if (sizeVariant) {
-                          console.log(`🔄 Auto-correcting variant by size "${sizeNum}": ${item.variantId} → ${sizeVariant.id} (${sizeVariant.title})`);
-                          item.variantId = sizeVariant.id;
-                        }
-                      }
-                    }
-                  }
-                } else {
-                  console.warn(`⚠️ Could not find correct product for "${item.productName}" in catalog`);
-                }
-              } else {
-                console.log(`✅ Product ID validated: "${item.productName}" matches productId ${item.productId}`);
-              }
-            }
-          }
-
-          // 🛡️ VARIANT RESOLUTION: Use SKU as the single source of truth
-          // SKU is unique per variant — resolve productId + variantId from SKU across entire catalog
-          for (const item of lineItems) {
-            if (!allShopifyProducts.length) continue;
-
-            let resolved = false;
-
-            // 1. PRIMARY: Resolve by SKU (searches entire catalog since SKU is globally unique)
-            if (item.sku) {
-              let foundVariant: any = null;
-              let foundProduct: any = null;
-
-              for (const p of allShopifyProducts) {
-                const v = (p.variants || []).find((v: any) => String(v.sku) === String(item.sku) || String(v.id) === String(item.sku));
-                if (v) {
-                  foundVariant = v;
-                  foundProduct = p;
-                  break;
-                }
-              }
-
-              if (foundVariant && foundProduct) {
-                const pidChanged = foundProduct.id !== item.productId;
-                const vidChanged = String(foundVariant.id) !== String(item.variantId);
-
-                if (pidChanged || vidChanged) {
-                  console.log(`🔄 SKU-based resolution: "${item.productName}" (pid:${item.productId}, vid:${item.variantId}) → "${foundProduct.title}" / "${foundVariant.title}" (pid:${foundProduct.id}, vid:${foundVariant.id}) [SKU: ${item.sku}]`);
-                  item.productId = foundProduct.id;
-                  item.variantId = foundVariant.id;
-                } else {
-                  console.log(`✅ Variant validated by SKU: "${foundVariant.title}" (pid:${item.productId}, vid:${item.variantId}, SKU: ${item.sku})`);
-                }
-                resolved = true;
-              } else {
-                console.warn(`⚠️ SKU "${item.sku}" not found in catalog, falling back to name matching`);
+            for (const p of allShopifyProducts) {
+              const score = scoreProductMatch(p.title, item.productName);
+              if (score > bestScore) {
+                bestScore = score;
+                bestProduct = p;
               }
             }
 
-            // 2. FALLBACK: Verify variantId matches variantName (catches errors when SKU missing)
-            if (!resolved && item.variantName) {
-              const product = allShopifyProducts.find((p: any) => p.id === item.productId);
-              if (!product || !product.variants || product.variants.length <= 1) continue;
+            // Require minimum score of 50 to accept a match
+            if (!bestProduct || bestScore < 50) {
+              console.warn(`⚠️ No product match found for "${item.productName}" (best score: ${bestScore}). Keeping AI-provided IDs.`);
+              continue;
+            }
 
-              const declaredVariant = product.variants.find((v: any) => String(v.id) === String(item.variantId));
-              if (!declaredVariant) continue;
+            const pidChanged = bestProduct.id !== item.productId;
+            if (pidChanged) {
+              console.log(`🔄 NAME-RESOLVED product: AI said "${item.productName}" (pid:${item.productId}) → catalog "${bestProduct.title}" (pid:${bestProduct.id}) [score:${bestScore}]`);
+            } else {
+              console.log(`✅ Product confirmed by name: "${bestProduct.title}" (pid:${bestProduct.id}) [score:${bestScore}]`);
+            }
+            item.productId = bestProduct.id;
 
-              const declaredTitle = (declaredVariant.title || '').toLowerCase();
-              const aiVariantName = item.variantName.toLowerCase();
-
-              const aiSizeMatch = aiVariantName.match(/(\d+)/);
-              const declaredSizeMatch = declaredTitle.match(/(\d+)/);
-
-              const nameMatch = declaredTitle.includes(aiVariantName) || aiVariantName.includes(declaredTitle);
-              const sizeMatch = aiSizeMatch && declaredSizeMatch && aiSizeMatch[1] === declaredSizeMatch[1];
-
-              if (!nameMatch && !sizeMatch) {
-                console.warn(`⚠️ VARIANT MISMATCH! AI said "${item.variantName}" but variantId ${item.variantId} is "${declaredVariant.title}"`);
-
-                let correctVariant = product.variants.find((v: any) => {
-                  const vTitle = (v.title || '').toLowerCase();
-                  return vTitle.includes(aiVariantName) || aiVariantName.includes(vTitle);
-                });
-
-                if (!correctVariant && aiSizeMatch) {
-                  correctVariant = product.variants.find((v: any) => {
-                    const vTitle = (v.title || '').toLowerCase();
-                    const vSizeMatch = vTitle.match(/(\d+)/);
-                    return vSizeMatch && vSizeMatch[1] === aiSizeMatch[1];
-                  });
-                }
-
-                if (correctVariant) {
-                  console.log(`🔄 Name-based variant correction: "${declaredVariant.title}" (${item.variantId}) → "${correctVariant.title}" (${correctVariant.id})`);
-                  item.variantId = correctVariant.id;
-                }
-              } else {
-                console.log(`✅ Variant validated by name: "${item.variantName}" matches variantId ${item.variantId} ("${declaredTitle}")`);
+            // Step 2: Resolve variant by size number (most reliable for size-only variants)
+            const variants = bestProduct.variants || [];
+            if (variants.length <= 1) {
+              // Single variant product — use it directly
+              if (variants.length === 1) {
+                item.variantId = variants[0].id;
+                item.sku = variants[0].sku || item.sku;
+                console.log(`  ✅ Single variant: ${variants[0].title} (vid:${variants[0].id}, SKU:${variants[0].sku})`);
               }
+              continue;
+            }
+
+            // Extract size number from AI's variant name (e.g., "4", "Talla 4", "Size 4")
+            const sizeMatch = (item.variantName || '').match(/(\d+)/);
+            let resolvedVariant: any = null;
+
+            if (sizeMatch) {
+              const targetSize = sizeMatch[1];
+
+              // Exact size match — variant title contains the same number
+              resolvedVariant = variants.find((v: any) => {
+                const vSizeMatch = (v.title || '').match(/(\d+)/);
+                return vSizeMatch && vSizeMatch[1] === targetSize;
+              });
+
+              if (resolvedVariant) {
+                const vidChanged = String(resolvedVariant.id) !== String(origVid);
+                if (vidChanged) {
+                  console.log(`  🔄 SIZE-RESOLVED variant: AI said "${item.variantName}" (vid:${origVid}) → "${resolvedVariant.title}" (vid:${resolvedVariant.id}, SKU:${resolvedVariant.sku})`);
+                } else {
+                  console.log(`  ✅ Variant confirmed by size: "${resolvedVariant.title}" (vid:${resolvedVariant.id})`);
+                }
+              }
+            }
+
+            // Fallback: try name-based variant match
+            if (!resolvedVariant && item.variantName) {
+              const aiVariant = normalizeForMatch(item.variantName);
+              resolvedVariant = variants.find((v: any) => {
+                const vTitle = normalizeForMatch(v.title);
+                return vTitle.includes(aiVariant) || aiVariant.includes(vTitle);
+              });
+              if (resolvedVariant) {
+                console.log(`  🔄 NAME-RESOLVED variant: "${item.variantName}" → "${resolvedVariant.title}" (vid:${resolvedVariant.id})`);
+              }
+            }
+
+            // Fallback: try SKU match across this product's variants
+            if (!resolvedVariant && item.sku) {
+              const cleanSku = String(item.sku).replace(/^SKU:/i, '').trim();
+              resolvedVariant = variants.find((v: any) => {
+                const vSku = String(v.sku || '').replace(/^SKU:/i, '').trim();
+                return vSku === cleanSku;
+              });
+              if (resolvedVariant) {
+                console.log(`  🔄 SKU-RESOLVED variant: SKU "${item.sku}" → "${resolvedVariant.title}" (vid:${resolvedVariant.id})`);
+              }
+            }
+
+            if (resolvedVariant) {
+              item.variantId = resolvedVariant.id;
+              item.sku = resolvedVariant.sku || item.sku;
+            } else {
+              console.warn(`  ⚠️ Could not resolve variant "${item.variantName}" for "${bestProduct.title}". Keeping AI variantId ${item.variantId}.`);
+            }
+
+            // Log summary if anything changed
+            if (item.productId !== origPid || String(item.variantId) !== String(origVid) || item.sku !== origSku) {
+              console.log(`  📋 RESOLUTION SUMMARY: pid:${origPid}→${item.productId}, vid:${origVid}→${item.variantId}, sku:${origSku}→${item.sku}`);
             }
           }
 
