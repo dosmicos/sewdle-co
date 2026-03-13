@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 export type CostMode = 'percent' | 'per_product';
-export type ShippingMode = 'percent' | 'shopify_charges';
+export type ShippingMode = 'percent' | 'shopify_charges' | 'per_order_cost';
 export type GatewayMode = 'percent' | 'per_gateway';
 
 export interface FinanceSettings {
@@ -19,6 +19,7 @@ export interface FinanceSettings {
   cogs_mode: CostMode;
   shipping_mode: ShippingMode;
   gateway_mode: GatewayMode;
+  shipping_cost_per_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -32,8 +33,9 @@ const DEFAULT_SETTINGS: Omit<FinanceSettings, 'id' | 'organization_id' | 'create
   return_rate_percent: 5,
   cm_target_percent: 25,
   cogs_mode: 'per_product',
-  shipping_mode: 'percent',
+  shipping_mode: 'per_order_cost',
   gateway_mode: 'percent',
+  shipping_cost_per_order: 0,
 };
 
 export interface UseFinanceSettingsResult {

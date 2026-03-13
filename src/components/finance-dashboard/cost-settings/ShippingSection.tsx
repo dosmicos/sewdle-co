@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -15,17 +14,41 @@ import type { ShippingMode } from '@/hooks/useFinanceSettings';
 interface ShippingSectionProps {
   mode: ShippingMode;
   shippingPercent: number;
+  shippingCostPerOrder: number;
   onModeChange: (mode: ShippingMode) => void;
   onPercentChange: (value: number) => void;
+  onCostPerOrderChange: (value: number) => void;
 }
+
+const MODE_OPTIONS: { value: ShippingMode; label: string; description: string }[] = [
+  {
+    value: 'per_order_cost',
+    label: 'Costo real por envío',
+    description: 'Tu costo promedio real del carrier menos lo cobrado al cliente',
+  },
+  {
+    value: 'percent',
+    label: 'Porcentaje plano',
+    description: 'Porcentaje estimado sobre ventas netas',
+  },
+];
 
 export const ShippingSection: React.FC<ShippingSectionProps> = ({
   mode,
   shippingPercent,
+  shippingCostPerOrder,
   onModeChange,
   onPercentChange,
+  onCostPerOrderChange,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
+
+  const formatCOP = (value: number) =>
+    new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(value);
 
   return (
     <Card>
@@ -48,25 +71,69 @@ export const ShippingSection: React.FC<ShippingSectionProps> = ({
 
         <CollapsibleContent>
           <CardContent className="space-y-4">
-            {/* Mode toggle */}
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <Label className="text-sm font-medium">Use Shipping Charges from Orders</Label>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {mode === 'shopify_charges'
-                    ? 'Using actual shipping charges collected from Shopify orders'
-                    : 'Using a flat percentage estimate of net sales'}
-                </p>
-              </div>
-              <Switch
-                checked={mode === 'shopify_charges'}
-                onCheckedChange={(checked) =>
-                  onModeChange(checked ? 'shopify_charges' : 'percent')
-                }
-              />
+            {/* Mode selector */}
+            <div className="space-y-2">
+              {MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => onModeChange(option.value)}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-left ${
+                    mode === option.value
+                      ? 'bg-green-50 border-green-300'
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  <div>
+                    <p className={`text-sm font-medium ${mode === option.value ? 'text-green-800' : 'text-gray-700'}`}>
+                      {option.label}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${mode === option.value ? 'text-green-600' : 'text-gray-500'}`}>
+                      {option.description}
+                    </p>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      mode === option.value ? 'border-green-600' : 'border-gray-300'
+                    }`}
+                  >
+                    {mode === option.value && (
+                      <div className="w-2 h-2 rounded-full bg-green-600" />
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
 
-            {mode === 'percent' ? (
+            {mode === 'per_order_cost' ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Costo promedio real por envío (COP)</Label>
+                  <Input
+                    type="number"
+                    value={shippingCostPerOrder}
+                    onChange={(e) => onCostPerOrderChange(Number(e.target.value))}
+                    className="h-9"
+                    step={100}
+                    min={0}
+                    placeholder="9421"
+                  />
+                  <p className="text-xs text-gray-400">
+                    Lo que te cobra el carrier (Envia, Servientrega, etc.) en promedio por envío
+                  </p>
+                </div>
+
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-800">
+                    <strong>Cálculo:</strong> (Costo real × # órdenes) − Shipping cobrado al cliente
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Si cobras {formatCOP(12000)} de envío al cliente pero tu costo real es {formatCOP(shippingCostPerOrder || 9421)},
+                    el costo neto de shipping es {formatCOP((shippingCostPerOrder || 9421) - 12000)} por orden
+                    {(shippingCostPerOrder || 9421) < 12000 && ' (ganancia en shipping)'}
+                  </p>
+                </div>
+              </div>
+            ) : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">Shipping Cost %</Label>
@@ -92,20 +159,7 @@ export const ShippingSection: React.FC<ShippingSectionProps> = ({
                   className="cursor-pointer"
                 />
                 <p className="text-xs text-gray-400">
-                  Estimated shipping cost as a percentage of net sales
-                </p>
-              </div>
-            ) : (
-              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                <p className="text-sm text-green-800">
-                  Shipping costs will be calculated from the <strong>total_shipping</strong> field
-                  in each Shopify order. This reflects the actual shipping charges collected from
-                  customers.
-                </p>
-                <p className="text-xs text-green-600 mt-2">
-                  Note: This represents what customers paid for shipping, not your actual carrier
-                  costs. For accurate profit calculation, consider using the flat percentage mode
-                  with your actual carrier cost ratio.
+                  Costo estimado de envío como porcentaje de ventas netas
                 </p>
               </div>
             )}

@@ -167,10 +167,12 @@ const CostSettingsPage: React.FC = () => {
 
           {/* Shipping Section */}
           <ShippingSection
-            mode={settings?.shipping_mode || 'percent'}
+            mode={settings?.shipping_mode || 'per_order_cost'}
             shippingPercent={settings?.shipping_cost_percent || 10}
+            shippingCostPerOrder={settings?.shipping_cost_per_order || 0}
             onModeChange={(mode) => handleModeChange('shipping_mode', mode)}
             onPercentChange={(v) => handlePercentChange('shipping_cost_percent', v)}
+            onCostPerOrderChange={(v) => handlePercentChange('shipping_cost_per_order', v)}
           />
 
           {/* Gateway Costs Section */}

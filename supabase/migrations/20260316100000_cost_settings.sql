@@ -55,11 +55,12 @@ CREATE POLICY gateway_costs_org_policy ON gateway_cost_settings
     )
   );
 
--- 3. Extend finance_settings with cost mode flags
+-- 3. Extend finance_settings with cost mode flags + shipping cost per order
 ALTER TABLE finance_settings
   ADD COLUMN IF NOT EXISTS cogs_mode TEXT DEFAULT 'per_product' CHECK (cogs_mode IN ('percent', 'per_product')),
-  ADD COLUMN IF NOT EXISTS shipping_mode TEXT DEFAULT 'percent' CHECK (shipping_mode IN ('percent', 'shopify_charges')),
-  ADD COLUMN IF NOT EXISTS gateway_mode TEXT DEFAULT 'percent' CHECK (gateway_mode IN ('percent', 'per_gateway'));
+  ADD COLUMN IF NOT EXISTS shipping_mode TEXT DEFAULT 'per_order_cost' CHECK (shipping_mode IN ('percent', 'shopify_charges', 'per_order_cost')),
+  ADD COLUMN IF NOT EXISTS gateway_mode TEXT DEFAULT 'percent' CHECK (gateway_mode IN ('percent', 'per_gateway')),
+  ADD COLUMN IF NOT EXISTS shipping_cost_per_order NUMERIC(10,2) DEFAULT 0;
 
 -- 4. Extend finance_expenses for recurring expense support
 ALTER TABLE finance_expenses

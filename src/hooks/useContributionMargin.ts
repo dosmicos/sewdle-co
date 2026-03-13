@@ -100,7 +100,8 @@ export function useContributionMargin(
       return_rate_percent: 5,
       cm_target_percent: 25,
       cogs_mode: 'per_product' as const,
-      shipping_mode: 'percent' as const,
+      shipping_mode: 'per_order_cost' as const,
+      shipping_cost_per_order: 0,
       gateway_mode: 'percent' as const,
     };
 
@@ -114,9 +115,12 @@ export function useContributionMargin(
       ? costOverrides.productCost
       : netSales * (s.cogs_percent / 100);
 
-    const shippingCost = (s.shipping_mode === 'shopify_charges' && costOverrides?.shippingCost !== undefined)
-      ? costOverrides.shippingCost
-      : netSales * (s.shipping_cost_percent / 100);
+    // Shipping: per_order_cost mode = (real_cost × orders) − shipping_collected
+    const shippingCost = s.shipping_mode === 'per_order_cost'
+      ? Math.max(0, (s.shipping_cost_per_order ?? 0) * storeMetrics.current.orders - storeMetrics.current.totalShipping)
+      : (s.shipping_mode === 'shopify_charges' && costOverrides?.shippingCost !== undefined)
+        ? costOverrides.shippingCost
+        : netSales * (s.shipping_cost_percent / 100);
 
     const paymentGatewayFees = (s.gateway_mode === 'per_gateway' && costOverrides?.paymentGatewayFees !== undefined)
       ? costOverrides.paymentGatewayFees
