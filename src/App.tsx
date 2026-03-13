@@ -46,6 +46,7 @@ import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
 import AdPerformancePage from "@/pages/AdPerformancePage";
 import AdIntelligencePage from "@/pages/AdIntelligencePage";
 import UgcPerformancePage from "@/pages/UgcPerformancePage";
+import CostSettingsPage from "@/pages/CostSettingsPage";
 import MetaAdsCallbackPage from "@/pages/MetaAdsCallbackPage";
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -197,6 +198,13 @@ const FinanceAppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
+      <Route path="/cost-settings" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="finances" action="view">
+            <CostSettingsPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
       <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="/password-change" element={<PasswordChangePage />} />
@@ -305,6 +313,13 @@ const AppContent = () => {
         <Route path="finance-dashboard" element={
           <PermissionRoute module="finances" action="view">
             <FinanceDashboardPage />
+          </PermissionRoute>
+        } />
+
+        {/* Cost Settings - accesible desde la app principal */}
+        <Route path="cost-settings" element={
+          <PermissionRoute module="finances" action="view">
+            <CostSettingsPage />
           </PermissionRoute>
         } />
 

@@ -11,8 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import type { FinanceSettings } from '@/hooks/useFinanceSettings';
 import type { MonthlyTarget } from '@/hooks/useMonthlyTargets';
 import { format, startOfMonth, addMonths } from 'date-fns';
@@ -93,6 +94,8 @@ export const FinanceSettingsModal: React.FC<FinanceSettingsModalProps> = ({
   isUpdating,
   isUpserting,
 }) => {
+  const navigate = useNavigate();
+
   // Settings form state
   const [form, setForm] = useState<SettingsForm>({
     cogs_percent: 20,
@@ -190,32 +193,23 @@ export const FinanceSettingsModal: React.FC<FinanceSettingsModalProps> = ({
 
           {/* COSTS TAB */}
           <TabsContent value="costs" className="space-y-5 mt-4">
-            <PercentSlider
-              label="COGS (Product Cost)"
-              value={form.cogs_percent}
-              onChange={(v) => updateForm('cogs_percent', v)}
-              hint="Cost of goods sold as % of net sales"
-            />
-            <PercentSlider
-              label="Shipping Cost"
-              value={form.shipping_cost_percent}
-              onChange={(v) => updateForm('shipping_cost_percent', v)}
-              hint="Estimated shipping cost as % of net sales"
-            />
-            <PercentSlider
-              label="Payment Gateway"
-              value={form.payment_gateway_percent}
-              onChange={(v) => updateForm('payment_gateway_percent', v)}
-              max={10}
-              hint="Stripe, Mercado Pago, etc."
-            />
-            <PercentSlider
-              label="Handling Cost"
-              value={form.handling_cost_percent}
-              onChange={(v) => updateForm('handling_cost_percent', v)}
-              max={10}
-              hint="Packaging, fulfillment labor, etc."
-            />
+            {/* Link to detailed Cost Settings page */}
+            <button
+              onClick={() => {
+                onOpenChange(false);
+                navigate('/cost-settings');
+              }}
+              className="w-full flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <div className="text-left">
+                <p className="text-sm font-medium text-blue-800">Detailed Cost Settings</p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  Configure per-product COGS, shipping, gateway fees & custom expenses
+                </p>
+              </div>
+              <ExternalLink className="h-4 w-4 text-blue-500" />
+            </button>
+
             <PercentSlider
               label="Return Rate"
               value={form.return_rate_percent}
@@ -245,22 +239,9 @@ export const FinanceSettingsModal: React.FC<FinanceSettingsModalProps> = ({
               </p>
             </div>
 
-            {/* Summary */}
-            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 space-y-1">
-              <p className="text-xs font-medium text-gray-500">Cost Structure Preview</p>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Total Variable Cost</span>
-                <span className="font-semibold text-gray-800">{totalVarPct.toFixed(1)}%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Available for CM (before ads)</span>
-                <span className="font-semibold text-gray-800">{(100 - totalVarPct - form.return_rate_percent).toFixed(1)}%</span>
-              </div>
-            </div>
-
             <Button onClick={handleSaveSettings} disabled={isUpdating} className="w-full">
               {isUpdating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              Save Cost Settings
+              Save Settings
             </Button>
           </TabsContent>
 
