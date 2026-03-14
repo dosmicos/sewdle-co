@@ -20,8 +20,22 @@ export interface DailyActivity {
   marketingEvents: number;
   // Messages (from messaging_messages)
   messagesSent: number;
+  // Email campaigns (from Emailmark campaigns table)
+  emailCampaigns: number;
+  emailsSent: number;
   // Total activity count (sum of all action counts, excluding revenue)
   totalActions: number;
+}
+
+export interface EmailCampaignDay {
+  name: string;
+  subject: string;
+  totalSent: number;
+  totalOpened: number;
+  totalClicked: number;
+  totalRevenue: number;
+  totalOrders: number;
+  date: string;
 }
 
 export interface ActivitySummary {
@@ -32,9 +46,15 @@ export interface ActivitySummary {
   totalUgcVideos: number;
   totalMarketingEvents: number;
   totalMessagesSent: number;
+  totalEmailCampaigns: number;
+  totalEmailsSent: number;
+  totalEmailOpened: number;
+  totalEmailClicked: number;
   totalActions: number;
   // Correlation between daily actions and revenue
   correlation: number;
+  // Email campaign details for the period
+  emailCampaignDetails: EmailCampaignDay[];
 }
 
 export interface MarketingActivityResult {
@@ -250,6 +270,47 @@ export function useMarketingActivity(
     staleTime: 1000 * 60 * 5,
   });
 
+  // 7. Email campaigns from Emailmark (campaigns table - no org_id, shared Supabase)
+  const emailQuery = useQuery({
+    queryKey: ['mkt-activity-email', startStr, endStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('name, subject, sending_started_at, total_sent, total_opened, total_clicked, total_revenue, total_orders, status')
+        .in('status', ['sent', 'sending'])
+        .gte('sending_started_at', startDate.toISOString())
+        .lte('sending_started_at', endDate.toISOString());
+
+      if (error) throw error;
+
+      // Group by date: count campaigns and sum emails sent
+      const byDate = new Map<string, { campaigns: number; emailsSent: number }>();
+      const details: EmailCampaignDay[] = [];
+
+      for (const row of data || []) {
+        if (!row.sending_started_at) continue;
+        const d = format(new Date(row.sending_started_at), 'yyyy-MM-dd');
+        const existing = byDate.get(d) || { campaigns: 0, emailsSent: 0 };
+        existing.campaigns += 1;
+        existing.emailsSent += row.total_sent || 0;
+        byDate.set(d, existing);
+
+        details.push({
+          name: row.name,
+          subject: row.subject || '',
+          totalSent: row.total_sent || 0,
+          totalOpened: row.total_opened || 0,
+          totalClicked: row.total_clicked || 0,
+          totalRevenue: Number(row.total_revenue) || 0,
+          totalOrders: row.total_orders || 0,
+          date: d,
+        });
+      }
+      return { byDate, details };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Merge all data into daily breakdown
   const { dailyData, summary } = useMemo(() => {
     const allDays = eachDayOfInterval({ start: startDate, end: endDate });
@@ -259,6 +320,8 @@ export function useMarketingActivity(
     const ugcMap = ugcQuery.data || new Map();
     const eventsMap = eventsQuery.data || new Map();
     const messagesMap = messagesQuery.data || new Map();
+    const emailMap = emailQuery.data?.byDate || new Map();
+    const emailDetails = emailQuery.data?.details || [];
 
     let totalRevenue = 0;
     let totalOrders = 0;
@@ -267,7 +330,17 @@ export function useMarketingActivity(
     let totalUgcVideos = 0;
     let totalMarketingEvents = 0;
     let totalMessagesSent = 0;
+    let totalEmailCampaigns = 0;
+    let totalEmailsSent = 0;
     let totalActions = 0;
+
+    // Aggregate email totals
+    let totalEmailOpened = 0;
+    let totalEmailClicked = 0;
+    for (const d of emailDetails) {
+      totalEmailOpened += d.totalOpened;
+      totalEmailClicked += d.totalClicked;
+    }
 
     const daily: DailyActivity[] = allDays.map((day) => {
       const dateKey = format(day, 'yyyy-MM-dd');
@@ -277,8 +350,10 @@ export function useMarketingActivity(
       const ugc = ugcMap.get(dateKey) || 0;
       const events = eventsMap.get(dateKey) || 0;
       const messages = messagesMap.get(dateKey) || 0;
+      const email = emailMap.get(dateKey) || { campaigns: 0, emailsSent: 0 };
 
-      const dayActions = ads.activeAds + creatives + ugc + events + messages;
+      const dayActions =
+        ads.activeAds + creatives + ugc + events + messages + email.campaigns;
 
       totalRevenue += rev.revenue;
       totalOrders += rev.orders;
@@ -287,6 +362,8 @@ export function useMarketingActivity(
       totalUgcVideos += ugc;
       totalMarketingEvents += events;
       totalMessagesSent += messages;
+      totalEmailCampaigns += email.campaigns;
+      totalEmailsSent += email.emailsSent;
       totalActions += dayActions;
 
       return {
@@ -299,6 +376,8 @@ export function useMarketingActivity(
         ugcVideos: ugc,
         marketingEvents: events,
         messagesSent: messages,
+        emailCampaigns: email.campaigns,
+        emailsSent: email.emailsSent,
         totalActions: dayActions,
       };
     });
@@ -318,8 +397,13 @@ export function useMarketingActivity(
         totalUgcVideos,
         totalMarketingEvents,
         totalMessagesSent,
+        totalEmailCampaigns,
+        totalEmailsSent,
+        totalEmailOpened,
+        totalEmailClicked,
         totalActions,
         correlation,
+        emailCampaignDetails: emailDetails,
       },
     };
   }, [
@@ -331,6 +415,7 @@ export function useMarketingActivity(
     ugcQuery.data,
     eventsQuery.data,
     messagesQuery.data,
+    emailQuery.data,
   ]);
 
   const isLoading =
@@ -339,7 +424,8 @@ export function useMarketingActivity(
     creativesQuery.isLoading ||
     ugcQuery.isLoading ||
     eventsQuery.isLoading ||
-    messagesQuery.isLoading;
+    messagesQuery.isLoading ||
+    emailQuery.isLoading;
 
   return { dailyData, summary, isLoading };
 }

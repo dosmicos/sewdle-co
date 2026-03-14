@@ -21,6 +21,10 @@ import {
   CalendarDays,
   MessageSquare,
   ShoppingCart,
+  Mail,
+  MousePointerClick,
+  Eye,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DailyActivity, ActivitySummary } from '@/hooks/useMarketingActivity';
@@ -72,6 +76,12 @@ const CHANNELS = [
     icon: <CalendarDays className="h-3.5 w-3.5" />,
   },
   {
+    key: 'emailCampaigns' as const,
+    label: 'Email campaigns',
+    color: '#ef4444',
+    icon: <Mail className="h-3.5 w-3.5" />,
+  },
+  {
     key: 'messagesSent' as const,
     label: 'Mensajes',
     color: '#10b981',
@@ -108,6 +118,12 @@ const SUMMARY_KEYS: {
     label: 'Videos UGC',
     icon: <Video className="h-4 w-4" />,
     color: 'text-pink-600 bg-pink-50',
+  },
+  {
+    key: 'totalEmailCampaigns',
+    label: 'Emails enviados',
+    icon: <Mail className="h-4 w-4" />,
+    color: 'text-red-600 bg-red-50',
   },
   {
     key: 'totalMarketingEvents',
@@ -213,7 +229,7 @@ const ActivityRevenueChart: React.FC<ActivityRevenueChartProps> = ({
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
         {SUMMARY_KEYS.map((item) => {
           const value = summary[item.key] as number;
           return (
@@ -388,6 +404,193 @@ const ActivityRevenueChart: React.FC<ActivityRevenueChartProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* Email Campaign Details */}
+      {summary.emailCampaignDetails.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-red-500" />
+              <CardTitle className="text-base">
+                Email Campaigns — Emailmark
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-lg overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600 w-24">
+                      Fecha
+                    </th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">
+                      Campaña
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">
+                      <div className="flex items-center justify-end gap-1">
+                        <Send className="h-3 w-3" /> Enviados
+                      </div>
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">
+                      <div className="flex items-center justify-end gap-1">
+                        <Eye className="h-3 w-3" /> Abiertos
+                      </div>
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-gray-600 w-20">
+                      Open %
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">
+                      <div className="flex items-center justify-end gap-1">
+                        <MousePointerClick className="h-3 w-3" /> Clicks
+                      </div>
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium text-gray-600 w-20">
+                      CTR
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {summary.emailCampaignDetails
+                    .sort(
+                      (a, b) =>
+                        new Date(a.date).getTime() -
+                        new Date(b.date).getTime()
+                    )
+                    .map((campaign, idx) => {
+                      const openRate =
+                        campaign.totalSent > 0
+                          ? (campaign.totalOpened / campaign.totalSent) * 100
+                          : 0;
+                      const ctr =
+                        campaign.totalSent > 0
+                          ? (campaign.totalClicked / campaign.totalSent) * 100
+                          : 0;
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 text-gray-500 text-xs">
+                            {format(
+                              new Date(campaign.date + 'T12:00:00'),
+                              'd MMM',
+                              { locale: es }
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="font-medium text-sm truncate max-w-[250px]">
+                              {campaign.name}
+                            </div>
+                            <div className="text-xs text-gray-400 truncate max-w-[250px]">
+                              {campaign.subject}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium tabular-nums">
+                            {campaign.totalSent.toLocaleString('es-CO')}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {campaign.totalOpened.toLocaleString('es-CO')}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                'text-[10px] px-1.5 tabular-nums',
+                                openRate >= 20
+                                  ? 'bg-green-100 text-green-700'
+                                  : openRate >= 10
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-red-100 text-red-700'
+                              )}
+                            >
+                              {openRate.toFixed(1)}%
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {campaign.totalClicked.toLocaleString('es-CO')}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                'text-[10px] px-1.5 tabular-nums',
+                                ctr >= 3
+                                  ? 'bg-green-100 text-green-700'
+                                  : ctr >= 1
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-red-100 text-red-700'
+                              )}
+                            >
+                              {ctr.toFixed(1)}%
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Email totals */}
+            <div className="mt-3 flex gap-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center gap-2">
+                <Send className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Total enviados</p>
+                  <p className="font-semibold text-sm">
+                    {summary.totalEmailsSent.toLocaleString('es-CO')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Eye className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Total abiertos</p>
+                  <p className="font-semibold text-sm">
+                    {summary.totalEmailOpened.toLocaleString('es-CO')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <MousePointerClick className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Total clicks</p>
+                  <p className="font-semibold text-sm">
+                    {summary.totalEmailClicked.toLocaleString('es-CO')}
+                  </p>
+                </div>
+              </div>
+              {summary.totalEmailsSent > 0 && (
+                <>
+                  <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Open rate</p>
+                      <p className="font-semibold text-sm">
+                        {(
+                          (summary.totalEmailOpened / summary.totalEmailsSent) *
+                          100
+                        ).toFixed(1)}
+                        %
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <p className="text-xs text-gray-500">CTR</p>
+                      <p className="font-semibold text-sm">
+                        {(
+                          (summary.totalEmailClicked /
+                            summary.totalEmailsSent) *
+                          100
+                        ).toFixed(1)}
+                        %
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
