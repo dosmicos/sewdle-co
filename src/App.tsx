@@ -49,6 +49,7 @@ import UgcPerformancePage from "@/pages/UgcPerformancePage";
 import CostSettingsPage from "@/pages/CostSettingsPage";
 import MarketingCalendarPage from "@/pages/MarketingCalendarPage";
 import MetaAdsCallbackPage from "@/pages/MetaAdsCallbackPage";
+import GoogleAdsCallbackPage from "@/pages/GoogleAdsCallbackPage";
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -214,6 +215,7 @@ const FinanceAppContent = () => {
         </PasswordChangeRouteGuard>
       } />
       <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
+      <Route path="/google-ads-callback" element={<GoogleAdsCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="/password-change" element={<PasswordChangePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -338,8 +340,9 @@ const AppContent = () => {
           </PermissionRoute>
         } />
 
-        {/* Meta Ads OAuth callback */}
+        {/* Ads OAuth callbacks */}
         <Route path="meta-callback" element={<MetaAdsCallbackPage />} />
+        <Route path="google-ads-callback" element={<GoogleAdsCallbackPage />} />
 
         <Route path="shopify" element={
           <PermissionRoute module="shopify" action="view">

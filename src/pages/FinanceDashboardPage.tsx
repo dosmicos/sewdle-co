@@ -5,6 +5,7 @@ import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashbo
 import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
 import AttributionTable, { type AttributionRow } from '@/components/finance-dashboard/AttributionTable';
 import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnectionModal';
+import GoogleAdsConnectionModal from '@/components/finance-dashboard/GoogleAdsConnectionModal';
 import FinanceSettingsModal from '@/components/finance-dashboard/FinanceSettingsModal';
 import ContributionMarginCard from '@/components/finance-dashboard/ContributionMarginCard';
 import ContributionMarginBreakdown from '@/components/finance-dashboard/ContributionMarginBreakdown';
@@ -16,6 +17,7 @@ import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
 import { useStoreMetrics } from '@/hooks/useStoreMetrics';
 import { useAdMetrics } from '@/hooks/useAdMetrics';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
+import { useGoogleAdsConnection } from '@/hooks/useGoogleAdsConnection';
 import { useFinanceSettings } from '@/hooks/useFinanceSettings';
 import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
 import { useContributionMargin } from '@/hooks/useContributionMargin';
@@ -56,7 +58,9 @@ const FinanceDashboardPage: React.FC = () => {
   const dateRange = useFinanceDateRange();
   const storeMetrics = useStoreMetrics(dateRange.current, dateRange.previous);
   const metaAds = useAdMetrics(dateRange.current, dateRange.previous, 'meta');
+  const googleAds = useAdMetrics(dateRange.current, dateRange.previous, 'google_ads');
   const metaConnection = useMetaAdsConnection();
+  const googleConnection = useGoogleAdsConnection();
   const financeSettings = useFinanceSettings();
   const monthlyTargets = useMonthlyTargets(dateRange.current.start);
   const { products: productCostsList } = useProductCosts();
@@ -113,12 +117,15 @@ const FinanceDashboardPage: React.FC = () => {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metaModalOpen, setMetaModalOpen] = useState(false);
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
 
-  // Auto-open meta modal if returning from OAuth callback
+  // Auto-open modals if returning from OAuth callback
   useEffect(() => {
-    const oauthResult = sessionStorage.getItem('meta_oauth_result');
-    if (oauthResult) {
+    if (sessionStorage.getItem('meta_oauth_result')) {
       setMetaModalOpen(true);
+    }
+    if (sessionStorage.getItem('google_ads_oauth_result')) {
+      setGoogleModalOpen(true);
     }
   }, []);
 
@@ -138,18 +145,25 @@ const FinanceDashboardPage: React.FC = () => {
       source: 'Google Ads',
       icon: <GoogleIcon />,
       budget: null,
-      spend: 0,
-      cv: 0,
-      roas: 0,
-      clicks: 0,
-      impressions: 0,
+      spend: googleAds.current.spend,
+      cv: googleAds.current.conversionValue,
+      roas: googleAds.current.roas,
+      clicks: googleAds.current.clicks,
+      impressions: googleAds.current.impressions,
     },
   ];
 
   const handleSync = async () => {
     const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
     const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
-    await metaConnection.syncMetrics(startStr, endStr);
+    const promises: Promise<boolean>[] = [];
+    if (metaConnection.isConnected) {
+      promises.push(metaConnection.syncMetrics(startStr, endStr));
+    }
+    if (googleConnection.isConnected) {
+      promises.push(googleConnection.syncMetrics(startStr, endStr));
+    }
+    await Promise.all(promises);
   };
 
   if (storeMetrics.isLoading) {
@@ -194,6 +208,34 @@ const FinanceDashboardPage: React.FC = () => {
               >
                 <MetaIcon />
                 <span className="ml-1.5">Conectar Meta</span>
+              </Button>
+            )}
+            {googleConnection.isConnected ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
+                  const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
+                  await googleConnection.syncMetrics(startStr, endStr);
+                }}
+                disabled={googleConnection.syncing}
+              >
+                {googleConnection.syncing ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Sync Google
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setGoogleModalOpen(true)}
+              >
+                <GoogleIcon />
+                <span className="ml-1.5">Conectar Google</span>
               </Button>
             )}
             <Button
@@ -312,6 +354,11 @@ const FinanceDashboardPage: React.FC = () => {
         open={metaModalOpen}
         onOpenChange={setMetaModalOpen}
         onSuccess={() => setMetaModalOpen(false)}
+      />
+      <GoogleAdsConnectionModal
+        open={googleModalOpen}
+        onOpenChange={setGoogleModalOpen}
+        onSuccess={() => setGoogleModalOpen(false)}
       />
     </FinanceDashboardLayout>
   );
