@@ -69,10 +69,14 @@ const GoogleAdsCallbackPage: React.FC = () => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Try to extract detailed error from the response
+        const errorDetail = data?.error || data?.details || error.message;
+        throw new Error(errorDetail || 'Edge Function returned a non-2xx status code');
+      }
 
       if (!data.success) {
-        throw new Error(data.error || 'Error al intercambiar token');
+        throw new Error(data.error ? `${data.error}: ${data.details || ''}` : 'Error al intercambiar token');
       }
 
       // Store tokens + accounts in sessionStorage for the modal to pick up
