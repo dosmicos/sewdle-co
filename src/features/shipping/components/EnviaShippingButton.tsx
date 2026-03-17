@@ -690,11 +690,17 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
     apiRef.current = {
       createLabelWithDefaults: async () => {
-        if (!isReady || isCreatingLabel) {
+        if (isCreatingLabel) {
+          toast.error('Ya se está creando una guía');
+          return;
+        }
+        // canCreateLabel checks address + city validity, but allow even if quotes are loading
+        const canProceed = shippingAddress?.city && shippingAddress?.address1 && !isActiveLabel;
+        if (!canProceed) {
           toast.error('No es posible crear guía en este momento');
           return;
         }
-        // Use unified flow if no quotes loaded yet
+        // Use unified flow if no quotes loaded yet (handles quoting + creating in one step)
         if (quoteState.status !== 'success') {
           await handleQuoteAndCreateLabel();
         } else {
@@ -710,7 +716,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     return () => {
       apiRef.current = null;
     };
-  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrier, quotes, recommendedCarrier]);
+  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, shippingAddress, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrier, quotes, recommendedCarrier]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {

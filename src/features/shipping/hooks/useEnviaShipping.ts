@@ -215,7 +215,7 @@ export const useEnviaShipping = () => {
     }
   ): Promise<QuoteResponse | null> => {
     const maxAttempts = options?.maxRetries ?? 3;
-    const delays = [2000, 4000, 8000]; // Exponential backoff
+    const delays = [500, 1000, 2000]; // Fast retries
     const timeoutMs = options?.timeoutMs ?? 10_000;
 
     setIsLoadingQuotes(true);

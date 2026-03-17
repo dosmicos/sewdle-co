@@ -1093,248 +1093,143 @@ serve(async (req) => {
 
     console.log('✅ Label created successfully:', shipmentData.trackingNumber);
 
-    // === AUTO-FULFILL IN SHOPIFY (using new Fulfillment Orders API) ===
-    let shopifyFulfillmentId: string | null = null;
-    let shopifyFulfillmentStatus = 'pending';
-    let shopifyFulfillmentError: string | null = null;
-    
-    if (body.shopify_order_id && body.organization_id) {
-      try {
-        console.log('📦 ===== STARTING SHOPIFY FULFILLMENT =====');
-        console.log('📦 Shopify Order ID:', body.shopify_order_id);
-        console.log('📦 Organization ID:', body.organization_id);
-        console.log('📦 Tracking Number:', shipmentData.trackingNumber);
-        
-        // Get organization's Shopify credentials from database
-        const { data: org, error: orgError } = await supabase
-          .from('organizations')
-          .select('shopify_store_url, shopify_credentials')
-          .eq('id', body.organization_id)
-          .single();
+    // === RESPOND IMMEDIATELY — Shopify fulfillment runs in background ===
+    // The label is created and saved. User sees the label right away.
+    // Shopify fulfillment + DB updates happen async (saves 2-8 seconds).
 
-        if (orgError) {
-          console.error('❌ Error fetching organization:', orgError);
-          shopifyFulfillmentStatus = 'failed';
-          shopifyFulfillmentError = `Error fetching organization: ${orgError.message}`;
-        } else if (!org?.shopify_store_url) {
-          console.log('⚠️ No Shopify store URL configured');
-          shopifyFulfillmentStatus = 'skipped';
-          shopifyFulfillmentError = 'No Shopify store URL configured';
-        } else if (!org?.shopify_credentials) {
-          console.log('⚠️ No Shopify credentials configured');
-          shopifyFulfillmentStatus = 'skipped';
-          shopifyFulfillmentError = 'No Shopify credentials configured';
-        } else {
+    if (body.shopify_order_id && body.organization_id) {
+      // Fire and forget — do NOT await this
+      (async () => {
+        try {
+          console.log('📦 [BACKGROUND] Starting Shopify fulfillment...');
+
+          const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('shopify_store_url, shopify_credentials')
+            .eq('id', body.organization_id)
+            .single();
+
+          if (orgError || !org?.shopify_store_url || !org?.shopify_credentials) {
+            console.log('⚠️ [BACKGROUND] Skipping fulfillment:', orgError?.message || 'No Shopify config');
+            return;
+          }
+
           const credentials = org.shopify_credentials as { access_token?: string };
           const accessToken = credentials.access_token;
-          
           if (!accessToken) {
-            console.log('⚠️ No Shopify access token found');
-            shopifyFulfillmentStatus = 'skipped';
-            shopifyFulfillmentError = 'No Shopify access token found';
-          } else {
-            // Normalize domain
-            let shopDomain = org.shopify_store_url
-              .replace('https://', '')
-              .replace('http://', '')
-              .replace(/\/$/, '');
-            
-            if (!shopDomain.includes('.myshopify.com')) {
-              shopDomain = `${shopDomain}.myshopify.com`;
-            }
-            
-            console.log('📦 Shop domain:', shopDomain);
+            console.log('⚠️ [BACKGROUND] No Shopify access token');
+            return;
+          }
 
-            // Map carrier names for Shopify tracking
-            const carrierNamesMap: Record<string, string> = {
-              'coordinadora': 'Coordinadora Mercantil',
-              'interrapidisimo': 'Inter Rapidísimo',
-              'deprisa': 'Deprisa',
-              'servientrega': 'Servientrega',
-              'tcc': 'TCC',
-              'envia': 'Envia'
-            };
-            
-            const trackingCompany = carrierNamesMap[carrierConfig.carrier.toLowerCase()] || carrierConfig.carrier;
-            console.log('📦 Tracking company:', trackingCompany);
-            
-            // Retry logic for Shopify fulfillment (up to 3 attempts)
-            const MAX_FULFILLMENT_RETRIES = 3;
-            const RETRY_DELAY_MS = 2000;
+          let shopDomain = org.shopify_store_url
+            .replace('https://', '').replace('http://', '').replace(/\/$/, '');
+          if (!shopDomain.includes('.myshopify.com')) {
+            shopDomain = `${shopDomain}.myshopify.com`;
+          }
 
-            for (let attempt = 1; attempt <= MAX_FULFILLMENT_RETRIES; attempt++) {
-              console.log(`📦 Shopify fulfillment attempt ${attempt}/${MAX_FULFILLMENT_RETRIES}`);
-              shopifyFulfillmentStatus = 'pending';
-              shopifyFulfillmentError = null;
-              shopifyFulfillmentId = null;
+          const carrierNamesMap: Record<string, string> = {
+            'coordinadora': 'Coordinadora Mercantil',
+            'interrapidisimo': 'Inter Rapidísimo',
+            'deprisa': 'Deprisa',
+            'servientrega': 'Servientrega',
+            'tcc': 'TCC',
+            'envia': 'Envia'
+          };
+          const trackingCompany = carrierNamesMap[carrierConfig.carrier.toLowerCase()] || carrierConfig.carrier;
 
-              try {
-              // Step 1: Get fulfillment orders for this order
-              console.log('📋 Fetching fulfillment orders...');
-              const fulfillmentOrdersResponse = await fetch(
-              `https://${shopDomain}/admin/api/2024-01/orders/${body.shopify_order_id}/fulfillment_orders.json`,
-              {
-                method: 'GET',
-                headers: {
-                  'X-Shopify-Access-Token': accessToken,
-                  'Content-Type': 'application/json'
-                }
+          // Retry logic (up to 3 attempts, 500ms between)
+          let shopifyFulfillmentId: string | null = null;
+          let shopifyFulfillmentStatus = 'pending';
+          let shopifyFulfillmentError: string | null = null;
+
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const foResponse = await fetch(
+                `https://${shopDomain}/admin/api/2024-01/orders/${body.shopify_order_id}/fulfillment_orders.json`,
+                { headers: { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' } }
+              );
+              const foData = await foResponse.json();
+
+              if (!foResponse.ok) {
+                shopifyFulfillmentStatus = 'failed';
+                shopifyFulfillmentError = JSON.stringify(foData.errors || foData);
+                continue;
               }
-            );
-            
-            const fulfillmentOrdersData = await fulfillmentOrdersResponse.json();
-            console.log('📋 Fulfillment orders status:', fulfillmentOrdersResponse.status);
-            console.log('📋 Fulfillment orders response:', JSON.stringify(fulfillmentOrdersData, null, 2));
-            
-            if (!fulfillmentOrdersResponse.ok) {
-              console.error('❌ Failed to get fulfillment orders:', fulfillmentOrdersData);
-              shopifyFulfillmentStatus = 'failed';
-              shopifyFulfillmentError = `Failed to get fulfillment orders: ${JSON.stringify(fulfillmentOrdersData.errors || fulfillmentOrdersData)}`;
-            } else {
-              // Get the first open fulfillment order
-              const fulfillmentOrders = fulfillmentOrdersData.fulfillment_orders || [];
-              console.log('📋 Found', fulfillmentOrders.length, 'fulfillment orders');
-              fulfillmentOrders.forEach((fo: any, idx: number) => {
-                console.log(`📋 Fulfillment order ${idx}: id=${fo.id}, status=${fo.status}`);
-              });
-              
-              const openFulfillmentOrder = fulfillmentOrders.find(
+
+              const openFO = (foData.fulfillment_orders || []).find(
                 (fo: any) => fo.status === 'open' || fo.status === 'in_progress'
               );
-              
-              if (!openFulfillmentOrder) {
-                console.log('⚠️ No open fulfillment orders found - order may already be fulfilled');
+
+              if (!openFO) {
                 shopifyFulfillmentStatus = 'skipped';
-                shopifyFulfillmentError = 'No open fulfillment orders - already fulfilled or cancelled';
-                break; // No point retrying if already fulfilled
-              } else {
-                const fulfillmentOrderId = openFulfillmentOrder.id;
-                console.log('📦 Using fulfillment_order_id:', fulfillmentOrderId);
-                
-                // Step 2: Create fulfillment using the new endpoint
-                const fulfillmentPayload = {
-                  fulfillment: {
-                    line_items_by_fulfillment_order: [
-                      {
-                        fulfillment_order_id: fulfillmentOrderId
-                      }
-                    ],
-                tracking_info: {
-                      company: trackingCompany,
-                      number: shipmentData.trackingNumber,
-                      url: `https://envia.com/es-CO/tracking?label=${shipmentData.trackingNumber}`
-                    },
-                    notify_customer: true
-                  }
-                };
-                
-                console.log('📦 Creating fulfillment with payload:', JSON.stringify(fulfillmentPayload, null, 2));
-                
-                const fulfillmentResponse = await fetch(
-                  `https://${shopDomain}/admin/api/2024-01/fulfillments.json`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'X-Shopify-Access-Token': accessToken,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(fulfillmentPayload)
-                  }
-                );
-                
-                const fulfillmentData = await fulfillmentResponse.json();
-                console.log('📦 Fulfillment response status:', fulfillmentResponse.status);
-                console.log('📦 Fulfillment response:', JSON.stringify(fulfillmentData, null, 2));
-                
-                if (fulfillmentResponse.ok && fulfillmentData.fulfillment?.id) {
-                  shopifyFulfillmentId = String(fulfillmentData.fulfillment.id);
-                  shopifyFulfillmentStatus = 'success';
-                  console.log('✅ Shopify fulfillment created successfully! ID:', shopifyFulfillmentId);
-                  break; // Success - no more retries
-                } else {
-                  shopifyFulfillmentStatus = 'failed';
-                  shopifyFulfillmentError = JSON.stringify(fulfillmentData.errors || fulfillmentData);
-                  console.error(`❌ Shopify fulfillment failed (attempt ${attempt}):`, shopifyFulfillmentError);
+                shopifyFulfillmentError = 'No open fulfillment orders';
+                break;
+              }
+
+              const fResponse = await fetch(
+                `https://${shopDomain}/admin/api/2024-01/fulfillments.json`,
+                {
+                  method: 'POST',
+                  headers: { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    fulfillment: {
+                      line_items_by_fulfillment_order: [{ fulfillment_order_id: openFO.id }],
+                      tracking_info: {
+                        company: trackingCompany,
+                        number: shipmentData.trackingNumber,
+                        url: `https://envia.com/es-CO/tracking?label=${shipmentData.trackingNumber}`
+                      },
+                      notify_customer: true
+                    }
+                  })
                 }
-              }
-            }
-              } catch (retryError: any) {
+              );
+              const fData = await fResponse.json();
+
+              if (fResponse.ok && fData.fulfillment?.id) {
+                shopifyFulfillmentId = String(fData.fulfillment.id);
+                shopifyFulfillmentStatus = 'success';
+                console.log('✅ [BACKGROUND] Shopify fulfillment created:', shopifyFulfillmentId);
+                break;
+              } else {
                 shopifyFulfillmentStatus = 'failed';
-                shopifyFulfillmentError = retryError.message || 'Unknown error in fulfillment attempt';
-                console.error(`❌ Exception in fulfillment attempt ${attempt}:`, retryError);
+                shopifyFulfillmentError = JSON.stringify(fData.errors || fData);
               }
-
-              // Wait before retrying (unless last attempt or already succeeded/skipped)
-              if (attempt < MAX_FULFILLMENT_RETRIES && shopifyFulfillmentStatus === 'failed') {
-                console.log(`⏳ Waiting ${RETRY_DELAY_MS}ms before retry...`);
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-              }
-            } // end retry loop
-
-            // Update local database regardless of Shopify result
-            // Update picking_packing_orders to 'shipped'
-            const { error: pickingError } = await supabase
-              .from('picking_packing_orders')
-              .update({ 
-                operational_status: 'shipped',
-                shipped_at: new Date().toISOString()
-              })
-              .eq('shopify_order_id', body.shopify_order_id);
-            
-            if (pickingError) {
-              console.error('⚠️ Error updating picking_packing_orders:', pickingError);
-            } else {
-              console.log('✅ picking_packing_orders updated to shipped');
+            } catch (retryErr: any) {
+              shopifyFulfillmentStatus = 'failed';
+              shopifyFulfillmentError = retryErr.message;
             }
-            
-            // Update shopify_orders fulfillment_status
-            const { error: shopifyError } = await supabase
-              .from('shopify_orders')
-              .update({ fulfillment_status: 'fulfilled' })
-              .eq('shopify_order_id', body.shopify_order_id);
-            
-            if (shopifyError) {
-              console.error('⚠️ Error updating shopify_orders:', shopifyError);
-            } else {
-              console.log('✅ shopify_orders updated to fulfilled');
+
+            if (attempt < 3 && shopifyFulfillmentStatus === 'failed') {
+              await new Promise(r => setTimeout(r, 500));
             }
           }
-        }
-      } catch (fulfillmentError: any) {
-        console.error('❌ Exception in Shopify fulfillment:', fulfillmentError);
-        shopifyFulfillmentStatus = 'failed';
-        shopifyFulfillmentError = fulfillmentError.message || 'Unknown error';
-      }
-    } else {
-      console.log('⚠️ Skipping Shopify fulfillment - missing shopify_order_id or organization_id');
-      shopifyFulfillmentStatus = 'skipped';
-      shopifyFulfillmentError = 'Missing shopify_order_id or organization_id';
-    }
-    
-    // Update shipping_labels with fulfillment status
-    if (savedLabel?.id) {
-      console.log('📝 Updating shipping_labels with fulfillment status:', shopifyFulfillmentStatus);
-      const { error: updateError } = await supabase
-        .from('shipping_labels')
-        .update({
-          shopify_fulfillment_id: shopifyFulfillmentId,
-          shopify_fulfillment_status: shopifyFulfillmentStatus,
-          shopify_fulfillment_error: shopifyFulfillmentError
-        })
-        .eq('id', savedLabel.id);
-      
-      if (updateError) {
-        console.error('⚠️ Error updating shipping_labels with fulfillment status:', updateError);
-      } else {
-        console.log('✅ shipping_labels updated with fulfillment status');
-      }
-    }
-    
-    console.log('📦 ===== SHOPIFY FULFILLMENT COMPLETE =====');
-    console.log('📦 Status:', shopifyFulfillmentStatus);
-    console.log('📦 Fulfillment ID:', shopifyFulfillmentId);
-    console.log('📦 Error:', shopifyFulfillmentError);
 
+          // Update local DB in parallel
+          await Promise.all([
+            supabase.from('picking_packing_orders')
+              .update({ operational_status: 'shipped', shipped_at: new Date().toISOString() })
+              .eq('shopify_order_id', body.shopify_order_id),
+            supabase.from('shopify_orders')
+              .update({ fulfillment_status: 'fulfilled' })
+              .eq('shopify_order_id', body.shopify_order_id),
+            savedLabel?.id ? supabase.from('shipping_labels')
+              .update({
+                shopify_fulfillment_id: shopifyFulfillmentId,
+                shopify_fulfillment_status: shopifyFulfillmentStatus,
+                shopify_fulfillment_error: shopifyFulfillmentError
+              })
+              .eq('id', savedLabel.id) : Promise.resolve()
+          ]);
+
+          console.log('✅ [BACKGROUND] Fulfillment complete:', shopifyFulfillmentStatus);
+        } catch (bgError: any) {
+          console.error('❌ [BACKGROUND] Fulfillment error:', bgError.message);
+        }
+      })().catch(err => console.error('❌ [BACKGROUND] Unhandled:', err));
+    }
+
+    // Return immediately — user sees label without waiting for Shopify
     return new Response(
       JSON.stringify({
         success: true,
