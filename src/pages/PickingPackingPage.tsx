@@ -83,12 +83,19 @@ const PickingPackingPage = () => {
   const { toast } = useToast();
   const { availableTags } = useShopifyTags();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
+  // Read initial order from URL (preserve across refresh)
+  const initialOrderId = searchParams.get('order');
+
   // Clear URL filters on initial mount - user starts with clean slate
+  // But preserve the 'order' param if present
   useEffect(() => {
-    const hasFilters = searchParams.toString().length > 0;
-    if (hasFilters) {
-      setSearchParams(new URLSearchParams(), { replace: true });
+    const orderParam = searchParams.get('order');
+    const hasOtherFilters = Array.from(searchParams.keys()).some(k => k !== 'order');
+    if (hasOtherFilters) {
+      const clean = new URLSearchParams();
+      if (orderParam) clean.set('order', orderParam);
+      setSearchParams(clean, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
@@ -118,7 +125,34 @@ const PickingPackingPage = () => {
     fetchOrders,
     bulkUpdateOrdersByDate
   } = usePickingOrders();
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderIdRaw] = useState<string | null>(null);
+
+  // Sync selectedOrderId with URL ?order= param
+  const setSelectedOrderId = (orderId: string | null) => {
+    setSelectedOrderIdRaw(orderId);
+    if (orderId) {
+      // Find order number for URL (more readable than UUID)
+      const order = orders.find(o => o.id === orderId);
+      const orderNumber = order?.shopify_order?.order_number || orderId;
+      searchParams.set('order', orderNumber);
+    } else {
+      searchParams.delete('order');
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
+
+  // Restore order from URL on initial load (after orders are fetched)
+  useEffect(() => {
+    if (!initialOrderId || orders.length === 0 || selectedOrderId) return;
+    // Match by order_number or by picking order id
+    const order = orders.find(o =>
+      o.shopify_order?.order_number === initialOrderId || o.id === initialOrderId
+    );
+    if (order) {
+      setSelectedOrderIdRaw(order.id);
+    }
+  }, [orders, initialOrderId, selectedOrderId]);
+
   const [filterSelectorOpen, setFilterSelectorOpen] = useState(false);
   const [selectedFilterOption, setSelectedFilterOption] = useState<FilterOption | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
