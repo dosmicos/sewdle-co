@@ -81,141 +81,245 @@ const COLOMBIA_STATE_CODES: Record<string, string> = {
 };
 
 // Normalize text for comparison (removes accents and lowercases)
-// Defined here so it can be used by getDaneCodeFromDB
 function normalizeForComparison(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
-// Find coverage row with accent-insensitive matching in JavaScript
-// This solves the ilike limitation with accents (Medellin vs Medellín)
-async function findCoverageRowNormalized(
-  supabase: any, 
-  organizationId: string, 
-  city: string, 
-  department?: string
-): Promise<{ dane_code: string; municipality: string; department: string } | null> {
-  const normalizedCity = normalizeForComparison(city);
-  const normalizedDept = department ? normalizeForComparison(department) : null;
-  
-  console.log(`🔍 Finding coverage (accent-insensitive): city="${city}" (norm: "${normalizedCity}"), dept="${department}" (norm: "${normalizedDept}")`);
-  
-  // Build query - get candidates filtered by organization and optionally department
-  let query = supabase
-    .from('shipping_coverage')
-    .select('dane_code, municipality, department')
-    .eq('organization_id', organizationId);
-  
-  // Special case: Bogotá can come with province "Cundinamarca" from Shopify 
-  // but is stored as department "Bogotá" in the database
-  const isBogota = normalizedCity.includes('bogota');
-
-  if (isBogota) {
-    console.log(`🏛️ Detected Bogotá - searching in both Bogotá and Cundinamarca departments`);
-    query = query.or('department.ilike.%bogot%,department.ilike.%cundi%');
-  } else if (normalizedDept) {
-    // Normal case: filter by provided department
-    query = query.ilike('department', `%${normalizedDept.substring(0, 5)}%`);
+// Levenshtein distance for fuzzy matching
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
   }
-  
-  // Limit candidates for performance
-  query = query.limit(500);
-  
-  const { data: candidates, error } = await query;
-  
-  if (error) {
-    console.error('❌ Error querying shipping_coverage:', error);
-    return null;
-  }
-  
-  if (!candidates || candidates.length === 0) {
-    console.log(`⚠️ No coverage candidates found for org=${organizationId}, dept contains "${normalizedDept?.substring(0, 5) || 'any'}"`);
-    return null;
-  }
-  
-  console.log(`📊 Found ${candidates.length} coverage candidates, matching city...`);
-  
-  // Match in JavaScript using normalized comparison
-  // Priority 1: Exact match (normalized)
-  let match = candidates.find((row: any) => 
-    normalizeForComparison(row.municipality) === normalizedCity
-  );
-  
-  if (match) {
-    console.log(`✅ DANE found (exact norm match): "${city}" → "${match.dane_code}" (${match.municipality})`);
-    return match;
-  }
-  
-  // Priority 2: Municipality contains city or vice versa
-  // Find ALL partial matches, then pick the longest municipality name (most specific)
-  // This prevents "Pitalito" from matching "Pital" incorrectly
-  const partialMatches = candidates.filter((row: any) => {
-    const normMunicipality = normalizeForComparison(row.municipality);
-    return normMunicipality.includes(normalizedCity) || normalizedCity.includes(normMunicipality);
-  });
-
-  if (partialMatches.length > 0) {
-    // Sort by municipality name length descending - longest (most specific) wins
-    // "Pitalito" (8 chars) beats "Pital" (5 chars)
-    partialMatches.sort((a: any, b: any) => 
-      b.municipality.length - a.municipality.length
-    );
-    match = partialMatches[0];
-    console.log(`✅ DANE found (partial norm match, ${partialMatches.length} candidates, picked longest): "${city}" → "${match.dane_code}" (${match.municipality})`);
-    return match;
-  }
-  
-  console.log(`⚠️ No matching municipality found for "${city}" among ${candidates.length} candidates`);
-  return null;
+  return dp[m][n];
 }
 
-// Get DANE code - uses normalized matching + fallback to Envia Queries API
+// Use AI (OpenAI) to resolve ambiguous municipality matches
+async function resolveWithAI(
+  city: string,
+  department: string | undefined,
+  candidates: { municipality: string; department: string; dane_code: string }[]
+): Promise<{ municipality: string; department: string; dane_code: string } | null> {
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiKey) {
+    console.log('⚠️ No OPENAI_API_KEY configured, skipping AI resolution');
+    return null;
+  }
+
+  const candidateList = candidates
+    .map((c, i) => `${i + 1}. ${c.municipality}, ${c.department} (DANE: ${c.dane_code})`)
+    .join('\n');
+
+  const prompt = `El cliente escribió esta dirección de envío en Colombia:
+- Ciudad: "${city}"
+- Departamento: "${department || 'no especificado'}"
+
+Hay varios municipios con nombres similares. ¿Cuál es el correcto?
+
+${candidateList}
+
+Responde SOLO con el número de la opción correcta (1, 2, 3, etc). Si no estás seguro, responde "0".`;
+
+  try {
+    console.log(`🤖 Calling AI to disambiguate "${city}" among ${candidates.length} candidates...`);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 10,
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('❌ AI API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const answer = data.choices?.[0]?.message?.content?.trim();
+    console.log(`🤖 AI answered: "${answer}"`);
+
+    const index = parseInt(answer, 10);
+    if (index > 0 && index <= candidates.length) {
+      const selected = candidates[index - 1];
+      console.log(`✅ AI resolved: "${city}" → ${selected.municipality}, ${selected.department}`);
+      return selected;
+    }
+
+    console.log('⚠️ AI could not determine the correct municipality');
+    return null;
+  } catch (err) {
+    console.error('❌ AI resolution error:', err);
+    return null;
+  }
+}
+
+// 3-layer DANE code lookup:
+// 1. Exact match (using pre-normalized column in DB)
+// 2. Fuzzy match with Levenshtein distance (ignoring department for flexibility)
+// 3. AI disambiguation for ambiguous cases
+// 4. Fallback to Envia Queries API
 async function getDaneCodeFromDB(
-  supabase: any, 
-  city: string, 
-  department: string | undefined, 
+  supabase: any,
+  city: string,
+  department: string | undefined,
   organizationId: string,
   enviaApiKey: string
 ): Promise<{ daneCode: string; source: string } | null> {
-  
-  // Step 1: Try to find in shipping_coverage with accent-insensitive matching
-  const coverage = await findCoverageRowNormalized(supabase, organizationId, city, department);
-  
-  if (coverage?.dane_code) {
-    return { daneCode: coverage.dane_code, source: 'db' };
+
+  const normalizedCity = normalizeForComparison(city);
+  const normalizedDept = department ? normalizeForComparison(department) : null;
+
+  console.log(`🔍 DANE lookup: city="${city}" (norm: "${normalizedCity}"), dept="${department}" (norm: "${normalizedDept}")`);
+
+  // ============= LAYER 1: Exact match using normalized column =============
+  // Search by city only (ignore department) — handles "Chía" + dept "Bogotá" → finds Chía, Cundinamarca
+  const { data: exactMatches, error: exactErr } = await supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department')
+    .eq('organization_id', organizationId)
+    .eq('municipality_normalized', normalizedCity);
+
+  if (exactErr) {
+    console.error('❌ Error in exact DANE lookup:', exactErr);
   }
-  
-  // Step 2: Fallback to Envia Queries API
-  console.log(`🔄 DANE not in DB, falling back to Envia Queries API for "${city}"...`);
+
+  if (exactMatches && exactMatches.length === 1) {
+    // Unique match — perfect
+    console.log(`✅ DANE found (exact, unique): "${city}" → "${exactMatches[0].dane_code}" (${exactMatches[0].municipality}, ${exactMatches[0].department})`);
+    return { daneCode: exactMatches[0].dane_code, source: 'db_exact' };
+  }
+
+  if (exactMatches && exactMatches.length > 1) {
+    // Multiple matches (duplicate municipality names) — try department to disambiguate
+    console.log(`📊 Found ${exactMatches.length} exact matches for "${city}", using department to disambiguate...`);
+
+    if (normalizedDept) {
+      const deptMatch = exactMatches.find((r: any) =>
+        normalizeForComparison(r.department) === normalizedDept ||
+        normalizeForComparison(r.department).includes(normalizedDept) ||
+        normalizedDept.includes(normalizeForComparison(r.department))
+      );
+      if (deptMatch) {
+        console.log(`✅ DANE found (exact + dept match): "${city}" → "${deptMatch.dane_code}" (${deptMatch.municipality}, ${deptMatch.department})`);
+        return { daneCode: deptMatch.dane_code, source: 'db_exact_dept' };
+      }
+    }
+
+    // Department didn't help — try AI
+    const aiResult = await resolveWithAI(city, department, exactMatches);
+    if (aiResult?.dane_code) {
+      console.log(`✅ DANE found (AI disambiguated): "${city}" → "${aiResult.dane_code}" (${aiResult.municipality}, ${aiResult.department})`);
+      return { daneCode: aiResult.dane_code, source: 'ai_disambiguation' };
+    }
+
+    // Last resort: return first match
+    console.log(`⚠️ Could not disambiguate, using first match: ${exactMatches[0].municipality}, ${exactMatches[0].department}`);
+    return { daneCode: exactMatches[0].dane_code, source: 'db_exact_first' };
+  }
+
+  // ============= LAYER 2: Fuzzy match with Levenshtein =============
+  // Fetch all municipalities for this org and find closest match
+  console.log(`🔄 No exact match, trying fuzzy matching for "${city}"...`);
+
+  const { data: allMunicipalities, error: fuzzyErr } = await supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department, municipality_normalized')
+    .eq('organization_id', organizationId);
+
+  if (fuzzyErr) {
+    console.error('❌ Error fetching municipalities for fuzzy match:', fuzzyErr);
+  }
+
+  if (allMunicipalities && allMunicipalities.length > 0) {
+    // Calculate Levenshtein distance for each municipality
+    const scored = allMunicipalities
+      .map((row: any) => ({
+        ...row,
+        distance: levenshtein(normalizedCity, row.municipality_normalized || normalizeForComparison(row.municipality))
+      }))
+      .filter((row: any) => row.distance <= 3) // Max 3 edits
+      .sort((a: any, b: any) => a.distance - b.distance);
+
+    if (scored.length > 0) {
+      const bestDistance = scored[0].distance;
+      const bestMatches = scored.filter((r: any) => r.distance === bestDistance);
+
+      console.log(`📊 Fuzzy: ${scored.length} matches within distance 3, best distance: ${bestDistance}, ${bestMatches.length} tied`);
+
+      if (bestMatches.length === 1) {
+        // Single best fuzzy match
+        console.log(`✅ DANE found (fuzzy, distance=${bestDistance}): "${city}" → "${bestMatches[0].dane_code}" (${bestMatches[0].municipality}, ${bestMatches[0].department})`);
+        return { daneCode: bestMatches[0].dane_code, source: `db_fuzzy_d${bestDistance}` };
+      }
+
+      // Multiple tied fuzzy matches — try department
+      if (normalizedDept) {
+        const deptMatch = bestMatches.find((r: any) =>
+          normalizeForComparison(r.department) === normalizedDept ||
+          normalizeForComparison(r.department).includes(normalizedDept) ||
+          normalizedDept.includes(normalizeForComparison(r.department))
+        );
+        if (deptMatch) {
+          console.log(`✅ DANE found (fuzzy + dept, distance=${bestDistance}): "${city}" → "${deptMatch.dane_code}" (${deptMatch.municipality}, ${deptMatch.department})`);
+          return { daneCode: deptMatch.dane_code, source: `db_fuzzy_dept_d${bestDistance}` };
+        }
+      }
+
+      // Multiple tied, department didn't help — try AI
+      const aiResult = await resolveWithAI(city, department, bestMatches);
+      if (aiResult?.dane_code) {
+        console.log(`✅ DANE found (fuzzy + AI, distance=${bestDistance}): "${city}" → "${aiResult.dane_code}" (${aiResult.municipality}, ${aiResult.department})`);
+        return { daneCode: aiResult.dane_code, source: `ai_fuzzy_d${bestDistance}` };
+      }
+
+      // Fallback to first fuzzy match
+      console.log(`⚠️ Using first fuzzy match: ${bestMatches[0].municipality}, ${bestMatches[0].department}`);
+      return { daneCode: bestMatches[0].dane_code, source: `db_fuzzy_first_d${bestDistance}` };
+    }
+  }
+
+  // ============= LAYER 3: Fallback to Envia Queries API =============
+  console.log(`🔄 No fuzzy match, falling back to Envia Queries API for "${city}"...`);
   const enviaLookup = await lookupEnviaCity('CO', city, enviaApiKey);
-  
+
   if (enviaLookup?.zipCode && /^\d{5,8}$/.test(enviaLookup.zipCode)) {
     console.log(`✅ DANE from Envia API: "${city}" → "${enviaLookup.zipCode}"`);
-    
-    // Optional: Cache this DANE in shipping_coverage for future use
+
+    // Cache for future use
     try {
-      const { error: insertError } = await supabase
+      await supabase
         .from('shipping_coverage')
         .insert({
           organization_id: organizationId,
           municipality: city,
           department: department || enviaLookup.state || 'Unknown',
           dane_code: enviaLookup.zipCode,
-          carrier: 'envia_lookup',
-          is_covered: true
         });
-      
-      if (!insertError) {
-        console.log(`💾 Cached DANE for "${city}" in shipping_coverage`);
-      } else {
-        console.log(`⚠️ Could not cache DANE (non-critical):`, insertError.message);
-      }
+      console.log(`💾 Cached DANE for "${city}" in shipping_coverage`);
     } catch (cacheError) {
       console.log(`⚠️ Cache error (non-critical):`, cacheError);
     }
-    
+
     return { daneCode: enviaLookup.zipCode, source: 'envia_api' };
   }
-  
+
   // No DANE found anywhere
   console.error(`❌ NO DANE CODE FOUND for city: "${city}" (dept: ${department || 'unknown'})`);
   return null;
@@ -281,8 +385,6 @@ function getStateCode(department: string): string {
   // Finally, look up by department name
   return COLOMBIA_STATE_CODES[lower] || 'DC'; // Default to Bogota if unknown
 }
-
-// (lookupEnviaCity function defined below, after extractDistrict and parseAddress)
 
 // Extract district/neighborhood from address
 function extractDistrict(address: string, city: string): string {
@@ -1038,9 +1140,20 @@ serve(async (req) => {
             const trackingCompany = carrierNamesMap[carrierConfig.carrier.toLowerCase()] || carrierConfig.carrier;
             console.log('📦 Tracking company:', trackingCompany);
             
-            // Step 1: Get fulfillment orders for this order
-            console.log('📋 Fetching fulfillment orders...');
-            const fulfillmentOrdersResponse = await fetch(
+            // Retry logic for Shopify fulfillment (up to 3 attempts)
+            const MAX_FULFILLMENT_RETRIES = 3;
+            const RETRY_DELAY_MS = 2000;
+
+            for (let attempt = 1; attempt <= MAX_FULFILLMENT_RETRIES; attempt++) {
+              console.log(`📦 Shopify fulfillment attempt ${attempt}/${MAX_FULFILLMENT_RETRIES}`);
+              shopifyFulfillmentStatus = 'pending';
+              shopifyFulfillmentError = null;
+              shopifyFulfillmentId = null;
+
+              try {
+              // Step 1: Get fulfillment orders for this order
+              console.log('📋 Fetching fulfillment orders...');
+              const fulfillmentOrdersResponse = await fetch(
               `https://${shopDomain}/admin/api/2024-01/orders/${body.shopify_order_id}/fulfillment_orders.json`,
               {
                 method: 'GET',
@@ -1075,6 +1188,7 @@ serve(async (req) => {
                 console.log('⚠️ No open fulfillment orders found - order may already be fulfilled');
                 shopifyFulfillmentStatus = 'skipped';
                 shopifyFulfillmentError = 'No open fulfillment orders - already fulfilled or cancelled';
+                break; // No point retrying if already fulfilled
               } else {
                 const fulfillmentOrderId = openFulfillmentOrder.id;
                 console.log('📦 Using fulfillment_order_id:', fulfillmentOrderId);
@@ -1118,14 +1232,27 @@ serve(async (req) => {
                   shopifyFulfillmentId = String(fulfillmentData.fulfillment.id);
                   shopifyFulfillmentStatus = 'success';
                   console.log('✅ Shopify fulfillment created successfully! ID:', shopifyFulfillmentId);
+                  break; // Success - no more retries
                 } else {
                   shopifyFulfillmentStatus = 'failed';
                   shopifyFulfillmentError = JSON.stringify(fulfillmentData.errors || fulfillmentData);
-                  console.error('❌ Shopify fulfillment failed:', shopifyFulfillmentError);
+                  console.error(`❌ Shopify fulfillment failed (attempt ${attempt}):`, shopifyFulfillmentError);
                 }
               }
             }
-            
+              } catch (retryError: any) {
+                shopifyFulfillmentStatus = 'failed';
+                shopifyFulfillmentError = retryError.message || 'Unknown error in fulfillment attempt';
+                console.error(`❌ Exception in fulfillment attempt ${attempt}:`, retryError);
+              }
+
+              // Wait before retrying (unless last attempt or already succeeded/skipped)
+              if (attempt < MAX_FULFILLMENT_RETRIES && shopifyFulfillmentStatus === 'failed') {
+                console.log(`⏳ Waiting ${RETRY_DELAY_MS}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+              }
+            } // end retry loop
+
             // Update local database regardless of Shopify result
             // Update picking_packing_orders to 'shipped'
             const { error: pickingError } = await supabase
