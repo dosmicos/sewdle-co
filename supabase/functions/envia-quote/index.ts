@@ -103,119 +103,127 @@ interface DaneCodeResult {
   matchInfo: CityMatchInfo;
 }
 
-// Get DANE code from database with match info - queries shipping_coverage table
+// Get DANE code from database with match info - uses indexed normalized column
 async function getDaneCodeWithMatchInfo(supabase: any, city: string, department?: string): Promise<DaneCodeResult> {
   const originalCity = city.trim();
   const normalizedCity = city.toLowerCase().trim()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
+
   console.log(`🔍 Looking up DANE code for city: "${originalCity}" (normalized: "${normalizedCity}")`);
-  
-  // Step 1: Try exact match with ORIGINAL name (preserves accents like "Fómeque")
-  let { data, error } = await supabase
+
+  // Step 1: Exact match using indexed municipality_normalized column (ignores department)
+  const { data: exactMatches, error: exactErr } = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
-    .ilike('municipality', originalCity)
-    .limit(1);
-  
-  if (data && data.length > 0) {
-    console.log(`✅ DANE code found (exact with accents): "${originalCity}" → "${data[0].dane_code}"`);
+    .eq('municipality_normalized', normalizedCity);
+
+  if (exactErr) {
+    console.error('❌ Error in exact DANE lookup:', exactErr);
+  }
+
+  if (exactMatches && exactMatches.length === 1) {
+    console.log(`✅ DANE found (exact, unique): "${originalCity}" → "${exactMatches[0].dane_code}" (${exactMatches[0].municipality}, ${exactMatches[0].department})`);
     return {
-      daneCode: data[0].dane_code,
+      daneCode: exactMatches[0].dane_code,
       matchInfo: {
         matchType: 'exact',
         inputCity: originalCity,
-        matchedMunicipality: data[0].municipality,
-        matchedDepartment: data[0].department,
+        matchedMunicipality: exactMatches[0].municipality,
+        matchedDepartment: exactMatches[0].department,
         confidence: 1.0,
         suggestions: []
       }
     };
   }
-  
-  // Step 2: Get all municipalities to search for exact normalized match or fuzzy matches
-  const { data: allMunicipalities } = await supabase
-    .from('shipping_coverage')
-    .select('dane_code, municipality, department')
-    .limit(2000);
-  
-  if (allMunicipalities && allMunicipalities.length > 0) {
+
+  if (exactMatches && exactMatches.length > 1) {
+    // Multiple matches — use department to disambiguate
     const normalizedDept = department?.toLowerCase().trim()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '') || '';
-    
-    // Try exact normalized match first
-    const exactMatch = allMunicipalities.find((item: any) => {
-      const itemMunicipality = item.municipality.toLowerCase().trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const itemDept = item.department.toLowerCase().trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      
-      const cityMatches = itemMunicipality === normalizedCity;
-      const deptMatches = !department || itemDept.includes(normalizedDept) || normalizedDept.includes(itemDept);
-      
-      return cityMatches && deptMatches;
-    });
-    
-    if (exactMatch) {
-      console.log(`✅ DANE code found (exact normalized): "${originalCity}" → "${exactMatch.dane_code}" (${exactMatch.municipality})`);
-      return {
-        daneCode: exactMatch.dane_code,
-        matchInfo: {
-          matchType: 'exact',
-          inputCity: originalCity,
-          matchedMunicipality: exactMatch.municipality,
-          matchedDepartment: exactMatch.department,
-          confidence: 1.0,
-          suggestions: []
-        }
-      };
-    }
-    
-    // Calculate similarity for all municipalities
-    const similarityResults: Array<{ municipality: string; department: string; similarity: number; dane_code: string }> = [];
-    
-    for (const item of allMunicipalities) {
-      const similarity = calculateSimilarity(originalCity, item.municipality);
-      if (similarity >= 0.7) {
-        similarityResults.push({
-          municipality: item.municipality,
-          department: item.department,
-          similarity,
-          dane_code: item.dane_code
-        });
+
+    if (normalizedDept) {
+      const deptMatch = exactMatches.find((r: any) => {
+        const rd = r.department.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return rd === normalizedDept || rd.includes(normalizedDept) || normalizedDept.includes(rd);
+      });
+      if (deptMatch) {
+        console.log(`✅ DANE found (exact + dept): "${originalCity}" → "${deptMatch.dane_code}" (${deptMatch.municipality}, ${deptMatch.department})`);
+        return {
+          daneCode: deptMatch.dane_code,
+          matchInfo: {
+            matchType: 'exact',
+            inputCity: originalCity,
+            matchedMunicipality: deptMatch.municipality,
+            matchedDepartment: deptMatch.department,
+            confidence: 1.0,
+            suggestions: []
+          }
+        };
       }
     }
-    
-    // Sort by similarity descending
-    similarityResults.sort((a, b) => b.similarity - a.similarity);
-    
-    // If we have good fuzzy matches
-    if (similarityResults.length > 0) {
-      const bestMatch = similarityResults[0];
-      console.log(`⚠️ Fuzzy match: "${originalCity}" → "${bestMatch.municipality}" (${(bestMatch.similarity * 100).toFixed(0)}% similar)`);
-      
+
+    // Default to first match
+    console.log(`⚠️ Multiple matches, using first: ${exactMatches[0].municipality}, ${exactMatches[0].department}`);
+    return {
+      daneCode: exactMatches[0].dane_code,
+      matchInfo: {
+        matchType: 'exact',
+        inputCity: originalCity,
+        matchedMunicipality: exactMatches[0].municipality,
+        matchedDepartment: exactMatches[0].department,
+        confidence: 0.8,
+        suggestions: exactMatches.slice(0, 3).map((s: any) => ({
+          municipality: s.municipality,
+          department: s.department,
+          similarity: 1.0
+        }))
+      }
+    };
+  }
+
+  // Step 2: Fuzzy match with Levenshtein
+  console.log(`🔄 No exact match, trying fuzzy for "${originalCity}"...`);
+
+  const { data: allMunicipalities } = await supabase
+    .from('shipping_coverage')
+    .select('dane_code, municipality, department, municipality_normalized');
+
+  if (allMunicipalities && allMunicipalities.length > 0) {
+    const scored = allMunicipalities
+      .map((row: any) => ({
+        ...row,
+        distance: levenshteinDistance(normalizedCity, row.municipality_normalized || row.municipality.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+      }))
+      .filter((row: any) => row.distance <= 3)
+      .sort((a: any, b: any) => a.distance - b.distance);
+
+    if (scored.length > 0) {
+      const best = scored[0];
+      const similarity = 1 - (best.distance / Math.max(normalizedCity.length, (best.municipality_normalized || best.municipality).length));
+      console.log(`✅ Fuzzy match (distance=${best.distance}): "${originalCity}" → "${best.municipality}" (${best.department})`);
+
       return {
-        daneCode: bestMatch.dane_code,
+        daneCode: best.dane_code,
         matchInfo: {
           matchType: 'fuzzy',
           inputCity: originalCity,
-          matchedMunicipality: bestMatch.municipality,
-          matchedDepartment: bestMatch.department,
-          confidence: bestMatch.similarity,
-          suggestions: similarityResults.slice(0, 3).map(s => ({
+          matchedMunicipality: best.municipality,
+          matchedDepartment: best.department,
+          confidence: similarity,
+          suggestions: scored.slice(0, 3).map((s: any) => ({
             municipality: s.municipality,
             department: s.department,
-            similarity: s.similarity
+            similarity: 1 - (s.distance / Math.max(normalizedCity.length, (s.municipality_normalized || s.municipality).length))
           }))
         }
       };
     }
   }
-  
-  // No match found at all
+
+  // No match found
   console.log(`❌ DANE code not found for "${originalCity}", returning not_found`);
   return {
-    daneCode: '11001000', // Bogotá fallback for API call
+    daneCode: '11001000',
     matchInfo: {
       matchType: 'not_found',
       inputCity: originalCity,
