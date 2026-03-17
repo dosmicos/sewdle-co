@@ -694,10 +694,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           toast.error('Ya se está creando una guía');
           return;
         }
-        // canCreateLabel checks address + city validity, but allow even if quotes are loading
-        const canProceed = shippingAddress?.city && shippingAddress?.address1 && !isActiveLabel;
-        if (!canProceed) {
-          toast.error('No es posible crear guía en este momento');
+        if (isActiveLabel) {
+          toast.error('Ya existe una guía activa para este pedido');
+          return;
+        }
+        if (!shippingAddress?.city) {
+          toast.error('Falta la ciudad en la dirección de envío');
           return;
         }
         // Use unified flow if no quotes loaded yet (handles quoting + creating in one step)
