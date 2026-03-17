@@ -123,5 +123,18 @@ export const useUgcVideos = (creatorId?: string | null, campaignId?: string | nu
     onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
 
-  return { videos, isLoading, createVideo, updateVideoStatus, updateVideoPublication };
+  const deleteVideo = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('ugc_videos').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-videos'] });
+      queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
+      toast.success('Contenido eliminado');
+    },
+    onError: (err: Error) => toast.error(`Error: ${err.message}`),
+  });
+
+  return { videos, isLoading, createVideo, updateVideoStatus, updateVideoPublication, deleteVideo };
 };

@@ -46,7 +46,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onVideoPublicationChange,
   onDelete,
 }) => {
-  const { videos: allVideos } = useUgcVideos(creator?.id);
+  const { videos: allVideos, deleteVideo } = useUgcVideos(creator?.id);
 
   const isPhotoContent = (platform: string | null, url: string | null): boolean => {
     if (platform === 'instagram_post' || platform === 'instagram_carousel') return true;
@@ -560,6 +560,18 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                                   <ExternalLink className="h-3 w-3 mr-1" /> Ver
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  if (confirm('¿Estás seguro de eliminar este contenido? Esta acción no se puede deshacer.')) {
+                                    deleteVideo.mutate(video.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
                               {video.status === 'en_revision' && (
                                 <>
                                   <Button size="sm" variant="outline" className="h-7 text-xs text-green-700" onClick={() => onVideoStatusChange(video.id, 'aprobado')}>

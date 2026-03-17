@@ -64,10 +64,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   };
 
   const getCampaignPublicationMetrics = (campaignId: string | undefined, creatorId: string) => {
-    const campaignVideos = getCampaignVideos(campaignId).filter(isCountableVideo);
-    const sourceVideos =
-      campaignVideos.length > 0 ? campaignVideos : getCreatorVideos(creatorId).filter(isCountableVideo);
-    const usableVideos = sourceVideos;
+    const creatorVideos = getCreatorVideos(creatorId).filter(isCountableVideo);
+    const usableVideos = creatorVideos;
     const publicationGoal = usableVideos.length;
     const organicPublished = usableVideos.filter(
       (v) => v.published_organic || v.status === 'publicado'
