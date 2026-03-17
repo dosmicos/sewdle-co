@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { lookupDaneCode } from "../_shared/dane-codes.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -188,6 +189,14 @@ async function getDaneCodeFromDB(
 
   console.log(`🔍 DANE lookup: city="${city}" (norm: "${normalizedCity}"), dept="${department}" (norm: "${normalizedDept}")`);
 
+  // ============= LAYER 0: Embedded DANE map (instant, no DB) =============
+  const embeddedResult = lookupDaneCode(city, department);
+  if (embeddedResult) {
+    console.log(`✅ DANE found (embedded map, ${embeddedResult.source}): "${city}" → "${embeddedResult.daneCode}" (${embeddedResult.municipality}, ${embeddedResult.department})`);
+    return { daneCode: embeddedResult.daneCode, source: `embedded_${embeddedResult.source}` };
+  }
+  console.log(`⚠️ Not in embedded map, trying DB...`);
+
   // ============= LAYER 1: Exact match using normalized column =============
   // Search by city only (ignore department) — handles "Chía" + dept "Bogotá" → finds Chía, Cundinamarca
   let exactMatches: any[] | null = null;
@@ -263,6 +272,35 @@ async function getDaneCodeFromDB(
 
   if (fuzzyErr) {
     console.error('❌ Error fetching municipalities for fuzzy match:', fuzzyErr);
+  }
+
+  // Auto-seed DANE data if table is empty for this org
+  if (!allMunicipalities || allMunicipalities.length === 0) {
+    console.log(`⚠️ No municipalities found for org ${organizationId}, auto-seeding DANE data...`);
+    try {
+      const { error: seedErr } = await supabase.rpc('seed_dane_municipalities', { target_org_id: organizationId });
+      if (seedErr) {
+        console.error('❌ Auto-seed error:', seedErr);
+      } else {
+        console.log('✅ Auto-seed complete, retrying lookup...');
+        // Retry the exact match after seeding
+        const retryResult = await supabase
+          .from('shipping_coverage')
+          .select('dane_code, municipality, department')
+          .eq('organization_id', organizationId)
+          .eq('municipality_normalized', normalizedCity);
+        if (retryResult.data && retryResult.data.length > 0) {
+          const match = retryResult.data.length === 1 ? retryResult.data[0] :
+            (normalizedDept ? retryResult.data.find((r: any) =>
+              normalizeForComparison(r.department).includes(normalizedDept) || normalizedDept.includes(normalizeForComparison(r.department))
+            ) : null) || retryResult.data[0];
+          console.log(`✅ DANE found after auto-seed: "${city}" → "${match.dane_code}" (${match.municipality}, ${match.department})`);
+          return { daneCode: match.dane_code, source: 'db_auto_seeded' };
+        }
+      }
+    } catch (seedError) {
+      console.error('❌ Auto-seed exception:', seedError);
+    }
   }
 
   if (allMunicipalities && allMunicipalities.length > 0) {

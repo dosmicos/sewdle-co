@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { lookupDaneCode } from "../_shared/dane-codes.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -111,6 +112,29 @@ async function getDaneCodeWithMatchInfo(supabase: any, city: string, department?
 
   console.log(`🔍 Looking up DANE code for city: "${originalCity}" (normalized: "${normalizedCity}")`);
 
+  // Step 0: Try embedded DANE map (instant, no DB call)
+  const embeddedResult = lookupDaneCode(originalCity, department);
+  if (embeddedResult) {
+    console.log(`✅ DANE found (embedded, ${embeddedResult.source}): "${originalCity}" → "${embeddedResult.daneCode}" (${embeddedResult.municipality}, ${embeddedResult.department})`);
+    const isFuzzy = embeddedResult.source.startsWith('fuzzy');
+    return {
+      daneCode: embeddedResult.daneCode,
+      matchInfo: {
+        matchType: isFuzzy ? 'fuzzy' : 'exact',
+        inputCity: originalCity,
+        matchedMunicipality: embeddedResult.municipality,
+        matchedDepartment: embeddedResult.department,
+        confidence: isFuzzy ? 0.8 : 1.0,
+        suggestions: isFuzzy ? [{
+          municipality: embeddedResult.municipality,
+          department: embeddedResult.department,
+          similarity: 0.8
+        }] : []
+      }
+    };
+  }
+  console.log(`⚠️ Not in embedded map, trying DB...`);
+
   // Step 1: Try exact match using indexed municipality_normalized column
   // Falls back to ilike on municipality if normalized column doesn't exist yet
   let exactMatches: any[] | null = null;
@@ -206,6 +230,44 @@ async function getDaneCodeWithMatchInfo(supabase: any, city: string, department?
   const { data: allMunicipalities } = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department, municipality_normalized');
+
+  // Auto-seed if table is empty
+  if (!allMunicipalities || allMunicipalities.length === 0) {
+    console.log('⚠️ shipping_coverage table appears empty, attempting auto-seed...');
+    try {
+      // Get any organization to seed for
+      const { data: orgs } = await supabase.from('organizations').select('id').limit(5);
+      if (orgs && orgs.length > 0) {
+        for (const org of orgs) {
+          const { error: seedErr } = await supabase.rpc('seed_dane_municipalities', { target_org_id: org.id });
+          if (seedErr) console.error(`❌ Seed error for org ${org.id}:`, seedErr);
+          else console.log(`✅ Seeded DANE data for org ${org.id}`);
+        }
+        // Retry exact match
+        const retryResult = await supabase
+          .from('shipping_coverage')
+          .select('dane_code, municipality, department')
+          .eq('municipality_normalized', normalizedCity);
+        if (retryResult.data && retryResult.data.length > 0) {
+          const match = retryResult.data[0];
+          console.log(`✅ DANE found after auto-seed: "${originalCity}" → "${match.dane_code}"`);
+          return {
+            daneCode: match.dane_code,
+            matchInfo: {
+              matchType: 'exact',
+              inputCity: originalCity,
+              matchedMunicipality: match.municipality,
+              matchedDepartment: match.department,
+              confidence: 1.0,
+              suggestions: []
+            }
+          };
+        }
+      }
+    } catch (seedError) {
+      console.error('❌ Auto-seed exception:', seedError);
+    }
+  }
 
   if (allMunicipalities && allMunicipalities.length > 0) {
     const scored = allMunicipalities
