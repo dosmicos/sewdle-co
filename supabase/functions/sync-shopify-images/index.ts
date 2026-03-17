@@ -97,23 +97,37 @@ Deno.serve(async (req) => {
 
     console.log(`📦 Fetched ${shopifyProductCount} Shopify products, ${skuToImage.size} SKU→image mappings`)
 
-    // 2. Update products table — find products without images and match by name
+    // 2. Update products table — find products without images (null OR empty string) and match by name
     let productsFixed = 0
-    const { data: productsWithoutImages, error: prodErr } = await supabase
+
+    // Fetch ALL products and filter in JS (covers both null and empty string)
+    const { data: allProducts, error: prodErr } = await supabase
       .from('products')
       .select('id, name, image_url')
-      .is('image_url', null)
 
     if (prodErr) {
       console.error('Error fetching products:', prodErr)
-    } else if (productsWithoutImages && productsWithoutImages.length > 0) {
-      console.log(`🖼️ Found ${productsWithoutImages.length} products without images`)
+    } else if (allProducts) {
+      // Filter products that have no image (null, empty string, or undefined)
+      const productsWithoutImages = allProducts.filter(p => !p.image_url || p.image_url.trim() === '')
+      console.log(`🖼️ Found ${productsWithoutImages.length} products without images (out of ${allProducts.length} total)`)
 
       const updates: { id: string; image_url: string }[] = []
       for (const product of productsWithoutImages) {
         const imageUrl = productNameToImage.get(product.name.toLowerCase().trim())
         if (imageUrl) {
           updates.push({ id: product.id, image_url: imageUrl })
+        }
+      }
+
+      console.log(`🖼️ ${updates.length} products can be matched by name to Shopify images`)
+
+      // Log unmatched products for debugging
+      const unmatched = productsWithoutImages.filter(p => !productNameToImage.has(p.name.toLowerCase().trim()))
+      if (unmatched.length > 0) {
+        console.log(`⚠️ ${unmatched.length} products could not be matched. First 10:`)
+        for (const p of unmatched.slice(0, 10)) {
+          console.log(`  - "${p.name}"`)
         }
       }
 
@@ -132,11 +146,12 @@ Deno.serve(async (req) => {
 
     // 3. Update shopify_order_line_items — find items without images and match by SKU
     let lineItemsFixed = 0
+    // Fetch both null and empty string image_url items
     const { data: nullImageItems, error: lineErr } = await supabase
       .from('shopify_order_line_items')
-      .select('id, sku')
-      .is('image_url', null)
+      .select('id, sku, image_url')
       .not('sku', 'is', null)
+      .or('image_url.is.null,image_url.eq.')
       .limit(5000)
 
     if (lineErr) {
