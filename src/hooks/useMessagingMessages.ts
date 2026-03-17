@@ -65,22 +65,39 @@ export const useMessagingMessages = (conversationId: string | null) => {
         };
       }
       
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
-        body
-      });
+      // Use fetch with AbortController for explicit timeout (supabase.functions.invoke has no timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
-      if (error) {
-        // supabase.functions.invoke returns generic error message for non-2xx responses
-        // but the actual error details are in the data object
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: supabaseKey,
+            Authorization: `Bearer ${accessToken ?? supabaseKey}`,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
         if (data?.error) {
           throw new Error(data.error);
         }
-        throw error;
+        return data;
+      } finally {
+        clearTimeout(timeoutId);
       }
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-messages', conversationId], refetchType: 'all' });

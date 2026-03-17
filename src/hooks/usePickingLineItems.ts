@@ -13,6 +13,7 @@ interface ShopifyLineItem {
   image_url: string | null;
   shopify_line_item_id: number;
   properties: { name: string; value: string }[] | null;
+  fulfillment_status: string | null;
 }
 
 interface RawLineItem {
@@ -58,14 +59,14 @@ export const usePickingLineItems = (
         // Step 1: Fetch line items from database
         const { data, error: fetchError } = await supabase
           .from('shopify_order_line_items')
-          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id, properties')
+          .select('id, title, variant_title, sku, price, quantity, product_id, variant_id, image_url, shopify_line_item_id, properties, fulfillment_status')
           .eq('shopify_order_id', shopifyOrderId);
 
         if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
         if (fetchError) throw fetchError;
         if (!data) return [];
 
-        // Step 2: Enrich with fallback images from raw_data
+        // Step 2: Enrich with fallback images from raw_data (local, no API calls)
         let enrichedItems = (data as ShopifyLineItem[]).map(item => {
           const rawItem = rawLineItems?.find((ri) => ri.id === item.shopify_line_item_id);
           return {
@@ -76,48 +77,13 @@ export const usePickingLineItems = (
 
         if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
 
-        // Step 3: Fetch Shopify variant images in parallel (FAST - no individual waits)
-        const itemsWithShopifyIds = enrichedItems.filter(item => item.product_id && item.variant_id);
-        
-        if (itemsWithShopifyIds.length > 0) {
-          try {
-            const imagePromises = itemsWithShopifyIds.map(async (item) => {
-              try {
-                const { data: imgData } = await supabase.functions.invoke('get-shopify-variant-image', {
-                  body: { product_id: item.product_id, variant_id: item.variant_id }
-                });
-                return { sku: item.sku, image_url: imgData?.image_url || null };
-              } catch {
-                return { sku: item.sku, image_url: null };
-              }
-            });
-
-            const shopifyImages = await Promise.all(imagePromises);
-            
-            if (!signal?.aborted) {
-              const skuToImageMap = new Map(
-                shopifyImages.map(img => [img.sku, img.image_url])
-              );
-
-              enrichedItems = enrichedItems.map(item => ({
-                ...item,
-                image_url: skuToImageMap.get(item.sku) || item.image_url
-              }));
-            }
-          } catch (imgError) {
-            console.warn('Error fetching Shopify images, using fallbacks:', imgError);
-          }
-        }
-
-        if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
-
-        // Step 4: Final fallback from product_variants table
+        // Step 3: Fallback from product_variants table (single DB query, no edge function calls)
         const itemsStillWithoutImages = enrichedItems.filter(item => !item.image_url && item.sku);
-        
+
         if (itemsStillWithoutImages.length > 0) {
           try {
             const skus = itemsStillWithoutImages.map(item => item.sku).filter((sku): sku is string => Boolean(sku));
-            
+
             const { data: variantData } = await supabase
               .from('product_variants')
               .select('sku_variant, products(image_url)')

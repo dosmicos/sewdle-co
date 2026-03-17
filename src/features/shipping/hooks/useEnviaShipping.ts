@@ -101,7 +101,7 @@ export const useEnviaShipping = () => {
     try {
       console.log('📦 Creating shipping label for order:', request.order_number);
 
-      const data = await invokeEdgeFunction<any>('create-envia-label', request, { timeoutMs: 10_000 });
+      const data = await invokeEdgeFunction<any>('create-envia-label', request, { timeoutMs: 30_000 });
 
       if (data?.error) {
         console.error('Error creating label:', data);
