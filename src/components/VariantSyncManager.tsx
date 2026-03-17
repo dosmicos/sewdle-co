@@ -6,13 +6,22 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Search, RefreshCw, CheckCircle, AlertCircle, Clock, Zap } from 'lucide-react'
+import { Search, RefreshCw, CheckCircle, AlertCircle, Clock, Zap, ImageIcon } from 'lucide-react'
 import { useVariantSync, VariantComparison } from '@/hooks/useVariantSync'
 import { useFullShopifySync } from '@/hooks/useFullShopifySync'
+import { supabase } from '@/integrations/supabase/client'
+import { toast } from 'sonner'
 
 export const VariantSyncManager = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedVariants, setSelectedVariants] = useState<Set<string>>(new Set())
+  const [syncingImages, setSyncingImages] = useState(false)
+  const [imageSyncSummary, setImageSyncSummary] = useState<{
+    shopify_products: number
+    sku_image_mappings: number
+    products_fixed: number
+    line_items_fixed: number
+  } | null>(null)
   
   const {
     loading,
@@ -79,11 +88,74 @@ export const VariantSyncManager = () => {
     }
   }
 
+  const handleSyncImages = async () => {
+    setSyncingImages(true)
+    setImageSyncSummary(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-shopify-images', {
+        body: {}
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      setImageSyncSummary(data.summary)
+      toast.success(`Fotos sincronizadas: ${data.summary.products_fixed} productos + ${data.summary.line_items_fixed} line items`)
+    } catch (err: any) {
+      console.error('Error syncing images:', err)
+      toast.error('Error al sincronizar fotos: ' + err.message)
+    } finally {
+      setSyncingImages(false)
+    }
+  }
+
   const newVariants = getNewVariants()
   const allNewSelected = newVariants.length > 0 && newVariants.every(v => selectedVariants.has(v.shopify_variant_id))
 
   return (
     <div className="space-y-6">
+      {/* Image Sync Card */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ImageIcon className="h-5 w-5 text-blue-600" />
+            Sincronizar Fotos desde Shopify
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Busca productos y line items sin foto en Sewdle y las jala directamente de Shopify. No modifica nada mas, solo fotos.
+          </p>
+          <Button
+            onClick={handleSyncImages}
+            disabled={syncingImages}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <ImageIcon className="h-4 w-4" />
+            {syncingImages ? 'Sincronizando fotos...' : 'Sincronizar Solo Fotos'}
+          </Button>
+
+          {imageSyncSummary && (
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-blue-600">{imageSyncSummary.shopify_products}</div>
+                <div className="text-xs text-muted-foreground">Productos Shopify</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-blue-600">{imageSyncSummary.sku_image_mappings}</div>
+                <div className="text-xs text-muted-foreground">SKUs con Foto</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-green-600">{imageSyncSummary.products_fixed}</div>
+                <div className="text-xs text-muted-foreground">Productos Arreglados</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-green-600">{imageSyncSummary.line_items_fixed}</div>
+                <div className="text-xs text-muted-foreground">Line Items Arreglados</div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Full Sync Card */}
       <Card className="border-green-200 bg-green-50">
         <CardHeader>
