@@ -60,16 +60,15 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     videos.filter((v) => v.creator_id === creatorId);
 
   const isCountableVideo = (video: UgcVideo) => {
-    const hasPublicationFlag = !!video.published_ads || !!video.published_organic || video.status === 'publicado';
-    return video.status !== 'rechazado' && (hasUploadedAsset(video) || hasPublicationFlag || video.status !== 'pendiente');
+    return video.status !== 'rechazado';
   };
 
-  const getCampaignPublicationMetrics = (campaignId: string | undefined, creatorId: string) => {
+  const getCampaignPublicationMetrics = (campaignId: string | undefined, creatorId: string, campaign?: UgcCampaign) => {
     const campaignVideos = getCampaignVideos(campaignId).filter(isCountableVideo);
     const sourceVideos =
       campaignVideos.length > 0 ? campaignVideos : getCreatorVideos(creatorId).filter(isCountableVideo);
     const usableVideos = sourceVideos;
-    const publicationGoal = usableVideos.length;
+    const publicationGoal = campaign?.agreed_videos ?? usableVideos.length;
     const organicPublished = usableVideos.filter(
       (v) => v.published_organic || v.status === 'publicado'
     ).length;
@@ -101,7 +100,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
       activeCampaign?.id,
-      creator.id
+      creator.id,
+      activeCampaign
     );
 
     const missingOrganic = publicationGoal > 0 && organicPublished < publicationGoal;
@@ -221,7 +221,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                   publicationGoal,
                   organicPublished,
                   adsPublished,
-                } = getCampaignPublicationMetrics(activeCampaign?.id, creator.id);
+                } = getCampaignPublicationMetrics(activeCampaign?.id, creator.id, activeCampaign);
                 const creatorTags = getTagsForCreator?.(creator.id) || [];
 
                 return (

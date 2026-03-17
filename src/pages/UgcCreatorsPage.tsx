@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import type { UgcCreator, UgcCampaign, CampaignStatus, CreatorStatus } from '@/types/ugc';
 
 const UgcCreatorsPage: React.FC = () => {
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('table');
   const [kanbanTab, setKanbanTab] = useState<'prospectos' | 'campanas'>('prospectos');
   const [creatorFormOpen, setCreatorFormOpen] = useState(false);
   const [editingCreator, setEditingCreator] = useState<UgcCreator | null>(null);
@@ -178,11 +178,11 @@ const UgcCreatorsPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-muted rounded-lg p-1">
-            <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')} className="h-8">
-              <LayoutGrid className="h-4 w-4 mr-1" /> Kanban
-            </Button>
             <Button variant={viewMode === 'table' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('table')} className="h-8">
               <TableIcon className="h-4 w-4 mr-1" /> Tabla
+            </Button>
+            <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')} className="h-8">
+              <LayoutGrid className="h-4 w-4 mr-1" /> Kanban
             </Button>
           </div>
           <UgcNotificationCenter onNotificationClick={handleNotificationClick} />
