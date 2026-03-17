@@ -638,11 +638,12 @@ serve(async (req) => {
       }
     }
 
-    // Save message to database
+    // Save message to database in parallel (don't block the response to the user)
     if (conversationId) {
-      const { error: msgError } = await supabase
-        .from('messaging_messages')
-        .insert({
+      const now = new Date().toISOString();
+      // Fire both DB writes in parallel — no need to await sequentially
+      Promise.all([
+        supabase.from('messaging_messages').insert({
           conversation_id: conversationId,
           external_message_id: result.messages?.[0]?.id,
           channel_type: channelType,
@@ -652,33 +653,22 @@ serve(async (req) => {
           message_type: messageTypeForDb,
           media_url: savedMediaUrl,
           media_mime_type: media_mime_type,
-          reply_to_message_id: reply_to_message_id || null,  // Guardar referencia al mensaje original
+          reply_to_message_id: reply_to_message_id || null,
           metadata: result,
-          sent_at: new Date().toISOString()
-        });
-
-      if (msgError) {
-        console.error('Error saving message:', msgError);
-      }
-
-      // Update conversation (IMPORTANT: do NOT change ai_managed here; only the user toggles it)
-      const { error: updateError } = await supabase
-        .from('messaging_conversations')
-        .update({
-          last_message_preview: message || `📎 ${media_type === 'image' ? 'Imagen' : media_type === 'audio' ? 'Audio' : 'Documento'}`,
-          last_message_at: new Date().toISOString(),
-        })
-        .eq('id', conversationId);
-
-      if (updateError) {
-        console.error('Error updating conversation:', updateError);
-      }
+          sent_at: now
+        }),
+        supabase.from('messaging_conversations').update({
+          last_message_preview: (message || `📎 ${media_type === 'image' ? 'Imagen' : media_type === 'audio' ? 'Audio' : 'Documento'}`).substring(0, 100),
+          last_message_at: now,
+        }).eq('id', conversationId)
+      ]).catch(err => console.error('Error saving message to DB:', err));
     }
 
+    // Respond immediately after Meta confirms — DB writes continue in background
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message_id: result.messages?.[0]?.id 
+      JSON.stringify({
+        success: true,
+        message_id: result.messages?.[0]?.id
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
