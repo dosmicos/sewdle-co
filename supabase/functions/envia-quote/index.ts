@@ -111,14 +111,33 @@ async function getDaneCodeWithMatchInfo(supabase: any, city: string, department?
 
   console.log(`🔍 Looking up DANE code for city: "${originalCity}" (normalized: "${normalizedCity}")`);
 
-  // Step 1: Exact match using indexed municipality_normalized column (ignores department)
-  const { data: exactMatches, error: exactErr } = await supabase
+  // Step 1: Try exact match using indexed municipality_normalized column
+  // Falls back to ilike on municipality if normalized column doesn't exist yet
+  let exactMatches: any[] | null = null;
+  let exactErr: any = null;
+
+  // Try normalized column first (fast, indexed)
+  const normResult = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
     .eq('municipality_normalized', normalizedCity);
 
+  if (normResult.error) {
+    console.log('⚠️ municipality_normalized column not available, falling back to ilike');
+    // Fallback: use ilike on municipality (slower but works without migration)
+    const fallbackResult = await supabase
+      .from('shipping_coverage')
+      .select('dane_code, municipality, department')
+      .ilike('municipality', originalCity);
+    exactMatches = fallbackResult.data;
+    exactErr = fallbackResult.error;
+  } else {
+    exactMatches = normResult.data;
+    exactErr = normResult.error;
+  }
+
   if (exactErr) {
-    console.error('❌ Error in exact DANE lookup:', exactErr);
+    console.error('❌ Error in DANE lookup:', exactErr);
   }
 
   if (exactMatches && exactMatches.length === 1) {

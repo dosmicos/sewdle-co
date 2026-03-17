@@ -190,14 +190,32 @@ async function getDaneCodeFromDB(
 
   // ============= LAYER 1: Exact match using normalized column =============
   // Search by city only (ignore department) — handles "Chía" + dept "Bogotá" → finds Chía, Cundinamarca
-  const { data: exactMatches, error: exactErr } = await supabase
+  let exactMatches: any[] | null = null;
+  let exactErr: any = null;
+
+  // Try normalized column first (fast, indexed)
+  const normResult = await supabase
     .from('shipping_coverage')
     .select('dane_code, municipality, department')
     .eq('organization_id', organizationId)
     .eq('municipality_normalized', normalizedCity);
 
+  if (normResult.error) {
+    console.log('⚠️ municipality_normalized not available, falling back to ilike');
+    const fallbackResult = await supabase
+      .from('shipping_coverage')
+      .select('dane_code, municipality, department')
+      .eq('organization_id', organizationId)
+      .ilike('municipality', city.trim());
+    exactMatches = fallbackResult.data;
+    exactErr = fallbackResult.error;
+  } else {
+    exactMatches = normResult.data;
+    exactErr = normResult.error;
+  }
+
   if (exactErr) {
-    console.error('❌ Error in exact DANE lookup:', exactErr);
+    console.error('❌ Error in DANE lookup:', exactErr);
   }
 
   if (exactMatches && exactMatches.length === 1) {
