@@ -66,6 +66,13 @@ Deno.serve(async (req) => {
                 featuredImage {
                   url
                 }
+                images(first: 1) {
+                  edges {
+                    node {
+                      url
+                    }
+                  }
+                }
                 variants(first: 100) {
                   edges {
                     node {
@@ -128,13 +135,21 @@ Deno.serve(async (req) => {
           }
         })
 
+        const imageUrl = node.featuredImage?.url
+          || node.images?.edges?.[0]?.node?.url
+          || null
+
         allProducts.push({
           title: node.title,
           status: node.status,
           productType: node.productType || '',
-          imageUrl: node.featuredImage?.url || null,
+          imageUrl,
           variants,
         })
+
+        if (!imageUrl) {
+          console.log(`⚠️ No image found for: ${node.title}`)
+        }
       }
 
       hasNextPage = data.data.products.pageInfo.hasNextPage
@@ -172,11 +187,13 @@ Deno.serve(async (req) => {
 
     // 3. Process each Shopify product
     let productsCreated = 0
+    let imagesUpdated = 0
     let variantsCreated = 0
     let variantsUpdated = 0
     let variantsSkipped = 0
     let errors = 0
     const errorDetails: string[] = []
+    const pendingImageUpdates: { id: string, image_url: string }[] = []
 
     for (const shopProduct of allProducts) {
       try {
@@ -213,13 +230,9 @@ Deno.serve(async (req) => {
           productByName.set(shopProduct.title.toLowerCase().trim(), created)
           productsCreated++
           console.log(`✅ Created product: ${shopProduct.title}`)
-        } else if (shopProduct.imageUrl && !sewdleProduct.image_url) {
-          // Update existing product with missing image
-          await supabase
-            .from('products')
-            .update({ image_url: shopProduct.imageUrl })
-            .eq('id', sewdleProduct.id)
-          console.log(`🖼️ Updated image for: ${shopProduct.title}`)
+        } else if (shopProduct.imageUrl && sewdleProduct.image_url !== shopProduct.imageUrl) {
+          // Queue image update for batch processing
+          pendingImageUpdates.push({ id: sewdleProduct.id, image_url: shopProduct.imageUrl })
         }
 
         // Process each variant
@@ -293,10 +306,93 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Batch update images in parallel (chunks of 20)
+    if (pendingImageUpdates.length > 0) {
+      console.log(`🖼️ Updating ${pendingImageUpdates.length} product images...`)
+      for (let i = 0; i < pendingImageUpdates.length; i += 20) {
+        const batch = pendingImageUpdates.slice(i, i + 20)
+        const results = await Promise.all(
+          batch.map(u =>
+            supabase.from('products').update({ image_url: u.image_url }).eq('id', u.id)
+          )
+        )
+        for (const r of results) {
+          if (r.error) {
+            errors++
+            errorDetails.push(`Image update: ${r.error.message}`)
+          } else {
+            imagesUpdated++
+          }
+        }
+      }
+      console.log(`🖼️ Updated ${imagesUpdated} images`)
+    }
+
+    // 5. Fix line items with missing images using Shopify product images
+    // Build a map of product_id → image_url from the Shopify data we already fetched
+    let lineItemImagesFixed = 0
+    try {
+      // Build SKU → image map from Shopify variants (variant SKU → product image)
+      const skuToShopifyImage = new Map<string, string>()
+      for (const shopProduct of allProducts) {
+        if (!shopProduct.imageUrl) continue
+        for (const variant of shopProduct.variants) {
+          if (variant.sku && variant.sku.trim() !== '') {
+            skuToShopifyImage.set(variant.sku, shopProduct.imageUrl)
+          }
+        }
+      }
+
+      console.log(`🖼️ Built SKU→image map with ${skuToShopifyImage.size} entries, fixing line items...`)
+
+      // Fetch line items with null image_url (limit to recent ones for performance)
+      const { data: nullImageItems, error: fetchLineErr } = await supabase
+        .from('shopify_order_line_items')
+        .select('id, sku')
+        .is('image_url', null)
+        .not('sku', 'is', null)
+        .limit(2000)
+
+      if (fetchLineErr) {
+        console.error('Error fetching line items without images:', fetchLineErr)
+      } else if (nullImageItems && nullImageItems.length > 0) {
+        console.log(`🖼️ Found ${nullImageItems.length} line items without images`)
+
+        // Match by SKU and batch update
+        const lineItemUpdates: { id: string; image_url: string }[] = []
+        for (const item of nullImageItems) {
+          const imageUrl = item.sku ? skuToShopifyImage.get(item.sku) : null
+          if (imageUrl) {
+            lineItemUpdates.push({ id: item.id, image_url: imageUrl })
+          }
+        }
+
+        console.log(`🖼️ ${lineItemUpdates.length} line items can be fixed with Shopify images`)
+
+        // Batch update in chunks of 50
+        for (let i = 0; i < lineItemUpdates.length; i += 50) {
+          const batch = lineItemUpdates.slice(i, i + 50)
+          const results = await Promise.all(
+            batch.map(u =>
+              supabase.from('shopify_order_line_items').update({ image_url: u.image_url }).eq('id', u.id)
+            )
+          )
+          for (const r of results) {
+            if (!r.error) lineItemImagesFixed++
+          }
+        }
+        console.log(`✅ Fixed ${lineItemImagesFixed} line item images`)
+      }
+    } catch (lineItemErr) {
+      console.error('Error fixing line item images:', lineItemErr)
+    }
+
     const summary = {
       shopify_products: allProducts.length,
       shopify_variants: totalShopifyVariants,
       products_created: productsCreated,
+      images_updated: imagesUpdated,
+      line_item_images_fixed: lineItemImagesFixed,
       variants_created: variantsCreated,
       variants_updated: variantsUpdated,
       variants_skipped: variantsSkipped,
