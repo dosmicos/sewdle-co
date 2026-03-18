@@ -11,6 +11,7 @@ interface LineItem {
   productName?: string;
   variantId: number;
   variantName?: string;
+  sku?: string;
   quantity?: number;
 }
 
@@ -102,7 +103,7 @@ serve(async (req) => {
       );
     }
 
-    // Validate each line item's product and variant
+    // Validate each line item's product and variant (with SKU fallback)
     const validatedLineItems: Array<{ variant_id: number; quantity: number }> = [];
 
     for (const item of lineItems) {
@@ -133,16 +134,31 @@ serve(async (req) => {
         );
       }
 
-      const variant = product.variants?.find((v: any) => String(v.id) === String(item.variantId));
+      let variant = product.variants?.find((v: any) => String(v.id) === String(item.variantId));
+
+      // If variantId doesn't match, try SKU-based fallback within this product
+      if (!variant && item.sku) {
+        const cleanSku = String(item.sku).replace(/^SKU:/i, '').trim();
+        const skuVariant = product.variants?.find((v: any) => {
+          const vSku = String(v.sku || '').replace(/^SKU:/i, '').trim();
+          return vSku && vSku === cleanSku;
+        });
+        if (skuVariant) {
+          console.log(`🔄 SKU fallback in create-shopify-order: variantId ${item.variantId} not found, but SKU "${cleanSku}" matched variant "${skuVariant.title}" (vid:${skuVariant.id})`);
+          variant = skuVariant;
+          item.variantId = skuVariant.id;
+        }
+      }
+
       if (!variant) {
-        console.error(`❌ variantId ${item.variantId} NOT FOUND in product ${item.productId}. Available: ${product.variants?.map((v: any) => `${v.title}(${v.id})`).join(', ')}`);
+        console.error(`❌ variantId ${item.variantId} NOT FOUND in product ${item.productId}. SKU: ${item.sku || 'N/A'}. Available: ${product.variants?.map((v: any) => `${v.title}(${v.id}, SKU:${v.sku})`).join(', ')}`);
         return new Response(
           JSON.stringify({ error: `El variantId ${item.variantId} no pertenece al producto ${product.title}. Variantes disponibles: ${product.variants?.map((v: any) => `${v.title}(id:${v.id})`).join(', ')}` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      console.log(`✅ Variant validated: ${variant.title} (${item.variantId}) for product ${product.title}`);
+      console.log(`✅ Variant validated: ${variant.title} (${item.variantId}, SKU:${variant.sku}) for product ${product.title}`);
       validatedLineItems.push({
         variant_id: item.variantId,
         quantity: item.quantity || 1
@@ -207,6 +223,17 @@ serve(async (req) => {
           customerId = searchData.customers[0].id;
           console.log("Found existing customer:", customerId);
         }
+      }
+    }
+
+    // Fix Bogotá department: Bogotá D.C. is its own district, NOT Cundinamarca
+    const cityNorm = (orderData.city || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (cityNorm === 'bogota' || cityNorm === 'bogota d.c.' || cityNorm === 'bogota dc') {
+      const oldDept = orderData.department;
+      orderData.department = 'Bogotá D.C.';
+      orderData.city = 'Bogotá';
+      if (oldDept && oldDept.toLowerCase() !== 'bogota' && oldDept.toLowerCase() !== 'bogota d.c.') {
+        console.log(`🔄 Fixed department: "${oldDept}" → "Bogotá D.C." (Bogotá is its own district)`);
       }
     }
 

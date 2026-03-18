@@ -11,7 +11,7 @@ interface UseMessagingRealtimeOptions {
   activeConversationId?: string | null;
 }
 
-const POLL_INTERVAL_MS = 5000; // Poll every 5 seconds as primary mechanism
+const POLL_INTERVAL_MS = 30000; // Poll every 30 seconds (reduced from 5s to save DB resources)
 
 export const useMessagingRealtime = ({ 
   organizationId, 
@@ -53,7 +53,7 @@ export const useMessagingRealtime = ({
   const startPolling = useCallback(() => {
     if (pollingRef.current) return;
     
-    console.log('🔄 [Messaging] Starting polling every 5s');
+    console.log('🔄 [Messaging] Starting polling every 30s');
     pollingRef.current = setInterval(() => {
       if (!isUnmountedRef.current) {
         refreshAll();

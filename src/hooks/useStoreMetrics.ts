@@ -147,14 +147,16 @@ export function useStoreMetrics(current: DateRange, previous: DateRange): StoreM
     queryKey: ['store-metrics', 'current', orgId, format(current.start, 'yyyy-MM-dd'), format(current.end, 'yyyy-MM-dd')],
     queryFn: () => fetchMetrics(orgId!, current),
     enabled: !!orgId,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 30, // 30 min — expensive batch query
+    refetchOnWindowFocus: false,
   });
 
   const previousQuery = useQuery({
     queryKey: ['store-metrics', 'previous', orgId, format(previous.start, 'yyyy-MM-dd'), format(previous.end, 'yyyy-MM-dd')],
     queryFn: () => fetchMetrics(orgId!, previous),
     enabled: !!orgId,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
   });
 
   const cur = currentQuery.data || emptyMetrics;

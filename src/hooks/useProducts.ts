@@ -105,23 +105,10 @@ export const useProducts = (includeInactive: boolean = false) => {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'product_variants'
+          table: 'product_variants',
         },
         (payload) => {
           console.log('🔄 Cambio en variante detectado:', payload);
-          // Refresh products data when variants change
-          fetchProducts(true);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'product_variants'
-        },
-        (payload) => {
-          console.log('➕ Nueva variante detectada:', payload);
           fetchProducts(true);
         }
       )
@@ -145,9 +132,9 @@ export const useProducts = (includeInactive: boolean = false) => {
         console.log('🔄 Auto-refresh de productos ejecutado');
         fetchProducts(true);
       }
-    }, 120000); // 2 minutes
+    }, 300000); // 5 minutes (reduced from 2 min to save DB resources)
 
-    console.log('⏰ Auto-refresh configurado cada 2 minutos');
+    console.log('⏰ Auto-refresh configurado cada 5 minutos');
   };
 
   // Cleanup function

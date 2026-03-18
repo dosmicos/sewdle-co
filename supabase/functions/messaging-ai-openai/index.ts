@@ -633,14 +633,20 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 
     // Add anti-duplication order rules
     fullSystemPrompt += `\n\n🚫 REGLA ANTI-DUPLICACIÓN DE PEDIDOS — CRÍTICO, OBLIGATORIO:
-1. NUNCA crees un pedido duplicado. Si en el historial de esta conversación ya existe un mensaje tuyo que confirma la creación de un pedido (ej: "Tu pedido ha sido creado exitosamente", "Número de pedido: #"), NO llames create_order de nuevo.
-2. Si el cliente responde "SI", "Sí", "OK", "Gracias", "Perfecto", "Dale", "Listo", "Bueno" o CUALQUIER confirmación simple después de que ya se creó un pedido, NO crees otro pedido. Solo responde amablemente confirmando que su pedido está en proceso.
+1. NUNCA crees un pedido duplicado. Si en el historial de esta conversación ya existe un mensaje tuyo que confirma la creación de un pedido (ej: "Tu pedido ha sido creado exitosamente", "Número de pedido: #") o ya enviaste un LINK DE PAGO, NO llames create_order de nuevo.
+2. Si el cliente responde "SI", "Sí", "OK", "Gracias", "Perfecto", "Dale", "Listo", "Bueno" o CUALQUIER confirmación simple después de que ya se creó un pedido o se envió un link de pago, NO crees otro pedido. Solo responde amablemente confirmando que su pedido está en proceso.
 3. Solo crea un NUEVO pedido si el cliente EXPLÍCITAMENTE pide un producto DIFERENTE o dice claramente que quiere hacer OTRA compra adicional.
 4. Si recibes un mensaje que parece ser una respuesta automática de otra empresa/negocio (ej: "Gracias por comunicarte con X empresa"), ignóralo y NO crees un pedido.
-5. Antes de llamar create_order, SIEMPRE verifica en el historial de la conversación si ya creaste un pedido. Si ya hay uno, NO crees otro.`;
+5. Antes de llamar create_order, SIEMPRE verifica en el historial de la conversación si ya creaste un pedido o enviaste un link de pago. Si ya hay uno, NO crees otro.
+
+⚠️ REGLA CRÍTICA SOBRE LINKS DE PAGO:
+- Si ya enviaste un link de pago (ej: "TU LINK DE PAGO: https://checkout.bold.co/..."), el pedido se crea AUTOMÁTICAMENTE cuando el cliente paga. NO necesitas llamar create_order de nuevo.
+- Si el cliente dice "ya pagué", "pago realizado", "listo el pago", o envía un comprobante de pago, NUNCA llames create_order. Responde: "¡Gracias! Tu pago está siendo procesado. En unos momentos recibirás la confirmación de tu pedido con el número de orden. 😊"
+- Si el cliente pregunta por su pedido después de pagar, dile que su pago está siendo procesado y que recibirá confirmación pronto.
+- NUNCA generes un segundo link de pago para el mismo pedido.`;
 
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
-    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- ⚠️ PRECIOS — REGLA CRÍTICA: SIEMPRE tienes los precios de TODOS los productos en tu catálogo. NUNCA digas "no tengo esa información" sobre precios. Si el cliente pregunta "qué precio tiene" o "cuánto cuesta", busca el producto en el catálogo arriba y responde con el precio. Todos los precios están en COP. Si el cliente pregunta el precio después de que enviaste un link de colección, indica el precio general de la categoría (ej: "Las ruanas tienen un precio de $94.900 COP") o lista los precios si varían.\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId Y el SKU correctos del catálogo al crear el pedido. El SKU es único por variante y es el más confiable.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId, variantId y SKU del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.\n- ⚠️ CRÍTICO al llamar create_order: El campo productName debe ser el nombre EXACTO del catálogo, productId/variantId deben corresponder a ESE producto, y el SKU debe ser el de la variante elegida. NUNCA confundas IDs de un producto con otro. El SKU es el identificador más confiable.\n- ⚠️ ANTI-DUPLICACIÓN: Si ya creaste un pedido en esta conversación, NO crees otro a menos que el cliente EXPLÍCITAMENTE pida una compra adicional diferente.\n- ⚠️ MÚLTIPLES PRODUCTOS: Si el cliente pide varios productos, incluye TODOS en el array lineItems en UNA SOLA llamada a create_order. NUNCA hagas múltiples llamadas.';
+    fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- ⚠️ PRECIOS — REGLA CRÍTICA: SIEMPRE tienes los precios de TODOS los productos en tu catálogo. NUNCA digas "no tengo esa información" sobre precios. Si el cliente pregunta "qué precio tiene" o "cuánto cuesta", busca el producto en el catálogo arriba y responde con el precio. Todos los precios están en COP. Si el cliente pregunta el precio después de que enviaste un link de colección, indica el precio general de la categoría (ej: "Las ruanas tienen un precio de $94.900 COP") o lista los precios si varían.\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId Y el SKU correctos del catálogo al crear el pedido. El SKU es único por variante y es el más confiable.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId, variantId y SKU del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.\n- ⚠️ CRÍTICO al llamar create_order: El campo productName debe ser el nombre EXACTO del catálogo, productId/variantId deben corresponder a ESE producto, y el SKU debe ser el de la variante elegida. NUNCA confundas IDs de un producto con otro. El SKU es el identificador más confiable.\n- ⚠️ ANTI-DUPLICACIÓN: Si ya creaste un pedido O enviaste un link de pago en esta conversación, NO llames create_order de nuevo. Si el cliente dice "ya pagué" o "pago realizado", responde que su pago está siendo procesado, NUNCA generes otro link.\n- ⚠️ MÚLTIPLES PRODUCTOS: Si el cliente pide varios productos, incluye TODOS en el array lineItems en UNA SOLA llamada a create_order. NUNCA hagas múltiples llamadas.';
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
@@ -797,20 +803,17 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             );
           }
 
-          // 🛡️ NAME-FIRST PRODUCT RESOLUTION: The AI gets names right but IDs wrong.
-          // ALWAYS resolve productId + variantId from productName + variantName.
-          // This overrides whatever IDs the AI provided since names are reliable, IDs are not.
+          // 🛡️ SKU-FIRST PRODUCT RESOLUTION: SKU is the UNIQUE identifier per variant.
+          // The AI gets names right but may confuse IDs between similar products (e.g., "Ruana Mapache" vs "Ruana Mapache Adulto").
+          // ALWAYS resolve by SKU first (searches across ALL products), then fall back to name matching.
           const normalizeForMatch = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
           const scoreProductMatch = (catalogTitle: string, aiName: string): number => {
             const a = normalizeForMatch(catalogTitle);
             const b = normalizeForMatch(aiName);
-            // Exact match
             if (a === b) return 100;
-            // One contains the other fully
             if (a.includes(b) || b.includes(a)) return 80;
-            // Word overlap scoring — count how many words from AI name appear in catalog title
-            const aWords = a.split(/\s+/).filter(w => w.length > 2); // skip tiny words like "de"
+            const aWords = a.split(/\s+/).filter(w => w.length > 2);
             const bWords = b.split(/\s+/).filter(w => w.length > 2);
             if (bWords.length === 0) return 0;
             const matches = bWords.filter(bw => aWords.some(aw => aw.includes(bw) || bw.includes(aw)));
@@ -818,13 +821,23 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           };
 
           for (const item of lineItems) {
-            if (!item.productName || allShopifyProducts.length === 0) continue;
+            if (allShopifyProducts.length === 0) continue;
 
             const origPid = item.productId;
             const origVid = item.variantId;
             const origSku = item.sku;
 
-            // Step 1: Find best matching product by name (score-based)
+            // ========== PRODUCTNAME + VARIANTNAME RESOLUTION ==========
+            // The AI confirms the correct product name and size/talla to the customer,
+            // but sends WRONG IDs, SKUs, and variantIds. NEVER trust AI-provided IDs or SKUs.
+            // ALWAYS resolve from productName + variantName (the only reliable fields).
+
+            if (!item.productName) {
+              console.warn(`⚠️ No productName for item. Keeping AI-provided IDs (pid:${item.productId}, vid:${item.variantId}).`);
+              continue;
+            }
+
+            // Step 1: Find product by name
             let bestProduct: any = null;
             let bestScore = 0;
 
@@ -836,7 +849,6 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
               }
             }
 
-            // Require minimum score of 50 to accept a match
             if (!bestProduct || bestScore < 50) {
               console.warn(`⚠️ No product match found for "${item.productName}" (best score: ${bestScore}). Keeping AI-provided IDs.`);
               continue;
@@ -850,42 +862,52 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             }
             item.productId = bestProduct.id;
 
-            // Step 2: Resolve variant by size number (most reliable for size-only variants)
+            // Step 2: Resolve variant within matched product
             const variants = bestProduct.variants || [];
             if (variants.length <= 1) {
-              // Single variant product — use it directly
               if (variants.length === 1) {
                 item.variantId = variants[0].id;
-                item.sku = variants[0].sku || item.sku;
+                item.sku = variants[0].sku || '';
                 console.log(`  ✅ Single variant: ${variants[0].title} (vid:${variants[0].id}, SKU:${variants[0].sku})`);
               }
               continue;
             }
 
-            // Extract size number from AI's variant name (e.g., "4", "Talla 4", "Size 4")
+            // Extract size number from variantName (the ONLY reliable variant identifier)
             const sizeMatch = (item.variantName || '').match(/(\d+)/);
             let resolvedVariant: any = null;
 
             if (sizeMatch) {
               const targetSize = sizeMatch[1];
 
-              // Exact size match — variant title contains the same number
+              // First try: exact size number match at the START of variant title
+              // This prevents "4" matching "14" or "4" matching "Talla 4 - 6 años" incorrectly
               resolvedVariant = variants.find((v: any) => {
-                const vSizeMatch = (v.title || '').match(/(\d+)/);
+                const vTitle = (v.title || '').trim();
+                // Match if variant title starts with the size number (e.g., "4 (1 a 2 años)")
+                // or is exactly the number, or matches "Talla X" pattern
+                const vSizeMatch = vTitle.match(/^(\d+)/);
                 return vSizeMatch && vSizeMatch[1] === targetSize;
               });
 
+              // Second try: any number in the variant title that matches
+              if (!resolvedVariant) {
+                resolvedVariant = variants.find((v: any) => {
+                  const vTitle = (v.title || '').trim();
+                  // Split all numbers from variant title and check for exact match
+                  const allNumbers = vTitle.match(/\d+/g) || [];
+                  // The FIRST number in the title is the size (e.g., "4 (1 a 2 años)" → 4, not 1 or 2)
+                  return allNumbers.length > 0 && allNumbers[0] === targetSize;
+                });
+              }
+
               if (resolvedVariant) {
                 const vidChanged = String(resolvedVariant.id) !== String(origVid);
-                if (vidChanged) {
-                  console.log(`  🔄 SIZE-RESOLVED variant: AI said "${item.variantName}" (vid:${origVid}) → "${resolvedVariant.title}" (vid:${resolvedVariant.id}, SKU:${resolvedVariant.sku})`);
-                } else {
-                  console.log(`  ✅ Variant confirmed by size: "${resolvedVariant.title}" (vid:${resolvedVariant.id})`);
-                }
+                console.log(`  ${vidChanged ? '🔄' : '✅'} SIZE-RESOLVED variant: AI said "${item.variantName}" (vid:${origVid}) → "${resolvedVariant.title}" (vid:${resolvedVariant.id}, SKU:${resolvedVariant.sku})${vidChanged ? ' [CORRECTED]' : ''}`);
               }
             }
 
-            // Fallback: try name-based variant match
+            // Fallback: name-based variant match
             if (!resolvedVariant && item.variantName) {
               const aiVariant = normalizeForMatch(item.variantName);
               resolvedVariant = variants.find((v: any) => {
@@ -893,27 +915,16 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                 return vTitle.includes(aiVariant) || aiVariant.includes(vTitle);
               });
               if (resolvedVariant) {
-                console.log(`  🔄 NAME-RESOLVED variant: "${item.variantName}" → "${resolvedVariant.title}" (vid:${resolvedVariant.id})`);
-              }
-            }
-
-            // Fallback: try SKU match across this product's variants
-            if (!resolvedVariant && item.sku) {
-              const cleanSku = String(item.sku).replace(/^SKU:/i, '').trim();
-              resolvedVariant = variants.find((v: any) => {
-                const vSku = String(v.sku || '').replace(/^SKU:/i, '').trim();
-                return vSku === cleanSku;
-              });
-              if (resolvedVariant) {
-                console.log(`  🔄 SKU-RESOLVED variant: SKU "${item.sku}" → "${resolvedVariant.title}" (vid:${resolvedVariant.id})`);
+                console.log(`  🔄 NAME-RESOLVED variant: "${item.variantName}" → "${resolvedVariant.title}" (vid:${resolvedVariant.id}, SKU:${resolvedVariant.sku})`);
               }
             }
 
             if (resolvedVariant) {
               item.variantId = resolvedVariant.id;
-              item.sku = resolvedVariant.sku || item.sku;
+              // ALWAYS set SKU from the resolved variant, never trust AI-provided SKU
+              item.sku = resolvedVariant.sku || '';
             } else {
-              console.warn(`  ⚠️ Could not resolve variant "${item.variantName}" for "${bestProduct.title}". Keeping AI variantId ${item.variantId}.`);
+              console.warn(`  ⚠️ Could not resolve variant "${item.variantName}" for "${bestProduct.title}". Available: ${variants.map((v: any) => `"${v.title}"(vid:${v.id})`).join(', ')}. Keeping AI variantId ${item.variantId}.`);
             }
 
             // Log summary if anything changed
@@ -971,6 +982,17 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             productTotalForShipping += price * (item.quantity || 1);
           }
           console.log(`  💵 Product total for shipping calc: $${productTotalForShipping}`);
+
+          // 🏙️ Bogotá D.C. correction: AI often sends "Cundinamarca" for Bogotá, but Bogotá is its own district
+          const normalizedCity = (orderArgs.city || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+          if (normalizedCity === 'bogota' || normalizedCity === 'bogota d.c.' || normalizedCity === 'bogota dc') {
+            if ((orderArgs.department || '').toLowerCase().includes('cundinamarca')) {
+              console.log(`🏙️ Bogotá correction: department "${orderArgs.department}" → "Bogotá D.C."`);
+              orderArgs.department = 'Bogotá D.C.';
+            }
+            // Also normalize the city name
+            orderArgs.city = 'Bogotá';
+          }
 
           // Always calculate shipping from department
           let calculatedShippingCost = 0;
@@ -1070,6 +1092,122 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           } else {
             // ======= LINK DE PAGO: Generate payment link FIRST, order created after payment =======
             console.log("💳 Link de pago flow: generating payment link before creating order...");
+
+            // 🚫 SERVER-SIDE ANTI-DUPLICATION: Check if there's already a pending/paid order for this phone
+            const customerPhone = orderArgs.phone;
+            if (customerPhone) {
+              const { data: existingOrders } = await supabase
+                .from('pending_orders')
+                .select('*')
+                .eq('customer_phone', customerPhone)
+                .in('status', ['pending_payment', 'paid', 'order_created'])
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+              if (existingOrders && existingOrders.length > 0) {
+                const existing = existingOrders[0];
+                console.log(`🚫 DUPLICATE CHECK: Found existing order for phone ${customerPhone} — status: ${existing.status}, ref: ${existing.bold_reference}, created: ${existing.created_at}`);
+
+                // If order already created in Shopify, just confirm
+                if (existing.status === 'order_created') {
+                  return new Response(
+                    JSON.stringify({
+                      response: `¡Tu pedido ya fue creado exitosamente! 🎉 Tu número de pedido es #${existing.shopify_order_number}. Te enviaremos la información de seguimiento cuando sea despachado. ¡Gracias por tu compra! 😊`,
+                      order_created: true,
+                      duplicate_blocked: true,
+                    }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                  );
+                }
+
+                // If pending_payment or paid: the Bold webhook may have failed.
+                // Create the Shopify order now as fallback using the stored pending_order data.
+                if (existing.status === 'pending_payment' || existing.status === 'paid') {
+                  console.log(`🔄 FALLBACK ORDER CREATION: Bold webhook may have failed. Creating Shopify order from pending_order ${existing.id}...`);
+
+                  try {
+                    const pendingLineItems = existing.line_items as any[];
+
+                    // Update pending order status to 'paid' (customer confirmed payment)
+                    await supabase
+                      .from('pending_orders')
+                      .update({
+                        status: 'paid',
+                        paid_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                      })
+                      .eq('id', existing.id);
+
+                    // Create the Shopify order using the stored pending_order data
+                    const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
+                      body: {
+                        orderData: {
+                          customerName: existing.customer_name,
+                          cedula: existing.cedula || '',
+                          email: existing.customer_email,
+                          phone: existing.customer_phone,
+                          address: existing.address,
+                          city: existing.city,
+                          department: existing.department,
+                          neighborhood: existing.neighborhood || '',
+                          lineItems: pendingLineItems,
+                          notes: (existing.notes || '') + ' | Pago confirmado por cliente (fallback)',
+                          shippingCost: existing.shipping_cost || 0,
+                          paymentMethod: 'link_de_pago'
+                        },
+                        organizationId: organizationId
+                      }
+                    });
+
+                    if (orderError) {
+                      console.error("Fallback order creation error:", orderError);
+                      return new Response(
+                        JSON.stringify({
+                          response: "Lo siento, hubo un inconveniente al crear tu pedido. No te preocupes, ya te conecto con un asesor que te ayudará. 😊",
+                          order_created: false,
+                          needs_attention: true,
+                          error: orderError.message
+                        }),
+                        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                      );
+                    }
+
+                    console.log("✅ Fallback order created successfully:", orderResult);
+
+                    // Update pending order with Shopify order info
+                    await supabase
+                      .from('pending_orders')
+                      .update({
+                        status: 'order_created',
+                        shopify_order_id: String(orderResult.orderId),
+                        shopify_order_number: String(orderResult.orderNumber),
+                        updated_at: new Date().toISOString()
+                      })
+                      .eq('id', existing.id);
+
+                    return new Response(
+                      JSON.stringify({
+                        response: `¡Tu pago ha sido confirmado y tu pedido ha sido creado exitosamente! 🎉\n\n📋 Número de pedido: #${orderResult.orderNumber}\n💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\nTe enviaremos la información de seguimiento cuando tu pedido sea despachado. ¡Gracias por tu compra! 😊`,
+                        order_created: true,
+                        orderId: orderResult.orderId,
+                        orderNumber: orderResult.orderNumber,
+                      }),
+                      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                    );
+                  } catch (fallbackErr) {
+                    console.error("Fallback order creation exception:", fallbackErr);
+                    return new Response(
+                      JSON.stringify({
+                        response: "¡Tu pago fue recibido! Estamos procesando tu pedido. En unos momentos recibirás la confirmación. 😊",
+                        order_created: false,
+                        needs_attention: true,
+                      }),
+                      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                    );
+                  }
+                }
+              }
+            }
 
             // Calculate total from product variant prices (reuse getVariantPrice helper)
             let productTotal = 0;

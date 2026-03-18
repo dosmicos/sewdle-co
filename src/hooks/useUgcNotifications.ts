@@ -33,7 +33,7 @@ export const useUgcNotifications = () => {
       return data as UgcNotification[];
     },
     enabled: !!orgId,
-    refetchInterval: 60000,
+    refetchInterval: 300000, // 5 minutes (reduced from 60s to save DB resources)
   });
 
   const unreadCount = notifications.filter(n => !n.read).length;

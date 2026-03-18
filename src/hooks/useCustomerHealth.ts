@@ -135,14 +135,16 @@ export function useCustomerHealth(
     queryKey: ['customer-health', 'active-file', orgId],
     queryFn: () => fetchActiveFile(orgId!),
     enabled: !!orgId,
-    staleTime: 1000 * 60 * 15, // 15 min — expensive query
+    staleTime: 1000 * 60 * 60, // 1 hour — expensive query, data changes slowly
+    refetchOnWindowFocus: false,
   });
 
   const layersQuery = useQuery({
     queryKey: ['customer-health', 'layers', orgId],
     queryFn: () => fetchMonthlyLayers(orgId!),
     enabled: !!orgId,
-    staleTime: 1000 * 60 * 15,
+    staleTime: 1000 * 60 * 60, // 1 hour
+    refetchOnWindowFocus: false,
   });
 
   const activeFile = activeFileQuery.data ?? { current: 0, previous: 0 };

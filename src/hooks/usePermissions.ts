@@ -33,9 +33,9 @@ export const usePermissions = () => {
       return data?.[0]?.permissions || {};
     },
     enabled: !!user?.id,
-    staleTime: 1000 * 60 * 5, // 5 minutos
-    refetchOnWindowFocus: true,
-    refetchOnMount: true
+    staleTime: 1000 * 60 * 30, // 30 minutos (permissions rarely change)
+    refetchOnWindowFocus: false,
+    refetchOnMount: false
   });
 
   const hasPermission = (module: string, action: string): boolean => {
