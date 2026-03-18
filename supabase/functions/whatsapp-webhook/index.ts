@@ -806,28 +806,22 @@ async function generateAIResponse(
     let systemPrompt = config.systemPrompt || defaultAiConfig.systemPrompt;
 
     // Add current date/time context so AI knows what day it is
+    // IMPORTANT: Intl.DateTimeFormat with timeZone is UNRELIABLE in Deno/Supabase Edge Functions.
+    // Use manual UTC-5 offset calculation instead.
     const now = new Date();
-    const colombiaFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Bogota',
-      year: 'numeric', month: 'numeric', day: 'numeric',
-      hour: 'numeric', minute: 'numeric', weekday: 'long', hour12: false,
-    });
-    const dateParts = colombiaFormatter.formatToParts(now);
-    const getDatePart = (type: string) => dateParts.find(p => p.type === type)?.value || '';
-    const colWeekday = getDatePart('weekday').toLowerCase();
-    const weekdayMap: Record<string, string> = {
-      'sunday': 'domingo', 'monday': 'lunes', 'tuesday': 'martes',
-      'wednesday': 'miércoles', 'thursday': 'jueves', 'friday': 'viernes', 'saturday': 'sábado'
-    };
+    const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
+    const colombiaTime = new Date(now.getTime() + COLOMBIA_OFFSET_MS + (now.getTimezoneOffset() * 60 * 1000));
+    const colYear = colombiaTime.getFullYear();
+    const colMonth = colombiaTime.getMonth() + 1;
+    const colDay = colombiaTime.getDate();
+    const colHour = String(colombiaTime.getHours()).padStart(2, '0');
+    const colMinute = String(colombiaTime.getMinutes()).padStart(2, '0');
+    const colWeekdayNum = colombiaTime.getDay();
+    const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const mesesMap = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const diaSemana = weekdayMap[colWeekday] || colWeekday;
-    const colDay = parseInt(getDatePart('day'));
-    const colMonth = parseInt(getDatePart('month'));
+    const diaSemana = diasSemana[colWeekdayNum];
     const mes = mesesMap[colMonth] || '';
-    const colYear = getDatePart('year');
-    const colHour = getDatePart('hour');
-    const colMinute = getDatePart('minute');
-    console.log(`📅 [Fallback AI] Colombia time: ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute}`);
+    console.log(`📅 [Fallback AI] Colombia time (manual UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} (UTC: ${now.toISOString()})`);
     systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
     // Add tone instructions
@@ -1286,10 +1280,22 @@ async function handleAIAutoReply(
   const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
 
   const messagesForAI = [
-    ...(historyMessages || []).reverse().map((m: any) => ({
-      role: m.direction === 'inbound' ? 'user' : 'assistant',
-      content: m.content || ''
-    })),
+    ...(historyMessages || []).reverse().map((m: any) => {
+      const role = m.direction === 'inbound' ? 'user' : 'assistant';
+
+      // Include image URLs for vision support (gpt-4o-mini supports images)
+      if (role === 'user' && m.message_type === 'image' && m.media_url) {
+        return {
+          role,
+          content: [
+            { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
+            { type: 'image_url', image_url: { url: m.media_url, detail: 'low' } }
+          ]
+        };
+      }
+
+      return { role, content: m.content || '' };
+    }),
     { role: 'user', content }
   ];
 

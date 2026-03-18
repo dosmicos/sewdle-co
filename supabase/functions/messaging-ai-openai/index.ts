@@ -488,37 +488,24 @@ serve(async (req) => {
     let fullSystemPrompt = basePrompt;
 
     // Add current date/time context so AI knows what day it is
-    // Use Intl.DateTimeFormat.formatToParts for reliable timezone conversion in Deno
+    // IMPORTANT: Intl.DateTimeFormat with timeZone is UNRELIABLE in Deno/Supabase Edge Functions.
+    // Use manual UTC-5 offset calculation instead (proven to work in meta-webhook).
     const now = new Date();
-    const colombiaFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Bogota',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      weekday: 'long',
-      hour12: false,
-    });
-    const parts = colombiaFormatter.formatToParts(now);
-    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
-    const colYear = getPart('year');
-    const colMonth = parseInt(getPart('month'));
-    const colDay = parseInt(getPart('day'));
-    const colHour = getPart('hour');
-    const colMinute = getPart('minute');
-    const colWeekday = getPart('weekday').toLowerCase();
+    const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000; // UTC-5 in milliseconds
+    const colombiaTime = new Date(now.getTime() + COLOMBIA_OFFSET_MS + (now.getTimezoneOffset() * 60 * 1000));
+    const colYear = colombiaTime.getFullYear();
+    const colMonth = colombiaTime.getMonth() + 1; // 0-indexed → 1-indexed
+    const colDay = colombiaTime.getDate();
+    const colHour = String(colombiaTime.getHours()).padStart(2, '0');
+    const colMinute = String(colombiaTime.getMinutes()).padStart(2, '0');
+    const colWeekdayNum = colombiaTime.getDay(); // 0=Sunday, 1=Monday, ...
 
-    // Map English weekday to Spanish
-    const weekdayMap: Record<string, string> = {
-      'sunday': 'domingo', 'monday': 'lunes', 'tuesday': 'martes',
-      'wednesday': 'miércoles', 'thursday': 'jueves', 'friday': 'viernes', 'saturday': 'sábado'
-    };
+    const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const meses = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const diaSemana = weekdayMap[colWeekday] || colWeekday;
+    const diaSemana = diasSemana[colWeekdayNum];
     const mes = meses[colMonth] || '';
 
-    console.log(`📅 Colombia time: ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} (raw weekday: ${colWeekday})`);
+    console.log(`📅 Colombia time (manual UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} (UTC now: ${now.toISOString()}, weekdayNum: ${colWeekdayNum})`);
     fullSystemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
     // Add smart product recommendation strategy
@@ -576,6 +563,14 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 6. Pasar el campo shippingCost con el valor correcto al llamar create_order (DEBE coincidir con lo que le mostraste al cliente en el desglose)
 7. Si el cliente NO especifica express, asumir envío estándar
 8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($14.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.`;
+
+    // Add image handling rules
+    fullSystemPrompt += `\n\n📸 CUANDO EL CLIENTE ENVÍA IMÁGENES — REGLA CRÍTICA:
+- TÚ SÍ PUEDES TOMAR PEDIDOS. NUNCA digas "no puedo tomar pedidos por aquí" ni nada similar. Tu función principal ES crear pedidos.
+- Si el cliente envía una imagen o screenshot de productos (de la tienda, Instagram, etc.), analiza la imagen para identificar qué productos quiere.
+- Si puedes reconocer los productos en la imagen, menciónalos por nombre y pregunta la talla y cantidad.
+- Si NO puedes identificar los productos en la imagen, pregunta amablemente: "¡Qué lindos productos! ¿Me podrías decir el nombre del producto o diseño que te interesa y la talla que necesitas? Así te ayudo a crear tu pedido. 😊"
+- NUNCA respondas que no puedes ayudar. SIEMPRE intenta avanzar hacia la venta.`;
 
     // Add size/talla validation rules
     fullSystemPrompt += `\n\n👕 REGLA DE TALLAS — OBLIGATORIO ANTES DE CREAR PEDIDO:
