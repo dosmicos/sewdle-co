@@ -47,6 +47,11 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
   useEffect(() => { fetchSeedImages(); }, [fetchSeedImages]);
 
   const uploadSeedImage = async (file: File, seedType: 'product' | 'advertising'): Promise<string | null> => {
+    const currentOrgId = currentOrganization?.id;
+    if (!currentOrgId) {
+      toast({ title: 'Error', description: 'No se encontró la organización', variant: 'destructive' });
+      return null;
+    }
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       toast({ title: 'Error', description: 'Solo se permiten archivos JPG, PNG o WEBP', variant: 'destructive' });
@@ -57,7 +62,7 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
       return null;
     }
     const ext = file.name.split('.').pop() || 'jpg';
-    const fileName = `${seedType}s/${orgId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const fileName = `${seedType}s/${currentOrgId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
     const { data, error: uploadError } = await supabase.storage
       .from('publicidad-seeds')
       .upload(fileName, file, { cacheControl: '3600', upsert: false });
@@ -70,9 +75,13 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
   };
 
   const createSeedImage = async (data: { name: string; type: 'product' | 'advertising'; image_url: string; category?: string }) => {
-    if (!orgId) return;
+    const currentOrgId = currentOrganization?.id;
+    if (!currentOrgId) {
+      toast({ title: 'Error', description: 'No se encontró la organización', variant: 'destructive' });
+      return;
+    }
     const { error: insertError } = await (supabase.from('ai_seed_images' as any) as any).insert({
-      organization_id: orgId,
+      organization_id: currentOrgId,
       created_by: user?.id || null,
       ...data,
     });
