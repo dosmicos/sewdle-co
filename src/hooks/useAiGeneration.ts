@@ -89,10 +89,20 @@ export const useAiGeneration = () => {
     }
   };
 
-  const clearResult = () => {
+  const clearImage = () => {
     setResult(null);
     setError(null);
   };
 
-  return { generating, result, error, generate, downloadImage, clearResult };
+  const handleDownload = () => {
+    if (result?.image_url) {
+      downloadImage(result.image_url);
+    }
+  };
+
+  const generatedImageUrl = result?.image_url || null;
+  const rateLimitUsed = result?.generations_today || 0;
+  const rateLimitMax = 50;
+
+  return { generating, result, error, generate, downloadImage: handleDownload, clearImage, generatedImageUrl, rateLimitUsed, rateLimitMax };
 };
