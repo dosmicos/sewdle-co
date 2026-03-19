@@ -1,15 +1,14 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface GenerationRequest {
   mode: string;
   prompt: string;
-  organization_id: string;
   seed_image_ids?: string[];
   template_id?: string;
-  skill_id?: string;
-  parameters?: Record<string, any>;
+  resolution?: string;
+  base_image?: string;
 }
 
 interface GenerationResult {
@@ -30,15 +29,25 @@ export const useAiGeneration = () => {
       setError(null);
       setResult(null);
 
-      const { data, error: invokeError } = await supabase.functions.invoke('generate-ai-image', {
-        body: request,
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No estás autenticado. Inicia sesión de nuevo.');
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-ai-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(request),
       });
 
-      if (invokeError) {
-        throw invokeError;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || `Error ${response.status}`);
       }
 
-      // The edge function may return an error inside data
       if (data?.error) {
         throw new Error(data.error);
       }
