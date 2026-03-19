@@ -142,7 +142,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, messages, systemPrompt, organizationId } = body;
+    const { action, messages, systemPrompt, organizationId, conversationId } = body;
     
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     
@@ -520,7 +520,33 @@ serve(async (req) => {
     fullSystemPrompt += knowledgeContext;
     fullSystemPrompt += rulesContext;
     fullSystemPrompt += productCatalog;
-    
+
+    // Check for pending order confirmations in this conversation
+    if (conversationId) {
+      try {
+        const { data: pendingConfirmations } = await supabase
+          .from('order_confirmations')
+          .select('order_number, status, customer_name')
+          .eq('conversation_id', conversationId)
+          .in('status', ['pending', 'confirmed'])
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (pendingConfirmations && pendingConfirmations.length > 0) {
+          const pc = pendingConfirmations[0];
+          fullSystemPrompt += `\n\n🚨 PEDIDO YA EXISTENTE EN ESTA CONVERSACIÓN — NO CREAR OTRO:
+- Pedido #${pc.order_number} ya fue creado (estado: ${pc.status === 'pending' ? 'pendiente de confirmación del cliente' : 'confirmado'}).
+- Si el cliente dice "SI", "confirmo", "ok", o cualquier afirmación, responde que su pedido #${pc.order_number} está confirmado y será despachado pronto.
+- NUNCA llames create_order. El pedido YA EXISTE en Shopify.
+- Si el cliente quiere CAMBIAR algo del pedido (dirección, producto, talla), dile que se comunique con un asesor.
+- Si el cliente quiere hacer una compra COMPLETAMENTE DIFERENTE (otro producto adicional), ahí sí puedes proceder normalmente.`;
+          console.log(`📋 Added pending order context: #${pc.order_number} (${pc.status})`);
+        }
+      } catch (err) {
+        console.warn('Could not check pending confirmations:', err);
+      }
+    }
+
     // Add shipping policy (critical for correct order creation)
     fullSystemPrompt += `\n\n📦 POLÍTICA DE ENVÍOS DOSMICOS — DEBES calcular y agregar el costo de envío a CADA pedido:
 
@@ -562,7 +588,15 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 5. Express Bogotá: NO acepta pago contra entrega, debe pagar anticipadamente
 6. Pasar el campo shippingCost con el valor correcto al llamar create_order (DEBE coincidir con lo que le mostraste al cliente en el desglose)
 7. Si el cliente NO especifica express, asumir envío estándar
-8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($14.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.`;
+8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($14.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.
+
+⚠️ REGLA CRÍTICA SOBRE PRECIOS Y ENVÍO — NO CAMBIAR NUNCA EL CÁLCULO:
+- El total SIEMPRE es: precio del producto + costo de envío. El link de pago NO tiene costo adicional.
+- Si el cliente pregunta "¿por qué cobran más?", "¿los 3.000 son por el link?", "aquí dice otro precio", SIEMPRE explica que el monto adicional es el COSTO DE ENVÍO, no un cargo extra del link de pago.
+- Ejemplo de respuesta correcta: "Los $3.000 adicionales son el costo de envío estándar a Bogotá. El link de pago no tiene ningún cargo adicional. 😊"
+- NUNCA digas que el envío es gratis si el total de productos es MENOR a $150.000. Haz la comparación correcta: $114.900 es MENOR que $150.000, por lo tanto NO aplica envío gratis.
+- NUNCA te contradigas ni cambies el precio que ya calculaste solo porque el cliente lo cuestione. Si tu cálculo original era correcto, defiéndelo y explícalo.
+- Si cometiste un error real, corrígelo UNA VEZ y no vuelvas a cambiar.`;
 
     // Add image handling rules
     fullSystemPrompt += `\n\n📸 CUANDO EL CLIENTE ENVÍA IMÁGENES — REGLA CRÍTICA:
@@ -933,9 +967,9 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           let responseText = '';
           let paymentUrl = '';
 
-          // ======= SHIPPING COST: ALWAYS calculate server-side (AI math is unreliable) =======
-          const rawAiShipping = orderArgs.shippingCost;
-          console.log(`  📦 SHIPPING DEBUG: AI sent shippingCost="${rawAiShipping}" (type=${typeof rawAiShipping}) — IGNORING, calculating server-side`);
+          // ======= SHIPPING COST: Calculate server-side but respect express shipping from AI =======
+          const rawAiShipping = Number(orderArgs.shippingCost) || 0;
+          console.log(`  📦 SHIPPING DEBUG: AI sent shippingCost="${rawAiShipping}" (type=${typeof orderArgs.shippingCost})`);
 
           // Helper: find variant price with fallback
           const getVariantPrice = (item: any): number => {
@@ -1014,7 +1048,14 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           const isBogota = city.includes('bogota') || dept.includes('bogota');
           const matchedZone = isBogota ? 'bogota' : Object.keys(shippingZones).find(zone => dept.includes(zone));
 
-          if (matchedZone) {
+          // Check if AI is requesting express shipping (Bogotá express = $14,000)
+          const isExpressRequest = isBogota && rawAiShipping === 14000;
+
+          if (isExpressRequest) {
+            // AI confirmed express shipping with the customer — respect it
+            calculatedShippingCost = 14000;
+            console.log(`  🚀 EXPRESS shipping: Bogotá express $14,000 (AI confirmed with customer)`);
+          } else if (matchedZone) {
             const isNoFreeShipping = noFreeShippingZones.some(z => dept.includes(z));
 
             if (productTotalForShipping >= 150000 && !isNoFreeShipping) {
@@ -1022,11 +1063,18 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
               console.log(`  🎉 Free shipping: product total $${productTotalForShipping} >= $150,000`);
             } else {
               calculatedShippingCost = shippingZones[matchedZone];
-              console.log(`  📦 Shipping: $${calculatedShippingCost} (product total $${productTotalForShipping} < $150,000, zone="${matchedZone}")`);
+              console.log(`  📦 Standard shipping: $${calculatedShippingCost} (product total $${productTotalForShipping} < $150,000, zone="${matchedZone}")`);
             }
           } else {
             calculatedShippingCost = 5000;
             console.log(`  ⚠️ No zone match for dept="${orderArgs.department}", city="${orderArgs.city}", using default $5,000`);
+          }
+
+          // Safety check: if AI sent a valid shipping cost that's higher than standard (e.g., remote zones),
+          // and it's within a reasonable range, respect it
+          if (!isExpressRequest && rawAiShipping > calculatedShippingCost && rawAiShipping <= 30000) {
+            console.log(`  🔄 AI shipping ($${rawAiShipping}) > calculated ($${calculatedShippingCost}). Using AI value (may be express or remote zone).`);
+            calculatedShippingCost = rawAiShipping;
           }
           console.log(`  📦 FINAL calculatedShippingCost: $${calculatedShippingCost}`);
 

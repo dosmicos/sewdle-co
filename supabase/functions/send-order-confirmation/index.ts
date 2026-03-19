@@ -413,7 +413,7 @@ Gracias por tu compra!`;
         direction: 'outbound',
         sender_type: 'agent',
         content: message,
-        message_type: 'text',
+        message_type: 'template',
         sent_at: new Date().toISOString()
       })
       .select('id')

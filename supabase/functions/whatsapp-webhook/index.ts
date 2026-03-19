@@ -1267,6 +1267,92 @@ async function handleAIAutoReply(
 
   console.log(`🤖 [${channelType}] AI enabled, generating response...`);
 
+  // 🛡️ CHECK: Is this a reply to a pending order confirmation template?
+  // If customer replies "SI"/"Sí"/"OK" to a confirmation template, don't send to AI — handle directly.
+  const normalizedReply = (content || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const isConfirmationReply = ['si', 'sí', 'ok', 'yes', 'dale', 'listo', 'confirmo', 'confirmado', 'si confirmo', 'si confirmado', 'si, confirmado', 'si confirmado', 'si por favor', 'si porfavor'].includes(normalizedReply);
+
+  if (isConfirmationReply && conversation?.id) {
+    // Check if there's a pending order confirmation for this conversation
+    const { data: pendingConfirmation } = await supabase
+      .from('order_confirmations')
+      .select('id, order_number, shopify_order_id, status, customer_name')
+      .eq('conversation_id', conversation.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (pendingConfirmation && pendingConfirmation.length > 0) {
+      const confirmation = pendingConfirmation[0];
+      console.log(`✅ ORDER CONFIRMATION DETECTED: Customer replied "${content}" to pending confirmation for order #${confirmation.order_number}. NOT sending to AI.`);
+
+      // Update confirmation status to 'confirmed'
+      await supabase
+        .from('order_confirmations')
+        .update({
+          status: 'confirmed',
+          confirmed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', confirmation.id);
+
+      // Send confirmation response via WhatsApp
+      const confirmResponse = `¡Perfecto${confirmation.customer_name ? ', ' + confirmation.customer_name.split(' ')[0] : ''}! Tu pedido #${confirmation.order_number} ha sido confirmado. 🎉\n\nTe enviaremos la guía de seguimiento cuando sea despachado. ¡Gracias por tu compra! 😊`;
+
+      // Get WhatsApp credentials for sending
+      const whatsappToken = Deno.env.get('META_WHATSAPP_TOKEN') || channel?.meta_access_token;
+      const phoneNumberId = channel?.meta_phone_number_id || Deno.env.get('META_PHONE_NUMBER_ID');
+      const customerPhone = conversation?.customer_phone || conversation?.metadata?.phone;
+
+      if (whatsappToken && phoneNumberId && customerPhone) {
+        const cleanPhone = customerPhone.replace(/[\s+]/g, '');
+        try {
+          await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${whatsappToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              recipient_type: 'individual',
+              to: cleanPhone,
+              type: 'text',
+              text: { preview_url: false, body: confirmResponse }
+            })
+          });
+          console.log(`✅ Confirmation reply sent to ${cleanPhone}`);
+        } catch (sendErr) {
+          console.error('Error sending confirmation reply:', sendErr);
+        }
+
+        // Save the response message
+        await supabase
+          .from('messaging_messages')
+          .insert({
+            conversation_id: conversation.id,
+            channel_type: 'whatsapp',
+            direction: 'outbound',
+            sender_type: 'system',
+            content: confirmResponse,
+            message_type: 'text',
+            sent_at: new Date().toISOString()
+          });
+
+        // Update conversation preview
+        await supabase
+          .from('messaging_conversations')
+          .update({
+            last_message_preview: confirmResponse.substring(0, 100),
+            last_message_at: new Date().toISOString()
+          })
+          .eq('id', conversation.id);
+      }
+
+      return; // Don't send to AI — confirmation handled
+    }
+  }
+
   // Get conversation history
   const { data: historyMessages } = await supabase
     .from('messaging_messages')
@@ -1304,6 +1390,7 @@ async function handleAIAutoReply(
       messages: messagesForAI,
       systemPrompt: aiConfig.systemPrompt || 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',
       organizationId: channel.organization_id,
+      conversationId: conversation?.id,
     }
   });
 
