@@ -58,7 +58,7 @@ const SeedImageManager = ({ type }: SeedImageManagerProps) => {
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: 'Archivo muy grande',
-        description: 'El archivo debe ser menor a 5MB.',
+        description: 'El archivo debe ser menor a 5.4MB.',
         variant: 'destructive',
       });
       return;
@@ -259,7 +259,7 @@ const SeedImageManager = ({ type }: SeedImageManagerProps) => {
                 <div className="space-y-2">
                   <Upload className="w-8 h-8 text-gray-400 mx-auto" />
                   <p className="text-sm text-gray-600">Arrastra una imagen o haz clic para seleccionar</p>
-                  <p className="text-xs text-gray-500">JPG, PNG o WEBP (max. 5MB)</p>
+                  <p className="text-xs text-gray-500">JPG, PNG o WEBP (max. 5.4MB)</p>
                 </div>
               )}
             </div>

@@ -60,8 +60,8 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
       toast({ title: 'Error', description: 'Solo se permiten archivos JPG, PNG o WEBP', variant: 'destructive' });
       return null;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: 'Error', description: 'El archivo no puede superar 5MB', variant: 'destructive' });
+    if (file.size > 5.4 * 1024 * 1024) {
+      toast({ title: 'Error', description: 'El archivo no puede superar 5.4MB', variant: 'destructive' });
       return null;
     }
     const ext = file.name.split('.').pop() || 'jpg';
