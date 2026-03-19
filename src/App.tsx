@@ -374,9 +374,9 @@ const AppContent = () => {
         } />
 
         <Route path="publicidad" element={
-          <PermissionRoute module="publicidad" action="view">
+          <AdminRoute>
             <PublicidadPage />
-          </PermissionRoute>
+          </AdminRoute>
         } />
 
         <Route path="alegra" element={
