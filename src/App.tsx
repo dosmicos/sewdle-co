@@ -38,6 +38,7 @@ import PickingPackingPage from "@/pages/PickingPackingPage";
 import PrintableOrderView from "@/pages/PrintableOrderView";
 import PasswordChangeRouteGuard from "@/components/PasswordChangeRouteGuard";
 import UgcCreatorsPage from "@/pages/UgcCreatorsPage";
+import PublicidadPage from "@/pages/PublicidadPage";
 import UgcUploadPage from "@/pages/UgcUploadPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import TermsOfServicePage from "@/pages/TermsOfServicePage";
@@ -369,6 +370,12 @@ const AppContent = () => {
         <Route path="ugc-creators" element={
           <PermissionRoute module="ugc" action="view">
             <UgcCreatorsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="publicidad" element={
+          <PermissionRoute module="publicidad" action="view">
+            <PublicidadPage />
           </PermissionRoute>
         } />
 
