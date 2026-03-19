@@ -30,6 +30,7 @@ interface ShopifyLineItem {
   image_url: string | null;
   shopify_line_item_id: number;
   properties: { name: string; value: string }[] | null;
+  fulfillment_status: string | null;
 }
 
 interface PickingOrderDetailsModalProps {
@@ -92,6 +93,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [selectedCarrierName, setSelectedCarrierName] = useState<string | null>(null);
   const [isProcessingExpressFulfillment, setIsProcessingExpressFulfillment] = useState(false);
   const [isSyncingFromShopify, setIsSyncingFromShopify] = useState(false);
+  const [isResyncingFulfillment, setIsResyncingFulfillment] = useState(false);
   const [showExpressCodeDialog, setShowExpressCodeDialog] = useState(false);
   const [expressDeliveryCode, setExpressDeliveryCode] = useState('');
 
@@ -619,6 +621,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     .filter(item => item.title?.toLowerCase() !== 'bordado personalizado')
     .reduce((sum, item) => sum + item.quantity, 0);
 
+  // Count units pending (not yet fulfilled) for partial fulfillment orders
+  const pendingUnits = lineItems
+    .filter(item => item.title?.toLowerCase() !== 'bordado personalizado' && item.fulfillment_status !== 'fulfilled')
+    .reduce((sum, item) => sum + item.quantity, 0);
+  const hasPartialFulfillment = pendingUnits > 0 && pendingUnits < totalRequiredUnits;
+
   // Determina si todos los artículos han sido verificados
   const allItemsVerified = totalRequiredUnits > 0 && totalVerifiedUnits === totalRequiredUnits;
 
@@ -928,6 +936,34 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
   };
 
+  const handleResyncShopifyFulfillment = async () => {
+    if (!shippingLabel?.id) return;
+    setIsResyncingFulfillment(true);
+    try {
+      const data = await invokeEdgeFunction<any>(
+        'resync-shopify-fulfillment',
+        { shipping_label_id: shippingLabel.id },
+        { timeoutMs: 15_000 }
+      );
+      if (data?.success) {
+        setShippingLabel(prev => prev ? {
+          ...prev,
+          shopify_fulfillment_status: 'success',
+          shopify_fulfillment_error: null,
+          shopify_fulfillment_id: data.fulfillment_id || prev.shopify_fulfillment_id
+        } : prev);
+        toast.success(data.already_synced ? 'Pedido ya estaba preparado en Shopify' : 'Pedido sincronizado con Shopify exitosamente');
+      } else {
+        toast.error(`Error: ${data?.error || 'Error desconocido'}`);
+      }
+    } catch (error: any) {
+      console.error('Error resyncing fulfillment:', error);
+      toast.error('Error al sincronizar con Shopify');
+    } finally {
+      setIsResyncingFulfillment(false);
+    }
+  };
+
   const handlePrint = useCallback(() => {
     // Use localOrder directly to ensure we print the correct order
     if (!localOrder?.shopify_order_id) {
@@ -939,12 +975,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
   const handleMarkAsPackedAndPrint = useCallback(async () => {
+    // Guard: Express orders must go through the Express fulfillment flow
+    if (isExpressShipping) {
+      console.log('🚀 handleMarkAsPackedAndPrint: Redirigiendo a flujo Express');
+      setShowExpressCodeDialog(true);
+      return;
+    }
+
     // Guard: prevent duplicate execution
     if (packInFlightRef.current) {
       console.log('⚠️ handleMarkAsPackedAndPrint: Already in flight, skipping');
       return;
     }
-    
+
     // Guard: check if already packed/shipped
     const currentStatus = localOrder?.operational_status;
     if (currentStatus === 'ready_to_ship' || currentStatus === 'awaiting_pickup' || currentStatus === 'shipped') {
@@ -993,7 +1036,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     } finally {
       packInFlightRef.current = false;
     }
-  }, [orderId, localOrder, handlePrint, handleStatusChange]);
+  }, [orderId, localOrder, handlePrint, handleStatusChange, isExpressShipping]);
 
   // Handler for Express orders - fulfill with delivery code
   const handleMarkAsPackedExpress = useCallback(async (deliveryCode?: string) => {
@@ -1385,6 +1428,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       🚚 Enviado
                     </Badge>
                   )}
+                  {shippingLabel?.shopify_fulfillment_status === 'failed' && (
+                    <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-xs px-2 py-0.5">
+                      ⚠️ Shopify no sync
+                    </Badge>
+                  )}
+                  {effectiveOrder.shopify_order?.fulfillment_status === 'partial' && (
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs px-2 py-0.5">
+                      Parcialmente preparado
+                    </Badge>
+                  )}
                   {effectiveOrder.shopify_order?.financial_status === 'pending' && actualPaymentMethod !== 'Contraentrega' && (
                     <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5">
                       Pendiente
@@ -1460,9 +1513,16 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                         Cargando...
                       </Badge>
                     ) : (
-                      <Badge className="text-base md:text-xl font-bold bg-primary text-primary-foreground px-3 py-1">
-                        {totalRequiredUnits} {totalRequiredUnits === 1 ? 'unidad' : 'unidades'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {hasPartialFulfillment && (
+                          <Badge className="text-xs font-medium bg-green-100 text-green-700 border border-green-300 px-2 py-0.5">
+                            {totalRequiredUnits - pendingUnits} enviado{totalRequiredUnits - pendingUnits !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                        <Badge className={`text-base md:text-xl font-bold px-3 py-1 ${hasPartialFulfillment ? 'bg-amber-500 text-white' : 'bg-primary text-primary-foreground'}`}>
+                          {hasPartialFulfillment ? `${pendingUnits} pendiente${pendingUnits !== 1 ? 's' : ''}` : `${totalRequiredUnits} ${totalRequiredUnits === 1 ? 'unidad' : 'unidades'}`}
+                        </Badge>
+                      </div>
                     )}
                   </CardTitle>
                 </CardHeader>
@@ -1494,13 +1554,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                   )}
                   
                   {/* Normal product list */}
-                  {lineItems.map((item, index: number) => (
-                    <div key={index} className="flex gap-2 md:gap-4 p-2 md:p-4 border rounded-lg">
+                  {lineItems.map((item, index: number) => {
+                    const isItemFulfilled = item.fulfillment_status === 'fulfilled';
+                    return (
+                    <div key={index} className={`flex gap-2 md:gap-4 p-2 md:p-4 border rounded-lg relative ${isItemFulfilled ? 'opacity-50 bg-green-50/50 border-green-200' : ''}`}>
+                      {/* Fulfilled badge overlay */}
+                      {isItemFulfilled && (
+                        <div className="absolute top-1.5 right-1.5 z-10">
+                          <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0.5">
+                            <CheckCircle className="w-3 h-3 mr-0.5" /> Ya enviado
+                          </Badge>
+                        </div>
+                      )}
                       {/* Product Image - Smaller on mobile */}
                       <div className="flex-shrink-0">
                         {item.image_url ? (
-                          <img 
-                            src={item.image_url} 
+                          <img
+                            src={item.image_url}
                             alt={item.title}
                             className="w-16 h-16 md:w-32 md:h-32 object-cover rounded-lg border"
                             onError={(e) => {
@@ -1556,7 +1626,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
 
@@ -1764,6 +1835,27 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                                 <span>💰</span>
                                 <span>${shippingLabel.total_price.toLocaleString('es-CO')} COP</span>
                               </p>
+                            )}
+                            {shippingLabel.shopify_fulfillment_status === 'failed' && (
+                              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                                <div className="flex items-center gap-1.5 text-amber-700 text-xs font-medium">
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                  <span>No se sincronizó con Shopify</span>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-1.5 h-7 text-xs w-full border-amber-300 text-amber-700 hover:bg-amber-100"
+                                  onClick={handleResyncShopifyFulfillment}
+                                  disabled={isResyncingFulfillment}
+                                >
+                                  {isResyncingFulfillment ? (
+                                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Sincronizando...</>
+                                  ) : (
+                                    <><RefreshCw className="w-3 h-3 mr-1" />Reintentar sync con Shopify</>
+                                  )}
+                                </Button>
+                              </div>
                             )}
                           </div>
                         )}
