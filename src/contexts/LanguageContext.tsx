@@ -78,6 +78,10 @@ const englishTranslations: Record<string, string> = {
   // Hero Section
   'hero.title.1': 'Take total control of your',
   'hero.title.2': 'textile production',
+  'hero.flipWords.1': 'textile production',
+  'hero.flipWords.2': 'supply chain',
+  'hero.flipWords.3': 'workshops',
+  'hero.flipWords.4': 'inventory',
   'hero.subtitle': 'The platform that connects your fashion brand with all your workshops and manufacturers, for limitless management without setbacks.',
   'hero.cta': 'Get started now',
 
@@ -212,6 +216,10 @@ const spanishTranslations: Record<string, string> = {
   // Hero Section
   'hero.title.1': 'Toma el control total de tu',
   'hero.title.2': 'producción textil',
+  'hero.flipWords.1': 'producción textil',
+  'hero.flipWords.2': 'cadena de suministro',
+  'hero.flipWords.3': 'talleres',
+  'hero.flipWords.4': 'inventario',
   'hero.subtitle': 'La plataforma que conecta tu marca de moda con todos tus talleres y fabricantes, para una gestión sin límites ni sobresaltos.',
   'hero.cta': 'Empezar ahora',
 

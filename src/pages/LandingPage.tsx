@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import LanguageSelector from '@/components/LanguageSelector';
 import MobileNavigation from '@/components/MobileNavigation';
+import { FlipWords } from '@/components/ui/flip-words';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -91,9 +92,12 @@ const LandingPage = () => {
             <div className="space-y-4 max-w-4xl mx-auto">
               <h1 className="text-gray-900 leading-tight text-3xl sm:text-4xl lg:text-6xl font-semibold">
                 {t('hero.title.1')}
-                <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent font-semibold">
-                  {" "}{t('hero.title.2')}
-                </span>
+                <br />
+                <FlipWords
+                  words={[t('hero.flipWords.1'), t('hero.flipWords.2'), t('hero.flipWords.3'), t('hero.flipWords.4')]}
+                  duration={3000}
+                  className="!text-[#FF5C02] font-semibold !text-center"
+                />
               </h1>
               <p className="text-base sm:text-lg text-gray-600 leading-relaxed max-w-3xl mx-auto">
                 {t('hero.subtitle')}
