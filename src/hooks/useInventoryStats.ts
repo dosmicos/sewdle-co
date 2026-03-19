@@ -373,6 +373,7 @@ export const useInventoryStats = () => {
         supabase.rpc('get_product_sales_analytics', {
           start_date: startDateStr,
           end_date: endDateStr,
+          org_id: orgId,
         }),
       ]);
 
