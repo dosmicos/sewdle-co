@@ -41,7 +41,7 @@ serve(async (req) => {
       .select('organization_id, role')
       .eq('id', user.id)
       .single();
-    if (!profile || profile.role !== 'Administrador') {
+    if (!profile || (profile.role !== 'admin' && profile.role !== 'Administrador')) {
       return new Response(JSON.stringify({ error: 'Admin access required' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
