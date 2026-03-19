@@ -27,7 +27,7 @@ interface GenerateWorkspaceProps {
 
 const GenerateWorkspace = ({ reuseData, onReuseConsumed }: GenerateWorkspaceProps) => {
   const { toast } = useToast();
-  const { generate, generating, generatedImageUrl, rateLimitUsed, rateLimitMax, clearImage, downloadImage } =
+  const { generate, generating, generatedImages, rateLimitUsed, rateLimitMax, clearImage, downloadImage } =
     useAiGeneration();
   const { skills } = useAiSkills();
 
@@ -219,9 +219,9 @@ const GenerateWorkspace = ({ reuseData, onReuseConsumed }: GenerateWorkspaceProp
         </div>
 
         <ImagePreview
-          imageUrl={generatedImageUrl}
+          images={generatedImages}
           generating={generating}
-          onDownload={downloadImage}
+          onDownload={(url) => downloadImage(url)}
           onClear={clearImage}
         />
       </div>
