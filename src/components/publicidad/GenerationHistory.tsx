@@ -23,7 +23,11 @@ const GenerationHistory = ({ onReuse }: GenerationHistoryProps) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const { records, loading } = useGenerationHistory({ mode: modeFilter, dateFrom, dateTo });
+  const { generations: records, loading } = useGenerationHistory({
+    mode: modeFilter === 'all' ? undefined : modeFilter,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined
+  });
 
   const modeBadge = (mode: string) => {
     switch (mode) {

@@ -40,7 +40,7 @@ export const useGenerationHistory = (filters?: HistoryFilters) => {
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (filters?.mode) {
+      if (filters?.mode && filters.mode !== 'all') {
         query = query.eq('mode', filters.mode);
       }
       if (filters?.dateFrom) {
