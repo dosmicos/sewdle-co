@@ -131,19 +131,40 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Get orders that are currently packed/shipped in picking_packing_orders
+    // to protect their tags from being overwritten by stale Shopify data
+    const { data: packedOrders } = await supabase
+      .from('picking_packing_orders')
+      .select('shopify_order_id')
+      .eq('organization_id', organizationId)
+      .in('operational_status', ['ready_to_ship', 'awaiting_pickup']);
+
+    const packedOrderIds = new Set(packedOrders?.map(o => o.shopify_order_id) || []);
+    let skippedTagsCount = 0;
+
     // Batch update in chunks of 100
     const batchSize = 100;
     for (let i = 0; i < updates.length; i += batchSize) {
       const batch = updates.slice(i, i + batchSize);
-      
+
       for (const update of batch) {
+        // For packed/awaiting orders: only update fulfillment_status and cancelled_at
+        // Do NOT overwrite tags — they may contain EMPACADO that Shopify doesn't have yet
+        const isProtected = packedOrderIds.has(update.shopify_order_id);
+        const updateData: any = {
+          fulfillment_status: update.fulfillment_status,
+          cancelled_at: update.cancelled_at
+        };
+
+        if (!isProtected) {
+          updateData.tags = update.tags;
+        } else {
+          skippedTagsCount++;
+        }
+
         const { error: updateError } = await supabase
           .from('shopify_orders')
-          .update({
-            fulfillment_status: update.fulfillment_status,
-            tags: update.tags,
-            cancelled_at: update.cancelled_at
-          })
+          .update(updateData)
           .eq('shopify_order_id', update.shopify_order_id)
           .eq('organization_id', organizationId);
 
@@ -154,8 +175,12 @@ Deno.serve(async (req) => {
           updatedCount++;
         }
       }
-      
+
       console.log(`✅ Batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(updates.length/batchSize)} procesado`);
+    }
+
+    if (skippedTagsCount > 0) {
+      console.log(`🛡️ Tags protegidos en ${skippedTagsCount} órdenes empacadas/en espera (no se sobrescribieron)`);
     }
 
     // Log summary statistics

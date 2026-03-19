@@ -211,8 +211,8 @@ export const usePickingOrders = () => {
       // Apply cancelled_at filter at DB level when filtering by "confirmado"
       if (filters?.tags && filters.tags.some(tag => tag.toLowerCase() === 'confirmado')) {
         query = query.is('shopify_order.cancelled_at', null);
-        // Also filter unfulfilled only
-        query = query.or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled', { foreignTable: 'shopify_order' });
+        // Also filter unfulfilled or partially fulfilled (exclude fully fulfilled)
+        query = query.or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial', { foreignTable: 'shopify_order' });
       }
 
       // Search filter - only filter by order_number at DB level
@@ -383,16 +383,20 @@ export const usePickingOrders = () => {
     newStatus: OperationalStatus,
     shopifyOrderId?: number
   ) => {
+    // Save previous status for rollback
+    const order = orders.find(o => o.id === pickingOrderId);
+    const previousStatus = order?.operational_status || 'pending';
+
     try {
       const updates: any = {
         operational_status: newStatus,
       };
 
       // Set timestamps based on status
-      if (newStatus === 'picking' && !orders.find(o => o.id === pickingOrderId)?.picked_at) {
+      if (newStatus === 'picking' && !order?.picked_at) {
         updates.picked_at = new Date().toISOString();
         updates.picked_by = (await supabase.auth.getUser()).data.user?.id;
-      } else if (newStatus === 'packing' && !orders.find(o => o.id === pickingOrderId)?.packed_at) {
+      } else if (newStatus === 'packing' && !order?.packed_at) {
         updates.packed_at = new Date().toISOString();
         updates.packed_by = (await supabase.auth.getUser()).data.user?.id;
       } else if (newStatus === 'ready_to_ship') {
@@ -411,10 +415,8 @@ export const usePickingOrders = () => {
       if (error) throw error;
 
       // Update tags in Shopify
-      // Use provided shopifyOrderId or fallback to searching in orders array
-      const order = orders.find(o => o.id === pickingOrderId);
       const effectiveShopifyOrderId = shopifyOrderId || order?.shopify_order_id;
-      
+
       if (!effectiveShopifyOrderId) {
         console.error('❌ MISSING SHOPIFY_ORDER_ID:', {
           pickingOrderId,
@@ -425,7 +427,7 @@ export const usePickingOrders = () => {
         toast.error('Error: No se pudo actualizar etiquetas en Shopify (ID no encontrado)');
         return;
       }
-      
+
       const statusTags: Record<OperationalStatus, string> = {
         pending: 'PENDIENTE',
         picking: 'PICKING_EN_PROCESO',
@@ -439,8 +441,18 @@ export const usePickingOrders = () => {
         console.log('🏷️ Updating Shopify tags for order:', effectiveShopifyOrderId, 'with tag:', statusTags[newStatus]);
         await updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]);
       } catch (tagError) {
-        console.error('❌ CRITICAL: Tag update failed:', tagError);
-        toast.error('Error al actualizar etiquetas en Shopify');
+        // ROLLBACK: Revert operational_status since Shopify tag failed
+        console.error('❌ CRITICAL: Tag update failed, rolling back operational_status:', tagError);
+        try {
+          await supabase
+            .from('picking_packing_orders')
+            .update({ operational_status: previousStatus })
+            .eq('id', pickingOrderId);
+          console.log(`🔄 Rollback exitoso: ${newStatus} → ${previousStatus}`);
+        } catch (rollbackError) {
+          console.error('❌ ROLLBACK FAILED:', rollbackError);
+        }
+        toast.error('Error al actualizar etiquetas en Shopify. Estado revertido.');
         throw tagError;
       }
 
@@ -448,7 +460,6 @@ export const usePickingOrders = () => {
       await fetchOrders();
     } catch (error: any) {
       console.error('Error updating order status:', error);
-      toast.error('Error al actualizar estado');
       throw error;
     }
   };
@@ -489,13 +500,31 @@ export const usePickingOrders = () => {
       console.log(`✅ Shopify actualizado para orden ${shopifyOrderId}`);
       
       // Update local DB with final tags from Shopify response
-      const finalTagsString = shopifyResponse.finalTags 
-        ? (Array.isArray(shopifyResponse.finalTags) ? shopifyResponse.finalTags.join(', ') : shopifyResponse.finalTags)
-        : newTags.join(', ');
-      
+      let finalTagsString: string;
+      if (shopifyResponse.finalTags) {
+        finalTagsString = Array.isArray(shopifyResponse.finalTags)
+          ? shopifyResponse.finalTags.join(', ')
+          : shopifyResponse.finalTags;
+      } else {
+        // FALLBACK: Merge new tags with existing DB tags instead of overwriting
+        const { data: currentOrder } = await supabase
+          .from('shopify_orders')
+          .select('tags')
+          .eq('shopify_order_id', shopifyOrderId)
+          .single();
+
+        const existingTags = (currentOrder?.tags || '')
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+        const mergedTags = [...new Set([...existingTags, ...newTags])];
+        finalTagsString = mergedTags.join(', ');
+        console.warn(`⚠️ Shopify no devolvió finalTags, usando merge local: ${finalTagsString}`);
+      }
+
       const { error: dbError } = await supabase
         .from('shopify_orders')
-        .update({ 
+        .update({
           tags: finalTagsString,
           updated_at: new Date().toISOString()
         })

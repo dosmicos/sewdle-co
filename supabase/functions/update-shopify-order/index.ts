@@ -206,15 +206,32 @@ serve(async (req) => {
           Deno.env.get('SUPABASE_URL') ?? '',
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         );
-        
+
+        // PROTECT: Check if order is packed/shipped — don't overwrite tags
+        const { data: pickingOrder } = await supabaseClient
+          .from('picking_packing_orders')
+          .select('operational_status')
+          .eq('shopify_order_id', orderId)
+          .single();
+
+        const isProtected = pickingOrder?.operational_status === 'ready_to_ship'
+          || pickingOrder?.operational_status === 'awaiting_pickup';
+
+        const updateData: any = {
+          note: order.note || null,
+          updated_at_shopify: order.updated_at
+          // NOTE: raw_data is NOT updated here for performance
+        };
+
+        if (!isProtected) {
+          updateData.tags = order.tags || null;
+        } else {
+          console.log(`🛡️ Tags protegidos: orden ${orderId} tiene status ${pickingOrder.operational_status}`);
+        }
+
         const { error: dbError } = await supabaseClient
           .from('shopify_orders')
-          .update({
-            note: order.note || null,
-            tags: order.tags || null,
-            updated_at_shopify: order.updated_at
-            // NOTE: raw_data is NOT updated here for performance - it's large and not needed for note sync
-          })
+          .update(updateData)
           .eq('shopify_order_id', orderId);
 
         if (dbError) {

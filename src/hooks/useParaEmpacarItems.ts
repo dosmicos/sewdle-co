@@ -129,6 +129,17 @@ export const useParaEmpacarItems = () => {
     setError(null);
 
     try {
+      // Step 1: Get orders that are already packed/shipped in picking_packing_orders
+      // so we can exclude them even if Shopify tags haven't synced yet (DOUBLE LOCK)
+      const { data: packedOrders } = await supabase
+        .from('picking_packing_orders')
+        .select('shopify_order_id')
+        .eq('organization_id', currentOrganization.id)
+        .in('operational_status', ['ready_to_ship', 'awaiting_pickup', 'shipped']);
+
+      const packedOrderIds = new Set(packedOrders?.map(o => o.shopify_order_id) || []);
+
+      // Step 2: Query shopify_orders with tag-based filters
       const { data: orders, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('shopify_order_id, order_number')
@@ -138,7 +149,7 @@ export const useParaEmpacarItems = () => {
         .ilike('tags', '%confirmado%')
         .not('tags', 'ilike', '%empacado%')
         .in('financial_status', ['paid', 'pending', 'partially_paid'])
-        .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled');
+        .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial');
 
       if (ordersError) throw ordersError;
       if (!orders || orders.length === 0) {
@@ -146,8 +157,16 @@ export const useParaEmpacarItems = () => {
         return;
       }
 
-      const orderMap = new Map(orders.map(o => [o.shopify_order_id, o.order_number]));
-      const orderIds = orders.map(o => o.shopify_order_id);
+      // Step 3: DOUBLE LOCK - exclude orders already packed/shipped by operational_status
+      const filteredOrders = orders.filter(o => !packedOrderIds.has(o.shopify_order_id));
+
+      if (filteredOrders.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const orderMap = new Map(filteredOrders.map(o => [o.shopify_order_id, o.order_number]));
+      const orderIds = filteredOrders.map(o => o.shopify_order_id);
 
       const { data: lineItems, error: lineItemsError } = await supabase
         .from('shopify_order_line_items')

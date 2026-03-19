@@ -468,6 +468,17 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         const syncedNote = data?.note || '';
         const syncedTags = data?.tags ?? null;
 
+        // PROTECT: Don't overwrite tags if order is already packed/shipped locally
+        // This prevents stale Shopify data from reverting the EMPACADO tag
+        const isAlreadyPacked = localOrder?.operational_status === 'ready_to_ship'
+          || localOrder?.operational_status === 'awaiting_pickup'
+          || localOrder?.operational_status === 'shipped';
+        const safeTags = isAlreadyPacked ? null : syncedTags;
+
+        if (isAlreadyPacked && syncedTags) {
+          console.log(`🛡️ sync_from_shopify: Tags protegidos para orden empacada (status: ${localOrder?.operational_status})`);
+        }
+
         // Update UI with fresh Shopify data
         setShopifyNote(syncedNote);
         lastSavedShopifyNoteRef.current = syncedNote;
@@ -481,7 +492,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                 shopify_order: {
                   ...(prev.shopify_order ?? {}),
                   note: syncedNote,
-                  ...(syncedTags ? { tags: syncedTags } : {}),
+                  ...(safeTags ? { tags: safeTags } : {}),
                 } as any,
               }
             : prev
@@ -494,7 +505,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
             shopify_order: {
               ...(prev.shopify_order ?? {}),
               note: syncedNote,
-              ...(syncedTags ? { tags: syncedTags } : {}),
+              ...(safeTags ? { tags: safeTags } : {}),
             } as any,
           } as PickingOrder;
         });
@@ -1016,22 +1027,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     // Lock to prevent duplicate execution
     packInFlightRef.current = true;
-    
+
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
-    
-    // Print only once per order
-    if (autoPrintTriggeredRef.current !== orderId) {
-      autoPrintTriggeredRef.current = orderId;
-      handlePrint();
-    }
-    
-    // Luego actualizar estado asincrónicamente
+
+    // FIRST: Update status and tags (must succeed before printing)
     try {
       await handleStatusChange('ready_to_ship');
+
+      // ONLY print after status change succeeds
+      if (autoPrintTriggeredRef.current !== orderId) {
+        autoPrintTriggeredRef.current = orderId;
+        handlePrint();
+      }
     } catch (error) {
       console.error('❌ Error al marcar como empacado:', error);
-      toast.error('Error al aplicar etiqueta EMPACADO. Intenta de nuevo.', {
-        duration: 5000,
+      toast.error('❌ Error al aplicar etiqueta EMPACADO. NO se imprimió. Intenta de nuevo.', {
+        duration: 8000,
       });
     } finally {
       packInFlightRef.current = false;
