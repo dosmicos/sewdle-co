@@ -598,8 +598,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     if (matchingItem && matchingItem.sku) {
       const currentCount = verifiedCounts.get(matchingItem.sku) || 0;
-      const requiredCount = matchingItem.quantity;
-      
+      // Sum total quantity across ALL line items with this SKU (not just the first match)
+      const requiredCount = lineItems
+        .filter(item => item.sku?.toLowerCase() === normalizedInput &&
+                item.title?.toLowerCase() !== 'bordado personalizado')
+        .reduce((sum, item) => sum + item.quantity, 0);
+
       if (currentCount < requiredCount) {
         // Increment verification counter
         const newCount = currentCount + 1;
