@@ -26,9 +26,9 @@ export const useGenerationHistory = (filters?: HistoryFilters) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentOrganization } = useOrganization();
-  const orgId = currentOrganization?.id;
 
   const fetchHistory = useCallback(async () => {
+    const orgId = currentOrganization?.id;
     if (!orgId) return;
     try {
       setLoading(true);
@@ -58,7 +58,7 @@ export const useGenerationHistory = (filters?: HistoryFilters) => {
     } finally {
       setLoading(false);
     }
-  }, [orgId, filters?.mode, filters?.dateFrom, filters?.dateTo]);
+  }, [currentOrganization?.id, filters?.mode, filters?.dateFrom, filters?.dateTo]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 

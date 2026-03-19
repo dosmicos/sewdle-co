@@ -22,9 +22,8 @@ export const useSavedPrompts = () => {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const { toast } = useToast();
-  const orgId = currentOrganization?.id;
-
   const fetchPrompts = useCallback(async () => {
+    const orgId = currentOrganization?.id;
     if (!orgId) return;
     try {
       setLoading(true);
@@ -40,11 +39,12 @@ export const useSavedPrompts = () => {
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [currentOrganization?.id]);
 
   useEffect(() => { fetchPrompts(); }, [fetchPrompts]);
 
   const createPrompt = async (name: string, prompt: string, category?: string) => {
+    const orgId = currentOrganization?.id;
     if (!orgId) return;
     const { error: insertError } = await (supabase.from('ai_saved_prompts' as any) as any).insert({
       organization_id: orgId,

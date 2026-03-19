@@ -20,9 +20,8 @@ export const useAiTemplates = (category?: string) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentOrganization } = useOrganization();
-  const orgId = currentOrganization?.id;
-
   const fetchTemplates = useCallback(async () => {
+    const orgId = currentOrganization?.id;
     if (!orgId) return;
     try {
       setLoading(true);
@@ -41,7 +40,7 @@ export const useAiTemplates = (category?: string) => {
     } finally {
       setLoading(false);
     }
-  }, [orgId, category]);
+  }, [currentOrganization?.id, category]);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 

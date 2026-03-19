@@ -25,9 +25,8 @@ export const useAiSkills = () => {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const { toast } = useToast();
-  const orgId = currentOrganization?.id;
-
   const fetchSkills = useCallback(async () => {
+    const orgId = currentOrganization?.id;
     if (!orgId) return;
     try {
       setLoading(true);
@@ -68,7 +67,7 @@ export const useAiSkills = () => {
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [currentOrganization?.id]);
 
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
 
@@ -76,6 +75,7 @@ export const useAiSkills = () => {
     data: { name: string; description?: string; prompt: string; category?: string; is_active?: boolean },
     seedImageIds: string[] = []
   ) => {
+    const orgId = currentOrganization?.id;
     if (!orgId) return;
     const { data: inserted, error: insertError } = await (supabase.from('ai_skills' as any) as any)
       .insert({

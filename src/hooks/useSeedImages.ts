@@ -22,10 +22,13 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const { toast } = useToast();
-  const orgId = currentOrganization?.id;
 
   const fetchSeedImages = useCallback(async () => {
-    if (!orgId) return;
+    const orgId = currentOrganization?.id;
+    if (!orgId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -42,13 +45,13 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
     } finally {
       setLoading(false);
     }
-  }, [orgId, type]);
+  }, [currentOrganization?.id, type]);
 
   useEffect(() => { fetchSeedImages(); }, [fetchSeedImages]);
 
   const uploadSeedImage = async (file: File, seedType: 'product' | 'advertising'): Promise<string | null> => {
-    const currentOrgId = currentOrganization?.id;
-    if (!currentOrgId) {
+    const orgId = currentOrganization?.id;
+    if (!orgId) {
       toast({ title: 'Error', description: 'No se encontró la organización', variant: 'destructive' });
       return null;
     }
@@ -62,7 +65,7 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
       return null;
     }
     const ext = file.name.split('.').pop() || 'jpg';
-    const fileName = `${seedType}s/${currentOrgId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const fileName = `${seedType}s/${orgId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
     const { data, error: uploadError } = await supabase.storage
       .from('publicidad-seeds')
       .upload(fileName, file, { cacheControl: '3600', upsert: false });
@@ -75,13 +78,13 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
   };
 
   const createSeedImage = async (data: { name: string; type: 'product' | 'advertising'; image_url: string; category?: string }) => {
-    const currentOrgId = currentOrganization?.id;
-    if (!currentOrgId) {
+    const orgId = currentOrganization?.id;
+    if (!orgId) {
       toast({ title: 'Error', description: 'No se encontró la organización', variant: 'destructive' });
       return;
     }
     const { error: insertError } = await (supabase.from('ai_seed_images' as any) as any).insert({
-      organization_id: currentOrgId,
+      organization_id: orgId,
       created_by: user?.id || null,
       ...data,
     });
@@ -98,7 +101,7 @@ export const useSeedImages = (type?: 'product' | 'advertising') => {
     if (seed) {
       try {
         const path = new URL(seed.image_url).pathname.split('/publicidad-seeds/')[1];
-        if (path) await supabase.storage.from('publicidad-seeds').remove([path]);
+        if (path) await supabase.storage.from('publicidad-seeds').remove([decodeURIComponent(path)]);
       } catch {}
     }
     const { error: deleteError } = await (supabase.from('ai_seed_images' as any) as any).delete().eq('id', id);
