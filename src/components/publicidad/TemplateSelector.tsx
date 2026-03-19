@@ -12,8 +12,8 @@ interface TemplateSelectorProps {
 const TemplateSelector = ({ onSelect, selectedTemplateId }: TemplateSelectorProps) => {
   const { templates, loading } = useAiTemplates();
 
-  const productTemplates = templates.filter((t) => t.category === 'producto');
-  const adTemplates = templates.filter((t) => t.category === 'publicidad');
+  const productTemplates = templates.filter((t) => t.category === 'product');
+  const adTemplates = templates.filter((t) => t.category === 'advertising');
 
   if (loading) {
     return (
@@ -50,9 +50,9 @@ const TemplateSelector = ({ onSelect, selectedTemplateId }: TemplateSelectorProp
                 <Badge variant="outline" className="text-xs">
                   {template.resolution || '1K'}
                 </Badge>
-                {template.width && template.height && (
+                {template.dimensions && (
                   <Badge variant="secondary" className="text-xs">
-                    {template.width}x{template.height}
+                    {template.dimensions}
                   </Badge>
                 )}
               </div>

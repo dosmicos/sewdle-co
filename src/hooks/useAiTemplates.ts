@@ -5,10 +5,10 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 interface AiTemplate {
   id: string;
   name: string;
-  description: string | null;
-  prompt_template: string;
-  category: string;
-  thumbnail_url: string | null;
+  prompt_base: string;
+  category: 'product' | 'advertising';
+  resolution: string;
+  dimensions: string | null;
   is_active: boolean;
   sort_order: number;
   organization_id: string | null;

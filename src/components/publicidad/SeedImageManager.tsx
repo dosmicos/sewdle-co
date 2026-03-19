@@ -98,9 +98,11 @@ const SeedImageManager = ({ type }: SeedImageManagerProps) => {
 
     setSaving(true);
     try {
-      const imageUrl = await uploadSeedImage(selectedFile);
+      const imageUrl = await uploadSeedImage(selectedFile, type);
+      if (!imageUrl) throw new Error('No se pudo subir la imagen');
       await createSeedImage({
         name: name.trim(),
+        type,
         category: category.trim() || undefined,
         image_url: imageUrl,
       });
