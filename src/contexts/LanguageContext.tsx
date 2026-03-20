@@ -93,7 +93,14 @@ const englishTranslations: Record<string, string> = {
   'problem.4': 'Scaling = more stress and errors.',
 
   // Features Section
-  'features.title': 'Sewdle in 30 seconds',
+  'features.title': 'All your data, one platform',
+  'features.dataFlow.subtitle': 'Connect Shopify, your workshops, supplies, and deliveries in a single source of truth that optimizes your entire operation.',
+  'features.dataFlow.badge2': 'Workshops',
+  'features.dataFlow.badge3': 'Supplies',
+  'features.dataFlow.badge4': 'Deliveries',
+  'features.dataFlow.boxTitle': 'All your data, one single platform',
+  'features.dataFlow.tag1': 'Operations',
+  'features.dataFlow.tag2': 'Decisions',
   'features.centralized.title': 'Centralized orders',
   'features.centralized.desc': 'Create, assign and track every order from a single panel.',
   'features.connected.title': 'Connected workshops',
@@ -104,6 +111,8 @@ const englishTranslations: Record<string, string> = {
   'features.dashboard.desc': 'Progress, compliance and capacity KPIs in real time.',
 
   // Benefits Section
+  'logoCloud.line1': 'Trusted by leading fashion brands.',
+  'logoCloud.line2': 'They already manage their production with Sewdle.',
   'benefits.brands.title': 'For Fashion Brands',
   'benefits.brands.1': '360° visibility of the chain',
   'benefits.brands.2': '30% less time in coordination',
@@ -231,7 +240,14 @@ const spanishTranslations: Record<string, string> = {
   'problem.4': 'Escalar = más estrés y errores.',
 
   // Features Section
-  'features.title': 'Sewdle en 30 segundos',
+  'features.title': 'Todos tus datos, una sola plataforma',
+  'features.dataFlow.subtitle': 'Conecta Shopify, tus talleres, insumos y entregas en una única fuente de verdad que optimiza toda tu operación.',
+  'features.dataFlow.badge2': 'Talleres',
+  'features.dataFlow.badge3': 'Insumos',
+  'features.dataFlow.badge4': 'Entregas',
+  'features.dataFlow.boxTitle': 'Todos tus datos, una sola plataforma',
+  'features.dataFlow.tag1': 'Operaciones',
+  'features.dataFlow.tag2': 'Decisiones',
   'features.centralized.title': 'Órdenes centralizadas',
   'features.centralized.desc': 'Crea, asigna y sigue cada orden desde un único panel.',
   'features.connected.title': 'Talleres conectados',
@@ -242,6 +258,8 @@ const spanishTranslations: Record<string, string> = {
   'features.dashboard.desc': 'KPIs de avance, cumplimiento y capacidad en tiempo real.',
 
   // Benefits Section
+  'logoCloud.line1': 'Marcas que confían en nosotros.',
+  'logoCloud.line2': 'Ya gestionan su producción con Sewdle.',
   'benefits.brands.title': 'Para Marcas de Moda',
   'benefits.brands.1': 'Visibilidad 360° de la cadena',
   'benefits.brands.2': '30% menos tiempo en coordinación',

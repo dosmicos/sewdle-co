@@ -9,6 +9,17 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import LanguageSelector from '@/components/LanguageSelector';
 import MobileNavigation from '@/components/MobileNavigation';
 import { FlipWords } from '@/components/ui/flip-words';
+import DatabaseWithRestApi from '@/components/ui/database-with-rest-api';
+import { LogoCloud } from '@/components/ui/logo-cloud';
+
+const integrationLogos = [
+  { src: "/logo-dosmicos.png", alt: "Dosmicos" },
+  { src: "/logo-dosmicos.png", alt: "Dosmicos" },
+  { src: "/logo-dosmicos.png", alt: "Dosmicos" },
+  { src: "/logo-dosmicos.png", alt: "Dosmicos" },
+  { src: "/logo-dosmicos.png", alt: "Dosmicos" },
+  { src: "/logo-dosmicos.png", alt: "Dosmicos" },
+];
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -232,73 +243,49 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Features Section - Sewdle en 30s */}
+      {/* Features Section - Data Flow Visualization */}
       <section id="como-funciona" className="py-16 sm:py-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-12 sm:mb-16">
+          <div className="text-center mb-8 sm:mb-12">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-4 font-semibold">
               {t('features.title')}
             </h2>
+            <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+              {t('features.dataFlow.subtitle')}
+            </p>
           </div>
-          
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-            {[
-              {
-                title: t('features.centralized.title'),
-                description: t('features.centralized.desc')
-              },
-              {
-                title: t('features.connected.title'),
-                description: t('features.connected.desc')
-              },
-              {
-                title: t('features.traceability.title'),
-                description: t('features.traceability.desc')
-              },
-              {
-                title: t('features.dashboard.title'),
-                description: t('features.dashboard.desc')
-              }
-            ].map((feature, index) => (
-              <Card key={index} className="p-6 text-center hover:shadow-lg transition-shadow duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3">{feature.title}</h3>
-                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{feature.description}</p>
-              </Card>
-            ))}
+
+          <div className="flex justify-center">
+            <DatabaseWithRestApi
+              className="h-[320px] sm:h-[380px] max-w-[550px]"
+              badgeTexts={{
+                first: "Shopify",
+                second: t('features.dataFlow.badge2'),
+                third: t('features.dataFlow.badge3'),
+                fourth: t('features.dataFlow.badge4'),
+              }}
+              title={t('features.dataFlow.boxTitle')}
+              buttonTexts={{
+                first: t('features.dataFlow.tag1'),
+                second: t('features.dataFlow.tag2'),
+              }}
+              lightColor="#FF5C02"
+            />
           </div>
         </div>
       </section>
 
-      {/* Benefits Section */}
-      <section className="py-16 sm:py-20 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12">
-            {/* Para Marcas de Moda */}
-            <Card className="p-6 sm:p-8 border-0 shadow-lg bg-white">
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">{t('benefits.brands.title')}</h3>
-              <div className="space-y-4">
-                {[t('benefits.brands.1'), t('benefits.brands.2'), t('benefits.brands.3'), t('benefits.brands.4')].map((benefit, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <span className="text-sm sm:text-base text-gray-700">{benefit}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Para Talleres */}
-            <Card className="p-6 sm:p-8 border-0 shadow-lg bg-white">
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">{t('benefits.workshops.title')}</h3>
-              <div className="space-y-4">
-                {[t('benefits.workshops.1'), t('benefits.workshops.2'), t('benefits.workshops.3'), t('benefits.workshops.4')].map((benefit, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <span className="text-sm sm:text-base text-gray-700">{benefit}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
+      {/* Integrations / Logo Cloud Section */}
+      <section id="integraciones" className="py-16 sm:py-20 bg-white">
+        <div className="relative mx-auto max-w-3xl px-4 sm:px-6">
+          <h2 className="mb-5 text-center tracking-tight">
+            <span className="text-lg sm:text-xl md:text-2xl text-gray-400 font-medium">{t('logoCloud.line1')}</span>
+            <br />
+            <span className="text-xl sm:text-2xl md:text-3xl text-gray-900 font-semibold">{t('logoCloud.line2')}</span>
+          </h2>
+          <div className="mx-auto my-5 h-px max-w-sm bg-gray-200 [mask-image:linear-gradient(to_right,transparent,black,transparent)]" />
+          <LogoCloud logos={integrationLogos} />
+          <div className="mt-5 h-px bg-gray-200 [mask-image:linear-gradient(to_right,transparent,black,transparent)]" />
         </div>
       </section>
 
