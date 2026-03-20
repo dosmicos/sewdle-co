@@ -67,8 +67,9 @@ export const useProspects = () => {
       return { data, error: null };
     } catch (err: any) {
       console.error('Error creating prospect:', err);
-      toast.error('Error al crear prospecto');
-      return { data: null, error: err.message };
+      const errorMsg = err?.message || err?.details || 'Error desconocido';
+      toast.error(`Error al crear prospecto: ${errorMsg}`);
+      return { data: null, error: errorMsg };
     }
   };
 
