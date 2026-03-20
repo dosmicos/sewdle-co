@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowRight, CheckCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -11,6 +11,9 @@ import MobileNavigation from '@/components/MobileNavigation';
 import { FlipWords } from '@/components/ui/flip-words';
 import DatabaseWithRestApi from '@/components/ui/database-with-rest-api';
 import { LogoCloud } from '@/components/ui/logo-cloud';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/radix-accordion';
+import DisplayCards from '@/components/ui/display-cards';
+import { DottedSurface } from '@/components/ui/dotted-surface';
 
 const integrationLogos = [
   { src: "/logo-dosmicos.png", alt: "Dosmicos" },
@@ -47,7 +50,7 @@ const LandingPage = () => {
     <div className="min-h-screen bg-white">
       {/* Hero Section with Integrated Navigation */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-blue-50"></div>
+        <DottedSurface />
         
         {/* Navigation Header - Now responsive */}
         <header className="relative z-50 w-full">
@@ -97,7 +100,7 @@ const LandingPage = () => {
         </header>
 
         {/* Hero Content */}
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 lg:py-24">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 lg:py-24">
           <div className="text-center space-y-6">
             {/* Headline */}
             <div className="space-y-4 max-w-4xl mx-auto">
@@ -244,9 +247,9 @@ const LandingPage = () => {
       </section>
 
       {/* Features Section - Data Flow Visualization */}
-      <section id="como-funciona" className="py-16 sm:py-20">
+      <section id="como-funciona" className="py-8 sm:py-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-8 sm:mb-12">
+          <div className="text-center mb-4 sm:mb-12">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-4 font-semibold">
               {t('features.title')}
             </h2>
@@ -257,7 +260,7 @@ const LandingPage = () => {
 
           <div className="flex justify-center">
             <DatabaseWithRestApi
-              className="h-[320px] sm:h-[380px] max-w-[550px]"
+              className="h-[220px] sm:h-[380px] max-w-[550px]"
               badgeTexts={{
                 first: "Shopify",
                 second: t('features.dataFlow.badge2'),
@@ -283,45 +286,53 @@ const LandingPage = () => {
             <br />
             <span className="text-xl sm:text-2xl md:text-3xl text-gray-900 font-semibold">{t('logoCloud.line2')}</span>
           </h2>
-          <div className="mx-auto my-5 h-px max-w-sm bg-gray-200 [mask-image:linear-gradient(to_right,transparent,black,transparent)]" />
           <LogoCloud logos={integrationLogos} />
-          <div className="mt-5 h-px bg-gray-200 [mask-image:linear-gradient(to_right,transparent,black,transparent)]" />
         </div>
       </section>
 
       {/* Use Cases Section */}
-      <section id="casos-de-uso" className="py-16 sm:py-20">
+      <section id="casos-de-uso" className="py-16 sm:py-10 overflow-hidden bg-gradient-to-br from-background to-secondary">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 mb-4 font-semibold">
+          <div className="text-center mb-2 sm:mb-8">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-gray-900 font-semibold">
               {t('useCases.title')}
             </h2>
           </div>
-          
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {[
-              {
-                title: t('useCases.emerging.title'),
-                subtitle: t('useCases.emerging.subtitle'),
-                description: t('useCases.emerging.desc')
-              },
-              {
-                title: t('useCases.global.title'),
-                subtitle: t('useCases.global.subtitle'),
-                description: t('useCases.global.desc')
-              },
-              {
-                title: t('useCases.seasonal.title'),
-                subtitle: t('useCases.seasonal.subtitle'),
-                description: t('useCases.seasonal.desc')
-              }
-            ].map((useCase, index) => (
-              <Card key={index} className="p-6 text-center border-0 bg-gradient-to-br from-white to-orange-50 hover:shadow-lg transition-shadow duration-300">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">{useCase.title}</h3>
-                <p className="text-sm text-orange-600 font-medium mb-4">{useCase.subtitle}</p>
-                <p className="text-sm sm:text-base text-gray-600">{useCase.description}</p>
-              </Card>
-            ))}
+
+          <div className="flex min-h-[240px] sm:min-h-[280px] w-full items-start justify-center pt-4">
+            <div className="w-full max-w-3xl">
+              <DisplayCards
+                cards={[
+                  {
+                    icon: <Sparkles className="size-4 text-orange-300" />,
+                    title: t('useCases.emerging.title'),
+                    description: t('useCases.emerging.desc'),
+                    date: t('useCases.emerging.subtitle'),
+                    titleClassName: "text-[#FF5C02]",
+                    className:
+                      "[grid-area:stack] hover:-translate-y-10 before:absolute before:w-[100%] before:outline-1 before:rounded-xl before:outline-gray-200 before:h-[100%] before:content-[''] before:bg-blend-overlay before:bg-white/50 grayscale-[100%] hover:before:opacity-0 before:transition-opacity before:duration-700 hover:grayscale-0 before:left-0 before:top-0",
+                  },
+                  {
+                    icon: <Sparkles className="size-4 text-orange-300" />,
+                    title: t('useCases.global.title'),
+                    description: t('useCases.global.desc'),
+                    date: t('useCases.global.subtitle'),
+                    titleClassName: "text-[#FF5C02]",
+                    className:
+                      "[grid-area:stack] translate-x-12 sm:translate-x-16 translate-y-10 hover:-translate-y-1 before:absolute before:w-[100%] before:outline-1 before:rounded-xl before:outline-gray-200 before:h-[100%] before:content-[''] before:bg-blend-overlay before:bg-white/50 grayscale-[100%] hover:before:opacity-0 before:transition-opacity before:duration-700 hover:grayscale-0 before:left-0 before:top-0",
+                  },
+                  {
+                    icon: <Sparkles className="size-4 text-orange-300" />,
+                    title: t('useCases.seasonal.title'),
+                    description: t('useCases.seasonal.desc'),
+                    date: t('useCases.seasonal.subtitle'),
+                    titleClassName: "text-[#FF5C02]",
+                    className:
+                      "[grid-area:stack] translate-x-24 sm:translate-x-32 translate-y-20 hover:translate-y-10",
+                  },
+                ]}
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -335,45 +346,6 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Differentials Section */}
-      <section id="integraciones" className="py-16 sm:py-20 bg-gradient-to-br from-cream-100 to-cream-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl text-foreground mb-4 font-semibold">
-              {t('differentials.title')}
-            </h2>
-          </div>
-          
-          <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
-            {[
-              {
-                title: t('differentials.designed.title'),
-                description: t('differentials.designed.desc')
-              },
-              {
-                title: t('differentials.shopify.title'),
-                description: t('differentials.shopify.desc')
-              },
-              {
-                title: t('differentials.scalable.title'),
-                description: t('differentials.scalable.desc')
-              },
-              {
-                title: t('differentials.ui.title'),
-                description: t('differentials.ui.desc')
-              }
-            ].map((differential, index) => (
-              <div key={index} className="flex items-start space-x-4 p-6 bg-card/50 rounded-xl border border-border/10 hover:shadow-md transition-all duration-300">
-                <div className="w-3 h-3 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2">{differential.title}</h3>
-                  <p className="text-sm sm:text-base text-muted-foreground">{differential.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Pricing Section */}
       <section id="pricing" className="py-16 sm:py-20 bg-gradient-to-br from-orange-50 via-white to-blue-50">
@@ -519,20 +491,32 @@ const LandingPage = () => {
           {/* FAQ Section */}
           <div className="mt-16 sm:mt-20 max-w-3xl mx-auto">
             <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">{t('pricing.faq.title')}</h3>
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h4 className="font-semibold text-gray-900 mb-2">{t('pricing.faq.q1')}</h4>
-                <p className="text-gray-600">{t('pricing.faq.a1')}</p>
-              </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h4 className="font-semibold text-gray-900 mb-2">{t('pricing.faq.q2')}</h4>
-                <p className="text-gray-600">{t('pricing.faq.a2')}</p>
-              </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h4 className="font-semibold text-gray-900 mb-2">{t('pricing.faq.q3')}</h4>
-                <p className="text-gray-600">{t('pricing.faq.a3')}</p>
-              </div>
-            </div>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="faq-1" className="border-gray-200">
+                <AccordionTrigger className="text-gray-900 text-left text-base hover:no-underline hover:text-[#FF5C02]">
+                  {t('pricing.faq.q1')}
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-600">
+                  {t('pricing.faq.a1')}
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="faq-2" className="border-gray-200">
+                <AccordionTrigger className="text-gray-900 text-left text-base hover:no-underline hover:text-[#FF5C02]">
+                  {t('pricing.faq.q2')}
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-600">
+                  {t('pricing.faq.a2')}
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="faq-3" className="border-gray-200">
+                <AccordionTrigger className="text-gray-900 text-left text-base hover:no-underline hover:text-[#FF5C02]">
+                  {t('pricing.faq.q3')}
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-600">
+                  {t('pricing.faq.a3')}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         </div>
       </section>

@@ -233,9 +233,9 @@ const DatabaseWithRestApi = ({
         </defs>
       </svg>
       {/* Main Box */}
-      <div className="absolute bottom-10 flex w-full flex-col items-center">
+      <div className="absolute bottom-4 sm:bottom-10 flex w-full flex-col items-center">
         {/* bottom shadow */}
-        <div className="absolute -bottom-4 h-[100px] w-[62%] rounded-lg bg-orange-100/50" />
+        <div className="absolute -bottom-4 h-[60px] sm:h-[100px] w-[62%] rounded-lg bg-orange-100/50" />
         {/* box title */}
         <div className="absolute -top-3 z-20 flex items-center justify-center rounded-lg border border-orange-200 bg-white px-2 py-1 sm:-top-4 sm:py-1.5 shadow-sm">
           <SparklesIcon className="size-3 text-[#FF5C02]" />
@@ -244,11 +244,11 @@ const DatabaseWithRestApi = ({
           </span>
         </div>
         {/* box outter circle */}
-        <div className="absolute -bottom-8 z-30 grid h-[60px] w-[60px] place-items-center rounded-full border-t border-orange-200 bg-white font-semibold text-xs text-[#FF5C02] shadow-sm">
+        <div className="absolute -bottom-6 sm:-bottom-8 z-30 grid h-[45px] w-[45px] sm:h-[60px] sm:w-[60px] place-items-center rounded-full border-t border-orange-200 bg-white font-semibold text-[10px] sm:text-xs text-[#FF5C02] shadow-sm">
           {circleText || "Sewdle"}
         </div>
         {/* box content */}
-        <div className="relative z-10 flex h-[150px] w-full items-center justify-center overflow-hidden rounded-lg border border-orange-200/60 bg-white shadow-md">
+        <div className="relative z-10 flex h-[100px] sm:h-[150px] w-full items-center justify-center overflow-hidden rounded-lg border border-orange-200/60 bg-white shadow-md">
           {/* Badges */}
           <div className="absolute bottom-8 left-12 z-10 h-7 rounded-full bg-white px-3 text-xs border border-orange-200 flex items-center gap-2 text-gray-700 shadow-sm">
             <HeartHandshakeIcon className="size-4 text-[#FF5C02]" />
