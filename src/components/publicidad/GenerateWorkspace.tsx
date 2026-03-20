@@ -15,6 +15,7 @@ import { Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAiGeneration } from '@/hooks/useAiGeneration';
 import { useAiSkills } from '@/hooks/useAiSkills';
+import { useBrandGuide } from '@/hooks/useBrandGuide';
 import TemplateSelector from './TemplateSelector';
 import PromptEditor from './PromptEditor';
 import ImageEditor from './ImageEditor';
@@ -27,6 +28,7 @@ interface GenerateWorkspaceProps {
 
 const GenerateWorkspace = ({ reuseData, onReuseConsumed }: GenerateWorkspaceProps) => {
   const { toast } = useToast();
+  const { brandGuide, getPromptPrefix } = useBrandGuide();
   const { generate, generating, generatedImages, rateLimitUsed, rateLimitMax, clearImage, downloadImage } =
     useAiGeneration();
   const { skills } = useAiSkills();
@@ -85,9 +87,16 @@ const GenerateWorkspace = ({ reuseData, onReuseConsumed }: GenerateWorkspaceProp
     }
 
     try {
+      // Inject brand context if available
+      let finalPrompt = mode === 'edit' ? editInstructions : prompt;
+      const brandPrefix = getPromptPrefix();
+      if (brandPrefix) {
+        finalPrompt = `${brandPrefix}\n\n${finalPrompt}`;
+      }
+
       const request = {
         mode,
-        prompt: mode === 'edit' ? editInstructions : prompt,
+        prompt: finalPrompt,
         resolution,
         seed_image_ids: mode === 'edit' ? selectedAdSeedIds : selectedSeedIds,
         base_image: mode === 'edit' ? baseImage || undefined : undefined,
@@ -208,6 +217,15 @@ const GenerateWorkspace = ({ reuseData, onReuseConsumed }: GenerateWorkspaceProp
           <Wand2 className="w-5 h-5 mr-2" />
           {generating ? 'Generando...' : 'Generar Imagen'}
         </Button>
+        {brandGuide?.extraction_status === 'complete' ? (
+          <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">
+            ✓ Marca aplicada
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            Sin guía de marca
+          </Badge>
+        )}
       </div>
 
       {/* Right column - Preview & Rate limit */}

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wand2, History, Settings } from 'lucide-react';
+import { Wand2, History, Settings, Palette } from 'lucide-react';
 import GenerateWorkspace from '@/components/publicidad/GenerateWorkspace';
 import GenerationHistory from '@/components/publicidad/GenerationHistory';
 import SettingsPanel from '@/components/publicidad/SettingsPanel';
+import BrandGuidePanel from '@/components/publicidad/BrandGuidePanel';
 
 const PublicidadPage = () => {
   const [activeTab, setActiveTab] = useState('generate');
@@ -27,6 +28,10 @@ const PublicidadPage = () => {
             <Wand2 className="h-4 w-4" />
             Generar
           </TabsTrigger>
+          <TabsTrigger value="brand" className="flex items-center gap-2">
+            <Palette className="h-4 w-4" />
+            Marca
+          </TabsTrigger>
           <TabsTrigger value="history" className="flex items-center gap-2">
             <History className="h-4 w-4" />
             Historial
@@ -39,6 +44,10 @@ const PublicidadPage = () => {
 
         <TabsContent value="generate">
           <GenerateWorkspace reuseData={reuseData} onReuseConsumed={() => setReuseData(null)} />
+        </TabsContent>
+
+        <TabsContent value="brand">
+          <BrandGuidePanel />
         </TabsContent>
 
         <TabsContent value="history">
