@@ -68,7 +68,7 @@ export const useBrandGuide = () => {
     try {
       setExtracting(true);
 
-      const { data, error } = await supabase.functions.invoke('extract-brand', {
+      const { data, error } = await supabase.functions.invoke('clever-task', {
         body: {},
       });
 
