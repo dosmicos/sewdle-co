@@ -4,31 +4,38 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-interface BrandGuide {
+export interface BrandGuide {
   id: string;
   organization_id: string;
+  source_url: string | null;
   brand_name: string | null;
   tagline: string | null;
   brand_voice: string | null;
-  brand_tone: string | null;
+  tone: string | null;
   target_audience: string | null;
-  primary_color: string | null;
-  secondary_color: string | null;
-  accent_color: string | null;
-  colors: { hex: string; name: string; usage: string }[];
-  fonts: { heading?: string; body?: string };
-  logo_url: string | null;
-  product_image_urls: string[];
-  mood_keywords: string[];
+  colors: {
+    primary?: string;
+    secondary?: string;
+    accent?: string;
+    additional?: string[];
+  } | null;
+  typography: {
+    heading_font?: string;
+    body_font?: string;
+  } | null;
   visual_style: string | null;
-  do_list: string[];
-  dont_list: string[];
+  mood_keywords: string[] | null;
+  logo_urls: string[] | null;
+  product_image_urls: string[] | null;
+  guidelines: {
+    do?: string[];
+    dont?: string[];
+  } | null;
   prompt_prefix: string | null;
-  source: 'auto' | 'manual';
-  extraction_status: 'pending' | 'extracting' | 'complete' | 'failed';
-  last_extracted_at: string | null;
+  extraction_status: string | null;
+  extracted_at: string | null;
+  extracted_by: string | null;
   created_at: string;
-  updated_at: string;
 }
 
 export const useBrandGuide = () => {
@@ -44,17 +51,15 @@ export const useBrandGuide = () => {
     if (!orgId) return;
     try {
       setLoading(true);
-
       const { data, error } = await (supabase.from('brand_guides' as any) as any)
         .select('*')
         .eq('organization_id', orgId)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
-
       setBrandGuide((data as BrandGuide) || null);
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      console.error('fetchBrandGuide error:', err);
     } finally {
       setLoading(false);
     }
@@ -67,41 +72,36 @@ export const useBrandGuide = () => {
     if (!orgId || !url) return;
     try {
       setExtracting(true);
-
       const { data, error } = await supabase.functions.invoke('clever-task', {
         body: { url },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      toast({ title: 'Marca extraida', description: 'La guia de marca se extrajo correctamente' });
+      toast({ title: 'Marca extraída', description: 'La guía de marca se extrajo correctamente' });
       await fetchBrandGuide();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Error al extraer la marca', variant: 'destructive' });
     } finally {
       setExtracting(false);
     }
-  }, [currentOrganization?.id, fetchBrandGuide]);
+  }, [currentOrganization?.id, fetchBrandGuide, toast]);
 
   const updateBrandGuide = useCallback(async (updates: Partial<BrandGuide>) => {
     if (!brandGuide?.id) return;
     try {
       const { error: updateError } = await (supabase.from('brand_guides' as any) as any)
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update(updates)
         .eq('id', brandGuide.id);
 
       if (updateError) throw updateError;
-
-      toast({ title: 'Actualizado', description: 'Guia de marca actualizada correctamente' });
+      toast({ title: 'Actualizado', description: 'Guía de marca actualizada correctamente' });
       await fetchBrandGuide();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
-  }, [brandGuide?.id, fetchBrandGuide]);
+  }, [brandGuide?.id, fetchBrandGuide, toast]);
 
   const getPromptPrefix = useCallback((): string | null => {
     if (brandGuide?.extraction_status === 'complete') {
