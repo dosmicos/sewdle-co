@@ -26,6 +26,9 @@ import { useBrandGuide } from '@/hooks/useBrandGuide';
 const BrandGuidePanel = () => {
   const { brandGuide, loading, extracting, extractBrand, updateBrandGuide } = useBrandGuide();
 
+  // URL input state
+  const [siteUrl, setSiteUrl] = useState('https://dosmicos.com');
+
   // Local editable state
   const [brandName, setBrandName] = useState('');
   const [tagline, setTagline] = useState('');
@@ -142,18 +145,27 @@ const BrandGuidePanel = () => {
               Extrae tu Identidad de Marca
             </h3>
             <p className="text-gray-600 max-w-lg mx-auto">
-              Analiza automáticamente tus productos y tienda para generar una guía de marca completa
-              con colores, estilo visual, voz de marca y más.
+              Ingresa la URL de tu tienda y analizaremos automáticamente tus productos, colores,
+              estilo visual, voz de marca y más.
             </p>
           </div>
-          <Button
-            size="lg"
-            className="bg-[#ff5c02] hover:bg-[#e55502] text-white"
-            onClick={extractBrand}
-          >
-            <Wand2 className="w-5 h-5 mr-2" />
-            Extraer Identidad de Marca
-          </Button>
+          <div className="max-w-md mx-auto w-full space-y-3">
+            <Input
+              placeholder="https://tutienda.com"
+              value={siteUrl}
+              onChange={(e) => setSiteUrl(e.target.value)}
+              className="text-center"
+            />
+            <Button
+              size="lg"
+              className="bg-[#ff5c02] hover:bg-[#e55502] text-white w-full"
+              onClick={() => extractBrand(siteUrl)}
+              disabled={!siteUrl || extracting}
+            >
+              <Wand2 className="w-5 h-5 mr-2" />
+              Extraer Identidad de Marca
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

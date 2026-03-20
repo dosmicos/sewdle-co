@@ -62,14 +62,14 @@ export const useBrandGuide = () => {
 
   useEffect(() => { fetchBrandGuide(); }, [fetchBrandGuide]);
 
-  const extractBrand = useCallback(async () => {
+  const extractBrand = useCallback(async (url: string) => {
     const orgId = currentOrganization?.id;
-    if (!orgId) return;
+    if (!orgId || !url) return;
     try {
       setExtracting(true);
 
       const { data, error } = await supabase.functions.invoke('clever-task', {
-        body: {},
+        body: { url },
       });
 
       if (error) throw error;
