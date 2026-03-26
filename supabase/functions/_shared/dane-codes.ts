@@ -99,14 +99,14 @@ const DANE_ENTRIES: DaneEntry[] = [
   { municipality: 'Necoclí', department: 'Antioquia', daneCode: '05490' },
   { municipality: 'Nechí', department: 'Antioquia', daneCode: '05495' },
   { municipality: 'Olaya', department: 'Antioquia', daneCode: '05501' },
-  { municipality: 'Peñol', department: 'Antioquia', daneCode: '05541' },
+  { municipality: 'El Peñol', department: 'Antioquia', daneCode: '05541' },
   { municipality: 'Peque', department: 'Antioquia', daneCode: '05543' },
   { municipality: 'Pueblorrico', department: 'Antioquia', daneCode: '05576' },
   { municipality: 'Puerto Berrío', department: 'Antioquia', daneCode: '05579' },
   { municipality: 'Puerto Nare', department: 'Antioquia', daneCode: '05585' },
   { municipality: 'Puerto Triunfo', department: 'Antioquia', daneCode: '05591' },
   { municipality: 'Remedios', department: 'Antioquia', daneCode: '05604' },
-  { municipality: 'Retiro', department: 'Antioquia', daneCode: '05607' },
+  { municipality: 'El Retiro', department: 'Antioquia', daneCode: '05607' },
   { municipality: 'Rionegro', department: 'Antioquia', daneCode: '05615' },
   { municipality: 'Sabanalarga', department: 'Antioquia', daneCode: '05628' },
   { municipality: 'Sabaneta', department: 'Antioquia', daneCode: '05631' },
@@ -1175,8 +1175,17 @@ function levenshtein(a: string, b: string): number {
 }
 
 /**
+ * Pad a 5-digit DANE code to the 8-digit format expected by Envia.com API.
+ * Example: "11001" → "11001000", "05001" → "05001000"
+ */
+function padDaneCode(code: string): string {
+  return code.length <= 5 ? code.padEnd(8, '0') : code;
+}
+
+/**
  * Look up a DANE code by city name, optionally filtering by department.
  * Uses exact match first, then fuzzy matching with Levenshtein distance <= 3.
+ * Returns 8-digit DANE codes as required by Envia.com API.
  */
 export function lookupDaneCode(
   city: string,
@@ -1188,7 +1197,7 @@ export function lookupDaneCode(
   const exactMatches = DANE_CODES.get(normalizedCity);
   if (exactMatches) {
     if (exactMatches.length === 1) {
-      return { ...exactMatches[0], source: 'exact' };
+      return { ...exactMatches[0], daneCode: padDaneCode(exactMatches[0].daneCode), source: 'exact' };
     }
     // Multiple matches — try to disambiguate with department
     if (department) {
@@ -1198,38 +1207,53 @@ export function lookupDaneCode(
         return nd === normalizedDept || nd.includes(normalizedDept) || normalizedDept.includes(nd);
       });
       if (deptMatch) {
-        return { ...deptMatch, source: 'exact+department' };
+        return { ...deptMatch, daneCode: padDaneCode(deptMatch.daneCode), source: 'exact+department' };
       }
     }
     // Return first match if no department disambiguation possible
-    return { ...exactMatches[0], source: 'exact-first' };
+    return { ...exactMatches[0], daneCode: padDaneCode(exactMatches[0].daneCode), source: 'exact-first' };
   }
 
-  // 2. Fuzzy match (Levenshtein distance <= 3)
-  let bestMatch: DaneEntry | null = null;
-  let bestDistance = 4; // threshold + 1
+  // 2. Fuzzy match with dynamic threshold based on input length
+  // Short inputs (e.g. "CC") get a tighter threshold to avoid absurd matches
+  const maxDistance = Math.max(1, Math.min(3, Math.floor(normalizedCity.length * 0.4)));
+
+  let bestDeptMatch: DaneEntry | null = null;
+  let bestDeptDistance = maxDistance + 1;
+  let bestAnyMatch: DaneEntry | null = null;
+  let bestAnyDistance = maxDistance + 1;
+
+  const normalizedDept = department ? normalize(department) : '';
 
   for (const [key, entries] of DANE_CODES) {
     const distance = levenshtein(normalizedCity, key);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      if (department) {
-        const normalizedDept = normalize(department);
-        const deptMatch = entries.find((e) => {
-          const nd = normalize(e.department);
-          return nd === normalizedDept || nd.includes(normalizedDept) || normalizedDept.includes(nd);
-        });
-        if (deptMatch) {
-          bestMatch = deptMatch;
-          continue;
-        }
+    if (distance > maxDistance) continue;
+
+    // Check for department match
+    if (normalizedDept) {
+      const deptMatch = entries.find((e) => {
+        const nd = normalize(e.department);
+        return nd === normalizedDept || nd.includes(normalizedDept) || normalizedDept.includes(nd);
+      });
+      if (deptMatch && distance < bestDeptDistance) {
+        bestDeptDistance = distance;
+        bestDeptMatch = deptMatch;
       }
-      bestMatch = entries[0];
+    }
+
+    if (distance < bestAnyDistance) {
+      bestAnyDistance = distance;
+      bestAnyMatch = entries[0];
     }
   }
 
-  if (bestMatch) {
-    return { ...bestMatch, source: `fuzzy-${bestDistance}` };
+  // Strongly prefer department-matching results; only fall back to any match
+  // when no department was provided
+  const finalMatch = bestDeptMatch || (normalizedDept ? null : bestAnyMatch);
+  const finalDistance = bestDeptMatch ? bestDeptDistance : bestAnyDistance;
+
+  if (finalMatch) {
+    return { ...finalMatch, daneCode: padDaneCode(finalMatch.daneCode), source: `fuzzy-${finalDistance}` };
   }
 
   return null;

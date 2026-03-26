@@ -15,7 +15,8 @@ interface VerificationRequest {
   mismatch: {
     city: string;
     province: string;
-    expectedDepartment: string;
+    expectedDepartment: string | null;
+    reason?: 'mismatch' | 'unknown_city';
   };
 }
 
@@ -111,10 +112,23 @@ serve(async (req) => {
 
     // 4. Build address verification template parameters
     const orderNum = String(order.order_number).replace('#', '');
-    const { city, province, expectedDepartment } = body.mismatch;
+    const { city, province, expectedDepartment, reason } = body.mismatch;
+
+    // For unknown cities, adapt the template parameters
+    // Template: "{{3}} pertenece a {{4}}, pero en tu pedido aparece {{5}}"
+    // Unknown city: "{{3}} no es un municipio reconocido, pero en tu pedido aparece como ciudad en {{5}}"
+    const isUnknownCity = reason === 'unknown_city' || !expectedDepartment;
+    const templateExpectedDept = isUnknownCity
+      ? 'un municipio no reconocido en nuestro sistema'
+      : expectedDepartment;
+    const templateProvince = isUnknownCity
+      ? `${province} como departamento`
+      : province;
 
     // Text fallback for saving in DB (readable version of the template)
-    const message = `Hola ${customerName}! 🛍️ Para tu pedido #${orderNum} de Dosmicos.co, necesitamos verificar tu direccion. ${city} pertenece a ${expectedDepartment}, pero en tu pedido aparece ${province}. ¿Esta correcta tu direccion?`;
+    const message = isUnknownCity
+      ? `Hola ${customerName}! 🛍️ Para tu pedido #${orderNum} de Dosmicos.co, necesitamos verificar tu direccion. "${city}" no es un municipio reconocido en nuestro sistema. ¿Esta correcta tu direccion?`
+      : `Hola ${customerName}! 🛍️ Para tu pedido #${orderNum} de Dosmicos.co, necesitamos verificar tu direccion. ${city} pertenece a ${expectedDepartment}, pero en tu pedido aparece ${province}. ¿Esta correcta tu direccion?`;
 
     // 5. Find or create conversation
     let conversationId: string | null = null;
@@ -210,8 +224,8 @@ serve(async (req) => {
         { type: 'text', text: customerName },
         { type: 'text', text: orderNum },
         { type: 'text', text: city.replace(/[\n\t\r]/g, ' ') },
-        { type: 'text', text: expectedDepartment.replace(/[\n\t\r]/g, ' ') },
-        { type: 'text', text: province.replace(/[\n\t\r]/g, ' ') },
+        { type: 'text', text: templateExpectedDept.replace(/[\n\t\r]/g, ' ') },
+        { type: 'text', text: templateProvince.replace(/[\n\t\r]/g, ' ') },
       ],
       [
         { type: 'payload', payload: 'ADDRESS_CORRECT' },

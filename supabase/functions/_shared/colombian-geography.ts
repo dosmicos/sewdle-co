@@ -444,7 +444,7 @@ export function validateCityDepartment(
   city: string,
   province: string,
   provinceCode?: string
-): { valid: boolean; expectedDepartment?: string } {
+): { valid: boolean; expectedDepartment?: string; reason?: 'mismatch' | 'unknown_city' } {
   const normalizedCity = normalizeGeoName(city);
   const normalizedProvince = normalizeProvince(province);
 
@@ -462,8 +462,8 @@ export function validateCityDepartment(
   const validDepts = CITY_TO_DEPARTMENTS.get(normalizedCity);
 
   if (!validDepts) {
-    // City not in our database — can't validate, assume valid
-    return { valid: true };
+    // City not in our database — flag for verification
+    return { valid: false, reason: 'unknown_city' };
   }
 
   // Check if the claimed department matches any valid department for this city
@@ -484,7 +484,7 @@ export function validateCityDepartment(
   // Convert back to a displayable department name
   const displayDept = getDisplayDepartment(expectedDept);
 
-  return { valid: false, expectedDepartment: displayDept };
+  return { valid: false, expectedDepartment: displayDept, reason: 'mismatch' };
 }
 
 /**

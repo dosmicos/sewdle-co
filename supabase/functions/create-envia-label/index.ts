@@ -304,13 +304,17 @@ async function getDaneCodeFromDB(
   }
 
   if (allMunicipalities && allMunicipalities.length > 0) {
+    // Dynamic threshold: shorter inputs get tighter threshold to avoid absurd matches
+    const maxFuzzyDistance = Math.max(1, Math.min(3, Math.floor(normalizedCity.length * 0.4)));
+    console.log(`🔄 Fuzzy threshold for "${normalizedCity}" (${normalizedCity.length} chars): max distance = ${maxFuzzyDistance}`);
+
     // Calculate Levenshtein distance for each municipality
     const scored = allMunicipalities
       .map((row: any) => ({
         ...row,
         distance: levenshtein(normalizedCity, row.municipality_normalized || normalizeForComparison(row.municipality))
       }))
-      .filter((row: any) => row.distance <= 3) // Max 3 edits
+      .filter((row: any) => row.distance <= maxFuzzyDistance)
       .sort((a: any, b: any) => a.distance - b.distance);
 
     if (scored.length > 0) {

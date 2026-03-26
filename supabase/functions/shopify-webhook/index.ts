@@ -444,8 +444,13 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     console.log(`📍 Validando dirección colombiana: ${shippingAddr.city}, ${shippingAddr.province}`);
     const validation = validateCityDepartment(shippingAddr.city, shippingAddr.province, shippingAddr.province_code);
 
-    if (!validation.valid && validation.expectedDepartment) {
-      console.log(`⚠️ Mismatch detectado: ${shippingAddr.city} deberia ser ${validation.expectedDepartment}, no ${shippingAddr.province}`);
+    if (!validation.valid) {
+      const reason = validation.reason || 'mismatch';
+      if (reason === 'unknown_city') {
+        console.log(`⚠️ Ciudad desconocida: "${shippingAddr.city}" no existe en nuestra base de datos`);
+      } else {
+        console.log(`⚠️ Mismatch detectado: ${shippingAddr.city} deberia ser ${validation.expectedDepartment}, no ${shippingAddr.province}`);
+      }
 
       // Apply "Revisar Dirección" tag
       await applyAutoTagsToShopify(order.id, ['Revisar Dirección'], order.tags, shopDomain, supabase);
@@ -470,7 +475,8 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
                 mismatch: {
                   city: shippingAddr.city,
                   province: shippingAddr.province,
-                  expectedDepartment: validation.expectedDepartment
+                  expectedDepartment: validation.expectedDepartment || null,
+                  reason
                 }
               })
             }).then(r => r.json()).then(res => {
