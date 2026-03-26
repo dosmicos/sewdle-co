@@ -46,6 +46,40 @@ async function sendWhatsAppMessage(
   }
 }
 
+// Tag a conversation with "Revisar Pedido" so the team can follow up
+async function tagConversationRevisarPedido(supabase: any, organizationId: string, conversationId: string | null) {
+  if (!conversationId) return;
+  try {
+    let tagId: string | null = null;
+    const { data: existingTag } = await supabase
+      .from('messaging_conversation_tags')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('name', 'Revisar Pedido')
+      .maybeSingle();
+
+    if (existingTag) {
+      tagId = existingTag.id;
+    } else {
+      const { data: newTag } = await supabase
+        .from('messaging_conversation_tags')
+        .insert({ organization_id: organizationId, name: 'Revisar Pedido', color: '#ef4444' })
+        .select('id')
+        .single();
+      tagId = newTag?.id || null;
+    }
+
+    if (tagId) {
+      await supabase
+        .from('messaging_conversation_tag_assignments')
+        .upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+      console.log(`🏷️ Tag "Revisar Pedido" assigned to conversation ${conversationId}`);
+    }
+  } catch (err) {
+    console.error('Error tagging conversation:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -158,7 +192,7 @@ serve(async (req) => {
 
     if (orderError) {
       console.error("Error creating Shopify order after payment:", orderError);
-      // Mark as creation_failed so the recovery cron can retry
+      // Mark as creation_failed and tag conversation for team follow-up
       await supabase
         .from('pending_orders')
         .update({
@@ -167,6 +201,8 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', pendingOrder.id);
+
+      await tagConversationRevisarPedido(supabase, pendingOrder.organization_id, pendingOrder.conversation_id);
 
       return new Response(
         JSON.stringify({ error: "Error creating Shopify order", details: orderError.message }),

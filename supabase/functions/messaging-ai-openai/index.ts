@@ -268,8 +268,37 @@ serve(async (req) => {
             );
           } else {
             console.error(`❌ EARLY RECOVERY FAILED for ${stuckOrder.id}:`, orderError);
-            // Don't block the conversation — let the AI respond normally
-            // The recovery cron will retry later
+            // Tag conversation for team follow-up
+            try {
+              let tagId: string | null = null;
+              const { data: existingTag } = await supabase
+                .from('messaging_conversation_tags')
+                .select('id')
+                .eq('organization_id', organizationId)
+                .eq('name', 'Revisar Pedido')
+                .maybeSingle();
+
+              if (existingTag) {
+                tagId = existingTag.id;
+              } else {
+                const { data: newTag } = await supabase
+                  .from('messaging_conversation_tags')
+                  .insert({ organization_id: organizationId, name: 'Revisar Pedido', color: '#ef4444' })
+                  .select('id')
+                  .single();
+                tagId = newTag?.id || null;
+              }
+
+              if (tagId) {
+                await supabase
+                  .from('messaging_conversation_tag_assignments')
+                  .upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                console.log(`🏷️ Tag "Revisar Pedido" assigned to conversation ${conversationId}`);
+              }
+            } catch (tagErr) {
+              console.error('Error tagging conversation:', tagErr);
+            }
+            // Don't block — let the AI respond normally
           }
         }
 
