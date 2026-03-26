@@ -1,5 +1,8 @@
 project_id = "ysdcsqsfnckeuafjyrbc"
 
+[functions.recover-stuck-orders]
+verify_jwt = false
+
 [functions.sewdle-copilot]
 verify_jwt = false
 

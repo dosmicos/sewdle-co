@@ -205,6 +205,117 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ============= EARLY CHECK: Recover stuck paid orders before AI processing =============
+    // This runs on EVERY message, catching the case where Bold webhook failed
+    // but the customer sent a follow-up message (receipt, "ya pagué", etc.)
+    if (conversationId && organizationId) {
+      try {
+        const { data: stuckOrders } = await supabase
+          .from('pending_orders')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .in('status', ['paid', 'creation_failed'])
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (stuckOrders && stuckOrders.length > 0) {
+          const stuckOrder = stuckOrders[0];
+          console.log(`🔄 EARLY RECOVERY: Found stuck order ${stuckOrder.id} (status: ${stuckOrder.status}) for conversation ${conversationId}`);
+
+          const pendingLineItems = stuckOrder.line_items as any[];
+
+          const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
+            body: {
+              orderData: {
+                customerName: stuckOrder.customer_name,
+                cedula: stuckOrder.cedula || '',
+                email: stuckOrder.customer_email,
+                phone: stuckOrder.customer_phone,
+                address: stuckOrder.address,
+                city: stuckOrder.city,
+                department: stuckOrder.department,
+                neighborhood: stuckOrder.neighborhood || '',
+                lineItems: pendingLineItems,
+                notes: (stuckOrder.notes || '') + ' | Recovered on next message (early check)',
+                shippingCost: stuckOrder.shipping_cost || 0,
+                paymentMethod: 'link_de_pago'
+              },
+              organizationId: organizationId
+            }
+          });
+
+          if (!orderError && orderResult) {
+            console.log(`✅ EARLY RECOVERY SUCCESS: Order ${stuckOrder.id} → Shopify #${orderResult.orderNumber}`);
+
+            await supabase
+              .from('pending_orders')
+              .update({
+                status: 'order_created',
+                shopify_order_id: String(orderResult.orderId),
+                shopify_order_number: String(orderResult.orderNumber),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', stuckOrder.id);
+
+            return new Response(
+              JSON.stringify({
+                response: `¡Tu pago ha sido confirmado y tu pedido ha sido creado exitosamente! 🎉\n\n📋 Número de pedido: #${orderResult.orderNumber}\n💰 Total: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\nTe enviaremos la información de seguimiento cuando tu pedido sea despachado. ¡Gracias por tu compra! 😊`,
+                order_created: true,
+                orderId: orderResult.orderId,
+                orderNumber: orderResult.orderNumber,
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.error(`❌ EARLY RECOVERY FAILED for ${stuckOrder.id}:`, orderError);
+            // Don't block the conversation — let the AI respond normally
+            // The recovery cron will retry later
+          }
+        }
+
+        // Check for pending_payment orders (customer may have sent receipt but Bold hasn't confirmed yet)
+        const { data: pendingPaymentOrders } = await supabase
+          .from('pending_orders')
+          .select('id, bold_payment_url, created_at')
+          .eq('conversation_id', conversationId)
+          .eq('status', 'pending_payment')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (pendingPaymentOrders && pendingPaymentOrders.length > 0) {
+          const pending = pendingPaymentOrders[0];
+          const createdAt = new Date(pending.created_at).getTime();
+          const ageMinutes = (Date.now() - createdAt) / (1000 * 60);
+
+          // If the payment link was sent recently (< 60 min) and customer sends a message,
+          // they likely just paid — tell them we're verifying
+          if (ageMinutes < 60) {
+            const lastMessage = messages?.[messages?.length - 1]?.content || '';
+            const looksLikePaymentConfirmation = /pag[oué]|transfer|comprobante|recibo|listo|hecho|ya\s/i.test(
+              typeof lastMessage === 'string' ? lastMessage : ''
+            );
+
+            // Only intercept if it looks like a payment-related message
+            if (looksLikePaymentConfirmation || messages?.[messages?.length - 1]?.role === 'user') {
+              // Check if the last message contains an image (payment receipt)
+              const lastMsg = messages?.[messages?.length - 1];
+              const hasImage = lastMsg?.content && Array.isArray(lastMsg.content) &&
+                lastMsg.content.some((c: any) => c.type === 'image_url');
+
+              if (hasImage || looksLikePaymentConfirmation) {
+                console.log(`⏳ Pending payment detected for conversation ${conversationId}, customer seems to confirm payment`);
+                // Don't return early here — let the AI handle the conversation naturally
+                // but inject context so the AI responds appropriately
+                // The AI prompt already says "Tu pago está siendo procesado" for these cases
+              }
+            }
+          }
+        }
+      } catch (earlyCheckErr) {
+        console.warn('Early stuck order check failed (non-blocking):', earlyCheckErr);
+      }
+    }
+
     // Load AI config (knowledge base, rules, etc.) from messaging_channels
     let knowledgeContext = '';
     let rulesContext = '';
@@ -488,24 +599,22 @@ serve(async (req) => {
     let fullSystemPrompt = basePrompt;
 
     // Add current date/time context so AI knows what day it is
-    // IMPORTANT: Intl.DateTimeFormat with timeZone is UNRELIABLE in Deno/Supabase Edge Functions.
-    // Use manual UTC-5 offset calculation instead (proven to work in meta-webhook).
+    // Subtract 5h from UTC then read with getUTC*() methods — fully timezone-agnostic.
     const now = new Date();
-    const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000; // UTC-5 in milliseconds
-    const colombiaTime = new Date(now.getTime() + COLOMBIA_OFFSET_MS + (now.getTimezoneOffset() * 60 * 1000));
-    const colYear = colombiaTime.getFullYear();
-    const colMonth = colombiaTime.getMonth() + 1; // 0-indexed → 1-indexed
-    const colDay = colombiaTime.getDate();
-    const colHour = String(colombiaTime.getHours()).padStart(2, '0');
-    const colMinute = String(colombiaTime.getMinutes()).padStart(2, '0');
-    const colWeekdayNum = colombiaTime.getDay(); // 0=Sunday, 1=Monday, ...
+    const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const colYear = colombiaTime.getUTCFullYear();
+    const colMonth = colombiaTime.getUTCMonth() + 1; // 0-indexed → 1-indexed
+    const colDay = colombiaTime.getUTCDate();
+    const colHour = String(colombiaTime.getUTCHours()).padStart(2, '0');
+    const colMinute = String(colombiaTime.getUTCMinutes()).padStart(2, '0');
+    const colWeekdayNum = colombiaTime.getUTCDay(); // 0=Sunday, 1=Monday, ...
 
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const meses = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     const diaSemana = diasSemana[colWeekdayNum];
     const mes = meses[colMonth] || '';
 
-    console.log(`📅 Colombia time (manual UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} (UTC now: ${now.toISOString()}, weekdayNum: ${colWeekdayNum})`);
+    console.log(`📅 Colombia time (UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} | UTC: ${now.toISOString()} | weekdayNum: ${colWeekdayNum} | getTimezoneOffset: ${now.getTimezoneOffset()}`);
     fullSystemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
     // Add smart product recommendation strategy
@@ -704,12 +813,13 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                 properties: {
                   productId: { type: "number", description: "ID numérico del producto en Shopify. Obtener del catálogo." },
                   productName: { type: "string", description: "Nombre EXACTO del producto tal como aparece en el catálogo." },
+                  size: { type: "number", description: "Número de talla que el cliente confirmó. SOLO puede ser: 2, 4, 6, 8, 10 o 12. Este es el dato MÁS IMPORTANTE — debe coincidir EXACTAMENTE con lo que le confirmaste al cliente." },
                   variantId: { type: "number", description: "ID numérico del variante/talla en Shopify. Obtener del catálogo." },
                   variantName: { type: "string", description: "Nombre de la talla/variante elegida." },
                   sku: { type: "string", description: "SKU único de la variante elegida. Obtener del catálogo (ej: SKU:RUANA-POLLITO-4). Es el identificador más confiable para la variante." },
                   quantity: { type: "number", description: "Cantidad de este producto (default 1)" }
                 },
-                required: ["productId", "productName", "variantId", "variantName", "sku"]
+                required: ["productId", "productName", "size", "variantId", "variantName", "sku"]
               },
               minItems: 1
             },
@@ -902,37 +1012,38 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
               continue;
             }
 
-            // Extract size number from variantName (the ONLY reliable variant identifier)
-            const sizeMatch = (item.variantName || '').match(/(\d+)/);
+            // Use item.size (number) as the PRIMARY source of truth for variant resolution.
+            // This is more reliable than variantName/variantId because it's a single number
+            // that the AI confirmed to the customer (e.g., 2, 4, 6, 8, 10, 12).
+            const targetSize = item.size != null ? String(item.size) : ((item.variantName || '').match(/(\d+)/) || [])[1];
             let resolvedVariant: any = null;
 
-            if (sizeMatch) {
-              const targetSize = sizeMatch[1];
+            if (targetSize) {
+              // Log if size and variantName disagree — this catches the exact bug we're fixing
+              const variantNameSize = ((item.variantName || '').match(/(\d+)/) || [])[1];
+              if (variantNameSize && variantNameSize !== targetSize) {
+                console.warn(`  ⚠️ SIZE MISMATCH DETECTED: item.size=${targetSize} but variantName="${item.variantName}" contains size ${variantNameSize}. Using item.size=${targetSize} (confirmed to customer).`);
+              }
 
               // First try: exact size number match at the START of variant title
-              // This prevents "4" matching "14" or "4" matching "Talla 4 - 6 años" incorrectly
               resolvedVariant = variants.find((v: any) => {
                 const vTitle = (v.title || '').trim();
-                // Match if variant title starts with the size number (e.g., "4 (1 a 2 años)")
-                // or is exactly the number, or matches "Talla X" pattern
                 const vSizeMatch = vTitle.match(/^(\d+)/);
                 return vSizeMatch && vSizeMatch[1] === targetSize;
               });
 
-              // Second try: any number in the variant title that matches
+              // Second try: any variant where the first number matches
               if (!resolvedVariant) {
                 resolvedVariant = variants.find((v: any) => {
                   const vTitle = (v.title || '').trim();
-                  // Split all numbers from variant title and check for exact match
                   const allNumbers = vTitle.match(/\d+/g) || [];
-                  // The FIRST number in the title is the size (e.g., "4 (1 a 2 años)" → 4, not 1 or 2)
                   return allNumbers.length > 0 && allNumbers[0] === targetSize;
                 });
               }
 
               if (resolvedVariant) {
                 const vidChanged = String(resolvedVariant.id) !== String(origVid);
-                console.log(`  ${vidChanged ? '🔄' : '✅'} SIZE-RESOLVED variant: AI said "${item.variantName}" (vid:${origVid}) → "${resolvedVariant.title}" (vid:${resolvedVariant.id}, SKU:${resolvedVariant.sku})${vidChanged ? ' [CORRECTED]' : ''}`);
+                console.log(`  ${vidChanged ? '🔄' : '✅'} SIZE-RESOLVED variant: size=${targetSize}, AI said "${item.variantName}" (vid:${origVid}) → "${resolvedVariant.title}" (vid:${resolvedVariant.id}, SKU:${resolvedVariant.sku})${vidChanged ? ' [CORRECTED]' : ''}`);
               }
             }
 

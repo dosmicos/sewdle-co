@@ -114,7 +114,11 @@ serve(async (req) => {
 
     if (lookupError || !pendingOrder) {
       console.error("Pending order not found for reference:", reference, lookupError);
-      return new Response("OK", { status: 200 });
+      // Return 404 so Bold retries the webhook (instead of silent 200 OK)
+      return new Response(
+        JSON.stringify({ error: "Pending order not found", reference }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log(`Found pending order: ${pendingOrder.id} for ${pendingOrder.customer_name}`);
@@ -154,17 +158,18 @@ serve(async (req) => {
 
     if (orderError) {
       console.error("Error creating Shopify order after payment:", orderError);
-      // Update pending order with error info
+      // Mark as creation_failed so the recovery cron can retry
       await supabase
         .from('pending_orders')
         .update({
-          status: 'paid',
+          status: 'creation_failed',
+          notes: (pendingOrder.notes || '') + ` | Webhook order creation failed: ${orderError.message || 'unknown error'}`,
           updated_at: new Date().toISOString()
         })
         .eq('id', pendingOrder.id);
 
       return new Response(
-        JSON.stringify({ error: "Error creating Shopify order" }),
+        JSON.stringify({ error: "Error creating Shopify order", details: orderError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
