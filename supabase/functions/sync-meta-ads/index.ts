@@ -25,43 +25,46 @@ const INSIGHT_FIELDS = [
 ].join(",");
 
 /**
+ * Extract a value from Meta's actions/action_values/cost_per_action_type arrays.
+ * Checks both the simple action_type (e.g. "purchase") and the offsite_conversion
+ * variant (e.g. "offsite_conversion.fb_pixel_purchase"). If both exist, returns
+ * the larger value (they typically represent the same conversions reported under
+ * different keys, so summing would double-count).
+ */
+function extractFromActions(
+  actions: any[] | undefined,
+  actionType: string
+): number {
+  if (!actions) return 0;
+  const direct = actions.find((a: any) => a.action_type === actionType);
+  const offsite = actions.find(
+    (a: any) =>
+      a.action_type === `offsite_conversion.fb_pixel_${actionType}`
+  );
+  const directVal = direct ? parseFloat(direct.value) : 0;
+  const offsiteVal = offsite ? parseFloat(offsite.value) : 0;
+  return Math.max(directVal, offsiteVal);
+}
+
+/**
  * Extracts purchases count from the `actions` array.
- * Meta returns actions as: [{ action_type: "purchase", value: "5" }, ...]
  */
 function extractPurchases(actions: any[] | undefined): number {
-  if (!actions) return 0;
-  const purchaseAction = actions.find(
-    (a: any) =>
-      a.action_type === "purchase" ||
-      a.action_type === "offsite_conversion.fb_pixel_purchase"
-  );
-  return purchaseAction ? parseInt(purchaseAction.value, 10) : 0;
+  return Math.round(extractFromActions(actions, "purchase"));
 }
 
 /**
  * Extracts conversion value (purchase value) from `action_values` array.
  */
 function extractConversionValue(actionValues: any[] | undefined): number {
-  if (!actionValues) return 0;
-  const purchaseValue = actionValues.find(
-    (a: any) =>
-      a.action_type === "purchase" ||
-      a.action_type === "offsite_conversion.fb_pixel_purchase"
-  );
-  return purchaseValue ? parseFloat(purchaseValue.value) : 0;
+  return extractFromActions(actionValues, "purchase");
 }
 
 /**
  * Extracts cost per purchase from `cost_per_action_type` array.
  */
 function extractCPA(costPerAction: any[] | undefined): number {
-  if (!costPerAction) return 0;
-  const purchaseCost = costPerAction.find(
-    (a: any) =>
-      a.action_type === "purchase" ||
-      a.action_type === "offsite_conversion.fb_pixel_purchase"
-  );
-  return purchaseCost ? parseFloat(purchaseCost.value) : 0;
+  return extractFromActions(costPerAction, "purchase");
 }
 
 serve(async (req) => {

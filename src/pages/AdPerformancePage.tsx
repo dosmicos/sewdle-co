@@ -12,7 +12,7 @@ import { useAdCreativeSync } from '@/hooks/useAdCreativeSync';
 import { useAdTags } from '@/hooks/useAdTags';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 
 const formatCOP = (amount: number) => {
   return `COP ${new Intl.NumberFormat('es-CO', {
@@ -46,9 +46,9 @@ const AdPerformancePage: React.FC = () => {
   const { tags: tagsMap, creatives: creativesMap, lifecycle: lifecycleMap } = useAdTags(adIds);
 
   const handleSync = async () => {
-    const sevenDaysAgo = format(subDays(dateRange.current.end, 6), 'yyyy-MM-dd');
+    const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
     const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
-    await adPerformance.syncAdPerformance(sevenDaysAgo, endStr);
+    await adPerformance.syncAdPerformance(startStr, endStr);
   };
 
   return (

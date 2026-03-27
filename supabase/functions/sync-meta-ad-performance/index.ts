@@ -39,18 +39,26 @@ const AD_INSIGHT_FIELDS = [
   "video_avg_time_watched_actions",
 ].join(",");
 
-/** Extract a value from Meta's actions/action_values/cost_per_action_type arrays */
+/**
+ * Extract a value from Meta's actions/action_values/cost_per_action_type arrays.
+ * Checks both the simple action_type (e.g. "purchase") and the offsite_conversion
+ * variant (e.g. "offsite_conversion.fb_pixel_purchase"). If both exist, returns
+ * the larger value (they typically represent the same conversions reported under
+ * different keys, so summing would double-count).
+ */
 function extractFromActions(
   actions: any[] | undefined,
   actionType: string
 ): number {
   if (!actions) return 0;
-  const match = actions.find(
+  const direct = actions.find((a: any) => a.action_type === actionType);
+  const offsite = actions.find(
     (a: any) =>
-      a.action_type === actionType ||
       a.action_type === `offsite_conversion.fb_pixel_${actionType}`
   );
-  return match ? parseFloat(match.value) : 0;
+  const directVal = direct ? parseFloat(direct.value) : 0;
+  const offsiteVal = offsite ? parseFloat(offsite.value) : 0;
+  return Math.max(directVal, offsiteVal);
 }
 
 /** Extract video metric value from video action arrays */
@@ -174,12 +182,16 @@ serve(async (req) => {
         {
           field: "ad.effective_status",
           operator: "IN",
-          value: ["ACTIVE"],
+          value: ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"],
         },
       ])
     );
     const timeRange = encodeURIComponent(
       JSON.stringify({ since: startDate, until: endDate })
+    );
+
+    const attributionWindows = encodeURIComponent(
+      JSON.stringify(["7d_click", "1d_view"])
     );
 
     const insightsUrl =
@@ -189,6 +201,8 @@ serve(async (req) => {
       `&time_range=${timeRange}` +
       `&time_increment=1` +
       `&filtering=${filtering}` +
+      `&action_attribution_windows=${attributionWindows}` +
+      `&use_account_attribution_setting=true` +
       `&limit=500` +
       `&access_token=${accessToken}`;
 
