@@ -329,9 +329,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
-      // Tunja, Boyacá → Interrapidisimo Domicilio (COD y Sin COD)
+      // Tunja, Boyacá → Coordinadora Ecommerce Domicilio (COD y Sin COD)
       if (dept.includes('boyaca') && city.includes('tunja')) {
-        setRecommendedCarrier('interrapidisimo_domicilio');
+        setRecommendedCarrier('coordinadora');
         return;
       }
 
