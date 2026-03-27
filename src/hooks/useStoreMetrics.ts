@@ -94,8 +94,8 @@ async function fetchMetrics(
   const orderIds = orders.map(o => o.shopify_order_id);
 
   let totalUnits = 0;
-  // Batch line item queries to avoid URL length limits
-  const batchSize = 50;
+  // Batch line item queries — use large batches to minimize round trips
+  const batchSize = 500;
   for (let i = 0; i < orderIds.length; i += batchSize) {
     const batch = orderIds.slice(i, i + batchSize);
     const { data: lineItems } = await supabase

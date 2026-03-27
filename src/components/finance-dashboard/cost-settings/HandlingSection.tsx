@@ -84,11 +84,7 @@ export const HandlingSection: React.FC<HandlingSectionProps> = ({
   const isFixedFee = mode === 'per_order' || mode === 'per_item';
 
   const formatCOP = (v: number) =>
-    new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0,
-    }).format(v);
+    `COP ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(v))}`;
 
   return (
     <Card>

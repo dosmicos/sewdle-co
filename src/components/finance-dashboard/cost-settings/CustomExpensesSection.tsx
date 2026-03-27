@@ -104,10 +104,10 @@ export const CustomExpensesSection: React.FC<CustomExpensesSectionProps> = ({
   const nonAdExpenses = expenses.filter((e) => !e.is_ad_spend);
 
   const formatCOP = (value: number) =>
-    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value);
+    `COP ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(value))}`;
 
   const formatCOPDecimal = (value: number) =>
-    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 }).format(value);
+    `COP ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
 
   /** Calculate cost per day based on recurrence */
   const costPerDay = (expense: FinanceExpense): number => {

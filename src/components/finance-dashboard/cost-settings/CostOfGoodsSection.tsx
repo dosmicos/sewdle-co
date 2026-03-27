@@ -71,7 +71,7 @@ export const CostOfGoodsSection: React.FC<CostOfGoodsSectionProps> = ({
   };
 
   const formatCOP = (value: number) =>
-    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value);
+    `COP ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(value))}`;
 
   return (
     <Card>

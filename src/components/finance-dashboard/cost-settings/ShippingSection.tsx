@@ -54,11 +54,7 @@ const ShippingCostInput: React.FC<{
   };
 
   const formatCOP = (v: number) =>
-    new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0,
-    }).format(v);
+    `COP ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(v))}`;
 
   return (
     <>
