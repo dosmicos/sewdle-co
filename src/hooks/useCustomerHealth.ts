@@ -91,7 +91,7 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
   // Single query instead of 6 sequential ones
   const { data, error } = await supabase
     .from('shopify_orders')
-    .select('current_total_price, customer_orders_count, created_at_shopify')
+    .select('current_total_price, customer_email, created_at_shopify')
     .eq('organization_id', orgId)
     .gte('created_at_shopify', sixMonthsAgo)
     .lte('created_at_shopify', monthEnd)
@@ -101,15 +101,42 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
 
   if (error) throw error;
 
+  // Determine returning customers: those with orders BEFORE the 6-month window
+  const allEmails = new Set(
+    (data ?? []).map(o => o.customer_email?.toLowerCase()).filter(Boolean)
+  );
+  let returningEmails = new Set<string>();
+  if (allEmails.size > 0) {
+    const emailArray = Array.from(allEmails);
+    const batchSize = 200;
+    for (let i = 0; i < emailArray.length; i += batchSize) {
+      const batch = emailArray.slice(i, i + batchSize);
+      const { data: priorOrders } = await supabase
+        .from('shopify_orders')
+        .select('customer_email')
+        .eq('organization_id', orgId)
+        .lt('created_at_shopify', sixMonthsAgo)
+        .in('customer_email', batch)
+        .is('cancelled_at', null)
+        .not('financial_status', 'eq', 'voided')
+        .limit(batch.length);
+      if (priorOrders) {
+        for (const o of priorOrders) {
+          if (o.customer_email) returningEmails.add(o.customer_email.toLowerCase());
+        }
+      }
+    }
+  }
+
   // Group by month client-side
   const monthMap = new Map<string, { newRev: number; retRev: number; newOrd: number; retOrd: number }>();
   for (const o of data ?? []) {
     const month = format(new Date(o.created_at_shopify), 'yyyy-MM');
     if (!monthMap.has(month)) monthMap.set(month, { newRev: 0, retRev: 0, newOrd: 0, retOrd: 0 });
     const m = monthMap.get(month)!;
-    const isNew = (o.customer_orders_count ?? 0) <= 1;
-    if (isNew) { m.newRev += o.current_total_price ?? 0; m.newOrd++; }
-    else { m.retRev += o.current_total_price ?? 0; m.retOrd++; }
+    const isReturning = o.customer_email && returningEmails.has(o.customer_email.toLowerCase());
+    if (isReturning) { m.retRev += o.current_total_price ?? 0; m.retOrd++; }
+    else { m.newRev += o.current_total_price ?? 0; m.newOrd++; }
   }
 
   return Array.from(monthMap.entries())

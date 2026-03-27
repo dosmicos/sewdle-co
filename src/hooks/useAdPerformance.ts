@@ -86,18 +86,47 @@ async function fetchNewCustomerPercentage(
   startDate: string,
   endDate: string
 ): Promise<number> {
-  // Query shopify_orders for the date range and calculate % of revenue from new customers
-  // New customer = customer_orders_count === 1 (their first order)
+  // Query shopify_orders for the date range
   const { data, error } = await supabase
     .from('shopify_orders')
-    .select('total_price, customer_orders_count')
+    .select('total_price, customer_email')
     .eq('organization_id', orgId)
-    .gte('created_at', `${startDate}T00:00:00`)
-    .lte('created_at', `${endDate}T23:59:59`);
+    .gte('created_at_shopify', `${startDate}T00:00:00`)
+    .lte('created_at_shopify', `${endDate}T23:59:59`)
+    .is('cancelled_at', null)
+    .not('financial_status', 'eq', 'voided');
 
   if (error || !data || data.length === 0) {
     console.warn('Could not fetch new customer data, defaulting to 0%', error);
     return 0;
+  }
+
+  // Determine returning customers: those with orders BEFORE the period
+  const periodEmails = new Set(
+    data.map(o => o.customer_email?.toLowerCase()).filter(Boolean)
+  );
+
+  const returningEmails = new Set<string>();
+  if (periodEmails.size > 0) {
+    const emailArray = Array.from(periodEmails);
+    const batchSize = 200;
+    for (let i = 0; i < emailArray.length; i += batchSize) {
+      const batch = emailArray.slice(i, i + batchSize);
+      const { data: priorOrders } = await supabase
+        .from('shopify_orders')
+        .select('customer_email')
+        .eq('organization_id', orgId)
+        .lt('created_at_shopify', `${startDate}T00:00:00`)
+        .in('customer_email', batch)
+        .is('cancelled_at', null)
+        .not('financial_status', 'eq', 'voided')
+        .limit(batch.length);
+      if (priorOrders) {
+        for (const o of priorOrders) {
+          if (o.customer_email) returningEmails.add(o.customer_email.toLowerCase());
+        }
+      }
+    }
   }
 
   let totalRevenue = 0;
@@ -106,7 +135,8 @@ async function fetchNewCustomerPercentage(
   for (const order of data) {
     const price = Number(order.total_price) || 0;
     totalRevenue += price;
-    if (order.customer_orders_count === 1) {
+    const isReturning = order.customer_email && returningEmails.has(order.customer_email.toLowerCase());
+    if (!isReturning) {
       newCustomerRevenue += price;
     }
   }

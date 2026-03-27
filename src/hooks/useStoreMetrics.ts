@@ -134,9 +134,44 @@ async function fetchMetrics(
   const shipping = validOrders.reduce((sum, o) => sum + (o.total_shipping || 0), 0);
   const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
 
-  // New vs returning customer — also use net revenue
-  const newOrders = validOrders.filter(o => (o.customer_orders_count || 0) <= 1);
-  const returningOrders = validOrders.filter(o => (o.customer_orders_count || 0) > 1);
+  // New vs returning customer — determine by checking if the customer had orders BEFORE this period
+  // customer_orders_count from Shopify is unreliable (often 0 from bulk sync), so we query for
+  // customers who have prior orders instead
+  const periodEmails = new Set(
+    validOrders.map(o => o.customer_email?.toLowerCase()).filter(Boolean)
+  );
+
+  let returningEmails = new Set<string>();
+  if (periodEmails.size > 0) {
+    // Fetch distinct emails that have orders BEFORE the start of the period
+    const emailArray = Array.from(periodEmails);
+    const batchSizeEmails = 200;
+    for (let i = 0; i < emailArray.length; i += batchSizeEmails) {
+      const batch = emailArray.slice(i, i + batchSizeEmails);
+      const { data: priorOrders } = await supabase
+        .from('shopify_orders')
+        .select('customer_email')
+        .eq('organization_id', orgId)
+        .lt('created_at_shopify', startStr)
+        .in('customer_email', batch)
+        .is('cancelled_at', null)
+        .not('financial_status', 'eq', 'voided')
+        .limit(batch.length);
+
+      if (priorOrders) {
+        for (const o of priorOrders) {
+          if (o.customer_email) returningEmails.add(o.customer_email.toLowerCase());
+        }
+      }
+    }
+  }
+
+  const newOrders = validOrders.filter(o =>
+    !o.customer_email || !returningEmails.has(o.customer_email.toLowerCase())
+  );
+  const returningOrders = validOrders.filter(o =>
+    o.customer_email && returningEmails.has(o.customer_email.toLowerCase())
+  );
 
   const newCustomerRevenue = newOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
   const returningCustomerRevenue = returningOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
