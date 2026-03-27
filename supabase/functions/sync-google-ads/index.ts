@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GOOGLE_ADS_API = "https://googleads.googleapis.com/v17";
+const GOOGLE_ADS_API = "https://googleads.googleapis.com/v23";
 
 /**
  * Refreshes an access token using a refresh token.

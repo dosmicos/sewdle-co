@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GOOGLE_ADS_API = "https://googleads.googleapis.com/v17";
+const GOOGLE_ADS_API = "https://googleads.googleapis.com/v23";
 
 /**
  * Refreshes an access token using a refresh token.
@@ -79,27 +79,41 @@ serve(async (req) => {
         );
       }
 
+      console.log("[exchange_token] Starting. redirectUri:", redirectUri, "orgId:", organizationId);
+
       // Step 1: Exchange authorization code for tokens
-      const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: GOOGLE_CLIENT_ID,
-          client_secret: GOOGLE_CLIENT_SECRET,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-      });
+      let tokenRes: Response;
+      try {
+        tokenRes = await fetch(GOOGLE_TOKEN_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: GOOGLE_CLIENT_ID,
+            client_secret: GOOGLE_CLIENT_SECRET,
+            redirect_uri: redirectUri,
+            grant_type: "authorization_code",
+          }),
+        });
+      } catch (fetchErr) {
+        console.error("[exchange_token] Token fetch network error:", fetchErr);
+        return new Response(
+          JSON.stringify({ error: "Error de red al contactar Google OAuth", details: String(fetchErr) }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       const tokenData = await tokenRes.json();
+      console.log("[exchange_token] Token exchange status:", tokenRes.status);
+      console.log("[exchange_token] Token exchange keys:", Object.keys(tokenData).join(", "));
 
       if (tokenData.error) {
         console.error("Google token exchange error:", tokenData);
         return new Response(
           JSON.stringify({
             error: "Error al intercambiar código por token",
-            details: tokenData.error_description || tokenData.error,
+            details: `${tokenData.error}: ${tokenData.error_description || 'sin detalle'}`,
+            redirectUriUsed: redirectUri,
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -125,24 +139,54 @@ serve(async (req) => {
       }
 
       // Step 2: List accessible customer accounts
-      const customersRes = await fetch(
-        `${GOOGLE_ADS_API}/customers:listAccessibleCustomers`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "developer-token": DEVELOPER_TOKEN,
-          },
-        }
-      );
+      console.log("[exchange_token] Calling listAccessibleCustomers with API:", GOOGLE_ADS_API);
 
-      const customersData = await customersRes.json();
+      let customersRes: Response;
+      try {
+        customersRes = await fetch(
+          `${GOOGLE_ADS_API}/customers:listAccessibleCustomers`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "developer-token": DEVELOPER_TOKEN,
+            },
+          }
+        );
+      } catch (fetchErr) {
+        console.error("[exchange_token] Google Ads API network error:", fetchErr);
+        return new Response(
+          JSON.stringify({ error: "Error de red al contactar Google Ads API", details: String(fetchErr) }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Handle non-JSON responses (e.g., HTML error pages from deprecated API versions)
+      const customersText = await customersRes.text();
+      console.log("[exchange_token] listAccessibleCustomers status:", customersRes.status);
+      console.log("[exchange_token] listAccessibleCustomers response (first 500):", customersText.substring(0, 500));
+
+      let customersData: any;
+      try {
+        customersData = JSON.parse(customersText);
+      } catch {
+        console.error("[exchange_token] Google Ads API returned non-JSON:", customersText.substring(0, 300));
+        return new Response(
+          JSON.stringify({
+            error: "Google Ads API devolvió una respuesta inválida",
+            details: `Status ${customersRes.status}. Respuesta: ${customersText.substring(0, 200)}. Verifica que el Developer Token sea válido y la API version (${GOOGLE_ADS_API}) esté activa.`,
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       if (customersData.error) {
-        console.error("Google Ads list customers error:", customersData.error);
+        const errMsg = customersData.error.message || JSON.stringify(customersData.error);
+        const errStatus = customersData.error.status || customersData.error.code || "";
+        console.error("[exchange_token] Google Ads list customers error:", errMsg, "status:", errStatus);
         return new Response(
           JSON.stringify({
             error: "Error al obtener cuentas de Google Ads",
-            details: customersData.error.message,
+            details: `${errMsg}${errStatus ? ` (${errStatus})` : ""}`,
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -171,7 +215,18 @@ serve(async (req) => {
             }
           );
 
-          const queryData = await queryRes.json();
+          const queryText = await queryRes.text();
+          let queryData: any;
+          try {
+            queryData = JSON.parse(queryText);
+          } catch {
+            console.warn(`Non-JSON response for customer ${customerId}:`, queryText.substring(0, 200));
+            accounts.push({
+              id: customerId,
+              name: `Google Ads ${customerId}`,
+            });
+            continue;
+          }
 
           if (queryData[0]?.results?.[0]?.customer) {
             const cust = queryData[0].results[0].customer;

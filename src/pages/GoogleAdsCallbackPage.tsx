@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 /**
@@ -60,19 +61,30 @@ const GoogleAdsCallbackPage: React.FC = () => {
 
       const redirectUri = `${window.location.origin}/google-ads-callback`;
 
-      const { data, error } = await supabase.functions.invoke('google-ads-oauth', {
-        body: {
+      // Use fetch directly instead of supabase.functions.invoke
+      // because invoke() swallows error details on non-2xx responses
+      const session = (await supabase.auth.getSession()).data.session;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/google-ads-oauth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || SUPABASE_PUBLISHABLE_KEY}`,
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
           action: 'exchange_token',
           code,
           redirectUri,
           organizationId,
-        },
+        }),
       });
 
-      if (error) {
-        // Try to extract detailed error from the response
-        const errorDetail = data?.error || data?.details || error.message;
-        throw new Error(errorDetail || 'Edge Function returned a non-2xx status code');
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorMsg = data?.error || `HTTP ${res.status}`;
+        const details = data?.details || '';
+        throw new Error(details ? `${errorMsg}: ${details}` : errorMsg);
       }
 
       if (!data.success) {
