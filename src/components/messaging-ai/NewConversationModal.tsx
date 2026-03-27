@@ -119,6 +119,16 @@ export const WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
     ],
   },
   {
+    name: 'reclamar_interrapidisimo',
+    displayName: 'Reclamar Interrapidísimo',
+    language: 'es_CO',
+    description: 'Informar al cliente que puede reclamar su pedido en oficina Interrapidísimo',
+    previewText: 'Hola, nos estamos comunicando de dosmicos.co\n\nEs para informarte que ya puedes reclamar tu pedido en la oficina Interrapidísimo con el número de guía: {{1}}\n\nCualquier duda estoy para ayudarte\ud83d\ude0a',
+    params: [
+      { key: '1', label: 'Número de guía', placeholder: '240048962605' },
+    ],
+  },
+  {
     name: 'notificacion_envio_express',
     displayName: 'Notificación envío express',
     language: 'en',
