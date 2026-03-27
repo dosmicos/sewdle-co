@@ -1,8 +1,14 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info } from 'lucide-react';
 import SparklineChart from './SparklineChart';
 import { SemaphoreBadge } from './SemaphoreBadge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { ContributionMarginData } from '@/hooks/useContributionMargin';
 
 interface ContributionMarginCardProps {
@@ -86,6 +92,51 @@ export const ContributionMarginCard: React.FC<ContributionMarginCardProps> = ({ 
           <MiniStat label="Ad Spend" value={formatCOP(data.adSpend)} negative />
           <span className="text-gray-300 text-xs">=</span>
           <MiniStat label="CM" value={formatCOP(data.contributionMargin)} />
+        </div>
+
+        {/* Secondary indicators: Gross Margin, Shipping %, Daily Burn */}
+        <div className="flex items-center justify-start gap-5 border-t border-gray-100 pt-2.5 mt-2.5">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 cursor-help">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400">Gross Margin</span>
+                  <Info className="h-3 w-3 text-gray-300" />
+                  <span className={`text-xs font-semibold ${
+                    data.grossMarginPct >= 65 ? 'text-emerald-600' :
+                    data.grossMarginPct >= 58 ? 'text-lime-600' :
+                    data.grossMarginPct >= 42 ? 'text-amber-500' :
+                    'text-red-500'
+                  }`}>
+                    {data.grossMarginPct.toFixed(1)}%
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[220px] text-xs">
+                <p>Margen antes de ads y OpEx.</p>
+                <p className="text-gray-400 mt-0.5">Benchmark: {'>'}58% bueno, {'>'}65% excelente</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-gray-400">Shipping</span>
+            <span className={`text-xs font-semibold ${
+              data.shippingCostPct < 8 ? 'text-emerald-600' :
+              data.shippingCostPct < 10 ? 'text-lime-600' :
+              data.shippingCostPct < 12 ? 'text-amber-500' :
+              'text-red-500'
+            }`}>
+              {data.shippingCostPct.toFixed(1)}%
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-gray-400">Costo Diario</span>
+            <span className="text-xs font-semibold text-gray-600">
+              {formatCOP(data.dailyBurn)}/dia
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>

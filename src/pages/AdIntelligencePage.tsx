@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, RefreshCw, Loader2, TrendingUp, TrendingDown, Users, Zap } from 'lucide-react';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnectionModal';
+import ProductMVPMatrix from '@/components/finance-dashboard/ProductMVPMatrix';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
 import { useAdIntelligence, type PerformancePattern } from '@/hooks/useAdIntelligence';
 import { useAdCreativeSync } from '@/hooks/useAdCreativeSync';
@@ -193,6 +194,14 @@ const AdIntelligencePage: React.FC = () => {
           </div>
         ) : (
           <>
+            {/* Product MVP Matrix */}
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">
+                Product MVP Matrix — Ultimos 30 dias
+              </h2>
+              <ProductMVPMatrix />
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <SummaryCard

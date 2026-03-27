@@ -72,8 +72,17 @@ export interface ContributionMarginData {
   // Daily breakdown
   dailyData: DailyBreakdown[];
 
-  // MER
+  // MER & AMER (Prophit System)
   mer: number;
+  amer: number;
+  newCustomerRevenuePct: number;
+
+  // Gross Margin & Cash Flow indicators
+  grossMargin: number;          // netSales - productCost - shippingCost
+  grossMarginPct: number;       // grossMargin / netSales * 100
+  shippingCostPct: number;      // shippingCost / netSales * 100
+  dailyBurn: number;            // total costs / daysInPeriod
+  projectedMonthlyProfit: number; // profit projected to full month
 }
 
 function computeSemaphore(cmPercent: number, targetPercent: number): Semaphore {
@@ -164,8 +173,12 @@ export function useContributionMargin(
     const profit = netSales - costOfDelivery - cacCost - opexCost;
     const profitPct = netSales > 0 ? (profit / netSales) * 100 : 0;
 
-    // MER
+    // MER & AMER (Prophit System — Taylor Holiday / CTC)
     const mer = adSpend > 0 ? grossRevenue / adSpend : 0;
+    const newCustomerRevenue = storeMetrics.current.newCustomerRevenue;
+    const totalRevenue = storeMetrics.current.totalSales;
+    const newCustomerRevenuePct = totalRevenue > 0 ? newCustomerRevenue / totalRevenue : 0;
+    const amer = adSpend > 0 ? newCustomerRevenue / adSpend : 0;
 
     // Pace / Forecast
     const monthStart = startOfMonth(currentRange.start);
@@ -242,6 +255,17 @@ export function useContributionMargin(
       };
     });
 
+    // Gross Margin & Cash Flow indicators
+    const grossMargin = netSales - productCost - shippingCost;
+    const grossMarginPct = netSales > 0 ? (grossMargin / netSales) * 100 : 0;
+    const shippingCostPct = netSales > 0 ? (shippingCost / netSales) * 100 : 0;
+    const dailyBurn = daysInPeriod > 0
+      ? (productCost + shippingCost + paymentGatewayFees + handlingCost + adSpend + opexCost) / daysInPeriod
+      : 0;
+    const projectedMonthlyProfit = daysElapsed > 0
+      ? (profit / daysElapsed) * daysInMonth
+      : 0;
+
     return {
       grossRevenue,
       returnsAccrual,
@@ -273,6 +297,13 @@ export function useContributionMargin(
       gapPerDay,
       dailyData,
       mer,
+      amer,
+      newCustomerRevenuePct,
+      grossMargin,
+      grossMarginPct,
+      shippingCostPct,
+      dailyBurn,
+      projectedMonthlyProfit,
     };
   }, [storeMetrics.current, adMetrics.current, settings, target, currentRange, costOverrides]);
 }

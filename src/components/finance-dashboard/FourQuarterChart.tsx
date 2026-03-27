@@ -128,6 +128,36 @@ export const FourQuarterChart: React.FC<FourQuarterChartProps> = ({ data, format
             />
           </div>
         </div>
+
+        {/* Gross Margin reference line */}
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative h-3 bg-gray-100 rounded-full overflow-hidden">
+              {/* Gross Margin bar (starting point before CAC + OpEx) */}
+              <div
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{
+                  width: `${Math.min(100, Math.max(0, data.grossMarginPct))}%`,
+                  backgroundColor: data.grossMarginPct >= 65 ? '#22c55e' : data.grossMarginPct >= 58 ? '#84cc16' : data.grossMarginPct >= 42 ? '#f59e0b' : '#ef4444',
+                }}
+              />
+              {/* Profit bar overlaid */}
+              <div
+                className="absolute inset-y-0 left-0 rounded-full opacity-40"
+                style={{
+                  width: `${Math.min(100, Math.max(0, data.profitPct))}%`,
+                  backgroundColor: data.profitPct >= 0 ? '#22c55e' : '#ef4444',
+                }}
+              />
+            </div>
+            <span className="text-[10px] text-gray-400 whitespace-nowrap w-28 text-right">
+              GM {data.grossMarginPct.toFixed(1)}% → Profit {data.profitPct.toFixed(1)}%
+            </span>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">
+            Del Gross Margin ({data.grossMarginPct.toFixed(1)}%), CAC consume {data.cacPct.toFixed(1)}% y OpEx {data.opexPct.toFixed(1)}%
+          </p>
+        </div>
       </CardContent>
     </Card>
   );

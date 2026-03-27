@@ -1,5 +1,9 @@
 import React from 'react';
 import MetricCard from './MetricCard';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { ContributionMarginData } from '@/hooks/useContributionMargin';
 import type { StoreMetricsResult } from '@/hooks/useStoreMetrics';
 import type { AdMetricsResult } from '@/hooks/useAdMetrics';
@@ -10,6 +14,71 @@ interface BusinessMetricsRowProps {
   adMetrics: AdMetricsResult;
   formatCOP: (amount: number) => string;
 }
+
+/** Semaphore badge for MER/AMER health status */
+const SemaphoreBadge: React.FC<{
+  value: number;
+  thresholds: { green: number; yellow: number };
+}> = ({ value, thresholds }) => {
+  const isGreen = value >= thresholds.green;
+  const isYellow = !isGreen && value >= thresholds.yellow;
+
+  const color = isGreen
+    ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    : isYellow
+      ? 'bg-amber-100 text-amber-700 border-amber-200'
+      : 'bg-red-100 text-red-700 border-red-200';
+
+  const dot = isGreen ? 'bg-emerald-500' : isYellow ? 'bg-amber-500' : 'bg-red-500';
+  const label = isGreen ? 'Saludable' : isYellow ? 'Atencion' : 'Critico';
+
+  return (
+    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full border', color)}>
+      <span className={cn('h-1.5 w-1.5 rounded-full', dot)} />
+      {label}
+    </span>
+  );
+};
+
+/** Highlighted metric card for MER and AMER */
+const EfficiencyMetricCard: React.FC<{
+  label: string;
+  value: number;
+  tooltip: string;
+  thresholds: { green: number; yellow: number };
+}> = ({ label, value, tooltip, thresholds }) => {
+  const isGreen = value >= thresholds.green;
+  const isYellow = !isGreen && value >= thresholds.yellow;
+  const ringClass = isGreen
+    ? 'ring-emerald-200'
+    : isYellow
+      ? 'ring-amber-200'
+      : 'ring-red-200';
+
+  return (
+    <Card className={cn('relative hover:shadow-md transition-shadow ring-2', ringClass)}>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-gray-700">{label}</span>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-gray-400 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  {tooltip}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <SemaphoreBadge value={value} thresholds={thresholds} />
+        </div>
+        <div className="text-2xl font-bold text-gray-900">{value.toFixed(2)}x</div>
+      </CardContent>
+    </Card>
+  );
+};
 
 export const BusinessMetricsRow: React.FC<BusinessMetricsRowProps> = ({
   cmData,
@@ -39,7 +108,25 @@ export const BusinessMetricsRow: React.FC<BusinessMetricsRowProps> = ({
       <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
         Business Metrics
       </h3>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+
+      {/* Row 1: MER & AMER — primary efficiency metrics (Prophit System) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <EfficiencyMetricCard
+          label="MER"
+          value={cmData.mer}
+          tooltip="Marketing Efficiency Ratio = Total Revenue / Total Ad Spend. La metrica mas honesta de eficiencia de marketing. Objetivo: >4x."
+          thresholds={{ green: 4, yellow: 2.5 }}
+        />
+        <EfficiencyMetricCard
+          label="AMER"
+          value={cmData.amer}
+          tooltip="Acquisition MER = New Customer Revenue / Ad Spend. Eficiencia de adquisicion de clientes nuevos. Metrica #1 segun Prophit System (Taylor Holiday / CTC)."
+          thresholds={{ green: 2, yellow: 1.5 }}
+        />
+      </div>
+
+      {/* Row 2: Revenue & cost metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Revenue"
           value={formatCOP(cmData.grossRevenue)}
@@ -47,14 +134,8 @@ export const BusinessMetricsRow: React.FC<BusinessMetricsRowProps> = ({
           sparklineData={dailySales}
         />
         <MetricCard
-          label="Ad Spend"
-          value={formatCOP(cmData.adSpend)}
-          changePercent={adMetrics.changes.spend}
-          sparklineData={dailyAdSpend}
-        />
-        <MetricCard
-          label="MER"
-          value={cmData.mer.toFixed(2)}
+          label="Gross Margin"
+          value={`${cmData.grossMarginPct.toFixed(1)}%`}
           changePercent={undefined}
           sparklineData={[]}
         />
@@ -69,6 +150,22 @@ export const BusinessMetricsRow: React.FC<BusinessMetricsRowProps> = ({
           value={new Intl.NumberFormat('es-CO').format(storeMetrics.current.orders)}
           changePercent={storeMetrics.changes.orders}
           sparklineData={dailyOrders}
+        />
+      </div>
+
+      {/* Row 3: Spend & operational */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        <MetricCard
+          label="Ad Spend"
+          value={formatCOP(cmData.adSpend)}
+          changePercent={adMetrics.changes.spend}
+          sparklineData={dailyAdSpend}
+        />
+        <MetricCard
+          label="Costo Diario"
+          value={`${formatCOP(cmData.dailyBurn)}/dia`}
+          changePercent={undefined}
+          sparklineData={[]}
         />
         <MetricCard
           label="Net Shipping"

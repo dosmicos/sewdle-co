@@ -36,6 +36,11 @@ export interface AdPerformanceRow {
   video_avg_time: number | null;
   roas: number;
   cpa: number;
+  // AMER / NC-ROAS metrics
+  new_customer_pct: number;
+  estimated_new_revenue: number;
+  amer: number;
+  nc_roas: number;
   hook_rate: number | null;
   hold_rate: number | null;
   lp_conv_rate: number | null;
@@ -76,8 +81,42 @@ export interface AdPerformanceResult {
   syncAdPerformance: (startDate: string, endDate: string) => Promise<boolean>;
 }
 
+async function fetchNewCustomerPercentage(
+  orgId: string,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  // Query shopify_orders for the date range and calculate % of revenue from new customers
+  // New customer = customer_orders_count === 1 (their first order)
+  const { data, error } = await supabase
+    .from('shopify_orders')
+    .select('total_price, customer_orders_count')
+    .eq('organization_id', orgId)
+    .gte('created_at', `${startDate}T00:00:00`)
+    .lte('created_at', `${endDate}T23:59:59`);
+
+  if (error || !data || data.length === 0) {
+    console.warn('Could not fetch new customer data, defaulting to 0%', error);
+    return 0;
+  }
+
+  let totalRevenue = 0;
+  let newCustomerRevenue = 0;
+
+  for (const order of data) {
+    const price = Number(order.total_price) || 0;
+    totalRevenue += price;
+    if (order.customer_orders_count === 1) {
+      newCustomerRevenue += price;
+    }
+  }
+
+  return totalRevenue > 0 ? newCustomerRevenue / totalRevenue : 0;
+}
+
 function aggregateByAd(
-  rows: any[]
+  rows: any[],
+  newCustomerPct: number
 ): AdPerformanceRow[] {
   const grouped = new Map<string, any[]>();
 
@@ -138,6 +177,9 @@ function aggregateByAd(
     const cpc = clicks > 0 ? spend / clicks : 0;
     const roas = spend > 0 ? revenue / spend : 0;
     const cpa = purchases > 0 ? spend / purchases : 0;
+    const estimatedNewRevenue = revenue * newCustomerPct;
+    const amer = spend > 0 ? estimatedNewRevenue / spend : 0;
+    const ncRoas = spend > 0 ? estimatedNewRevenue / spend : 0;
     const hookRate = hasVideo && impressions > 0 ? (videoThruplay / impressions) * 100 : null;
     const holdRate = hasVideo && videoThruplay > 0 ? (videoP75 / videoThruplay) * 100 : null;
     const lpConvRate = landingPageViews > 0 ? (purchases / landingPageViews) * 100 : null;
@@ -190,6 +232,10 @@ function aggregateByAd(
       video_avg_time: null, // avg doesn't sum well
       roas,
       cpa,
+      new_customer_pct: newCustomerPct,
+      estimated_new_revenue: estimatedNewRevenue,
+      amer,
+      nc_roas: ncRoas,
       hook_rate: hookRate,
       hold_rate: holdRate,
       lp_conv_rate: lpConvRate,
@@ -226,7 +272,10 @@ async function fetchAdPerformance(
 
   if (!data || data.length === 0) return [];
 
-  return aggregateByAd(data);
+  // Fetch new customer revenue percentage from Shopify data
+  const newCustomerPct = await fetchNewCustomerPercentage(orgId, startStr, endStr);
+
+  return aggregateByAd(data, newCustomerPct);
 }
 
 export function useAdPerformance(

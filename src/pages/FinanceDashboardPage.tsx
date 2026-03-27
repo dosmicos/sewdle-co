@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Loader2, Settings, ExternalLink } from 'lucide-react';
+import { RefreshCw, Loader2, Settings, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
@@ -29,6 +29,7 @@ import { useFinanceExpenses } from '@/hooks/useFinanceExpenses';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -180,6 +181,7 @@ const FinanceDashboardPage: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [channelMetricsOpen, setChannelMetricsOpen] = useState(false);
 
   // Auto-open modals if returning from OAuth callback
   useEffect(() => {
@@ -400,48 +402,62 @@ const FinanceDashboardPage: React.FC = () => {
           />
         </section>
 
-        {/* ========== SECTION 5: AD PERFORMANCE ========== */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📊</span>
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
-                Attribution
-              </h3>
-              {metaConnection.isConnected && (
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
-                  Meta conectado
-                </Badge>
-              )}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-blue-600 hover:text-blue-700"
-              onClick={() => navigate('/ad-performance')}
-            >
-              Ver detalle
-              <ExternalLink className="h-3 w-3 ml-1" />
-            </Button>
-          </div>
-          <AttributionTable rows={attributionRows} formatCurrency={formatCOP} />
-          {!metaConnection.isConnected && (
-            <Card className="border-dashed border-blue-200 bg-blue-50/50">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-900">Meta Ads no conectado</p>
-                  <p className="text-xs text-blue-700 mt-0.5">Conecta tu cuenta para ver métricas reales de ads</p>
-                </div>
+        {/* ========== SECTION 5: CHANNEL METRICS (Contexto) ========== */}
+        <section>
+          <Collapsible open={channelMetricsOpen} onOpenChange={setChannelMetricsOpen}>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <CollapsibleTrigger asChild>
+                  <button className="flex items-center gap-2 group cursor-pointer">
+                    {channelMetricsOpen
+                      ? <ChevronDown className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                      : <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                    }
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider group-hover:text-gray-700">
+                      Channel Metrics (Contexto)
+                    </h3>
+                    {metaConnection.isConnected && (
+                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
+                        Meta conectado
+                      </Badge>
+                    )}
+                  </button>
+                </CollapsibleTrigger>
                 <Button
+                  variant="ghost"
                   size="sm"
-                  className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
-                  onClick={() => setMetaModalOpen(true)}
+                  className="text-blue-600 hover:text-blue-700"
+                  onClick={() => navigate('/ad-performance')}
                 >
-                  Conectar
+                  Ver detalle
+                  <ExternalLink className="h-3 w-3 ml-1" />
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+              <p className="text-xs text-gray-400 italic ml-6">
+                Channel ROAS es contexto, no driver de decisiones. Usa CM y MER para gobernar.
+              </p>
+            </div>
+            <CollapsibleContent className="mt-4 space-y-4">
+              <AttributionTable rows={attributionRows} formatCurrency={formatCOP} />
+              {!metaConnection.isConnected && (
+                <Card className="border-dashed border-blue-200 bg-blue-50/50">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Meta Ads no conectado</p>
+                      <p className="text-xs text-blue-700 mt-0.5">Conecta tu cuenta para ver metricas reales de ads</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
+                      onClick={() => setMetaModalOpen(true)}
+                    >
+                      Conectar
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </section>
       </div>
 

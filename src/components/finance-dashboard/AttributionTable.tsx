@@ -47,7 +47,7 @@ const AttributionTable: React.FC<AttributionTableProps> = ({ rows, formatCurrenc
             <TableHead className="text-xs font-medium text-gray-500 text-right">Budget</TableHead>
             <TableHead className="text-xs font-medium text-gray-500 text-right">Spend</TableHead>
             <TableHead className="text-xs font-medium text-gray-500 text-right">CV</TableHead>
-            <TableHead className="text-xs font-medium text-gray-500 text-right">ROAS</TableHead>
+            <TableHead className="text-xs font-medium text-gray-400 text-right">ROAS (Contexto)</TableHead>
             <TableHead className="text-xs font-medium text-gray-500 text-right">Clicks</TableHead>
             <TableHead className="text-xs font-medium text-gray-500 text-right">Impressions</TableHead>
           </TableRow>
@@ -66,7 +66,7 @@ const AttributionTable: React.FC<AttributionTableProps> = ({ rows, formatCurrenc
               </TableCell>
               <TableCell className="text-right text-sm">{formatCurrency(row.spend)}</TableCell>
               <TableCell className="text-right text-sm">{formatCurrency(row.cv)}</TableCell>
-              <TableCell className="text-right text-sm">{row.roas.toFixed(2)}</TableCell>
+              <TableCell className="text-right text-sm text-gray-400">{row.roas.toFixed(2)}</TableCell>
               <TableCell className="text-right text-sm">{row.clicks.toLocaleString()}</TableCell>
               <TableCell className="text-right text-sm">{row.impressions.toLocaleString()}</TableCell>
             </TableRow>
@@ -78,7 +78,7 @@ const AttributionTable: React.FC<AttributionTableProps> = ({ rows, formatCurrenc
             <TableCell className="text-right text-sm">-</TableCell>
             <TableCell className="text-right text-sm">{formatCurrency(totals.spend)}</TableCell>
             <TableCell className="text-right text-sm">{formatCurrency(totals.cv)}</TableCell>
-            <TableCell className="text-right text-sm">{totals.roas.toFixed(2)}</TableCell>
+            <TableCell className="text-right text-sm text-gray-400">{totals.roas.toFixed(2)}</TableCell>
             <TableCell className="text-right text-sm">{totals.clicks.toLocaleString()}</TableCell>
             <TableCell className="text-right text-sm">{totals.impressions.toLocaleString()}</TableCell>
           </TableRow>

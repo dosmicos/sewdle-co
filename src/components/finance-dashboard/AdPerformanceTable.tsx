@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, ChevronsUpDown, Search, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Search, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -25,6 +25,8 @@ type ThresholdDef = { green: number; yellow: number; invert?: boolean };
 
 const THRESHOLDS: Record<string, ThresholdDef> = {
   roas: { green: 3.0, yellow: 1.5 },
+  amer: { green: 1.5, yellow: 1.0 },
+  nc_roas: { green: 1.5, yellow: 1.0 },
   cpa: { green: 25000, yellow: 35000, invert: true },
   ctr: { green: 1.8, yellow: 1.2 },
   cpm: { green: 15000, yellow: 25000, invert: true },
@@ -52,9 +54,9 @@ function getColorClass(metric: string, value: number | null): string {
   return 'text-red-600 font-medium';
 }
 
-function getStatusDot(roas: number): string {
-  if (roas >= 3.0) return 'bg-green-500';
-  if (roas >= 1.5) return 'bg-amber-500';
+function getStatusDot(amer: number): string {
+  if (amer >= 1.5) return 'bg-green-500';
+  if (amer >= 1.0) return 'bg-amber-500';
   return 'bg-red-500';
 }
 
@@ -160,7 +162,7 @@ const AdPerformanceTable: React.FC<Props> = ({
     }
 
     if (statusFilter === 'problem') {
-      result = result.filter((a) => a.spend > 0 && a.roas < 1.5);
+      result = result.filter((a) => a.spend > 0 && a.amer < 1.0);
     }
 
     if (audienceFilter !== 'all' && tagsMap) {
@@ -180,8 +182,8 @@ const AdPerformanceTable: React.FC<Props> = ({
       let bVal: any;
 
       if (sortKey === 'status') {
-        aVal = a.roas;
-        bVal = b.roas;
+        aVal = a.amer;
+        bVal = b.amer;
       } else if (sortKey === 'audience_type') {
         aVal = tagsMap?.get(a.ad_id)?.audience_type || '';
         bVal = tagsMap?.get(b.ad_id)?.audience_type || '';
@@ -329,6 +331,25 @@ const AdPerformanceTable: React.FC<Props> = ({
                   <TH colKey="phase" label="Phase" />
                 )}
                 <TH colKey="spend" label="Spend" />
+                <th
+                  className="px-2 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none whitespace-nowrap"
+                  onClick={() => handleSort('amer')}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-0.5">
+                        AMER
+                        <Info className="h-3 w-3 text-gray-400" />
+                        <SortIcon colKey={'amer' as SortKey} />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs font-medium">Acquisition Marketing Efficiency Ratio</p>
+                      <p className="text-xs text-gray-400 mt-0.5">NC-ROAS: New Customer Revenue / Ad Spend. Usa un % estimado global de clientes nuevos desde Shopify.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </th>
+                <TH colKey={'new_customer_pct' as SortKey} label="New %" />
                 <TH colKey="revenue" label="Revenue" />
                 <TH colKey="roas" label="ROAS" />
                 <TH colKey="purchases" label="Purch" />
@@ -360,10 +381,10 @@ const AdPerformanceTable: React.FC<Props> = ({
                         setExpandedAdId(isExpanded ? null : ad.ad_id)
                       }
                     >
-                      {/* Status dot */}
+                      {/* Status dot (based on AMER) */}
                       <td className="px-2 py-2 text-center">
                         <span
-                          className={`inline-block w-2 h-2 rounded-full ${getStatusDot(ad.roas)}`}
+                          className={`inline-block w-2 h-2 rounded-full ${getStatusDot(ad.amer)}`}
                         />
                       </td>
                       {/* Ad name */}
@@ -454,12 +475,27 @@ const AdPerformanceTable: React.FC<Props> = ({
                       <td className="px-2 py-2 text-gray-900 font-medium whitespace-nowrap">
                         {formatCurrency(ad.spend)}
                       </td>
+                      {/* AMER (NC-ROAS) */}
+                      <td className={`px-2 py-2 whitespace-nowrap ${getColorClass('amer', ad.amer)}`}>
+                        {ad.amer.toFixed(2)}x
+                      </td>
+                      {/* New Customer % */}
+                      <td className="px-2 py-2 text-gray-600 whitespace-nowrap">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>{(ad.new_customer_pct * 100).toFixed(1)}%</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="text-xs">% estimado de ingresos de clientes nuevos (global del periodo desde Shopify)</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </td>
                       {/* Revenue */}
                       <td className="px-2 py-2 text-gray-900 whitespace-nowrap">
                         {formatCurrency(ad.revenue)}
                       </td>
-                      {/* ROAS */}
-                      <td className={`px-2 py-2 whitespace-nowrap ${getColorClass('roas', ad.roas)}`}>
+                      {/* ROAS (blended) */}
+                      <td className={`px-2 py-2 whitespace-nowrap text-gray-500`}>
                         {ad.roas.toFixed(2)}x
                       </td>
                       {/* Purchases */}

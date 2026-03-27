@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   format,
   startOfMonth,
@@ -11,18 +11,22 @@ import {
   isSameMonth,
   isSameDay,
   isToday,
+  isPast,
+  isFuture,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import ActivityRevenueChart from '@/components/finance-dashboard/ActivityRevenueChart';
 import { useMarketingEvents } from '@/hooks/useMarketingEvents';
 import { useMarketingActivity } from '@/hooks/useMarketingActivity';
-import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel } from '@/hooks/useMarketingEvents';
+import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase } from '@/hooks/useMarketingEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +52,12 @@ import {
   Palette,
   Radio,
   MoreHorizontal,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Zap,
+  RefreshCw,
+  Mountain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -64,7 +74,7 @@ const EVENT_TYPE_CONFIG: Record<
     icon: <Rocket className="h-3 w-3" />,
   },
   promotion: {
-    label: 'Promoción',
+    label: 'Promocion',
     color: 'bg-red-50 text-red-700 border-red-200',
     dot: 'bg-red-500',
     icon: <Megaphone className="h-3 w-3" />,
@@ -139,16 +149,16 @@ const IMPACT_CONFIG: Record<ImpactLevel, { label: string; color: string }> = {
 
 const EVENT_TYPE_OPTIONS: { value: EventType; label: string }[] = [
   { value: 'product_launch', label: 'Lanzamiento de producto' },
-  { value: 'promotion', label: 'Promoción / Sale' },
-  { value: 'email_campaign', label: 'Campaña de email' },
+  { value: 'promotion', label: 'Promocion / Sale' },
+  { value: 'email_campaign', label: 'Campana de email' },
   { value: 'sms_blast', label: 'SMS Blast' },
-  { value: 'influencer_collab', label: 'Colaboración influencer' },
+  { value: 'influencer_collab', label: 'Colaboracion influencer' },
   { value: 'pr_hit', label: 'PR / Prensa' },
-  { value: 'organic_viral', label: 'Orgánico viral' },
+  { value: 'organic_viral', label: 'Organico viral' },
   { value: 'cultural_moment', label: 'Momento cultural' },
   { value: 'price_change', label: 'Cambio de precio' },
   { value: 'new_creative_batch', label: 'Batch de creativos' },
-  { value: 'channel_expansion', label: 'Expansión de canal' },
+  { value: 'channel_expansion', label: 'Expansion de canal' },
   { value: 'other', label: 'Otro' },
 ];
 
@@ -158,11 +168,143 @@ const IMPACT_OPTIONS: { value: ImpactLevel; label: string }[] = [
   { value: 'low', label: 'Bajo' },
 ];
 
+const PEAK_PHASE_OPTIONS: { value: PeakPhase; label: string }[] = [
+  { value: 'concept', label: 'Concepto' },
+  { value: 'creative', label: 'Creativo' },
+  { value: 'teaser', label: 'Teaser' },
+  { value: 'peak', label: 'Peak' },
+  { value: 'analysis', label: 'Analisis' },
+];
+
+const PEAK_PHASE_CONFIG: Record<PeakPhase, { label: string; color: string }> = {
+  concept: { label: 'Concepto', color: 'bg-slate-100 text-slate-700' },
+  creative: { label: 'Creativo', color: 'bg-violet-100 text-violet-700' },
+  teaser: { label: 'Teaser', color: 'bg-amber-100 text-amber-700' },
+  peak: { label: 'Peak', color: 'bg-red-100 text-red-700' },
+  analysis: { label: 'Analisis', color: 'bg-blue-100 text-blue-700' },
+};
+
+// ─── Quarterly Peaks for Dosmicos ────────────────────────
+interface QuarterlyPeak {
+  quarter: string;
+  name: string;
+  months: string;
+  monthNumbers: number[]; // 1-indexed
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+}
+
+const QUARTERLY_PEAKS: QuarterlyPeak[] = [
+  {
+    quarter: 'Q1',
+    name: 'Hot Days',
+    months: 'Marzo',
+    monthNumbers: [3],
+    icon: <Flame className="h-4 w-4" />,
+    color: 'text-red-600',
+    bgColor: 'bg-red-50 border-red-200',
+  },
+  {
+    quarter: 'Q2',
+    name: 'Dia de la Madre',
+    months: 'Mayo',
+    monthNumbers: [5],
+    icon: <Target className="h-4 w-4" />,
+    color: 'text-pink-600',
+    bgColor: 'bg-pink-50 border-pink-200',
+  },
+  {
+    quarter: 'Q3',
+    name: 'Temporada de Frio',
+    months: 'Julio - Agosto',
+    monthNumbers: [7, 8],
+    icon: <Mountain className="h-4 w-4" />,
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50 border-blue-200',
+  },
+  {
+    quarter: 'Q4',
+    name: 'Black Friday + Navidad',
+    months: 'Nov - Dic',
+    monthNumbers: [11, 12],
+    icon: <Zap className="h-4 w-4" />,
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50 border-purple-200',
+  },
+];
+
 const formatCOP = (amount: number) =>
   `COP ${new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Math.round(amount))}`;
+
+const formatCOPShort = (amount: number) => {
+  if (amount >= 1_000_000) return `COP ${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `COP ${(amount / 1_000).toFixed(0)}K`;
+  return formatCOP(amount);
+};
+
+// ─── Delta Badge Component ──────────────────────────────
+const DeltaBadge: React.FC<{ expected: number; actual: number }> = ({
+  expected,
+  actual,
+}) => {
+  if (!expected || expected === 0) return null;
+  const delta = ((actual - expected) / expected) * 100;
+  const isPositive = delta >= 0;
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        'text-[10px] px-1.5 gap-0.5',
+        isPositive
+          ? 'bg-green-100 text-green-700'
+          : 'bg-red-100 text-red-700'
+      )}
+    >
+      {isPositive ? (
+        <TrendingUp className="h-2.5 w-2.5" />
+      ) : (
+        <TrendingDown className="h-2.5 w-2.5" />
+      )}
+      {isPositive ? '+' : ''}{delta.toFixed(0)}%
+    </Badge>
+  );
+};
+
+// ─── Expected vs Actual Display ─────────────────────────
+const ExpectedVsActual: React.FC<{
+  expected: number | null;
+  actual: number | null;
+  label?: string;
+}> = ({ expected, actual, label }) => {
+  if (!expected && !actual) return null;
+  return (
+    <div className="text-xs">
+      {label && <span className="text-gray-400 mr-1">{label}:</span>}
+      {expected != null && (
+        <span className="text-gray-500">
+          Esperado {formatCOPShort(expected)}
+        </span>
+      )}
+      {expected != null && actual != null && (
+        <span className="text-gray-400 mx-1">&rarr;</span>
+      )}
+      {actual != null && (
+        <span className="font-medium text-gray-700">
+          Actual {formatCOPShort(actual)}
+        </span>
+      )}
+      {expected != null && actual != null && (
+        <span className="ml-1">
+          <DeltaBadge expected={expected} actual={actual} />
+        </span>
+      )}
+    </div>
+  );
+};
 
 // ─── Default form ─────────────────────────────────────────
 const defaultForm: MarketingEventInput = {
@@ -172,11 +314,19 @@ const defaultForm: MarketingEventInput = {
   description: '',
   expected_impact: 'medium',
   actual_revenue_impact: null,
+  expected_revenue: null,
+  expected_new_customers: null,
+  attribution_window_days: 7,
+  why_now: null,
+  is_peak: false,
+  peak_name: null,
+  peak_phase: null,
+  learnings: null,
 };
 
 // ─── Page Component ───────────────────────────────────────
 const MarketingCalendarPage: React.FC = () => {
-  const { events, isLoading, addEvent, updateEvent, deleteEvent } =
+  const { events, isLoading, addEvent, updateEvent, deleteEvent, calculateAttribution } =
     useMarketingEvents();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -192,7 +342,9 @@ const MarketingCalendarPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [form, setForm] = useState<MarketingEventInput>(defaultForm);
+  const [calculatingId, setCalculatingId] = useState<string | null>(null);
 
   // ─── Calendar grid ───────────────────────────────────
   const calendarDays = useMemo(() => {
@@ -242,6 +394,55 @@ const MarketingCalendarPage: React.FC = () => {
     return eventsByDate.get(key) || [];
   }, [selectedDate, eventsByDate]);
 
+  // ─── Quarterly peak data ──────────────────────────────
+  const currentYear = new Date().getFullYear();
+
+  const peakData = useMemo(() => {
+    return QUARTERLY_PEAKS.map((peak) => {
+      // Find peak events for this quarter/year
+      const peakEvents = events.filter(
+        (e) =>
+          e.is_peak &&
+          peak.monthNumbers.includes(
+            new Date(e.event_date + 'T12:00:00').getMonth() + 1
+          ) &&
+          new Date(e.event_date + 'T12:00:00').getFullYear() === currentYear
+      );
+
+      const totalExpected = peakEvents.reduce(
+        (sum, e) => sum + (e.expected_revenue || 0),
+        0
+      );
+      const totalActual = peakEvents.reduce(
+        (sum, e) => sum + (e.attributed_revenue || 0),
+        0
+      );
+      const eventCount = peakEvents.length;
+
+      // Determine status
+      const now = new Date();
+      const peakMonthsInPast = peak.monthNumbers.every(
+        (m) => new Date(currentYear, m - 1, 28) < now
+      );
+      const peakMonthsInFuture = peak.monthNumbers.every(
+        (m) => new Date(currentYear, m - 1, 1) > now
+      );
+
+      let status: 'planned' | 'in-progress' | 'completed' = 'planned';
+      if (peakMonthsInPast) status = 'completed';
+      else if (!peakMonthsInFuture) status = 'in-progress';
+
+      return {
+        ...peak,
+        peakEvents,
+        totalExpected,
+        totalActual,
+        eventCount,
+        status,
+      };
+    });
+  }, [events, currentYear]);
+
   // ─── Handlers ────────────────────────────────────────
   const openAddDialog = (date?: Date) => {
     setEditingId(null);
@@ -261,13 +462,26 @@ const MarketingCalendarPage: React.FC = () => {
       description: event.description || '',
       expected_impact: event.expected_impact,
       actual_revenue_impact: event.actual_revenue_impact,
+      expected_revenue: event.expected_revenue,
+      expected_new_customers: event.expected_new_customers,
+      attribution_window_days: event.attribution_window_days || 7,
+      why_now: event.why_now,
+      is_peak: event.is_peak || false,
+      peak_name: event.peak_name,
+      peak_phase: event.peak_phase,
+      learnings: event.learnings,
     });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
     if (!form.title.trim()) {
-      toast.error('El título es obligatorio');
+      toast.error('El titulo es obligatorio');
+      return;
+    }
+    // Require why_now for high-impact events
+    if (form.expected_impact === 'high' && !form.why_now?.trim()) {
+      toast.error('"Por que ahora?" es obligatorio para eventos de alto impacto');
       return;
     }
     try {
@@ -293,6 +507,23 @@ const MarketingCalendarPage: React.FC = () => {
     }
   };
 
+  const handleCalculateAttribution = useCallback(
+    async (event: MarketingEvent) => {
+      setCalculatingId(event.id);
+      try {
+        const result = await calculateAttribution(event);
+        toast.success(
+          `Atribucion calculada: ${formatCOP(result.attributed_revenue)} (${result.attributed_orders} ordenes)`
+        );
+      } catch {
+        toast.error('Error al calcular atribucion');
+      } finally {
+        setCalculatingId(null);
+      }
+    },
+    [calculateAttribution]
+  );
+
   const updateForm = <K extends keyof MarketingEventInput>(
     key: K,
     value: MarketingEventInput[K]
@@ -301,7 +532,13 @@ const MarketingCalendarPage: React.FC = () => {
   };
 
   // ─── Day names ───────────────────────────────────────
-  const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const dayNames = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
+
+  const STATUS_CONFIG = {
+    planned: { label: 'Planeado', color: 'bg-gray-100 text-gray-600' },
+    'in-progress': { label: 'En curso', color: 'bg-blue-100 text-blue-700' },
+    completed: { label: 'Completado', color: 'bg-green-100 text-green-700' },
+  };
 
   return (
     <FinanceDashboardLayout>
@@ -315,8 +552,8 @@ const MarketingCalendarPage: React.FC = () => {
                 Marketing Calendar
               </h1>
               <p className="text-sm text-gray-500">
-                Registra cada acción de marketing para entender qué acciones
-                crean qué resultados
+                Registra cada accion de marketing para entender que acciones
+                crean que resultados
               </p>
             </div>
           </div>
@@ -325,6 +562,82 @@ const MarketingCalendarPage: React.FC = () => {
             Nuevo Evento
           </Button>
         </div>
+
+        {/* ─── Quarterly Peaks Section ─────────────────── */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Mountain className="h-4 w-4 text-gray-600" />
+              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                Peaks del Ano — {currentYear}
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              {peakData.map((peak) => {
+                const statusCfg = STATUS_CONFIG[peak.status];
+                return (
+                  <div
+                    key={peak.quarter}
+                    className={cn(
+                      'rounded-lg border p-3 space-y-2',
+                      peak.bgColor
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={peak.color}>{peak.icon}</span>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {peak.name}
+                          </div>
+                          <div className="text-[10px] text-gray-500">
+                            {peak.quarter} — {peak.months}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={cn('text-[10px]', statusCfg.color)}
+                      >
+                        {statusCfg.label}
+                      </Badge>
+                    </div>
+
+                    {peak.eventCount > 0 ? (
+                      <div className="space-y-1">
+                        {peak.totalExpected > 0 && (
+                          <div className="text-xs text-gray-600">
+                            Esperado: {formatCOPShort(peak.totalExpected)}
+                          </div>
+                        )}
+                        {peak.totalActual > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-medium text-gray-800">
+                              Actual: {formatCOPShort(peak.totalActual)}
+                            </span>
+                            {peak.totalExpected > 0 && (
+                              <DeltaBadge
+                                expected={peak.totalExpected}
+                                actual={peak.totalActual}
+                              />
+                            )}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-gray-400">
+                          {peak.eventCount} evento{peak.eventCount !== 1 && 's'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">
+                        Sin eventos peak creados
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Month navigation + Calendar */}
         <Card>
@@ -371,6 +684,7 @@ const MarketingCalendarPage: React.FC = () => {
                 const today = isToday(day);
                 const isSelected =
                   selectedDate && isSameDay(day, selectedDate);
+                const hasPeakEvent = dayEvents.some((e) => e.is_peak);
 
                 return (
                   <button
@@ -381,7 +695,8 @@ const MarketingCalendarPage: React.FC = () => {
                       'min-h-[80px] p-1.5 text-left transition-colors flex flex-col',
                       inMonth ? 'bg-white' : 'bg-gray-50',
                       isSelected && 'ring-2 ring-blue-500 ring-inset',
-                      !isSelected && 'hover:bg-blue-50/50'
+                      !isSelected && 'hover:bg-blue-50/50',
+                      hasPeakEvent && 'bg-amber-50/50'
                     )}
                   >
                     <span
@@ -402,17 +717,21 @@ const MarketingCalendarPage: React.FC = () => {
                             key={ev.id}
                             className={cn(
                               'text-[10px] leading-tight px-1 py-0.5 rounded truncate border',
-                              cfg.color
+                              cfg.color,
+                              ev.is_peak && 'ring-1 ring-amber-400'
                             )}
                             title={ev.title}
                           >
+                            {ev.is_peak && (
+                              <Mountain className="h-2 w-2 inline mr-0.5" />
+                            )}
                             {ev.title}
                           </div>
                         );
                       })}
                       {dayEvents.length > 3 && (
                         <span className="text-[10px] text-gray-400 px-1">
-                          +{dayEvents.length - 3} más
+                          +{dayEvents.length - 3} mas
                         </span>
                       )}
                     </div>
@@ -452,60 +771,218 @@ const MarketingCalendarPage: React.FC = () => {
                 {selectedDateEvents.map((ev) => {
                   const cfg = EVENT_TYPE_CONFIG[ev.event_type];
                   const impact = IMPACT_CONFIG[ev.expected_impact];
+                  const isExpanded = expandedEventId === ev.id;
+                  const eventDate = new Date(ev.event_date + 'T12:00:00');
+                  const isEventPast = isPast(addDays(eventDate, ev.attribution_window_days || 7));
+
                   return (
                     <div
                       key={ev.id}
-                      className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50"
+                      className="border rounded-lg hover:bg-gray-50 transition-colors"
                     >
+                      {/* Main row */}
                       <div
-                        className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                          cfg.color
-                        )}
+                        className="flex items-start gap-3 p-3 cursor-pointer"
+                        onClick={() =>
+                          setExpandedEventId(isExpanded ? null : ev.id)
+                        }
                       >
-                        {cfg.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-medium text-sm truncate">
-                            {ev.title}
-                          </span>
-                          <Badge
-                            variant="secondary"
-                            className={cn('text-[10px] px-1.5', impact.color)}
-                          >
-                            {impact.label}
-                          </Badge>
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                            cfg.color
+                          )}
+                        >
+                          {cfg.icon}
                         </div>
-                        {ev.description && (
-                          <p className="text-xs text-gray-500 line-clamp-2">
-                            {ev.description}
-                          </p>
-                        )}
-                        {ev.actual_revenue_impact != null && (
-                          <p className="text-xs text-green-600 mt-1 font-medium">
-                            Impacto real: {formatCOP(ev.actual_revenue_impact)}
-                          </p>
-                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-sm truncate">
+                              {ev.title}
+                            </span>
+                            <Badge
+                              variant="secondary"
+                              className={cn('text-[10px] px-1.5', impact.color)}
+                            >
+                              {impact.label}
+                            </Badge>
+                            {ev.is_peak && (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] px-1.5 bg-amber-100 text-amber-700"
+                              >
+                                <Mountain className="h-2.5 w-2.5 mr-0.5" />
+                                Peak
+                              </Badge>
+                            )}
+                            {ev.peak_phase && (
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'text-[10px] px-1.5',
+                                  PEAK_PHASE_CONFIG[ev.peak_phase].color
+                                )}
+                              >
+                                {PEAK_PHASE_CONFIG[ev.peak_phase].label}
+                              </Badge>
+                            )}
+                          </div>
+                          {ev.description && (
+                            <p className="text-xs text-gray-500 line-clamp-2">
+                              {ev.description}
+                            </p>
+                          )}
+                          {/* Why Now - prominent display */}
+                          {ev.why_now && (
+                            <div className="mt-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">
+                              <strong>Por que ahora:</strong> {ev.why_now}
+                            </div>
+                          )}
+                          {/* Expected vs Actual inline */}
+                          <div className="mt-1">
+                            <ExpectedVsActual
+                              expected={ev.expected_revenue}
+                              actual={ev.attributed_revenue}
+                            />
+                          </div>
+                          {ev.ad_spend_during != null &&
+                            ev.ad_spend_during > 0 &&
+                            ev.roas_during != null && (
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                Ad Spend: {formatCOPShort(ev.ad_spend_during)} | ROAS:{' '}
+                                {ev.roas_during.toFixed(1)}x
+                              </div>
+                            )}
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditDialog(ev);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(ev.id);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={() => openEditDialog(ev)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                          onClick={() => handleDelete(ev.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+
+                      {/* Expanded Impact Section */}
+                      {isExpanded && (
+                        <div className="border-t px-4 py-3 bg-gray-50/50 space-y-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Target className="h-4 w-4 text-gray-600" />
+                            <h4 className="text-sm font-semibold text-gray-700">
+                              Impacto del Evento
+                            </h4>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-white rounded-lg border p-2.5">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                                Revenue Atribuido
+                              </div>
+                              <div className="text-sm font-semibold">
+                                {ev.attributed_revenue != null
+                                  ? formatCOP(ev.attributed_revenue)
+                                  : '---'}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg border p-2.5">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                                Ordenes Atribuidas
+                              </div>
+                              <div className="text-sm font-semibold">
+                                {ev.attributed_orders != null
+                                  ? ev.attributed_orders
+                                  : '---'}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg border p-2.5">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                                Delta vs Esperado
+                              </div>
+                              <div className="text-sm font-semibold">
+                                {ev.expected_revenue != null &&
+                                ev.attributed_revenue != null ? (
+                                  <DeltaBadge
+                                    expected={ev.expected_revenue}
+                                    actual={ev.attributed_revenue}
+                                  />
+                                ) : (
+                                  '---'
+                                )}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg border p-2.5">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                                ROI
+                              </div>
+                              <div className="text-sm font-semibold">
+                                {ev.roi_percent != null ? (
+                                  <span
+                                    className={
+                                      ev.roi_percent >= 0
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                    }
+                                  >
+                                    {ev.roi_percent.toFixed(0)}%
+                                  </span>
+                                ) : (
+                                  '---'
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Calculate Attribution button */}
+                          {isEventPast && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs"
+                              disabled={calculatingId === ev.id}
+                              onClick={() => handleCalculateAttribution(ev)}
+                            >
+                              <RefreshCw
+                                className={cn(
+                                  'h-3 w-3 mr-1',
+                                  calculatingId === ev.id && 'animate-spin'
+                                )}
+                              />
+                              {calculatingId === ev.id
+                                ? 'Calculando...'
+                                : 'Calcular Atribucion'}
+                            </Button>
+                          )}
+
+                          {/* Learnings */}
+                          {ev.learnings && (
+                            <div className="bg-white border rounded-lg p-3">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                                Aprendizajes
+                              </div>
+                              <p className="text-xs text-gray-700 whitespace-pre-wrap">
+                                {ev.learnings}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -563,8 +1040,8 @@ const MarketingCalendarPage: React.FC = () => {
                       <th className="text-center px-3 py-2 font-medium text-gray-600 w-20">
                         Impacto
                       </th>
-                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-36">
-                        Revenue Real
+                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-48">
+                        Esperado vs Actual
                       </th>
                       <th className="w-20" />
                     </tr>
@@ -592,12 +1069,25 @@ const MarketingCalendarPage: React.FC = () => {
                               {cfg.icon}
                               {cfg.label}
                             </div>
+                            {ev.is_peak && (
+                              <Badge
+                                variant="secondary"
+                                className="text-[9px] px-1 ml-1 bg-amber-100 text-amber-700"
+                              >
+                                Peak
+                              </Badge>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <div className="font-medium">{ev.title}</div>
                             {ev.description && (
                               <div className="text-xs text-gray-400 truncate max-w-[300px]">
                                 {ev.description}
+                              </div>
+                            )}
+                            {ev.why_now && (
+                              <div className="text-[10px] text-indigo-500 truncate max-w-[300px]">
+                                Por que ahora: {ev.why_now}
                               </div>
                             )}
                           </td>
@@ -612,10 +1102,26 @@ const MarketingCalendarPage: React.FC = () => {
                               {impact.label}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2 text-right font-medium">
-                            {ev.actual_revenue_impact != null
-                              ? formatCOP(ev.actual_revenue_impact)
-                              : '—'}
+                          <td className="px-3 py-2 text-right">
+                            {ev.expected_revenue != null ||
+                            ev.attributed_revenue != null ? (
+                              <div className="space-y-0.5">
+                                <ExpectedVsActual
+                                  expected={ev.expected_revenue}
+                                  actual={ev.attributed_revenue}
+                                />
+                                {ev.ad_spend_during != null &&
+                                  ev.roas_during != null && (
+                                    <div className="text-[10px] text-gray-400">
+                                      ROAS: {ev.roas_during.toFixed(1)}x
+                                    </div>
+                                  )}
+                              </div>
+                            ) : ev.actual_revenue_impact != null ? (
+                              formatCOP(ev.actual_revenue_impact)
+                            ) : (
+                              <span className="text-gray-300">---</span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex gap-1 justify-end">
@@ -660,7 +1166,7 @@ const MarketingCalendarPage: React.FC = () => {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingId ? 'Editar Evento' : 'Nuevo Evento de Marketing'}
@@ -668,8 +1174,9 @@ const MarketingCalendarPage: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
+            {/* Title */}
             <div className="space-y-1.5">
-              <Label className="text-sm">Título</Label>
+              <Label className="text-sm">Titulo</Label>
               <Input
                 value={form.title}
                 onChange={(e) => updateForm('title', e.target.value)}
@@ -677,6 +1184,7 @@ const MarketingCalendarPage: React.FC = () => {
               />
             </div>
 
+            {/* Date + Type */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Fecha</Label>
@@ -704,8 +1212,9 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Description */}
             <div className="space-y-1.5">
-              <Label className="text-sm">Descripción (opcional)</Label>
+              <Label className="text-sm">Descripcion (opcional)</Label>
               <Input
                 value={form.description || ''}
                 onChange={(e) => updateForm('description', e.target.value)}
@@ -713,6 +1222,26 @@ const MarketingCalendarPage: React.FC = () => {
               />
             </div>
 
+            {/* Why Now? - PROMINENT */}
+            <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+              <Label className="text-sm font-semibold text-indigo-700">
+                Por que ahora?{' '}
+                {form.expected_impact === 'high' && (
+                  <span className="text-red-500">*</span>
+                )}
+              </Label>
+              <Textarea
+                value={form.why_now || ''}
+                onChange={(e) => updateForm('why_now', e.target.value)}
+                placeholder="Que hace que ESTE momento sea el correcto para esta accion? (temporada, tendencia, inventario, competencia...)"
+                className="bg-white text-sm min-h-[60px]"
+              />
+              <p className="text-[10px] text-indigo-400">
+                Clave del Prophit System: documenta la razon estrategica
+              </p>
+            </div>
+
+            {/* Impact + Revenue real */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Impacto esperado</Label>
@@ -744,12 +1273,132 @@ const MarketingCalendarPage: React.FC = () => {
                       e.target.value ? Number(e.target.value) : null
                     )
                   }
-                  placeholder="Después del evento"
+                  placeholder="Despues del evento"
                   min={0}
                   step={10000}
                 />
               </div>
             </div>
+
+            {/* Expected Revenue + Expected New Customers */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Revenue Esperado (COP)</Label>
+                <Input
+                  type="number"
+                  value={form.expected_revenue ?? ''}
+                  onChange={(e) =>
+                    updateForm(
+                      'expected_revenue',
+                      e.target.value ? Number(e.target.value) : null
+                    )
+                  }
+                  placeholder="Meta de ventas"
+                  min={0}
+                  step={100000}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Nuevos Clientes Esperados</Label>
+                <Input
+                  type="number"
+                  value={form.expected_new_customers ?? ''}
+                  onChange={(e) =>
+                    updateForm(
+                      'expected_new_customers',
+                      e.target.value ? Number(e.target.value) : null
+                    )
+                  }
+                  placeholder="# clientes nuevos"
+                  min={0}
+                  step={1}
+                />
+              </div>
+            </div>
+
+            {/* Attribution Window */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Ventana de atribucion (dias)</Label>
+              <Input
+                type="number"
+                value={form.attribution_window_days ?? 7}
+                onChange={(e) =>
+                  updateForm(
+                    'attribution_window_days',
+                    e.target.value ? Number(e.target.value) : 7
+                  )
+                }
+                min={1}
+                max={30}
+                step={1}
+              />
+              <p className="text-[10px] text-gray-400">
+                Ordenes de Shopify entre la fecha del evento y +N dias se atribuyen a este evento
+              </p>
+            </div>
+
+            {/* Peak Event Section */}
+            <div className="border rounded-lg p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="is-peak"
+                  checked={form.is_peak || false}
+                  onCheckedChange={(checked) =>
+                    updateForm('is_peak', checked === true)
+                  }
+                />
+                <Label htmlFor="is-peak" className="text-sm font-medium cursor-pointer">
+                  Es un evento Peak
+                </Label>
+                <Mountain className="h-3.5 w-3.5 text-amber-500" />
+              </div>
+
+              {form.is_peak && (
+                <div className="grid grid-cols-2 gap-3 pl-6">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Nombre del Peak</Label>
+                    <Input
+                      value={form.peak_name || ''}
+                      onChange={(e) => updateForm('peak_name', e.target.value)}
+                      placeholder="Ej: Hot Days 2026"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Fase</Label>
+                    <select
+                      value={form.peak_phase || ''}
+                      onChange={(e) =>
+                        updateForm(
+                          'peak_phase',
+                          (e.target.value as PeakPhase) || null
+                        )
+                      }
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">Seleccionar fase</option>
+                      {PEAK_PHASE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Learnings (for editing existing events) */}
+            {editingId && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">Aprendizajes</Label>
+                <Textarea
+                  value={form.learnings || ''}
+                  onChange={(e) => updateForm('learnings', e.target.value)}
+                  placeholder="Que aprendimos de este evento? Que hariamos diferente?"
+                  className="text-sm min-h-[60px]"
+                />
+              </div>
+            )}
 
             <Button onClick={handleSave} className="w-full">
               {editingId ? 'Guardar Cambios' : 'Crear Evento'}
