@@ -16,6 +16,7 @@ const presetLabels: Record<DatePreset, string> = {
   today: 'Hoy',
   yesterday: 'Ayer',
   '7d': '7 días',
+  mtd: 'Este mes',
   '30d': '30 días',
   '90d': '90 días',
   custom: 'Personalizado',

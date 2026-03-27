@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { startOfDay, endOfDay, subDays, subMonths, format } from 'date-fns';
+import { startOfDay, endOfDay, subDays, startOfMonth, subMonths, format } from 'date-fns';
 
-export type DatePreset = 'today' | 'yesterday' | '7d' | '30d' | '90d' | 'custom';
+export type DatePreset = 'today' | 'yesterday' | '7d' | 'mtd' | '30d' | '90d' | 'custom';
 
 export interface DateRange {
   start: Date;
@@ -27,7 +27,7 @@ function getPreviousPeriod(current: DateRange): DateRange {
 }
 
 export function useFinanceDateRange(): FinanceDateRange {
-  const [preset, setPreset] = useState<DatePreset>('today');
+  const [preset, setPreset] = useState<DatePreset>('mtd');
   const [customStart, setCustomStart] = useState<Date>(new Date());
   const [customEnd, setCustomEnd] = useState<Date>(new Date());
 
@@ -40,6 +40,8 @@ export function useFinanceDateRange(): FinanceDateRange {
         return { start: startOfDay(subDays(now, 1)), end: endOfDay(subDays(now, 1)) };
       case '7d':
         return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
+      case 'mtd':
+        return { start: startOfDay(startOfMonth(now)), end: endOfDay(now) };
       case '30d':
         return { start: startOfDay(subDays(now, 29)), end: endOfDay(now) };
       case '90d':
