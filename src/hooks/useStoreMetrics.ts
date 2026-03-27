@@ -48,6 +48,35 @@ function calcChange(current: number, previous: number): number {
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
+async function fetchAllOrders(orgId: string, startStr: string, endStr: string) {
+  const pageSize = 1000;
+  let allOrders: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('shopify_orders')
+      .select('shopify_order_id, total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
+      .eq('organization_id', orgId)
+      .gte('created_at_shopify', startStr)
+      .lte('created_at_shopify', endStr)
+      .not('financial_status', 'eq', 'voided')
+      .is('cancelled_at', null)
+      .order('created_at_shopify', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    allOrders = allOrders.concat(data);
+    from += pageSize;
+    hasMore = data.length === pageSize;
+  }
+
+  return allOrders;
+}
+
 async function fetchMetrics(
   orgId: string,
   range: DateRange
@@ -56,17 +85,9 @@ async function fetchMetrics(
   const startStr = range.start.toISOString();
   const endStr = range.end.toISOString();
 
-  // Fetch orders in range — exclude voided, cancelled, and pending (unpaid) orders
-  const { data: orders, error } = await supabase
-    .from('shopify_orders')
-    .select('shopify_order_id, total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
-    .eq('organization_id', orgId)
-    .gte('created_at_shopify', startStr)
-    .lte('created_at_shopify', endStr)
-    .not('financial_status', 'eq', 'voided')
-    .is('cancelled_at', null);
+  // Fetch ALL orders with pagination (Supabase default limit is 1000)
+  const orders = await fetchAllOrders(orgId, startStr, endStr);
 
-  if (error) throw error;
   if (!orders || orders.length === 0) return emptyMetrics;
 
   // Fetch line items for units sold
