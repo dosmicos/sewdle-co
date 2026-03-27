@@ -187,19 +187,30 @@ const FinanceDashboardPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {metaConnection.isConnected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSync}
-                disabled={metaConnection.syncing}
-              >
-                {metaConnection.syncing ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Sync Meta
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={metaConnection.syncing}
+                >
+                  {metaConnection.syncing ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Sync Meta
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMetaModalOpen(true)}
+                  className="px-2"
+                  title="Configurar Meta Ads"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ) : (
               <Button
                 size="sm"
@@ -211,23 +222,34 @@ const FinanceDashboardPage: React.FC = () => {
               </Button>
             )}
             {googleConnection.isConnected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
-                  const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
-                  await googleConnection.syncMetrics(startStr, endStr);
-                }}
-                disabled={googleConnection.syncing}
-              >
-                {googleConnection.syncing ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Sync Google
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
+                    const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
+                    await googleConnection.syncMetrics(startStr, endStr);
+                  }}
+                  disabled={googleConnection.syncing}
+                >
+                  {googleConnection.syncing ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Sync Google
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setGoogleModalOpen(true)}
+                  className="px-2"
+                  title="Configurar Google Ads"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ) : (
               <Button
                 size="sm"
