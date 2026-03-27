@@ -9,7 +9,8 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import AuthPage from "@/pages/AuthPage";
-import LandingPage from "@/pages/LandingPage";
+// Landing page uses three.js (~600KB) — lazy load it
+const LandingPage = React.lazy(() => import("@/pages/LandingPage"));
 import SignupPage from "@/pages/SignupPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PasswordChangePage from "@/pages/PasswordChangePage";
@@ -43,14 +44,15 @@ import UgcUploadPage from "@/pages/UgcUploadPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import TermsOfServicePage from "@/pages/TermsOfServicePage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
-import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
-import AdPerformancePage from "@/pages/AdPerformancePage";
-import AdIntelligencePage from "@/pages/AdIntelligencePage";
-import UgcPerformancePage from "@/pages/UgcPerformancePage";
-import CostSettingsPage from "@/pages/CostSettingsPage";
-import MarketingCalendarPage from "@/pages/MarketingCalendarPage";
-import MetaAdsCallbackPage from "@/pages/MetaAdsCallbackPage";
-import GoogleAdsCallbackPage from "@/pages/GoogleAdsCallbackPage";
+// Finance dashboard — lazy loaded (heavy: Recharts, date-fns)
+const FinanceDashboardPage = React.lazy(() => import("@/pages/FinanceDashboardPage"));
+const AdPerformancePage = React.lazy(() => import("@/pages/AdPerformancePage"));
+const AdIntelligencePage = React.lazy(() => import("@/pages/AdIntelligencePage"));
+const UgcPerformancePage = React.lazy(() => import("@/pages/UgcPerformancePage"));
+const CostSettingsPage = React.lazy(() => import("@/pages/CostSettingsPage"));
+const MarketingCalendarPage = React.lazy(() => import("@/pages/MarketingCalendarPage"));
+const MetaAdsCallbackPage = React.lazy(() => import("@/pages/MetaAdsCallbackPage"));
+const GoogleAdsCallbackPage = React.lazy(() => import("@/pages/GoogleAdsCallbackPage"));
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -151,6 +153,12 @@ const isFinanceSubdomain = () => {
 };
 
 // Finance Dashboard - layout independiente para finance.sewdle.co
+const LazyFallback = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
 const FinanceAppContent = () => {
   const { user, loading } = useAuth();
 
@@ -172,6 +180,7 @@ const FinanceAppContent = () => {
   }
 
   return (
+    <React.Suspense fallback={<LazyFallback />}>
     <Routes>
       <Route path="/" element={
         <PasswordChangeRouteGuard>
@@ -221,6 +230,7 @@ const FinanceAppContent = () => {
       <Route path="/password-change" element={<PasswordChangePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </React.Suspense>
   );
 };
 
@@ -247,7 +257,7 @@ const AppContent = () => {
       <Route path="/signup" element={!user ? <SignupPage /> : <SmartRedirect />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login" element={<Navigate to="/auth" replace />} />
-      <Route path="/" element={!user ? <LandingPage /> : <SmartRedirect />} />
+      <Route path="/" element={!user ? <React.Suspense fallback={<LazyFallback />}><LandingPage /></React.Suspense> : <SmartRedirect />} />
       <Route path="/upload/:token" element={<UgcUploadPage />} />
       <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
       <Route path="/terms-of-service" element={<TermsOfServicePage />} />
@@ -323,21 +333,27 @@ const AppContent = () => {
         {/* Finance Dashboard - accesible también desde la app principal */}
         <Route path="finance-dashboard" element={
           <PermissionRoute module="finances" action="view">
-            <FinanceDashboardPage />
+            <React.Suspense fallback={<LazyFallback />}>
+              <FinanceDashboardPage />
+            </React.Suspense>
           </PermissionRoute>
         } />
 
         {/* Cost Settings - accesible desde la app principal */}
         <Route path="cost-settings" element={
           <PermissionRoute module="finances" action="view">
-            <CostSettingsPage />
+            <React.Suspense fallback={<LazyFallback />}>
+              <CostSettingsPage />
+            </React.Suspense>
           </PermissionRoute>
         } />
 
         {/* Marketing Calendar - accesible desde la app principal */}
         <Route path="marketing-calendar" element={
           <PermissionRoute module="finances" action="view">
-            <MarketingCalendarPage />
+            <React.Suspense fallback={<LazyFallback />}>
+              <MarketingCalendarPage />
+            </React.Suspense>
           </PermissionRoute>
         } />
 

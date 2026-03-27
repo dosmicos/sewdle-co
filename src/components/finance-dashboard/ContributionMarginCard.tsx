@@ -92,4 +92,4 @@ export const ContributionMarginCard: React.FC<ContributionMarginCardProps> = ({ 
   );
 };
 
-export default ContributionMarginCard;
+export default React.memo(ContributionMarginCard);

@@ -101,7 +101,7 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
   }
 
   return (
-    <div className="w-[220px] border-r border-gray-200 bg-white flex flex-col h-screen">
+    <div className="w-[220px] border-r border-gray-200 bg-white flex flex-col h-dvh">
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

@@ -7,12 +7,12 @@ interface SparklineChartProps {
   height?: number;
 }
 
-const SparklineChart: React.FC<SparklineChartProps> = ({
+const SparklineChart: React.FC<SparklineChartProps> = React.memo(({
   data,
   color = '#22c55e',
   height = 40
 }) => {
-  const chartData = data.map((value, index) => ({ value, index }));
+  const chartData = React.useMemo(() => data.map((value, index) => ({ value, index })), [data]);
 
   if (chartData.length < 2) return null;
 
@@ -30,6 +30,8 @@ const SparklineChart: React.FC<SparklineChartProps> = ({
       </LineChart>
     </ResponsiveContainer>
   );
-};
+});
+
+SparklineChart.displayName = 'SparklineChart';
 
 export default SparklineChart;

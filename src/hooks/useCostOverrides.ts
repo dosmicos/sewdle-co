@@ -46,7 +46,7 @@ export function useCostOverrides(
       const orderIds = orders.map(o => o.shopify_order_id);
 
       // Fetch line items in batches (same pattern as useStoreMetrics)
-      const batchSize = 50;
+      const batchSize = 500;
       const allLineItems: Array<{ product_id: number | null; variant_id: number | null; quantity: number }> = [];
 
       for (let i = 0; i < orderIds.length; i += batchSize) {

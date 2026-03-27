@@ -85,40 +85,42 @@ async function fetchActiveFile(orgId: string): Promise<ActiveFileQueryResult> {
 
 async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
   const now = new Date();
-  const layers: MonthlyLayer[] = [];
+  const sixMonthsAgo = startOfMonth(subMonths(now, 5)).toISOString();
+  const monthEnd = endOfMonth(now).toISOString();
 
-  for (let i = 5; i >= 0; i--) {
-    const monthDate = subMonths(now, i);
-    const monthStart = startOfMonth(monthDate).toISOString();
-    const monthEnd = endOfMonth(monthDate).toISOString();
-    const monthLabel = format(monthDate, 'yyyy-MM');
+  // Single query instead of 6 sequential ones
+  const { data, error } = await supabase
+    .from('shopify_orders')
+    .select('current_total_price, customer_orders_count, created_at_shopify')
+    .eq('organization_id', orgId)
+    .gte('created_at_shopify', sixMonthsAgo)
+    .lte('created_at_shopify', monthEnd)
+    .is('cancelled_at', null)
+    .not('financial_status', 'eq', 'voided')
+    .not('financial_status', 'eq', 'refunded');
 
-    const { data, error } = await supabase
-      .from('shopify_orders')
-      .select('total_price, customer_orders_count')
-      .eq('organization_id', orgId)
-      .gte('created_at_shopify', monthStart)
-      .lte('created_at_shopify', monthEnd)
-      .is('cancelled_at', null)
-      .not('financial_status', 'eq', 'voided')
-      .not('financial_status', 'eq', 'refunded');
+  if (error) throw error;
 
-    if (error) throw error;
-
-    const orders = data ?? [];
-    const newOrders = orders.filter(o => (o.customer_orders_count ?? 0) <= 1);
-    const returningOrders = orders.filter(o => (o.customer_orders_count ?? 0) > 1);
-
-    layers.push({
-      month: monthLabel,
-      newRevenue: newOrders.reduce((s, o) => s + (o.total_price ?? 0), 0),
-      returningRevenue: returningOrders.reduce((s, o) => s + (o.total_price ?? 0), 0),
-      newOrders: newOrders.length,
-      returningOrders: returningOrders.length,
-    });
+  // Group by month client-side
+  const monthMap = new Map<string, { newRev: number; retRev: number; newOrd: number; retOrd: number }>();
+  for (const o of data ?? []) {
+    const month = format(new Date(o.created_at_shopify), 'yyyy-MM');
+    if (!monthMap.has(month)) monthMap.set(month, { newRev: 0, retRev: 0, newOrd: 0, retOrd: 0 });
+    const m = monthMap.get(month)!;
+    const isNew = (o.customer_orders_count ?? 0) <= 1;
+    if (isNew) { m.newRev += o.current_total_price ?? 0; m.newOrd++; }
+    else { m.retRev += o.current_total_price ?? 0; m.retOrd++; }
   }
 
-  return layers;
+  return Array.from(monthMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, m]) => ({
+      month,
+      newRevenue: m.newRev,
+      returningRevenue: m.retRev,
+      newOrders: m.newOrd,
+      returningOrders: m.retOrd,
+    }));
 }
 
 export function useCustomerHealth(

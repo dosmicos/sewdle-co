@@ -216,5 +216,6 @@ export function useStoreMetrics(current: DateRange, previous: DateRange): StoreM
     previous: prev,
     changes,
     isLoading: currentQuery.isLoading || previousQuery.isLoading,
+    error: currentQuery.error || previousQuery.error,
   };
 }

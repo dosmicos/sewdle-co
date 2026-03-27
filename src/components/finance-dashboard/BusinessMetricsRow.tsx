@@ -17,16 +17,17 @@ export const BusinessMetricsRow: React.FC<BusinessMetricsRowProps> = ({
   adMetrics,
   formatCOP,
 }) => {
-  const dailySales = storeMetrics.current.dailyData.map(d => d.totalSales);
-  const dailyOrders = storeMetrics.current.dailyData.map(d => d.orders);
-  const dailyAdSpend = adMetrics.current.dailyData.map(d => d.spend);
+  const dailySales = React.useMemo(() => storeMetrics.current.dailyData.map(d => d.totalSales), [storeMetrics.current.dailyData]);
+  const dailyOrders = React.useMemo(() => storeMetrics.current.dailyData.map(d => d.orders), [storeMetrics.current.dailyData]);
+  const dailyAdSpend = React.useMemo(() => adMetrics.current.dailyData.map(d => d.spend), [adMetrics.current.dailyData]);
 
   // Net Shipping Cost = Shipping Revenue (from Shopify) - Estimated shipping cost
   const shippingRevenue = storeMetrics.current.totalShipping;
   const estimatedShippingCost = cmData.shippingCost;
   const netShippingCost = shippingRevenue - estimatedShippingCost;
   const prevShippingRevenue = storeMetrics.previous.totalShipping;
-  const prevNetSales = storeMetrics.previous.totalSales * (1 - 5 / 100); // rough estimate
+  // current_total_price already accounts for refunds, no need for return rate adjustment
+  const prevNetSales = storeMetrics.previous.totalSales;
   const prevEstimatedCost = prevNetSales * (cmData.shippingCost / (cmData.netSales || 1));
   const prevNetShipping = prevShippingRevenue - prevEstimatedCost;
   const netShippingChange = prevNetShipping !== 0
@@ -80,4 +81,4 @@ export const BusinessMetricsRow: React.FC<BusinessMetricsRowProps> = ({
   );
 };
 
-export default BusinessMetricsRow;
+export default React.memo(BusinessMetricsRow);

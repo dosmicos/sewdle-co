@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const formatCOP = (amount: number) => {
   return `COP ${new Intl.NumberFormat('es-CO', {
@@ -67,6 +68,67 @@ const FinanceDashboardPage: React.FC = () => {
   const { gateways: gatewayCostsList } = useGatewayCosts();
   const { expenses } = useFinanceExpenses();
 
+  // Combine Meta + Google Ads into a single AdMetricsResult for Contribution Margin
+  const combinedAdMetrics = React.useMemo(() => ({
+    current: {
+      spend: metaAds.current.spend + googleAds.current.spend,
+      impressions: metaAds.current.impressions + googleAds.current.impressions,
+      clicks: metaAds.current.clicks + googleAds.current.clicks,
+      conversions: metaAds.current.conversions + googleAds.current.conversions,
+      conversionValue: metaAds.current.conversionValue + googleAds.current.conversionValue,
+      purchases: metaAds.current.purchases + googleAds.current.purchases,
+      cpc: (metaAds.current.clicks + googleAds.current.clicks) > 0
+        ? (metaAds.current.spend + googleAds.current.spend) / (metaAds.current.clicks + googleAds.current.clicks)
+        : 0,
+      cpm: (metaAds.current.impressions + googleAds.current.impressions) > 0
+        ? ((metaAds.current.spend + googleAds.current.spend) / (metaAds.current.impressions + googleAds.current.impressions)) * 1000
+        : 0,
+      ctr: (metaAds.current.impressions + googleAds.current.impressions) > 0
+        ? ((metaAds.current.clicks + googleAds.current.clicks) / (metaAds.current.impressions + googleAds.current.impressions)) * 100
+        : 0,
+      roas: (metaAds.current.spend + googleAds.current.spend) > 0
+        ? (metaAds.current.conversionValue + googleAds.current.conversionValue) / (metaAds.current.spend + googleAds.current.spend)
+        : 0,
+      cpa: (metaAds.current.purchases + googleAds.current.purchases) > 0
+        ? (metaAds.current.spend + googleAds.current.spend) / (metaAds.current.purchases + googleAds.current.purchases)
+        : 0,
+      dailyData: (() => {
+        const map = new Map<string, { spend: number; roas: number; purchases: number }>();
+        for (const d of metaAds.current.dailyData) {
+          map.set(d.date, { spend: d.spend, roas: 0, purchases: d.purchases });
+        }
+        for (const d of googleAds.current.dailyData) {
+          const existing = map.get(d.date);
+          if (existing) {
+            existing.spend += d.spend;
+            existing.purchases += d.purchases;
+          } else {
+            map.set(d.date, { spend: d.spend, roas: 0, purchases: d.purchases });
+          }
+        }
+        return Array.from(map.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, vals]) => ({ date, ...vals }));
+      })(),
+    },
+    previous: {
+      spend: metaAds.previous.spend + googleAds.previous.spend,
+      impressions: metaAds.previous.impressions + googleAds.previous.impressions,
+      clicks: metaAds.previous.clicks + googleAds.previous.clicks,
+      conversions: metaAds.previous.conversions + googleAds.previous.conversions,
+      conversionValue: metaAds.previous.conversionValue + googleAds.previous.conversionValue,
+      purchases: metaAds.previous.purchases + googleAds.previous.purchases,
+      cpc: 0,
+      cpm: 0,
+      ctr: 0,
+      roas: 0,
+      cpa: 0,
+      dailyData: [],
+    },
+    changes: {} as Record<string, number>,
+    isLoading: metaAds.isLoading || googleAds.isLoading,
+  }), [metaAds, googleAds]);
+
   // Compute per-product COGS and per-gateway fees for the selected date range
   const { overrides: costOverrides } = useCostOverrides(
     dateRange.current,
@@ -100,7 +162,7 @@ const FinanceDashboardPage: React.FC = () => {
 
   const cmData = useContributionMargin(
     storeMetrics,
-    metaAds,
+    combinedAdMetrics,
     financeSettings.settings,
     monthlyTargets.target,
     dateRange.current,
@@ -112,7 +174,7 @@ const FinanceDashboardPage: React.FC = () => {
     storeMetrics.current.returningCustomerRevenue,
     storeMetrics.current.newCustomerOrders,
     storeMetrics.current.orders,
-    metaAds.current.spend
+    combinedAdMetrics.current.spend
   );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -163,7 +225,12 @@ const FinanceDashboardPage: React.FC = () => {
     if (googleConnection.isConnected) {
       promises.push(googleConnection.syncMetrics(startStr, endStr));
     }
-    await Promise.all(promises);
+    try {
+      await Promise.all(promises);
+      toast.success('Sincronización completada');
+    } catch (err) {
+      toast.error('Error en la sincronización');
+    }
   };
 
   if (storeMetrics.isLoading) {
@@ -176,16 +243,33 @@ const FinanceDashboardPage: React.FC = () => {
     );
   }
 
+  if (storeMetrics.error) {
+    return (
+      <FinanceDashboardLayout onOpenSettings={() => setSettingsOpen(true)}>
+        <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+          <p className="text-red-500 text-lg font-medium">Error al cargar los datos</p>
+          <p className="text-gray-500 text-sm">{String(storeMetrics.error)}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Reintentar
+          </button>
+        </div>
+      </FinanceDashboardLayout>
+    );
+  }
+
   return (
     <FinanceDashboardLayout onOpenSettings={() => setSettingsOpen(true)}>
       <div className="p-6 max-w-[1400px] mx-auto space-y-8">
         {/* ===================== HEADER ===================== */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4 pl-10 md:pl-0">
             <h1 className="text-xl font-bold text-gray-900">Prophit Dashboard</h1>
             <FinanceDatePicker dateRange={dateRange} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {metaConnection.isConnected ? (
               <div className="flex items-center gap-1">
                 <Button
@@ -302,7 +386,7 @@ const FinanceDashboardPage: React.FC = () => {
           <BusinessMetricsRow
             cmData={cmData}
             storeMetrics={storeMetrics}
-            adMetrics={metaAds}
+            adMetrics={combinedAdMetrics}
             formatCOP={formatCOP}
           />
         </section>

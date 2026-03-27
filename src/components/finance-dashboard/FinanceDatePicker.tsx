@@ -108,9 +108,9 @@ const FinanceDatePicker: React.FC<FinanceDatePickerProps> = ({ dateRange }) => {
           )}
         </PopoverContent>
       </Popover>
-      <Button variant="outline" className="h-9 px-3 text-sm font-medium bg-white border-gray-200 text-gray-600">
-        Período anterior
-      </Button>
+      <span className="h-9 px-3 text-sm font-medium text-gray-400 flex items-center" title="Comparación automática con el período anterior">
+        vs {format(dateRange.previous.start, 'dd/MM', { locale: es })} – {format(dateRange.previous.end, 'dd/MM', { locale: es })}
+      </span>
     </div>
   );
 };

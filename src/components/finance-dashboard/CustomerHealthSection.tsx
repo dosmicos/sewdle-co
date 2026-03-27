@@ -182,4 +182,4 @@ export const CustomerHealthSection: React.FC<CustomerHealthSectionProps> = ({
   );
 };
 
-export default CustomerHealthSection;
+export default React.memo(CustomerHealthSection);

@@ -15,7 +15,7 @@ export interface MetricCardProps {
   format?: 'currency' | 'percent' | 'number' | 'decimal' | 'time';
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({
+const MetricCard: React.FC<MetricCardProps> = React.memo(({
   icon,
   label,
   value,
@@ -55,6 +55,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
+
+MetricCard.displayName = 'MetricCard';
 
 export default MetricCard;

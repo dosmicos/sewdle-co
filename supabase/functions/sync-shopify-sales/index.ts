@@ -527,15 +527,17 @@ Deno.serve(async (req) => {
     
     console.log(`📊 Creados ${dateChunks.length} chunks de ${chunkSizeDays} días cada uno`);
 
-    // CORRECTED FINANCIAL STATUSES - More restrictive to avoid duplicates
+    // ALL FINANCIAL STATUSES - Include all orders to match Shopify totals
     const validStatuses = [
-      'paid',              // Only fully paid orders
-      'partially_paid',    // Partially paid orders
-      'authorized'         // Authorized but not captured
-      // Removed: 'pending', 'partially_refunded' to avoid over-counting
+      'paid',                // Fully paid orders
+      'partially_paid',      // Partially paid orders
+      'authorized',          // Authorized but not captured
+      'pending',             // Pending payment (contra entrega, etc.)
+      'partially_refunded'   // Partial returns (still count as revenue)
+      // Excluded: 'refunded' (full refunds), 'voided' (cancelled transactions)
     ];
     
-    console.log(`💰 Estados financieros CORREGIDOS (más restrictivos): ${validStatuses.join(', ')}`);
+    console.log(`💰 Estados financieros AMPLIADOS (match Shopify): ${validStatuses.join(', ')}`);
     
     let allOrders: ShopifyOrder[] = [];
     const statusSummary = new Map<string, number>();
@@ -765,6 +767,7 @@ Deno.serve(async (req) => {
     const { error: deleteError } = await supabase
       .from('sales_metrics')
       .delete()
+      .eq('organization_id', organizationId)
       .gte('metric_date', deleteStartDate);
 
     if (deleteError) {

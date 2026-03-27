@@ -108,9 +108,10 @@ export function useContributionMargin(
       handling_fee_per_item: 0,
     };
 
-    // Revenue
+    // Revenue — current_total_price already accounts for real refunds,
+    // so returnsAccrual is 0 to avoid double-counting.
     const grossRevenue = storeMetrics.current.totalSales;
-    const returnsAccrual = grossRevenue * (s.return_rate_percent / 100);
+    const returnsAccrual = 0;
     const netSales = grossRevenue - returnsAccrual;
 
     // Dual-mode cost calculation: use overrides when mode is not 'percent'
@@ -223,8 +224,8 @@ export function useContributionMargin(
 
     const dailyData: DailyBreakdown[] = sortedDates.map(date => {
       const dayGross = storeDailyMap.get(date) ?? 0;
-      const dayReturns = dayGross * (s.return_rate_percent / 100);
-      const dayNet = dayGross - dayReturns;
+      // current_total_price already accounts for refunds — no accrual needed
+      const dayNet = dayGross;
       const dayVariable = dayNet * effectiveVarRate;
       const dayAd = adDailyMap.get(date) ?? 0;
       const dayCm = dayNet - dayVariable - dayAd;

@@ -133,4 +133,4 @@ export const FourQuarterChart: React.FC<FourQuarterChartProps> = ({ data, format
   );
 };
 
-export default FourQuarterChart;
+export default React.memo(FourQuarterChart);

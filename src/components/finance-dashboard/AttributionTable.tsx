@@ -39,7 +39,7 @@ const AttributionTable: React.FC<AttributionTableProps> = ({ rows, formatCurrenc
   totals.roas = totals.spend > 0 ? totals.cv / totals.spend : 0;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+    <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-gray-50/60">

@@ -116,4 +116,4 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({ cmData, target, fo
   );
 };
 
-export default ForecastChart;
+export default React.memo(ForecastChart);

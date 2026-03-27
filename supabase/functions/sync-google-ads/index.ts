@@ -70,6 +70,15 @@ serve(async (req) => {
       );
     }
 
+    // Validate date format to prevent GAQL injection
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_ADS_CLIENT_ID");
     const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_ADS_CLIENT_SECRET");
     const DEVELOPER_TOKEN = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN");
@@ -219,22 +228,29 @@ serve(async (req) => {
 
         const metrics = result.metrics || {};
 
-        // Google Ads reports cost in micros (1/1,000,000 of the currency)
-        const spend = (metrics.costMicros || 0) / 1_000_000;
+        // Log first result to debug field names
+        if (result === allResults[0]) {
+          console.log('📊 First result metrics keys:', Object.keys(metrics));
+          console.log('📊 First result metrics sample:', JSON.stringify(metrics).substring(0, 500));
+        }
+
+        // Google Ads API v23 returns snake_case field names
+        // Support both camelCase (older versions) and snake_case (v23+)
+        const spend = (metrics.cost_micros || metrics.costMicros || 0) / 1_000_000;
         const impressions = metrics.impressions || 0;
         const clicks = metrics.clicks || 0;
         const conversions = metrics.conversions || 0;
-        const conversionValue = metrics.conversionsValue || 0;
+        const conversionValue = metrics.conversions_value || metrics.conversionsValue || 0;
 
         // CPC and CPM come in micros too
-        const cpc = (metrics.averageCpc || 0) / 1_000_000;
-        const cpm = (metrics.averageCpm || 0) / 1_000_000;
+        const cpc = (metrics.average_cpc || metrics.averageCpc || 0) / 1_000_000;
+        const cpm = (metrics.average_cpm || metrics.averageCpm || 0) / 1_000_000;
 
         // CTR comes as a fraction (0.05 = 5%)
         const ctr = (metrics.ctr || 0) * 100;
 
         // CPA (cost per conversion) in micros
-        const cpa = (metrics.costPerConversion || 0) / 1_000_000;
+        const cpa = (metrics.cost_per_conversion || metrics.costPerConversion || 0) / 1_000_000;
 
         // ROAS
         const roas = spend > 0 ? conversionValue / spend : 0;
@@ -249,8 +265,8 @@ serve(async (req) => {
               spend,
               impressions,
               clicks,
-              conversions,
-              conversion_value: conversionValue,
+              conversions: Math.round(conversions),
+              conversion_value: Math.round(conversionValue * 100) / 100,
               purchases: Math.round(conversions), // Google Ads conversions ≈ purchases
               cpc,
               cpm,
