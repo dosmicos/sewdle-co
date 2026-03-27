@@ -57,7 +57,7 @@ async function fetchAllOrders(orgId: string, startStr: string, endStr: string) {
   while (hasMore) {
     const { data, error } = await supabase
       .from('shopify_orders')
-      .select('shopify_order_id, total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
+      .select('shopify_order_id, total_price, raw_data->current_total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
       .eq('organization_id', orgId)
       .gte('created_at_shopify', startStr)
       .lte('created_at_shopify', endStr)
@@ -109,11 +109,24 @@ async function fetchMetrics(
     }
   }
 
-  // Exclude fully refunded orders from revenue (keep pending/COD — Shopify counts them)
+  // Helper: get net revenue for an order (after refunds)
+  // current_total_price comes from Shopify's raw_data and reflects actual revenue after refunds
+  const getNetPrice = (o: any): number => {
+    if (o.current_total_price != null) {
+      const net = typeof o.current_total_price === 'string'
+        ? parseFloat(o.current_total_price)
+        : o.current_total_price;
+      return isNaN(net) ? (o.total_price || 0) : net;
+    }
+    return o.total_price || 0;
+  };
+
+  // Exclude fully refunded orders from count (keep pending/COD — Shopify counts them)
   const validOrders = orders.filter(o => o.financial_status !== 'refunded');
   const refundedOrders = orders.filter(o => o.financial_status === 'refunded');
 
-  const totalSales = validOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  // Use NET revenue (current_total_price) to match Shopify totals
+  const totalSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
   const totalOrders = validOrders.length;
   const returns = refundedOrders.length;
   const taxes = validOrders.reduce((sum, o) => sum + (o.total_tax || 0), 0);
@@ -121,12 +134,12 @@ async function fetchMetrics(
   const shipping = validOrders.reduce((sum, o) => sum + (o.total_shipping || 0), 0);
   const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
 
-  // New vs returning customer
+  // New vs returning customer — also use net revenue
   const newOrders = validOrders.filter(o => (o.customer_orders_count || 0) <= 1);
   const returningOrders = validOrders.filter(o => (o.customer_orders_count || 0) > 1);
 
-  const newCustomerRevenue = newOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-  const returningCustomerRevenue = returningOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const newCustomerRevenue = newOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
+  const returningCustomerRevenue = returningOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
 
   // Daily breakdown for sparklines
   const days = eachDayOfInterval({ start: range.start, end: range.end });
@@ -138,7 +151,7 @@ async function fetchMetrics(
     });
     return {
       date: dayStr,
-      totalSales: dayOrders.reduce((sum, o) => sum + (o.total_price || 0), 0),
+      totalSales: dayOrders.reduce((sum, o) => sum + getNetPrice(o), 0),
       orders: dayOrders.length,
     };
   });
