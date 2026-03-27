@@ -341,6 +341,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
+      // Manizales, Caldas → Coordinadora (COD y Sin COD)
+      if (dept.includes('caldas') && city.includes('manizales')) {
+        setRecommendedCarrier('coordinadora');
+        return;
+      }
+
       // Dosquebradas, Risaralda → Coordinadora (COD y Sin COD)
       if (dept.includes('risaralda') && city.includes('dosquebradas')) {
         setRecommendedCarrier('coordinadora');

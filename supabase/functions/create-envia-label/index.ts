@@ -682,6 +682,12 @@ function selectCarrierByRules(city: string, department: string, isCOD: boolean):
     return 'coordinadora';
   }
 
+  // Rule 2.5: Manizales, Caldas → Coordinadora (accepts both COD and paid)
+  if (normalizedDept.includes('caldas') && normalizedCity.includes('manizales')) {
+    console.log('📍 Rule 2.5: Manizales, Caldas → Coordinadora (acepta COD y pagado)');
+    return 'coordinadora';
+  }
+
   // Check if it's a main city
   const isMainCity = MAIN_CITIES.some(mainCity => {
     const normalizedMainCity = normalizeText(mainCity);
