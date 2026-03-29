@@ -61,17 +61,28 @@ async function fetchMediaUrl(
   }
 
   try {
-    // Step 1: media info (temp URL)
-    const infoController = new AbortController();
-    const infoTimeout = setTimeout(() => infoController.abort(), DOWNLOAD_TIMEOUT_MS);
-    let infoResponse: Response;
-    try {
-      infoResponse = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        signal: infoController.signal,
-      });
-    } finally {
-      clearTimeout(infoTimeout);
+    // Step 1: media info (temp URL) — with retry for transient errors
+    const MAX_RETRIES = 3;
+    let infoResponse!: Response;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const infoController = new AbortController();
+      const infoTimeout = setTimeout(() => infoController.abort(), DOWNLOAD_TIMEOUT_MS);
+      try {
+        infoResponse = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          signal: infoController.signal,
+        });
+      } finally {
+        clearTimeout(infoTimeout);
+      }
+
+      // Retry on server errors (5xx) or rate limiting (429)
+      if ((infoResponse.status >= 500 || infoResponse.status === 429) && attempt < MAX_RETRIES) {
+        console.warn(`Meta media info attempt ${attempt}/${MAX_RETRIES} failed (${infoResponse.status}), retrying in 1s...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      break;
     }
 
     if (!infoResponse.ok) {
@@ -91,17 +102,27 @@ async function fetchMediaUrl(
       return { url: null, mimeType, error: `File too large (${fileSize} bytes)` };
     }
 
-    // Step 2: download binary
-    const downloadController = new AbortController();
-    const downloadTimeout = setTimeout(() => downloadController.abort(), DOWNLOAD_TIMEOUT_MS);
-    let mediaResponse: Response;
-    try {
-      mediaResponse = await fetch(mediaInfo.url, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        signal: downloadController.signal,
-      });
-    } finally {
-      clearTimeout(downloadTimeout);
+    // Step 2: download binary — with retry for transient errors
+    let mediaResponse!: Response;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const downloadController = new AbortController();
+      const downloadTimeout = setTimeout(() => downloadController.abort(), DOWNLOAD_TIMEOUT_MS);
+      try {
+        mediaResponse = await fetch(mediaInfo.url, {
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          signal: downloadController.signal,
+        });
+      } finally {
+        clearTimeout(downloadTimeout);
+      }
+
+      // Retry on server errors (5xx) or rate limiting (429)
+      if ((mediaResponse.status >= 500 || mediaResponse.status === 429) && attempt < MAX_RETRIES) {
+        console.warn(`Media download attempt ${attempt}/${MAX_RETRIES} failed (${mediaResponse.status}), retrying in 1s...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      break;
     }
 
     if (!mediaResponse.ok) {
@@ -806,22 +827,20 @@ async function generateAIResponse(
     let systemPrompt = config.systemPrompt || defaultAiConfig.systemPrompt;
 
     // Add current date/time context so AI knows what day it is
-    // IMPORTANT: Intl.DateTimeFormat with timeZone is UNRELIABLE in Deno/Supabase Edge Functions.
-    // Use manual UTC-5 offset calculation instead.
+    // Subtract 5h from UTC then read with getUTC*() methods — fully timezone-agnostic.
     const now = new Date();
-    const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
-    const colombiaTime = new Date(now.getTime() + COLOMBIA_OFFSET_MS + (now.getTimezoneOffset() * 60 * 1000));
-    const colYear = colombiaTime.getFullYear();
-    const colMonth = colombiaTime.getMonth() + 1;
-    const colDay = colombiaTime.getDate();
-    const colHour = String(colombiaTime.getHours()).padStart(2, '0');
-    const colMinute = String(colombiaTime.getMinutes()).padStart(2, '0');
-    const colWeekdayNum = colombiaTime.getDay();
+    const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const colYear = colombiaTime.getUTCFullYear();
+    const colMonth = colombiaTime.getUTCMonth() + 1;
+    const colDay = colombiaTime.getUTCDate();
+    const colHour = String(colombiaTime.getUTCHours()).padStart(2, '0');
+    const colMinute = String(colombiaTime.getUTCMinutes()).padStart(2, '0');
+    const colWeekdayNum = colombiaTime.getUTCDay();
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const mesesMap = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     const diaSemana = diasSemana[colWeekdayNum];
     const mes = mesesMap[colMonth] || '';
-    console.log(`📅 [Fallback AI] Colombia time (manual UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} (UTC: ${now.toISOString()})`);
+    console.log(`📅 [Fallback AI] Colombia time (UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} | UTC: ${now.toISOString()} | weekdayNum: ${colWeekdayNum} | getTimezoneOffset: ${now.getTimezoneOffset()}`);
     systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
     // Add tone instructions
@@ -876,7 +895,7 @@ async function generateAIResponse(
           role,
           content: [
             { type: 'text', text: msg.content || 'El cliente envió esta imagen.' },
-            { type: 'image_url', image_url: { url: msg.media_url, detail: 'low' } }
+            { type: 'image_url', image_url: { url: msg.media_url, detail: 'auto' } }
           ]
         };
       }
@@ -1375,7 +1394,7 @@ async function handleAIAutoReply(
           role,
           content: [
             { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
-            { type: 'image_url', image_url: { url: m.media_url, detail: 'low' } }
+            { type: 'image_url', image_url: { url: m.media_url, detail: 'auto' } }
           ]
         };
       }
@@ -1507,7 +1526,7 @@ serve(async (req) => {
                 content = message.text?.body || '';
               } else if (message.type === 'image') {
                 mediaId = message.image?.id || null;
-                content = message.image?.caption || '[Imagen]';
+                content = message.image?.caption || 'El cliente envió una imagen de un producto. Analiza la imagen y responde.';
                 messageType = 'image';
               } else if (message.type === 'audio') {
                 mediaId = message.audio?.id || null;
@@ -1713,6 +1732,37 @@ serve(async (req) => {
               } else {
                 console.log('Message saved to database');
               }
+
+              // ========== IMAGE RECEIPT CONFIRMATION ==========
+              // Send immediate confirmation when an image is received, before AI debounce
+              if (messageType === 'image' && mediaUrl && conversation?.id) {
+                try {
+                  const imageConfirmText = '📸 Recibí tu imagen, déjame revisarla...';
+                  const imageConfirmSent = await sendWhatsAppMessage(
+                    senderPhone,
+                    imageConfirmText,
+                    channel.meta_phone_number_id || phoneNumberId
+                  );
+                  if (imageConfirmSent) {
+                    console.log('📸 Image receipt confirmation sent to customer');
+                    // Save confirmation message to DB
+                    await supabase
+                      .from('messaging_messages')
+                      .insert({
+                        conversation_id: conversation.id,
+                        channel_type: 'whatsapp',
+                        direction: 'outbound',
+                        sender_type: 'system',
+                        content: imageConfirmText,
+                        message_type: 'text',
+                        sent_at: new Date().toISOString(),
+                      });
+                  }
+                } catch (confirmError) {
+                  console.error('Error sending image receipt confirmation:', confirmError);
+                }
+              }
+              // ========== END IMAGE RECEIPT CONFIRMATION ==========
 
               // ========== ADDRESS VERIFICATION DETECTION ==========
               let pendingAddressVerification: any = null;
@@ -2413,7 +2463,7 @@ serve(async (req) => {
                       role,
                       content: [
                         { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
-                        { type: 'image_url', image_url: { url: m.media_url, detail: 'low' } }
+                        { type: 'image_url', image_url: { url: m.media_url, detail: 'auto' } }
                       ]
                     };
                   }

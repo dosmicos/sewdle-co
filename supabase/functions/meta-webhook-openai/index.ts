@@ -167,12 +167,20 @@ TU ROL PRINCIPAL:
 - Recomendar la talla correcta según la edad del bebé/niño
 - Guiar en el proceso de compra y resolver dudas
 
-📷 RECONOCIMIENTO DE IMÁGENES:
-- Puedes VER las imágenes que los clientes te envían
-- Si un cliente envía una foto o screenshot de un producto, identifícalo comparándolo con los productos del catálogo
-- Busca coincidencias por nombre, diseño, animal o patrón visible en la imagen
-- Si reconoces el producto, responde directamente con su nombre, precio y disponibilidad
-- Si no estás seguro de cuál es, menciona las opciones más probables del catálogo
+📷 RECONOCIMIENTO DE IMÁGENES — REGLA CRÍTICA:
+- Puedes VER y ANALIZAR las imágenes que los clientes te envían
+- Cuando recibas una imagen (con o sin texto), SIEMPRE:
+  1. Confirma que recibiste la imagen: "Recibí tu imagen, déjame revisarla..."
+  2. Describe brevemente lo que VES (color, forma, diseño, animal, patrón)
+  3. Compara con los productos del catálogo de Dosmicos
+  4. Si identificas el producto: responde nombre, precio, tallas disponibles y stock
+  5. Si hay múltiples coincidencias: muestra las opciones más probables
+  6. Si NO puedes identificar: describe lo que ves y pregunta "¿Es este el producto que buscas?" o "¿Podrías decirme qué producto te interesa?"
+- NUNCA respondas "No tengo esa información" cuando recibes una imagen
+- NUNCA escales a un humano SOLO porque recibiste una imagen
+- NUNCA ignores una imagen — siempre reconócela y analízala
+- Si el cliente envía un screenshot de la tienda online, identifica el producto por nombre/diseño visible
+- Si el cliente envía una foto de un bebé/niño usando un producto Dosmicos, identifica el producto y ofrece recompra o tallas mayores
 
 INFORMACIÓN DE DOSMICOS:
 - Tienda online: dosmicos.com
@@ -197,7 +205,7 @@ GUÍA TOG (nivel de abrigo):
 REGLAS DE COMUNICACIÓN:
 - Siempre saluda cordialmente al iniciar una conversación
 - Usa emojis ocasionalmente para ser más amigable (👋🐄✨👶🌙)
-- Si no tienes información específica, ofrece conectar con un asesor humano
+- Solo ofrece conectar con un asesor humano si el cliente EXPLÍCITAMENTE lo pide, o si después de 2 intentos de ayudar no puedes resolver su consulta. NUNCA escales solo porque recibiste una imagen.
 - Responde siempre en español
 - Sé conciso pero completo en tus respuestas
 
@@ -807,35 +815,23 @@ async function generateAIResponse(
     systemPrompt += productCatalog;
 
     // Add current date/time so AI knows what day it is
+    // Subtract 5h from UTC then read with getUTC*() methods — fully timezone-agnostic.
     const now = new Date();
-    const colombiaFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Bogota',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      weekday: 'long',
-      hour12: false,
-    });
-    const parts = colombiaFormatter.formatToParts(now);
-    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
-    const colYear = getPart('year');
-    const colMonth = parseInt(getPart('month'));
-    const colDay = parseInt(getPart('day'));
-    const colHour = getPart('hour');
-    const colMinute = getPart('minute');
-    const colWeekday = getPart('weekday').toLowerCase();
+    const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const colYear = colombiaTime.getUTCFullYear();
+    const colMonth = colombiaTime.getUTCMonth() + 1;
+    const colDay = colombiaTime.getUTCDate();
+    const colHour = String(colombiaTime.getUTCHours()).padStart(2, '0');
+    const colMinute = String(colombiaTime.getUTCMinutes()).padStart(2, '0');
+    const colWeekdayNum = colombiaTime.getUTCDay();
 
-    const weekdayMapLocal: Record<string, string> = {
-      'sunday': 'domingo', 'monday': 'lunes', 'tuesday': 'martes',
-      'wednesday': 'miércoles', 'thursday': 'jueves', 'friday': 'viernes', 'saturday': 'sábado'
-    };
+    const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const mesesLocal = ['', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    const diaSemana = weekdayMapLocal[colWeekday] || colWeekday;
+    const diaSemana = diasSemana[colWeekdayNum];
     const mes = mesesLocal[colMonth] || '';
 
-    systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL: Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
+    console.log(`📅 Colombia time (UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} | UTC: ${now.toISOString()} | weekdayNum: ${colWeekdayNum} | getTimezoneOffset: ${now.getTimezoneOffset()}`);
+    systemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
     // Add final reminder at the end of prompt
     if (isProductRelated && relevantProducts.length > 0) {
