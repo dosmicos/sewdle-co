@@ -10,10 +10,19 @@ export async function sendWhatsAppTemplate(
   templateName: string,
   languageCode: string,
   bodyParameters: Array<{ type: 'text'; text: string }>,
-  buttonParameters?: Array<{ type: 'payload' | 'text'; payload?: string; text?: string }>
+  buttonParameters?: Array<{ type: 'payload' | 'text'; payload?: string; text?: string }>,
+  headerParameters?: Array<{ type: 'image' | 'video' | 'document'; image?: { link: string }; video?: { link: string }; document?: { link: string } }>
 ): Promise<{ ok: boolean; messageId?: string; error?: any }> {
   try {
     const components: any[] = [];
+
+    // Add header parameters if any (image, video, document)
+    if (headerParameters && headerParameters.length > 0) {
+      components.push({
+        type: 'header',
+        parameters: headerParameters,
+      });
+    }
 
     // Add body parameters if any
     if (bodyParameters.length > 0) {

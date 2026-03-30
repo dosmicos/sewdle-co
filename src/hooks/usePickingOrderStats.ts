@@ -39,7 +39,7 @@ export const usePickingOrderStats = () => {
           .ilike('tags', '%confirmado%')
           .not('tags', 'ilike', '%empacado%')
           .in('financial_status', ['paid', 'pending', 'partially_paid'])
-          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled'),
+          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
         // No confirmados: Sin tag confirmado + no enviados + pago pendiente
         supabase
@@ -50,7 +50,7 @@ export const usePickingOrderStats = () => {
           .is('cancelled_at', null)
           .eq('financial_status', 'pending')
           .or('tags.is.null,tags.not.ilike.%confirmado%')
-          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled'),
+          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
         // Express: tags contains 'express', NOT contains 'empacado'
         supabase
@@ -61,7 +61,7 @@ export const usePickingOrderStats = () => {
           .is('cancelled_at', null)
           .ilike('tags', '%express%')
           .not('tags', 'ilike', '%empacado%')
-          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled'),
+          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
         // Empacados: tags contains 'empacado'
         supabase

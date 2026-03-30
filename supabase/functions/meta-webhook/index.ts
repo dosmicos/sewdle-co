@@ -1049,10 +1049,9 @@ serve(async (req) => {
                       let withinBusinessHours = true;
                       if (aiConfig?.businessHours === true) {
                         const now = new Date();
-                        const colombiaOffset = -5 * 60;
-                        const colombiaTime = new Date(now.getTime() + (colombiaOffset - now.getTimezoneOffset()) * 60000);
-                        const hour = colombiaTime.getHours();
-                        const dayOfWeek = colombiaTime.getDay();
+                        const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+                        const hour = colombiaTime.getUTCHours();
+                        const dayOfWeek = colombiaTime.getUTCDay();
 
                         withinBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 6 && hour >= 9 && hour < 18;
                         if (!withinBusinessHours) {

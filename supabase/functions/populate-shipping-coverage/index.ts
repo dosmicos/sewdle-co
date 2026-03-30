@@ -49,6 +49,11 @@ function determinePriorityCarrier(municipality: string, department: string): str
     return 'coordinadora';
   }
   
+  // Ibagué → Coordinadora
+  if (normDept.includes('tolima') && normMuni.includes('ibague')) {
+    return 'coordinadora';
+  }
+
   // Main cities → Deprisa (for paid orders)
   if (DEPRISA_CITIES.has(normMuni)) {
     return 'deprisa';

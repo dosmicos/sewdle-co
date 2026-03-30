@@ -122,3 +122,12 @@ verify_jwt = false
 
 [functions.compute-ugc-scores]
 verify_jwt = false
+
+[functions.bold-payment-webhook]
+verify_jwt = false
+
+[functions.create-bold-payment-link]
+verify_jwt = false
+
+[functions.create-shopify-order]
+verify_jwt = false

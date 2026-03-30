@@ -85,6 +85,9 @@ export interface ShippingLabel {
   updated_at: string;
   last_tracking_update?: string | null;
   tracking_events?: TrackingEvent[] | null;
+  shopify_fulfillment_id?: string | null;
+  shopify_fulfillment_status?: string | null;
+  shopify_fulfillment_error?: string | null;
 }
 
 export interface ShippingCoverage {
