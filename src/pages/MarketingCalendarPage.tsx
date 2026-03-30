@@ -58,9 +58,12 @@ import {
   Zap,
   RefreshCw,
   Mountain,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import HolidaySuggestionPanel from '@/components/marketing-calendar/HolidaySuggestionPanel';
+import { useHolidaySuggestions } from '@/hooks/useHolidaySuggestions';
 
 // ─── Event type configuration ─────────────────────────────
 const EVENT_TYPE_CONFIG: Record<
@@ -328,6 +331,7 @@ const defaultForm: MarketingEventInput = {
 const MarketingCalendarPage: React.FC = () => {
   const { events, isLoading, addEvent, updateEvent, deleteEvent, calculateAttribution } =
     useMarketingEvents();
+  const { suggestedCount: pendingSuggestions } = useHolidaySuggestions();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -556,12 +560,21 @@ const MarketingCalendarPage: React.FC = () => {
                 crean que resultados
               </p>
             </div>
+            {pendingSuggestions > 0 && (
+              <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs">
+                <Sparkles className="h-3 w-3 mr-1" />
+                {pendingSuggestions} sugerencias IA
+              </Badge>
+            )}
           </div>
           <Button onClick={() => openAddDialog()}>
             <Plus className="h-4 w-4 mr-1.5" />
             Nuevo Evento
           </Button>
         </div>
+
+        {/* ─── Holiday AI Suggestions Panel ─────────────── */}
+        <HolidaySuggestionPanel />
 
         {/* ─── Quarterly Peaks Section ─────────────────── */}
         <Card>
