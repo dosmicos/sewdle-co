@@ -54,10 +54,7 @@ const MarketingCalendarPage = React.lazy(() => import("@/pages/MarketingCalendar
 const ContentPlannerPage = React.lazy(() => import("@/pages/ContentPlannerPage"));
 const MetaAdsCallbackPage = React.lazy(() => import("@/pages/MetaAdsCallbackPage"));
 const GoogleAdsCallbackPage = React.lazy(() => import("@/pages/GoogleAdsCallbackPage"));
-<<<<<<< HEAD
-=======
 const TikTokCallbackPage = React.lazy(() => import("@/pages/TikTokCallbackPage"));
->>>>>>> worktree-social-analytics-tiktok
 const SocialAnalyticsPage = React.lazy(() => import("@/pages/SocialAnalyticsPage"));
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -371,19 +368,20 @@ const AppContent = () => {
           </PermissionRoute>
         } />
 
-<<<<<<< HEAD
         {/* Content Planner */}
         <Route path="content-planner" element={
           <PermissionRoute module="finances" action="view">
             <React.Suspense fallback={<LazyFallback />}>
               <ContentPlannerPage />
-=======
+            </React.Suspense>
+          </PermissionRoute>
+        } />
+
         {/* Social Analytics */}
         <Route path="social-analytics" element={
           <PermissionRoute module="finances" action="view">
             <React.Suspense fallback={<LazyFallback />}>
               <SocialAnalyticsPage />
->>>>>>> worktree-social-analytics-tiktok
             </React.Suspense>
           </PermissionRoute>
         } />
