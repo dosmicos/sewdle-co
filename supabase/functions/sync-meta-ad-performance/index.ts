@@ -182,7 +182,7 @@ serve(async (req) => {
         {
           field: "ad.effective_status",
           operator: "IN",
-          value: ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"],
+          value: ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "ARCHIVED"],
         },
       ])
     );
@@ -269,8 +269,9 @@ serve(async (req) => {
 
     console.log(`Got ${allInsights.length} ad-day rows from Meta`);
 
-    let syncedAds = 0;
-    const errors: string[] = [];
+    // Build all records first (fast, no DB calls)
+    const records: any[] = [];
+    const parseErrors: string[] = [];
 
     for (const row of allInsights) {
       try {
@@ -340,70 +341,78 @@ serve(async (req) => {
             ? (addToCart / landingPageViews) * 100
             : null;
 
-        const { error: upsertError } = await supabase
-          .from("ad_performance_daily")
-          .upsert(
-            {
-              organization_id: organizationId,
-              date: row.date_start,
-              ad_id: row.ad_id,
-              ad_name: row.ad_name,
-              campaign_id: row.campaign_id,
-              campaign_name: row.campaign_name,
-              adset_id: row.adset_id,
-              adset_name: row.adset_name,
-              spend,
-              impressions,
-              reach,
-              frequency,
-              cpm,
-              clicks,
-              link_clicks: linkClicks,
-              ctr,
-              cpc,
-              purchases,
-              revenue,
-              add_to_cart: addToCart,
-              initiate_checkout: initiateCheckout,
-              landing_page_views: landingPageViews,
-              video_thruplay: videoThruplay || null,
-              video_p25: videoP25 || null,
-              video_p50: videoP50 || null,
-              video_p75: videoP75 || null,
-              video_p95: videoP95 || null,
-              video_p100: videoP100 || null,
-              video_avg_time: videoAvgTime,
-              roas,
-              cpa,
-              hook_rate: hookRate,
-              hold_rate: holdRate,
-              lp_conv_rate: lpConvRate,
-              atc_rate: atcRate,
-              synced_at: new Date().toISOString(),
-            },
-            { onConflict: "organization_id,date,ad_id" }
-          );
-
-        if (upsertError) {
-          console.error(
-            `Error upserting ad ${row.ad_id} on ${row.date_start}:`,
-            upsertError
-          );
-          errors.push(
-            `${row.ad_name} (${row.date_start}): ${upsertError.message}`
-          );
-        } else {
-          syncedAds++;
-        }
+        records.push({
+          organization_id: organizationId,
+          date: row.date_start,
+          ad_id: row.ad_id,
+          ad_name: row.ad_name,
+          campaign_id: row.campaign_id,
+          campaign_name: row.campaign_name,
+          adset_id: row.adset_id,
+          adset_name: row.adset_name,
+          spend,
+          impressions,
+          reach,
+          frequency,
+          cpm,
+          clicks,
+          link_clicks: linkClicks,
+          ctr,
+          cpc,
+          purchases,
+          revenue,
+          add_to_cart: addToCart,
+          initiate_checkout: initiateCheckout,
+          landing_page_views: landingPageViews,
+          video_thruplay: videoThruplay || null,
+          video_p25: videoP25 || null,
+          video_p50: videoP50 || null,
+          video_p75: videoP75 || null,
+          video_p95: videoP95 || null,
+          video_p100: videoP100 || null,
+          video_avg_time: videoAvgTime,
+          roas,
+          cpa,
+          hook_rate: hookRate,
+          hold_rate: holdRate,
+          lp_conv_rate: lpConvRate,
+          atc_rate: atcRate,
+          synced_at: new Date().toISOString(),
+        });
       } catch (rowError) {
-        console.error(`Error processing ad ${row.ad_id}:`, rowError);
-        errors.push(
+        parseErrors.push(
           `${row.ad_name}: ${
             rowError instanceof Error ? rowError.message : "Error desconocido"
           }`
         );
       }
     }
+
+    // Batch upsert (500 at a time)
+    const BATCH_SIZE = 500;
+    let syncedAds = 0;
+    const upsertErrors: string[] = [];
+
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const batch = records.slice(i, i + BATCH_SIZE);
+      const { error: batchError } = await supabase
+        .from("ad_performance_daily")
+        .upsert(batch, { onConflict: "organization_id,date,ad_id" });
+
+      if (batchError) {
+        console.error(
+          `Batch upsert error (rows ${i}-${i + batch.length}):`,
+          batchError
+        );
+        upsertErrors.push(
+          `Batch ${Math.floor(i / BATCH_SIZE)}: ${batchError.message}`
+        );
+      } else {
+        syncedAds += batch.length;
+      }
+    }
+
+    const errors = [...parseErrors, ...upsertErrors];
 
     // Update last sync timestamp
     await supabase

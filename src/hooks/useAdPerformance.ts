@@ -287,25 +287,39 @@ async function fetchAdPerformance(
   const startStr = format(dateRange.start, 'yyyy-MM-dd');
   const endStr = format(dateRange.end, 'yyyy-MM-dd');
 
-  const { data, error } = await supabase
-    .from('ad_performance_daily')
-    .select('*')
-    .eq('organization_id', orgId)
-    .gte('date', startStr)
-    .lte('date', endStr)
-    .order('date', { ascending: true });
+  // Paginate to fetch ALL rows (Supabase default limit is 1000)
+  const pageSize = 1000;
+  let allData: any[] = [];
+  let from = 0;
+  let hasMore = true;
 
-  if (error) {
-    console.error('Error fetching ad performance:', error);
-    return [];
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('ad_performance_daily')
+      .select('*')
+      .eq('organization_id', orgId)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      console.error('Error fetching ad performance:', error);
+      return [];
+    }
+    if (!data || data.length === 0) break;
+
+    allData = allData.concat(data);
+    from += pageSize;
+    hasMore = data.length === pageSize;
   }
 
-  if (!data || data.length === 0) return [];
+  if (allData.length === 0) return [];
 
   // Fetch new customer revenue percentage from Shopify data
   const newCustomerPct = await fetchNewCustomerPercentage(orgId, startStr, endStr);
 
-  return aggregateByAd(data, newCustomerPct);
+  return aggregateByAd(allData, newCustomerPct);
 }
 
 export function useAdPerformance(
