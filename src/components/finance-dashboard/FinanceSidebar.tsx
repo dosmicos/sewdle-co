@@ -10,6 +10,7 @@ import {
   Sparkles,
   DollarSign,
   CalendarDays,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -29,6 +30,7 @@ const workspaceItems: NavItem[] = [
   { label: 'Ad Performance', icon: <Target className="h-4 w-4" />, id: 'ad-performance', path: '/ad-performance' },
   { label: 'Intelligence', icon: <Sparkles className="h-4 w-4" />, id: 'intelligence', path: '/intelligence' },
   { label: 'UGC Performance', icon: <Users className="h-4 w-4" />, id: 'ugc-performance', path: '/ugc-performance' },
+  { label: 'Social Analytics', icon: <BarChart3 className="h-4 w-4" />, id: 'social-analytics', path: '/social-analytics' },
   { label: 'Mkt Calendar', icon: <CalendarDays className="h-4 w-4" />, id: 'marketing-calendar', path: '/marketing-calendar' },
   { label: 'Cost Settings', icon: <DollarSign className="h-4 w-4" />, id: 'cost-settings', path: '/cost-settings' },
 ];
@@ -55,6 +57,7 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
     if (location.pathname === '/ad-performance') return 'ad-performance';
     if (location.pathname === '/intelligence') return 'intelligence';
     if (location.pathname === '/ugc-performance') return 'ugc-performance';
+    if (location.pathname === '/social-analytics') return 'social-analytics';
     if (location.pathname === '/marketing-calendar') return 'marketing-calendar';
     if (location.pathname === '/cost-settings') return 'cost-settings';
     return 'summary';
