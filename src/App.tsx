@@ -53,6 +53,7 @@ const CostSettingsPage = React.lazy(() => import("@/pages/CostSettingsPage"));
 const MarketingCalendarPage = React.lazy(() => import("@/pages/MarketingCalendarPage"));
 const MetaAdsCallbackPage = React.lazy(() => import("@/pages/MetaAdsCallbackPage"));
 const GoogleAdsCallbackPage = React.lazy(() => import("@/pages/GoogleAdsCallbackPage"));
+const SocialAnalyticsPage = React.lazy(() => import("@/pages/SocialAnalyticsPage"));
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -224,6 +225,13 @@ const FinanceAppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
+      <Route path="/social-analytics" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="finances" action="view">
+            <SocialAnalyticsPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
       <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
       <Route path="/google-ads-callback" element={<GoogleAdsCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
@@ -386,6 +394,14 @@ const AppContent = () => {
         <Route path="ugc-creators" element={
           <PermissionRoute module="ugc" action="view">
             <UgcCreatorsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="social-analytics" element={
+          <PermissionRoute module="publicidad" action="view">
+            <React.Suspense fallback={<LazyFallback />}>
+              <SocialAnalyticsPage />
+            </React.Suspense>
           </PermissionRoute>
         } />
 
