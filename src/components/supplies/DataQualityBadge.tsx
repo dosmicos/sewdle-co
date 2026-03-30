@@ -7,7 +7,8 @@ interface DataQualityBadgeProps {
 }
 
 export const DataQualityBadge = ({ quality }: DataQualityBadgeProps) => {
-  if (!quality) return null;
+  const validQualities = ['high', 'medium', 'low', 'insufficient'] as const;
+  const resolvedQuality = quality && validQualities.includes(quality) ? quality : 'low';
 
   const config = {
     high: {
@@ -32,7 +33,7 @@ export const DataQualityBadge = ({ quality }: DataQualityBadgeProps) => {
     },
   };
 
-  const { label, variant, tooltip } = config[quality];
+  const { label, variant, tooltip } = config[resolvedQuality];
 
   return (
     <TooltipProvider>
@@ -45,7 +46,7 @@ export const DataQualityBadge = ({ quality }: DataQualityBadgeProps) => {
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
           <p className="text-sm">{tooltip}</p>
-          {quality === 'low' || quality === 'insufficient' ? (
+          {resolvedQuality === 'low' || resolvedQuality === 'insufficient' ? (
             <p className="text-xs text-muted-foreground mt-2">
               Los snapshots diarios mejorarán la precisión en los próximos 30 días
             </p>

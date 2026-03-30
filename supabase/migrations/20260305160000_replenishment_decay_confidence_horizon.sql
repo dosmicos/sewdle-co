@@ -182,7 +182,7 @@ BEGIN
         WHEN COALESCE(sales.sales_30d, 0) > 0
         THEN ROUND(sales.sales_30d::numeric / 30, 2)
         WHEN COALESCE(lv.saved_velocity, 0) > 0
-        THEN ROUND(lv.saved_velocity * GREATEST(0.3, 1.0 - (COALESCE(lsd.days_since_last_stock, 120)::numeric / 120.0)), 2)
+        THEN ROUND(lv.saved_velocity * EXP(-0.025 * COALESCE(lsd.days_since_last_stock, 90)), 2)
         ELSE 0
       END as avg_daily_sales,
 
@@ -195,7 +195,7 @@ BEGIN
         WHEN COALESCE(sales.sales_30d, 0) > 0 AND COALESCE(sd.current_stock, 0) > 0
         THEN ROUND(sd.current_stock::numeric / (sales.sales_30d::numeric / 30), 1)
         WHEN COALESCE(lv.saved_velocity, 0) > 0 AND COALESCE(sd.current_stock, 0) > 0
-        THEN ROUND(sd.current_stock::numeric / (lv.saved_velocity * GREATEST(0.3, 1.0 - (COALESCE(lsd.days_since_last_stock, 120)::numeric / 120.0))), 1)
+        THEN ROUND(sd.current_stock::numeric / GREATEST(0.01, lv.saved_velocity * EXP(-0.025 * COALESCE(lsd.days_since_last_stock, 90))), 1)
         ELSE NULL
       END as days_of_supply,
 
@@ -216,7 +216,7 @@ BEGIN
         -- P4 Histórica: velocidad decaída × horizonte 20d (lote prueba)
         WHEN COALESCE(lv.saved_velocity, 0) > 0
         THEN ROUND(
-          (lv.saved_velocity * GREATEST(0.3, 1.0 - (COALESCE(lsd.days_since_last_stock, 120)::numeric / 120.0))) * 20,
+          (lv.saved_velocity * EXP(-0.025 * COALESCE(lsd.days_since_last_stock, 90))) * 20,
           0
         )
         ELSE 0
@@ -234,15 +234,17 @@ BEGIN
         THEN 'Vel. 30d (horizonte 30d)'
         WHEN COALESCE(lv.saved_velocity, 0) > 0
         THEN 'Vel. historica guardada (decaimiento ' ||
-          ROUND((1.0 - GREATEST(0.3, 1.0 - (COALESCE(lsd.days_since_last_stock, 120)::numeric / 120.0))) * 100) ||
+          ROUND((1.0 - EXP(-0.025 * COALESCE(lsd.days_since_last_stock, 90))) * 100) ||
           '%, lote prueba 20d)'
         ELSE NULL
       END as reason,
 
-      -- Confianza de datos (sin cambios en valores)
+      -- Confianza de datos (M2: combina días con stock + órdenes)
       CASE
-        WHEN COALESCE(stk.days_with_stock_30d, 0) >= 15 THEN 'high'
-        WHEN COALESCE(stk.days_with_stock_30d, 0) >= 5 THEN 'medium'
+        WHEN COALESCE(stk.days_with_stock_30d, 0) >= 15 AND COALESCE(sales.orders_count_30d, 0) >= 5 THEN 'high'
+        WHEN COALESCE(stk.days_with_stock_30d, 0) >= 15 THEN 'medium'
+        WHEN COALESCE(stk.days_with_stock_30d, 0) >= 5 AND COALESCE(sales.orders_count_30d, 0) >= 3 THEN 'medium'
+        WHEN COALESCE(stk.days_with_stock_30d, 0) >= 5 THEN 'low'
         WHEN COALESCE(stk.days_with_stock_90d, 0) >= 5 THEN 'low'
         WHEN COALESCE(lv.saved_velocity, 0) > 0 THEN 'low'
         ELSE 'low'
@@ -296,7 +298,11 @@ BEGIN
     GREATEST(0, rc.projected_demand_variable - rc.current_stock - rc.pending_production - rc.in_transit) as suggested_quantity,
     CASE
       WHEN rc.days_of_supply IS NULL OR rc.days_of_supply <= 0 THEN
-        CASE WHEN rc.avg_daily_sales > 0 THEN 'critical' ELSE 'low' END
+        CASE
+          WHEN rc.sales_30d > 0 AND rc.avg_daily_sales > 0 THEN 'critical'
+          WHEN rc.avg_daily_sales > 0 THEN 'medium'
+          ELSE 'low'
+        END
       WHEN rc.days_of_supply <= 7 THEN 'critical'
       WHEN rc.days_of_supply <= 14 THEN 'high'
       WHEN rc.days_of_supply <= 30 THEN 'medium'

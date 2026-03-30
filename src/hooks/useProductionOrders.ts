@@ -116,7 +116,14 @@ export const useProductionOrders = () => {
         .in('variant_id', variantIds)
         .eq('calculation_date', new Date().toISOString().split('T')[0]);
 
-      if (updateError) console.warn('Warning updating replenishment status:', updateError);
+      if (updateError) {
+        console.warn('Warning updating replenishment status:', updateError);
+        toast({
+          title: "Advertencia",
+          description: "La orden se creó pero no se pudo actualizar el estado de la sugerencia. Recargue la página.",
+          variant: "destructive",
+        });
+      }
 
       toast({
         title: "Orden de producción creada",
