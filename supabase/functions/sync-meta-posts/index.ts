@@ -370,6 +370,17 @@ serve(async (req) => {
       ? [platform]
       : ["instagram", "facebook"];
 
+    // Diagnostic info to return in response
+    const diagnostics: Record<string, any> = {
+      accountId: adAccount.account_id,
+      accountName: adAccount.account_name,
+      tokenPresent: !!accessToken,
+      tokenLength: accessToken?.length || 0,
+      since,
+      platforms,
+      steps: [],
+    };
+
     for (const p of platforms) {
       let posts: any[] = [];
 
@@ -379,13 +390,22 @@ serve(async (req) => {
           `${GRAPH_API}/me/accounts?access_token=${accessToken}`
         );
         if (!pageRes.ok) {
-          console.error("Failed to fetch pages:", await pageRes.text());
+          const errText = await pageRes.text();
+          console.error("Failed to fetch pages:", errText);
+          diagnostics.steps.push({ step: "ig_fetch_pages", status: "error", detail: errText });
           continue;
         }
         const pagesJson = await pageRes.json();
         const page = pagesJson.data?.[0];
+        diagnostics.steps.push({
+          step: "ig_fetch_pages",
+          status: "ok",
+          pagesCount: pagesJson.data?.length || 0,
+          firstPageId: page?.id || null,
+          firstPageName: page?.name || null,
+        });
         if (!page) {
-          console.error("No Facebook page found");
+          diagnostics.steps.push({ step: "ig_no_page", status: "skipped", detail: "No Facebook page found" });
           continue;
         }
 
@@ -394,36 +414,53 @@ serve(async (req) => {
           `${GRAPH_API}/${page.id}?fields=instagram_business_account&access_token=${accessToken}`
         );
         if (!igRes.ok) {
-          console.error("Failed to fetch IG account:", await igRes.text());
+          const errText = await igRes.text();
+          console.error("Failed to fetch IG account:", errText);
+          diagnostics.steps.push({ step: "ig_business_account", status: "error", detail: errText });
           continue;
         }
         const igJson = await igRes.json();
         const igUserId = igJson.instagram_business_account?.id;
+        diagnostics.steps.push({
+          step: "ig_business_account",
+          status: igUserId ? "ok" : "not_linked",
+          igUserId: igUserId || null,
+        });
         if (!igUserId) {
-          console.error("No IG business account linked to page");
           continue;
         }
 
         const rawPosts = await fetchInstagramPosts(accessToken, igUserId, since);
+        diagnostics.steps.push({ step: "ig_fetch_posts", status: "ok", rawPostsCount: rawPosts.length });
         posts = rawPosts.map((p) => transformInstagramPost(p, organizationId));
       } else if (p === "facebook") {
         const pageRes = await fetch(
           `${GRAPH_API}/me/accounts?access_token=${accessToken}`
         );
         if (!pageRes.ok) {
-          console.error("Failed to fetch pages:", await pageRes.text());
+          const errText = await pageRes.text();
+          console.error("Failed to fetch pages:", errText);
+          diagnostics.steps.push({ step: "fb_fetch_pages", status: "error", detail: errText });
           continue;
         }
         const pagesJson = await pageRes.json();
         const page = pagesJson.data?.[0];
+        diagnostics.steps.push({
+          step: "fb_fetch_pages",
+          status: "ok",
+          pagesCount: pagesJson.data?.length || 0,
+          firstPageId: page?.id || null,
+          firstPageName: page?.name || null,
+        });
         if (!page) {
-          console.error("No Facebook page found");
+          diagnostics.steps.push({ step: "fb_no_page", status: "skipped", detail: "No Facebook page found" });
           continue;
         }
 
         // Use page access token for page-level insights
         const pageToken = page.access_token || accessToken;
         const rawPosts = await fetchFacebookPosts(pageToken, page.id, since);
+        diagnostics.steps.push({ step: "fb_fetch_posts", status: "ok", rawPostsCount: rawPosts.length });
         posts = rawPosts.map((p) => transformFacebookPost(p, organizationId));
       }
 
@@ -441,6 +478,7 @@ serve(async (req) => {
 
         if (upsertError) {
           console.error(`Upsert error for ${p}:`, upsertError);
+          diagnostics.steps.push({ step: `${p}_upsert`, status: "error", detail: upsertError.message });
         } else {
           totalSynced += batch.length;
         }
@@ -452,6 +490,7 @@ serve(async (req) => {
         success: true,
         syncedPosts: totalSynced,
         platforms,
+        diagnostics,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

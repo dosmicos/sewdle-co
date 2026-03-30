@@ -143,7 +143,20 @@ export function useMetaSocialAnalytics(
         }
 
         if (data.success) {
-          toast.success(`${data.syncedPosts} posts sincronizados`);
+          // Log diagnostics for debugging
+          if (data.diagnostics) {
+            console.log('🔍 Sync diagnostics:', JSON.stringify(data.diagnostics, null, 2));
+          }
+          if (data.syncedPosts === 0 && data.diagnostics?.steps?.length > 0) {
+            const failedStep = data.diagnostics.steps.find((s: any) => s.status === 'error' || s.status === 'not_linked' || s.status === 'skipped');
+            if (failedStep) {
+              toast.error(`0 posts: ${failedStep.step} - ${failedStep.detail || failedStep.status}`);
+            } else {
+              toast.success('0 posts encontrados en el rango de fechas');
+            }
+          } else {
+            toast.success(`${data.syncedPosts} posts sincronizados`);
+          }
           queryClient.invalidateQueries({ queryKey: ['social-posts'] });
           return true;
         } else {
