@@ -381,106 +381,92 @@ serve(async (req) => {
       steps: [],
     };
 
-    for (const p of platforms) {
-      let posts: any[] = [];
+    // Fetch all pages once (shared between IG and FB)
+    const pageRes = await fetch(
+      `${GRAPH_API}/me/accounts?fields=id,name,access_token,instagram_business_account&limit=100&access_token=${accessToken}`
+    );
+    if (!pageRes.ok) {
+      const errText = await pageRes.text();
+      diagnostics.steps.push({ step: "fetch_pages", status: "error", detail: errText });
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to fetch pages", diagnostics }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const pagesJson = await pageRes.json();
+    const allPages = pagesJson.data || [];
+    diagnostics.steps.push({
+      step: "fetch_pages",
+      status: "ok",
+      pagesCount: allPages.length,
+      pages: allPages.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        hasIgAccount: !!p.instagram_business_account,
+        igId: p.instagram_business_account?.id || null,
+      })),
+    });
 
-      if (p === "instagram") {
-        // Get IG user ID from the connected page
-        const pageRes = await fetch(
-          `${GRAPH_API}/me/accounts?access_token=${accessToken}`
-        );
-        if (!pageRes.ok) {
-          const errText = await pageRes.text();
-          console.error("Failed to fetch pages:", errText);
-          diagnostics.steps.push({ step: "ig_fetch_pages", status: "error", detail: errText });
-          continue;
-        }
-        const pagesJson = await pageRes.json();
-        const page = pagesJson.data?.[0];
-        diagnostics.steps.push({
-          step: "ig_fetch_pages",
-          status: "ok",
-          pagesCount: pagesJson.data?.length || 0,
-          firstPageId: page?.id || null,
-          firstPageName: page?.name || null,
-        });
-        if (!page) {
-          diagnostics.steps.push({ step: "ig_no_page", status: "skipped", detail: "No Facebook page found" });
-          continue;
-        }
+    if (allPages.length === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: "No Facebook pages found", diagnostics }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-        // Get IG business account linked to the page
-        const igRes = await fetch(
-          `${GRAPH_API}/${page.id}?fields=instagram_business_account&access_token=${accessToken}`
-        );
-        if (!igRes.ok) {
-          const errText = await igRes.text();
-          console.error("Failed to fetch IG account:", errText);
-          diagnostics.steps.push({ step: "ig_business_account", status: "error", detail: errText });
-          continue;
-        }
-        const igJson = await igRes.json();
-        const igUserId = igJson.instagram_business_account?.id;
-        diagnostics.steps.push({
-          step: "ig_business_account",
-          status: igUserId ? "ok" : "not_linked",
-          igUserId: igUserId || null,
-        });
-        if (!igUserId) {
-          continue;
-        }
+    // Process ALL pages (not just the first one)
+    for (const page of allPages) {
+      for (const p of platforms) {
+        let posts: any[] = [];
 
-        const rawPosts = await fetchInstagramPosts(accessToken, igUserId, since);
-        diagnostics.steps.push({ step: "ig_fetch_posts", status: "ok", rawPostsCount: rawPosts.length });
-        posts = rawPosts.map((p) => transformInstagramPost(p, organizationId));
-      } else if (p === "facebook") {
-        const pageRes = await fetch(
-          `${GRAPH_API}/me/accounts?access_token=${accessToken}`
-        );
-        if (!pageRes.ok) {
-          const errText = await pageRes.text();
-          console.error("Failed to fetch pages:", errText);
-          diagnostics.steps.push({ step: "fb_fetch_pages", status: "error", detail: errText });
-          continue;
-        }
-        const pagesJson = await pageRes.json();
-        const page = pagesJson.data?.[0];
-        diagnostics.steps.push({
-          step: "fb_fetch_pages",
-          status: "ok",
-          pagesCount: pagesJson.data?.length || 0,
-          firstPageId: page?.id || null,
-          firstPageName: page?.name || null,
-        });
-        if (!page) {
-          diagnostics.steps.push({ step: "fb_no_page", status: "skipped", detail: "No Facebook page found" });
-          continue;
-        }
+        if (p === "instagram") {
+          const igUserId = page.instagram_business_account?.id;
+          if (!igUserId) {
+            diagnostics.steps.push({
+              step: `ig_${page.name}`,
+              status: "skipped",
+              detail: "No IG business account linked",
+            });
+            continue;
+          }
 
-        // Use page access token for page-level insights
-        const pageToken = page.access_token || accessToken;
-        const rawPosts = await fetchFacebookPosts(pageToken, page.id, since);
-        diagnostics.steps.push({ step: "fb_fetch_posts", status: "ok", rawPostsCount: rawPosts.length });
-        posts = rawPosts.map((p) => transformFacebookPost(p, organizationId));
-      }
-
-      if (posts.length === 0) continue;
-
-      // Batch upsert (50 at a time)
-      const batchSize = 50;
-      for (let i = 0; i < posts.length; i += batchSize) {
-        const batch = posts.slice(i, i + batchSize);
-        const { error: upsertError } = await supabase
-          .from("social_posts")
-          .upsert(batch, {
-            onConflict: "org_id,platform,external_post_id",
+          const rawPosts = await fetchInstagramPosts(accessToken, igUserId, since);
+          diagnostics.steps.push({
+            step: `ig_${page.name}`,
+            status: "ok",
+            igUserId,
+            rawPostsCount: rawPosts.length,
           });
+          posts = rawPosts.map((post) => transformInstagramPost(post, organizationId));
+        } else if (p === "facebook") {
+          const pageToken = page.access_token || accessToken;
+          const rawPosts = await fetchFacebookPosts(pageToken, page.id, since);
+          diagnostics.steps.push({
+            step: `fb_${page.name}`,
+            status: "ok",
+            rawPostsCount: rawPosts.length,
+          });
+          posts = rawPosts.map((post) => transformFacebookPost(post, organizationId));
+        }
 
-        if (upsertError) {
-          console.error(`Upsert error for ${p}:`, upsertError);
-          diagnostics.steps.push({ step: `${p}_upsert`, status: "error", detail: upsertError.message });
-        } else {
-          totalSynced += batch.length;
+        if (posts.length === 0) continue;
+
+        // Batch upsert (50 at a time)
+        const batchSize = 50;
+        for (let i = 0; i < posts.length; i += batchSize) {
+          const batch = posts.slice(i, i + batchSize);
+          const { error: upsertError } = await supabase
+            .from("social_posts")
+            .upsert(batch, {
+              onConflict: "org_id,platform,external_post_id",
+            });
+
+          if (upsertError) {
+            console.error(`Upsert error for ${p} ${page.name}:`, upsertError);
+            diagnostics.steps.push({ step: `${p}_${page.name}_upsert`, status: "error", detail: upsertError.message });
+          } else {
+            totalSynced += batch.length;
+          }
         }
       }
     }
