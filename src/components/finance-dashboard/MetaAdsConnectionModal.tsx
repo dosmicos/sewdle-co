@@ -107,7 +107,7 @@ const MetaAdsConnectionModal: React.FC<MetaAdsConnectionModalProps> = ({
 
       const redirectUri = `${window.location.origin}/meta-callback`;
       const state = currentOrganization.id;
-      const scopes = 'ads_read,ads_management,read_insights';
+      const scopes = 'ads_read,ads_management,read_insights,pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights';
 
       const authUrl =
         `https://www.facebook.com/v21.0/dialog/oauth` +
