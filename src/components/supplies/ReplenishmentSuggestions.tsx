@@ -157,7 +157,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
         suggestion.current_stock || 0,
         suggestion.sales_30d || 0,
         Number(suggestion.avg_daily_sales || 0).toFixed(2),
-        Math.round(suggestion.days_of_supply || 0),
+        Number(suggestion.days_of_supply || 0).toFixed(1),
         suggestion.pending_production || 0,
         suggestion.suggested_quantity || 0,
         `"${suggestion.urgency?.toUpperCase() || 'MEDIUM'}"`,
