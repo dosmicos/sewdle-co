@@ -133,8 +133,12 @@ BEGIN
       COALESCE(SUM(di.quantity_delivered), 0) as total_delivered,
       COALESCE(SUM(
         CASE
+          -- En revisión de calidad: contar lo no aprobado aún
           WHEN d.status IN ('in_quality', 'partial_approved')
           THEN di.quantity_delivered - COALESCE(di.quantity_approved, 0)
+          -- Aprobadas pero NO sincronizadas a Shopify: contar lo aprobado pendiente de sync
+          WHEN d.status = 'approved' AND COALESCE(di.synced_to_shopify, false) = false
+          THEN COALESCE(di.quantity_approved, 0)
           ELSE 0
         END
       ), 0) as in_transit_qty
