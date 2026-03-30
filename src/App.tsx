@@ -227,6 +227,13 @@ const FinanceAppContent = () => {
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
+      <Route path="/content-planner" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="finances" action="view">
+            <ContentPlannerPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
       <Route path="/social-analytics" element={
         <PasswordChangeRouteGuard>
           <PermissionRoute module="finances" action="view">
@@ -364,24 +371,6 @@ const AppContent = () => {
           <PermissionRoute module="finances" action="view">
             <React.Suspense fallback={<LazyFallback />}>
               <MarketingCalendarPage />
-            </React.Suspense>
-          </PermissionRoute>
-        } />
-
-        {/* Content Planner */}
-        <Route path="content-planner" element={
-          <PermissionRoute module="finances" action="view">
-            <React.Suspense fallback={<LazyFallback />}>
-              <ContentPlannerPage />
-            </React.Suspense>
-          </PermissionRoute>
-        } />
-
-        {/* Social Analytics */}
-        <Route path="social-analytics" element={
-          <PermissionRoute module="finances" action="view">
-            <React.Suspense fallback={<LazyFallback />}>
-              <SocialAnalyticsPage />
             </React.Suspense>
           </PermissionRoute>
         } />
