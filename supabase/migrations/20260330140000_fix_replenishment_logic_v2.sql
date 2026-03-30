@@ -146,17 +146,16 @@ BEGIN
     GROUP BY oi.product_variant_id
   ),
 
-  -- Unidades aprobadas pero NO sincronizadas a Shopify (cualquier status de orden)
+  -- Unidades aprobadas pero NO sincronizadas a Shopify (cualquier status)
   approved_not_synced AS (
     SELECT
       oi.product_variant_id,
       COALESCE(SUM(di.quantity_approved), 0) as qty_approved_not_synced
-    FROM deliveries d
-    JOIN delivery_items di ON d.id = di.delivery_id
+    FROM delivery_items di
+    JOIN deliveries d ON d.id = di.delivery_id
     JOIN order_items oi ON di.order_item_id = oi.id
     JOIN orders o ON d.order_id = o.id
     WHERE o.organization_id = org_id
-      AND d.status IN ('approved', 'partial_approved')
       AND COALESCE(di.synced_to_shopify, false) = false
       AND COALESCE(di.quantity_approved, 0) > 0
     GROUP BY oi.product_variant_id
