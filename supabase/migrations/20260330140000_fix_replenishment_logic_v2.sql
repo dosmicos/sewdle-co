@@ -132,12 +132,8 @@ BEGIN
       COALESCE(SUM(di.quantity_delivered), 0) as total_delivered,
       COALESCE(SUM(
         CASE
-          -- En revisión de calidad: contar lo no aprobado aún
           WHEN d.status IN ('in_quality', 'partial_approved')
           THEN di.quantity_delivered - COALESCE(di.quantity_approved, 0)
-          -- Aprobadas pero NO sincronizadas a Shopify: contar lo aprobado pendiente de sync
-          WHEN d.status = 'approved' AND COALESCE(di.synced_to_shopify, false) = false
-          THEN COALESCE(di.quantity_approved, 0)
           ELSE 0
         END
       ), 0) as in_transit_qty
@@ -147,6 +143,22 @@ BEGIN
     JOIN orders o ON d.order_id = o.id
     WHERE o.organization_id = org_id
       AND o.status NOT IN ('cancelled', 'completed')
+    GROUP BY oi.product_variant_id
+  ),
+
+  -- Unidades aprobadas pero NO sincronizadas a Shopify (cualquier status de orden)
+  approved_not_synced AS (
+    SELECT
+      oi.product_variant_id,
+      COALESCE(SUM(di.quantity_approved), 0) as qty_approved_not_synced
+    FROM deliveries d
+    JOIN delivery_items di ON d.id = di.delivery_id
+    JOIN order_items oi ON di.order_item_id = oi.id
+    JOIN orders o ON d.order_id = o.id
+    WHERE o.organization_id = org_id
+      AND d.status IN ('approved', 'partial_approved')
+      AND COALESCE(di.synced_to_shopify, false) = false
+      AND COALESCE(di.quantity_approved, 0) > 0
     GROUP BY oi.product_variant_id
   ),
 
@@ -172,7 +184,7 @@ BEGIN
       pv.id as variant_id,
       COALESCE(sd.current_stock, 0) as current_stock,
       GREATEST(0, COALESCE(po.ordered_qty, 0) - COALESCE(dd.total_delivered, 0)) as pending_production,
-      COALESCE(dd.in_transit_qty, 0) as in_transit,
+      COALESCE(dd.in_transit_qty, 0) + COALESCE(ans.qty_approved_not_synced, 0) as in_transit,
       COALESCE(sales.sales_30d, 0) as sales_30d,
       COALESCE(sales.orders_count_30d, 0) as orders_count_30d,
 
@@ -262,6 +274,7 @@ BEGIN
     LEFT JOIN last_stock_date lsd ON pv.id = lsd.variant_id
     LEFT JOIN pending_orders po ON pv.id = po.product_variant_id
     LEFT JOIN delivery_data dd ON pv.id = dd.product_variant_id
+    LEFT JOIN approved_not_synced ans ON pv.id = ans.product_variant_id
     LEFT JOIN stock_data sd ON pv.id = sd.variant_id
     WHERE p.organization_id = org_id
       AND p.status = 'active'
