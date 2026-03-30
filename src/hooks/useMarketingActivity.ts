@@ -18,8 +18,6 @@ export interface DailyActivity {
   ugcVideos: number;
   // Marketing events (from marketing_events)
   marketingEvents: number;
-  // Messages (from messaging_messages)
-  messagesSent: number;
   // Email campaigns (from Emailmark campaigns table)
   emailCampaigns: number;
   emailsSent: number;
@@ -45,7 +43,6 @@ export interface ActivitySummary {
   totalNewCreatives: number;
   totalUgcVideos: number;
   totalMarketingEvents: number;
-  totalMessagesSent: number;
   totalEmailCampaigns: number;
   totalEmailsSent: number;
   totalEmailOpened: number;
@@ -244,33 +241,7 @@ export function useMarketingActivity(
     staleTime: 1000 * 60 * 5,
   });
 
-  // 6. Messages sent (outbound from messaging_messages)
-  const messagesQuery = useQuery({
-    queryKey: ['mkt-activity-messages', orgId, startStr, endStr],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('messaging_messages')
-        .select('sent_at')
-        .eq('direction', 'outbound')
-        .gte('sent_at', startDate.toISOString())
-        .lte('sent_at', endDate.toISOString())
-        .limit(5000);
-
-      if (error) throw error;
-
-      const byDate = new Map<string, number>();
-      for (const row of data || []) {
-        if (!row.sent_at) continue;
-        const d = format(new Date(row.sent_at), 'yyyy-MM-dd');
-        byDate.set(d, (byDate.get(d) || 0) + 1);
-      }
-      return byDate;
-    },
-    enabled: !!orgId,
-    staleTime: 1000 * 60 * 5,
-  });
-
-  // 7. Email campaigns from Emailmark (campaigns table - no org_id, shared Supabase)
+  // 6. Email campaigns from Emailmark (campaigns table - no org_id, shared Supabase)
   const emailQuery = useQuery({
     queryKey: ['mkt-activity-email', startStr, endStr],
     queryFn: async () => {
@@ -319,7 +290,6 @@ export function useMarketingActivity(
     const creativesMap = creativesQuery.data || new Map();
     const ugcMap = ugcQuery.data || new Map();
     const eventsMap = eventsQuery.data || new Map();
-    const messagesMap = messagesQuery.data || new Map();
     const emailMap = emailQuery.data?.byDate || new Map();
     const emailDetails = emailQuery.data?.details || [];
 
@@ -329,7 +299,6 @@ export function useMarketingActivity(
     let totalNewCreatives = 0;
     let totalUgcVideos = 0;
     let totalMarketingEvents = 0;
-    let totalMessagesSent = 0;
     let totalEmailCampaigns = 0;
     let totalEmailsSent = 0;
     let totalActions = 0;
@@ -349,11 +318,10 @@ export function useMarketingActivity(
       const creatives = creativesMap.get(dateKey) || 0;
       const ugc = ugcMap.get(dateKey) || 0;
       const events = eventsMap.get(dateKey) || 0;
-      const messages = messagesMap.get(dateKey) || 0;
       const email = emailMap.get(dateKey) || { campaigns: 0, emailsSent: 0 };
 
       const dayActions =
-        ads.activeAds + creatives + ugc + events + messages + email.campaigns;
+        ads.activeAds + creatives + ugc + events + email.campaigns;
 
       totalRevenue += rev.revenue;
       totalOrders += rev.orders;
@@ -361,7 +329,6 @@ export function useMarketingActivity(
       totalNewCreatives += creatives;
       totalUgcVideos += ugc;
       totalMarketingEvents += events;
-      totalMessagesSent += messages;
       totalEmailCampaigns += email.campaigns;
       totalEmailsSent += email.emailsSent;
       totalActions += dayActions;
@@ -375,7 +342,6 @@ export function useMarketingActivity(
         newCreatives: creatives,
         ugcVideos: ugc,
         marketingEvents: events,
-        messagesSent: messages,
         emailCampaigns: email.campaigns,
         emailsSent: email.emailsSent,
         totalActions: dayActions,
@@ -396,7 +362,6 @@ export function useMarketingActivity(
         totalNewCreatives,
         totalUgcVideos,
         totalMarketingEvents,
-        totalMessagesSent,
         totalEmailCampaigns,
         totalEmailsSent,
         totalEmailOpened,
@@ -414,7 +379,6 @@ export function useMarketingActivity(
     creativesQuery.data,
     ugcQuery.data,
     eventsQuery.data,
-    messagesQuery.data,
     emailQuery.data,
   ]);
 
@@ -424,7 +388,6 @@ export function useMarketingActivity(
     creativesQuery.isLoading ||
     ugcQuery.isLoading ||
     eventsQuery.isLoading ||
-    messagesQuery.isLoading ||
     emailQuery.isLoading;
 
   return { dailyData, summary, isLoading };

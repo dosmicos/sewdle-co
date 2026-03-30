@@ -19,7 +19,6 @@ import {
   Palette,
   Video,
   CalendarDays,
-  MessageSquare,
   ShoppingCart,
   Mail,
   MousePointerClick,
@@ -81,12 +80,6 @@ const CHANNELS = [
     color: '#ef4444',
     icon: <Mail className="h-3.5 w-3.5" />,
   },
-  {
-    key: 'messagesSent' as const,
-    label: 'Mensajes',
-    color: '#10b981',
-    icon: <MessageSquare className="h-3.5 w-3.5" />,
-  },
 ];
 
 const SUMMARY_KEYS: {
@@ -130,12 +123,6 @@ const SUMMARY_KEYS: {
     label: 'Eventos',
     icon: <CalendarDays className="h-4 w-4" />,
     color: 'text-amber-600 bg-amber-50',
-  },
-  {
-    key: 'totalMessagesSent',
-    label: 'Mensajes',
-    icon: <MessageSquare className="h-4 w-4" />,
-    color: 'text-emerald-600 bg-emerald-50',
   },
 ];
 
@@ -229,7 +216,7 @@ const ActivityRevenueChart: React.FC<ActivityRevenueChartProps> = ({
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {SUMMARY_KEYS.map((item) => {
           const value = summary[item.key] as number;
           return (
