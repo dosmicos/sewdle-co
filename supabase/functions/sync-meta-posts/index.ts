@@ -104,17 +104,33 @@ async function fetchInstagramPosts(
     pages++;
   }
 
-  // Fetch insights for each post (reach, impressions, saved, shares)
+  // Fetch insights for each post — metrics differ by media type:
+  // Reels: reach,saved,shares,plays (no impressions)
+  // Other (IMAGE, VIDEO, CAROUSEL_ALBUM): reach,impressions,saved (no shares)
   const postsWithInsights = [];
   for (const post of allPosts) {
     try {
-      const insightsUrl = `${GRAPH_API}/${post.id}/insights?metric=reach,impressions,saved,shares&access_token=${accessToken}`;
+      const isReel = post.media_type === "VIDEO" || post.media_type === "REEL";
+      const metrics = isReel
+        ? "reach,saved,shares,plays"
+        : "reach,impressions,saved";
+      const insightsUrl = `${GRAPH_API}/${post.id}/insights?metric=${metrics}&access_token=${accessToken}`;
       const insRes = await fetch(insightsUrl);
       let insights: Record<string, number> = {};
       if (insRes.ok) {
         const insJson = await insRes.json();
         for (const metric of insJson.data || []) {
           insights[metric.name] = metric.values?.[0]?.value ?? 0;
+        }
+      } else {
+        // Fallback: try minimal metrics if the first request fails
+        const fallbackUrl = `${GRAPH_API}/${post.id}/insights?metric=reach,saved&access_token=${accessToken}`;
+        const fallbackRes = await fetch(fallbackUrl);
+        if (fallbackRes.ok) {
+          const fallbackJson = await fallbackRes.json();
+          for (const metric of fallbackJson.data || []) {
+            insights[metric.name] = metric.values?.[0]?.value ?? 0;
+          }
         }
       }
       postsWithInsights.push({ ...post, insights });
@@ -191,7 +207,9 @@ function transformInstagramPost(
   const shares = post.insights?.shares || 0;
   const reach = post.insights?.reach || 0;
   const impressions = post.insights?.impressions || 0;
-  const isReel = post.media_type === "VIDEO" && !post.media_url;
+  const plays = post.insights?.plays || null;
+  // Detect reels: REEL type, or VIDEO without media_url (IG API quirk)
+  const isReel = post.media_type === "REEL" || (post.media_type === "VIDEO" && !post.media_url);
 
   const engagement_rate = computeEngagementRate({
     likes,
@@ -218,7 +236,7 @@ function transformInstagramPost(
     reach,
     impressions,
     engagement_rate,
-    plays: null as number | null,
+    plays: plays,
     avg_watch_time: null as number | null,
     content_category: "uncategorized",
     performance_score: 0,
@@ -430,12 +448,17 @@ serve(async (req) => {
             continue;
           }
 
-          const rawPosts = await fetchInstagramPosts(accessToken, igUserId, since);
+          // Use page token for Instagram Business API (not user token)
+          const pageToken = page.access_token || accessToken;
+          const rawPosts = await fetchInstagramPosts(pageToken, igUserId, since);
+          const postsWithInsights = rawPosts.filter((p) => Object.keys(p.insights || {}).length > 0).length;
           diagnostics.steps.push({
             step: `ig_${page.name}`,
             status: "ok",
             igUserId,
             rawPostsCount: rawPosts.length,
+            postsWithInsights,
+            tokenUsed: pageToken === accessToken ? "user_token" : "page_token",
           });
           posts = rawPosts.map((post) => transformInstagramPost(post, organizationId));
         } else if (p === "facebook") {

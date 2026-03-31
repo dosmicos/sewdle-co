@@ -78,8 +78,8 @@ async function fetchPosts(
     .from('social_posts')
     .select('*')
     .eq('org_id', orgId)
-    .gte('published_at', startDate)
-    .lte('published_at', endDate)
+    .gte('published_at', `${startDate}T00:00:00`)
+    .lte('published_at', `${endDate}T23:59:59`)
     .order('published_at', { ascending: false });
 
   if (platform !== 'all') {
