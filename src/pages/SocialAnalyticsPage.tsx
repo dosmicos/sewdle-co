@@ -45,6 +45,10 @@ const SocialAnalyticsPage: React.FC = () => {
     kpis,
     insights,
     isConnected,
+    availablePages,
+    loadingPages,
+    selectedPageId,
+    setSelectedPageId,
   } = useMetaSocialAnalytics(metaPlatform, startDate, endDate);
 
   const handleSync = () => {
@@ -157,6 +161,29 @@ const SocialAnalyticsPage: React.FC = () => {
                       </div>
                     </PopoverContent>
                   </Popover>
+
+                  {/* Page / Instagram Account Selector */}
+                  {isConnected && availablePages.length > 0 && (
+                    <Select
+                      value={selectedPageId || 'all'}
+                      onValueChange={(v) => setSelectedPageId(v === 'all' ? null : v)}
+                    >
+                      <SelectTrigger className="w-52 h-9">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Instagram className="h-3.5 w-3.5 text-pink-500 flex-shrink-0" />
+                          <SelectValue placeholder="Selecciona página" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las páginas</SelectItem>
+                        {availablePages.map((page) => (
+                          <SelectItem key={page.id} value={page.id}>
+                            {page.name} {page.hasIgAccount ? '(IG ✓)' : '(Sin IG)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
 
                   <Button
                     onClick={handleSync}

@@ -319,7 +319,7 @@ serve(async (req) => {
   }
 
   try {
-    const { organizationId, platform, sinceDays } = await req.json();
+    const { organizationId, platform, sinceDays, action, pageId } = await req.json();
 
     if (!organizationId) {
       return new Response(
@@ -379,6 +379,33 @@ serve(async (req) => {
       );
     }
 
+    // ─── Action: list_pages ──────────────────────────────────────────
+    // Returns all Facebook pages + their linked Instagram accounts
+    if (action === "list_pages") {
+      const pageRes = await fetch(
+        `${GRAPH_API}/me/accounts?fields=id,name,access_token,instagram_business_account&limit=100&access_token=${accessToken}`
+      );
+      if (!pageRes.ok) {
+        const errText = await pageRes.text();
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to fetch pages", detail: errText }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const pagesJson = await pageRes.json();
+      const pages = (pagesJson.data || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        hasIgAccount: !!p.instagram_business_account,
+        igId: p.instagram_business_account?.id || null,
+      }));
+      return new Response(
+        JSON.stringify({ success: true, pages }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ─── Action: sync (default) ──────────────────────────────────────
     const since = sinceDays
       ? new Date(Date.now() - sinceDays * 86400000).toISOString().split("T")[0]
       : undefined;
@@ -412,7 +439,7 @@ serve(async (req) => {
       );
     }
     const pagesJson = await pageRes.json();
-    const allPages = pagesJson.data || [];
+    let allPages = pagesJson.data || [];
     diagnostics.steps.push({
       step: "fetch_pages",
       status: "ok",
@@ -424,6 +451,17 @@ serve(async (req) => {
         igId: p.instagram_business_account?.id || null,
       })),
     });
+
+    // Filter to selected page if specified
+    if (pageId) {
+      allPages = allPages.filter((p: any) => p.id === pageId);
+      if (allPages.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: `Page ${pageId} not found in authorized pages`, diagnostics }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     if (allPages.length === 0) {
       return new Response(

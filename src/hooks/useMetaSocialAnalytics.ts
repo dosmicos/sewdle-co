@@ -1,9 +1,16 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
 import { toast } from 'sonner';
+
+export interface MetaPage {
+  id: string;
+  name: string;
+  hasIgAccount: boolean;
+  igId: string | null;
+}
 
 export interface SocialPost {
   id: string;
@@ -104,6 +111,31 @@ export function useMetaSocialAnalytics(
   const queryClient = useQueryClient();
   const { isConnected } = useMetaAdsConnection();
   const [syncing, setSyncing] = useState(false);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(() => {
+    if (!orgId) return null;
+    return localStorage.getItem(`social_page_${orgId}`) || null;
+  });
+
+  // Update localStorage when selection changes
+  useEffect(() => {
+    if (orgId && selectedPageId) {
+      localStorage.setItem(`social_page_${orgId}`, selectedPageId);
+    }
+  }, [orgId, selectedPageId]);
+
+  // Fetch available Facebook pages + Instagram accounts
+  const { data: availablePages, isLoading: loadingPages } = useQuery({
+    queryKey: ['meta-pages', orgId],
+    queryFn: async (): Promise<MetaPage[]> => {
+      const { data, error } = await supabase.functions.invoke('sync-meta-posts', {
+        body: { organizationId: orgId, action: 'list_pages' },
+      });
+      if (error || !data.success) return [];
+      return data.pages || [];
+    },
+    enabled: !!orgId && isConnected,
+    staleTime: 1000 * 60 * 10,
+  });
 
   // Fetch all posts for the date range
   const { data: posts, isLoading } = useQuery({
@@ -132,6 +164,7 @@ export function useMetaSocialAnalytics(
             organizationId: orgId,
             platform: platform === 'all' ? undefined : platform,
             sinceDays,
+            pageId: selectedPageId || undefined,
           },
         });
 
@@ -177,7 +210,7 @@ export function useMetaSocialAnalytics(
         setSyncing(false);
       }
     },
-    [orgId, platform, isConnected, queryClient]
+    [orgId, platform, isConnected, queryClient, selectedPageId]
   );
 
   // --- Analysis functions (computed from fetched posts) ---
@@ -408,5 +441,10 @@ export function useMetaSocialAnalytics(
     insights,
     // Meta connection
     isConnected,
+    // Page selection
+    availablePages: availablePages || [],
+    loadingPages,
+    selectedPageId,
+    setSelectedPageId,
   };
 }
