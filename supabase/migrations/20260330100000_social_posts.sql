@@ -45,7 +45,7 @@ CREATE POLICY "Users can view social posts from their organization"
   ON social_posts FOR SELECT
   USING (
     org_id IN (
-      SELECT organization_id FROM organization_members
+      SELECT organization_id FROM organization_users
       WHERE user_id = auth.uid()
     )
   );
@@ -54,7 +54,7 @@ CREATE POLICY "Users can insert social posts for their organization"
   ON social_posts FOR INSERT
   WITH CHECK (
     org_id IN (
-      SELECT organization_id FROM organization_members
+      SELECT organization_id FROM organization_users
       WHERE user_id = auth.uid()
     )
   );
@@ -63,7 +63,7 @@ CREATE POLICY "Users can update social posts from their organization"
   ON social_posts FOR UPDATE
   USING (
     org_id IN (
-      SELECT organization_id FROM organization_members
+      SELECT organization_id FROM organization_users
       WHERE user_id = auth.uid()
     )
   );
