@@ -148,7 +148,7 @@ serve(async (req) => {
 Genera una lista de fechas culturales, comerciales y de marca relevantes para campañas de marketing para el año ${year}.
 
 Para cada fecha incluye:
-- name: nombre del evento/holiday
+- name: nombre del evento/holiday SIEMPRE en español (ej: "Día de la Madre", no "Mother's Day"). No dupliques la misma fecha con nombres diferentes.
 - date: fecha exacta en formato YYYY-MM-DD (para el año ${year})
 - market: "co" | "us" | "both"
 - category: "cultural" | "commercial" | "brand" | "seasonal"

@@ -3,8 +3,6 @@ import {
   format,
   startOfMonth,
   endOfMonth,
-  startOfWeek,
-  endOfWeek,
   addDays,
   addMonths,
   subMonths,
@@ -17,8 +15,10 @@ import {
 import { es } from 'date-fns/locale';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import ActivityRevenueChart from '@/components/finance-dashboard/ActivityRevenueChart';
+import MarketingCalendarView from '@/components/marketing-calendar/MarketingCalendarView';
 import { useMarketingEvents } from '@/hooks/useMarketingEvents';
 import { useMarketingActivity } from '@/hooks/useMarketingActivity';
+import { useHolidaySuggestions } from '@/hooks/useHolidaySuggestions';
 import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase } from '@/hooks/useMarketingEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,8 +34,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ChevronLeft,
-  ChevronRight,
   Plus,
   Pencil,
   Trash2,
@@ -59,11 +57,13 @@ import {
   RefreshCw,
   Mountain,
   Sparkles,
+  CalendarClock,
+  ListChecks,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import HolidaySuggestionPanel from '@/components/marketing-calendar/HolidaySuggestionPanel';
-import { useHolidaySuggestions } from '@/hooks/useHolidaySuggestions';
 
 // ─── Event type configuration ─────────────────────────────
 const EVENT_TYPE_CONFIG: Record<
@@ -187,12 +187,12 @@ const PEAK_PHASE_CONFIG: Record<PeakPhase, { label: string; color: string }> = {
   analysis: { label: 'Analisis', color: 'bg-blue-100 text-blue-700' },
 };
 
-// ─── Quarterly Peaks for Dosmicos ────────────────────────
+// ─── Quarterly Peaks ────────────────────────────────────
 interface QuarterlyPeak {
   quarter: string;
   name: string;
   months: string;
-  monthNumbers: number[]; // 1-indexed
+  monthNumbers: number[];
   icon: React.ReactNode;
   color: string;
   bgColor: string;
@@ -204,7 +204,7 @@ const QUARTERLY_PEAKS: QuarterlyPeak[] = [
     name: 'Hot Days',
     months: 'Marzo',
     monthNumbers: [3],
-    icon: <Flame className="h-4 w-4" />,
+    icon: <Flame className="h-3.5 w-3.5" />,
     color: 'text-red-600',
     bgColor: 'bg-red-50 border-red-200',
   },
@@ -213,25 +213,25 @@ const QUARTERLY_PEAKS: QuarterlyPeak[] = [
     name: 'Dia de la Madre',
     months: 'Mayo',
     monthNumbers: [5],
-    icon: <Target className="h-4 w-4" />,
+    icon: <Target className="h-3.5 w-3.5" />,
     color: 'text-pink-600',
     bgColor: 'bg-pink-50 border-pink-200',
   },
   {
     quarter: 'Q3',
     name: 'Temporada de Frio',
-    months: 'Julio - Agosto',
+    months: 'Jul - Ago',
     monthNumbers: [7, 8],
-    icon: <Mountain className="h-4 w-4" />,
+    icon: <Mountain className="h-3.5 w-3.5" />,
     color: 'text-blue-600',
     bgColor: 'bg-blue-50 border-blue-200',
   },
   {
     quarter: 'Q4',
-    name: 'Black Friday + Navidad',
+    name: 'BF + Navidad',
     months: 'Nov - Dic',
     monthNumbers: [11, 12],
-    icon: <Zap className="h-4 w-4" />,
+    icon: <Zap className="h-3.5 w-3.5" />,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50 border-purple-200',
   },
@@ -262,9 +262,7 @@ const DeltaBadge: React.FC<{ expected: number; actual: number }> = ({
       variant="secondary"
       className={cn(
         'text-[10px] px-1.5 gap-0.5',
-        isPositive
-          ? 'bg-green-100 text-green-700'
-          : 'bg-red-100 text-red-700'
+        isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
       )}
     >
       {isPositive ? (
@@ -331,7 +329,7 @@ const defaultForm: MarketingEventInput = {
 const MarketingCalendarPage: React.FC = () => {
   const { events, isLoading, addEvent, updateEvent, deleteEvent, calculateAttribution } =
     useMarketingEvents();
-  const { suggestedCount: pendingSuggestions } = useHolidaySuggestions();
+  const { suggestions, suggestedCount: pendingSuggestions } = useHolidaySuggestions();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -349,22 +347,6 @@ const MarketingCalendarPage: React.FC = () => {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [form, setForm] = useState<MarketingEventInput>(defaultForm);
   const [calculatingId, setCalculatingId] = useState<string | null>(null);
-
-  // ─── Calendar grid ───────────────────────────────────
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 }); // Monday
-    const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-
-    const days: Date[] = [];
-    let day = gridStart;
-    while (day <= gridEnd) {
-      days.push(day);
-      day = addDays(day, 1);
-    }
-    return days;
-  }, [currentMonth]);
 
   // ─── Events indexed by date ──────────────────────────
   const eventsByDate = useMemo(() => {
@@ -398,12 +380,35 @@ const MarketingCalendarPage: React.FC = () => {
     return eventsByDate.get(key) || [];
   }, [selectedDate, eventsByDate]);
 
+  // ─── KPI Summaries ──────────────────────────────────
+  const kpiData = useMemo(() => {
+    const thisMonthCount = monthEvents.length;
+
+    // Next upcoming event
+    const today = new Date().toISOString().slice(0, 10);
+    const nextEvent = events
+      .filter(e => e.event_date >= today)
+      .sort((a, b) => a.event_date.localeCompare(b.event_date))[0];
+
+    // Peak events this year
+    const currentYear = new Date().getFullYear();
+    const peakCount = events.filter(
+      e => e.is_peak && new Date(e.event_date + 'T12:00:00').getFullYear() === currentYear
+    ).length;
+
+    return {
+      thisMonthCount,
+      pendingSuggestions,
+      nextEvent,
+      peakCount,
+    };
+  }, [monthEvents, events, pendingSuggestions]);
+
   // ─── Quarterly peak data ──────────────────────────────
   const currentYear = new Date().getFullYear();
 
   const peakData = useMemo(() => {
     return QUARTERLY_PEAKS.map((peak) => {
-      // Find peak events for this quarter/year
       const peakEvents = events.filter(
         (e) =>
           e.is_peak &&
@@ -423,7 +428,6 @@ const MarketingCalendarPage: React.FC = () => {
       );
       const eventCount = peakEvents.length;
 
-      // Determine status
       const now = new Date();
       const peakMonthsInPast = peak.monthNumbers.every(
         (m) => new Date(currentYear, m - 1, 28) < now
@@ -483,7 +487,6 @@ const MarketingCalendarPage: React.FC = () => {
       toast.error('El titulo es obligatorio');
       return;
     }
-    // Require why_now for high-impact events
     if (form.expected_impact === 'high' && !form.why_now?.trim()) {
       toast.error('"Por que ahora?" es obligatorio para eventos de alto impacto');
       return;
@@ -535,9 +538,6 @@ const MarketingCalendarPage: React.FC = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  // ─── Day names ───────────────────────────────────────
-  const dayNames = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
-
   const STATUS_CONFIG = {
     planned: { label: 'Planeado', color: 'bg-gray-100 text-gray-600' },
     'in-progress': { label: 'En curso', color: 'bg-blue-100 text-blue-700' },
@@ -546,225 +546,105 @@ const MarketingCalendarPage: React.FC = () => {
 
   return (
     <FinanceDashboardLayout>
-      <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-5">
+
+        {/* ─── 1. HEADER ──────────────────────────────────── */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <CalendarDays className="h-6 w-6 text-blue-600" />
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
+              <CalendarDays className="h-5 w-5 text-white" />
+            </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">
                 Marketing Calendar
               </h1>
               <p className="text-sm text-gray-500">
-                Registra cada accion de marketing para entender que acciones
-                crean que resultados
+                Registra cada accion para entender que crea resultados
               </p>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
             {pendingSuggestions > 0 && (
               <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs">
                 <Sparkles className="h-3 w-3 mr-1" />
                 {pendingSuggestions} sugerencias IA
               </Badge>
             )}
+            <Button onClick={() => openAddDialog()} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nuevo Evento
+            </Button>
           </div>
-          <Button onClick={() => openAddDialog()}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nuevo Evento
-          </Button>
         </div>
 
-        {/* ─── Holiday AI Suggestions Panel ─────────────── */}
-        <HolidaySuggestionPanel />
-
-        {/* ─── Quarterly Peaks Section ─────────────────── */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Mountain className="h-4 w-4 text-gray-600" />
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                Peaks del Ano — {currentYear}
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {peakData.map((peak) => {
-                const statusCfg = STATUS_CONFIG[peak.status];
-                return (
-                  <div
-                    key={peak.quarter}
-                    className={cn(
-                      'rounded-lg border p-3 space-y-2',
-                      peak.bgColor
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={peak.color}>{peak.icon}</span>
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900">
-                            {peak.name}
-                          </div>
-                          <div className="text-[10px] text-gray-500">
-                            {peak.quarter} — {peak.months}
-                          </div>
-                        </div>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={cn('text-[10px]', statusCfg.color)}
-                      >
-                        {statusCfg.label}
-                      </Badge>
-                    </div>
-
-                    {peak.eventCount > 0 ? (
-                      <div className="space-y-1">
-                        {peak.totalExpected > 0 && (
-                          <div className="text-xs text-gray-600">
-                            Esperado: {formatCOPShort(peak.totalExpected)}
-                          </div>
-                        )}
-                        {peak.totalActual > 0 && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-medium text-gray-800">
-                              Actual: {formatCOPShort(peak.totalActual)}
-                            </span>
-                            {peak.totalExpected > 0 && (
-                              <DeltaBadge
-                                expected={peak.totalExpected}
-                                actual={peak.totalActual}
-                              />
-                            )}
-                          </div>
-                        )}
-                        <div className="text-[10px] text-gray-400">
-                          {peak.eventCount} evento{peak.eventCount !== 1 && 's'}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-400 italic">
-                        Sin eventos peak creados
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Month navigation + Calendar */}
-        <Card>
-          <CardContent className="p-4">
-            {/* Month nav */}
-            <div className="flex items-center justify-between mb-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <h2 className="text-lg font-semibold capitalize">
-                {format(currentMonth, 'MMMM yyyy', { locale: es })}
-              </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Day headers */}
-            <div className="grid grid-cols-7 gap-px mb-1">
-              {dayNames.map((d) => (
-                <div
-                  key={d}
-                  className="text-center text-xs font-medium text-gray-500 py-2"
-                >
-                  {d}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
-              {calendarDays.map((day, idx) => {
-                const dateKey = format(day, 'yyyy-MM-dd');
-                const dayEvents = eventsByDate.get(dateKey) || [];
-                const inMonth = isSameMonth(day, currentMonth);
-                const today = isToday(day);
-                const isSelected =
-                  selectedDate && isSameDay(day, selectedDate);
-                const hasPeakEvent = dayEvents.some((e) => e.is_peak);
-
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedDate(day)}
-                    onDoubleClick={() => openAddDialog(day)}
-                    className={cn(
-                      'min-h-[80px] p-1.5 text-left transition-colors flex flex-col',
-                      inMonth ? 'bg-white' : 'bg-gray-50',
-                      isSelected && 'ring-2 ring-blue-500 ring-inset',
-                      !isSelected && 'hover:bg-blue-50/50',
-                      hasPeakEvent && 'bg-amber-50/50'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full',
-                        !inMonth && 'text-gray-300',
-                        inMonth && !today && 'text-gray-700',
-                        today && 'bg-blue-600 text-white'
-                      )}
-                    >
-                      {format(day, 'd')}
-                    </span>
-                    <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
-                      {dayEvents.slice(0, 3).map((ev) => {
-                        const cfg = EVENT_TYPE_CONFIG[ev.event_type];
-                        return (
-                          <div
-                            key={ev.id}
-                            className={cn(
-                              'text-[10px] leading-tight px-1 py-0.5 rounded truncate border',
-                              cfg.color,
-                              ev.is_peak && 'ring-1 ring-amber-400'
-                            )}
-                            title={ev.title}
-                          >
-                            {ev.is_peak && (
-                              <Mountain className="h-2 w-2 inline mr-0.5" />
-                            )}
-                            {ev.title}
-                          </div>
-                        );
-                      })}
-                      {dayEvents.length > 3 && (
-                        <span className="text-[10px] text-gray-400 px-1">
-                          +{dayEvents.length - 3} mas
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Activity vs Revenue */}
-        <ActivityRevenueChart
-          dailyData={activity.dailyData}
-          summary={activity.summary}
-          isLoading={activity.isLoading}
+        {/* ─── 2. CALENDARIO PRINCIPAL ─────────────────────── */}
+        <MarketingCalendarView
+          currentMonth={currentMonth}
+          onMonthChange={setCurrentMonth}
+          events={events}
+          suggestions={suggestions}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          onDoubleClickDate={(date) => openAddDialog(date)}
         />
 
-        {/* Selected date events */}
-        {selectedDate && selectedDateEvents.length > 0 && (
+        {/* ─── 3. KPI SUMMARY ROW ──────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <CalendarClock className="h-4 w-4 text-blue-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{kpiData.thisMonthCount}</div>
+                <div className="text-xs text-gray-500">Eventos este mes</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="h-4 w-4 text-violet-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{kpiData.pendingSuggestions}</div>
+                <div className="text-xs text-gray-500">Sugerencias pendientes</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-4 w-4 text-green-600" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-gray-900 truncate">
+                  {kpiData.nextEvent
+                    ? format(new Date(kpiData.nextEvent.event_date + 'T12:00:00'), 'd MMM', { locale: es })
+                    : '---'}
+                </div>
+                <div className="text-xs text-gray-500 truncate">
+                  {kpiData.nextEvent ? kpiData.nextEvent.title : 'Proximo evento'}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <Mountain className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{kpiData.peakCount}</div>
+                <div className="text-xs text-gray-500">Peaks {currentYear}</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ─── Selected date events (inline panel) ─────────── */}
+        {selectedDate && selectedDateEvents.length > 0 && (
+          <Card className="border-blue-200 bg-blue-50/20">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-700">
@@ -791,9 +671,8 @@ const MarketingCalendarPage: React.FC = () => {
                   return (
                     <div
                       key={ev.id}
-                      className="border rounded-lg hover:bg-gray-50 transition-colors"
+                      className="border rounded-lg bg-white hover:shadow-sm transition-shadow"
                     >
-                      {/* Main row */}
                       <div
                         className="flex items-start gap-3 p-3 cursor-pointer"
                         onClick={() =>
@@ -845,13 +724,11 @@ const MarketingCalendarPage: React.FC = () => {
                               {ev.description}
                             </p>
                           )}
-                          {/* Why Now - prominent display */}
                           {ev.why_now && (
                             <div className="mt-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">
                               <strong>Por que ahora:</strong> {ev.why_now}
                             </div>
                           )}
-                          {/* Expected vs Actual inline */}
                           <div className="mt-1">
                             <ExpectedVsActual
                               expected={ev.expected_revenue}
@@ -962,7 +839,6 @@ const MarketingCalendarPage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Calculate Attribution button */}
                           {isEventPast && (
                             <Button
                               size="sm"
@@ -983,7 +859,6 @@ const MarketingCalendarPage: React.FC = () => {
                             </Button>
                           )}
 
-                          {/* Learnings */}
                           {ev.learnings && (
                             <div className="bg-white border rounded-lg p-3">
                               <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
@@ -1004,7 +879,88 @@ const MarketingCalendarPage: React.FC = () => {
           </Card>
         )}
 
-        {/* All month events list */}
+        {/* ─── 4. SUGERENCIAS IA (TABLA COMPACTA) ──────────── */}
+        <HolidaySuggestionPanel />
+
+        {/* ─── 5. PEAKS DEL ANO (COMPACTOS) ────────────────── */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Mountain className="h-4 w-4 text-gray-600" />
+              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                Peaks del Ano — {currentYear}
+              </h3>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {peakData.map((peak) => {
+                const statusCfg = STATUS_CONFIG[peak.status];
+                return (
+                  <div
+                    key={peak.quarter}
+                    className={cn(
+                      'rounded-lg border p-3 flex items-start gap-2.5',
+                      peak.bgColor
+                    )}
+                  >
+                    <span className={cn('mt-0.5', peak.color)}>{peak.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {peak.quarter} {peak.name}
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={cn('text-[9px] px-1 flex-shrink-0', statusCfg.color)}
+                        >
+                          {statusCfg.label}
+                        </Badge>
+                      </div>
+                      <div className="text-[10px] text-gray-500">{peak.months}</div>
+                      {peak.eventCount > 0 ? (
+                        <div className="mt-1 space-y-0.5">
+                          {peak.totalExpected > 0 && (
+                            <div className="text-[10px] text-gray-600">
+                              Esp: {formatCOPShort(peak.totalExpected)}
+                            </div>
+                          )}
+                          {peak.totalActual > 0 && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-medium text-gray-800">
+                                Act: {formatCOPShort(peak.totalActual)}
+                              </span>
+                              {peak.totalExpected > 0 && (
+                                <DeltaBadge
+                                  expected={peak.totalExpected}
+                                  actual={peak.totalActual}
+                                />
+                              )}
+                            </div>
+                          )}
+                          <div className="text-[9px] text-gray-400">
+                            {peak.eventCount} evento{peak.eventCount !== 1 && 's'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-400 italic mt-1">
+                          Sin eventos peak
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ─── Activity vs Revenue ─────────────────────────── */}
+        <ActivityRevenueChart
+          dailyData={activity.dailyData}
+          summary={activity.summary}
+          isLoading={activity.isLoading}
+        />
+
+        {/* ─── All month events table ──────────────────────── */}
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
@@ -1163,16 +1119,6 @@ const MarketingCalendarPage: React.FC = () => {
                 </table>
               </div>
             )}
-
-            {/* Legend */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {Object.entries(EVENT_TYPE_CONFIG).map(([key, cfg]) => (
-                <div key={key} className="flex items-center gap-1">
-                  <span className={cn('w-2 h-2 rounded-full', cfg.dot)} />
-                  <span className="text-[10px] text-gray-500">{cfg.label}</span>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -1187,7 +1133,6 @@ const MarketingCalendarPage: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
-            {/* Title */}
             <div className="space-y-1.5">
               <Label className="text-sm">Titulo</Label>
               <Input
@@ -1197,7 +1142,6 @@ const MarketingCalendarPage: React.FC = () => {
               />
             </div>
 
-            {/* Date + Type */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Fecha</Label>
@@ -1225,7 +1169,6 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Description */}
             <div className="space-y-1.5">
               <Label className="text-sm">Descripcion (opcional)</Label>
               <Input
@@ -1235,7 +1178,6 @@ const MarketingCalendarPage: React.FC = () => {
               />
             </div>
 
-            {/* Why Now? - PROMINENT */}
             <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
               <Label className="text-sm font-semibold text-indigo-700">
                 Por que ahora?{' '}
@@ -1246,7 +1188,7 @@ const MarketingCalendarPage: React.FC = () => {
               <Textarea
                 value={form.why_now || ''}
                 onChange={(e) => updateForm('why_now', e.target.value)}
-                placeholder="Que hace que ESTE momento sea el correcto para esta accion? (temporada, tendencia, inventario, competencia...)"
+                placeholder="Que hace que ESTE momento sea el correcto para esta accion?"
                 className="bg-white text-sm min-h-[60px]"
               />
               <p className="text-[10px] text-indigo-400">
@@ -1254,7 +1196,6 @@ const MarketingCalendarPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Impact + Revenue real */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Impacto esperado</Label>
@@ -1293,7 +1234,6 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Expected Revenue + Expected New Customers */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Revenue Esperado (COP)</Label>
@@ -1329,7 +1269,6 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Attribution Window */}
             <div className="space-y-1.5">
               <Label className="text-sm">Ventana de atribucion (dias)</Label>
               <Input
@@ -1350,7 +1289,6 @@ const MarketingCalendarPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Peak Event Section */}
             <div className="border rounded-lg p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -1400,7 +1338,6 @@ const MarketingCalendarPage: React.FC = () => {
               )}
             </div>
 
-            {/* Learnings (for editing existing events) */}
             {editingId && (
               <div className="space-y-1.5">
                 <Label className="text-sm">Aprendizajes</Label>

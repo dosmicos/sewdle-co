@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,14 +8,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ChevronDown,
-  ChevronUp,
   Sparkles,
   Check,
   X,
@@ -32,6 +37,9 @@ import {
   Calendar,
   Bot,
   User,
+  ChevronDown,
+  ChevronUp,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -41,12 +49,12 @@ import {
   type SuggestionFilters,
 } from '@/hooks/useHolidaySuggestions';
 
-// ─── Quarter Config ─────────────────────────────────────
+// ─── Config ─────────────────────────────────────────────
 const QUARTER_CONFIG = {
-  q1: { label: 'Q1 Hot Days', color: 'border-l-orange-500', bg: 'bg-orange-50', icon: Flame, iconColor: 'text-orange-500' },
-  q2: { label: 'Q2 Dia de la Madre', color: 'border-l-pink-500', bg: 'bg-pink-50', icon: Target, iconColor: 'text-pink-500' },
-  q3: { label: 'Q3 Temporada Frio', color: 'border-l-blue-500', bg: 'bg-blue-50', icon: Mountain, iconColor: 'text-blue-500' },
-  q4: { label: 'Q4 BF + Navidad', color: 'border-l-yellow-500', bg: 'bg-yellow-50', icon: Zap, iconColor: 'text-yellow-500' },
+  q1: { label: 'Q1', fullLabel: 'Q1 Hot Days', icon: Flame, iconColor: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
+  q2: { label: 'Q2', fullLabel: 'Q2 Dia Madre', icon: Target, iconColor: 'text-pink-500', bg: 'bg-pink-50', border: 'border-pink-200' },
+  q3: { label: 'Q3', fullLabel: 'Q3 Frio', icon: Mountain, iconColor: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+  q4: { label: 'Q4', fullLabel: 'Q4 BF+Nav', icon: Zap, iconColor: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' },
 } as const;
 
 const IMPACT_BADGE = {
@@ -61,171 +69,89 @@ const MARKET_FLAG: Record<string, string> = {
   both: '\u{1F1E8}\u{1F1F4}\u{1F1FA}\u{1F1F8}',
 };
 
-// ─── Suggestion Card ────────────────────────────────────
-const SuggestionCard: React.FC<{
-  suggestion: HolidaySuggestion;
-  onAccept: (s: HolidaySuggestion) => void;
-  onDismiss: (id: string) => void;
-  onRestore: (id: string) => void;
-  isAccepting: boolean;
-}> = ({ suggestion, onAccept, onDismiss, onRestore, isAccepting }) => {
-  const [expanded, setExpanded] = useState(false);
+const CATEGORY_LABEL: Record<string, string> = {
+  cultural: 'Cultural',
+  commercial: 'Comercial',
+  brand: 'Marca',
+  seasonal: 'Temporal',
+};
+
+// ─── Detail Popover for a suggestion ────────────────────
+const SuggestionDetailDialog: React.FC<{
+  suggestion: HolidaySuggestion | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}> = ({ suggestion, open, onOpenChange }) => {
+  if (!suggestion) return null;
   const quarter = suggestion.quarter_peak ? QUARTER_CONFIG[suggestion.quarter_peak] : null;
-  const impact = IMPACT_BADGE[suggestion.expected_impact];
   const QuarterIcon = quarter?.icon || Calendar;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
-      transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
-    >
-      <div
-        className={cn(
-          'rounded-lg border border-l-4 transition-shadow hover:shadow-sm',
-          quarter?.color || 'border-l-gray-300',
-          suggestion.status === 'dismissed' && 'opacity-50',
-          suggestion.status === 'accepted' && 'bg-green-50/30 border-green-200',
-        )}
-      >
-        <div className="p-3">
-          {/* Top row */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg leading-none">{MARKET_FLAG[suggestion.market]}</span>
-                <span className="font-semibold text-sm text-gray-900 truncate">
-                  {suggestion.name}
-                </span>
-                {suggestion.is_ai_generated ? (
-                  <Badge variant="outline" className="text-[9px] px-1 gap-0.5 border-violet-200 text-violet-600">
-                    <Bot className="h-2.5 w-2.5" /> IA
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[9px] px-1 gap-0.5 border-gray-200 text-gray-500">
-                    <User className="h-2.5 w-2.5" /> Manual
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{format(new Date(suggestion.date + 'T12:00:00'), "d 'de' MMMM, yyyy", { locale: es })}</span>
-                <Badge variant="secondary" className={cn('text-[10px] px-1.5 border', impact.className)}>
-                  {impact.label}
-                </Badge>
-                {quarter && (
-                  <span className={cn('flex items-center gap-0.5 text-[10px]', quarter.iconColor)}>
-                    <QuarterIcon className="h-3 w-3" />
-                    {suggestion.quarter_peak?.toUpperCase()}
-                  </span>
-                )}
-                {suggestion.status === 'accepted' && (
-                  <Badge className="text-[9px] px-1.5 bg-green-100 text-green-700 border-green-200">
-                    Agregado
-                  </Badge>
-                )}
-                {suggestion.status === 'dismissed' && (
-                  <Badge className="text-[9px] px-1.5 bg-gray-100 text-gray-500 border-gray-200">
-                    Descartado
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {suggestion.status === 'suggested' && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                    onClick={() => onAccept(suggestion)}
-                    disabled={isAccepting}
-                  >
-                    <Check className="h-3.5 w-3.5 mr-1" />
-                    <span className="text-xs">Agregar</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
-                    onClick={() => onDismiss(suggestion.id)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              )}
-              {suggestion.status === 'dismissed' && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-gray-500 hover:text-blue-600"
-                  onClick={() => onRestore(suggestion.id)}
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  <span className="text-xs">Restaurar</span>
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0 text-gray-400"
-                onClick={() => setExpanded(!expanded)}
-              >
-                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Expandable content */}
-          <AnimatePresence>
-            {expanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 pt-3 border-t space-y-2">
-                  {suggestion.why_now && (
-                    <div className="bg-indigo-50 rounded-md p-2.5">
-                      <div className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 uppercase tracking-wider mb-1">
-                        <Target className="h-3 w-3" />
-                        Por que ahora
-                      </div>
-                      <p className="text-xs text-indigo-800 leading-relaxed">{suggestion.why_now}</p>
-                    </div>
-                  )}
-                  {suggestion.campaign_idea && (
-                    <div className="bg-amber-50 rounded-md p-2.5">
-                      <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-1">
-                        <Lightbulb className="h-3 w-3" />
-                        Idea de campana
-                      </div>
-                      <p className="text-xs text-amber-800 leading-relaxed">{suggestion.campaign_idea}</p>
-                    </div>
-                  )}
-                  <div className="flex gap-2 text-[10px] text-gray-400">
-                    <span>Categoria: {suggestion.category}</span>
-                    <span>|</span>
-                    <span>Tipo sugerido: {suggestion.suggested_event_type}</span>
-                    {suggestion.source_model && (
-                      <>
-                        <span>|</span>
-                        <span>Modelo: {suggestion.source_model}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span>{MARKET_FLAG[suggestion.market]}</span>
+            {suggestion.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 mt-2">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="outline" className="text-xs">
+              {format(new Date(suggestion.date + 'T12:00:00'), "d 'de' MMMM, yyyy", { locale: es })}
+            </Badge>
+            <Badge variant="secondary" className={cn('text-xs border', IMPACT_BADGE[suggestion.expected_impact].className)}>
+              {IMPACT_BADGE[suggestion.expected_impact].label}
+            </Badge>
+            {quarter && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <QuarterIcon className={cn('h-3 w-3', quarter.iconColor)} />
+                {quarter.fullLabel}
+              </Badge>
             )}
-          </AnimatePresence>
+            <Badge variant="outline" className="text-xs">
+              {CATEGORY_LABEL[suggestion.category] || suggestion.category}
+            </Badge>
+            {suggestion.is_ai_generated ? (
+              <Badge variant="outline" className="text-xs gap-1 border-violet-200 text-violet-600">
+                <Bot className="h-3 w-3" /> IA
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs gap-1">
+                <User className="h-3 w-3" /> Manual
+              </Badge>
+            )}
+          </div>
+          {suggestion.why_now && (
+            <div className="bg-indigo-50 rounded-md p-3">
+              <div className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 uppercase tracking-wider mb-1">
+                <Target className="h-3 w-3" />
+                Por que ahora
+              </div>
+              <p className="text-sm text-indigo-800 leading-relaxed">{suggestion.why_now}</p>
+            </div>
+          )}
+          {suggestion.campaign_idea && (
+            <div className="bg-amber-50 rounded-md p-3">
+              <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-1">
+                <Lightbulb className="h-3 w-3" />
+                Idea de campana
+              </div>
+              <p className="text-sm text-amber-800 leading-relaxed">{suggestion.campaign_idea}</p>
+            </div>
+          )}
+          <div className="flex gap-2 text-xs text-gray-400 pt-1">
+            <span>Tipo sugerido: {suggestion.suggested_event_type}</span>
+            {suggestion.source_model && (
+              <>
+                <span>|</span>
+                <span>Modelo: {suggestion.source_model}</span>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </motion.div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -329,7 +255,7 @@ const ManualSuggestionDialog: React.FC<{
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm">Idea de campana</Label>
-            <Textarea value={form.campaign_idea} onChange={e => setForm({ ...form, campaign_idea: e.target.value })} placeholder="Idea breve de campaña..." className="text-sm min-h-[50px]" />
+            <Textarea value={form.campaign_idea} onChange={e => setForm({ ...form, campaign_idea: e.target.value })} placeholder="Idea breve de campana..." className="text-sm min-h-[50px]" />
           </div>
           <Button onClick={handleSave} className="w-full">Agregar Fecha</Button>
         </div>
@@ -340,9 +266,9 @@ const ManualSuggestionDialog: React.FC<{
 
 // ─── Main Panel ─────────────────────────────────────────
 const HolidaySuggestionPanel: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [detailSuggestion, setDetailSuggestion] = useState<HolidaySuggestion | null>(null);
   const [filters, setFilters] = useState<SuggestionFilters>({});
 
   const currentYear = new Date().getFullYear();
@@ -363,12 +289,12 @@ const HolidaySuggestionPanel: React.FC = () => {
     addManualSuggestion,
   } = useHolidaySuggestions({ ...filters, year: selectedYear });
 
-  // Group by quarter
+  // Group by quarter for compact counters
   const byQuarter = useMemo(() => {
-    const grouped: Record<string, HolidaySuggestion[]> = { q1: [], q2: [], q3: [], q4: [] };
+    const grouped: Record<string, number> = { q1: 0, q2: 0, q3: 0, q4: 0 };
     for (const s of suggestions) {
       const key = s.quarter_peak || 'q1';
-      if (grouped[key]) grouped[key].push(s);
+      if (grouped[key] !== undefined) grouped[key]++;
     }
     return grouped;
   }, [suggestions]);
@@ -419,256 +345,339 @@ const HolidaySuggestionPanel: React.FC = () => {
 
   return (
     <>
-      <Card className="overflow-hidden">
-        {/* Header - always visible */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-violet-600" />
-            </div>
-            <div className="text-left">
-              <h3 className="text-sm font-semibold text-gray-900">
-                Fechas Sugeridas por IA
-              </h3>
-              <p className="text-xs text-gray-500">
-                Campanas recomendadas para {selectedYear}
-              </p>
-            </div>
-            {suggestedCount > 0 && (
-              <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs">
-                {suggestedCount} pendientes
-              </Badge>
-            )}
-            {acceptedCount > 0 && (
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">
-                {acceptedCount} aceptadas
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-          </div>
-        </button>
-
-        {/* Collapsible content */}
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
-              className="overflow-hidden"
-            >
-              <CardContent className="pt-0 pb-4 px-4">
-                {/* Controls */}
-                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleGenerate}
-                      disabled={isGenerating}
-                      className="bg-violet-600 hover:bg-violet-700 text-white"
-                    >
-                      {isGenerating ? (
-                        <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      {isGenerating ? 'Generando...' : 'Generar sugerencias con IA'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setManualDialogOpen(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Fecha manual
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setShowFilters(!showFilters)}
-                      className={showFilters ? 'bg-gray-100' : ''}
-                    >
-                      <Filter className="h-3.5 w-3.5 mr-1" />
-                      Filtros
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedYear}
-                      onChange={e => setSelectedYear(Number(e.target.value))}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    >
-                      <option value={currentYear}>{currentYear}</option>
-                      <option value={currentYear + 1}>{currentYear + 1}</option>
-                    </select>
-                  </div>
+      <Card>
+        <CardContent className="p-4">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="h-4 w-4 text-violet-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Sugerencias IA
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>{suggestedCount} pendientes</span>
+                  <span className="text-gray-300">|</span>
+                  <span>{acceptedCount} aceptadas</span>
+                  <span className="text-gray-300">|</span>
+                  <span>{dismissedCount} descartadas</span>
                 </div>
+              </div>
+            </div>
 
-                {/* Filters row */}
-                <AnimatePresence>
-                  {showFilters && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="overflow-hidden"
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Compact quarter counters */}
+              <div className="hidden sm:flex items-center gap-1">
+                {(Object.entries(QUARTER_CONFIG) as [string, typeof QUARTER_CONFIG['q1']][]).map(([key, config]) => {
+                  const QuIcon = config.icon;
+                  const count = byQuarter[key] || 0;
+                  const isActive = filters.quarter_peak === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setFilters(prev => ({ ...prev, quarter_peak: prev.quarter_peak === key ? null : key }))}
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all border',
+                        isActive
+                          ? `${config.bg} ${config.border} font-medium`
+                          : 'border-transparent hover:bg-gray-50 text-gray-500',
+                      )}
                     >
-                      <div className="flex flex-wrap gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
-                        <select
-                          value={filters.quarter_peak || ''}
-                          onChange={e => setFilters({ ...filters, quarter_peak: e.target.value || null })}
-                          className="h-7 rounded-md border border-input bg-white px-2 text-xs"
-                        >
-                          <option value="">Todos los quarters</option>
-                          <option value="q1">Q1 Hot Days</option>
-                          <option value="q2">Q2 Dia Madre</option>
-                          <option value="q3">Q3 Frio</option>
-                          <option value="q4">Q4 BF+Nav</option>
-                        </select>
-                        <select
-                          value={filters.market || ''}
-                          onChange={e => setFilters({ ...filters, market: (e.target.value || null) as any })}
-                          className="h-7 rounded-md border border-input bg-white px-2 text-xs"
-                        >
-                          <option value="">Todos los mercados</option>
-                          <option value="co">Colombia</option>
-                          <option value="us">USA</option>
-                          <option value="both">Ambos</option>
-                        </select>
-                        <select
-                          value={filters.status || ''}
-                          onChange={e => setFilters({ ...filters, status: (e.target.value || null) as any })}
-                          className="h-7 rounded-md border border-input bg-white px-2 text-xs"
-                        >
-                          <option value="">Todos los estados</option>
-                          <option value="suggested">Pendientes</option>
-                          <option value="accepted">Aceptadas</option>
-                          <option value="dismissed">Descartadas</option>
-                        </select>
-                        <select
-                          value={filters.is_ai_generated === null || filters.is_ai_generated === undefined ? '' : String(filters.is_ai_generated)}
-                          onChange={e => setFilters({ ...filters, is_ai_generated: e.target.value === '' ? null : e.target.value === 'true' })}
-                          className="h-7 rounded-md border border-input bg-white px-2 text-xs"
-                        >
-                          <option value="">Todas las fuentes</option>
-                          <option value="true">IA</option>
-                          <option value="false">Manual</option>
-                        </select>
-                        {(filters.quarter_peak || filters.market || filters.status || filters.is_ai_generated !== null && filters.is_ai_generated !== undefined) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-gray-500"
-                            onClick={() => setFilters({})}
-                          >
-                            Limpiar filtros
-                          </Button>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <QuIcon className={cn('h-3 w-3', config.iconColor)} />
+                      <span>{config.label}</span>
+                      <span className="text-[10px] text-gray-400">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-                {/* Content */}
-                {isLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
-                    ))}
-                  </div>
-                ) : suggestions.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <Sparkles className="h-10 w-10 text-violet-200 mx-auto mb-3" />
-                    <p className="text-sm text-gray-500 mb-1">
-                      No hay sugerencias para {selectedYear}
-                    </p>
-                    <p className="text-xs text-gray-400 mb-4">
-                      Genera sugerencias con IA para descubrir las mejores fechas de campana
-                    </p>
-                    <Button
-                      size="sm"
-                      onClick={handleGenerate}
-                      disabled={isGenerating}
-                      className="bg-violet-600 hover:bg-violet-700 text-white"
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                      Generar ahora
-                    </Button>
-                  </div>
+              <div className="h-4 w-px bg-gray-200 hidden sm:block" />
+
+              <select
+                value={selectedYear}
+                onChange={e => setSelectedYear(Number(e.target.value))}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value={currentYear}>{currentYear}</option>
+                <option value={currentYear + 1}>{currentYear + 1}</option>
+              </select>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowFilters(!showFilters)}
+                className={cn('h-8', showFilters && 'bg-gray-100')}
+              >
+                <Filter className="h-3.5 w-3.5 mr-1" />
+                <span className="text-xs">Filtros</span>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => setManualDialogOpen(true)}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                <span className="text-xs">Manual</span>
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="h-8 bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                {isGenerating ? (
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 ) : (
-                  <div className="space-y-5">
-                    {/* Quarter timeline */}
-                    <div className="grid grid-cols-4 gap-2">
-                      {(Object.entries(QUARTER_CONFIG) as [string, typeof QUARTER_CONFIG['q1']][]).map(([key, config]) => {
-                        const count = byQuarter[key]?.length || 0;
-                        const suggestedInQ = byQuarter[key]?.filter(s => s.status === 'suggested').length || 0;
-                        const QuIcon = config.icon;
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => setFilters(prev => ({ ...prev, quarter_peak: prev.quarter_peak === key ? null : key }))}
-                            className={cn(
-                              'rounded-lg border p-2 text-center transition-all',
-                              filters.quarter_peak === key ? `${config.bg} border-current shadow-sm` : 'hover:bg-gray-50',
-                            )}
-                          >
-                            <QuIcon className={cn('h-4 w-4 mx-auto mb-1', config.iconColor)} />
-                            <div className="text-[10px] font-medium text-gray-700">{key.toUpperCase()}</div>
-                            <div className="text-[10px] text-gray-400">
-                              {count} fecha{count !== 1 && 's'}
-                              {suggestedInQ > 0 && (
-                                <span className="text-violet-500 ml-0.5">({suggestedInQ} nuevas)</span>
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                <span className="text-xs">{isGenerating ? 'Generando...' : 'Generar IA'}</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Filters row (collapsible) */}
+          {showFilters && (
+            <div className="flex flex-wrap gap-2 mb-4 p-3 bg-gray-50 rounded-lg border">
+              {/* Quarter filter (mobile) */}
+              <select
+                value={filters.quarter_peak || ''}
+                onChange={e => setFilters({ ...filters, quarter_peak: e.target.value || null })}
+                className="h-7 rounded-md border border-input bg-white px-2 text-xs sm:hidden"
+              >
+                <option value="">Todos Q</option>
+                <option value="q1">Q1 Hot Days</option>
+                <option value="q2">Q2 Dia Madre</option>
+                <option value="q3">Q3 Frio</option>
+                <option value="q4">Q4 BF+Nav</option>
+              </select>
+              <select
+                value={filters.market || ''}
+                onChange={e => setFilters({ ...filters, market: (e.target.value || null) as any })}
+                className="h-7 rounded-md border border-input bg-white px-2 text-xs"
+              >
+                <option value="">Todos mercados</option>
+                <option value="co">Colombia</option>
+                <option value="us">USA</option>
+                <option value="both">Ambos</option>
+              </select>
+              <select
+                value={filters.status || ''}
+                onChange={e => setFilters({ ...filters, status: (e.target.value || null) as any })}
+                className="h-7 rounded-md border border-input bg-white px-2 text-xs"
+              >
+                <option value="">Todos estados</option>
+                <option value="suggested">Pendientes</option>
+                <option value="accepted">Aceptadas</option>
+                <option value="dismissed">Descartadas</option>
+              </select>
+              <select
+                value={filters.category || ''}
+                onChange={e => setFilters({ ...filters, category: e.target.value || null })}
+                className="h-7 rounded-md border border-input bg-white px-2 text-xs"
+              >
+                <option value="">Todas categorias</option>
+                <option value="cultural">Cultural</option>
+                <option value="commercial">Comercial</option>
+                <option value="brand">Marca</option>
+                <option value="seasonal">Temporal</option>
+              </select>
+              <select
+                value={filters.is_ai_generated === null || filters.is_ai_generated === undefined ? '' : String(filters.is_ai_generated)}
+                onChange={e => setFilters({ ...filters, is_ai_generated: e.target.value === '' ? null : e.target.value === 'true' })}
+                className="h-7 rounded-md border border-input bg-white px-2 text-xs"
+              >
+                <option value="">Todas fuentes</option>
+                <option value="true">IA</option>
+                <option value="false">Manual</option>
+              </select>
+              {(filters.quarter_peak || filters.market || filters.status || filters.category || (filters.is_ai_generated !== null && filters.is_ai_generated !== undefined)) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-gray-500"
+                  onClick={() => setFilters({})}
+                >
+                  Limpiar
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Content */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-10 rounded bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : suggestions.length === 0 ? (
+            <div className="py-8 text-center">
+              <Sparkles className="h-10 w-10 text-violet-200 mx-auto mb-3" />
+              <p className="text-sm text-gray-500 mb-1">No hay sugerencias para {selectedYear}</p>
+              <p className="text-xs text-gray-400 mb-4">
+                Genera sugerencias con IA para descubrir las mejores fechas de campana
+              </p>
+              <Button
+                size="sm"
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                Generar ahora
+              </Button>
+            </div>
+          ) : (
+            <>
+              {/* Compact table */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/80">
+                      <TableHead className="h-9 px-3 text-xs font-semibold w-[110px]">Fecha</TableHead>
+                      <TableHead className="h-9 px-3 text-xs font-semibold">Evento</TableHead>
+                      <TableHead className="h-9 px-3 text-xs font-semibold w-[60px] text-center">Mercado</TableHead>
+                      <TableHead className="h-9 px-3 text-xs font-semibold w-[70px] text-center">Impacto</TableHead>
+                      <TableHead className="h-9 px-3 text-xs font-semibold w-[80px] text-center hidden md:table-cell">Categoria</TableHead>
+                      <TableHead className="h-9 px-3 text-xs font-semibold w-[50px] text-center hidden md:table-cell">Q</TableHead>
+                      <TableHead className="h-9 px-3 text-xs font-semibold w-[120px] text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {suggestions.map((s) => {
+                      const impact = IMPACT_BADGE[s.expected_impact];
+                      const quarter = s.quarter_peak ? QUARTER_CONFIG[s.quarter_peak] : null;
+                      const QuIcon = quarter?.icon;
+
+                      return (
+                        <TableRow
+                          key={s.id}
+                          className={cn(
+                            'transition-colors',
+                            s.status === 'dismissed' && 'opacity-50',
+                            s.status === 'accepted' && 'bg-green-50/30',
+                          )}
+                        >
+                          <TableCell className="py-2 px-3 text-xs text-gray-600">
+                            {format(new Date(s.date + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
+                          </TableCell>
+                          <TableCell className="py-2 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-medium text-gray-900 truncate">{s.name}</span>
+                              {s.is_ai_generated ? (
+                                <Bot className="h-3 w-3 text-violet-500 flex-shrink-0" />
+                              ) : (
+                                <User className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                              )}
+                              {s.status === 'accepted' && (
+                                <Badge className="text-[9px] px-1 py-0 bg-green-100 text-green-700 border-green-200 flex-shrink-0">
+                                  Agregado
+                                </Badge>
+                              )}
+                              {s.status === 'dismissed' && (
+                                <Badge className="text-[9px] px-1 py-0 bg-gray-100 text-gray-500 border-gray-200 flex-shrink-0">
+                                  Descartado
+                                </Badge>
                               )}
                             </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                          </TableCell>
+                          <TableCell className="py-2 px-3 text-center text-sm">
+                            {MARKET_FLAG[s.market]}
+                          </TableCell>
+                          <TableCell className="py-2 px-3 text-center">
+                            <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 border', impact.className)}>
+                              {impact.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-2 px-3 text-center hidden md:table-cell">
+                            <span className="text-xs text-gray-500">
+                              {CATEGORY_LABEL[s.category] || s.category}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 px-3 text-center hidden md:table-cell">
+                            {quarter && QuIcon && (
+                              <span className={cn('inline-flex items-center gap-0.5 text-xs', quarter.iconColor)}>
+                                <QuIcon className="h-3 w-3" />
+                                {quarter.label}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 px-3">
+                            <div className="flex items-center gap-1 justify-end">
+                              {/* Info button */}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600"
+                                onClick={() => setDetailSuggestion(s)}
+                                title="Ver detalle"
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </Button>
 
-                    {/* Suggestions list */}
-                    <div className="space-y-2">
-                      <AnimatePresence mode="popLayout">
-                        {suggestions.map((suggestion) => (
-                          <SuggestionCard
-                            key={suggestion.id}
-                            suggestion={suggestion}
-                            onAccept={handleAccept}
-                            onDismiss={handleDismiss}
-                            onRestore={handleRestore}
-                            isAccepting={isAccepting}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </div>
+                              {s.status === 'suggested' && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    onClick={() => handleAccept(s)}
+                                    disabled={isAccepting}
+                                    title="Agregar al calendario"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-gray-400 hover:text-red-500"
+                                    onClick={() => handleDismiss(s.id)}
+                                    title="Descartar"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                              {s.status === 'dismissed' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-gray-500 hover:text-blue-600"
+                                  onClick={() => handleRestore(s.id)}
+                                  title="Restaurar"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
 
-                    {/* Stats footer */}
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 pt-2 border-t">
-                      <span>
-                        {suggestions.length} sugerencia{suggestions.length !== 1 && 's'} total
-                        {suggestedCount > 0 && ` · ${suggestedCount} pendientes`}
-                        {acceptedCount > 0 && ` · ${acceptedCount} aceptadas`}
-                        {dismissedCount > 0 && ` · ${dismissedCount} descartadas`}
-                      </span>
-                      {suggestions.some(s => s.is_ai_generated) && (
-                        <span className="flex items-center gap-1">
-                          <Bot className="h-3 w-3" />
-                          Generado con Gemini
-                        </span>
-                      )}
-                    </div>
-                  </div>
+              {/* Stats footer */}
+              <div className="flex items-center justify-between text-[10px] text-gray-400 pt-2 mt-2">
+                <span>
+                  {suggestions.length} sugerencia{suggestions.length !== 1 && 's'} total
+                </span>
+                {suggestions.some(s => s.is_ai_generated) && (
+                  <span className="flex items-center gap-1">
+                    <Bot className="h-3 w-3" />
+                    Generado con Gemini
+                  </span>
                 )}
-              </CardContent>
-            </motion.div>
+              </div>
+            </>
           )}
-        </AnimatePresence>
+        </CardContent>
       </Card>
 
       <ManualSuggestionDialog
@@ -676,6 +685,12 @@ const HolidaySuggestionPanel: React.FC = () => {
         onOpenChange={setManualDialogOpen}
         onSave={handleAddManual}
         year={selectedYear}
+      />
+
+      <SuggestionDetailDialog
+        suggestion={detailSuggestion}
+        open={!!detailSuggestion}
+        onOpenChange={(open) => { if (!open) setDetailSuggestion(null); }}
       />
     </>
   );
