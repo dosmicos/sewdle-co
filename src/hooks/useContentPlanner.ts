@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -258,20 +259,24 @@ export function useContentPlanner(weekNumber: number, year: number, filters: Con
     },
   });
 
-  // Contadores por status
-  const statusCounts = (query.data || []).reduce<Record<ContentStatus, number>>(
-    (acc, piece) => {
-      acc[piece.status] = (acc[piece.status] || 0) + 1;
-      return acc;
-    },
-    { idea: 0, briefed: 0, in_production: 0, review: 0, approved: 0, scheduled: 0, published: 0 }
-  );
+  // Contadores por status - memoized
+  const statusCounts = useMemo(() => {
+    return (query.data || []).reduce<Record<ContentStatus, number>>(
+      (acc, piece) => {
+        acc[piece.status] = (acc[piece.status] || 0) + 1;
+        return acc;
+      },
+      { idea: 0, briefed: 0, in_production: 0, review: 0, approved: 0, scheduled: 0, published: 0 }
+    );
+  }, [query.data]);
 
-  // Agrupar por fecha
-  const piecesByDate = weekDates.reduce<Record<string, ContentPiece[]>>((acc, date) => {
-    acc[date] = (query.data || []).filter((p) => p.scheduled_date === date);
-    return acc;
-  }, {});
+  // Agrupar por fecha - memoized
+  const piecesByDate = useMemo(() => {
+    return weekDates.reduce<Record<string, ContentPiece[]>>((acc, date) => {
+      acc[date] = (query.data || []).filter((p) => p.scheduled_date === date);
+      return acc;
+    }, {});
+  }, [query.data, weekDates]);
 
   return {
     pieces: query.data || [],
