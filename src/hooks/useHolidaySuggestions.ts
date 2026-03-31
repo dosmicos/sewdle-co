@@ -47,11 +47,13 @@ export function useHolidaySuggestions(filters: SuggestionFilters = {}) {
   const query = useQuery({
     queryKey,
     queryFn: async (): Promise<HolidaySuggestion[]> => {
+      const today = new Date().toISOString().slice(0, 10);
       let q = supabase
         .from('holiday_suggestions')
         .select('*')
         .eq('org_id', orgId!)
         .eq('year', year)
+        .or(`date.gte.${today},status.neq.suggested`)
         .order('date', { ascending: true });
 
       if (filters.market) {
@@ -180,8 +182,14 @@ export function useHolidaySuggestions(filters: SuggestionFilters = {}) {
     },
   });
 
+  // Filter out past 'suggested' items (keep past 'accepted'/'dismissed' as-is)
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const suggestions = (query.data || []).filter(s => {
+    if (s.status === 'suggested' && s.date < today) return false;
+    return true;
+  });
+
   // Computed stats
-  const suggestions = query.data || [];
   const suggestedCount = suggestions.filter(s => s.status === 'suggested').length;
   const acceptedCount = suggestions.filter(s => s.status === 'accepted').length;
   const dismissedCount = suggestions.filter(s => s.status === 'dismissed').length;

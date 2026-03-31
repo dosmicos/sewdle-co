@@ -36,7 +36,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 const DeliveriesPage = () => {
   // Force cache refresh - URLs implementation
-  const { deliveries, loading, refetch } = useFilteredDeliveries();
+  const { deliveries, loading, error: deliveriesError, debugInfo, refetch } = useFilteredDeliveries();
   const { deleteDelivery } = useDeliveries();
   const { payments } = useDeliveryPayments();
   const { isAdmin } = useUserContext();
@@ -796,11 +796,28 @@ const DeliveryCards = ({
     return (
       <Card>
         <CardContent className="p-8 text-center">
-          <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No hay entregas</h3>
-          <p className="text-muted-foreground">
-            No se encontraron entregas que coincidan con los filtros seleccionados.
-          </p>
+          {deliveriesError ? (
+            <>
+              <AlertTriangle className="w-12 h-12 mx-auto text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Error cargando entregas</h3>
+              <p className="text-muted-foreground mb-2">
+                {deliveriesError instanceof Error ? deliveriesError.message : 'Ocurrió un error al cargar las entregas.'}
+              </p>
+              <Button variant="outline" onClick={refetch} className="mt-2">Reintentar</Button>
+            </>
+          ) : (
+            <>
+              <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No hay entregas</h3>
+              <p className="text-muted-foreground">
+                No se encontraron entregas que coincidan con los filtros seleccionados.
+              </p>
+              {debugInfo && (
+                <p className="text-xs text-amber-600 mt-2">{debugInfo}</p>
+              )}
+              <Button variant="outline" onClick={refetch} className="mt-2">Reintentar</Button>
+            </>
+          )}
         </CardContent>
       </Card>
     );
@@ -942,11 +959,28 @@ const DeliveryTable = ({
     return (
       <Card>
         <CardContent className="p-8 text-center">
-          <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No hay entregas</h3>
-          <p className="text-muted-foreground">
-            No se encontraron entregas que coincidan con los filtros seleccionados.
-          </p>
+          {deliveriesError ? (
+            <>
+              <AlertTriangle className="w-12 h-12 mx-auto text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Error cargando entregas</h3>
+              <p className="text-muted-foreground mb-2">
+                {deliveriesError instanceof Error ? deliveriesError.message : 'Ocurrió un error al cargar las entregas.'}
+              </p>
+              <Button variant="outline" onClick={refetch} className="mt-2">Reintentar</Button>
+            </>
+          ) : (
+            <>
+              <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No hay entregas</h3>
+              <p className="text-muted-foreground">
+                No se encontraron entregas que coincidan con los filtros seleccionados.
+              </p>
+              {debugInfo && (
+                <p className="text-xs text-amber-600 mt-2">{debugInfo}</p>
+              )}
+              <Button variant="outline" onClick={refetch} className="mt-2">Reintentar</Button>
+            </>
+          )}
         </CardContent>
       </Card>
     );

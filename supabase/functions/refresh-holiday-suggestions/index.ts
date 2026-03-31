@@ -20,82 +20,108 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
-    );
-
-    // 1. Verify JWT
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header");
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
-    if (userError) throw new Error(`Auth error: ${userError.message}`);
-    const user = userData.user;
-    logStep("User authenticated", { userId: user.id });
-
-    // 2. Get profile
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single();
-    if (!profile) throw new Error('Profile not found');
-    const orgId = profile.organization_id;
-    logStep("Profile verified", { orgId });
-
-    const currentYear = new Date().getFullYear();
-    const nextYear = currentYear + 1;
-
-    // 3. Mark old years' suggestions as outdated (delete suggested ones from past years)
-    const { data: outdated } = await supabaseAdmin
-      .from('holiday_suggestions')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('org_id', orgId)
-      .lt('year', currentYear)
-      .eq('status', 'suggested')
-      .select('id');
-    logStep("Outdated suggestions marked", { count: outdated?.length || 0 });
-
-    // 4. Generate for current year
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    const generateForYear = async (year: number) => {
-      const response = await fetch(`${supabaseUrl}/functions/v1/generate-holiday-suggestions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': serviceKey,
-        },
-        body: JSON.stringify({ year }),
-      });
+    const supabaseAdmin = createClient(
+      supabaseUrl,
+      serviceKey,
+      { auth: { persistSession: false } }
+    );
 
-      if (!response.ok) {
-        const error = await response.text();
-        logStep(`Generation failed for ${year}`, { error });
-        return { year, error, suggestions: [] };
+    // Determine auth mode: cron (no user auth) vs user-initiated
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "") ?? "";
+    let orgIds: string[] = [];
+    let isCronMode = false;
+
+    // Try to authenticate as a user first
+    if (authHeader && token !== serviceKey) {
+      const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+      if (!userError && userData?.user) {
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('organization_id')
+          .eq('id', userData.user.id)
+          .single();
+        if (profile) {
+          orgIds = [profile.organization_id];
+          logStep("User mode", { orgId: profile.organization_id });
+        }
+      }
+    }
+
+    // If no user was authenticated, treat as cron mode (all orgs)
+    if (orgIds.length === 0) {
+      isCronMode = true;
+      logStep("Cron mode: refreshing all organizations");
+
+      const { data: orgs, error: orgsError } = await supabaseAdmin
+        .from('organizations')
+        .select('id');
+      if (orgsError) throw new Error(`Failed to fetch organizations: ${orgsError.message}`);
+      orgIds = (orgs || []).map((o: any) => o.id);
+      logStep("Organizations found", { count: orgIds.length });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const currentYear = new Date().getFullYear();
+    const results: any[] = [];
+
+    for (const orgId of orgIds) {
+      logStep(`Processing org: ${orgId}`);
+
+      // 1. Auto-dismiss past suggestions that are still 'suggested'
+      const { data: dismissed, error: dismissError } = await supabaseAdmin
+        .from('holiday_suggestions')
+        .update({ status: 'dismissed', updated_at: new Date().toISOString() })
+        .eq('org_id', orgId)
+        .eq('status', 'suggested')
+        .lt('date', today)
+        .select('id, name, date');
+
+      if (dismissError) {
+        logStep(`Dismiss error for org ${orgId}`, { error: dismissError.message });
+      } else {
+        logStep(`Dismissed past suggestions`, { orgId, count: dismissed?.length || 0 });
       }
 
-      const data = await response.json();
-      logStep(`Generated for ${year}`, { count: data.generated });
-      return { year, ...data };
-    };
+      // 2. Regenerate suggestions for current year via generate-holiday-suggestions
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/generate-holiday-suggestions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceKey}`,
+            'apikey': serviceKey,
+          },
+          body: JSON.stringify({
+            year: currentYear,
+            org_id: orgId,
+          }),
+        });
 
-    // Generate for both years
-    const [currentYearResult, nextYearResult] = await Promise.all([
-      generateForYear(currentYear),
-      generateForYear(nextYear),
-    ]);
+        if (!response.ok) {
+          const errorText = await response.text();
+          logStep(`Generation failed for org ${orgId}`, { status: response.status, error: errorText.substring(0, 300) });
+          results.push({ org_id: orgId, dismissed: dismissed?.length || 0, generated: 0, error: errorText.substring(0, 200) });
+        } else {
+          const data = await response.json();
+          logStep(`Generated for org ${orgId}`, { count: data.generated });
+          results.push({ org_id: orgId, dismissed: dismissed?.length || 0, generated: data.generated, new_inserts: data.new_inserts });
+        }
+      } catch (genError) {
+        logStep(`Generation exception for org ${orgId}`, { error: (genError as Error).message });
+        results.push({ org_id: orgId, dismissed: dismissed?.length || 0, generated: 0, error: (genError as Error).message });
+      }
+    }
 
-    logStep("Refresh complete");
+    logStep("Refresh complete", { orgsProcessed: results.length });
 
     return new Response(JSON.stringify({
-      current_year: currentYearResult,
-      next_year: nextYearResult,
+      results,
       refreshed_at: new Date().toISOString(),
+      orgs_processed: results.length,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

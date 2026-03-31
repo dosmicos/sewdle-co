@@ -13,19 +13,56 @@ export const useDeliveries = () => {
   const fetchDeliveries = async () => {
     setLoading(true);
     try {
+      // Verificar sesión activa antes de llamar RPC
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('[fetchDeliveries] No hay usuario autenticado');
+        throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.');
+      }
+      console.log('[fetchDeliveries] Usuario autenticado:', user.id);
+
       const { data, error } = await supabase
         .rpc('get_deliveries_with_sync_status');
 
       if (error) {
+        console.error('[fetchDeliveries] Error RPC:', error.message, error.details, error.hint);
         throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('[fetchDeliveries] RPC retornó 0 entregas. Verificando organización...');
+        // Verificar si el usuario tiene organización activa
+        const { data: orgData, error: orgError } = await supabase
+          .from('organization_users')
+          .select('organization_id, status')
+          .eq('user_id', user.id)
+          .eq('status', 'active');
+
+        if (orgError) {
+          console.error('[fetchDeliveries] Error verificando organización:', orgError);
+        } else if (!orgData || orgData.length === 0) {
+          console.error('[fetchDeliveries] CAUSA RAÍZ: Usuario NO tiene organización activa en organization_users');
+          throw new Error('Tu usuario no tiene una organización activa asignada. Contacta al administrador.');
+        } else {
+          console.log('[fetchDeliveries] Usuario tiene org activa:', orgData[0].organization_id);
+          // Verificar si hay entregas directamente
+          const { count } = await supabase
+            .from('deliveries')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', orgData[0].organization_id);
+          console.log(`[fetchDeliveries] Total entregas en BD para esta org: ${count}`);
+          if (count && count > 0) {
+            console.error('[fetchDeliveries] CAUSA RAÍZ: Hay entregas en BD pero get_current_organization_safe() no las resuelve. Posible problema con user_roles.');
+          }
+        }
       }
 
       return data || [];
     } catch (error) {
       console.error('Error fetching deliveries:', error);
       toast({
-        title: "Error fetching deliveries",
-        description: error instanceof Error ? error.message : "Failed to fetch deliveries",
+        title: "Error cargando entregas",
+        description: error instanceof Error ? error.message : "No se pudieron cargar las entregas",
         variant: "destructive",
       });
       return [];
