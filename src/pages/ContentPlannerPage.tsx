@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -26,6 +27,7 @@ import {
   SlidersHorizontal,
   Loader2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -53,6 +55,7 @@ const ContentForm = lazy(() =>
 type ViewMode = 'week' | 'list';
 
 const ContentPlannerPage: React.FC = () => {
+  const navigate = useNavigate();
   const { week: currentWeek, year: currentYear } = getCurrentWeekAndYear();
   const [weekNumber, setWeekNumber] = useState(currentWeek);
   const [year, setYear] = useState(currentYear);
@@ -198,6 +201,9 @@ const ContentPlannerPage: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Title + week nav */}
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-8 w-8 shrink-0">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
             <div>
               <h1 className="text-lg font-bold text-[#1E293B] leading-tight">Content Planner</h1>
               <p className="text-xs text-gray-400 mt-0.5">{weekLabel}</p>

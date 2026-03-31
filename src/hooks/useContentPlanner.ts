@@ -171,7 +171,7 @@ export function useContentPlanner(weekNumber: number, year: number, filters: Con
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId] });
+      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId, weekNumber, year] });
     },
   });
 
@@ -184,7 +184,7 @@ export function useContentPlanner(weekNumber: number, year: number, filters: Con
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId] });
+      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId, weekNumber, year] });
     },
   });
 
@@ -223,7 +223,7 @@ export function useContentPlanner(weekNumber: number, year: number, filters: Con
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId] });
+      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId, weekNumber, year] });
     },
   });
 
@@ -255,7 +255,7 @@ export function useContentPlanner(weekNumber: number, year: number, filters: Con
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId] });
+      queryClient.invalidateQueries({ queryKey: ['content-pieces', orgId, weekNumber, year] });
     },
   });
 
