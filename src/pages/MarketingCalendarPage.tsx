@@ -389,6 +389,12 @@ const defaultForm: MarketingEventInput = {
   platform: null,
   status: 'idea',
   assigned_to: null,
+  scheduled_time: null,
+  copy_text: null,
+  hashtags: null,
+  assets_needed: null,
+  assets_url: null,
+  approval_notes: null,
 };
 
 // ─── Page Component ───────────────────────────────────────
@@ -440,6 +446,7 @@ const MarketingCalendarPage: React.FC = () => {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [form, setForm] = useState<MarketingEventInput>(defaultForm);
   const [calculatingId, setCalculatingId] = useState<string | null>(null);
+  const [hashtagInput, setHashtagInput] = useState('');
 
   // ─── Events indexed by date ──────────────────────────
   const eventsByDate = useMemo(() => {
@@ -547,6 +554,7 @@ const MarketingCalendarPage: React.FC = () => {
   // ─── Handlers ────────────────────────────────────────
   const openAddDialog = (date?: Date) => {
     setEditingId(null);
+    setHashtagInput('');
     setForm({
       ...defaultForm,
       event_date: format(date || new Date(), 'yyyy-MM-dd'),
@@ -556,6 +564,7 @@ const MarketingCalendarPage: React.FC = () => {
 
   const openEditDialog = (event: MarketingEvent) => {
     setEditingId(event.id);
+    setHashtagInput('');
     setForm({
       event_date: event.event_date,
       event_type: event.event_type,
@@ -575,6 +584,12 @@ const MarketingCalendarPage: React.FC = () => {
       platform: event.platform || null,
       status: event.status || 'idea',
       assigned_to: event.assigned_to || null,
+      scheduled_time: event.scheduled_time || null,
+      copy_text: event.copy_text || null,
+      hashtags: event.hashtags || null,
+      assets_needed: event.assets_needed || null,
+      assets_url: event.assets_url || null,
+      approval_notes: event.approval_notes || null,
     });
     setDialogOpen(true);
   };
@@ -1314,56 +1329,22 @@ const MarketingCalendarPage: React.FC = () => {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingId ? 'Editar Evento' : 'Nuevo Evento de Marketing'}
+              {editingId ? 'Editar Contenido' : 'Nuevo Contenido'}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
+            {/* 1. Titulo */}
             <div className="space-y-1.5">
               <Label className="text-sm">Titulo</Label>
               <Input
                 value={form.title}
                 onChange={(e) => updateForm('title', e.target.value)}
-                placeholder="Ej: Lanzamiento Ruana Premium, Hot Days -30%"
+                placeholder="Ej: Reel de lanzamiento coleccion verano"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-sm">Fecha</Label>
-                <Input
-                  type="date"
-                  value={form.event_date}
-                  onChange={(e) => updateForm('event_date', e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Tipo de evento</Label>
-                <select
-                  value={form.event_type}
-                  onChange={(e) =>
-                    updateForm('event_type', e.target.value as EventType)
-                  }
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {EVENT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm">Descripcion (opcional)</Label>
-              <Input
-                value={form.description || ''}
-                onChange={(e) => updateForm('description', e.target.value)}
-                placeholder="Detalles del evento, audiencia, canales..."
-              />
-            </div>
-
+            {/* 2. Tipo de contenido + Plataformas */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Tipo de contenido</Label>
@@ -1413,21 +1394,7 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-              <Label className="text-sm font-semibold text-indigo-700">
-                Por que ahora?
-              </Label>
-              <Textarea
-                value={form.why_now || ''}
-                onChange={(e) => updateForm('why_now', e.target.value)}
-                placeholder="Que hace que ESTE momento sea el correcto para esta accion?"
-                className="bg-white text-sm min-h-[60px]"
-              />
-              <p className="text-[10px] text-indigo-400">
-                Prophit System: registra cada accion para entender que crea resultados
-              </p>
-            </div>
-
+            {/* 3. Estado + Responsable */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm">Estado</Label>
@@ -1455,6 +1422,164 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             </div>
 
+            {/* 4. Fecha + Hora */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Fecha</Label>
+                <Input
+                  type="date"
+                  value={form.event_date}
+                  onChange={(e) => updateForm('event_date', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Hora de publicacion</Label>
+                <Input
+                  type="time"
+                  value={form.scheduled_time || ''}
+                  onChange={(e) => updateForm('scheduled_time', e.target.value || null)}
+                />
+              </div>
+            </div>
+
+            {/* 5. Descripcion / Brief */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Descripcion / Brief</Label>
+              <Textarea
+                value={form.description || ''}
+                onChange={(e) => updateForm('description', e.target.value)}
+                placeholder="Descripcion del contenido, instrucciones para el equipo..."
+                className="text-sm min-h-[60px]"
+              />
+            </div>
+
+            {/* 6. Copy / Caption */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Copy / Caption</Label>
+              <Textarea
+                value={form.copy_text || ''}
+                onChange={(e) => {
+                  if (e.target.value.length <= 2200) {
+                    updateForm('copy_text', e.target.value || null);
+                  }
+                }}
+                placeholder="Texto del post, caption, copy del email..."
+                className="text-sm min-h-[80px]"
+              />
+              <div className="text-[10px] text-gray-400 text-right">
+                {(form.copy_text || '').length} / 2200
+              </div>
+            </div>
+
+            {/* 7. Hashtags */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Hashtags</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={hashtagInput}
+                  onChange={(e) => setHashtagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const tag = hashtagInput.trim().replace(/^#/, '');
+                      if (tag) {
+                        const current = form.hashtags || [];
+                        if (!current.includes(`#${tag}`)) {
+                          updateForm('hashtags', [...current, `#${tag}`]);
+                        }
+                        setHashtagInput('');
+                      }
+                    }
+                  }}
+                  placeholder="Agregar hashtag..."
+                  className="text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    const tag = hashtagInput.trim().replace(/^#/, '');
+                    if (tag) {
+                      const current = form.hashtags || [];
+                      if (!current.includes(`#${tag}`)) {
+                        updateForm('hashtags', [...current, `#${tag}`]);
+                      }
+                      setHashtagInput('');
+                    }
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {form.hashtags && form.hashtags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {form.hashtags.map((tag, idx) => (
+                    <Badge
+                      key={idx}
+                      variant="secondary"
+                      className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                      onClick={() => {
+                        const updated = form.hashtags!.filter((_, i) => i !== idx);
+                        updateForm('hashtags', updated.length > 0 ? updated : null);
+                      }}
+                    >
+                      {tag} &times;
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 8. Assets Necesarios + Link de Assets */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Assets necesarios</Label>
+                <Input
+                  value={form.assets_needed || ''}
+                  onChange={(e) => updateForm('assets_needed', e.target.value || null)}
+                  placeholder="Fotos, video, diseno..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Link de assets</Label>
+                <Input
+                  value={form.assets_url || ''}
+                  onChange={(e) => updateForm('assets_url', e.target.value || null)}
+                  placeholder="Link a Drive, Figma..."
+                />
+              </div>
+            </div>
+
+            {/* 9. Por que ahora? */}
+            <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+              <Label className="text-sm font-semibold text-indigo-700">
+                Por que ahora?
+              </Label>
+              <Textarea
+                value={form.why_now || ''}
+                onChange={(e) => updateForm('why_now', e.target.value)}
+                placeholder="Que hace que ESTE momento sea el correcto para esta accion?"
+                className="bg-white text-sm min-h-[60px]"
+              />
+              <p className="text-[10px] text-indigo-400">
+                Prophit System: registra cada accion para entender que crea resultados
+              </p>
+            </div>
+
+            {/* 10. Notas de Aprobacion */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Notas de Aprobacion</Label>
+              <Textarea
+                value={form.approval_notes || ''}
+                onChange={(e) => updateForm('approval_notes', e.target.value || null)}
+                placeholder="Feedback, cambios requeridos..."
+                className="text-sm min-h-[60px]"
+              />
+            </div>
+
+            {/* 11. Peak section */}
             <div className="border rounded-lg p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -1504,6 +1629,7 @@ const MarketingCalendarPage: React.FC = () => {
               )}
             </div>
 
+            {/* 12. Aprendizajes (solo en edicion) */}
             {editingId && (
               <div className="space-y-1.5">
                 <Label className="text-sm">Aprendizajes</Label>
@@ -1516,12 +1642,13 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             )}
 
+            {/* 13. Botones */}
             <div className={cn('flex gap-2', editingId ? 'flex-row' : '')}>
               {editingId && (
                 <Button
                   variant="destructive"
                   onClick={() => {
-                    if (confirm('¿Eliminar este evento?')) {
+                    if (confirm('Eliminar este contenido?')) {
                       handleDelete(editingId);
                       setDialogOpen(false);
                     }
@@ -1533,7 +1660,7 @@ const MarketingCalendarPage: React.FC = () => {
                 </Button>
               )}
               <Button onClick={handleSave} className="flex-1">
-                {editingId ? 'Guardar Cambios' : 'Crear Evento'}
+                {editingId ? 'Guardar Cambios' : 'Crear Contenido'}
               </Button>
             </div>
           </div>

@@ -66,6 +66,12 @@ export interface MarketingEvent {
   platform: Platform[] | null;
   status: EventStatus;
   assigned_to: string | null;
+  scheduled_time: string | null;
+  copy_text: string | null;
+  hashtags: string[] | null;
+  assets_needed: string | null;
+  assets_url: string | null;
+  approval_notes: string | null;
 }
 
 export type MarketingEventInput = {
@@ -88,6 +94,12 @@ export type MarketingEventInput = {
   platform?: Platform[] | null;
   status?: EventStatus;
   assigned_to?: string | null;
+  scheduled_time?: string | null;
+  copy_text?: string | null;
+  hashtags?: string[] | null;
+  assets_needed?: string | null;
+  assets_url?: string | null;
+  approval_notes?: string | null;
   // These can be set manually or via calculateAttribution
   attributed_revenue?: number | null;
   attributed_orders?: number | null;
