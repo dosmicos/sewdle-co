@@ -76,6 +76,7 @@ import { toast } from 'sonner';
 import HolidaySuggestionPanel from '@/components/marketing-calendar/HolidaySuggestionPanel';
 import ContentIdeasPanel from '@/components/marketing-calendar/ContentIdeasPanel';
 import { useContentIdeas } from '@/hooks/useContentIdeas';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 // ─── Event type configuration ─────────────────────────────
 const EVENT_TYPE_CONFIG: Record<
@@ -407,6 +408,7 @@ const MarketingCalendarPage: React.FC = () => {
     useMarketingEvents();
   const { suggestions, suggestedCount: pendingSuggestions } = useHolidaySuggestions();
   const { newCount: pendingIdeas } = useContentIdeas();
+  const { teamMembers } = useTeamMembers();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekRef, setWeekRef] = useState(new Date());
@@ -1460,12 +1462,16 @@ const MarketingCalendarPage: React.FC = () => {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[13px] font-medium text-slate-700">Responsable</Label>
-                  <Input
+                  <select
                     value={form.assigned_to || ''}
                     onChange={(e) => updateForm('assigned_to', e.target.value || null)}
-                    placeholder="Nombre"
-                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
-                  />
+                    className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+                  >
+                    <option value="">Sin asignar</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.name}>{m.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

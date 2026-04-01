@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useContentIdeas } from '@/hooks/useContentIdeas';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 import type { ContentIdea, ContentIdeaInput, IdeaStatus, IdeaPriority } from '@/hooks/useContentIdeas';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,6 +107,7 @@ export default function ContentIdeasPanel() {
     convertToEvent,
     isConverting,
   } = useContentIdeas();
+  const { teamMembers } = useTeamMembers();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -387,12 +389,16 @@ export default function ContentIdeasPanel() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[13px] font-medium text-slate-700">Propuesto por</Label>
-                <Input
+                <select
                   value={form.submitted_by || ''}
                   onChange={(e) => updateForm('submitted_by', e.target.value || null)}
-                  placeholder="Nombre del miembro del equipo"
-                  className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
-                />
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+                >
+                  <option value="">Sin asignar</option>
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
