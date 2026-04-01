@@ -193,56 +193,56 @@ const FinanceAppContent = () => {
     <Routes>
       <Route path="/" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <FinanceDashboardPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/ad-performance" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <AdPerformancePage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/intelligence" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <AdIntelligencePage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/ugc-performance" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <UgcPerformancePage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/cost-settings" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <CostSettingsPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/marketing-calendar" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <MarketingCalendarPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/content-planner" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <ContentPlannerPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
       <Route path="/social-analytics" element={
         <PasswordChangeRouteGuard>
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <SocialAnalyticsPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
@@ -356,7 +356,7 @@ const AppContent = () => {
 
         {/* Finance Dashboard - accesible también desde la app principal */}
         <Route path="finance-dashboard" element={
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <React.Suspense fallback={<LazyFallback />}>
               <FinanceDashboardPage />
             </React.Suspense>
@@ -365,7 +365,7 @@ const AppContent = () => {
 
         {/* Cost Settings - accesible desde la app principal */}
         <Route path="cost-settings" element={
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <React.Suspense fallback={<LazyFallback />}>
               <CostSettingsPage />
             </React.Suspense>
@@ -374,7 +374,7 @@ const AppContent = () => {
 
         {/* Marketing Calendar - accesible desde la app principal */}
         <Route path="marketing-calendar" element={
-          <PermissionRoute module="finances" action="view">
+          <PermissionRoute module="growth" action="view">
             <React.Suspense fallback={<LazyFallback />}>
               <MarketingCalendarPage />
             </React.Suspense>

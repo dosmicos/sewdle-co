@@ -32,6 +32,7 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSave }) => {
     'Picking y Packing',
     'Usuarios',
     'Finanzas',
+    'Growth',
     'Reposición IA',
     'Shopify',
     'Reclutamiento',

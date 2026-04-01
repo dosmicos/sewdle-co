@@ -36,6 +36,7 @@ const MODULE_MAPPING = {
   'picking y packing': 'Picking y Packing',
   'users': 'Usuarios',
   'finances': 'Finanzas',
+  'growth': 'Growth',
   'replenishment': 'Reposición IA',
   'shopify': 'Shopify',
   'prospects': 'Reclutamiento',
