@@ -77,6 +77,8 @@ interface MarketingCalendarViewProps {
   selectedDate: Date | null;
   onSelectDate: (date: Date) => void;
   onDoubleClickDate: (date: Date) => void;
+  onEventClick?: (event: MarketingEvent) => void;
+  onSuggestionClick?: (suggestion: HolidaySuggestion) => void;
 }
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
@@ -89,6 +91,8 @@ const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
   selectedDate,
   onSelectDate,
   onDoubleClickDate,
+  onEventClick,
+  onSuggestionClick,
 }) => {
   // Calendar grid days
   const calendarDays = useMemo(() => {
@@ -224,13 +228,17 @@ const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
                   {dayEvents.slice(0, 2).map((ev) => (
                     <div
                       key={ev.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEventClick?.(ev);
+                      }}
                       className={cn(
-                        'flex items-center gap-1 text-[10px] leading-tight px-1 py-0.5 rounded truncate',
+                        'flex items-center gap-1 text-[10px] leading-tight px-1 py-0.5 rounded truncate cursor-pointer transition-all',
                         ev.is_peak
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-gray-100 text-gray-700',
+                          ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
                       )}
-                      title={ev.title}
+                      title={`Click para ver/editar: ${ev.title}`}
                     >
                       <span
                         className={cn(
@@ -244,7 +252,18 @@ const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
 
                   {/* AI suggestion dots */}
                   {daySuggestions.length > 0 && dayEvents.length < 2 && (
-                    <div className="flex items-center gap-1 text-[10px] leading-tight px-1 py-0.5 rounded truncate bg-violet-50 text-violet-700">
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (daySuggestions.length === 1) {
+                          onSuggestionClick?.(daySuggestions[0]);
+                        } else {
+                          onSelectDate(day);
+                        }
+                      }}
+                      className="flex items-center gap-1 text-[10px] leading-tight px-1 py-0.5 rounded truncate bg-violet-50 text-violet-700 cursor-pointer hover:bg-violet-100 transition-all"
+                      title={daySuggestions.length === 1 ? `Ver: ${daySuggestions[0].name}` : `${daySuggestions.length} sugerencias`}
+                    >
                       <Sparkles className="h-2.5 w-2.5 flex-shrink-0" />
                       <span className="truncate">
                         {daySuggestions.length === 1

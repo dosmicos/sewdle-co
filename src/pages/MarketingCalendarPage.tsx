@@ -608,6 +608,13 @@ const MarketingCalendarPage: React.FC = () => {
               selectedDate={selectedDate}
               onSelectDate={setSelectedDate}
               onDoubleClickDate={(date) => openAddDialog(date)}
+              onEventClick={(event) => openEditDialog(event)}
+              onSuggestionClick={(suggestion) => {
+                toast.info(
+                  `${suggestion.name} — ${suggestion.why_now || suggestion.campaign_idea || 'Sugerencia IA'}`,
+                  { duration: 5000 }
+                );
+              }}
             />
 
         {/* ─── KPI SUMMARY ROW ──────────────────────────── */}
