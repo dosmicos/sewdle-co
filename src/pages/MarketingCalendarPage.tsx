@@ -19,7 +19,7 @@ import MarketingCalendarView from '@/components/marketing-calendar/MarketingCale
 import { useMarketingEvents } from '@/hooks/useMarketingEvents';
 import { useMarketingActivity } from '@/hooks/useMarketingActivity';
 import { useHolidaySuggestions } from '@/hooks/useHolidaySuggestions';
-import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase, ContentType, Platform } from '@/hooks/useMarketingEvents';
+import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase, ContentType, Platform, EventStatus } from '@/hooks/useMarketingEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -224,6 +224,24 @@ const PLATFORM_OPTIONS: { value: Platform; label: string; emoji: string }[] = [
   { value: 'blog', label: 'Blog', emoji: '📝' },
 ];
 
+const EVENT_STATUS_OPTIONS: { value: EventStatus; label: string }[] = [
+  { value: 'idea', label: 'Idea' },
+  { value: 'planned', label: 'Planeado' },
+  { value: 'in_production', label: 'En produccion' },
+  { value: 'ready', label: 'Listo' },
+  { value: 'published', label: 'Publicado' },
+  { value: 'done', label: 'Hecho' },
+];
+
+const EVENT_STATUS_CONFIG: Record<EventStatus, { label: string; color: string }> = {
+  idea: { label: 'Idea', color: 'bg-gray-100 text-gray-600' },
+  planned: { label: 'Planeado', color: 'bg-blue-100 text-blue-700' },
+  in_production: { label: 'En produccion', color: 'bg-yellow-100 text-yellow-700' },
+  ready: { label: 'Listo', color: 'bg-emerald-100 text-emerald-700' },
+  published: { label: 'Publicado', color: 'bg-purple-100 text-purple-700' },
+  done: { label: 'Hecho', color: 'bg-green-100 text-green-700' },
+};
+
 // ─── Quarterly Peaks ────────────────────────────────────
 interface QuarterlyPeak {
   quarter: string;
@@ -362,6 +380,8 @@ const defaultForm: MarketingEventInput = {
   learnings: null,
   content_type: null,
   platform: null,
+  status: 'idea',
+  assigned_to: null,
 };
 
 // ─── Page Component ───────────────────────────────────────
@@ -519,6 +539,8 @@ const MarketingCalendarPage: React.FC = () => {
       learnings: event.learnings,
       content_type: event.content_type || null,
       platform: event.platform || null,
+      status: event.status || 'idea',
+      assigned_to: event.assigned_to || null,
     });
     setDialogOpen(true);
   };
@@ -787,6 +809,17 @@ const MarketingCalendarPage: React.FC = () => {
                                 {CONTENT_TYPE_CONFIG[ev.content_type].label}
                               </Badge>
                             )}
+                            {ev.status && (
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'text-[10px] px-1.5',
+                                  EVENT_STATUS_CONFIG[ev.status].color
+                                )}
+                              >
+                                {EVENT_STATUS_CONFIG[ev.status].label}
+                              </Badge>
+                            )}
                           </div>
                           {ev.platform && ev.platform.length > 0 && (
                             <div className="flex gap-1 mt-0.5">
@@ -990,6 +1023,9 @@ const MarketingCalendarPage: React.FC = () => {
                       <th className="text-left px-3 py-2 font-medium text-gray-600">
                         Evento
                       </th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-28">
+                        Estado
+                      </th>
                       <th className="w-20" />
                     </tr>
                   </thead>
@@ -1039,6 +1075,11 @@ const MarketingCalendarPage: React.FC = () => {
                                 </Badge>
                               )}
                             </div>
+                            {ev.assigned_to && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">
+                                Responsable: {ev.assigned_to}
+                              </div>
+                            )}
                             {ev.platform && ev.platform.length > 0 && (
                               <div className="flex gap-1 mt-0.5">
                                 {ev.platform.map((p) => {
@@ -1060,6 +1101,19 @@ const MarketingCalendarPage: React.FC = () => {
                               <div className="text-[10px] text-indigo-500 truncate max-w-[300px]">
                                 Por que ahora: {ev.why_now}
                               </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {ev.status && (
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'text-[10px] px-1.5',
+                                  EVENT_STATUS_CONFIG[ev.status].color
+                                )}
+                              >
+                                {EVENT_STATUS_CONFIG[ev.status].label}
+                              </Badge>
                             )}
                           </td>
                           <td className="px-3 py-2">
@@ -1212,6 +1266,33 @@ const MarketingCalendarPage: React.FC = () => {
               <p className="text-[10px] text-indigo-400">
                 Prophit System: registra cada accion para entender que crea resultados
               </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Estado</Label>
+                <select
+                  value={form.status || 'idea'}
+                  onChange={(e) =>
+                    updateForm('status', e.target.value as EventStatus)
+                  }
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {EVENT_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Responsable</Label>
+                <Input
+                  value={form.assigned_to || ''}
+                  onChange={(e) => updateForm('assigned_to', e.target.value || null)}
+                  placeholder="Nombre del responsable"
+                />
+              </div>
             </div>
 
             <div className="border rounded-lg p-3 space-y-3">

@@ -35,6 +35,8 @@ export type ContentType =
 
 export type Platform = 'instagram' | 'tiktok' | 'facebook' | 'whatsapp' | 'email' | 'blog';
 
+export type EventStatus = 'idea' | 'planned' | 'in_production' | 'ready' | 'published' | 'done';
+
 export interface MarketingEvent {
   id: string;
   organization_id: string;
@@ -62,6 +64,8 @@ export interface MarketingEvent {
   learnings: string | null;
   content_type: ContentType | null;
   platform: Platform[] | null;
+  status: EventStatus;
+  assigned_to: string | null;
 }
 
 export type MarketingEventInput = {
@@ -82,6 +86,8 @@ export type MarketingEventInput = {
   learnings?: string | null;
   content_type?: ContentType | null;
   platform?: Platform[] | null;
+  status?: EventStatus;
+  assigned_to?: string | null;
   // These can be set manually or via calculateAttribution
   attributed_revenue?: number | null;
   attributed_orders?: number | null;
