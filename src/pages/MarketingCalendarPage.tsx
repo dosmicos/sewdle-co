@@ -1386,9 +1386,26 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
             )}
 
-            <Button onClick={handleSave} className="w-full">
-              {editingId ? 'Guardar Cambios' : 'Crear Evento'}
-            </Button>
+            <div className={cn('flex gap-2', editingId ? 'flex-row' : '')}>
+              {editingId && (
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (confirm('¿Eliminar este evento?')) {
+                      handleDelete(editingId);
+                      setDialogOpen(false);
+                    }
+                  }}
+                  className="shrink-0"
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Eliminar
+                </Button>
+              )}
+              <Button onClick={handleSave} className="flex-1">
+                {editingId ? 'Guardar Cambios' : 'Crear Evento'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
