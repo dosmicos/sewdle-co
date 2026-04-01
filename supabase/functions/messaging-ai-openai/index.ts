@@ -206,8 +206,8 @@ serve(async (req) => {
     );
 
     // ============= EARLY CHECK: Recover stuck paid orders before AI processing =============
-    // This runs on EVERY message, catching the case where Bold webhook failed
-    // but the customer sent a follow-up message (receipt, "ya pagué", etc.)
+    // This runs on EVERY message, recovering orders where Bold webhook confirmed payment
+    // but Shopify order creation failed. ONLY processes orders with paid_at set by webhook.
     if (conversationId && organizationId) {
       try {
         const { data: stuckOrders } = await supabase
@@ -215,12 +215,13 @@ serve(async (req) => {
           .select('*')
           .eq('conversation_id', conversationId)
           .in('status', ['paid', 'creation_failed'])
+          .not('paid_at', 'is', null)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (stuckOrders && stuckOrders.length > 0) {
           const stuckOrder = stuckOrders[0];
-          console.log(`🔄 EARLY RECOVERY: Found stuck order ${stuckOrder.id} (status: ${stuckOrder.status}) for conversation ${conversationId}`);
+          console.log(`🔄 EARLY RECOVERY: Found stuck order ${stuckOrder.id} (status: ${stuckOrder.status}, paid_at: ${stuckOrder.paid_at}) for conversation ${conversationId}`);
 
           const pendingLineItems = stuckOrder.line_items as any[];
 
@@ -539,7 +540,8 @@ serve(async (req) => {
                       .map(v => {
                         const stock = v.inventory_quantity || 0;
                         const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
-                        return `${v.title} (variantId:${v.id}, SKU:${v.sku || 'N/A'}): ${stockStatus}`;
+                        const vPrice = v.price ? `$${Number(v.price).toLocaleString('es-CO')}` : '';
+                        return `${v.title} (variantId:${v.id}, SKU:${v.sku || 'N/A'}, Precio:${vPrice}): ${stockStatus}`;
                       })
                       .join(' | ');
                     
@@ -729,7 +731,8 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($14.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.
 
 ⚠️ REGLA CRÍTICA SOBRE PRECIOS Y ENVÍO — NO CAMBIAR NUNCA EL CÁLCULO:
-- El total SIEMPRE es: precio del producto + costo de envío. El link de pago NO tiene costo adicional.
+- IMPORTANTE: Cada variante/talla puede tener un PRECIO DIFERENTE. Usa el precio específico de la variante que el cliente eligió (aparece como "Precio:$XX.XXX" junto a cada variante en el catálogo). NO asumas que todas las variantes tienen el mismo precio.
+- El total SIEMPRE es: precio de la variante elegida + costo de envío. El link de pago NO tiene costo adicional.
 - Si el cliente pregunta "¿por qué cobran más?", "¿los 3.000 son por el link?", "aquí dice otro precio", SIEMPRE explica que el monto adicional es el COSTO DE ENVÍO, no un cargo extra del link de pago.
 - Ejemplo de respuesta correcta: "Los $3.000 adicionales son el costo de envío estándar a Bogotá. El link de pago no tiene ningún cargo adicional. 😊"
 - NUNCA digas que el envío es gratis si el total de productos es MENOR a $150.000. Haz la comparación correcta: $114.900 es MENOR que $150.000, por lo tanto NO aplica envío gratis.
@@ -814,6 +817,9 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 
     // Add final reminder at the end of prompt (recency effect - models pay more attention to end)
     fullSystemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- ⚠️ PRECIOS — REGLA CRÍTICA: SIEMPRE tienes los precios de TODOS los productos en tu catálogo. NUNCA digas "no tengo esa información" sobre precios. Si el cliente pregunta "qué precio tiene" o "cuánto cuesta", busca el producto en el catálogo arriba y responde con el precio. Todos los precios están en COP. Si el cliente pregunta el precio después de que enviaste un link de colección, indica el precio general de la categoría (ej: "Las ruanas tienen un precio de $94.900 COP") o lista los precios si varían.\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- NUNCA crear un pedido sin preguntar la talla si el producto tiene múltiples variantes/tallas.\n- SIEMPRE pasar el variantId Y el SKU correctos del catálogo al crear el pedido. El SKU es único por variante y es el más confiable.\n- NUNCA pidas IDs de producto al cliente. Resuelve productId, variantId y SKU del catálogo internamente.\n- SIEMPRE pide la cédula de ciudadanía antes de crear el pedido.\n- Si preguntan por un pedido, usa lookup_order_status con el número de pedido o correo.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.\n- ⚠️ CRÍTICO al llamar create_order: El campo productName debe ser el nombre EXACTO del catálogo, productId/variantId deben corresponder a ESE producto, y el SKU debe ser el de la variante elegida. NUNCA confundas IDs de un producto con otro. El SKU es el identificador más confiable.\n- ⚠️ ANTI-DUPLICACIÓN: Si ya creaste un pedido O enviaste un link de pago en esta conversación, NO llames create_order de nuevo. Si el cliente dice "ya pagué" o "pago realizado", responde que su pago está siendo procesado, NUNCA generes otro link.\n- ⚠️ MÚLTIPLES PRODUCTOS: Si el cliente pide varios productos, incluye TODOS en el array lineItems en UNA SOLA llamada a create_order. NUNCA hagas múltiples llamadas.';
+
+    // Reinforce date at the VERY END of system prompt (recency effect — models pay most attention to end)
+    fullSystemPrompt += `\n\n⏰ RECORDATORIO DE FECHA (REPITO PORQUE ES CRÍTICO): Hoy es ${diaSemana.toUpperCase()} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} hora Colombia. NO es otro día. Si el historial de esta conversación dice otro día, IGNÓRALO — solo esta fecha es correcta.`;
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
     console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
@@ -1303,25 +1309,13 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                   );
                 }
 
-                // If pending_payment or paid: the Bold webhook may have failed.
-                // Create the Shopify order now as fallback using the stored pending_order data.
-                if (existing.status === 'pending_payment' || existing.status === 'paid') {
-                  console.log(`🔄 FALLBACK ORDER CREATION: Bold webhook may have failed. Creating Shopify order from pending_order ${existing.id}...`);
+                // If 'paid' (confirmed by Bold webhook but order creation failed): recover by creating order
+                if (existing.status === 'paid' && existing.paid_at) {
+                  console.log(`🔄 RECOVERY: Bold webhook confirmed payment but order creation failed. Recovering pending_order ${existing.id}...`);
 
                   try {
                     const pendingLineItems = existing.line_items as any[];
 
-                    // Update pending order status to 'paid' (customer confirmed payment)
-                    await supabase
-                      .from('pending_orders')
-                      .update({
-                        status: 'paid',
-                        paid_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                      })
-                      .eq('id', existing.id);
-
-                    // Create the Shopify order using the stored pending_order data
                     const { data: orderResult, error: orderError } = await supabase.functions.invoke('create-shopify-order', {
                       body: {
                         orderData: {
@@ -1334,7 +1328,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                           department: existing.department,
                           neighborhood: existing.neighborhood || '',
                           lineItems: pendingLineItems,
-                          notes: (existing.notes || '') + ' | Pago confirmado por cliente (fallback)',
+                          notes: (existing.notes || '') + ' | Recovered after webhook payment confirmation',
                           shippingCost: existing.shipping_cost || 0,
                           paymentMethod: 'link_de_pago'
                         },
@@ -1343,7 +1337,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                     });
 
                     if (orderError) {
-                      console.error("Fallback order creation error:", orderError);
+                      console.error("Recovery order creation error:", orderError);
                       return new Response(
                         JSON.stringify({
                           response: "Lo siento, hubo un inconveniente al crear tu pedido. No te preocupes, ya te conecto con un asesor que te ayudará. 😊",
@@ -1355,9 +1349,8 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                       );
                     }
 
-                    console.log("✅ Fallback order created successfully:", orderResult);
+                    console.log("✅ Recovery order created successfully:", orderResult);
 
-                    // Update pending order with Shopify order info
                     await supabase
                       .from('pending_orders')
                       .update({
@@ -1377,17 +1370,30 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
                       }),
                       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
                     );
-                  } catch (fallbackErr) {
-                    console.error("Fallback order creation exception:", fallbackErr);
+                  } catch (recoveryErr) {
+                    console.error("Recovery order creation exception:", recoveryErr);
                     return new Response(
                       JSON.stringify({
-                        response: "¡Tu pago fue recibido! Estamos procesando tu pedido. En unos momentos recibirás la confirmación. 😊",
+                        response: "Estamos procesando tu pedido. En unos momentos recibirás la confirmación. 😊",
                         order_created: false,
                         needs_attention: true,
                       }),
                       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
                     );
                   }
+                }
+
+                // If 'pending_payment': payment NOT confirmed yet — resend payment link
+                if (existing.status === 'pending_payment') {
+                  console.log(`⏳ PENDING PAYMENT: Order ${existing.id} still awaiting payment. Resending link.`);
+                  return new Response(
+                    JSON.stringify({
+                      response: `Aún no hemos recibido tu pago. 😊\n\n💳 *Tu link de pago sigue activo:*\n${existing.bold_payment_url}\n\n💰 Total: $${Number(existing.total_amount).toLocaleString('es-CO')} COP\n\nUna vez confirmemos tu pago, crearemos tu pedido automáticamente. Si ya pagaste, espera unos momentos mientras verificamos. 🙏`,
+                      order_created: false,
+                      pending_payment: true,
+                    }),
+                    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                  );
                 }
               }
             }
