@@ -68,10 +68,14 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
+  Lightbulb,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import HolidaySuggestionPanel from '@/components/marketing-calendar/HolidaySuggestionPanel';
+import ContentIdeasPanel from '@/components/marketing-calendar/ContentIdeasPanel';
+import { useContentIdeas } from '@/hooks/useContentIdeas';
 
 // ─── Event type configuration ─────────────────────────────
 const EVENT_TYPE_CONFIG: Record<
@@ -402,6 +406,7 @@ const MarketingCalendarPage: React.FC = () => {
   const { events, isLoading, addEvent, updateEvent, deleteEvent, calculateAttribution } =
     useMarketingEvents();
   const { suggestions, suggestedCount: pendingSuggestions } = useHolidaySuggestions();
+  const { newCount: pendingIdeas } = useContentIdeas();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekRef, setWeekRef] = useState(new Date());
@@ -705,6 +710,13 @@ const MarketingCalendarPage: React.FC = () => {
               Sugerencias IA
               {pendingSuggestions > 0 && (
                 <Badge className="ml-1.5 bg-violet-100 text-violet-700 border-0 text-[10px] px-1.5 py-0">{pendingSuggestions}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="ideas" className="text-sm data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700">
+              <Lightbulb className="h-3.5 w-3.5 mr-1.5" />
+              Ideas
+              {pendingIdeas > 0 && (
+                <Badge className="ml-1.5 bg-amber-100 text-amber-700 border-0 text-[10px] px-1.5 py-0">{pendingIdeas}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -1071,6 +1083,11 @@ const MarketingCalendarPage: React.FC = () => {
           {/* ─── Tab: Sugerencias IA ──────────────────────────── */}
           <TabsContent value="sugerencias" className="mt-4">
             <HolidaySuggestionPanel />
+          </TabsContent>
+
+          {/* ─── Tab: Ideas del equipo ───────────────────────── */}
+          <TabsContent value="ideas" className="mt-4">
+            <ContentIdeasPanel />
           </TabsContent>
 
           {/* ─── Tab: Peaks del Año ──────────────────────────── */}
