@@ -349,6 +349,28 @@ const DeliveriesPage = () => {
     );
   }
 
+  if (deliveriesError) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6 text-center space-y-4">
+            <AlertTriangle className="w-12 h-12 text-destructive mx-auto" />
+            <h2 className="text-lg font-semibold">Error al cargar entregas</h2>
+            <p className="text-sm text-muted-foreground">
+              {deliveriesError?.message || 'Ocurrió un error inesperado al cargar las entregas.'}
+            </p>
+            {debugInfo && (
+              <p className="text-xs text-muted-foreground bg-muted p-2 rounded">{debugInfo}</p>
+            )}
+            <Button onClick={() => refetch()} variant="outline">
+              Reintentar
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 md:p-6 space-y-3 md:space-y-6">
       {/* Header */}
@@ -631,80 +653,104 @@ const DeliveriesPage = () => {
 
         <TabsContent value="all" className="space-y-4 mt-3">
           {isMobile ? (
-            <DeliveryCards 
-              deliveries={filteredDeliveries} 
+            <DeliveryCards
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           ) : (
-            <DeliveryTable 
-              deliveries={filteredDeliveries} 
+            <DeliveryTable
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           )}
         </TabsContent>
 
         <TabsContent value="in_quality" className="space-y-4 mt-3">
           {isMobile ? (
-            <DeliveryCards 
-              deliveries={filteredDeliveries} 
+            <DeliveryCards
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           ) : (
-            <DeliveryTable 
-              deliveries={filteredDeliveries} 
+            <DeliveryTable
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           )}
         </TabsContent>
 
         <TabsContent value="approved" className="space-y-4 mt-3">
           {isMobile ? (
-            <DeliveryCards 
-              deliveries={filteredDeliveries} 
+            <DeliveryCards
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           ) : (
-            <DeliveryTable 
-              deliveries={filteredDeliveries} 
+            <DeliveryTable
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           )}
         </TabsContent>
 
         <TabsContent value="rejected" className="space-y-4 mt-3">
           {isMobile ? (
-            <DeliveryCards 
-              deliveries={filteredDeliveries} 
+            <DeliveryCards
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           ) : (
-            <DeliveryTable 
-              deliveries={filteredDeliveries} 
+            <DeliveryTable
+              deliveries={filteredDeliveries}
               onViewDetails={handleViewDelivery}
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              deliveriesError={deliveriesError}
+              debugInfo={debugInfo}
+              refetch={refetch}
             />
           )}
         </TabsContent>
@@ -749,18 +795,24 @@ const DeliveriesPage = () => {
 };
 
 // Componente para las tarjetas de entregas (vista móvil)
-const DeliveryCards = ({ 
-  deliveries, 
-  onViewDetails, 
-  onDeleteDelivery, 
+const DeliveryCards = ({
+  deliveries,
+  onViewDetails,
+  onDeleteDelivery,
   canDeleteDeliveries,
-  PaymentStatusIndicator 
-}: { 
-  deliveries: any[], 
+  PaymentStatusIndicator,
+  deliveriesError,
+  debugInfo,
+  refetch
+}: {
+  deliveries: any[],
   onViewDetails: (delivery: any) => void,
   onDeleteDelivery: (delivery: any) => void,
   canDeleteDeliveries: boolean,
-  PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null
+  PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null,
+  deliveriesError?: any,
+  debugInfo?: string | null,
+  refetch?: () => void
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -912,18 +964,24 @@ const DeliveryCards = ({
 };
 
 // Componente para la tabla de entregas (vista desktop)
-const DeliveryTable = ({ 
-  deliveries, 
-  onViewDetails, 
-  onDeleteDelivery, 
+const DeliveryTable = ({
+  deliveries,
+  onViewDetails,
+  onDeleteDelivery,
   canDeleteDeliveries,
-  PaymentStatusIndicator 
-}: { 
-  deliveries: any[], 
+  PaymentStatusIndicator,
+  deliveriesError,
+  debugInfo,
+  refetch
+}: {
+  deliveries: any[],
   onViewDetails: (delivery: any) => void,
   onDeleteDelivery: (delivery: any) => void,
   canDeleteDeliveries: boolean,
-  PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null
+  PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null,
+  deliveriesError?: any,
+  debugInfo?: string | null,
+  refetch?: () => void
 }) => {
   const getStatusColor = (status: string) => {
     switch (status) {

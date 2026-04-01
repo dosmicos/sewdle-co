@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AuthPage from "@/pages/AuthPage";
 // Landing page uses three.js (~600KB) — lazy load it
 const LandingPage = React.lazy(() => import("@/pages/LandingPage"));
@@ -495,7 +496,9 @@ const App = () => {
             />
             <ShadcnToaster />
             <BrowserRouter>
-              <AppContent />
+              <ErrorBoundary>
+                <AppContent />
+              </ErrorBoundary>
             </BrowserRouter>
             </OrganizationProvider>
           </AuthProvider>
