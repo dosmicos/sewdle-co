@@ -585,16 +585,16 @@ const MarketingCalendarPage: React.FC = () => {
               <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
               Calendario
             </TabsTrigger>
+            <TabsTrigger value="peaks" className="text-sm data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700">
+              <Mountain className="h-3.5 w-3.5 mr-1.5" />
+              Peaks & Actividad
+            </TabsTrigger>
             <TabsTrigger value="sugerencias" className="text-sm data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700">
               <Sparkles className="h-3.5 w-3.5 mr-1.5" />
               Sugerencias IA
               {pendingSuggestions > 0 && (
                 <Badge className="ml-1.5 bg-violet-100 text-violet-700 border-0 text-[10px] px-1.5 py-0">{pendingSuggestions}</Badge>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="peaks" className="text-sm data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700">
-              <Mountain className="h-3.5 w-3.5 mr-1.5" />
-              Peaks {currentYear}
             </TabsTrigger>
           </TabsList>
 
