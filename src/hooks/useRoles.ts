@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
 import { useQueryClient } from '@tanstack/react-query';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 export interface Permission {
   module: string;
@@ -59,6 +60,7 @@ export const useRoles = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { currentOrganization } = useOrganization();
 
   const fetchRoles = async () => {
     try {
@@ -155,7 +157,8 @@ export const useRoles = () => {
           name: roleData.name,
           description: roleData.description,
           permissions: permissionsJson,
-          is_system: false
+          is_system: false,
+          organization_id: currentOrganization?.id
         });
 
       if (error) {
