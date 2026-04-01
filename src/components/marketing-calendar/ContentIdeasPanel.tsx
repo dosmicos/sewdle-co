@@ -25,6 +25,7 @@ import {
   ArrowRight,
   Search,
   RotateCcw,
+  Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -107,6 +108,7 @@ export default function ContentIdeasPanel() {
   } = useContentIdeas();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<IdeaStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [form, setForm] = useState<ContentIdeaInput>({ ...EMPTY_FORM });
@@ -133,18 +135,40 @@ export default function ContentIdeasPanel() {
     return filtered;
   }, [ideas, statusFilter, searchQuery]);
 
-  const handleCreate = async () => {
+  const openEditDialog = (idea: ContentIdea) => {
+    setEditingId(idea.id);
+    setForm({
+      title: idea.title,
+      description: idea.description,
+      source: idea.source,
+      reference_url: idea.reference_url,
+      content_type: idea.content_type,
+      platform: idea.platform,
+      suggested_date: idea.suggested_date,
+      priority: idea.priority,
+      submitted_by: idea.submitted_by,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!form.title.trim()) {
       toast.error('El titulo es obligatorio');
       return;
     }
     try {
-      await addIdea(form);
-      toast.success('Idea creada');
+      if (editingId) {
+        await updateIdea({ id: editingId, updates: form as Partial<ContentIdea> });
+        toast.success('Idea actualizada');
+      } else {
+        await addIdea(form);
+        toast.success('Idea creada');
+      }
       setDialogOpen(false);
+      setEditingId(null);
       setForm({ ...EMPTY_FORM });
     } catch {
-      toast.error('Error al crear la idea');
+      toast.error(editingId ? 'Error al actualizar' : 'Error al crear la idea');
     }
   };
 
@@ -205,6 +229,7 @@ export default function ContentIdeasPanel() {
         </div>
         <Button
           onClick={() => {
+            setEditingId(null);
             setForm({ ...EMPTY_FORM });
             setDialogOpen(true);
           }}
@@ -276,6 +301,7 @@ export default function ContentIdeasPanel() {
               onReject={() => handleStatusChange(idea.id, 'rejected')}
               onRestore={() => handleStatusChange(idea.id, 'new')}
               onConvert={() => handleConvert(idea)}
+              onEdit={() => openEditDialog(idea)}
               onDelete={() => handleDelete(idea.id)}
               isUpdating={isUpdating}
               isConverting={isConverting}
@@ -291,11 +317,13 @@ export default function ContentIdeasPanel() {
           <div className="sticky top-0 z-10 bg-white border-b px-6 py-4">
             <DialogHeader>
               <DialogTitle className="text-lg font-semibold tracking-tight text-slate-900">
-                Nueva Idea
+                {editingId ? 'Editar Idea' : 'Nueva Idea'}
               </DialogTitle>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Registra una oportunidad o tendencia de contenido
-              </p>
+              {!editingId && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Registra una oportunidad o tendencia de contenido
+                </p>
+              )}
             </DialogHeader>
           </div>
 
@@ -470,16 +498,16 @@ export default function ContentIdeasPanel() {
               Cancelar
             </Button>
             <Button
-              onClick={handleCreate}
-              disabled={isAdding || !form.title.trim()}
+              onClick={handleSave}
+              disabled={(isAdding || isUpdating) || !form.title.trim()}
               className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-[0.97] transition-all duration-150 cursor-pointer disabled:opacity-50"
             >
-              {isAdding ? (
+              {(isAdding || isUpdating) ? (
                 <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1.5" />
               ) : (
                 <Lightbulb className="h-4 w-4 mr-1.5" />
               )}
-              Crear Idea
+              {editingId ? 'Guardar' : 'Crear Idea'}
             </Button>
           </div>
         </DialogContent>
@@ -496,6 +524,7 @@ interface IdeaCardProps {
   onReject: () => void;
   onRestore: () => void;
   onConvert: () => void;
+  onEdit: () => void;
   onDelete: () => void;
   isUpdating: boolean;
   isConverting: boolean;
@@ -507,6 +536,7 @@ function IdeaCard({
   onReject,
   onRestore,
   onConvert,
+  onEdit,
   onDelete,
   isUpdating,
   isConverting,
@@ -653,7 +683,16 @@ function IdeaCard({
               En calendario
             </span>
           )}
-          {/* Delete — always available, far right */}
+          {/* Edit — available before conversion */}
+          {idea.status !== 'converted' && (
+            <button
+              onClick={onEdit}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-[0.97] transition-all duration-150 cursor-pointer"
+              title="Editar"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
           <div className="flex-1" />
           <button
             onClick={onDelete}
