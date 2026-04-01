@@ -21,6 +21,20 @@ export type ImpactLevel = 'high' | 'medium' | 'low';
 
 export type PeakPhase = 'concept' | 'creative' | 'teaser' | 'peak' | 'analysis';
 
+export type ContentType =
+  | 'reel'
+  | 'story'
+  | 'post'
+  | 'carousel'
+  | 'live'
+  | 'tiktok'
+  | 'email'
+  | 'blog'
+  | 'ugc'
+  | 'other';
+
+export type Platform = 'instagram' | 'tiktok' | 'facebook' | 'whatsapp' | 'email' | 'blog';
+
 export interface MarketingEvent {
   id: string;
   organization_id: string;
@@ -46,6 +60,8 @@ export interface MarketingEvent {
   is_peak: boolean;
   peak_phase: PeakPhase | null;
   learnings: string | null;
+  content_type: ContentType | null;
+  platform: Platform[] | null;
 }
 
 export type MarketingEventInput = {
@@ -64,6 +80,8 @@ export type MarketingEventInput = {
   peak_name?: string | null;
   peak_phase?: PeakPhase | null;
   learnings?: string | null;
+  content_type?: ContentType | null;
+  platform?: Platform[] | null;
   // These can be set manually or via calculateAttribution
   attributed_revenue?: number | null;
   attributed_orders?: number | null;

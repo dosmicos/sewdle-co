@@ -19,7 +19,7 @@ import MarketingCalendarView from '@/components/marketing-calendar/MarketingCale
 import { useMarketingEvents } from '@/hooks/useMarketingEvents';
 import { useMarketingActivity } from '@/hooks/useMarketingActivity';
 import { useHolidaySuggestions } from '@/hooks/useHolidaySuggestions';
-import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase } from '@/hooks/useMarketingEvents';
+import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase, ContentType, Platform } from '@/hooks/useMarketingEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -188,6 +188,42 @@ const PEAK_PHASE_CONFIG: Record<PeakPhase, { label: string; color: string }> = {
   analysis: { label: 'Analisis', color: 'bg-blue-100 text-blue-700' },
 };
 
+// ─── Content Type & Platform ─────────────────────────────
+const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string }[] = [
+  { value: 'reel', label: 'Reel' },
+  { value: 'story', label: 'Historia' },
+  { value: 'post', label: 'Post' },
+  { value: 'carousel', label: 'Carrusel' },
+  { value: 'live', label: 'Live' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'email', label: 'Email' },
+  { value: 'blog', label: 'Blog' },
+  { value: 'ugc', label: 'UGC' },
+  { value: 'other', label: 'Otro' },
+];
+
+const CONTENT_TYPE_CONFIG: Record<ContentType, { label: string; color: string }> = {
+  reel: { label: 'Reel', color: 'bg-pink-100 text-pink-700' },
+  story: { label: 'Historia', color: 'bg-violet-100 text-violet-700' },
+  post: { label: 'Post', color: 'bg-blue-100 text-blue-700' },
+  carousel: { label: 'Carrusel', color: 'bg-cyan-100 text-cyan-700' },
+  live: { label: 'Live', color: 'bg-red-100 text-red-700' },
+  tiktok: { label: 'TikTok', color: 'bg-gray-900 text-white' },
+  email: { label: 'Email', color: 'bg-emerald-100 text-emerald-700' },
+  blog: { label: 'Blog', color: 'bg-amber-100 text-amber-700' },
+  ugc: { label: 'UGC', color: 'bg-orange-100 text-orange-700' },
+  other: { label: 'Otro', color: 'bg-gray-100 text-gray-700' },
+};
+
+const PLATFORM_OPTIONS: { value: Platform; label: string; emoji: string }[] = [
+  { value: 'instagram', label: 'Instagram', emoji: '📸' },
+  { value: 'tiktok', label: 'TikTok', emoji: '🎵' },
+  { value: 'facebook', label: 'Facebook', emoji: '📘' },
+  { value: 'whatsapp', label: 'WhatsApp', emoji: '💬' },
+  { value: 'email', label: 'Email', emoji: '📧' },
+  { value: 'blog', label: 'Blog', emoji: '📝' },
+];
+
 // ─── Quarterly Peaks ────────────────────────────────────
 interface QuarterlyPeak {
   quarter: string;
@@ -324,6 +360,8 @@ const defaultForm: MarketingEventInput = {
   peak_name: null,
   peak_phase: null,
   learnings: null,
+  content_type: null,
+  platform: null,
 };
 
 // ─── Page Component ───────────────────────────────────────
@@ -479,6 +517,8 @@ const MarketingCalendarPage: React.FC = () => {
       peak_name: event.peak_name,
       peak_phase: event.peak_phase,
       learnings: event.learnings,
+      content_type: event.content_type || null,
+      platform: event.platform || null,
     });
     setDialogOpen(true);
   };
@@ -747,7 +787,30 @@ const MarketingCalendarPage: React.FC = () => {
                                 {PEAK_PHASE_CONFIG[ev.peak_phase].label}
                               </Badge>
                             )}
+                            {ev.content_type && (
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'text-[10px] px-1.5',
+                                  CONTENT_TYPE_CONFIG[ev.content_type].color
+                                )}
+                              >
+                                {CONTENT_TYPE_CONFIG[ev.content_type].label}
+                              </Badge>
+                            )}
                           </div>
+                          {ev.platform && ev.platform.length > 0 && (
+                            <div className="flex gap-1 mt-0.5">
+                              {ev.platform.map((p) => {
+                                const plat = PLATFORM_OPTIONS.find((o) => o.value === p);
+                                return plat ? (
+                                  <span key={p} className="text-[10px] text-gray-500">
+                                    {plat.emoji} {plat.label}
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
                           {ev.description && (
                             <p className="text-xs text-gray-500 line-clamp-2">
                               {ev.description}
@@ -1082,7 +1145,32 @@ const MarketingCalendarPage: React.FC = () => {
                             )}
                           </td>
                           <td className="px-3 py-2">
-                            <div className="font-medium">{ev.title}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium">{ev.title}</span>
+                              {ev.content_type && (
+                                <Badge
+                                  variant="secondary"
+                                  className={cn(
+                                    'text-[9px] px-1',
+                                    CONTENT_TYPE_CONFIG[ev.content_type].color
+                                  )}
+                                >
+                                  {CONTENT_TYPE_CONFIG[ev.content_type].label}
+                                </Badge>
+                              )}
+                            </div>
+                            {ev.platform && ev.platform.length > 0 && (
+                              <div className="flex gap-1 mt-0.5">
+                                {ev.platform.map((p) => {
+                                  const plat = PLATFORM_OPTIONS.find((o) => o.value === p);
+                                  return plat ? (
+                                    <span key={p} className="text-[10px] text-gray-400">
+                                      {plat.emoji}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
                             {ev.description && (
                               <div className="text-xs text-gray-400 truncate max-w-[300px]">
                                 {ev.description}
@@ -1212,6 +1300,55 @@ const MarketingCalendarPage: React.FC = () => {
                 onChange={(e) => updateForm('description', e.target.value)}
                 placeholder="Detalles del evento, audiencia, canales..."
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Tipo de contenido</Label>
+                <select
+                  value={form.content_type || ''}
+                  onChange={(e) =>
+                    updateForm('content_type', (e.target.value as ContentType) || null)
+                  }
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Sin especificar</option>
+                  {CONTENT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Plataformas</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {PLATFORM_OPTIONS.map((opt) => {
+                    const selected = form.platform?.includes(opt.value) || false;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          const current = form.platform || [];
+                          const updated = selected
+                            ? current.filter((p) => p !== opt.value)
+                            : [...current, opt.value];
+                          updateForm('platform', updated.length > 0 ? updated : null);
+                        }}
+                        className={cn(
+                          'px-2 py-1 rounded-full text-xs font-medium border transition-colors',
+                          selected
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                        )}
+                      >
+                        {opt.emoji} {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
