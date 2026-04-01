@@ -1324,48 +1324,75 @@ const MarketingCalendarPage: React.FC = () => {
         </Tabs>
       </div>
 
-      {/* Add/Edit Dialog */}
+      {/* Add/Edit Dialog — Redesigned with sections, hierarchy, and polish */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingId ? 'Editar Contenido' : 'Nuevo Contenido'}
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-[520px] max-h-[90vh] overflow-y-auto p-0 gap-0">
+          {/* Header */}
+          <div className="sticky top-0 z-10 bg-white border-b px-6 py-4">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold tracking-tight text-slate-900">
+                {editingId ? 'Editar Contenido' : 'Nuevo Contenido'}
+              </DialogTitle>
+              {!editingId && (
+                <p className="text-xs text-slate-400 mt-0.5">Planea y documenta cada pieza de contenido</p>
+              )}
+            </DialogHeader>
+          </div>
 
-          <div className="space-y-4 mt-2">
-            {/* 1. Titulo */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">Titulo</Label>
-              <Input
-                value={form.title}
-                onChange={(e) => updateForm('title', e.target.value)}
-                placeholder="Ej: Reel de lanzamiento coleccion verano"
-              />
-            </div>
-
-            {/* 2. Tipo de contenido + Plataformas */}
-            <div className="grid grid-cols-2 gap-3">
+          <div className="px-6 py-5 space-y-6">
+            {/* ── Section 1: Esencial ──────────────────────── */}
+            <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-sm">Tipo de contenido</Label>
-                <select
-                  value={form.content_type || ''}
-                  onChange={(e) =>
-                    updateForm('content_type', (e.target.value as ContentType) || null)
-                  }
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">Sin especificar</option>
-                  {CONTENT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <Label className="text-[13px] font-medium text-slate-700">
+                  Titulo <span className="text-red-400">*</span>
+                </Label>
+                <Input
+                  value={form.title}
+                  onChange={(e) => updateForm('title', e.target.value)}
+                  placeholder="Ej: Reel de lanzamiento coleccion verano"
+                  className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                />
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Formato</Label>
+                  <select
+                    value={form.content_type || ''}
+                    onChange={(e) =>
+                      updateForm('content_type', (e.target.value as ContentType) || null)
+                    }
+                    className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+                  >
+                    <option value="">Sin especificar</option>
+                    {CONTENT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Estado</Label>
+                  <select
+                    value={form.status || 'idea'}
+                    onChange={(e) =>
+                      updateForm('status', e.target.value as EventStatus)
+                    }
+                    className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+                  >
+                    {EVENT_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <Label className="text-sm">Plataformas</Label>
-                <div className="flex flex-wrap gap-1.5">
+                <Label className="text-[13px] font-medium text-slate-700">Plataformas</Label>
+                <div className="flex flex-wrap gap-2">
                   {PLATFORM_OPTIONS.map((opt) => {
                     const selected = form.platform?.includes(opt.value) || false;
                     return (
@@ -1380,107 +1407,119 @@ const MarketingCalendarPage: React.FC = () => {
                           updateForm('platform', updated.length > 0 ? updated : null);
                         }}
                         className={cn(
-                          'px-2 py-1 rounded-full text-xs font-medium border transition-colors',
+                          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 cursor-pointer',
                           selected
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
                         )}
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        {opt.emoji} {opt.label}
+                        <span className="text-sm leading-none">{opt.emoji}</span>
+                        {opt.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Fecha</Label>
+                  <Input
+                    type="date"
+                    value={form.event_date}
+                    onChange={(e) => updateForm('event_date', e.target.value)}
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Hora</Label>
+                  <Input
+                    type="time"
+                    value={form.scheduled_time || ''}
+                    onChange={(e) => updateForm('scheduled_time', e.target.value || null)}
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Responsable</Label>
+                  <Input
+                    value={form.assigned_to || ''}
+                    onChange={(e) => updateForm('assigned_to', e.target.value || null)}
+                    placeholder="Nombre"
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* 3. Estado + Responsable */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* ── Divider ──────────────────────────────────── */}
+            <div className="border-t border-slate-100" />
+
+            {/* ── Section 2: Contenido ─────────────────────── */}
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Contenido</h3>
+
               <div className="space-y-1.5">
-                <Label className="text-sm">Estado</Label>
-                <select
-                  value={form.status || 'idea'}
-                  onChange={(e) =>
-                    updateForm('status', e.target.value as EventStatus)
-                  }
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {EVENT_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Responsable</Label>
-                <Input
-                  value={form.assigned_to || ''}
-                  onChange={(e) => updateForm('assigned_to', e.target.value || null)}
-                  placeholder="Nombre del responsable"
+                <Label className="text-[13px] font-medium text-slate-700">Brief / Instrucciones</Label>
+                <Textarea
+                  value={form.description || ''}
+                  onChange={(e) => updateForm('description', e.target.value)}
+                  placeholder="Describe el contenido, objetivo, audiencia..."
+                  className="text-sm min-h-[56px] border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 resize-y transition-colors"
                 />
               </div>
-            </div>
 
-            {/* 4. Fecha + Hora */}
-            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-sm">Fecha</Label>
-                <Input
-                  type="date"
-                  value={form.event_date}
-                  onChange={(e) => updateForm('event_date', e.target.value)}
+                <div className="flex items-center justify-between">
+                  <Label className="text-[13px] font-medium text-slate-700">Copy / Caption</Label>
+                  <span className={cn(
+                    'text-[11px] tabular-nums',
+                    (form.copy_text || '').length > 2000 ? 'text-amber-500 font-medium' : 'text-slate-300'
+                  )}>
+                    {(form.copy_text || '').length}/2200
+                  </span>
+                </div>
+                <Textarea
+                  value={form.copy_text || ''}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 2200) {
+                      updateForm('copy_text', e.target.value || null);
+                    }
+                  }}
+                  placeholder="Texto del post, caption, copy del email..."
+                  className="text-sm min-h-[72px] border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 resize-y transition-colors"
                 />
               </div>
+
               <div className="space-y-1.5">
-                <Label className="text-sm">Hora de publicacion</Label>
-                <Input
-                  type="time"
-                  value={form.scheduled_time || ''}
-                  onChange={(e) => updateForm('scheduled_time', e.target.value || null)}
-                />
-              </div>
-            </div>
-
-            {/* 5. Descripcion / Brief */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">Descripcion / Brief</Label>
-              <Textarea
-                value={form.description || ''}
-                onChange={(e) => updateForm('description', e.target.value)}
-                placeholder="Descripcion del contenido, instrucciones para el equipo..."
-                className="text-sm min-h-[60px]"
-              />
-            </div>
-
-            {/* 6. Copy / Caption */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">Copy / Caption</Label>
-              <Textarea
-                value={form.copy_text || ''}
-                onChange={(e) => {
-                  if (e.target.value.length <= 2200) {
-                    updateForm('copy_text', e.target.value || null);
-                  }
-                }}
-                placeholder="Texto del post, caption, copy del email..."
-                className="text-sm min-h-[80px]"
-              />
-              <div className="text-[10px] text-gray-400 text-right">
-                {(form.copy_text || '').length} / 2200
-              </div>
-            </div>
-
-            {/* 7. Hashtags */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">Hashtags</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={hashtagInput}
-                  onChange={(e) => setHashtagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
+                <Label className="text-[13px] font-medium text-slate-700">Hashtags</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={hashtagInput}
+                    onChange={(e) => setHashtagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const tag = hashtagInput.trim().replace(/^#/, '');
+                        if (tag) {
+                          const current = form.hashtags || [];
+                          if (!current.includes(`#${tag}`)) {
+                            updateForm('hashtags', [...current, `#${tag}`]);
+                          }
+                          setHashtagInput('');
+                        }
+                      }
+                    }}
+                    placeholder="Escribe y presiona Enter..."
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-10 w-10 p-0 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer"
+                    onClick={() => {
                       const tag = hashtagInput.trim().replace(/^#/, '');
                       if (tag) {
                         const current = form.hashtags || [];
@@ -1489,180 +1528,188 @@ const MarketingCalendarPage: React.FC = () => {
                         }
                         setHashtagInput('');
                       }
-                    }
-                  }}
-                  placeholder="Agregar hashtag..."
-                  className="text-sm"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => {
-                    const tag = hashtagInput.trim().replace(/^#/, '');
-                    if (tag) {
-                      const current = form.hashtags || [];
-                      if (!current.includes(`#${tag}`)) {
-                        updateForm('hashtags', [...current, `#${tag}`]);
-                      }
-                      setHashtagInput('');
-                    }
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-              {form.hashtags && form.hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {form.hashtags.map((tag, idx) => (
-                    <Badge
-                      key={idx}
-                      variant="secondary"
-                      className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                      onClick={() => {
-                        const updated = form.hashtags!.filter((_, i) => i !== idx);
-                        updateForm('hashtags', updated.length > 0 ? updated : null);
-                      }}
-                    >
-                      {tag} &times;
-                    </Badge>
-                  ))}
+                    }}
+                  >
+                    <Plus className="h-4 w-4 text-slate-500" />
+                  </Button>
                 </div>
-              )}
-            </div>
-
-            {/* 8. Assets Necesarios + Link de Assets */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-sm">Assets necesarios</Label>
-                <Input
-                  value={form.assets_needed || ''}
-                  onChange={(e) => updateForm('assets_needed', e.target.value || null)}
-                  placeholder="Fotos, video, diseno..."
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Link de assets</Label>
-                <Input
-                  value={form.assets_url || ''}
-                  onChange={(e) => updateForm('assets_url', e.target.value || null)}
-                  placeholder="Link a Drive, Figma..."
-                />
-              </div>
-            </div>
-
-            {/* 9. Por que ahora? */}
-            <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-              <Label className="text-sm font-semibold text-indigo-700">
-                Por que ahora?
-              </Label>
-              <Textarea
-                value={form.why_now || ''}
-                onChange={(e) => updateForm('why_now', e.target.value)}
-                placeholder="Que hace que ESTE momento sea el correcto para esta accion?"
-                className="bg-white text-sm min-h-[60px]"
-              />
-              <p className="text-[10px] text-indigo-400">
-                Prophit System: registra cada accion para entender que crea resultados
-              </p>
-            </div>
-
-            {/* 10. Notas de Aprobacion */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">Notas de Aprobacion</Label>
-              <Textarea
-                value={form.approval_notes || ''}
-                onChange={(e) => updateForm('approval_notes', e.target.value || null)}
-                placeholder="Feedback, cambios requeridos..."
-                className="text-sm min-h-[60px]"
-              />
-            </div>
-
-            {/* 11. Peak section */}
-            <div className="border rounded-lg p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="is-peak"
-                  checked={form.is_peak || false}
-                  onCheckedChange={(checked) =>
-                    updateForm('is_peak', checked === true)
-                  }
-                />
-                <Label htmlFor="is-peak" className="text-sm font-medium cursor-pointer">
-                  Es un evento Peak
-                </Label>
-                <Mountain className="h-3.5 w-3.5 text-amber-500" />
-              </div>
-
-              {form.is_peak && (
-                <div className="grid grid-cols-2 gap-3 pl-6">
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Nombre del Peak</Label>
-                    <Input
-                      value={form.peak_name || ''}
-                      onChange={(e) => updateForm('peak_name', e.target.value)}
-                      placeholder="Ej: Hot Days 2026"
-                    />
+                {form.hashtags && form.hashtags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {form.hashtags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-600 cursor-pointer hover:bg-red-50 hover:text-red-500 transition-colors duration-150 group"
+                        onClick={() => {
+                          const updated = form.hashtags!.filter((_, i) => i !== idx);
+                          updateForm('hashtags', updated.length > 0 ? updated : null);
+                        }}
+                      >
+                        {tag}
+                        <X className="h-3 w-3 text-slate-400 group-hover:text-red-400 transition-colors" />
+                      </span>
+                    ))}
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Fase</Label>
-                    <select
-                      value={form.peak_phase || ''}
-                      onChange={(e) =>
-                        updateForm(
-                          'peak_phase',
-                          (e.target.value as PeakPhase) || null
-                        )
-                      }
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">Seleccionar fase</option>
-                      {PEAK_PHASE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Divider ──────────────────────────────────── */}
+            <div className="border-t border-slate-100" />
+
+            {/* ── Section 3: Assets & Produccion ───────────── */}
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Assets & Produccion</h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Assets necesarios</Label>
+                  <Input
+                    value={form.assets_needed || ''}
+                    onChange={(e) => updateForm('assets_needed', e.target.value || null)}
+                    placeholder="Fotos, video, diseño..."
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                  />
                 </div>
-              )}
-            </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Link de assets</Label>
+                  <Input
+                    value={form.assets_url || ''}
+                    onChange={(e) => updateForm('assets_url', e.target.value || null)}
+                    placeholder="Drive, Figma, Canva..."
+                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                  />
+                </div>
+              </div>
 
-            {/* 12. Aprendizajes (solo en edicion) */}
-            {editingId && (
               <div className="space-y-1.5">
-                <Label className="text-sm">Aprendizajes</Label>
+                <Label className="text-[13px] font-medium text-slate-700">Notas de Aprobacion</Label>
                 <Textarea
-                  value={form.learnings || ''}
-                  onChange={(e) => updateForm('learnings', e.target.value)}
-                  placeholder="Que aprendimos de este evento? Que hariamos diferente?"
-                  className="text-sm min-h-[60px]"
+                  value={form.approval_notes || ''}
+                  onChange={(e) => updateForm('approval_notes', e.target.value || null)}
+                  placeholder="Feedback del equipo, cambios requeridos..."
+                  className="text-sm min-h-[56px] border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 resize-y transition-colors"
                 />
               </div>
-            )}
-
-            {/* 13. Botones */}
-            <div className={cn('flex gap-2', editingId ? 'flex-row' : '')}>
-              {editingId && (
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    if (confirm('Eliminar este contenido?')) {
-                      handleDelete(editingId);
-                      setDialogOpen(false);
-                    }
-                  }}
-                  className="shrink-0"
-                >
-                  <Trash2 className="h-4 w-4 mr-1.5" />
-                  Eliminar
-                </Button>
-              )}
-              <Button onClick={handleSave} className="flex-1">
-                {editingId ? 'Guardar Cambios' : 'Crear Contenido'}
-              </Button>
             </div>
+
+            {/* ── Divider ──────────────────────────────────── */}
+            <div className="border-t border-slate-100" />
+
+            {/* ── Section 4: Estrategia (collapsible feel) ── */}
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Estrategia</h3>
+
+              <div className="space-y-1.5 bg-gradient-to-br from-indigo-50/80 to-blue-50/40 border border-indigo-100 rounded-xl p-4">
+                <Label className="text-[13px] font-semibold text-indigo-700">
+                  Por que ahora?
+                </Label>
+                <Textarea
+                  value={form.why_now || ''}
+                  onChange={(e) => updateForm('why_now', e.target.value)}
+                  placeholder="Que hace que ESTE momento sea el correcto?"
+                  className="bg-white/80 text-sm min-h-[56px] border-indigo-200/60 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-300 resize-y transition-colors"
+                />
+                <p className="text-[10px] text-indigo-400/80 mt-1">
+                  Prophit System — registra la razon estrategica de cada accion
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="is-peak"
+                    checked={form.is_peak || false}
+                    onCheckedChange={(checked) =>
+                      updateForm('is_peak', checked === true)
+                    }
+                  />
+                  <Label htmlFor="is-peak" className="text-[13px] font-medium text-slate-700 cursor-pointer">
+                    Evento Peak
+                  </Label>
+                  <Mountain className="h-3.5 w-3.5 text-amber-500" />
+                </div>
+
+                {form.is_peak && (
+                  <div className="grid grid-cols-2 gap-3 pl-6 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-[13px] font-medium text-slate-700">Nombre</Label>
+                      <Input
+                        value={form.peak_name || ''}
+                        onChange={(e) => updateForm('peak_name', e.target.value)}
+                        placeholder="Ej: Hot Days 2026"
+                        className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[13px] font-medium text-slate-700">Fase</Label>
+                      <select
+                        value={form.peak_phase || ''}
+                        onChange={(e) =>
+                          updateForm(
+                            'peak_phase',
+                            (e.target.value as PeakPhase) || null
+                          )
+                        }
+                        className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+                      >
+                        <option value="">Seleccionar</option>
+                        {PEAK_PHASE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {editingId && (
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] font-medium text-slate-700">Aprendizajes</Label>
+                  <Textarea
+                    value={form.learnings || ''}
+                    onChange={(e) => updateForm('learnings', e.target.value)}
+                    placeholder="Que aprendimos? Que hariamos diferente?"
+                    className="text-sm min-h-[56px] border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 resize-y transition-colors"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Sticky Footer ──────────────────────────────── */}
+          <div className="sticky bottom-0 bg-white border-t border-slate-100 px-6 py-4 flex items-center gap-3">
+            {editingId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (confirm('Eliminar este contenido?')) {
+                    handleDelete(editingId);
+                    setDialogOpen(false);
+                  }
+                }}
+                className="text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Eliminar
+              </Button>
+            )}
+            <div className="flex-1" />
+            <Button
+              variant="ghost"
+              onClick={() => setDialogOpen(false)}
+              className="text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              className="bg-slate-900 hover:bg-slate-800 text-white px-6 transition-all duration-150 active:scale-[0.97] cursor-pointer"
+            >
+              {editingId ? 'Guardar' : 'Crear'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
