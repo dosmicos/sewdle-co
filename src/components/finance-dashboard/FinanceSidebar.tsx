@@ -10,7 +10,6 @@ import {
   Sparkles,
   DollarSign,
   CalendarDays,
-  CalendarRange,
   BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,7 +32,6 @@ const workspaceItems: NavItem[] = [
   { label: 'UGC Performance', icon: <Users className="h-4 w-4" />, id: 'ugc-performance', path: '/ugc-performance' },
   { label: 'Social Analytics', icon: <BarChart3 className="h-4 w-4" />, id: 'social-analytics', path: '/social-analytics' },
   { label: 'Mkt Calendar', icon: <CalendarDays className="h-4 w-4" />, id: 'marketing-calendar', path: '/marketing-calendar' },
-  { label: 'Content Planner', icon: <CalendarRange className="h-4 w-4" />, id: 'content-planner', path: '/content-planner' },
   { label: 'Cost Settings', icon: <DollarSign className="h-4 w-4" />, id: 'cost-settings', path: '/cost-settings' },
 ];
 
@@ -61,7 +59,6 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
     if (location.pathname === '/ugc-performance') return 'ugc-performance';
     if (location.pathname === '/social-analytics') return 'social-analytics';
     if (location.pathname === '/marketing-calendar') return 'marketing-calendar';
-    if (location.pathname === '/content-planner') return 'content-planner';
     if (location.pathname === '/cost-settings') return 'cost-settings';
     return 'summary';
   })();

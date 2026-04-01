@@ -3,14 +3,18 @@ import {
   format,
   startOfMonth,
   endOfMonth,
+  startOfWeek,
   addDays,
   addMonths,
   subMonths,
+  addWeeks,
+  subWeeks,
   isSameMonth,
   isSameDay,
   isToday,
   isPast,
   isFuture,
+  getISOWeek,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
@@ -61,6 +65,9 @@ import {
   CalendarClock,
   ListChecks,
   Clock,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -391,6 +398,33 @@ const MarketingCalendarPage: React.FC = () => {
   const { suggestions, suggestedCount: pendingSuggestions } = useHolidaySuggestions();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [weekRef, setWeekRef] = useState(new Date());
+
+  // Week view helpers
+  const weekStart = useMemo(() => startOfWeek(weekRef, { weekStartsOn: 1 }), [weekRef]);
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const weekNumber = useMemo(() => getISOWeek(weekStart), [weekStart]);
+
+  const weekEvents = useMemo(() => {
+    const weekEnd = addDays(weekStart, 6);
+    return events.filter((e) => {
+      const d = new Date(e.event_date + 'T12:00:00');
+      return d >= weekStart && d <= weekEnd;
+    });
+  }, [events, weekStart]);
+
+  const weekEventsByDay = useMemo(() => {
+    const map = new Map<string, MarketingEvent[]>();
+    for (const day of weekDays) {
+      const key = format(day, 'yyyy-MM-dd');
+      map.set(key, []);
+    }
+    for (const ev of weekEvents) {
+      const list = map.get(ev.event_date);
+      if (list) list.push(ev);
+    }
+    return map;
+  }, [weekEvents, weekDays]);
 
   // Activity vs Revenue data for the current month
   const activityStart = useMemo(() => startOfMonth(currentMonth), [currentMonth]);
@@ -643,6 +677,10 @@ const MarketingCalendarPage: React.FC = () => {
               <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
               Calendario
             </TabsTrigger>
+            <TabsTrigger value="semana" className="text-sm data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700">
+              <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
+              Semana
+            </TabsTrigger>
             <TabsTrigger value="peaks" className="text-sm data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700">
               <Mountain className="h-3.5 w-3.5 mr-1.5" />
               Peaks & Actividad
@@ -891,6 +929,128 @@ const MarketingCalendarPage: React.FC = () => {
           </Card>
         )}
 
+          </TabsContent>
+
+          {/* ─── Tab: Semana ───────────────────────────────────── */}
+          <TabsContent value="semana" className="mt-4 space-y-4">
+            {/* Week navigation */}
+            <div className="flex items-center justify-between">
+              <Button variant="outline" size="sm" onClick={() => setWeekRef((prev) => subWeeks(prev, 1))}>
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Semana anterior
+              </Button>
+              <div className="text-center">
+                <div className="text-sm font-semibold text-gray-900">S{weekNumber}</div>
+                <div className="text-xs text-gray-500">
+                  {format(weekDays[0], "d MMM", { locale: es })} – {format(weekDays[6], "d MMM yyyy", { locale: es })}
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setWeekRef((prev) => addWeeks(prev, 1))}>
+                Semana siguiente
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+
+            {/* Today button */}
+            <div className="flex justify-center">
+              <Button variant="ghost" size="sm" className="text-xs text-blue-600" onClick={() => setWeekRef(new Date())}>
+                Ir a hoy
+              </Button>
+            </div>
+
+            {/* 7-column grid */}
+            <div className="grid grid-cols-7 gap-2">
+              {weekDays.map((day) => {
+                const key = format(day, 'yyyy-MM-dd');
+                const dayEvents = weekEventsByDay.get(key) || [];
+                const dayIsToday = isToday(day);
+
+                return (
+                  <div
+                    key={key}
+                    className={cn(
+                      'border rounded-lg min-h-[200px] flex flex-col',
+                      dayIsToday ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200 bg-white'
+                    )}
+                  >
+                    {/* Day header */}
+                    <div className={cn(
+                      'px-2 py-1.5 border-b text-center',
+                      dayIsToday ? 'bg-blue-100 border-blue-200' : 'bg-gray-50 border-gray-100'
+                    )}>
+                      <div className="text-[10px] font-medium text-gray-500 uppercase">
+                        {format(day, 'EEE', { locale: es })}
+                      </div>
+                      <div className={cn(
+                        'text-sm font-bold',
+                        dayIsToday ? 'text-blue-700' : 'text-gray-800'
+                      )}>
+                        {format(day, 'd')}
+                      </div>
+                    </div>
+
+                    {/* Events */}
+                    <div className="flex-1 p-1.5 space-y-1.5 overflow-y-auto">
+                      {dayEvents.map((ev) => {
+                        const ctCfg = ev.content_type ? CONTENT_TYPE_CONFIG[ev.content_type] : null;
+                        const statusCfg = ev.status ? EVENT_STATUS_CONFIG[ev.status] : null;
+                        return (
+                          <div
+                            key={ev.id}
+                            onClick={() => openEditDialog(ev)}
+                            className="border rounded-md p-1.5 bg-white hover:shadow-sm cursor-pointer transition-shadow space-y-1"
+                          >
+                            <div className="text-xs font-medium text-gray-900 line-clamp-2 leading-tight">
+                              {ev.title}
+                            </div>
+                            <div className="flex flex-wrap gap-0.5">
+                              {ctCfg && (
+                                <Badge variant="secondary" className={cn('text-[9px] px-1 py-0', ctCfg.color)}>
+                                  {ctCfg.label}
+                                </Badge>
+                              )}
+                              {statusCfg && (
+                                <Badge variant="secondary" className={cn('text-[9px] px-1 py-0', statusCfg.color)}>
+                                  {statusCfg.label}
+                                </Badge>
+                              )}
+                            </div>
+                            {ev.platform && ev.platform.length > 0 && (
+                              <div className="flex gap-0.5">
+                                {ev.platform.map((p) => {
+                                  const plat = PLATFORM_OPTIONS.find((o) => o.value === p);
+                                  return plat ? (
+                                    <span key={p} className="text-[10px]">{plat.emoji}</span>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
+                            {ev.assigned_to && (
+                              <div className="text-[9px] text-gray-400 truncate">
+                                {ev.assigned_to}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add button */}
+                    <div className="px-1.5 pb-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full h-6 text-[10px] text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                        onClick={() => openAddDialog(day)}
+                      >
+                        <Plus className="h-3 w-3 mr-0.5" />
+                        Agregar
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </TabsContent>
 
           {/* ─── Tab: Sugerencias IA ──────────────────────────── */}
