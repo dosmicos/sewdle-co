@@ -528,10 +528,6 @@ const MarketingCalendarPage: React.FC = () => {
       toast.error('El titulo es obligatorio');
       return;
     }
-    if (form.expected_impact === 'high' && !form.why_now?.trim()) {
-      toast.error('"Por que ahora?" es obligatorio para eventos de alto impacto');
-      return;
-    }
     try {
       if (editingId) {
         await updateEvent({ id: editingId, updates: form });
@@ -732,7 +728,6 @@ const MarketingCalendarPage: React.FC = () => {
               <div className="space-y-2">
                 {selectedDateEvents.map((ev) => {
                   const cfg = EVENT_TYPE_CONFIG[ev.event_type];
-                  const impact = IMPACT_CONFIG[ev.expected_impact];
                   const isExpanded = expandedEventId === ev.id;
                   const eventDate = new Date(ev.event_date + 'T12:00:00');
                   const isEventPast = isPast(addDays(eventDate, ev.attribution_window_days || 7));
@@ -761,12 +756,6 @@ const MarketingCalendarPage: React.FC = () => {
                             <span className="font-medium text-sm truncate">
                               {ev.title}
                             </span>
-                            <Badge
-                              variant="secondary"
-                              className={cn('text-[10px] px-1.5', impact.color)}
-                            >
-                              {impact.label}
-                            </Badge>
                             {ev.is_peak && (
                               <Badge
                                 variant="secondary"
@@ -821,20 +810,6 @@ const MarketingCalendarPage: React.FC = () => {
                               <strong>Por que ahora:</strong> {ev.why_now}
                             </div>
                           )}
-                          <div className="mt-1">
-                            <ExpectedVsActual
-                              expected={ev.expected_revenue}
-                              actual={ev.attributed_revenue}
-                            />
-                          </div>
-                          {ev.ad_spend_during != null &&
-                            ev.ad_spend_during > 0 &&
-                            ev.roas_during != null && (
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                Ad Spend: {formatCOPShort(ev.ad_spend_during)} | ROAS:{' '}
-                                {ev.roas_during.toFixed(1)}x
-                              </div>
-                            )}
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
                           <Button
@@ -862,105 +837,17 @@ const MarketingCalendarPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Expanded Impact Section */}
-                      {isExpanded && (
-                        <div className="border-t px-4 py-3 bg-gray-50/50 space-y-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Target className="h-4 w-4 text-gray-600" />
-                            <h4 className="text-sm font-semibold text-gray-700">
-                              Impacto del Evento
-                            </h4>
+                      {/* Expanded Details */}
+                      {isExpanded && ev.learnings && (
+                        <div className="border-t px-4 py-3 bg-gray-50/50">
+                          <div className="bg-white border rounded-lg p-3">
+                            <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
+                              Aprendizajes
+                            </div>
+                            <p className="text-xs text-gray-700 whitespace-pre-wrap">
+                              {ev.learnings}
+                            </p>
                           </div>
-
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="bg-white rounded-lg border p-2.5">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
-                                Revenue Atribuido
-                              </div>
-                              <div className="text-sm font-semibold">
-                                {ev.attributed_revenue != null
-                                  ? formatCOP(ev.attributed_revenue)
-                                  : '---'}
-                              </div>
-                            </div>
-                            <div className="bg-white rounded-lg border p-2.5">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
-                                Ordenes Atribuidas
-                              </div>
-                              <div className="text-sm font-semibold">
-                                {ev.attributed_orders != null
-                                  ? ev.attributed_orders
-                                  : '---'}
-                              </div>
-                            </div>
-                            <div className="bg-white rounded-lg border p-2.5">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
-                                Delta vs Esperado
-                              </div>
-                              <div className="text-sm font-semibold">
-                                {ev.expected_revenue != null &&
-                                ev.attributed_revenue != null ? (
-                                  <DeltaBadge
-                                    expected={ev.expected_revenue}
-                                    actual={ev.attributed_revenue}
-                                  />
-                                ) : (
-                                  '---'
-                                )}
-                              </div>
-                            </div>
-                            <div className="bg-white rounded-lg border p-2.5">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
-                                ROI
-                              </div>
-                              <div className="text-sm font-semibold">
-                                {ev.roi_percent != null ? (
-                                  <span
-                                    className={
-                                      ev.roi_percent >= 0
-                                        ? 'text-green-600'
-                                        : 'text-red-600'
-                                    }
-                                  >
-                                    {ev.roi_percent.toFixed(0)}%
-                                  </span>
-                                ) : (
-                                  '---'
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {isEventPast && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs"
-                              disabled={calculatingId === ev.id}
-                              onClick={() => handleCalculateAttribution(ev)}
-                            >
-                              <RefreshCw
-                                className={cn(
-                                  'h-3 w-3 mr-1',
-                                  calculatingId === ev.id && 'animate-spin'
-                                )}
-                              />
-                              {calculatingId === ev.id
-                                ? 'Calculando...'
-                                : 'Calcular Atribucion'}
-                            </Button>
-                          )}
-
-                          {ev.learnings && (
-                            <div className="bg-white border rounded-lg p-3">
-                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
-                                Aprendizajes
-                              </div>
-                              <p className="text-xs text-gray-700 whitespace-pre-wrap">
-                                {ev.learnings}
-                              </p>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1103,19 +990,12 @@ const MarketingCalendarPage: React.FC = () => {
                       <th className="text-left px-3 py-2 font-medium text-gray-600">
                         Evento
                       </th>
-                      <th className="text-center px-3 py-2 font-medium text-gray-600 w-20">
-                        Impacto
-                      </th>
-                      <th className="text-right px-3 py-2 font-medium text-gray-600 w-48">
-                        Esperado vs Actual
-                      </th>
                       <th className="w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {monthEvents.map((ev) => {
                       const cfg = EVENT_TYPE_CONFIG[ev.event_type];
-                      const impact = IMPACT_CONFIG[ev.expected_impact];
                       return (
                         <tr key={ev.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2 text-gray-500 text-xs">
@@ -1180,38 +1060,6 @@ const MarketingCalendarPage: React.FC = () => {
                               <div className="text-[10px] text-indigo-500 truncate max-w-[300px]">
                                 Por que ahora: {ev.why_now}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                'text-[10px] px-1.5',
-                                impact.color
-                              )}
-                            >
-                              {impact.label}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            {ev.expected_revenue != null ||
-                            ev.attributed_revenue != null ? (
-                              <div className="space-y-0.5">
-                                <ExpectedVsActual
-                                  expected={ev.expected_revenue}
-                                  actual={ev.attributed_revenue}
-                                />
-                                {ev.ad_spend_during != null &&
-                                  ev.roas_during != null && (
-                                    <div className="text-[10px] text-gray-400">
-                                      ROAS: {ev.roas_during.toFixed(1)}x
-                                    </div>
-                                  )}
-                              </div>
-                            ) : ev.actual_revenue_impact != null ? (
-                              formatCOP(ev.actual_revenue_impact)
-                            ) : (
-                              <span className="text-gray-300">---</span>
                             )}
                           </td>
                           <td className="px-3 py-2">
@@ -1353,10 +1201,7 @@ const MarketingCalendarPage: React.FC = () => {
 
             <div className="space-y-1.5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
               <Label className="text-sm font-semibold text-indigo-700">
-                Por que ahora?{' '}
-                {form.expected_impact === 'high' && (
-                  <span className="text-red-500">*</span>
-                )}
+                Por que ahora?
               </Label>
               <Textarea
                 value={form.why_now || ''}
@@ -1365,100 +1210,7 @@ const MarketingCalendarPage: React.FC = () => {
                 className="bg-white text-sm min-h-[60px]"
               />
               <p className="text-[10px] text-indigo-400">
-                Clave del Prophit System: documenta la razon estrategica
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-sm">Impacto esperado</Label>
-                <select
-                  value={form.expected_impact}
-                  onChange={(e) =>
-                    updateForm(
-                      'expected_impact',
-                      e.target.value as ImpactLevel
-                    )
-                  }
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {IMPACT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Revenue real (COP)</Label>
-                <Input
-                  type="number"
-                  value={form.actual_revenue_impact ?? ''}
-                  onChange={(e) =>
-                    updateForm(
-                      'actual_revenue_impact',
-                      e.target.value ? Number(e.target.value) : null
-                    )
-                  }
-                  placeholder="Despues del evento"
-                  min={0}
-                  step={10000}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-sm">Revenue Esperado (COP)</Label>
-                <Input
-                  type="number"
-                  value={form.expected_revenue ?? ''}
-                  onChange={(e) =>
-                    updateForm(
-                      'expected_revenue',
-                      e.target.value ? Number(e.target.value) : null
-                    )
-                  }
-                  placeholder="Meta de ventas"
-                  min={0}
-                  step={100000}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm">Nuevos Clientes Esperados</Label>
-                <Input
-                  type="number"
-                  value={form.expected_new_customers ?? ''}
-                  onChange={(e) =>
-                    updateForm(
-                      'expected_new_customers',
-                      e.target.value ? Number(e.target.value) : null
-                    )
-                  }
-                  placeholder="# clientes nuevos"
-                  min={0}
-                  step={1}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm">Ventana de atribucion (dias)</Label>
-              <Input
-                type="number"
-                value={form.attribution_window_days ?? 7}
-                onChange={(e) =>
-                  updateForm(
-                    'attribution_window_days',
-                    e.target.value ? Number(e.target.value) : 7
-                  )
-                }
-                min={1}
-                max={30}
-                step={1}
-              />
-              <p className="text-[10px] text-gray-400">
-                Ordenes de Shopify entre la fecha del evento y +N dias se atribuyen a este evento
+                Prophit System: registra cada accion para entender que crea resultados
               </p>
             </div>
 
