@@ -150,10 +150,15 @@ const PermissionRoute = ({
   return <>{children}</>;
 };
 
+// Redirect finance.sewdle.co → growth.sewdle.co
+if (window.location.hostname === 'finance.sewdle.co') {
+  window.location.replace(`https://growth.sewdle.co${window.location.pathname}${window.location.search}`);
+}
+
 // Detect if we're on the growth/finance subdomain
 const isFinanceSubdomain = () => {
   const hostname = window.location.hostname;
-  return hostname === 'finance.sewdle.co' || hostname === 'growth.sewdle.co' || hostname.startsWith('finance.') || hostname.startsWith('growth.');
+  return hostname === 'growth.sewdle.co' || hostname.startsWith('growth.');
 };
 
 // Finance Dashboard - layout independiente para finance.sewdle.co
