@@ -13,7 +13,7 @@ export interface ContentIdea {
   title: string;
   description: string | null;
   source: string | null;
-  reference_url: string | null;
+  reference_urls: string[] | null;
   content_type: string | null;
   platform: string[] | null;
   suggested_date: string | null;
@@ -30,7 +30,7 @@ export type ContentIdeaInput = {
   title: string;
   description?: string | null;
   source?: string | null;
-  reference_url?: string | null;
+  reference_urls?: string[] | null;
   content_type?: string | null;
   platform?: string[] | null;
   suggested_date?: string | null;

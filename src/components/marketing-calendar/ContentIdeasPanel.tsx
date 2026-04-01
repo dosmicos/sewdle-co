@@ -82,7 +82,7 @@ const EMPTY_FORM: ContentIdeaInput = {
   title: '',
   description: null,
   source: null,
-  reference_url: null,
+  reference_urls: null,
   content_type: null,
   platform: null,
   suggested_date: null,
@@ -114,6 +114,7 @@ export default function ContentIdeasPanel() {
   const [statusFilter, setStatusFilter] = useState<IdeaStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [form, setForm] = useState<ContentIdeaInput>({ ...EMPTY_FORM });
+  const [linkInput, setLinkInput] = useState('');
 
   const updateForm = <K extends keyof ContentIdeaInput>(key: K, value: ContentIdeaInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -139,11 +140,12 @@ export default function ContentIdeasPanel() {
 
   const openEditDialog = (idea: ContentIdea) => {
     setEditingId(idea.id);
+    setLinkInput('');
     setForm({
       title: idea.title,
       description: idea.description,
       source: idea.source,
-      reference_url: idea.reference_url,
+      reference_urls: idea.reference_urls,
       content_type: idea.content_type,
       platform: idea.platform,
       suggested_date: idea.suggested_date,
@@ -233,6 +235,7 @@ export default function ContentIdeasPanel() {
           onClick={() => {
             setEditingId(null);
             setForm({ ...EMPTY_FORM });
+            setLinkInput('');
             setDialogOpen(true);
           }}
           size="sm"
@@ -378,13 +381,76 @@ export default function ContentIdeasPanel() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[13px] font-medium text-slate-700">Link de referencia</Label>
-                  <Input
-                    value={form.reference_url || ''}
-                    onChange={(e) => updateForm('reference_url', e.target.value || null)}
-                    placeholder="https://..."
-                    className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
-                  />
+                  <Label className="text-[13px] font-medium text-slate-700">Links de referencia</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={linkInput}
+                      onChange={(e) => setLinkInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const url = linkInput.trim();
+                          if (url) {
+                            const current = form.reference_urls || [];
+                            if (!current.includes(url)) {
+                              updateForm('reference_urls', [...current, url]);
+                            }
+                            setLinkInput('');
+                          }
+                        }
+                      }}
+                      placeholder="https://..."
+                      className="h-10 text-sm border-slate-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 transition-colors"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 h-10 w-10 p-0 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer"
+                      onClick={() => {
+                        const url = linkInput.trim();
+                        if (url) {
+                          const current = form.reference_urls || [];
+                          if (!current.includes(url)) {
+                            updateForm('reference_urls', [...current, url]);
+                          }
+                          setLinkInput('');
+                        }
+                      }}
+                    >
+                      <Plus className="h-4 w-4 text-slate-500" />
+                    </Button>
+                  </div>
+                  {form.reference_urls && form.reference_urls.length > 0 && (
+                    <div className="space-y-1.5 mt-2">
+                      {form.reference_urls.map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-lg bg-slate-50 border border-slate-150 group"
+                        >
+                          <ExternalLink className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-700 truncate flex-1 transition-colors"
+                          >
+                            {url}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = form.reference_urls!.filter((_, i) => i !== idx);
+                              updateForm('reference_urls', updated.length > 0 ? updated : null);
+                            }}
+                            className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -580,23 +646,29 @@ function IdeaCard({
           </p>
         )}
 
-        {/* Source + link */}
-        {(idea.source || idea.reference_url) && (
-          <div className="flex items-center gap-2 text-xs text-slate-400">
+        {/* Source + links */}
+        {(idea.source || (idea.reference_urls && idea.reference_urls.length > 0)) && (
+          <div className="space-y-1">
             {idea.source && (
-              <span className="truncate max-w-[160px]">
+              <div className="text-xs text-slate-400 truncate">
                 {idea.source}
-              </span>
+              </div>
             )}
-            {idea.reference_url && (
-              <a
-                href={idea.reference_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-500 hover:text-blue-600 transition-colors flex-shrink-0"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+            {idea.reference_urls && idea.reference_urls.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {idea.reference_urls.map((url, idx) => (
+                  <a
+                    key={idx}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-600 bg-blue-50 px-2 py-0.5 rounded transition-colors"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    Link {idx + 1}
+                  </a>
+                ))}
+              </div>
             )}
           </div>
         )}
