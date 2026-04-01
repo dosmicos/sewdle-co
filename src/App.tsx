@@ -150,10 +150,10 @@ const PermissionRoute = ({
   return <>{children}</>;
 };
 
-// Detect if we're on the finance subdomain
+// Detect if we're on the growth/finance subdomain
 const isFinanceSubdomain = () => {
   const hostname = window.location.hostname;
-  return hostname === 'finance.sewdle.co' || hostname.startsWith('finance.');
+  return hostname === 'finance.sewdle.co' || hostname === 'growth.sewdle.co' || hostname.startsWith('finance.') || hostname.startsWith('growth.');
 };
 
 // Finance Dashboard - layout independiente para finance.sewdle.co

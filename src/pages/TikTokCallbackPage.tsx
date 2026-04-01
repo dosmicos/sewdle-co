@@ -37,11 +37,12 @@ const TikTokCallbackPage: React.FC = () => {
   }, [searchParams]);
 
   const navigateBack = () => {
-    const isFinanceSubdomain =
-      window.location.hostname === 'finance.sewdle.co' ||
-      window.location.hostname.startsWith('finance.');
+    const hostname = window.location.hostname;
+    const isGrowthSubdomain =
+      hostname === 'finance.sewdle.co' || hostname === 'growth.sewdle.co' ||
+      hostname.startsWith('finance.') || hostname.startsWith('growth.');
 
-    navigate(isFinanceSubdomain ? '/social-analytics' : '/social-analytics', { replace: true });
+    navigate(isGrowthSubdomain ? '/social-analytics' : '/social-analytics', { replace: true });
   };
 
   const exchangeToken = async (code: string, organizationId: string) => {
