@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -577,18 +578,39 @@ const MarketingCalendarPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ─── 2. CALENDARIO PRINCIPAL ─────────────────────── */}
-        <MarketingCalendarView
-          currentMonth={currentMonth}
-          onMonthChange={setCurrentMonth}
-          events={events}
-          suggestions={suggestions}
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-          onDoubleClickDate={(date) => openAddDialog(date)}
-        />
+        {/* ─── 2. TABS: Calendario | Sugerencias IA | Peaks ── */}
+        <Tabs defaultValue="calendario" className="w-full">
+          <TabsList className="w-full justify-start bg-white border rounded-lg p-1 h-auto">
+            <TabsTrigger value="calendario" className="text-sm data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+              <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
+              Calendario
+            </TabsTrigger>
+            <TabsTrigger value="sugerencias" className="text-sm data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              Sugerencias IA
+              {pendingSuggestions > 0 && (
+                <Badge className="ml-1.5 bg-violet-100 text-violet-700 border-0 text-[10px] px-1.5 py-0">{pendingSuggestions}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="peaks" className="text-sm data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700">
+              <Mountain className="h-3.5 w-3.5 mr-1.5" />
+              Peaks {currentYear}
+            </TabsTrigger>
+          </TabsList>
 
-        {/* ─── 3. KPI SUMMARY ROW ──────────────────────────── */}
+          {/* ─── Tab: Calendario ──────────────────────────────── */}
+          <TabsContent value="calendario" className="mt-4 space-y-4">
+            <MarketingCalendarView
+              currentMonth={currentMonth}
+              onMonthChange={setCurrentMonth}
+              events={events}
+              suggestions={suggestions}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              onDoubleClickDate={(date) => openAddDialog(date)}
+            />
+
+        {/* ─── KPI SUMMARY ROW ──────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
@@ -879,10 +901,15 @@ const MarketingCalendarPage: React.FC = () => {
           </Card>
         )}
 
-        {/* ─── 4. SUGERENCIAS IA (TABLA COMPACTA) ──────────── */}
-        <HolidaySuggestionPanel />
+          </TabsContent>
 
-        {/* ─── 5. PEAKS DEL ANO (COMPACTOS) ────────────────── */}
+          {/* ─── Tab: Sugerencias IA ──────────────────────────── */}
+          <TabsContent value="sugerencias" className="mt-4">
+            <HolidaySuggestionPanel />
+          </TabsContent>
+
+          {/* ─── Tab: Peaks del Año ──────────────────────────── */}
+          <TabsContent value="peaks" className="mt-4 space-y-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -1121,6 +1148,8 @@ const MarketingCalendarPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Add/Edit Dialog */}
