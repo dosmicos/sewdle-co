@@ -29,7 +29,7 @@ const MODULE_MAPPING = {
   // Base de datos → Interfaz
   'dashboard': 'Dashboard',
   'orders': 'Órdenes',
-  'workshops': 'Talleres', 
+  'workshops': 'Talleres',
   'products': 'Productos',
   'insumos': 'Insumos',
   'deliveries': 'Entregas',
@@ -39,7 +39,12 @@ const MODULE_MAPPING = {
   'replenishment': 'Reposición IA',
   'shopify': 'Shopify',
   'prospects': 'Reclutamiento',
-  'messaging': 'Mensajería IA'
+  'messaging': 'Mensajería IA',
+  'okrs': 'OKRs',
+  'publicidad': 'Publicidad',
+  'ugc': 'UGC Creators',
+  'alegra': 'Alegra',
+  'apis': 'APIs'
 };
 
 // Mapeo inverso: Interfaz → Base de datos
