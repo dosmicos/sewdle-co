@@ -57,11 +57,18 @@ export function useUgcPerformance() {
     try {
       // Step 1: Sync creative data from Meta to detect UGC handles
       toast.info('Sincronizando creativos de Meta...');
-      const { error: syncError } = await supabase.functions.invoke('sync-meta-ad-creative', {
+      const { data: syncData, error: syncError } = await supabase.functions.invoke('sync-meta-ad-creative', {
         body: { organizationId: orgId },
       });
       if (syncError) {
-        console.warn('Error syncing creatives (continuing with scores):', syncError.message);
+        console.error('Error syncing creatives:', syncError);
+        toast.error(`Error sincronizando creativos: ${syncError.message}`);
+      } else if (syncData?.error) {
+        toast.error(`Sync Meta: ${syncData.error}`);
+      } else {
+        const synced = syncData?.creativesSync?.synced ?? 0;
+        const total = syncData?.creativesSync?.total ?? 0;
+        toast.success(`Creativos sincronizados: ${synced} de ${total} ads`);
       }
 
       // Step 2: Compute UGC scores with the updated data
