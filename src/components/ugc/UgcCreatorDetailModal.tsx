@@ -15,6 +15,7 @@ import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { UgcChildrenManager } from './UgcChildrenManager';
 import { UgcCreatorTagsManager } from './UgcCreatorTagsManager';
 import { GenerateUploadLinkButton } from './GenerateUploadLinkButton';
+import { DiscountLinkButton } from './DiscountLinkButton';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -281,6 +282,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           {/* Action buttons row */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
             <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
+            <DiscountLinkButton creatorId={creator.id} creatorName={creator.name} />
             <Button variant="outline" size="sm" onClick={onEdit}>
               <Edit className="h-3.5 w-3.5 mr-1" /> Editar
             </Button>

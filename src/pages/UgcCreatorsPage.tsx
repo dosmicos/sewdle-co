@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, LayoutGrid, Table as TableIcon } from 'lucide-react';
+import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { supabase as supabaseClient } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUgcCreators } from '@/hooks/useUgcCreators';
 import { useUgcCampaigns } from '@/hooks/useUgcCampaigns';
@@ -20,8 +23,14 @@ import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetai
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { UgcCreator, UgcCampaign, CampaignStatus, CreatorStatus } from '@/types/ugc';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const UgcCreatorsPage: React.FC = () => {
+  const { isAdmin } = useAuth();
+  const { currentOrganization } = useOrganization();
+  const [rankingStartedAt, setRankingStartedAt] = useState<string | null>(null);
+  const [resettingRanking, setResettingRanking] = useState(false);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('table');
   const [kanbanTab, setKanbanTab] = useState<'prospectos' | 'campanas'>('prospectos');
   const [creatorFormOpen, setCreatorFormOpen] = useState(false);
@@ -42,6 +51,44 @@ const UgcCreatorsPage: React.FC = () => {
 
   // Auto-sync campaign statuses based on shipping events
   useUgcCampaignSync(campaigns);
+
+  // Load ranking period start date
+  useEffect(() => {
+    if (!currentOrganization?.id || !isAdmin()) return;
+    (supabaseClient.from('organizations' as any) as any)
+      .select('settings')
+      .eq('id', currentOrganization.id)
+      .single()
+      .then(({ data }: any) => {
+        if (data?.settings?.ugc_ranking_started_at) {
+          setRankingStartedAt(data.settings.ugc_ranking_started_at);
+        }
+      });
+  }, [currentOrganization?.id]);
+
+  const handleResetRanking = async () => {
+    if (!currentOrganization?.id) return;
+    if (!window.confirm('¿Reiniciar el ranking? Las comisiones del período anterior se acumularán como historial y el ranking comenzará desde cero.')) return;
+    setResettingRanking(true);
+    try {
+      const now = new Date().toISOString();
+      const { data: org } = await (supabaseClient.from('organizations' as any) as any)
+        .select('settings')
+        .eq('id', currentOrganization.id)
+        .single();
+      const currentSettings = org?.settings || {};
+      const { error } = await (supabaseClient.from('organizations' as any) as any)
+        .update({ settings: { ...currentSettings, ugc_ranking_started_at: now } })
+        .eq('id', currentOrganization.id);
+      if (error) throw error;
+      setRankingStartedAt(now);
+      toast.success('Ranking reiniciado correctamente');
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    } finally {
+      setResettingRanking(false);
+    }
+  };
 
   const handleCreatorSubmit = (data: any) => {
     if (editingCreator) {
@@ -194,6 +241,42 @@ const UgcCreatorsPage: React.FC = () => {
 
       {/* Stats */}
       <UgcStatsCards creators={creators} campaigns={campaigns} videos={videos} />
+
+      {/* Ranking admin control (admins only) */}
+      {isAdmin() && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            <div>
+              <p className="text-sm font-medium">Ranking de Comisiones UGC</p>
+              <p className="text-xs text-muted-foreground">
+                {rankingStartedAt
+                  ? `Período actual desde: ${format(new Date(rankingStartedAt), "dd 'de' MMMM yyyy, HH:mm", { locale: es })}`
+                  : 'Sin período iniciado — el ranking muestra datos desde siempre'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open('https://ads.dosmicos.com/ranking', '_blank')}
+            >
+              <ExternalLink className="h-4 w-4 mr-1" /> Ver Ranking Público
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetRanking}
+              disabled={resettingRanking}
+              className="text-destructive border-destructive/30 hover:bg-destructive/5"
+            >
+              <RotateCcw className="h-4 w-4 mr-1" />
+              {resettingRanking ? 'Reiniciando...' : 'Reiniciar Ranking'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       {isLoading ? (
