@@ -100,11 +100,23 @@ async function processOrder(body: string) {
   }
 
   // Calculate amounts
-  const orderTotal = parseFloat(order.total_price || '0');
+  // Use subtotal_price (products after discount, before tax & shipping) as commission base.
+  // This ensures the creator is commissioned only on the actual product revenue they drove,
+  // not on taxes or shipping fees.
+  const subtotalPrice = parseFloat(order.subtotal_price || order.total_price || '0');
   const discountAmount = (order.discount_codes || []).reduce((sum: number, d: any) => {
     return sum + parseFloat(d.amount || '0');
   }, 0);
-  const commissionAmount = (orderTotal * link.commission_rate) / 100;
+  // Revenue stored is what the customer paid for products (after discount, before tax/shipping)
+  const orderRevenue = subtotalPrice;
+  const commissionAmount = Math.round((orderRevenue * link.commission_rate) / 100 * 100) / 100;
+
+  log("Amounts calculated", {
+    subtotalPrice,
+    discountAmount,
+    commissionRate: link.commission_rate,
+    commissionAmount,
+  });
 
   // Insert attributed order
   const { error: insertError } = await supabaseAdmin
@@ -115,7 +127,7 @@ async function processOrder(body: string) {
       creator_id: link.creator_id,
       shopify_order_id: shopifyOrderId,
       shopify_order_number: String(order.order_number || ''),
-      order_total: orderTotal,
+      order_total: orderRevenue,
       discount_amount: discountAmount,
       commission_amount: commissionAmount,
       order_date: order.created_at || new Date().toISOString(),
@@ -126,24 +138,16 @@ async function processOrder(body: string) {
     return;
   }
 
-  // Update cumulative totals on discount link
+  // Update cumulative totals atomically via RPC
   const { error: updateError } = await supabaseAdmin.rpc('increment_ugc_link_totals', {
     p_link_id: link.id,
-    p_revenue: orderTotal,
+    p_revenue: orderRevenue,
     p_commission: commissionAmount,
   });
 
-  // If RPC doesn't exist yet, fall back to a direct update
   if (updateError) {
-    log("RPC increment failed, using direct update", { error: updateError.message });
-    await supabaseAdmin
-      .from('ugc_discount_links')
-      .update({
-        total_orders: supabaseAdmin.rpc ? undefined : undefined, // will use raw SQL below
-      })
-      .eq('id', link.id);
-
-    // Use a raw approach: read current + add
+    log("RPC increment failed", { error: updateError.message });
+    // Fallback: read-modify-write (non-atomic but better than nothing)
     const { data: current } = await supabaseAdmin
       .from('ugc_discount_links')
       .select('total_orders, total_revenue, total_commission')
@@ -155,7 +159,7 @@ async function processOrder(body: string) {
         .from('ugc_discount_links')
         .update({
           total_orders: (current.total_orders || 0) + 1,
-          total_revenue: (current.total_revenue || 0) + orderTotal,
+          total_revenue: (current.total_revenue || 0) + orderRevenue,
           total_commission: (current.total_commission || 0) + commissionAmount,
           updated_at: new Date().toISOString(),
         })
@@ -165,8 +169,9 @@ async function processOrder(body: string) {
 
   log("Attribution complete", {
     orderId: shopifyOrderId,
-    orderTotal,
+    orderRevenue,
     commission: commissionAmount,
+    commissionRate: link.commission_rate,
     creatorId: link.creator_id,
   });
 }
