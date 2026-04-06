@@ -19,6 +19,16 @@ const AD_CREATIVE_FIELDS = [
   "creative{body,title,link_url,thumbnail_url,video_id,call_to_action_type,object_story_spec,asset_feed_spec}",
 ].join(",");
 
+// Lightweight fields for quickSync - only what's needed for UGC handle detection
+const AD_QUICK_FIELDS = [
+  "name",
+  "status",
+  "effective_status",
+  "adset_id",
+  "campaign_id",
+  "creative{body,title,link_url,thumbnail_url,video_id,call_to_action_type}",
+].join(",");
+
 const ADSET_FIELDS = [
   "name",
   "targeting",
@@ -700,21 +710,30 @@ serve(async (req) => {
 
     console.log(`[A] Fetching ads for account ${accountId}...`);
 
+    // quickSync: only ACTIVE ads (fast, for UGC handle detection)
+    // full sync: include paused ads too (more comprehensive but slower)
+    const statusFilter = quickSync
+      ? ["ACTIVE"]
+      : ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"];
+
     const filtering = encodeURIComponent(
       JSON.stringify([
         {
           field: "effective_status",
           operator: "IN",
-          value: ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"],
+          value: statusFilter,
         },
       ])
     );
 
+    const fields = quickSync ? AD_QUICK_FIELDS : AD_CREATIVE_FIELDS;
+    const pageLimit = quickSync ? 200 : 100;
+
     const adsUrl =
       `${GRAPH_API}/act_${accountId}/ads` +
-      `?fields=${AD_CREATIVE_FIELDS}` +
+      `?fields=${fields}` +
       `&filtering=${filtering}` +
-      `&limit=500` +
+      `&limit=${pageLimit}` +
       `&access_token=${accessToken}`;
 
     const adsRes = await fetchWithRetry(adsUrl);
