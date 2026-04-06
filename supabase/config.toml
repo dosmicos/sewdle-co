@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.extract-brand]
 verify_jwt = false
+
+[functions.delete-ugc-discount]
+verify_jwt = false
