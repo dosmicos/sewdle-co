@@ -129,8 +129,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get the active Meta ad account
-    const { data: adAccount, error: accountError } = await supabase
+    // Get Meta ad account (try active first, then any inactive)
+    let { data: adAccount, error: accountError } = await supabase
       .from("ad_accounts")
       .select("*")
       .eq("organization_id", organizationId)
@@ -138,7 +138,27 @@ serve(async (req) => {
       .eq("is_active", true)
       .single();
 
-    if (accountError || !adAccount) {
+    // Fallback: try inactive account (may have been deactivated by transient error)
+    if (!adAccount) {
+      const { data: inactiveAccount } = await supabase
+        .from("ad_accounts")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("platform", "meta")
+        .eq("is_active", false)
+        .single();
+
+      if (inactiveAccount) {
+        console.log("[sync-perf] Found inactive Meta account, reactivating...");
+        adAccount = inactiveAccount;
+        await supabase
+          .from("ad_accounts")
+          .update({ is_active: true })
+          .eq("id", inactiveAccount.id);
+      }
+    }
+
+    if (!adAccount) {
       return new Response(
         JSON.stringify({
           error: "No hay cuenta de Meta Ads conectada",
