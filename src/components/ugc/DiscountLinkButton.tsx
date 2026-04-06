@@ -4,11 +4,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Link2, Copy, Check, ShoppingBag, DollarSign, TrendingUp, Trash2, PowerOff, Power, AlertCircle } from 'lucide-react';
+import {
+  Loader2, Link2, Copy, Check, ShoppingBag, DollarSign, TrendingUp,
+  Trash2, PowerOff, Power, AlertCircle, Wallet, CreditCard, Smartphone, History,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useUgcDiscountLinks } from '@/hooks/useUgcDiscountLinks';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 
 interface DiscountLinkButtonProps {
@@ -19,6 +23,12 @@ interface DiscountLinkButtonProps {
 const formatCOP = (amount: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
 
+const PAYOUT_TYPES = [
+  { value: 'nequi', label: 'Nequi', icon: Smartphone },
+  { value: 'discount', label: 'Descuento en tienda', icon: CreditCard },
+  { value: 'other', label: 'Otro', icon: DollarSign },
+] as const;
+
 export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorId, creatorName }) => {
   const [open, setOpen] = useState(false);
   const [discountValue, setDiscountValue] = useState(10);
@@ -27,12 +37,23 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState(false);
 
-  const { discountLink, attributedOrders, loading, creating, createDiscountLink, toggleActive, refetch } =
+  // Payout state
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutType, setPayoutType] = useState<'nequi' | 'discount' | 'other'>('nequi');
+  const [payoutNotes, setPayoutNotes] = useState('');
+
+  const { isAdmin } = useAuth();
+  const { discountLink, attributedOrders, payouts, loading, creating, registeringPayout, createDiscountLink, toggleActive, registerPayout, refetch } =
     useUgcDiscountLinks(creatorId);
 
   const redirectUrl = discountLink
     ? `${SUPABASE_URL}/functions/v1/ugc-redirect/${discountLink.redirect_token}`
     : '';
+
+  const balance = discountLink
+    ? Math.max(discountLink.total_commission - discountLink.total_paid_out, 0)
+    : 0;
 
   const handleCreate = async () => {
     await createDiscountLink({ discount_value: discountValue, commission_rate: commissionRate });
@@ -61,7 +82,6 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error('No autenticado');
 
-      // Call edge function to delete from Shopify + DB
       const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-ugc-discount`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -69,7 +89,6 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
       });
 
       if (!response.ok) {
-        // Fallback: just mark as inactive in DB if edge function doesn't exist yet
         const { error } = await (supabase.from('ugc_discount_links' as any) as any)
           .update({ is_active: false })
           .eq('id', discountLink.id);
@@ -85,6 +104,16 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handlePayout = async () => {
+    const amount = parseFloat(payoutAmount);
+    if (!amount || amount <= 0) { toast.error('Ingresa un monto válido'); return; }
+    if (amount > balance) { toast.error('El monto supera el saldo disponible'); return; }
+    await registerPayout({ amount, payout_type: payoutType, notes: payoutNotes || undefined });
+    setPayoutOpen(false);
+    setPayoutAmount('');
+    setPayoutNotes('');
   };
 
   const hasLink = !!discountLink;
@@ -107,7 +136,7 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Link de Compras — {creatorName}</DialogTitle>
             <DialogDescription>
@@ -146,8 +175,35 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
                 </div>
               </div>
 
+              {/* Balance card */}
+              <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-green-700" />
+                    <div>
+                      <p className="text-xs text-green-700 font-medium">Saldo pendiente de pago</p>
+                      <p className="text-xl font-bold text-green-800">{formatCOP(balance)}</p>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    <p>Ganado: {formatCOP(discountLink.total_commission)}</p>
+                    <p>Pagado: {formatCOP(discountLink.total_paid_out)}</p>
+                  </div>
+                </div>
+                {isAdmin() && balance > 0 && (
+                  <Button
+                    size="sm"
+                    className="w-full mt-3 bg-green-700 hover:bg-green-800 text-white"
+                    onClick={() => { setPayoutOpen(true); setPayoutAmount(balance.toFixed(0)); }}
+                  >
+                    <DollarSign className="h-3.5 w-3.5 mr-1" />
+                    Registrar Pago
+                  </Button>
+                )}
+              </div>
+
               {/* Metrics */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-lg border p-2 text-center">
                   <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <ShoppingBag className="h-3 w-3" /> Pedidos
@@ -156,15 +212,9 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
                 </div>
                 <div className="rounded-lg border p-2 text-center">
                   <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                    <TrendingUp className="h-3 w-3" /> Revenue
+                    <TrendingUp className="h-3 w-3" /> Revenue total
                   </p>
                   <p className="text-sm font-bold">{formatCOP(discountLink.total_revenue)}</p>
-                </div>
-                <div className="rounded-lg border p-2 text-center">
-                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                    <DollarSign className="h-3 w-3" /> Comisión
-                  </p>
-                  <p className="text-sm font-bold text-green-600">{formatCOP(discountLink.total_commission)}</p>
                 </div>
               </div>
 
@@ -172,15 +222,38 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
               {attributedOrders.length > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs">Últimos pedidos atribuidos</Label>
-                  <div className="rounded-md border divide-y max-h-40 overflow-y-auto">
+                  <div className="rounded-md border divide-y max-h-36 overflow-y-auto">
                     {attributedOrders.slice(0, 10).map((order) => (
                       <div key={order.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
                         <span className="font-mono text-muted-foreground">#{order.shopify_order_number}</span>
                         <span className="text-muted-foreground">
-                          {format(new Date(order.order_date), "dd MMM", { locale: es })}
+                          {format(new Date(order.order_date), 'dd MMM', { locale: es })}
                         </span>
                         <span>{formatCOP(order.order_total)}</span>
                         <span className="text-green-600 font-medium">{formatCOP(order.commission_amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Payout history */}
+              {payouts.length > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    <History className="h-3 w-3" /> Historial de pagos
+                  </Label>
+                  <div className="rounded-md border divide-y max-h-28 overflow-y-auto">
+                    {payouts.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                        <span className="text-muted-foreground">
+                          {format(new Date(p.created_at), 'dd MMM yyyy', { locale: es })}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] px-1 h-4">
+                          {p.payout_type === 'nequi' ? 'Nequi' : p.payout_type === 'discount' ? 'Descuento' : 'Otro'}
+                        </Badge>
+                        {p.notes && <span className="text-muted-foreground truncate max-w-[80px]">{p.notes}</span>}
+                        <span className="text-red-600 font-medium">-{formatCOP(p.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -259,6 +332,73 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payout registration dialog */}
+      <Dialog open={payoutOpen} onOpenChange={setPayoutOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar Pago — {creatorName.split(' ')[0]}</DialogTitle>
+            <DialogDescription>
+              Saldo disponible: <strong>{formatCOP(balance)}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Monto a pagar (COP)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={balance}
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Tipo de pago</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {PAYOUT_TYPES.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPayoutType(value)}
+                    className={`flex flex-col items-center gap-1 rounded-lg border p-2 text-xs transition-colors ${
+                      payoutType === value
+                        ? 'border-primary bg-primary/5 text-primary font-medium'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Notas (opcional)</Label>
+              <Input
+                value={payoutNotes}
+                onChange={(e) => setPayoutNotes(e.target.value)}
+                placeholder="Ej: Nequi 300 123 4567"
+              />
+            </div>
+
+            <Button
+              onClick={handlePayout}
+              disabled={registeringPayout || !payoutAmount || parseFloat(payoutAmount) <= 0}
+              className="w-full"
+            >
+              {registeringPayout
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Registrando...</>
+                : <><Check className="h-4 w-4 mr-2" /> Confirmar Pago</>
+              }
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

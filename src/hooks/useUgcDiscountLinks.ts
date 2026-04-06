@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 export interface UgcDiscountLink {
@@ -13,6 +12,7 @@ export interface UgcDiscountLink {
   total_orders: number;
   total_revenue: number;
   total_commission: number;
+  total_paid_out: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -28,11 +28,21 @@ export interface UgcAttributedOrder {
   order_date: string;
 }
 
+export interface UgcCommissionPayout {
+  id: string;
+  amount: number;
+  payout_type: string;
+  notes: string | null;
+  created_at: string;
+}
+
 export const useUgcDiscountLinks = (creatorId: string | undefined) => {
   const [discountLink, setDiscountLink] = useState<UgcDiscountLink | null>(null);
   const [attributedOrders, setAttributedOrders] = useState<UgcAttributedOrder[]>([]);
+  const [payouts, setPayouts] = useState<UgcCommissionPayout[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [registeringPayout, setRegisteringPayout] = useState(false);
   const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
@@ -42,7 +52,7 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
 
       // Fetch discount link (exclude shopify_discount_code from select)
       const { data: linkData, error: linkError } = await (supabase.from('ugc_discount_links' as any) as any)
-        .select('id, organization_id, creator_id, redirect_token, discount_value, commission_rate, total_orders, total_revenue, total_commission, is_active, created_at, updated_at')
+        .select('id, organization_id, creator_id, redirect_token, discount_value, commission_rate, total_orders, total_revenue, total_commission, total_paid_out, is_active, created_at, updated_at')
         .eq('creator_id', creatorId)
         .eq('is_active', true)
         .maybeSingle();
@@ -51,16 +61,27 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
       setDiscountLink(linkData || null);
 
       if (linkData) {
-        const { data: orders, error: ordersError } = await (supabase.from('ugc_attributed_orders' as any) as any)
-          .select('id, shopify_order_number, order_total, discount_amount, commission_amount, order_date')
-          .eq('discount_link_id', linkData.id)
-          .order('order_date', { ascending: false })
-          .limit(50);
+        const [ordersRes, payoutsRes] = await Promise.all([
+          (supabase.from('ugc_attributed_orders' as any) as any)
+            .select('id, shopify_order_number, order_total, discount_amount, commission_amount, order_date')
+            .eq('discount_link_id', linkData.id)
+            .order('order_date', { ascending: false })
+            .limit(50),
+          (supabase.from('ugc_commission_payouts' as any) as any)
+            .select('id, amount, payout_type, notes, created_at')
+            .eq('discount_link_id', linkData.id)
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ]);
 
-        if (ordersError) throw ordersError;
-        setAttributedOrders(orders || []);
+        if (ordersRes.error) throw ordersRes.error;
+        if (payoutsRes.error) throw payoutsRes.error;
+
+        setAttributedOrders(ordersRes.data || []);
+        setPayouts(payoutsRes.data || []);
       } else {
         setAttributedOrders([]);
+        setPayouts([]);
       }
     } catch (err: any) {
       console.error('useUgcDiscountLinks error:', err);
@@ -81,10 +102,7 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/create-ugc-discount`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ creator_id: creatorId, ...params }),
       });
 
@@ -123,5 +141,48 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
     await fetchData();
   };
 
-  return { discountLink, attributedOrders, loading, creating, createDiscountLink, toggleActive, refetch: fetchData };
+  const registerPayout = async (params: {
+    amount: number;
+    payout_type: 'nequi' | 'discount' | 'other';
+    notes?: string;
+  }) => {
+    if (!discountLink) return;
+    try {
+      setRegisteringPayout(true);
+
+      const { error } = await (supabase.rpc('register_ugc_commission_payout' as any, {
+        p_link_id: discountLink.id,
+        p_amount: params.amount,
+        p_type: params.payout_type,
+        p_notes: params.notes || null,
+        p_creator_id: discountLink.creator_id,
+        p_org_id: discountLink.organization_id,
+      }) as any);
+
+      if (error) throw error;
+
+      const typeLabel = params.payout_type === 'nequi' ? 'Nequi'
+        : params.payout_type === 'discount' ? 'descuento en tienda'
+        : 'otro';
+      toast({ title: 'Pago registrado', description: `Se descontaron las comisiones por ${typeLabel}.` });
+      await fetchData();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setRegisteringPayout(false);
+    }
+  };
+
+  return {
+    discountLink,
+    attributedOrders,
+    payouts,
+    loading,
+    creating,
+    registeringPayout,
+    createDiscountLink,
+    toggleActive,
+    registerPayout,
+    refetch: fetchData,
+  };
 };
