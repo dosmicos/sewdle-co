@@ -684,7 +684,7 @@ serve(async (req) => {
         {
           field: "effective_status",
           operator: "IN",
-          value: ["ACTIVE"],
+          value: ["ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"],
         },
       ])
     );

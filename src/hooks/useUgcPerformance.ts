@@ -55,15 +55,29 @@ export function useUgcPerformance() {
     if (!orgId) return false;
     setComputing(true);
     try {
+      // Step 1: Sync creative data from Meta to detect UGC handles
+      toast.info('Sincronizando creativos de Meta...');
+      const { error: syncError } = await supabase.functions.invoke('sync-meta-ad-creative', {
+        body: { organizationId: orgId },
+      });
+      if (syncError) {
+        console.warn('Error syncing creatives (continuing with scores):', syncError.message);
+      }
+
+      // Step 2: Compute UGC scores with the updated data
+      toast.info('Calculando scores...');
       const { data, error } = await supabase.functions.invoke('compute-ugc-scores', {
         body: { organizationId: orgId },
       });
       if (error) throw error;
-      const result = data as { success: boolean; creatorsScored: number; adsLinked: number; autoCreated: number };
+      const result = data as { success: boolean; creatorsScored: number; adsLinked: number; autoCreated: number; totalHandles?: number; errors?: string[] };
       toast.success(
         `Scores computados: ${result.creatorsScored} creadoras, ${result.adsLinked} ads vinculados` +
-          (result.autoCreated > 0 ? `, ${result.autoCreated} creadoras nuevas` : '')
+          (result.autoCreated > 0 ? `, ${result.autoCreated} nuevas` : '')
       );
+      if (result.errors && result.errors.length > 0) {
+        toast.warning(`${result.errors.length} errores: ${result.errors.slice(0, 3).join('; ')}`);
+      }
       queryClient.invalidateQueries({ queryKey: ['ugc-performance-creators'] });
       queryClient.invalidateQueries({ queryKey: ['ugc-creator-ads'] });
       queryClient.invalidateQueries({ queryKey: ['ugc-creators'] });

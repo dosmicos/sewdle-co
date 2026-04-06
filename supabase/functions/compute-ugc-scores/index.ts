@@ -179,7 +179,10 @@ serve(async (req: Request) => {
 
     console.log(`[UGC Scores] Starting for org: ${organizationId}`);
 
-    // ─── 1. Load ad_tags with UGC handles ───────────────────────
+    // ─── 1. Load UGC ads from both ad_tags AND ad_creative_content ─
+    // ad_tags may be incomplete if AI tagging timed out, so we also
+    // check ad_creative_content which is always written first during sync.
+
     const { data: adTags, error: tagsErr } = await supabase
       .from("ad_tags")
       .select("ad_id, ad_name, ugc_creator_handle, product, sales_angle, creative_type, funnel_stage")
@@ -187,25 +190,58 @@ serve(async (req: Request) => {
       .not("ugc_creator_handle", "is", null);
 
     if (tagsErr) throw new Error(`ad_tags query failed: ${tagsErr.message}`);
-    if (!adTags || adTags.length === 0) {
+
+    // Also load from ad_creative_content (always written during sync, even without AI tagging)
+    const { data: creativeHandles, error: creativeErr } = await supabase
+      .from("ad_creative_content")
+      .select("ad_id, ad_name, ugc_creator_handle")
+      .eq("organization_id", organizationId)
+      .not("ugc_creator_handle", "is", null);
+
+    if (creativeErr) console.warn(`[UGC Scores] ad_creative_content query failed: ${creativeErr.message}`);
+
+    // Merge: use ad_tags as primary source, fill gaps from ad_creative_content
+    const adTagsMap = new Map<string, typeof adTags[0]>();
+    for (const tag of adTags || []) {
+      adTagsMap.set(tag.ad_id, tag);
+    }
+
+    // Add any UGC ads from ad_creative_content that are missing from ad_tags
+    for (const cc of creativeHandles || []) {
+      if (!adTagsMap.has(cc.ad_id)) {
+        adTagsMap.set(cc.ad_id, {
+          ad_id: cc.ad_id,
+          ad_name: cc.ad_name,
+          ugc_creator_handle: cc.ugc_creator_handle,
+          product: null,
+          sales_angle: null,
+          creative_type: "ugc",
+          funnel_stage: null,
+        });
+      }
+    }
+
+    const mergedAdTags = Array.from(adTagsMap.values());
+
+    if (mergedAdTags.length === 0) {
       return new Response(
         JSON.stringify({ success: true, creatorsScored: 0, message: "No UGC ads found" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[UGC Scores] Found ${adTags.length} UGC ads`);
+    console.log(`[UGC Scores] Found ${mergedAdTags.length} UGC ads (${adTags?.length || 0} from ad_tags, ${creativeHandles?.length || 0} from ad_creative_content)`);
 
     // Group ads by handle
-    const adsByHandle = new Map<string, typeof adTags>();
-    for (const tag of adTags) {
+    const adsByHandle = new Map<string, typeof mergedAdTags>();
+    for (const tag of mergedAdTags) {
       const handle = tag.ugc_creator_handle!;
       if (!adsByHandle.has(handle)) adsByHandle.set(handle, []);
       adsByHandle.get(handle)!.push(tag);
     }
 
     // ─── 2. Load ad_performance_daily for all UGC ad_ids ────────
-    const allAdIds = adTags.map((t) => t.ad_id);
+    const allAdIds = mergedAdTags.map((t) => t.ad_id);
     const { data: perfData, error: perfErr } = await supabase
       .from("ad_performance_daily")
       .select("ad_id, date, spend, revenue, purchases, impressions, clicks, link_clicks, ctr, cpa, roas, hook_rate, hold_rate, lp_conv_rate, landing_page_views")
