@@ -131,3 +131,15 @@ verify_jwt = false
 
 [functions.create-shopify-order]
 verify_jwt = false
+
+[functions.create-ugc-discount]
+verify_jwt = false
+
+[functions.ugc-redirect]
+verify_jwt = false
+
+[functions.shopify-ugc-webhook]
+verify_jwt = false
+
+[functions.extract-brand]
+verify_jwt = false
