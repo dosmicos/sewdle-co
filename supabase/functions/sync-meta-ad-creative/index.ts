@@ -599,7 +599,7 @@ serve(async (req) => {
   }
 
   try {
-    const { organizationId } = await req.json();
+    const { organizationId, quickSync } = await req.json();
 
     if (!organizationId) {
       return new Response(
@@ -813,6 +813,28 @@ serve(async (req) => {
     console.log(
       `[A] Synced ${stats.creativesSync.synced}/${stats.creativesSync.total} creatives`
     );
+
+    // Quick sync mode: only sync creative content + UGC handles, skip audience & AI tagging
+    if (quickSync) {
+      console.log("[quickSync] Skipping audience fetch and AI tagging");
+      await supabase
+        .from("ad_accounts")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", adAccount.id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          quickSync: true,
+          creativesSync: {
+            synced: stats.creativesSync.synced,
+            total: stats.creativesSync.total,
+            errors: stats.creativesSync.errors.length > 0 ? stats.creativesSync.errors : undefined,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ═══════════════════════════════════════════════════════════
     // STEP B: Fetch adset targeting data

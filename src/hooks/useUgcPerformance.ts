@@ -58,7 +58,7 @@ export function useUgcPerformance() {
       // Step 1: Sync creative data from Meta to detect UGC handles
       toast.info('Sincronizando creativos de Meta...');
       const { data: syncData, error: syncError } = await supabase.functions.invoke('sync-meta-ad-creative', {
-        body: { organizationId: orgId },
+        body: { organizationId: orgId, quickSync: true },
       });
       if (syncError) {
         console.error('Error syncing creatives:', syncError);
