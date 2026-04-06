@@ -48,7 +48,7 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
     useUgcDiscountLinks(creatorId);
 
   const redirectUrl = discountLink
-    ? `${SUPABASE_URL}/functions/v1/ugc-redirect/${discountLink.redirect_token}`
+    ? `https://ads.dosmicos.com/ugc/${discountLink.redirect_token}`
     : '';
 
   const balance = discountLink

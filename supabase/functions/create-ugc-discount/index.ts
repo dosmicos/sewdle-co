@@ -82,12 +82,9 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existing) {
-      // Return existing link without creating a new one
-      const shopifyDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN") ?? "dosmicos.com";
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
       return new Response(JSON.stringify({
         already_exists: true,
-        redirect_url: `${supabaseUrl}/functions/v1/ugc-redirect/${existing.redirect_token}`,
+        redirect_url: `https://ads.dosmicos.com/ugc/${existing.redirect_token}`,
         discount_link_id: existing.id,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -172,8 +169,7 @@ serve(async (req) => {
 
     if (insertError) throw new Error(`DB insert error: ${insertError.message}`);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const redirectUrl = `${supabaseUrl}/functions/v1/ugc-redirect/${link.redirect_token}`;
+    const redirectUrl = `https://ads.dosmicos.com/ugc/${link.redirect_token}`;
     log("Done", { redirectUrl, linkId: link.id });
 
     return new Response(JSON.stringify({
