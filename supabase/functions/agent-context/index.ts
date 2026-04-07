@@ -17,52 +17,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
-// ─── Mem0 Helpers (duplicados de daily-ad-analysis/mem0.ts) ─────
-
-const MEM0_BASE_URL = "https://api.mem0.ai";
-
-function getMem0Headers(): Record<string, string> {
-  const apiKey = Deno.env.get("MEM0_API_KEY");
-  if (!apiKey) throw new Error("MEM0_API_KEY no está configurada");
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Token ${apiKey}`,
-  };
-}
-
-interface Mem0Memory {
-  id: string;
-  memory: string;
-  metadata?: Record<string, unknown>;
-  created_at?: string;
-  updated_at?: string;
-  score?: number;
-}
-
-async function searchMemories(
-  query: string,
-  userId: string,
-  agentId: string,
-  limit = 20
-): Promise<Mem0Memory[]> {
-  try {
-    const res = await fetch(`${MEM0_BASE_URL}/v2/memories/search/`, {
-      method: "POST",
-      headers: getMem0Headers(),
-      body: JSON.stringify({ query, user_id: userId, agent_id: agentId, limit }),
-    });
-    if (!res.ok) {
-      console.error("Mem0 search error:", res.status, await res.text());
-      return [];
-    }
-    const data = await res.json();
-    return (data.results || data) as Mem0Memory[];
-  } catch (err) {
-    console.error("Mem0 searchMemories error:", err);
-    return [];
-  }
-}
-
 // ─── Helpers ────────────────────────────────────────────────────
 
 function daysAgo(dateStr: string): number {
@@ -94,17 +48,31 @@ serve(async (req) => {
     );
 
     // ═══════════════════════════════════════════════════════════
-    // Scope: memory_only — solo Mem0
+    // Scope: memory_only — learnings, benchmarks, rules desde BD
     // ═══════════════════════════════════════════════════════════
     if (scope === "memory_only") {
-      const memories = await searchMemories(
-        "rendimiento ads, ROAS, CPA, patrones, fatigue, benchmarks, learnings",
-        organizationId,
-        "media-buying-agent",
-        20
-      );
+      const { data: learnings } = await supabase
+        .from('agent_learnings')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(30);
+
+      const { data: benchmarks } = await supabase
+        .from('agent_benchmarks')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+      const { data: rules } = await supabase
+        .from('agent_rules')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('times_correct', { ascending: false });
+
       return new Response(
-        JSON.stringify({ memories }),
+        JSON.stringify({ learnings, benchmarks, rules }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -311,30 +279,39 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    // Memorias de Mem0
-    let memories: Mem0Memory[] = [];
-    try {
-      memories = await searchMemories(
-        "rendimiento ads, ROAS, CPA, patrones, fatigue, benchmarks, reglas, learnings Dosmicos",
-        organizationId,
-        "media-buying-agent",
-        20
-      );
-    } catch (e) {
-      console.error("Error fetching Mem0 memories:", e);
-    }
+    // Learnings desde agent_learnings
+    const { data: agentLearnings } = await supabase
+      .from('agent_learnings')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(30);
 
-    // Benchmarks: buscar dinámicos en memorias, si no usar iniciales
-    const dynamicBenchmark = memories.find(
-      (m) =>
-        m.memory.toLowerCase().includes("benchmarks actualizados") ||
-        m.metadata?.category === "benchmark_dynamic"
-    );
+    // Benchmarks desde agent_benchmarks
+    const { data: agentBenchmarks } = await supabase
+      .from('agent_benchmarks')
+      .select('*')
+      .eq('organization_id', organizationId);
 
-    const benchmarks = dynamicBenchmark
+    // Reglas desde agent_rules
+    const { data: agentRules } = await supabase
+      .from('agent_rules')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+      .order('times_correct', { ascending: false });
+
+    const benchmarks = (agentBenchmarks && agentBenchmarks.length > 0)
       ? {
           source: "dynamic" as const,
-          raw: dynamicBenchmark.memory,
+          metrics: agentBenchmarks.map(b => ({
+            metric: b.metric,
+            value_good: b.value_good,
+            value_avg: b.value_avg,
+            value_bad: b.value_bad,
+            source: b.source,
+          })),
         }
       : {
           source: "initial" as const,
@@ -362,13 +339,20 @@ serve(async (req) => {
         top_ads_active: topAds,
         fatigued_ads: fatiguedAds || [],
         pending_recommendations: pendingRecs || [],
-        memories: memories.map((m) => ({
-          id: m.id,
-          memory: m.memory,
-          category: m.metadata?.category,
-          score: m.score,
+        learnings: (agentLearnings || []).map((l) => ({
+          id: l.id,
+          category: l.category,
+          content: l.content,
+          confidence: l.confidence,
+          source: l.source,
         })),
         benchmarks,
+        rules: (agentRules || []).map((r) => ({
+          id: r.id,
+          rule: r.rule,
+          times_applied: r.times_applied,
+          times_correct: r.times_correct,
+        })),
         monthly_targets: monthlyTargets,
         prophit_system: prophitSystem,
       }),

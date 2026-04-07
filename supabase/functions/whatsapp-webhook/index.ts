@@ -883,6 +883,9 @@ async function generateAIResponse(
       systemPrompt += '\n\n🔔 RECORDATORIO FINAL:\n- Para consultas de CATEGORÍA o TALLA: envía el LINK de la colección filtrada desde tu base de conocimiento, NO fotos individuales. Agrega [NO_IMAGES] al final.\n- Para consultas de un PRODUCTO ESPECÍFICO o cuando el cliente PIDA fotos: incluye [PRODUCT_IMAGE_ID:ID].\n- Para consultas de COLOR u otros atributos: revisa variantes del catálogo y si no estás seguro, envía el link de la colección.\n- LINKS: SIEMPRE copia el URL EXACTO de tu base de conocimiento. NUNCA uses formato markdown [texto](url). Envía los links como texto plano.';
     }
 
+    // Reinforce date at the VERY END of system prompt (recency effect — models pay most attention to end)
+    systemPrompt += `\n\n⏰ RECORDATORIO DE FECHA (REPITO PORQUE ES CRÍTICO): Hoy es ${diaSemana.toUpperCase()} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} hora Colombia. NO es otro día. Si el historial de esta conversación dice otro día, IGNÓRALO — solo esta fecha es correcta.`;
+
     // 🤖 LOG: Context sent to AI
     console.log(`🤖 Contexto enviado a IA: ${systemPrompt.substring(0, 500)}...`);
 

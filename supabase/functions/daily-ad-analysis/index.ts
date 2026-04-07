@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { searchMemories, addMemory } from "./mem0.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -313,7 +313,9 @@ async function callClaudeAnalysis(
   scorecards: AdScorecard[],
   alerts: Alert[],
   pacing: any,
-  memories: any[],
+  learnings: any[],
+  benchmarksData: any[],
+  rulesData: any[],
   autonomyLevel: number,
   analysisDate: string
 ): Promise<{
@@ -327,9 +329,21 @@ async function callClaudeAnalysis(
     return null;
   }
 
-  const memoriesContext = memories.length > 0
-    ? memories.map((m: any) => `- ${m.memory || m.content || JSON.stringify(m)}`).join("\n")
-    : "No hay memorias previas. Este es un análisis temprano.";
+  const learningsContext = (learnings || [])
+    .map(l => `[${l.category}/${l.confidence}] ${l.content}`)
+    .join("\n");
+
+  const benchmarksContext = (benchmarksData || [])
+    .map(b => `${b.metric}: good=${b.value_good}, avg=${b.value_avg}, bad=${b.value_bad} (${b.source})`)
+    .join("\n");
+
+  const rulesContext = (rulesData || [])
+    .map(r => `[${r.times_correct}/${r.times_applied} correct] ${r.rule}`)
+    .join("\n");
+
+  const memoriesContext = learningsContext || benchmarksContext || rulesContext
+    ? `### Learnings:\n${learningsContext || "Sin learnings previos."}\n\n### Benchmarks:\n${benchmarksContext || "Sin benchmarks."}\n\n### Reglas:\n${rulesContext || "Sin reglas."}`
+    : "No hay contexto previo. Este es un análisis temprano.";
 
   const systemPrompt = `Eres el Ad Intelligence Agent de Sewdle, un analista experto de Meta Ads basado en el Prophit System de Taylor Holiday (Common Thread Collective).
 
@@ -682,15 +696,32 @@ serve(async (req) => {
       );
     }
 
-    // ─── 3. Buscar memorias en Mem0 ─────────────────────────────
+    // ─── 3. Obtener contexto del agente desde BD ────────────────
 
-    const memories = await searchMemories(
-      "rendimiento ads ROAS CPA patrones benchmarks",
-      organizationId,
-      "media-buying-agent",
-      15
-    );
-    console.log(`Memorias encontradas: ${memories.length}`);
+    // Obtener learnings activos
+    const { data: learnings } = await supabase
+      .from('agent_learnings')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(30);
+
+    // Obtener benchmarks
+    const { data: benchmarks } = await supabase
+      .from('agent_benchmarks')
+      .select('*')
+      .eq('organization_id', organizationId);
+
+    // Obtener reglas activas
+    const { data: rules } = await supabase
+      .from('agent_rules')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+      .order('times_correct', { ascending: false });
+
+    console.log(`Contexto: ${(learnings || []).length} learnings, ${(benchmarks || []).length} benchmarks, ${(rules || []).length} rules`);
 
     // ─── 4. Calcular métricas determinísticas ───────────────────
 
@@ -739,7 +770,9 @@ serve(async (req) => {
       scorecards,
       alerts,
       pacing,
-      memories,
+      learnings || [],
+      benchmarks || [],
+      rules || [],
       autonomyLevel,
       dateToAnalyze
     );
@@ -758,7 +791,7 @@ serve(async (req) => {
       executive_summary: aiAnalysis?.executive_summary || "Análisis no disponible — error en Claude API",
       ai_recommendations: aiAnalysis?.recommendations || [],
       new_learnings: aiAnalysis?.new_learnings || [],
-      memories_used: memories.length,
+      learnings_used: (learnings || []).length,
       created_at: new Date().toISOString(),
     };
 
@@ -799,23 +832,24 @@ serve(async (req) => {
       }
     }
 
-    // ─── 8. Guardar new_learnings en Mem0 ───────────────────────
+    // ─── 8. Guardar new_learnings en agent_learnings ─────────────
 
     if (aiAnalysis?.new_learnings) {
       for (const learning of aiAnalysis.new_learnings) {
-        await addMemory(
-          learning,
-          organizationId,
-          "media-buying-agent",
-          {
-            category: "learning",
-            source: "daily-analysis",
-            date: dateToAnalyze,
-            report_id: reportId,
-          }
-        );
+        const learningData = typeof learning === 'string'
+          ? { content: learning, category: 'pattern', confidence: 'medium', evidence: null }
+          : learning;
+
+        await supabase.from('agent_learnings').insert({
+          organization_id: organizationId,
+          category: learningData.category || 'pattern',
+          content: learningData.content || learningData.insight || learning,
+          confidence: learningData.confidence || 'medium',
+          evidence: learningData.evidence || null,
+          source: 'agent',
+        });
       }
-      console.log(`Guardados ${aiAnalysis.new_learnings.length} learnings en Mem0`);
+      console.log(`Guardados ${aiAnalysis.new_learnings.length} learnings en agent_learnings`);
     }
 
     // ─── 9. Acciones automáticas (Nivel 3) ──────────────────────
@@ -878,7 +912,7 @@ serve(async (req) => {
       recommendations_count: aiAnalysis?.recommendations?.length || 0,
       recommendations: aiAnalysis?.recommendations || [],
       new_learnings: aiAnalysis?.new_learnings || [],
-      memories_used: memories.length,
+      learnings_used: (learnings || []).length,
       auto_actions: autoActions,
     };
 

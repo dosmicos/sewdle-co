@@ -3,7 +3,7 @@
 // 1. Medir accuracy de recomendaciones ejecutadas hace 3-7 días
 // 2. Actualizar accuracy_score en ad_recommendations_log
 // 3. Recalcular agent_autonomy_level en ad_accounts
-// 4. Cada 7 días recalcular benchmarks dinámicos → guardar en Mem0
+// 4. Cada 7 días recalcular benchmarks dinámicos → UPSERT en agent_benchmarks
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -14,47 +14,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
-
-// ─── Mem0 Helpers ───────────────────────────────────────────────
-
-const MEM0_BASE_URL = "https://api.mem0.ai";
-
-function getMem0Headers(): Record<string, string> {
-  const apiKey = Deno.env.get("MEM0_API_KEY");
-  if (!apiKey) throw new Error("MEM0_API_KEY no está configurada");
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Token ${apiKey}`,
-  };
-}
-
-async function addMemory(
-  content: string,
-  userId: string,
-  agentId: string,
-  metadata?: Record<string, unknown>
-): Promise<void> {
-  try {
-    const body: Record<string, unknown> = {
-      messages: [{ role: "user", content }],
-      user_id: userId,
-      agent_id: agentId,
-    };
-    if (metadata) body.metadata = metadata;
-
-    const res = await fetch(`${MEM0_BASE_URL}/v1/memories/`, {
-      method: "POST",
-      headers: getMem0Headers(),
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      console.error("Mem0 addMemory error:", res.status, await res.text());
-    }
-  } catch (err) {
-    console.error("Mem0 addMemory error:", err);
-  }
-}
 
 // ─── Accuracy calculation ───────────────────────────────────────
 
@@ -265,15 +224,56 @@ serve(async (req) => {
         updated++;
       }
 
-      // Si accuracy muy baja, guardar contradicción en Mem0
-      if (score < 0.3) {
-        await addMemory(
-          `Contradicción detectada: la recomendación "${rec.action}" (categoría: ${rec.category}) tuvo accuracy ${score}. Métricas before: ROAS ${metricsBefore.roas?.toFixed(2)}, CPA ${metricsBefore.cpa?.toFixed(0)}. Métricas after: ROAS ${metricsAfter.roas?.toFixed(2)}, CPA ${metricsAfter.cpa?.toFixed(0)}. Revisar si este tipo de recomendación es válida.`,
-          organizationId,
-          "media-buying-agent",
-          { category: "contradiction", recommendation_id: rec.id }
-        );
+      // Si accuracy alta, confirmar pattern → subir confianza de learnings relacionados
+      if (score >= 0.8) {
+        await supabase
+          .from('agent_learnings')
+          .update({ confidence: 'high', updated_at: new Date().toISOString() })
+          .eq('organization_id', organizationId)
+          .eq('category', rec.category)
+          .eq('is_active', true)
+          .neq('confidence', 'high');
+
+        // Actualizar reglas relacionadas: incrementar times_applied y times_correct
+        const { data: matchingRules } = await supabase
+          .from('agent_rules')
+          .select('id, times_applied, times_correct')
+          .eq('organization_id', organizationId)
+          .eq('is_active', true)
+          .ilike('rule', `%${rec.category}%`);
+
+        for (const rule of (matchingRules || [])) {
+          await supabase
+            .from('agent_rules')
+            .update({
+              times_applied: (rule.times_applied || 0) + 1,
+              times_correct: (rule.times_correct || 0) + 1,
+            })
+            .eq('id', rule.id);
+        }
       }
+
+      // Si accuracy muy baja, guardar contradicción en agent_learnings
+      if (score < 0.3) {
+        // Bajar confianza de learnings del mismo tipo
+        await supabase
+          .from('agent_learnings')
+          .update({ confidence: 'low', updated_at: new Date().toISOString() })
+          .eq('organization_id', organizationId)
+          .eq('category', rec.category)
+          .eq('is_active', true);
+
+        // Insertar nuevo learning con categoría 'error'
+        await supabase.from('agent_learnings').insert({
+          organization_id: organizationId,
+          category: 'error',
+          content: `Contradicción detectada: la recomendación "${rec.action}" (categoría: ${rec.category}) tuvo accuracy ${score}. Métricas before: ROAS ${metricsBefore.roas?.toFixed(2)}, CPA ${metricsBefore.cpa?.toFixed(0)}. Métricas after: ROAS ${metricsAfter.roas?.toFixed(2)}, CPA ${metricsAfter.cpa?.toFixed(0)}. Revisar si este tipo de recomendación es válida.`,
+          confidence: 'high',
+          evidence: { recommendation_id: rec.id, metrics_before: metricsBefore, metrics_after: metricsAfter, delta },
+          source: 'review',
+        });
+      }
+
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -395,17 +395,34 @@ serve(async (req) => {
         totals.purchases > 0 ? totals.spend / totals.purchases : 0;
       const avgRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
 
-      const dateStr = now.toISOString().split("T")[0];
+      // UPSERT benchmarks dinámicos en agent_benchmarks
+      const benchmarkRows = [
+        { metric: 'hook_rate', value_good: avgHookRate * 1.2, value_avg: avgHookRate, value_bad: avgHookRate * 0.8 },
+        { metric: 'hold_rate', value_good: avgHoldRate * 1.2, value_avg: avgHoldRate, value_bad: avgHoldRate * 0.8 },
+        { metric: 'ctr', value_good: avgCtr * 1.3, value_avg: avgCtr, value_bad: avgCtr * 0.6 },
+        { metric: 'cpa', value_good: avgCpa * 0.7, value_avg: avgCpa, value_bad: avgCpa * 2.0 },
+        { metric: 'roas', value_good: avgRoas * 1.5, value_avg: avgRoas, value_bad: avgRoas * 0.5 },
+      ];
 
-      await addMemory(
-        `Benchmarks actualizados de Dosmicos al ${dateStr}: Hook Rate promedio ${avgHookRate.toFixed(1)}%, Hold Rate ${avgHoldRate.toFixed(1)}%, CTR ${avgCtr.toFixed(2)}%, CPA promedio COP ${avgCpa.toFixed(0)}, ROAS promedio ${avgRoas.toFixed(2)}x. Rolling 30 días con ${perfData.length} datapoints. Estos reemplazan los benchmarks genéricos.`,
-        organizationId,
-        "media-buying-agent",
-        { category: "benchmark_dynamic", replaces: "benchmark_initial" }
-      );
+      for (const bm of benchmarkRows) {
+        await supabase
+          .from('agent_benchmarks')
+          .upsert(
+            {
+              organization_id: organizationId,
+              metric: bm.metric,
+              value_good: bm.value_good,
+              value_avg: bm.value_avg,
+              value_bad: bm.value_bad,
+              source: 'dynamic',
+              updated_at: now.toISOString(),
+            },
+            { onConflict: 'organization_id,metric' }
+          );
+      }
 
       console.log(
-        `[review-accuracy] Benchmarks dinámicos actualizados: HR=${avgHookRate.toFixed(1)}%, CTR=${avgCtr.toFixed(2)}%, CPA=COP${avgCpa.toFixed(0)}, ROAS=${avgRoas.toFixed(2)}x`
+        `[review-accuracy] Benchmarks dinámicos actualizados en agent_benchmarks: HR=${avgHookRate.toFixed(1)}%, CTR=${avgCtr.toFixed(2)}%, CPA=COP${avgCpa.toFixed(0)}, ROAS=${avgRoas.toFixed(2)}x`
       );
     }
 

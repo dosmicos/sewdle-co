@@ -97,6 +97,52 @@ const VALLE_ABURRA_CITIES = [
   'rionegro'
 ];
 
+// All cities referenced in carrier rules — used for fuzzy correction of typos
+const ALL_CARRIER_RULE_CITIES = [
+  ...CUNDINAMARCA_COORDINADORA_CITIES,
+  ...VALLE_ABURRA_CITIES,
+  'jamundi', 'cali', 'calima', 'darien',
+  'floridablanca', 'giron',
+  'tunja', 'labranzagrande',
+  'manizales',
+  'dosquebradas',
+  'la ceja',
+  'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
+  'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
+  'armenia', 'popayan', 'sincelejo', 'valledupar',
+  'florencia', 'riohacha'
+];
+
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function fuzzyMatchCity(input: string): string {
+  if (ALL_CARRIER_RULE_CITIES.includes(input)) return input;
+  let bestMatch = input;
+  let bestDist = Infinity;
+  for (const known of ALL_CARRIER_RULE_CITIES) {
+    const dist = levenshteinDistance(input, known);
+    // Max 2 edits, and the input must be at least 4 chars to avoid false positives
+    if (dist < bestDist && dist <= 2 && input.length >= 4) {
+      bestDist = dist;
+      bestMatch = known;
+    }
+  }
+  return bestMatch;
+}
+
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   shopifyOrderId,
   orderNumber,
@@ -265,10 +311,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         return;
       }
 
-      const normalizeText = (text: string) => 
+      const normalizeText = (text: string) =>
         text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-      const city = normalizeText(shippingAddress.city);
+      const rawCity = normalizeText(shippingAddress.city);
+      const city = fuzzyMatchCity(rawCity);
       const dept = normalizeText(shippingAddress.province);
 
       // Cundinamarca: solo Coordinadora para Bogotá y municipios grandes

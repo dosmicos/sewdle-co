@@ -54,6 +54,43 @@ export interface AgentStatus {
   total_executed: number;
 }
 
+export interface AgentLearning {
+  id: string;
+  organization_id: string;
+  category: string;
+  content: string;
+  confidence: 'high' | 'medium' | 'low';
+  source: 'seed' | 'agent' | 'human';
+  metadata: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentBenchmark {
+  id: string;
+  organization_id: string;
+  metric_name: string;
+  good_threshold: number;
+  average_threshold: number;
+  bad_threshold: number;
+  source: 'initial' | 'dynamic';
+  last_calculated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentRule {
+  id: string;
+  organization_id: string;
+  rule_text: string;
+  times_applied: number;
+  times_correct: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── Hook ───────────────────────────────────────────────────────
 
 export function useAdAnalysis() {
@@ -192,6 +229,52 @@ export function useAdAnalysis() {
     enabled: !!orgId,
   });
 
+  // Learnings del agente
+  const learningsQuery = useQuery({
+    queryKey: ['agent-learnings', orgId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('agent_learnings')
+        .select('*')
+        .eq('organization_id', orgId!)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as AgentLearning[];
+    },
+    enabled: !!orgId,
+  });
+
+  // Benchmarks del agente
+  const benchmarksQuery = useQuery({
+    queryKey: ['agent-benchmarks', orgId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('agent_benchmarks')
+        .select('*')
+        .eq('organization_id', orgId!);
+      if (error) throw error;
+      return (data || []) as AgentBenchmark[];
+    },
+    enabled: !!orgId,
+  });
+
+  // Reglas del agente
+  const rulesQuery = useQuery({
+    queryKey: ['agent-rules', orgId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('agent_rules')
+        .select('*')
+        .eq('organization_id', orgId!)
+        .eq('is_active', true)
+        .order('times_correct', { ascending: false });
+      if (error) throw error;
+      return (data || []) as AgentRule[];
+    },
+    enabled: !!orgId,
+  });
+
   // Mutation: marcar recomendación como ejecutada
   const executeRecMutation = useMutation({
     mutationFn: async (recId: string) => {
@@ -262,6 +345,14 @@ export function useAdAnalysis() {
       total_executed: 0,
     },
     statusLoading: agentStatusQuery.isLoading,
+
+    // Conocimiento del agente
+    learnings: learningsQuery.data || [],
+    learningsLoading: learningsQuery.isLoading,
+    benchmarks: benchmarksQuery.data || [],
+    benchmarksLoading: benchmarksQuery.isLoading,
+    rules: rulesQuery.data || [],
+    rulesLoading: rulesQuery.isLoading,
 
     // Mutations
     executeRecommendation: executeRecMutation.mutate,

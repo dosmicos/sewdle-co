@@ -523,8 +523,8 @@ serve(async (req) => {
             });
 
           if (upsertError) {
-            console.error(`Upsert error for ${p} ${page.name}:`, upsertError);
-            diagnostics.steps.push({ step: `${p}_${page.name}_upsert`, status: "error", detail: upsertError.message });
+            console.error(`Upsert error for ${p} ${page.name}:`, JSON.stringify(upsertError));
+            diagnostics.steps.push({ step: `${p}_${page.name}_upsert`, status: "error", detail: JSON.stringify(upsertError), code: upsertError.code, hint: upsertError.hint });
           } else {
             totalSynced += batch.length;
           }

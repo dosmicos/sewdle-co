@@ -6,6 +6,58 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Verify payment with Bold API by checking transaction status directly
+async function verifyPaymentWithBoldAPI(
+  transactionId: string,
+  reference: string,
+  expectedAmount: number,
+  boldApiKey: string
+): Promise<{ verified: boolean; reason: string }> {
+  try {
+    // Bold Transaction Status API
+    const resp = await fetch(`https://integrations.api.bold.co/online/transaction/v1/${transactionId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `x-api-key ${boldApiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!resp.ok) {
+      console.error(`Bold API verification failed: HTTP ${resp.status}`);
+      // If Bold API is down, DON'T auto-approve — fail safe
+      return { verified: false, reason: `Bold API returned HTTP ${resp.status}` };
+    }
+
+    const txData = await resp.json();
+    console.log("Bold API transaction data:", JSON.stringify(txData));
+
+    const txStatus = txData.payload?.status || txData.status;
+    const txReference = txData.payload?.reference || txData.reference;
+    const txAmount = txData.payload?.amount?.total_amount || txData.amount?.total_amount;
+
+    // Verify transaction is approved
+    if (txStatus !== 'APPROVED') {
+      return { verified: false, reason: `Transaction status is '${txStatus}', not APPROVED` };
+    }
+
+    // Verify reference matches our pending order
+    if (txReference && txReference !== reference) {
+      return { verified: false, reason: `Reference mismatch: expected '${reference}', got '${txReference}'` };
+    }
+
+    // Verify amount matches (within 1 COP tolerance for rounding)
+    if (txAmount && expectedAmount && Math.abs(txAmount - expectedAmount) > 1) {
+      return { verified: false, reason: `Amount mismatch: expected ${expectedAmount}, got ${txAmount}` };
+    }
+
+    return { verified: true, reason: 'Transaction verified via Bold API' };
+  } catch (err) {
+    console.error("Error verifying with Bold API:", err);
+    return { verified: false, reason: `API verification error: ${err instanceof Error ? err.message : 'unknown'}` };
+  }
+}
+
 // Send a WhatsApp text message
 async function sendWhatsAppMessage(
   phoneNumberId: string,
@@ -157,7 +209,46 @@ serve(async (req) => {
 
     console.log(`Found pending order: ${pendingOrder.id} for ${pendingOrder.customer_name}`);
 
-    // Update pending order status to "paid"
+    // ===== CRITICAL: Verify payment with Bold API before confirming =====
+    // Bold doesn't provide webhook signatures, so we verify by calling their API directly
+    let boldApiKey = null;
+    if (pendingOrder.organization_id) {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('bold_credentials')
+        .eq('id', pendingOrder.organization_id)
+        .single();
+      boldApiKey = org?.bold_credentials
+        ? ((org.bold_credentials as any).api_key || (org.bold_credentials as any).apiKey)
+        : null;
+    }
+    if (!boldApiKey) {
+      boldApiKey = Deno.env.get('BOLD_API_KEY');
+    }
+
+    if (boldApiKey && transactionId) {
+      const verification = await verifyPaymentWithBoldAPI(
+        transactionId,
+        reference,
+        pendingOrder.total_amount,
+        boldApiKey
+      );
+
+      if (!verification.verified) {
+        console.error(`❌ PAYMENT VERIFICATION FAILED for ${reference}: ${verification.reason}`);
+        await tagConversationRevisarPedido(supabase, pendingOrder.organization_id, pendingOrder.conversation_id);
+        return new Response(
+          JSON.stringify({ error: "Payment verification failed", reason: verification.reason }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`✅ PAYMENT VERIFIED via Bold API: ${verification.reason}`);
+    } else {
+      console.warn("⚠️ Could not verify payment with Bold API (missing API key or transaction ID). Proceeding with caution.");
+    }
+
+    // Update pending order status to "paid" — only after API verification
     await supabase
       .from('pending_orders')
       .update({

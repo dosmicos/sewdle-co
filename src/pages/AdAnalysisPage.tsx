@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Brain,
   ChevronDown,
@@ -13,15 +13,34 @@ import {
   Eye,
   Zap,
   TrendingUp,
+  BookOpen,
+  BarChart3,
+  Scale,
+  Filter,
 } from 'lucide-react';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import { useAdAnalysis } from '@/hooks/useAdAnalysis';
-import type { AdAnalysisReport, AdRecommendation } from '@/hooks/useAdAnalysis';
+import type { AdAnalysisReport, AdRecommendation, AgentLearning, AgentBenchmark, AgentRule } from '@/hooks/useAdAnalysis';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -329,11 +348,29 @@ const AdAnalysisPage: React.FC = () => {
     ignoreRecommendation,
     executingRec,
     ignoringRec,
+    learnings,
+    learningsLoading,
+    benchmarks,
+    benchmarksLoading,
+    rules,
+    rulesLoading,
   } = useAdAnalysis();
+
+  const [learningCategoryFilter, setLearningCategoryFilter] = useState<string>('all');
 
   const autonomyConfig = AUTONOMY_CONFIG[agentStatus.autonomy_level] || AUTONOMY_CONFIG[1];
   const accuracyPct = agentStatus.accuracy * 100;
   const targetAccuracy = 80;
+
+  const learningCategories = useMemo(() => {
+    const cats = new Set(learnings.map((l) => l.category));
+    return Array.from(cats).sort();
+  }, [learnings]);
+
+  const filteredLearnings = useMemo(() => {
+    if (learningCategoryFilter === 'all') return learnings;
+    return learnings.filter((l) => l.category === learningCategoryFilter);
+  }, [learnings, learningCategoryFilter]);
 
   return (
     <FinanceDashboardLayout activeSection="ad-analysis">
@@ -411,6 +448,10 @@ const AdAnalysisPage: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger value="history" className="text-xs">
               Historial
+            </TabsTrigger>
+            <TabsTrigger value="knowledge" className="text-xs">
+              <BookOpen className="h-3 w-3 mr-1" />
+              Conocimiento
             </TabsTrigger>
           </TabsList>
 
@@ -496,6 +537,270 @@ const AdAnalysisPage: React.FC = () => {
                 />
               ))
             )}
+          </TabsContent>
+
+          {/* Tab: Conocimiento */}
+          <TabsContent value="knowledge" className="space-y-6">
+            {/* Sub-sección: Learnings */}
+            <Card>
+              <CardHeader className="py-3 px-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-purple-500" />
+                    <CardTitle className="text-sm font-medium">Learnings</CardTitle>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                      {filteredLearnings.length}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-3 w-3 text-gray-400" />
+                    <Select
+                      value={learningCategoryFilter}
+                      onValueChange={setLearningCategoryFilter}
+                    >
+                      <SelectTrigger className="h-7 w-[160px] text-xs">
+                        <SelectValue placeholder="Todas las categorías" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {learningCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 pt-0">
+                {learningsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                  </div>
+                ) : filteredLearnings.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">
+                    No hay learnings registrados
+                  </p>
+                ) : (
+                  <div className="rounded-md border overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs w-[120px]">Categoría</TableHead>
+                          <TableHead className="text-xs">Contenido</TableHead>
+                          <TableHead className="text-xs w-[90px]">Confianza</TableHead>
+                          <TableHead className="text-xs w-[80px]">Fuente</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredLearnings.map((learning) => (
+                          <TableRow key={learning.id}>
+                            <TableCell className="text-xs font-medium">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {learning.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-700 max-w-[400px]">
+                              <span className="line-clamp-2">{learning.content}</span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] px-1.5 py-0 ${
+                                  learning.confidence === 'high'
+                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                    : learning.confidence === 'medium'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-red-50 text-red-700 border-red-200'
+                                }`}
+                              >
+                                {learning.confidence === 'high'
+                                  ? 'Alta'
+                                  : learning.confidence === 'medium'
+                                  ? 'Media'
+                                  : 'Baja'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] px-1.5 py-0 ${
+                                  learning.source === 'seed'
+                                    ? 'bg-gray-50 text-gray-600 border-gray-200'
+                                    : learning.source === 'agent'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-violet-50 text-violet-700 border-violet-200'
+                                }`}
+                              >
+                                {learning.source === 'seed'
+                                  ? 'Semilla'
+                                  : learning.source === 'agent'
+                                  ? 'Agente'
+                                  : 'Humano'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sub-sección: Benchmarks */}
+            <Card>
+              <CardHeader className="py-3 px-4">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-500" />
+                  <CardTitle className="text-sm font-medium">Benchmarks</CardTitle>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    {benchmarks.length}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 pt-0">
+                {benchmarksLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                  </div>
+                ) : benchmarks.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">
+                    No hay benchmarks registrados
+                  </p>
+                ) : (
+                  <div className="rounded-md border overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Métrica</TableHead>
+                          <TableHead className="text-xs w-[100px]">Bueno</TableHead>
+                          <TableHead className="text-xs w-[100px]">Promedio</TableHead>
+                          <TableHead className="text-xs w-[100px]">Malo</TableHead>
+                          <TableHead className="text-xs w-[100px]">Fuente</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {benchmarks.map((benchmark) => (
+                          <TableRow key={benchmark.id}>
+                            <TableCell className="text-xs font-medium text-gray-800">
+                              {benchmark.metric_name}
+                            </TableCell>
+                            <TableCell className="text-xs text-green-700 font-mono">
+                              {benchmark.good_threshold}
+                            </TableCell>
+                            <TableCell className="text-xs text-amber-700 font-mono">
+                              {benchmark.average_threshold}
+                            </TableCell>
+                            <TableCell className="text-xs text-red-700 font-mono">
+                              {benchmark.bad_threshold}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] px-1.5 py-0 ${
+                                  benchmark.source === 'dynamic'
+                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                                }`}
+                              >
+                                {benchmark.source === 'dynamic' ? 'Dinámico' : 'Inicial'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sub-sección: Reglas */}
+            <Card>
+              <CardHeader className="py-3 px-4">
+                <div className="flex items-center gap-2">
+                  <Scale className="h-4 w-4 text-amber-500" />
+                  <CardTitle className="text-sm font-medium">Reglas</CardTitle>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    {rules.length}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 pt-0">
+                {rulesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                  </div>
+                ) : rules.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">
+                    No hay reglas registradas
+                  </p>
+                ) : (
+                  <div className="rounded-md border overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Regla</TableHead>
+                          <TableHead className="text-xs w-[80px]">Aplicada</TableHead>
+                          <TableHead className="text-xs w-[80px]">Correcta</TableHead>
+                          <TableHead className="text-xs w-[90px]">Accuracy</TableHead>
+                          <TableHead className="text-xs w-[80px]">Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rules.map((rule) => {
+                          const accuracy =
+                            rule.times_applied > 0
+                              ? (rule.times_correct / rule.times_applied) * 100
+                              : 0;
+                          return (
+                            <TableRow key={rule.id}>
+                              <TableCell className="text-xs text-gray-700 max-w-[400px]">
+                                <span className="line-clamp-2">{rule.rule_text}</span>
+                              </TableCell>
+                              <TableCell className="text-xs font-mono text-center">
+                                {rule.times_applied}
+                              </TableCell>
+                              <TableCell className="text-xs font-mono text-center">
+                                {rule.times_correct}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] px-1.5 py-0 ${
+                                    accuracy >= 70
+                                      ? 'bg-green-50 text-green-700 border-green-200'
+                                      : accuracy >= 40
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                      : 'bg-red-50 text-red-700 border-red-200'
+                                  }`}
+                                >
+                                  {accuracy.toFixed(0)}%
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] px-1.5 py-0 ${
+                                    rule.is_active
+                                      ? 'bg-green-50 text-green-700 border-green-200'
+                                      : 'bg-gray-50 text-gray-500 border-gray-200'
+                                  }`}
+                                >
+                                  {rule.is_active ? 'Activa' : 'Inactiva'}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
