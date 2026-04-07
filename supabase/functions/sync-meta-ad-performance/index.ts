@@ -61,6 +61,12 @@ function extractFromActions(
   return Math.max(directVal, offsiteVal);
 }
 
+/** Clamp rate/percentage values to prevent DB overflow from bad data */
+function clampRate(val: number | null, max = 999): number | null {
+  if (val === null || val === undefined) return null;
+  return Math.min(Math.max(val, 0), max);
+}
+
 /** Extract video metric value from video action arrays */
 function extractVideoMetric(videoActions: any[] | undefined): number {
   if (!videoActions || videoActions.length === 0) return 0;
@@ -393,10 +399,10 @@ serve(async (req) => {
           video_avg_time: videoAvgTime,
           roas,
           cpa,
-          hook_rate: hookRate,
-          hold_rate: holdRate,
-          lp_conv_rate: lpConvRate,
-          atc_rate: atcRate,
+          hook_rate: clampRate(hookRate),
+          hold_rate: clampRate(holdRate),
+          lp_conv_rate: clampRate(lpConvRate),
+          atc_rate: clampRate(atcRate),
           synced_at: new Date().toISOString(),
         });
       } catch (rowError) {
@@ -408,8 +414,8 @@ serve(async (req) => {
       }
     }
 
-    // Batch upsert (500 at a time)
-    const BATCH_SIZE = 500;
+    // Batch upsert (50 at a time – small batches so one bad row doesn't fail 500)
+    const BATCH_SIZE = 50;
     let syncedAds = 0;
     const upsertErrors: string[] = [];
 
