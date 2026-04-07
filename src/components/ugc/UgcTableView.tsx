@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -6,13 +6,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search } from 'lucide-react';
+import { Search, Tag } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus, UgcVideo, CreatorTier } from '@/types/ugc';
 import { CAMPAIGN_STATUS_CONFIG } from '@/types/ugc';
 import { TierBadge } from '@/components/finance-dashboard/TierBadge';
 import type { UgcCreatorTag } from '@/hooks/useUgcCreatorTags';
+import { useUgcCreatorTags } from '@/hooks/useUgcCreatorTags';
 
 interface UgcTableViewProps {
   creators: UgcCreator[];
@@ -35,6 +36,9 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [publicationFilter, setPublicationFilter] = useState<string>('all');
   const [tierFilter, setTierFilter] = useState<string>('all');
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+
+  const { tags: allTags } = useUgcCreatorTags();
 
   const hasUploadedAsset = (video: UgcVideo) => !!video.video_url && video.video_url.trim().length > 0;
 
@@ -82,6 +86,18 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
   const cities = [...new Set(creators.map((c) => c.city).filter(Boolean))] as string[];
 
+  // Tag counts — total creators per tag (ignoring other filters, for context)
+  const tagCounts = useMemo(
+    () =>
+      allTags.map((tag) => ({
+        ...tag,
+        count: creators.filter((c) =>
+          (getTagsForCreator?.(c.id) ?? []).some((t) => t.id === tag.id)
+        ).length,
+      })),
+    [allTags, creators, getTagsForCreator]
+  );
+
   const filtered = creators.filter((creator) => {
     const matchesSearch =
       !search ||
@@ -95,6 +111,10 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
 
     const matchesTier = tierFilter === 'all' || (creator.tier ?? 'none') === tierFilter;
+
+    const matchesTag =
+      !selectedTagId ||
+      (getTagsForCreator?.(creator.id) ?? []).some((t) => t.id === selectedTagId);
 
     const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
       activeCampaign?.id,
@@ -113,7 +133,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
       (publicationFilter === 'published_organic' && hasOrganicPublished) ||
       (publicationFilter === 'published_ads' && hasAdsPublished);
 
-    return matchesSearch && matchesStatus && matchesCity && matchesPublication && matchesTier;
+    return matchesSearch && matchesStatus && matchesCity && matchesPublication && matchesTier && matchesTag;
   });
 
   return (
@@ -179,6 +199,47 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Tag filter chips */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+            <Tag className="h-3.5 w-3.5" />
+            Etiquetas:
+          </div>
+          <button
+            onClick={() => setSelectedTagId(null)}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+              selectedTagId === null
+                ? 'bg-foreground text-background border-foreground'
+                : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
+            }`}
+          >
+            Todas
+            <span className={`ml-0.5 px-1 rounded text-[10px] ${selectedTagId === null ? 'bg-background/20' : 'bg-muted'}`}>
+              {creators.length}
+            </span>
+          </button>
+          {tagCounts.map((tag) => (
+            <button
+              key={tag.id}
+              onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                selectedTagId === tag.id
+                  ? 'text-white border-transparent'
+                  : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
+              }`}
+              style={selectedTagId === tag.id ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+              {tag.name}
+              <span className={`ml-0.5 px-1 rounded text-[10px] ${selectedTagId === tag.id ? 'bg-white/20' : 'bg-muted'}`}>
+                {tag.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Table */}
       <div className="border rounded-lg overflow-x-auto">
