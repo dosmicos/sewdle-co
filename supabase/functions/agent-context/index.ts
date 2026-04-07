@@ -330,6 +330,86 @@ serve(async (req) => {
       mer_target: "3-5x",
     };
 
+    // ═══════════════════════════════════════════════════════════
+    // Vault Ingest — datos formateados para dosmicos-brain wiki
+    // ═══════════════════════════════════════════════════════════
+    const today = new Date().toISOString().split("T")[0];
+    const mer = accountMetrics7d.spend > 0
+      ? (accountMetrics7d.revenue / accountMetrics7d.spend).toFixed(1)
+      : "N/A";
+    const totalAds = topAds.length;
+
+    const vaultIngest = {
+      daily_report: [
+        `# Reporte Diario — ${today}`,
+        "",
+        `**Organizacion:** ${org?.name ?? organizationId}`,
+        `**Agente Nivel:** ${agentStatus.autonomy_level} (${agentStatus.autonomy_label})`,
+        `**Accuracy 30d:** ${agentStatus.accuracy_30d}`,
+        "",
+        "## Metricas 7d",
+        "",
+        `| Metrica | Valor |`,
+        `|---------|-------|`,
+        `| Spend | COP ${Math.round(accountMetrics7d.spend).toLocaleString()} |`,
+        `| Revenue | COP ${Math.round(accountMetrics7d.revenue).toLocaleString()} |`,
+        `| ROAS | ${accountMetrics7d.roas.toFixed(2)}x |`,
+        `| MER | ${mer}x |`,
+        `| CPA | COP ${Math.round(accountMetrics7d.cpa).toLocaleString()} |`,
+        `| CTR | ${accountMetrics7d.ctr.toFixed(2)}% |`,
+        `| CPM | COP ${Math.round(accountMetrics7d.cpm).toLocaleString()} |`,
+        `| Purchases | ${accountMetrics7d.purchases} |`,
+        "",
+        `## Ads Activos (top ${totalAds})`,
+        "",
+        ...topAds.map(
+          (a) =>
+            `- **${a.ad_name}**: ROAS ${a.roas.toFixed(2)}x | CPA COP ${Math.round(a.cpa).toLocaleString()} | CTR ${a.ctr.toFixed(2)}%`
+        ),
+        "",
+        `## Ads Fatigados: ${(fatiguedAds || []).length}`,
+        "",
+        ...(fatiguedAds || []).map(
+          (a) =>
+            `- **${a.ad_name}**: ${a.current_status} | ROAS lifetime ${a.lifetime_roas?.toFixed(2) ?? "N/A"}x | ${a.days_active}d activo`
+        ),
+        "",
+        `## Recomendaciones Pendientes: ${(pendingRecs || []).length}`,
+      ].join("\n"),
+
+      decisions: [
+        `# Decisiones — ${today}`,
+        "",
+        ...(pendingRecs || []).map(
+          (r, i) =>
+            `${i + 1}. **[${r.type ?? "general"}]** ${r.recommendation ?? r.action ?? "Sin detalle"} (confianza: ${r.confidence ?? "N/A"})`
+        ),
+        "",
+        (pendingRecs || []).length === 0
+          ? "_Sin recomendaciones pendientes._"
+          : "",
+      ].join("\n"),
+
+      metrics_snapshot: {
+        date: today,
+        spend_7d: Math.round(accountMetrics7d.spend),
+        revenue_7d: Math.round(accountMetrics7d.revenue),
+        roas_7d: Number(accountMetrics7d.roas.toFixed(2)),
+        mer_7d: mer === "N/A" ? null : Number(mer),
+        cpa_7d: Math.round(accountMetrics7d.cpa),
+        ctr_7d: Number(accountMetrics7d.ctr.toFixed(2)),
+        cpm_7d: Math.round(accountMetrics7d.cpm),
+        purchases_7d: accountMetrics7d.purchases,
+        active_ads: totalAds,
+        fatigued_ads: (fatiguedAds || []).length,
+        pending_recommendations: (pendingRecs || []).length,
+        agent_level: agentStatus.autonomy_level,
+        agent_accuracy: agentStatus.accuracy_30d,
+      },
+
+      log_entry: `## [${today}] ingest | Daily Report — MER: ${mer}x, Ads: ${totalAds}`,
+    };
+
     return new Response(
       JSON.stringify({
         organization: org,
@@ -355,6 +435,7 @@ serve(async (req) => {
         })),
         monthly_targets: monthlyTargets,
         prophit_system: prophitSystem,
+        vault_ingest: vaultIngest,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
