@@ -315,6 +315,7 @@ const UgcCreatorsPage: React.FC = () => {
               onCampaignClick={handleCampaignClick}
               onStatusChange={(id, status) => handleCampaignStatusChange(id, status)}
               onOrderClick={handleOrderClick}
+              getTagsForCreator={getTagsForCreator}
             />
           </TabsContent>
         </Tabs>
