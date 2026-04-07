@@ -146,7 +146,8 @@ async function fetchNewCustomerPercentage(
 
 function aggregateByAd(
   rows: any[],
-  newCustomerPct: number
+  newCustomerPct: number,
+  endDate: string
 ): AdPerformanceRow[] {
   const grouped = new Map<string, any[]>();
 
@@ -232,6 +233,40 @@ function aggregateByAd(
 
     const latest = sorted[sorted.length - 1];
 
+    // Determine phase based on spend within the selected date range
+    let phase: string;
+    if (spend === 0) {
+      phase = 'inactive';
+    } else {
+      // Find the most recent date with spend
+      const daysWithSpend = dailyData.filter(d => d.spend > 0);
+      const lastSpendDate = daysWithSpend.length > 0
+        ? daysWithSpend[daysWithSpend.length - 1].date
+        : null;
+
+      if (!lastSpendDate) {
+        phase = 'inactive';
+      } else {
+        // Check if last spend is within 3 days of the end of the selected range
+        const endMs = new Date(endDate + 'T23:59:59').getTime();
+        const lastSpendMs = new Date(lastSpendDate + 'T00:00:00').getTime();
+        const daysSinceLastSpend = Math.floor((endMs - lastSpendMs) / (1000 * 60 * 60 * 24));
+
+        if (daysSinceLastSpend <= 3) {
+          phase = 'active';
+        } else {
+          // Ad had spend in the range but stopped >3 days before end
+          if (roas >= 2.0) {
+            phase = 'scaling';
+          } else if (roas >= 1.0) {
+            phase = 'mature';
+          } else {
+            phase = 'declining';
+          }
+        }
+      }
+    }
+
     result.push({
       ad_id: adId,
       ad_name: latest.ad_name || '',
@@ -274,6 +309,7 @@ function aggregateByAd(
       checkout_rate: checkoutRate,
       trend,
       dailyData,
+      phase,
     });
   }
 
@@ -319,7 +355,7 @@ async function fetchAdPerformance(
   // Fetch new customer revenue percentage from Shopify data
   const newCustomerPct = await fetchNewCustomerPercentage(orgId, startStr, endStr);
 
-  return aggregateByAd(allData, newCustomerPct);
+  return aggregateByAd(allData, newCustomerPct, endStr);
 }
 
 export function useAdPerformance(

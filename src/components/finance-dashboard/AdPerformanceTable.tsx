@@ -127,6 +127,12 @@ const AdPerformanceTable: React.FC<Props> = ({
 
   const hasTags = tagsMap && tagsMap.size > 0;
 
+  // Global new customer % (same value for all ads since it comes from Shopify)
+  const globalNewPct = useMemo(() => {
+    if (ads.length === 0) return '0.0';
+    return (ads[0].new_customer_pct * 100).toFixed(1);
+  }, [ads]);
+
   // Get unique campaigns
   const campaigns = useMemo(() => {
     const set = new Set(ads.map((a) => a.campaign_name).filter(Boolean));
@@ -188,8 +194,8 @@ const AdPerformanceTable: React.FC<Props> = ({
         aVal = tagsMap?.get(a.ad_id)?.audience_type || '';
         bVal = tagsMap?.get(b.ad_id)?.audience_type || '';
       } else if (sortKey === 'phase') {
-        aVal = lifecycleMap?.get(a.ad_id)?.current_status || '';
-        bVal = lifecycleMap?.get(b.ad_id)?.current_status || '';
+        aVal = a.phase || '';
+        bVal = b.phase || '';
       } else {
         aVal = (a as any)[sortKey] ?? 0;
         bVal = (b as any)[sortKey] ?? 0;
@@ -203,7 +209,7 @@ const AdPerformanceTable: React.FC<Props> = ({
 
       return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
     });
-  }, [filtered, sortKey, sortDir, tagsMap, lifecycleMap]);
+  }, [filtered, sortKey, sortDir, tagsMap]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -307,8 +313,19 @@ const AdPerformanceTable: React.FC<Props> = ({
               </SelectContent>
             </Select>
           )}
-          <span className="text-xs text-gray-400 ml-auto">
-            {sorted.length} ads
+          <span className="text-xs text-gray-400 ml-auto flex items-center gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-gray-500">
+                  <Info className="h-3 w-3" />
+                  New Cust: {globalNewPct}%
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="text-xs">% global de ingresos de clientes nuevos en el periodo (calculado desde Shopify). Se aplica a todos los ads para estimar AMER.</p>
+              </TooltipContent>
+            </Tooltip>
+            <span>{sorted.length} ads</span>
           </span>
         </div>
 
@@ -327,9 +344,7 @@ const AdPerformanceTable: React.FC<Props> = ({
                     Tags
                   </th>
                 )}
-                {lifecycleMap && lifecycleMap.size > 0 && (
-                  <TH colKey="phase" label="Phase" />
-                )}
+                <TH colKey="phase" label="Phase" />
                 <TH colKey="spend" label="Spend" />
                 <th
                   className="px-2 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none whitespace-nowrap"
@@ -345,11 +360,12 @@ const AdPerformanceTable: React.FC<Props> = ({
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">
                       <p className="text-xs font-medium">Acquisition Marketing Efficiency Ratio</p>
-                      <p className="text-xs text-gray-400 mt-0.5">NC-ROAS: New Customer Revenue / Ad Spend. Usa un % estimado global de clientes nuevos desde Shopify.</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        AMER estimado: usa el % global de nuevos clientes de Shopify ({globalNewPct}%) aplicado al revenue de cada ad. No es atribucion per-ad.
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 </th>
-                <TH colKey={'new_customer_pct' as SortKey} label="New %" />
                 <TH colKey="revenue" label="Revenue" />
                 <TH colKey="roas" label="ROAS" />
                 <TH colKey="purchases" label="Purch" />
@@ -453,24 +469,19 @@ const AdPerformanceTable: React.FC<Props> = ({
                           </td>
                         );
                       })()}
-                      {/* Phase */}
-                      {lifecycleMap && lifecycleMap.size > 0 && (() => {
-                        const lc = lifecycleMap?.get(ad.ad_id);
-                        return (
-                          <td className="px-2 py-2">
-                            {lc?.current_status ? (
-                              <Badge
-                                variant="secondary"
-                                className={`text-[10px] px-1.5 py-0 font-medium ${getPhaseBadgeClass(lc.current_status)}`}
-                              >
-                                {lc.current_status}
-                              </Badge>
-                            ) : (
-                              <span className="text-gray-300">-</span>
-                            )}
-                          </td>
-                        );
-                      })()}
+                      {/* Phase (computed client-side from spend in selected range) */}
+                      <td className="px-2 py-2">
+                        {ad.phase ? (
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] px-1.5 py-0 font-medium ${getPhaseBadgeClass(ad.phase)}`}
+                          >
+                            {ad.phase}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
                       {/* Spend */}
                       <td className="px-2 py-2 text-gray-900 font-medium whitespace-nowrap">
                         {formatCurrency(ad.spend)}
@@ -478,17 +489,6 @@ const AdPerformanceTable: React.FC<Props> = ({
                       {/* AMER (NC-ROAS) */}
                       <td className={`px-2 py-2 whitespace-nowrap ${getColorClass('amer', ad.amer)}`}>
                         {ad.amer.toFixed(2)}x
-                      </td>
-                      {/* New Customer % */}
-                      <td className="px-2 py-2 text-gray-600 whitespace-nowrap">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>{(ad.new_customer_pct * 100).toFixed(1)}%</span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-xs">
-                            <p className="text-xs">% estimado de ingresos de clientes nuevos (global del periodo desde Shopify)</p>
-                          </TooltipContent>
-                        </Tooltip>
                       </td>
                       {/* Revenue */}
                       <td className="px-2 py-2 text-gray-900 whitespace-nowrap">
