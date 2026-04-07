@@ -31,10 +31,22 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
   const getCampaignCount = (creatorId: string) =>
     campaigns.filter((c) => c.creator_id === creatorId).length;
 
+  // Creators with at least one non-cancelled campaign are already active — exclude from prospect kanban
+  const creatorsWithActiveCampaign = new Set(
+    campaigns
+      .filter((c) => c.status !== 'cancelado' && c.status !== 'completado')
+      .map((c) => c.creator_id)
+  );
+
   const getCreatorsForColumn = (status: CreatorStatus) => {
     if (status === 'negociando') {
-      // Include respondio_si creators in the negociando column
-      return creators.filter((c) => c.status === 'negociando' || c.status === 'respondio_si');
+      // Include respondio_si creators in the negociando column,
+      // but exclude any who already have an active campaign
+      return creators.filter(
+        (c) =>
+          (c.status === 'negociando' || c.status === 'respondio_si') &&
+          !creatorsWithActiveCampaign.has(c.id)
+      );
     }
     return creators.filter((c) => c.status === status);
   };

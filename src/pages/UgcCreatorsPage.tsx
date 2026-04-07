@@ -142,8 +142,18 @@ const UgcCreatorsPage: React.FC = () => {
 
   const handleCampaignSubmit = (data: any) => {
     if (!campaignCreatorId) return;
-    createCampaign.mutate({ ...data, creatorId: campaignCreatorId }, {
-      onSuccess: () => { setCampaignFormOpen(false); setCampaignCreatorId(null); },
+    const creatorIdSnapshot = campaignCreatorId;
+    createCampaign.mutate({ ...data, creatorId: creatorIdSnapshot }, {
+      onSuccess: () => {
+        setCampaignFormOpen(false);
+        setCampaignCreatorId(null);
+        // Auto-promote creator to 'activo' when their first campaign is created
+        const creator = creators.find((c) => c.id === creatorIdSnapshot);
+        const prospectStatuses: CreatorStatus[] = ['prospecto', 'contactado', 'negociando', 'respondio_si'];
+        if (creator && prospectStatuses.includes(creator.status as CreatorStatus)) {
+          updateCreatorStatus.mutate({ id: creatorIdSnapshot, status: 'activo' });
+        }
+      },
     });
   };
 
