@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, AlertTriangle, BarChart3, XCircle, DollarSign } from 'lucide-react';
+import { DollarSign, TrendingUp, ShoppingCart, Target, Banknote } from 'lucide-react';
 import { type AdPerformanceRow } from '@/hooks/useAdPerformance';
 
 interface Props {
@@ -7,78 +7,63 @@ interface Props {
   formatCurrency: (n: number) => string;
 }
 
-const MIN_SPEND_FOR_WORST = 20000;
-
 const AdPerformanceDiagnostics: React.FC<Props> = ({ ads, formatCurrency }) => {
   if (ads.length === 0) return null;
 
-  // Top ad by ROAS (must have spend > 0)
   const adsWithSpend = ads.filter((a) => a.spend > 0);
-  const topAd = adsWithSpend.length > 0
-    ? adsWithSpend.reduce((best, a) => (a.roas > best.roas ? a : best))
-    : null;
 
-  // Worst ad by ROAS with significant spend
-  const adsWithMinSpend = adsWithSpend.filter((a) => a.spend >= MIN_SPEND_FOR_WORST);
-  const worstAd = adsWithMinSpend.length > 0
-    ? adsWithMinSpend.reduce((worst, a) => (a.roas < worst.roas ? a : worst))
-    : null;
-
-  const activeCount = ads.length;
-  const problemCount = adsWithSpend.filter((a) => a.roas < 1.0).length;
-
-  // Unprofitable spend: % of total spend going to ads with ROAS < 1.0
+  // Portfolio-level metrics (Taylor Holiday style)
   const totalSpend = adsWithSpend.reduce((sum, a) => sum + a.spend, 0);
-  const unprofitableSpend = adsWithSpend
-    .filter((a) => a.roas < 1.0)
-    .reduce((sum, a) => sum + a.spend, 0);
-  const unprofitablePct = totalSpend > 0 ? (unprofitableSpend / totalSpend) * 100 : 0;
+  const totalRevenue = adsWithSpend.reduce((sum, a) => sum + a.revenue, 0);
+  const totalPurchases = adsWithSpend.reduce((sum, a) => sum + a.purchases, 0);
+  const blendedRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+  const avgCpa = totalPurchases > 0 ? totalSpend / totalPurchases : 0;
 
   const cards = [
     {
-      icon: <Trophy className="h-4 w-4 text-green-600" />,
-      label: 'Top Ad (ROAS)',
-      value: topAd ? `${topAd.roas.toFixed(2)}x` : '-',
-      detail: topAd?.ad_name || '',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200',
-      textColor: 'text-green-700',
-    },
-    {
-      icon: <XCircle className="h-4 w-4 text-red-600" />,
-      label: 'Peor Ad (ROAS)',
-      value: worstAd ? `${worstAd.roas.toFixed(2)}x` : '-',
-      detail: worstAd?.ad_name || `Sin ads con gasto > ${formatCurrency(MIN_SPEND_FOR_WORST)}`,
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-      textColor: 'text-red-700',
-    },
-    {
-      icon: <DollarSign className="h-4 w-4 text-orange-600" />,
-      label: 'Gasto No Rentable',
-      value: `${unprofitablePct.toFixed(0)}%`,
-      detail: `${formatCurrency(unprofitableSpend)} en ads con ROAS < 1.0x`,
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200',
-      textColor: 'text-orange-700',
-    },
-    {
-      icon: <BarChart3 className="h-4 w-4 text-blue-600" />,
-      label: 'Ads Activos',
-      value: activeCount.toString(),
-      detail: '',
+      icon: <Banknote className="h-4 w-4 text-blue-600" />,
+      label: 'Ad Spend',
+      value: formatCurrency(totalSpend),
+      detail: `${adsWithSpend.length} ads con gasto`,
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200',
       textColor: 'text-blue-700',
     },
     {
-      icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
-      label: 'Ads Problema',
-      value: problemCount.toString(),
-      detail: 'ROAS < 1.0x',
-      bgColor: 'bg-amber-50',
-      borderColor: 'border-amber-200',
-      textColor: 'text-amber-700',
+      icon: <DollarSign className="h-4 w-4 text-green-600" />,
+      label: 'Revenue',
+      value: formatCurrency(totalRevenue),
+      detail: '',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-200',
+      textColor: 'text-green-700',
+    },
+    {
+      icon: <TrendingUp className="h-4 w-4 text-emerald-600" />,
+      label: 'Blended ROAS',
+      value: `${blendedRoas.toFixed(2)}x`,
+      detail: 'Revenue / Ad Spend',
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-200',
+      textColor: 'text-emerald-700',
+    },
+    {
+      icon: <ShoppingCart className="h-4 w-4 text-purple-600" />,
+      label: 'Purchases',
+      value: totalPurchases.toLocaleString(),
+      detail: '',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-200',
+      textColor: 'text-purple-700',
+    },
+    {
+      icon: <Target className="h-4 w-4 text-orange-600" />,
+      label: 'CPA Promedio',
+      value: formatCurrency(avgCpa),
+      detail: 'Costo por compra',
+      bgColor: 'bg-orange-50',
+      borderColor: 'border-orange-200',
+      textColor: 'text-orange-700',
     },
   ];
 
