@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 import type { UgcCreator, UgcCreatorFormData } from '@/types/ugc';
+import { useUgcCreatorTags } from '@/hooks/useUgcCreatorTags';
 
 interface UgcCreatorFormProps {
   open: boolean;
@@ -42,6 +43,9 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
   const [platform, setPlatform] = useState(creator?.platform || 'instagram');
   const [contentTypes, setContentTypes] = useState<string[]>(creator?.content_types || []);
   const [tiktokHandle, setTiktokHandle] = useState(creator?.tiktok_handle || '');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+
+  const { tags: allTags } = useUgcCreatorTags();
 
   React.useEffect(() => {
     if (open) {
@@ -56,8 +60,15 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
       setPlatform(creator?.platform || 'instagram');
       setContentTypes(creator?.content_types || []);
       setTiktokHandle(creator?.tiktok_handle || '');
+      setSelectedTagIds([]); // reset tags on open
     }
   }, [open, creator]);
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
 
   const toggleContentType = (type: string) => {
     setContentTypes((prev) =>
@@ -80,6 +91,7 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
       platform: platform || 'instagram',
       content_types: contentTypes.length > 0 ? contentTypes : undefined,
       tiktok_handle: tiktokHandle.replace('@', '').trim() || undefined,
+      tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
     });
   };
 
@@ -174,6 +186,44 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
             <Label htmlFor="notes">Notas</Label>
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
           </div>
+
+          {/* Tag picker — only shown when creating (not editing), and only if there are tags */}
+          {!creator && allTags.length > 0 && (
+            <div className="space-y-2">
+              <Label>Etiquetas</Label>
+              <div className="flex flex-wrap gap-2">
+                {allTags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.id)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                        isSelected
+                          ? 'text-white border-transparent'
+                          : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
+                      }`}
+                      style={isSelected ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                      {isSelected && <X className="h-3 w-3" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedTagIds.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedTagIds.length} etiqueta{selectedTagIds.length > 1 ? 's' : ''} seleccionada{selectedTagIds.length > 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar

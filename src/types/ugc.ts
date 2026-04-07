@@ -17,6 +17,7 @@ export interface UgcCreator {
   content_types: string[] | null;
   tiktok_handle: string | null;
   last_contact_date: string | null;
+  access_code: string | null;
   created_at: string;
   updated_at: string;
 
@@ -135,6 +136,7 @@ export interface UgcCreatorFormData {
   platform?: string;
   content_types?: string[];
   tiktok_handle?: string;
+  tagIds?: string[];
 }
 
 export interface UgcCampaignFormData {

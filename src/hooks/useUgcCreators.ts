@@ -51,6 +51,15 @@ export const useUgcCreators = () => {
         .select()
         .single();
       if (error) throw error;
+
+      // Assign tags immediately after creation
+      if (formData.tagIds && formData.tagIds.length > 0 && data?.id) {
+        await supabase.from('ugc_creator_tag_assignments').insert(
+          formData.tagIds.map((tagId) => ({ creator_id: data.id, tag_id: tagId }))
+        );
+        queryClient.invalidateQueries({ queryKey: ['ugc-creator-tag-assignments'] });
+      }
+
       return data;
     },
     onSuccess: () => {
