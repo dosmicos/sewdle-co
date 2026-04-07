@@ -1,6 +1,7 @@
--- Fix: Sync last 3 days instead of just today to capture delayed Meta attributions
+-- Fix: Sync last 3 days every 30 min to capture delayed Meta attributions
 -- Meta can update attribution data up to 7 days after the event, so syncing
 -- the last 3 days ensures recent conversions are not missed.
+-- Runs every 30 min (7am-11pm Colombia) for fresher data.
 
 -- Remove existing cron job
 SELECT cron.unschedule('sync-meta-ads-hourly')
@@ -8,10 +9,10 @@ WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'sync-meta-ads-hourly'
 );
 
--- Re-create with 3-day lookback window (CURRENT_DATE - 2 to CURRENT_DATE)
+-- Re-create with 3-day lookback window every 30 min
 SELECT cron.schedule(
   'sync-meta-ads-hourly',
-  '0 12-23,0-4 * * *',
+  '*/30 12-23,0-4 * * *',
   $$
   SELECT net.http_post(
     url := 'https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/sync-meta-ad-performance',
