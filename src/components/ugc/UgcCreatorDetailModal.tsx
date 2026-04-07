@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -32,6 +32,25 @@ interface UgcCreatorDetailModalProps {
   onVideoStatusChange: (videoId: string, status: string, feedback?: string) => void;
   onVideoPublicationChange: (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean, currentStatus?: string) => void;
   onDelete?: () => void;
+}
+
+function AccessCodeChip({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-2.5 py-1 text-xs font-mono font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+      title="Código de acceso para ads.dosmicos.com — click para copiar"
+    >
+      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+      {code}
+    </button>
+  );
 }
 
 export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
@@ -282,7 +301,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           {/* Action buttons row */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
             <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
-            <DiscountLinkButton creatorId={creator.id} creatorName={creator.name} />
+            <DiscountLinkButton creatorId={creator.id} creatorName={creator.name} accessCode={creator.access_code} />
             <Button variant="outline" size="sm" onClick={onEdit}>
               <Edit className="h-3.5 w-3.5 mr-1" /> Editar
             </Button>
@@ -296,6 +315,9 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
               </Button>
             )}
             <div className="flex-1" />
+            {creator.access_code && (
+              <AccessCodeChip code={creator.access_code} />
+            )}
             {onDelete && (
               <Button
                 variant="outline"
@@ -336,6 +358,24 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                 <span className="text-muted-foreground">Ciudad:</span>
                 <p className="font-medium">{creator.city || '—'}</p>
               </div>
+              {creator.access_code && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Código de acceso (ads.dosmicos.com):</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="font-mono font-bold tracking-widest text-sm bg-muted px-2 py-0.5 rounded">
+                      {creator.access_code}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(creator.access_code);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+              )}
               <div>
                 <span className="text-muted-foreground">Plataforma:</span>
                 <p className="font-medium capitalize">{creator.platform || 'Instagram'}</p>

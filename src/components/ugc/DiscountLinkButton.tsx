@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Link2, Copy, Check, ShoppingBag, DollarSign, TrendingUp,
-  Trash2, PowerOff, Power, AlertCircle, Wallet, CreditCard, Smartphone, History,
+  Trash2, PowerOff, Power, AlertCircle, Wallet, CreditCard, Smartphone, History, KeyRound,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -15,9 +15,30 @@ import { useUgcDiscountLinks } from '@/hooks/useUgcDiscountLinks';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 
+function AccessCodeBadge({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="flex items-center gap-1.5 shrink-0 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-2.5 py-1.5 text-xs font-mono font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+      title="Código de acceso para ads.dosmicos.com — click para copiar"
+    >
+      <KeyRound className="h-3 w-3 text-gray-400" />
+      {code}
+      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-gray-400" />}
+    </button>
+  );
+}
+
 interface DiscountLinkButtonProps {
   creatorId: string;
   creatorName: string;
+  accessCode?: string | null;
 }
 
 const formatCOP = (amount: number) =>
@@ -29,7 +50,7 @@ const PAYOUT_TYPES = [
   { value: 'other', label: 'Otro', icon: DollarSign },
 ] as const;
 
-export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorId, creatorName }) => {
+export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorId, creatorName, accessCode }) => {
   const [open, setOpen] = useState(false);
   const [discountValue, setDiscountValue] = useState(10);
   const [commissionRate, setCommissionRate] = useState(10);
@@ -138,12 +159,19 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Link de Compras — {creatorName}</DialogTitle>
-            <DialogDescription>
-              {hasLink
-                ? 'Link único de descuento para compartir en redes. El cliente nunca ve el código de Shopify.'
-                : 'Crea un link personalizado que aplica un descuento automáticamente al cliente.'}
-            </DialogDescription>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <DialogTitle>Link de Compras — {creatorName}</DialogTitle>
+                <DialogDescription className="mt-1">
+                  {hasLink
+                    ? 'Link único de descuento para compartir en redes. El cliente nunca ve el código de Shopify.'
+                    : 'Crea un link personalizado que aplica un descuento automáticamente al cliente.'}
+                </DialogDescription>
+              </div>
+              {accessCode && (
+                <AccessCodeBadge code={accessCode} />
+              )}
+            </div>
           </DialogHeader>
 
           {loading ? (
