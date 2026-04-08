@@ -13,6 +13,7 @@ import FourQuarterChart from '@/components/finance-dashboard/FourQuarterChart';
 import BusinessMetricsRow from '@/components/finance-dashboard/BusinessMetricsRow';
 import CustomerHealthSection from '@/components/finance-dashboard/CustomerHealthSection';
 import ForecastChart from '@/components/finance-dashboard/ForecastChart';
+import AdSpendPaceChart from '@/components/finance-dashboard/AdSpendPaceChart';
 import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
 import { useStoreMetrics } from '@/hooks/useStoreMetrics';
 import { useAdMetrics } from '@/hooks/useAdMetrics';
@@ -372,6 +373,11 @@ const FinanceDashboardPage: React.FC = () => {
             formatCOP={formatCOP}
           />
           <ForecastChart
+            cmData={cmData}
+            target={monthlyTargets.target}
+            formatCOP={formatCOP}
+          />
+          <AdSpendPaceChart
             cmData={cmData}
             target={monthlyTargets.target}
             formatCOP={formatCOP}
