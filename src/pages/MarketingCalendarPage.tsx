@@ -23,6 +23,8 @@ import MarketingCalendarView from '@/components/marketing-calendar/MarketingCale
 import { useMarketingEvents } from '@/hooks/useMarketingEvents';
 import { useMarketingActivity } from '@/hooks/useMarketingActivity';
 import { useHolidaySuggestions } from '@/hooks/useHolidaySuggestions';
+import { useContentFormats } from '@/hooks/useContentFormats';
+import type { ContentFormat } from '@/hooks/useContentFormats';
 import type { MarketingEvent, MarketingEventInput, EventType, ImpactLevel, PeakPhase, ContentType, Platform, EventStatus } from '@/hooks/useMarketingEvents';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -391,6 +393,7 @@ const defaultForm: MarketingEventInput = {
   peak_phase: null,
   learnings: null,
   content_type: null,
+  content_format_id: null,
   platform: null,
   status: 'idea',
   assigned_to: null,
@@ -407,6 +410,7 @@ const MarketingCalendarPage: React.FC = () => {
   const { events, isLoading, addEvent, updateEvent, deleteEvent, calculateAttribution } =
     useMarketingEvents();
   const { suggestions, suggestedCount: pendingSuggestions } = useHolidaySuggestions();
+  const { activeFormats, addFormat } = useContentFormats();
   const { newCount: pendingIdeas } = useContentIdeas();
   const { teamMembers } = useTeamMembers();
 
@@ -588,6 +592,7 @@ const MarketingCalendarPage: React.FC = () => {
       peak_phase: event.peak_phase,
       learnings: event.learnings,
       content_type: event.content_type || null,
+      content_format_id: event.content_format_id || null,
       platform: event.platform || null,
       status: event.status || 'idea',
       assigned_to: event.assigned_to || null,
@@ -876,6 +881,14 @@ const MarketingCalendarPage: React.FC = () => {
                                 {CONTENT_TYPE_CONFIG[ev.content_type].label}
                               </Badge>
                             )}
+                            {ev.content_format_id && (() => {
+                              const fmt = activeFormats.find(f => f.id === ev.content_format_id);
+                              return fmt ? (
+                                <Badge variant="outline" className="text-[10px] px-1.5">
+                                  {fmt.name}
+                                </Badge>
+                              ) : null;
+                            })()}
                             {ev.status && (
                               <Badge
                                 variant="secondary"
@@ -1375,7 +1388,7 @@ const MarketingCalendarPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[13px] font-medium text-slate-700">Formato</Label>
+                  <Label className="text-[13px] font-medium text-slate-700">Tipo de pieza</Label>
                   <select
                     value={form.content_type || ''}
                     onChange={(e) =>
@@ -1407,6 +1420,24 @@ const MarketingCalendarPage: React.FC = () => {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium text-slate-700">Formato estratégico</Label>
+                <select
+                  value={form.content_format_id || ''}
+                  onChange={(e) =>
+                    updateForm('content_format_id', e.target.value || null)
+                  }
+                  className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+                >
+                  <option value="">Sin especificar</option>
+                  {activeFormats.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1.5">

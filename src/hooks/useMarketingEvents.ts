@@ -72,6 +72,7 @@ export interface MarketingEvent {
   assets_needed: string | null;
   assets_url: string | null;
   approval_notes: string | null;
+  content_format_id: string | null;
 }
 
 export type MarketingEventInput = {
@@ -100,6 +101,7 @@ export type MarketingEventInput = {
   assets_needed?: string | null;
   assets_url?: string | null;
   approval_notes?: string | null;
+  content_format_id?: string | null;
   // These can be set manually or via calculateAttribution
   attributed_revenue?: number | null;
   attributed_orders?: number | null;
