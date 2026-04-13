@@ -24,25 +24,25 @@ ALTER TABLE content_formats ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view content formats of their org"
   ON content_formats FOR SELECT
   USING (organization_id IN (
-    SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM organization_users WHERE user_id = auth.uid()
   ));
 
 CREATE POLICY "Users can insert content formats for their org"
   ON content_formats FOR INSERT
   WITH CHECK (organization_id IN (
-    SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM organization_users WHERE user_id = auth.uid()
   ));
 
 CREATE POLICY "Users can update content formats of their org"
   ON content_formats FOR UPDATE
   USING (organization_id IN (
-    SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM organization_users WHERE user_id = auth.uid()
   ));
 
 CREATE POLICY "Users can delete content formats of their org"
   ON content_formats FOR DELETE
   USING (organization_id IN (
-    SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM organization_users WHERE user_id = auth.uid()
   ));
 
 -- Agregar columna content_format_id a marketing_events
