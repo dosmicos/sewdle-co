@@ -405,6 +405,98 @@ const defaultForm: MarketingEventInput = {
   approval_notes: null,
 };
 
+// ─── Content Format Picker ────────────────────────────────
+
+const ContentFormatPicker: React.FC<{
+  value: string | null;
+  formats: ContentFormat[];
+  onChange: (id: string | null) => void;
+  onCreateFormat: (name: string) => Promise<void>;
+}> = ({ value, formats, onChange, onCreateFormat }) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      await onCreateFormat(trimmed);
+      setNewName('');
+      setIsCreating(false);
+      toast.success(`Formato "${trimmed}" creado`);
+    } catch {
+      toast.error('Error al crear formato');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[13px] font-medium text-slate-700">Formato estratégico</Label>
+      {isCreating ? (
+        <div className="flex gap-2">
+          <Input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); handleCreate(); }
+              if (e.key === 'Escape') { setIsCreating(false); setNewName(''); }
+            }}
+            placeholder="Nombre del formato..."
+            className="h-10 text-sm flex-1"
+            disabled={saving}
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleCreate}
+            disabled={saving || !newName.trim()}
+            className="h-10 px-3"
+          >
+            {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => { setIsCreating(false); setNewName(''); }}
+            className="h-10 px-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <select
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value || null)}
+            className="flex-1 h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
+          >
+            <option value="">Sin especificar</option>
+            {formats.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setIsCreating(true)}
+            className="h-10 px-2 shrink-0"
+            title="Crear nuevo formato"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Page Component ───────────────────────────────────────
 const MarketingCalendarPage: React.FC = () => {
   const { events, isLoading, addEvent, updateEvent, deleteEvent, calculateAttribution } =
@@ -1422,23 +1514,15 @@ const MarketingCalendarPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-[13px] font-medium text-slate-700">Formato estratégico</Label>
-                <select
-                  value={form.content_format_id || ''}
-                  onChange={(e) =>
-                    updateForm('content_format_id', e.target.value || null)
-                  }
-                  className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-colors cursor-pointer"
-                >
-                  <option value="">Sin especificar</option>
-                  {activeFormats.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <ContentFormatPicker
+                value={form.content_format_id || null}
+                formats={activeFormats}
+                onChange={(id) => updateForm('content_format_id', id)}
+                onCreateFormat={async (name) => {
+                  const created = await addFormat({ name });
+                  updateForm('content_format_id', created.id);
+                }}
+              />
 
               <div className="space-y-1.5">
                 <Label className="text-[13px] font-medium text-slate-700">Plataformas</Label>
