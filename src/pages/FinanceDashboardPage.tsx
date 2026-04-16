@@ -14,6 +14,7 @@ import BusinessMetricsRow from '@/components/finance-dashboard/BusinessMetricsRo
 import CustomerHealthSection from '@/components/finance-dashboard/CustomerHealthSection';
 import ForecastChart from '@/components/finance-dashboard/ForecastChart';
 import AdSpendPaceChart from '@/components/finance-dashboard/AdSpendPaceChart';
+import PaymentGatewayChart from '@/components/finance-dashboard/PaymentGatewayChart';
 import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
 import { useStoreMetrics } from '@/hooks/useStoreMetrics';
 import { useAdMetrics } from '@/hooks/useAdMetrics';
@@ -23,6 +24,7 @@ import { useFinanceSettings } from '@/hooks/useFinanceSettings';
 import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
 import { useContributionMargin } from '@/hooks/useContributionMargin';
 import { useCustomerHealth } from '@/hooks/useCustomerHealth';
+import { usePaymentGatewayBreakdown } from '@/hooks/usePaymentGatewayBreakdown';
 import { useProductCosts } from '@/hooks/useProductCosts';
 import { useGatewayCosts } from '@/hooks/useGatewayCosts';
 import { useCostOverrides } from '@/hooks/useCostOverrides';
@@ -178,6 +180,8 @@ const FinanceDashboardPage: React.FC = () => {
     storeMetrics.current.orders,
     combinedAdMetrics.current.spend
   );
+
+  const paymentGatewayBreakdown = usePaymentGatewayBreakdown(dateRange.current);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metaModalOpen, setMetaModalOpen] = useState(false);
@@ -404,6 +408,17 @@ const FinanceDashboardPage: React.FC = () => {
           <CustomerHealthSection
             data={customerHealth.data}
             isLoading={customerHealth.isLoading}
+            formatCOP={formatCOP}
+          />
+        </section>
+
+        {/* ========== SECTION 4.5: PAYMENT GATEWAYS ========== */}
+        <section>
+          <PaymentGatewayChart
+            rows={paymentGatewayBreakdown.rows}
+            totalOrders={paymentGatewayBreakdown.totalOrders}
+            totalRevenue={paymentGatewayBreakdown.totalRevenue}
+            isLoading={paymentGatewayBreakdown.isLoading}
             formatCOP={formatCOP}
           />
         </section>
