@@ -96,6 +96,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const [isResyncingFulfillment, setIsResyncingFulfillment] = useState(false);
   const [showExpressCodeDialog, setShowExpressCodeDialog] = useState(false);
   const [expressDeliveryCode, setExpressDeliveryCode] = useState('');
+  const [packError, setPackError] = useState<string | null>(null);
+  const [isRetryingPack, setIsRetryingPack] = useState(false);
 
   // Shopify note sync UX (auto-save + background sync)
   const [shopifyNoteSaveState, setShopifyNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'pending_sync'>('idle');
@@ -333,6 +335,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       updateOrderOptimistically(() => updatedOrder);
     } catch (error) {
       console.error('❌ Error fetching order:', error);
+      throw error;
     } finally {
       setLoadingOrder(false);
     }
@@ -418,6 +421,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setShowScrollHint(false);
     setShowExpressCodeDialog(false);
     setExpressDeliveryCode('');
+    setPackError(null);
+    setIsRetryingPack(false);
 
     // Reset guards for new order (allow pack/print for the new order)
     autoPackTriggeredRef.current = null;
@@ -777,9 +782,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       
     } catch (error) {
       console.error('Error updating status:', error);
-      // ONLY on error: Refetch to get actual state and rollback
-      await refetchOrder(orderId);
-      throw error; // Propagar error para que handleMarkAsPackedAndPrint lo capture
+      // ONLY on error: Refetch to get actual state and rollback.
+      // Never let a refetch failure mask the original error.
+      try {
+        await refetchOrder(orderId);
+      } catch (refetchError) {
+        console.error('⚠️ Refetch también falló durante rollback:', refetchError);
+      }
+      throw error; // Propagar error ORIGINAL para que handleMarkAsPackedAndPrint lo capture
     } finally {
       if (statusUpdateWatchdogRef.current) {
         window.clearTimeout(statusUpdateWatchdogRef.current);
@@ -1031,26 +1041,51 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     
     // Lock to prevent duplicate execution
     packInFlightRef.current = true;
+    setPackError(null);
 
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
 
-    // FIRST: Update status and tags (must succeed before printing)
-    try {
-      await handleStatusChange('ready_to_ship');
+    const MAX_ATTEMPTS = 2;
+    const RETRY_BACKOFF_MS = 1500;
+    let lastError: unknown = null;
 
-      // ONLY print after status change succeeds
-      if (autoPrintTriggeredRef.current !== orderId) {
-        autoPrintTriggeredRef.current = orderId;
-        handlePrint();
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        if (attempt > 1) {
+          setIsRetryingPack(true);
+          console.log(`🔁 Reintentando marcar como empacado (intento ${attempt}/${MAX_ATTEMPTS})`);
+        }
+        await handleStatusChange('ready_to_ship');
+
+        // SUCCESS: print once and exit
+        if (autoPrintTriggeredRef.current !== orderId) {
+          autoPrintTriggeredRef.current = orderId;
+          handlePrint();
+        }
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ Error al marcar como empacado (intento ${attempt}/${MAX_ATTEMPTS}):`, error);
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((resolve) => window.setTimeout(resolve, RETRY_BACKOFF_MS));
+        }
       }
-    } catch (error) {
-      console.error('❌ Error al marcar como empacado:', error);
-      toast.error('❌ Error al aplicar etiqueta EMPACADO. NO se imprimió. Intenta de nuevo.', {
+    }
+
+    setIsRetryingPack(false);
+
+    if (lastError) {
+      const message = lastError instanceof Error ? lastError.message : 'Error desconocido';
+      setPackError(message);
+      // Allow retry (manual button or re-scan)
+      autoPackTriggeredRef.current = null;
+      toast.error('❌ No se pudo aplicar etiqueta EMPACADO. NO se imprimió. Usa "Reintentar".', {
         duration: 8000,
       });
-    } finally {
-      packInFlightRef.current = false;
     }
+
+    packInFlightRef.current = false;
   }, [orderId, localOrder, handlePrint, handleStatusChange, isExpressShipping]);
 
   // Handler for Express orders - fulfill with delivery code
@@ -1121,8 +1156,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
         };
         setLocalOrder(updatedOrder);
         updateOrderOptimistically(() => updatedOrder);
-        
-        await refetchOrder(orderId);
+
+        try {
+          await refetchOrder(orderId);
+        } catch (refetchError) {
+          console.warn('⚠️ Refetch post-Express falló (fulfillment ya fue exitoso):', refetchError);
+        }
       } else {
         throw new Error(data?.error || 'Error procesando pedido Express');
       }
@@ -1208,8 +1247,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           ...prev,
           operational_status: 'awaiting_pickup' as OperationalStatus
         } : prev);
-        
-        await refetchOrder(orderId);
+
+        try {
+          await refetchOrder(orderId);
+        } catch (refetchError) {
+          console.warn('⚠️ Refetch post-pickup falló (operación ya fue exitosa):', refetchError);
+        }
       } else {
         throw new Error(data?.error || 'Error procesando pedido');
       }
@@ -1253,8 +1296,12 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           shipped_at: new Date().toISOString(),
           shipped_by: user?.id
         } : prev);
-        
-        await refetchOrder(orderId);
+
+        try {
+          await refetchOrder(orderId);
+        } catch (refetchError) {
+          console.warn('⚠️ Refetch post-entrega falló (operación ya fue exitosa):', refetchError);
+        }
       } else {
         throw new Error(data?.error || 'Error confirmando entrega');
       }
@@ -1769,12 +1816,42 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                     </div>
                   )}
                   
+                  {/* Error banner: auto-pack failed, allow manual retry */}
+                  {packError && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'awaiting_pickup' && effectiveOrder.operational_status !== 'shipped' && (
+                    <div className="p-3 bg-red-50 border-2 border-red-400 rounded-lg space-y-2">
+                      <div className="flex items-start gap-2 text-red-700">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <div className="font-bold">No se pudo marcar como empacado</div>
+                          <div className="text-sm text-red-600 mt-0.5">
+                            {packError.includes('Shopify') || packError.includes('Timeout')
+                              ? 'Falló la sincronización con Shopify. El pedido NO se imprimió.'
+                              : packError}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setPackError(null);
+                          autoPackTriggeredRef.current = null;
+                          handleMarkAsPackedAndPrint();
+                        }}
+                        disabled={updatingStatus || packInFlightRef.current}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white"
+                        size="sm"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Reintentar
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Success message when all items verified */}
-                  {allItemsVerified && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'awaiting_pickup' && effectiveOrder.operational_status !== 'shipped' && (
+                  {!packError && allItemsVerified && effectiveOrder.operational_status !== 'ready_to_ship' && effectiveOrder.operational_status !== 'awaiting_pickup' && effectiveOrder.operational_status !== 'shipped' && (
                     <div className="p-3 bg-green-100 border-2 border-green-400 rounded-lg animate-pulse">
                       <div className="flex items-center justify-center gap-2 text-green-700 font-bold">
                         <CheckCircle className="w-5 h-5" />
-                        ¡Verificación completa! Marcando como empacado...
+                        {isRetryingPack ? 'Reintentando...' : '¡Verificación completa! Marcando como empacado...'}
                       </div>
                     </div>
                   )}
