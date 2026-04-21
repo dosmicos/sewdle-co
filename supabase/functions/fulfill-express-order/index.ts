@@ -167,16 +167,14 @@ Deno.serve(async (req) => {
     // Step 4: Update local database - picking_packing_orders
     console.log('💾 Actualizando estado local...');
     const now = new Date().toISOString();
-    
+
+    // Always update shipped fields
     const { error: updateError } = await supabase
       .from('picking_packing_orders')
       .update({
         operational_status: 'shipped',
         shipped_at: now,
         shipped_by: user_id || null,
-        // Also set packed_at/packed_by if not already set
-        packed_at: now,
-        packed_by: user_id || null,
       })
       .eq('shopify_order_id', shopify_order_id)
       .eq('organization_id', organization_id);
@@ -186,6 +184,17 @@ Deno.serve(async (req) => {
     } else {
       console.log('✅ Estado local actualizado a shipped');
     }
+
+    // Set packed_at/packed_by ONLY if not already set (step 1 of the 2-step flow sets them earlier)
+    await supabase
+      .from('picking_packing_orders')
+      .update({
+        packed_at: now,
+        packed_by: user_id || null,
+      })
+      .eq('shopify_order_id', shopify_order_id)
+      .eq('organization_id', organization_id)
+      .is('packed_at', null);
 
     // Step 5: Save delivery code to Shopify notes and send WhatsApp notification
     let notificationSent = false;
