@@ -199,7 +199,10 @@ const UgcPerformancePage: React.FC = () => {
                   filtered.map((creator, idx) => {
                     const avatarUrl = creator.instagram_handle
                       ? `https://unavatar.io/instagram/${creator.instagram_handle}`
+                      : creator.tiktok_handle
+                      ? `https://unavatar.io/tiktok/${creator.tiktok_handle}`
                       : null;
+                    const displayHandle = creator.instagram_handle || creator.tiktok_handle;
                     const rec = creator.recommendation
                       ? RECOMMENDATION_CONFIG[creator.recommendation]
                       : null;
@@ -231,7 +234,9 @@ const UgcPerformancePage: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <p className="font-medium text-xs truncate">{creator.name}</p>
-                              <p className="text-[10px] text-muted-foreground">@{creator.instagram_handle}</p>
+                              {displayHandle && (
+                                <p className="text-[10px] text-muted-foreground">@{displayHandle}</p>
+                              )}
                             </div>
                           </div>
                         </td>
