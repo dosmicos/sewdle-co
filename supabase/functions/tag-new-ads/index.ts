@@ -8,8 +8,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
-const MAX_ADS_PER_RUN = 20;
+const MAX_ADS_PER_RUN = 100;
 const AI_BATCH_SIZE = 10;
+const ACTIVE_WINDOW_DAYS = 30;
 
 // ─── Creative Content Types ────────────────────────────────────
 
@@ -59,10 +60,15 @@ function parseDestinationUrl(url: string | null) {
   }
 }
 
-function extractUGCHandle(adName: string | null): string | null {
-  if (!adName) return null;
-  const match = adName.match(/@([\w.]+)/);
-  return match ? `@${match[1]}` : null;
+function extractUGCHandle(
+  ...sources: (string | null | undefined)[]
+): string | null {
+  for (const src of sources) {
+    if (!src) continue;
+    const match = src.match(/@([\w.]+)/);
+    if (match) return `@${match[1]}`;
+  }
+  return null;
 }
 
 function preClassify(
@@ -254,17 +260,36 @@ serve(async (req) => {
     // Get all creative content
     const { data: allCreatives, error: creativesErr } = await supabase
       .from("ad_creative_content")
-      .select("ad_id, ad_name, primary_text, headline, description, destination_url, call_to_action, media_type, video_id, thumbnail_url, ugc_creator_handle, campaign_name")
+      .select("ad_id, ad_name, primary_text, headline, description, destination_url, call_to_action, media_type, video_id, thumbnail_url, ugc_creator_handle, campaign_name, adset_name")
       .eq("organization_id", organizationId);
 
     if (creativesErr) throw new Error(`ad_creative_content query failed: ${creativesErr.message}`);
 
-    // Filter to only untagged ads
-    const untaggedAds = (allCreatives || []).filter((c) => !taggedSet.has(c.ad_id));
+    // Get ad_ids that were active in the last ACTIVE_WINDOW_DAYS days.
+    // We skip tagging ads that have been dormant longer than that — they
+    // rarely come back, and it wastes AI tokens on stale creatives.
+    const activeCutoff = new Date();
+    activeCutoff.setDate(activeCutoff.getDate() - ACTIVE_WINDOW_DAYS);
+    const activeCutoffStr = activeCutoff.toISOString().split("T")[0];
+
+    const { data: activeLifecycle, error: lifecycleErr } = await supabase
+      .from("ad_lifecycle")
+      .select("ad_id")
+      .eq("organization_id", organizationId)
+      .gte("last_seen", activeCutoffStr);
+
+    if (lifecycleErr) throw new Error(`ad_lifecycle query failed: ${lifecycleErr.message}`);
+
+    const activeSet = new Set((activeLifecycle || []).map((a) => a.ad_id));
+
+    // Filter to only untagged ads that are currently/recently active
+    const untaggedAds = (allCreatives || []).filter(
+      (c) => !taggedSet.has(c.ad_id) && activeSet.has(c.ad_id)
+    );
     const batch = untaggedAds.slice(0, MAX_ADS_PER_RUN);
     const remaining = untaggedAds.length - batch.length;
 
-    console.log(`[tag-new-ads] Found ${untaggedAds.length} untagged ads, processing ${batch.length}`);
+    console.log(`[tag-new-ads] Found ${untaggedAds.length} untagged active ads (last ${ACTIVE_WINDOW_DAYS}d), processing ${batch.length}`);
 
     if (batch.length === 0) {
       return new Response(
@@ -297,7 +322,13 @@ serve(async (req) => {
       };
 
       const rules = preClassify(content, ad.ad_name, ad.campaign_name || null);
-      const ugcHandle = extractUGCHandle(ad.ad_name);
+      // Handle puede estar en ad_name, campaign_name o adset_name.
+      // Prioridad: ad_name > campaign_name > adset_name.
+      const ugcHandle = extractUGCHandle(
+        ad.ad_name,
+        ad.campaign_name,
+        ad.adset_name
+      );
 
       tagRecords.push({
         adId: ad.ad_id,

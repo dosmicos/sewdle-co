@@ -123,6 +123,9 @@ verify_jwt = false
 [functions.compute-ugc-scores]
 verify_jwt = false
 
+[functions.tag-new-ads]
+verify_jwt = false
+
 [functions.bold-payment-webhook]
 verify_jwt = false
 
@@ -146,3 +149,9 @@ verify_jwt = false
 
 [functions.delete-ugc-discount]
 verify_jwt = false
+
+[functions.sort-collection-products]
+verify_jwt = false
+
+[functions.agent-context]
+verify_jwt = true
