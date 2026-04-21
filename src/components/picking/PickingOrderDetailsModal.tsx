@@ -1000,13 +1000,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
   const handleMarkAsPackedAndPrint = useCallback(async () => {
-    // Guard: Express orders must go through the Express fulfillment flow
-    if (isExpressShipping) {
-      console.log('🚀 handleMarkAsPackedAndPrint: Redirigiendo a flujo Express');
-      setShowExpressCodeDialog(true);
-      return;
-    }
-
     // Guard: prevent duplicate execution
     if (packInFlightRef.current) {
       console.log('⚠️ handleMarkAsPackedAndPrint: Already in flight, skipping');
@@ -1096,13 +1089,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       return;
     }
     
-    // Guard: check if already packed/shipped
+    // Guard: check if already shipped (allow ready_to_ship — express now packs first, then enters code)
     const currentStatus = localOrder?.operational_status;
-    if (currentStatus === 'ready_to_ship' || currentStatus === 'awaiting_pickup' || currentStatus === 'shipped') {
+    if (currentStatus === 'awaiting_pickup' || currentStatus === 'shipped') {
       console.log(`⚠️ handleMarkAsPackedExpress: Order already ${currentStatus}, skipping`);
       return;
     }
-    
+
     if (!localOrder?.shopify_order?.shopify_order_id) {
       toast.error('Error: ID de Shopify no disponible');
       return;
@@ -1205,8 +1198,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       // Small delay to show the green verification before auto-packing
       const timer = setTimeout(() => {
         if (isExpressShipping) {
-          // Express: show delivery code dialog instead of auto-fulfilling
-          setShowExpressCodeDialog(true);
+          // Express: mark as packed + print immediately (code entry is a separate step via "Ingresar Codigo" button)
+          handleMarkAsPackedAndPrint();
         } else {
           // Standard: mark as ready_to_ship
           handleMarkAsPackedAndPrint();
@@ -2188,9 +2181,31 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           </div>
         )}
 
+        {/* Sticky Floating Action Button - "Ingresar Codigo" (Express orders after packing, before fulfillment) */}
+        {!effectiveOrder.shopify_order?.cancelled_at &&
+         effectiveOrder.operational_status === 'ready_to_ship' &&
+         isExpressShipping && (
+          <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
+            <Button
+              onClick={() => setShowExpressCodeDialog(true)}
+              disabled={isProcessingExpressFulfillment}
+              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
+            >
+              {isProcessingExpressFulfillment ? (
+                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+              ) : (
+                <>
+                  <Send className="w-4 h-4 md:w-5 md:h-5" />
+                  Ingresar Codigo
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
         {/* Sticky Floating Action Button - "Listo para Retiro" (pickup orders after packing) */}
-        {!effectiveOrder.shopify_order?.cancelled_at && 
-         effectiveOrder.operational_status === 'ready_to_ship' && 
+        {!effectiveOrder.shopify_order?.cancelled_at &&
+         effectiveOrder.operational_status === 'ready_to_ship' &&
          shippingType?.label === 'Recoger' && (
           <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
             <Button
