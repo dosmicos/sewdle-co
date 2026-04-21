@@ -169,6 +169,8 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
 
   const avatarUrl = creator.instagram_handle
     ? `https://unavatar.io/instagram/${creator.instagram_handle}`
+    : creator.tiktok_handle
+    ? `https://unavatar.io/tiktok/${creator.tiktok_handle}`
     : null;
 
   const creatorCampaigns = campaigns.filter((c) => c.creator_id === creator.id);

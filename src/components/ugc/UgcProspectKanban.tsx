@@ -132,7 +132,10 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
   const renderCreatorCard = (creator: UgcCreator, colStatus?: CreatorStatus) => {
     const avatarUrl = creator.instagram_handle
       ? `https://unavatar.io/instagram/${creator.instagram_handle}`
+      : creator.tiktok_handle
+      ? `https://unavatar.io/tiktok/${creator.tiktok_handle}`
       : null;
+    const displayHandle = creator.instagram_handle || creator.tiktok_handle;
     const creatorTags = getTagsForCreator?.(creator.id) ?? [];
     const campaignCount = getCampaignCount(creator.id);
     const campaignBadge = getCampaignStatusLabel(creator.id);
@@ -161,8 +164,8 @@ export const UgcProspectKanban: React.FC<UgcProspectKanbanProps> = ({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">{creator.name}</p>
-            {creator.instagram_handle && (
-              <p className="text-xs text-muted-foreground truncate">@{creator.instagram_handle}</p>
+            {displayHandle && (
+              <p className="text-xs text-muted-foreground truncate">@{displayHandle}</p>
             )}
             <p className="text-xs text-muted-foreground">{creator.instagram_followers?.toLocaleString() ?? 0} seguidores</p>
           </div>

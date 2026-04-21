@@ -23,6 +23,8 @@ export const CreatorPerformanceProfile: React.FC<CreatorPerformanceProfileProps>
 
   const avatarUrl = creator.instagram_handle
     ? `https://unavatar.io/instagram/${creator.instagram_handle}`
+    : creator.tiktok_handle
+    ? `https://unavatar.io/tiktok/${creator.tiktok_handle}`
     : null;
 
   const scoreData = [
@@ -58,7 +60,7 @@ export const CreatorPerformanceProfile: React.FC<CreatorPerformanceProfileProps>
                 <TierBadge tier={creator.tier} size="md" showLabel />
               </div>
               <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                {creator.instagram_handle && (
+                {creator.instagram_handle ? (
                   <a
                     href={`https://instagram.com/${creator.instagram_handle}`}
                     target="_blank"
@@ -67,7 +69,16 @@ export const CreatorPerformanceProfile: React.FC<CreatorPerformanceProfileProps>
                   >
                     @{creator.instagram_handle} <ExternalLink className="h-3 w-3" />
                   </a>
-                )}
+                ) : creator.tiktok_handle ? (
+                  <a
+                    href={`https://tiktok.com/@${creator.tiktok_handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                  >
+                    TikTok @{creator.tiktok_handle} <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : null}
                 <span className="text-xs font-bold text-foreground">
                   Score: {creator.overall_score?.toFixed(0) ?? '—'}/100
                 </span>

@@ -273,6 +273,8 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                 const activeCampaign = getPrimaryCampaign(creator.id);
                 const avatarUrl = creator.instagram_handle
                   ? `https://unavatar.io/instagram/${creator.instagram_handle}`
+                  : creator.tiktok_handle
+                  ? `https://unavatar.io/tiktok/${creator.tiktok_handle}`
                   : null;
                 const {
                   videosDelivered,
@@ -310,7 +312,11 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
                       )}
                     </TableCell>
                     <TableCell className="text-sm whitespace-nowrap">
-                      {creator.instagram_handle ? `@${creator.instagram_handle}` : '—'}
+                      {creator.instagram_handle
+                        ? `@${creator.instagram_handle}`
+                        : creator.tiktok_handle
+                        ? `TikTok @${creator.tiktok_handle}`
+                        : '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm whitespace-nowrap">
                       {creator.instagram_followers?.toLocaleString() || '0'}

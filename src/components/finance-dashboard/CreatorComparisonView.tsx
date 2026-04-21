@@ -58,6 +58,8 @@ export const CreatorComparisonView: React.FC<CreatorComparisonViewProps> = ({
           {creators.map((c, i) => {
             const avatarUrl = c.instagram_handle
               ? `https://unavatar.io/instagram/${c.instagram_handle}`
+              : c.tiktok_handle
+              ? `https://unavatar.io/tiktok/${c.tiktok_handle}`
               : null;
             return (
               <div key={c.id} className="flex-1 flex items-center gap-2 p-2 rounded-lg border border-border">
