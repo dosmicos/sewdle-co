@@ -22,13 +22,9 @@ import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
 import { useGoogleAdsConnection } from '@/hooks/useGoogleAdsConnection';
 import { useFinanceSettings } from '@/hooks/useFinanceSettings';
 import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
-import { useContributionMargin } from '@/hooks/useContributionMargin';
+import { useProphitMetrics } from '@/hooks/useProphitMetrics';
 import { useCustomerHealth } from '@/hooks/useCustomerHealth';
 import { usePaymentGatewayBreakdown } from '@/hooks/usePaymentGatewayBreakdown';
-import { useProductCosts } from '@/hooks/useProductCosts';
-import { useGatewayCosts } from '@/hooks/useGatewayCosts';
-import { useCostOverrides } from '@/hooks/useCostOverrides';
-import { useFinanceExpenses } from '@/hooks/useFinanceExpenses';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -68,9 +64,10 @@ const FinanceDashboardPage: React.FC = () => {
   const googleConnection = useGoogleAdsConnection();
   const financeSettings = useFinanceSettings();
   const monthlyTargets = useMonthlyTargets(dateRange.current.start);
-  const { products: productCostsList } = useProductCosts();
-  const { gateways: gatewayCostsList } = useGatewayCosts();
-  const { expenses } = useFinanceExpenses();
+  // Prophit metrics (Contribution Margin + pacing + COGS + fees + MER/AMER)
+  // come from the server-side `prophit-metrics` Edge Function so the dashboard
+  // and the Growth Manager agent share the same numbers.
+  const prophitMetrics = useProphitMetrics(dateRange.current, dateRange.previous);
 
   // Combine Meta + Google Ads into a single AdMetricsResult for Contribution Margin
   const combinedAdMetrics = React.useMemo(() => ({
@@ -133,45 +130,9 @@ const FinanceDashboardPage: React.FC = () => {
     isLoading: metaAds.isLoading || googleAds.isLoading,
   }), [metaAds, googleAds]);
 
-  // Compute per-product COGS and per-gateway fees for the selected date range
-  const { overrides: costOverrides } = useCostOverrides(
-    dateRange.current,
-    productCostsList,
-    gatewayCostsList,
-    financeSettings.settings?.cogs_mode || 'percent',
-    financeSettings.settings?.gateway_mode || 'percent',
-  );
-
-  // Compute monthly OpEx from individual expenses (replaces flat monthly_opex)
-  // Sum all monthly expense amounts to get the monthly total, then let CM hook prorate
-  const monthlyExpenseTotal = React.useMemo(() => {
-    if (expenses.length === 0) return undefined;
-    let monthlyTotal = 0;
-    for (const expense of expenses) {
-      switch (expense.recurrence) {
-        case 'monthly': monthlyTotal += expense.amount; break;
-        case 'weekly': monthlyTotal += expense.amount * (30.44 / 7); break;
-        case 'daily': monthlyTotal += expense.amount * 30.44; break;
-        case 'one_time': break; // One-time expenses not included in monthly OpEx
-      }
-    }
-    return monthlyTotal > 0 ? monthlyTotal : undefined;
-  }, [expenses]);
-
-  // Merge cost overrides: per-product COGS + per-gateway fees + computed expenses
-  const fullOverrides = React.useMemo(() => ({
-    ...costOverrides,
-    ...(monthlyExpenseTotal !== undefined && { customExpenses: monthlyExpenseTotal }),
-  }), [costOverrides, monthlyExpenseTotal]);
-
-  const cmData = useContributionMargin(
-    storeMetrics,
-    combinedAdMetrics,
-    financeSettings.settings,
-    monthlyTargets.target,
-    dateRange.current,
-    fullOverrides
-  );
+  // CM + all derived metrics now come from the server-side Edge Function
+  // (single source of truth shared with the Growth Manager).
+  const cmData = prophitMetrics.current;
 
   const customerHealth = useCustomerHealth(
     storeMetrics.current.newCustomerRevenue,
@@ -240,7 +201,7 @@ const FinanceDashboardPage: React.FC = () => {
     }
   };
 
-  if (storeMetrics.isLoading) {
+  if (storeMetrics.isLoading || prophitMetrics.isLoading) {
     return (
       <FinanceDashboardLayout onOpenSettings={() => setSettingsOpen(true)}>
         <div className="min-h-screen flex items-center justify-center">
@@ -250,12 +211,13 @@ const FinanceDashboardPage: React.FC = () => {
     );
   }
 
-  if (storeMetrics.error) {
+  const anyError = storeMetrics.error || prophitMetrics.error;
+  if (anyError) {
     return (
       <FinanceDashboardLayout onOpenSettings={() => setSettingsOpen(true)}>
         <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
           <p className="text-red-500 text-lg font-medium">Error al cargar los datos</p>
-          <p className="text-gray-500 text-sm">{String(storeMetrics.error)}</p>
+          <p className="text-gray-500 text-sm">{String(anyError)}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
