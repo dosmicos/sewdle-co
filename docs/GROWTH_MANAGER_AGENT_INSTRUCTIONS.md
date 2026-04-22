@@ -143,14 +143,22 @@ GET /rest/v1/ad_performance_daily?organization_id=eq.{ORG_ID}&date=gte.{7_DAYS_A
 
 #### Per-channel daily metrics (Meta + Google, for channel split)
 ```
-GET /rest/v1/ad_metrics_daily?organization_id=eq.{ORG_ID}&date=eq.{YYYY-MM-DD}&select=source,spend,revenue,purchases,conversions
+GET /rest/v1/ad_metrics_daily?organization_id=eq.{ORG_ID}&date=eq.{YYYY-MM-DD}&select=platform,spend,conversion_value,purchases,conversions,roas,cpa,cpc,cpm,ctr,impressions,clicks
 ```
 
-Group by `source` (`meta` / `google`) to get per-channel attributed revenue. Spend should match `metaSpend` / `googleSpend` from `/prophit-metrics` (if they diverge >2%, flag in the report — likely a sync lag).
+Group by `platform` (`meta` / `google_ads`) to get per-channel attributed metrics. The table stores one row per platform per day — no per-ad granularity here, that's what `ad_performance_daily` is for on the Meta side.
+
+**Column mapping** (the schema uses different names than you might expect):
+- `conversion_value` → **attributed revenue** (this is what you divide by spend to get channel ROAS)
+- `platform` values: `'meta'` and `'google_ads'` (note the underscore — NOT `'google'`)
+- `purchases` → conversion count (matches Meta Ads Manager / Google Ads conversions)
+- `roas` / `cpa` are **pre-calculated** in this table, but you can recompute from `conversion_value / spend` if you want to sanity-check.
+
+Spend should match `metaSpend` / `googleSpend` from `/prophit-metrics` within ~2% (sync timing differences). If it diverges by more than 2%, flag in the report — likely a sync lag or reconciliation issue.
 
 For month-to-date Google pacing:
 ```
-GET /rest/v1/ad_metrics_daily?organization_id=eq.{ORG_ID}&source=eq.google&date=gte.{YYYY-MM-01}&select=date,spend,revenue,purchases
+GET /rest/v1/ad_metrics_daily?organization_id=eq.{ORG_ID}&platform=eq.google_ads&date=gte.{YYYY-MM-01}&select=date,spend,conversion_value,purchases,roas
 ```
 
 #### Active learnings
@@ -215,7 +223,7 @@ Before calling any API, read the local knowledge base at `~/Documents/Dosmicos/d
 - Per-ad day-over-day deltas (spend, purchases, ROAS)
 
 **From `ad_metrics_daily` (Meta + Google channel split):**
-Group by `source` to get per-channel attributed revenue and purchases. Combine with `metaSpend` / `googleSpend` from `/prophit-metrics` to produce:
+Group by `platform` (`meta` + `google_ads`) to get per-channel attributed revenue (field: `conversion_value`) and purchases. Combine with `metaSpend` / `googleSpend` from `/prophit-metrics` to produce:
 
 ```
 Channel Split (yesterday)
@@ -230,9 +238,11 @@ Where:
 - Blended MER always comes from `/prophit-metrics` — do not recompute.
 
 **Google pacing (monthly):**
-- Sum `ad_metrics_daily.spend` WHERE `source = google` AND `date >= YYYY-MM-01` → `google_mtd_spend`
-- Read `monthly_targets`. If a `google_ad_spend_budget` field exists, use it. Otherwise, **approximate** Google's target share as `ad_spend_budget × (historical_google_pct_last_30d)`. Flag explicitly in the report when you're using the approximation vs a real target.
-- Compute: `google_pacing_pct = google_mtd_spend / google_target × (daysInMonth / daysElapsed)` — this is projected full-month spend vs target.
+- Sum `ad_metrics_daily.spend` WHERE `platform = 'google_ads'` AND `date >= YYYY-MM-01` → `google_mtd_spend`
+- Read `monthly_targets`. If `google_ad_spend_budget` is non-null, use it directly. Otherwise, **approximate** Google's target share as `ad_spend_budget × (google_pct_last_30d)` where `google_pct_last_30d` is Google's share of spend over the trailing 30 days. Flag explicitly in the report when you're using the approximation (`target_source: "approximated_from_30d_split"`) vs a real target (`target_source: "monthly_targets.google_ad_spend_budget"`).
+- Compute: `google_pacing_pct = (google_mtd_spend / google_target) × (daysInMonth / daysElapsed)` — this is projected full-month spend vs target.
+
+**Known quirk about Google ROAS:** Google Ads attribution is more generous than Meta's — it can claim credit for purchases that were driven by brand searches (cannibalization of organic traffic). Don't interpret a 10x+ Google ROAS as "double down" without triangulating against total orders and new-customer-rate from `/prophit-metrics`. If Google ROAS > 8x but `amer` stays flat and `newCustomerRevenuePct` drops, that's a cannibalization signal to surface in the report.
 
 If you ever find yourself writing `revenue / spend` or `netSales - cogs - ... - adSpend` manually for the **blended** numbers — **stop**. That's the endpoint's job. (Per-channel ROAS is fine to compute because the endpoint doesn't attribute revenue by channel.)
 
@@ -358,25 +368,24 @@ POST /rest/v1/ad_analysis_reports
     },
     "channels": {
       "meta": {
-        "spend": 39450000,
-        "spend_pct": 92.0,
-        "revenue": 188000000,
-        "purchases": 2000,
-        "roas": 4.77,
-        "mtd_spend": 39450000,
-        "mtd_pacing_pct": 98.3,
-        "source": "ad_metrics_daily"
+        "spend_mtd": 37447831,
+        "spend_pct": 87.1,
+        "revenue_mtd": 167124350,
+        "purchases_mtd": 1247,
+        "roas_mtd": 4.46,
+        "pacing_pct": 66.1,
+        "source": "ad_metrics_daily.platform=meta"
       },
-      "google": {
-        "spend": 3413663,
-        "spend_pct": 8.0,
-        "revenue": 17066315,
-        "purchases": 170,
-        "roas": 5.00,
-        "mtd_spend": 3413663,
-        "mtd_pacing_pct": 104.2,
-        "target_source": "approximated_from_historical_split",
-        "alert_level": "green"
+      "google_ads": {
+        "spend_mtd": 5540348,
+        "spend_pct": 12.9,
+        "revenue_mtd": 58448188,
+        "purchases_mtd": 422,
+        "roas_mtd": 10.55,
+        "pacing_pct": 75.2,
+        "target_source": "approximated_from_30d_split",
+        "alert_level": "yellow",
+        "alert_reason": "ROAS 10.55x MTD suggests possible brand traffic cannibalization — investigate new-customer-rate trend"
       }
     }
   },
@@ -599,8 +608,8 @@ The vault lives at `~/Documents/Dosmicos/dosmicos-brain/`. Follow the Karpathy L
        "semaphore": "red"
      },
      "channels_mtd": {
-       "meta":   { "spend": 39450000, "revenue": 188000000, "roas": 4.77, "spend_pct": 92.0, "pacing_pct": 98.3,  "alert_level": "green" },
-       "google": { "spend":  3413663, "revenue":  17066315, "roas": 5.00, "spend_pct":  8.0, "pacing_pct": 104.2, "alert_level": "green" }
+       "meta":       { "spend": 37447831, "revenue": 167124350, "roas":  4.46, "spend_pct": 87.1, "pacing_pct": 66.1, "alert_level": "green"  },
+       "google_ads": { "spend":  5540348, "revenue":  58448188, "roas": 10.55, "spend_pct": 12.9, "pacing_pct": 75.2, "alert_level": "yellow" }
      },
      "ctr_7d": 1.45,
      "cpm_7d": 22500,
