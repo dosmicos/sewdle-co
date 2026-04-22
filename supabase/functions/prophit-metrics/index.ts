@@ -85,6 +85,7 @@ interface GatewayCostSetting {
   percent_fee: number;
   flat_fee: number;
   is_active: boolean;
+  applies_to_all: boolean;
 }
 
 interface FinanceExpense {
@@ -431,12 +432,25 @@ async function fetchProductCosts(
   sb: SupabaseClient,
   orgId: string
 ): Promise<ProductCost[]> {
-  const { data, error } = await sb
-    .from("product_costs")
-    .select("product_id, variant_id, product_cost, handling_fee")
-    .eq("organization_id", orgId);
-  if (error) throw new Error(`product_costs: ${error.message}`);
-  return (data as unknown as ProductCost[]) || [];
+  // Paginate: Supabase default limit is 1000 rows. Many product catalogs exceed
+  // that (e.g. Dosmicos has 1167+). Without pagination we silently truncate and
+  // the COGS calculation ends up under-matching line items.
+  const pageSize = 1000;
+  let all: ProductCost[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from("product_costs")
+      .select("product_id, variant_id, product_cost, handling_fee")
+      .eq("organization_id", orgId)
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`product_costs: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all = all.concat(data as unknown as ProductCost[]);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
 }
 
 async function fetchGatewayCosts(
@@ -445,7 +459,7 @@ async function fetchGatewayCosts(
 ): Promise<GatewayCostSetting[]> {
   const { data, error } = await sb
     .from("gateway_cost_settings")
-    .select("gateway_name, percent_fee, flat_fee, is_active")
+    .select("gateway_name, percent_fee, flat_fee, is_active, applies_to_all")
     .eq("organization_id", orgId);
   if (error) throw new Error(`gateway_cost_settings: ${error.message}`);
   return (data as unknown as GatewayCostSetting[]) || [];
@@ -471,6 +485,9 @@ function computeCOGSFromLineItems(
   lineItems: Array<{ product_id: number | null; variant_id: number | null; quantity: number }>,
   productCosts: ProductCost[]
 ): number {
+  // Matches dashboard's useCostOverrides.ts — uses only product_cost.
+  // handling_fee is intentionally excluded; handlingCost is computed separately
+  // in computeProphitMetrics so that it doesn't get double-counted.
   let total = 0;
   for (const li of lineItems) {
     if (!li.product_id) continue;
@@ -478,7 +495,7 @@ function computeCOGSFromLineItems(
       productCosts.find(p => p.product_id === li.product_id && p.variant_id === li.variant_id) ||
       productCosts.find(p => p.product_id === li.product_id && !p.variant_id);
     if (match) {
-      total += (match.product_cost + match.handling_fee) * li.quantity;
+      total += match.product_cost * li.quantity;
     }
   }
   return total;
@@ -488,17 +505,30 @@ function computeGatewayFeesFromOrders(
   orders: Array<any>,
   gateways: GatewayCostSetting[]
 ): number {
+  // Matches dashboard's useCostOverrides.ts. Two kinds of fees:
+  //   1. applies_to_all (e.g. "Shopify Transaction Fee" at 1%) → applied to every order
+  //   2. per-gateway (Wompi, MercadoPago, etc.) → applied only when that gateway is used
   const map = new Map(gateways.map(g => [g.gateway_name, g]));
+  const universalFees = gateways.filter(g => g.applies_to_all && g.is_active);
   let total = 0;
+
   for (const o of orders) {
+    const price = o.total_price || 0;
+
+    // 1. Universal fees apply to all orders
+    for (const uf of universalFees) {
+      total += price * (uf.percent_fee / 100) + uf.flat_fee;
+    }
+
+    // 2. Per-gateway fees based on payment_gateway_names
     const raw = o.raw_data as any;
     if (!raw) continue;
     const names = (raw.payment_gateway_names as string[]) || [];
     const effective = names.length > 0 ? names[names.length - 1] : null;
     if (!effective) continue;
     const setting = map.get(effective);
-    if (setting && setting.is_active) {
-      total += (o.total_price || 0) * (setting.percent_fee / 100) + setting.flat_fee;
+    if (setting && setting.is_active && !setting.applies_to_all) {
+      total += price * (setting.percent_fee / 100) + setting.flat_fee;
     }
   }
   return total;
