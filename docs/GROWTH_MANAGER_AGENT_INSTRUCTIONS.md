@@ -522,7 +522,12 @@ The vault lives at `~/Documents/Dosmicos/dosmicos-brain/`. Follow the Karpathy L
 
 1. **Daily report** → `raw/daily-reports/{YYYY-MM-DD}-report.md`
 
-   Use `vault_ingest.daily_report` from `/agent-context`, or format:
+   **Write this file yourself — do NOT paste `vault_ingest.daily_report` from `/agent-context`.** That field is a legacy pre-rendered template that doesn't include the channel split, the prophit-metrics block, or anything you discover during the analysis.
+
+   The template below is a **minimum skeleton**, not a form to fill out. You are expected to extend it: add new sections when you detect a pattern worth explaining (e.g. "Creator oscillation analysis", "Google anomaly investigation", "Inventory risk intersecting with winners"), reorder when a specific finding deserves top billing, and write prose in the Executive Summary that surfaces the *story* of the day — not a recitation of numbers the reader can see in the tables.
+
+   The guaranteed sections below exist so every day is comparable; everything else is your judgment. If today you found that three UGCs from the same production batch all fatigued simultaneously, that deserves its own section even if the template doesn't mention it.
+
    ```markdown
    ---
    title: Daily Report — {YYYY-MM-DD}
@@ -533,7 +538,7 @@ The vault lives at `~/Documents/Dosmicos/dosmicos-brain/`. Follow the Karpathy L
    # Daily Ad Analysis — {YYYY-MM-DD}
 
    ## Executive Summary
-   {executive_summary}
+   {2-4 paragraphs in Spanish. Lead with the headline — is today good, mediocre, bad? Then the why, the one or two findings that matter most, and what you recommend. Do not repeat numbers from the tables below verbatim; interpret them.}
 
    ## Account Metrics (source: /prophit-metrics)
    | Metric | Value |
@@ -564,11 +569,23 @@ The vault lives at `~/Documents/Dosmicos/dosmicos-brain/`. Follow the Karpathy L
    {formatted top creatives}
 
    ## Recommendations
-   {formatted recommendations}
+   {formatted recommendations, each with category, priority, action, rationale, expected impact}
 
    ## New Learnings
-   {formatted learnings}
+   {formatted learnings — patterns you discovered today that hold across 3+ ads or 3+ days}
+
+   ## [Optional sections — add when the day warrants]
+   Examples of sections you should add when your analysis surfaces them (not an exhaustive list):
+   - **Creator oscillation watch** — when you detect a creator whose ROAS swings > 3x DoD
+   - **Google anomaly** — when Google DoD spend or ROAS deviates > 30%
+   - **Brand cannibalization signal** — when Google ROAS stays > 8x but AMER stays flat
+   - **Inventory risk × winners** — when a top-performing ad targets a low-stock SKU
+   - **Cohort / batch pattern** — when multiple ads from the same production batch fatigue together
+   - **Pacing recovery plan** — when semaphore is red, what would it take to turn it around
+   - **Hypothesis to validate tomorrow** — anything the data hints at but doesn't confirm yet
    ```
+
+   **Over time**, the shape of this report should evolve. If you keep discovering new kinds of patterns, propose new permanent sections in a recommendation. The template is a floor, not a ceiling.
 
 2. **Decisions** → `raw/decisions/{YYYY-MM-DD}-decisions.md`
 
