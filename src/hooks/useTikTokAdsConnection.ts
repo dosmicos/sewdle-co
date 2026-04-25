@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { toast } from 'sonner';
 
@@ -79,15 +79,33 @@ export function useTikTokAdsConnection() {
       setSyncing(true);
 
       try {
-        const { data, error } = await supabase.functions.invoke('sync-tiktok-ads', {
-          body: {
+        // Use fetch directly so error bodies on non-2xx responses are not swallowed
+        // by supabase.functions.invoke().
+        const session = (await supabase.auth.getSession()).data.session;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-tiktok-ads`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token || SUPABASE_PUBLISHABLE_KEY}`,
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
             organizationId: orgId,
             startDate,
             endDate,
-          },
+          }),
         });
 
-        if (error) throw error;
+        const data = await res.json();
+
+        if (!res.ok) {
+          const errorMsg = data?.error || `HTTP ${res.status}`;
+          const details = data?.details || '';
+          const fullMsg = details ? `${errorMsg}: ${details}` : errorMsg;
+          console.error('TikTok Ads sync server error:', data);
+          toast.error(fullMsg);
+          return false;
+        }
 
         if (data.needsReconnect) {
           toast.error(data.error || 'Necesitas reconectar tu cuenta de TikTok Ads');
@@ -108,7 +126,7 @@ export function useTikTokAdsConnection() {
         }
       } catch (error: any) {
         console.error('Error syncing TikTok Ads metrics:', error);
-        toast.error('Error al sincronizar métricas de TikTok Ads');
+        toast.error(error?.message || 'Error al sincronizar métricas de TikTok Ads');
         return false;
       } finally {
         setSyncing(false);

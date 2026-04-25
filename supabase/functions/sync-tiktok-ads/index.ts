@@ -10,7 +10,22 @@ const corsHeaders = {
 
 const TIKTOK_API = "https://business-api.tiktok.com/open_api/v1.3";
 
+// AUCTION_ADVERTISER only supports generic conversion metrics — complete_payment*
+// metrics are rejected at this level. Payment-specific totals are aggregated from
+// ad-level data instead.
 const ACCOUNT_METRICS = [
+  "spend",
+  "impressions",
+  "clicks",
+  "conversion",
+  "cpc",
+  "cpm",
+  "ctr",
+  "conversion_rate",
+  "cost_per_conversion",
+];
+
+const AD_METRICS = [
   "spend",
   "impressions",
   "clicks",
@@ -18,16 +33,12 @@ const ACCOUNT_METRICS = [
   "complete_payment",
   "complete_payment_value",
   "complete_payment_roas",
+  "cost_per_complete_payment",
   "cpc",
   "cpm",
   "ctr",
   "conversion_rate",
   "cost_per_conversion",
-  "cost_per_complete_payment",
-];
-
-const AD_METRICS = [
-  ...ACCOUNT_METRICS,
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -226,48 +237,8 @@ serve(async (req) => {
       throw err;
     }
 
-    let syncedDays = 0;
-    for (const row of accountRows) {
-      const m = row.metrics;
-      const spend = num(m.spend);
-      const impressions = int(m.impressions);
-      const clicks = int(m.clicks);
-      const conversions = int(m.conversion);
-      const purchases = int(m.complete_payment);
-      const conversionValue = num(m.complete_payment_value);
-      const roas = num(m.complete_payment_roas) || (spend > 0 ? conversionValue / spend : 0);
-      const cpa = num(m.cost_per_complete_payment);
-
-      const { error: upErr } = await supabase
-        .from("ad_metrics_daily")
-        .upsert(
-          {
-            organization_id: organizationId,
-            platform: "tiktok_ads",
-            date: row.dimensions.stat_time_day,
-            spend,
-            impressions,
-            clicks,
-            conversions,
-            conversion_value: conversionValue,
-            purchases,
-            cpc: num(m.cpc),
-            cpm: num(m.cpm),
-            ctr: num(m.ctr),
-            roas,
-            cpa,
-          },
-          { onConflict: "organization_id,platform,date" }
-        );
-
-      if (upErr) {
-        console.error(`Error upserting account-level ${row.dimensions.stat_time_day}:`, upErr);
-      } else {
-        syncedDays++;
-      }
-    }
-
-    // ─── 2) Ad-level report → tiktok_ad_metrics_daily ───────────────
+    // ─── 2) Ad-level report (run BEFORE account-level upsert so we can
+    //        aggregate payment totals by date) ─────────────────────────
     const adRows = await fetchReport(
       accessToken,
       advertiserId,
@@ -276,6 +247,13 @@ serve(async (req) => {
       endDate,
       AD_METRICS
     );
+
+    // Aggregate per-day totals from ad-level for the payment-specific metrics
+    // (which AUCTION_ADVERTISER does not support).
+    const paymentTotalsByDate = new Map<
+      string,
+      { purchases: number; conversionValue: number; cpaSum: number; cpaCount: number }
+    >();
 
     let syncedAdDays = 0;
     const adIdsSet = new Set<string>();
@@ -286,10 +264,26 @@ serve(async (req) => {
       adIdsSet.add(adId);
 
       const m = row.metrics;
+      const date = row.dimensions.stat_time_day;
       const spend = num(m.spend);
       const conversionValue = num(m.complete_payment_value);
       const purchases = int(m.complete_payment);
       const roas = num(m.complete_payment_roas) || (spend > 0 ? conversionValue / spend : 0);
+
+      const existing = paymentTotalsByDate.get(date) ?? {
+        purchases: 0,
+        conversionValue: 0,
+        cpaSum: 0,
+        cpaCount: 0,
+      };
+      existing.purchases += purchases;
+      existing.conversionValue += conversionValue;
+      const cpa = num(m.cost_per_complete_payment);
+      if (cpa > 0) {
+        existing.cpaSum += cpa;
+        existing.cpaCount += 1;
+      }
+      paymentTotalsByDate.set(date, existing);
 
       const { error: upErr } = await supabase
         .from("tiktok_ad_metrics_daily")
@@ -297,7 +291,7 @@ serve(async (req) => {
           {
             organization_id: organizationId,
             tiktok_ad_id: adId,
-            date: row.dimensions.stat_time_day,
+            date,
             spend,
             impressions: int(m.impressions),
             clicks: int(m.clicks),
@@ -316,15 +310,67 @@ serve(async (req) => {
             ctr: num(m.ctr),
             cvr: num(m.conversion_rate),
             roas,
-            cpa: num(m.cost_per_complete_payment),
+            cpa,
           },
           { onConflict: "organization_id,tiktok_ad_id,date" }
         );
 
       if (upErr) {
-        console.error(`Error upserting ad ${adId} ${row.dimensions.stat_time_day}:`, upErr);
+        console.error(`Error upserting ad ${adId} ${date}:`, upErr);
       } else {
         syncedAdDays++;
+      }
+    }
+
+    // ─── Account-level upsert → ad_metrics_daily ────────────────────
+    // Account-level row uses generic metrics from AUCTION_ADVERTISER + payment
+    // totals aggregated from ad-level (since they're not available at advertiser level).
+    let syncedDays = 0;
+    for (const row of accountRows) {
+      const m = row.metrics;
+      const date = row.dimensions.stat_time_day;
+      const spend = num(m.spend);
+      const impressions = int(m.impressions);
+      const clicks = int(m.clicks);
+      const conversions = int(m.conversion);
+
+      const payments = paymentTotalsByDate.get(date) ?? {
+        purchases: 0,
+        conversionValue: 0,
+        cpaSum: 0,
+        cpaCount: 0,
+      };
+      const purchases = payments.purchases;
+      const conversionValue = payments.conversionValue;
+      const roas = spend > 0 ? conversionValue / spend : 0;
+      const cpa = purchases > 0 ? spend / purchases : 0;
+
+      const { error: upErr } = await supabase
+        .from("ad_metrics_daily")
+        .upsert(
+          {
+            organization_id: organizationId,
+            platform: "tiktok_ads",
+            date,
+            spend,
+            impressions,
+            clicks,
+            conversions,
+            conversion_value: conversionValue,
+            purchases,
+            cpc: num(m.cpc),
+            cpm: num(m.cpm),
+            ctr: num(m.ctr),
+            roas,
+            cpa,
+          },
+          { onConflict: "organization_id,platform,date" }
+        );
+
+      if (upErr) {
+        console.error(`Error upserting account-level ${date}:`, upErr);
+      } else {
+        syncedDays++;
       }
     }
 
