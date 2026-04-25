@@ -37,12 +37,11 @@ const AD_METRICS = [
   "ctr",
   "conversion_rate",
   "cost_per_conversion",
-  // Purchase metrics — TikTok exposes Shopify CompletePayment events under
-  // total_purchase_* in the BASIC report (the complete_payment_* names are
-  // only available with custom EAPI configuration).
-  "total_purchase",
+  // Purchase value — Shopify pixel attribution comes through total_purchase_value
+  // even though total_purchase / cost_per_total_purchase return 0. Count + CPA
+  // come from the generic m.conversion / m.cost_per_conversion (which mirror
+  // the campaign's optimization event in TikTok UI).
   "total_purchase_value",
-  "cost_per_total_purchase",
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -271,12 +270,15 @@ serve(async (req) => {
       const m = row.metrics;
       const date = row.dimensions.stat_time_day;
       const spend = num(m.spend);
-      const purchases = int(m.total_purchase);
+      // TikTok's m.conversion already reflects the campaign's optimization event
+      // (Complete Payment for Dosmicos' Shopify pixel campaigns), and matches the
+      // "Conversiones / Resultados / Compras" column in the TikTok UI.
+      // m.total_purchase tends to come back as 0 for Shopify pixel attribution,
+      // so we use m.conversion as the canonical purchase count.
+      const purchases = int(m.conversion);
       const conversionValue = num(m.total_purchase_value);
       const roas = spend > 0 ? conversionValue / spend : 0;
-      const cpa =
-        num(m.cost_per_total_purchase) ||
-        (purchases > 0 ? spend / purchases : 0);
+      const cpa = num(m.cost_per_conversion);
 
       const existing = purchaseTotalsByDate.get(date) ?? {
         purchases: 0,
