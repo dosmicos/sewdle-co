@@ -37,11 +37,10 @@ const AD_METRICS = [
   "ctr",
   "conversion_rate",
   "cost_per_conversion",
-  // Purchase value — Shopify pixel attribution comes through total_purchase_value
-  // even though total_purchase / cost_per_total_purchase return 0. Count + CPA
-  // come from the generic m.conversion / m.cost_per_conversion (which mirror
-  // the campaign's optimization event in TikTok UI).
-  "total_purchase_value",
+  // Conversion value — for Shopify-pixel-attributed conversions, total_purchase_value
+  // comes back as 0. The generic conversion_value metric matches the campaign
+  // optimization event (same as m.conversion does for the count).
+  "conversion_value",
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -276,7 +275,7 @@ serve(async (req) => {
       // m.total_purchase tends to come back as 0 for Shopify pixel attribution,
       // so we use m.conversion as the canonical purchase count.
       const purchases = int(m.conversion);
-      const conversionValue = num(m.total_purchase_value);
+      const conversionValue = num(m.conversion_value);
       const roas = spend > 0 ? conversionValue / spend : 0;
       const cpa = num(m.cost_per_conversion);
 
