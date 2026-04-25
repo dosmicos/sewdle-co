@@ -43,7 +43,6 @@ const AD_METRICS = [
   "total_purchase",
   "total_purchase_value",
   "cost_per_total_purchase",
-  "total_purchase_value_roas",
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -274,9 +273,7 @@ serve(async (req) => {
       const spend = num(m.spend);
       const purchases = int(m.total_purchase);
       const conversionValue = num(m.total_purchase_value);
-      const roas =
-        num(m.total_purchase_value_roas) ||
-        (spend > 0 ? conversionValue / spend : 0);
+      const roas = spend > 0 ? conversionValue / spend : 0;
       const cpa =
         num(m.cost_per_total_purchase) ||
         (purchases > 0 ? spend / purchases : 0);
