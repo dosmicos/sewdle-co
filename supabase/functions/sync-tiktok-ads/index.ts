@@ -10,9 +10,11 @@ const corsHeaders = {
 
 const TIKTOK_API = "https://business-api.tiktok.com/open_api/v1.3";
 
-// AUCTION_ADVERTISER only supports generic conversion metrics — complete_payment*
-// metrics are rejected at this level. Payment-specific totals are aggregated from
-// ad-level data instead.
+// TikTok's BASIC report rejects complete_payment* metrics for this account
+// (they require pixel/EAPI configuration not yet active). Stick to generic
+// conversion metrics until purchase tracking is wired through TikTok Pixel.
+// Purchase value / ROAS will read 0 in tiktok_ad_metrics_daily and ad_metrics_daily
+// for the tiktok_ads platform until then.
 const ACCOUNT_METRICS = [
   "spend",
   "impressions",
@@ -30,10 +32,6 @@ const AD_METRICS = [
   "impressions",
   "clicks",
   "conversion",
-  "complete_payment",
-  "complete_payment_value",
-  "complete_payment_roas",
-  "cost_per_complete_payment",
   "cpc",
   "cpm",
   "ctr",
@@ -248,13 +246,6 @@ serve(async (req) => {
       AD_METRICS
     );
 
-    // Aggregate per-day totals from ad-level for the payment-specific metrics
-    // (which AUCTION_ADVERTISER does not support).
-    const paymentTotalsByDate = new Map<
-      string,
-      { purchases: number; conversionValue: number; cpaSum: number; cpaCount: number }
-    >();
-
     let syncedAdDays = 0;
     const adIdsSet = new Set<string>();
 
@@ -265,25 +256,6 @@ serve(async (req) => {
 
       const m = row.metrics;
       const date = row.dimensions.stat_time_day;
-      const spend = num(m.spend);
-      const conversionValue = num(m.complete_payment_value);
-      const purchases = int(m.complete_payment);
-      const roas = num(m.complete_payment_roas) || (spend > 0 ? conversionValue / spend : 0);
-
-      const existing = paymentTotalsByDate.get(date) ?? {
-        purchases: 0,
-        conversionValue: 0,
-        cpaSum: 0,
-        cpaCount: 0,
-      };
-      existing.purchases += purchases;
-      existing.conversionValue += conversionValue;
-      const cpa = num(m.cost_per_complete_payment);
-      if (cpa > 0) {
-        existing.cpaSum += cpa;
-        existing.cpaCount += 1;
-      }
-      paymentTotalsByDate.set(date, existing);
 
       const { error: upErr } = await supabase
         .from("tiktok_ad_metrics_daily")
@@ -292,12 +264,12 @@ serve(async (req) => {
             organization_id: organizationId,
             tiktok_ad_id: adId,
             date,
-            spend,
+            spend: num(m.spend),
             impressions: int(m.impressions),
             clicks: int(m.clicks),
             conversions: int(m.conversion),
-            conversion_value: conversionValue,
-            purchases,
+            conversion_value: 0,
+            purchases: 0,
             video_views: int(m.video_play_actions),
             video_views_2s: int(m.video_watched_2s),
             video_views_6s: int(m.video_watched_6s),
@@ -309,8 +281,8 @@ serve(async (req) => {
             cpm: num(m.cpm),
             ctr: num(m.ctr),
             cvr: num(m.conversion_rate),
-            roas,
-            cpa,
+            roas: 0,
+            cpa: 0,
           },
           { onConflict: "organization_id,tiktok_ad_id,date" }
         );
@@ -323,27 +295,11 @@ serve(async (req) => {
     }
 
     // ─── Account-level upsert → ad_metrics_daily ────────────────────
-    // Account-level row uses generic metrics from AUCTION_ADVERTISER + payment
-    // totals aggregated from ad-level (since they're not available at advertiser level).
     let syncedDays = 0;
     for (const row of accountRows) {
       const m = row.metrics;
       const date = row.dimensions.stat_time_day;
       const spend = num(m.spend);
-      const impressions = int(m.impressions);
-      const clicks = int(m.clicks);
-      const conversions = int(m.conversion);
-
-      const payments = paymentTotalsByDate.get(date) ?? {
-        purchases: 0,
-        conversionValue: 0,
-        cpaSum: 0,
-        cpaCount: 0,
-      };
-      const purchases = payments.purchases;
-      const conversionValue = payments.conversionValue;
-      const roas = spend > 0 ? conversionValue / spend : 0;
-      const cpa = purchases > 0 ? spend / purchases : 0;
 
       const { error: upErr } = await supabase
         .from("ad_metrics_daily")
@@ -353,16 +309,16 @@ serve(async (req) => {
             platform: "tiktok_ads",
             date,
             spend,
-            impressions,
-            clicks,
-            conversions,
-            conversion_value: conversionValue,
-            purchases,
+            impressions: int(m.impressions),
+            clicks: int(m.clicks),
+            conversions: int(m.conversion),
+            conversion_value: 0,
+            purchases: 0,
             cpc: num(m.cpc),
             cpm: num(m.cpm),
             ctr: num(m.ctr),
-            roas,
-            cpa,
+            roas: 0,
+            cpa: 0,
           },
           { onConflict: "organization_id,platform,date" }
         );
