@@ -37,13 +37,11 @@ const AD_METRICS = [
   "ctr",
   "conversion_rate",
   "cost_per_conversion",
-  // For Dosmicos' Shopify pixel using the "Complete Payment" event,
-  // total_purchase_value returns 0 even though the value is visible in
-  // TikTok UI. Trying derived metrics: value_per_conversion gives the
-  // average payment value per attributed conversion; multiplied by
-  // m.conversion this reconstructs total revenue.
-  "value_per_conversion",
-  "total_purchase_value",
+  // complete_payment_value was rejected at AUCTION_AD level previously,
+  // but complete_payment_roas alone (the ROAS) is documented as valid in
+  // TikTok's metric reference and not in any rejection list we've seen.
+  // Conversion value is then derived as roas × spend.
+  "complete_payment_roas",
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -278,12 +276,11 @@ serve(async (req) => {
       // m.total_purchase tends to come back as 0 for Shopify pixel attribution,
       // so we use m.conversion as the canonical purchase count.
       const purchases = int(m.conversion);
-      // Prefer total_purchase_value if it has data; fall back to deriving
-      // total value from value_per_conversion × conversion count.
-      const conversionValue =
-        num(m.total_purchase_value) ||
-        num(m.value_per_conversion) * purchases;
-      const roas = spend > 0 ? conversionValue / spend : 0;
+      // Derive revenue from complete_payment_roas × spend. TikTok's UI shows
+      // ROAS directly (e.g. 9.02x), so this gives us the same number that
+      // appears under "ROAS de Pago completado (sitio web)".
+      const roas = num(m.complete_payment_roas);
+      const conversionValue = roas * spend;
       const cpa = num(m.cost_per_conversion);
 
       const existing = purchaseTotalsByDate.get(date) ?? {
