@@ -37,10 +37,11 @@ const AD_METRICS = [
   "ctr",
   "conversion_rate",
   "cost_per_conversion",
-  // Conversion value — for Shopify-pixel-attributed conversions, total_purchase_value
-  // comes back as 0. The generic conversion_value metric matches the campaign
-  // optimization event (same as m.conversion does for the count).
-  "conversion_value",
+  // total_purchase_value is the documented correct name per TikTok docs and
+  // Supermetrics' field reference. If it comes back 0, the issue is upstream
+  // (Shopify/Pixel not sending `value` field in CompletePayment events) and
+  // not a metric-naming issue.
+  "total_purchase_value",
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -275,7 +276,7 @@ serve(async (req) => {
       // m.total_purchase tends to come back as 0 for Shopify pixel attribution,
       // so we use m.conversion as the canonical purchase count.
       const purchases = int(m.conversion);
-      const conversionValue = num(m.conversion_value);
+      const conversionValue = num(m.total_purchase_value);
       const roas = spend > 0 ? conversionValue / spend : 0;
       const cpa = num(m.cost_per_conversion);
 
