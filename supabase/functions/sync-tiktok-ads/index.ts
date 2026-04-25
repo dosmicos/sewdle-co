@@ -10,23 +10,6 @@ const corsHeaders = {
 
 const TIKTOK_API = "https://business-api.tiktok.com/open_api/v1.3";
 
-// TikTok's BASIC report rejects complete_payment* metrics for this account
-// (they require pixel/EAPI configuration not yet active). Stick to generic
-// conversion metrics until purchase tracking is wired through TikTok Pixel.
-// Purchase value / ROAS will read 0 in tiktok_ad_metrics_daily and ad_metrics_daily
-// for the tiktok_ads platform until then.
-const ACCOUNT_METRICS = [
-  "spend",
-  "impressions",
-  "clicks",
-  "conversion",
-  "cpc",
-  "cpm",
-  "ctr",
-  "conversion_rate",
-  "cost_per_conversion",
-];
-
 const AD_METRICS = [
   "spend",
   "impressions",
@@ -210,20 +193,19 @@ serve(async (req) => {
     const accessToken = adAccount.access_token;
     const advertiserId = adAccount.account_id;
 
-    // ─── 1) Account-level report → ad_metrics_daily ─────────────────
-    let accountRows: ReportRow[];
+    // ─── 1) Ad-level report ──────────────────────────────────────────
+    let adRows: ReportRow[];
     try {
-      accountRows = await fetchReport(
+      adRows = await fetchReport(
         accessToken,
         advertiserId,
-        "AUCTION_ADVERTISER",
+        "AUCTION_AD",
         startDate,
         endDate,
-        ACCOUNT_METRICS
+        AD_METRICS
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // TikTok auth-related codes: 40105 (token invalid), 40000-40099 generic
       if (/40105|invalid_token|access token/i.test(msg)) {
         await supabase
           .from("ad_accounts")
@@ -240,56 +222,61 @@ serve(async (req) => {
       throw err;
     }
 
-    // ─── 2) Ad-level report (run BEFORE account-level upsert so we can
-    //        aggregate payment totals by date) ─────────────────────────
-    const adRows = await fetchReport(
+    // ─── 2) Fetch metadata first to know which ads are active ────────
+    // Active = operation_status === 'ENABLE'. ad_metrics_daily aggregates only
+    // active ads so the dashboard ROAS reflects current campaign performance,
+    // not retroactive spend from paused ads.
+    const adIdsSet = new Set<string>();
+    for (const row of adRows) {
+      if (row.dimensions.ad_id) adIdsSet.add(row.dimensions.ad_id);
+    }
+
+    const adMetadata = await fetchAdMetadata(
       accessToken,
       advertiserId,
-      "AUCTION_AD",
-      startDate,
-      endDate,
-      AD_METRICS
+      Array.from(adIdsSet)
     );
 
-    // Aggregate purchase totals per day from ad-level so we can merge them into
-    // ad_metrics_daily (which uses the AUCTION_ADVERTISER row that doesn't expose
-    // total_purchase* metrics).
-    const purchaseTotalsByDate = new Map<
+    const activeAdIds = new Set<string>();
+    for (const ad of adMetadata) {
+      if (ad.operation_status === "ENABLE") activeAdIds.add(ad.ad_id);
+    }
+
+    // ─── 3) Loop ad rows: upsert per-ad (all) and aggregate active to
+    //        activeDailyTotals for the account-level row ──────────────
+    const activeDailyTotals = new Map<
       string,
-      { purchases: number; conversionValue: number }
+      {
+        spend: number;
+        impressions: number;
+        clicks: number;
+        conversions: number;
+        conversionValue: number;
+        purchases: number;
+      }
     >();
 
     let syncedAdDays = 0;
-    const adIdsSet = new Set<string>();
 
     for (const row of adRows) {
       const adId = row.dimensions.ad_id;
       if (!adId) continue;
-      adIdsSet.add(adId);
 
       const m = row.metrics;
       const date = row.dimensions.stat_time_day;
       const spend = num(m.spend);
-      // TikTok's m.conversion already reflects the campaign's optimization event
-      // (Complete Payment for Dosmicos' Shopify pixel campaigns), and matches the
-      // "Conversiones / Resultados / Compras" column in the TikTok UI.
-      // m.total_purchase tends to come back as 0 for Shopify pixel attribution,
-      // so we use m.conversion as the canonical purchase count.
+      // m.conversion mirrors the campaign's optimization event (Complete Payment
+      // for Dosmicos' Shopify pixel) and matches the "Conversiones / Compras"
+      // column in TikTok UI. Pixel-specific names like total_purchase return 0.
       const purchases = int(m.conversion);
-      // Derive revenue from complete_payment_roas × spend. TikTok's UI shows
-      // ROAS directly (e.g. 9.02x), so this gives us the same number that
-      // appears under "ROAS de Pago completado (sitio web)".
+      const conversions = int(m.conversion);
+      const impressions = int(m.impressions);
+      const clicks = int(m.clicks);
+      // Revenue derived from complete_payment_roas × spend (matches
+      // "ROAS de Pago completado (sitio web)" × spend in TikTok UI).
       const roas = num(m.complete_payment_roas);
       const conversionValue = roas * spend;
       const cpa = num(m.cost_per_conversion);
-
-      const existing = purchaseTotalsByDate.get(date) ?? {
-        purchases: 0,
-        conversionValue: 0,
-      };
-      existing.purchases += purchases;
-      existing.conversionValue += conversionValue;
-      purchaseTotalsByDate.set(date, existing);
 
       const { error: upErr } = await supabase
         .from("tiktok_ad_metrics_daily")
@@ -299,9 +286,9 @@ serve(async (req) => {
             tiktok_ad_id: adId,
             date,
             spend,
-            impressions: int(m.impressions),
-            clicks: int(m.clicks),
-            conversions: int(m.conversion),
+            impressions,
+            clicks,
+            conversions,
             conversion_value: conversionValue,
             purchases,
             video_views: int(m.video_play_actions),
@@ -326,19 +313,34 @@ serve(async (req) => {
       } else {
         syncedAdDays++;
       }
+
+      if (activeAdIds.has(adId)) {
+        const existing = activeDailyTotals.get(date) ?? {
+          spend: 0,
+          impressions: 0,
+          clicks: 0,
+          conversions: 0,
+          conversionValue: 0,
+          purchases: 0,
+        };
+        existing.spend += spend;
+        existing.impressions += impressions;
+        existing.clicks += clicks;
+        existing.conversions += conversions;
+        existing.conversionValue += conversionValue;
+        existing.purchases += purchases;
+        activeDailyTotals.set(date, existing);
+      }
     }
 
-    // ─── Account-level upsert → ad_metrics_daily ────────────────────
+    // ─── 4) Upsert ad_metrics_daily from active-only daily totals ────
     let syncedDays = 0;
-    for (const row of accountRows) {
-      const m = row.metrics;
-      const date = row.dimensions.stat_time_day;
-      const spend = num(m.spend);
-
-      const purchases = purchaseTotalsByDate.get(date)?.purchases ?? 0;
-      const conversionValue = purchaseTotalsByDate.get(date)?.conversionValue ?? 0;
-      const roas = spend > 0 ? conversionValue / spend : 0;
-      const cpa = purchases > 0 ? spend / purchases : 0;
+    for (const [date, t] of activeDailyTotals) {
+      const cpc = t.clicks > 0 ? t.spend / t.clicks : 0;
+      const cpm = t.impressions > 0 ? (t.spend / t.impressions) * 1000 : 0;
+      const ctr = t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0;
+      const roas = t.spend > 0 ? t.conversionValue / t.spend : 0;
+      const cpa = t.purchases > 0 ? t.spend / t.purchases : 0;
 
       const { error: upErr } = await supabase
         .from("ad_metrics_daily")
@@ -347,15 +349,15 @@ serve(async (req) => {
             organization_id: organizationId,
             platform: "tiktok_ads",
             date,
-            spend,
-            impressions: int(m.impressions),
-            clicks: int(m.clicks),
-            conversions: int(m.conversion),
-            conversion_value: conversionValue,
-            purchases,
-            cpc: num(m.cpc),
-            cpm: num(m.cpm),
-            ctr: num(m.ctr),
+            spend: t.spend,
+            impressions: t.impressions,
+            clicks: t.clicks,
+            conversions: t.conversions,
+            conversion_value: t.conversionValue,
+            purchases: t.purchases,
+            cpc,
+            cpm,
+            ctr,
             roas,
             cpa,
           },
@@ -369,13 +371,7 @@ serve(async (req) => {
       }
     }
 
-    // ─── 3) Ad metadata → tiktok_ads ────────────────────────────────
-    const adMetadata = await fetchAdMetadata(
-      accessToken,
-      advertiserId,
-      Array.from(adIdsSet)
-    );
-
+    // ─── 5) Upsert ad metadata → tiktok_ads ─────────────────────────
     let syncedAds = 0;
     for (const ad of adMetadata) {
       const { error: upErr } = await supabase.from("tiktok_ads").upsert(
@@ -419,6 +415,7 @@ serve(async (req) => {
         syncedAdDays,
         syncedAds,
         uniqueAds: adIdsSet.size,
+        activeAds: activeAdIds.size,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
