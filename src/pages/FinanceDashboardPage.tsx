@@ -6,6 +6,8 @@ import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker'
 import AttributionTable, { type AttributionRow } from '@/components/finance-dashboard/AttributionTable';
 import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnectionModal';
 import GoogleAdsConnectionModal from '@/components/finance-dashboard/GoogleAdsConnectionModal';
+import TikTokAdsConnectionModal from '@/components/finance-dashboard/TikTokAdsConnectionModal';
+import TikTokAdBreakdownTable from '@/components/finance-dashboard/TikTokAdBreakdownTable';
 import FinanceSettingsModal from '@/components/finance-dashboard/FinanceSettingsModal';
 import ContributionMarginCard from '@/components/finance-dashboard/ContributionMarginCard';
 import ContributionMarginBreakdown from '@/components/finance-dashboard/ContributionMarginBreakdown';
@@ -20,6 +22,7 @@ import { useStoreMetrics } from '@/hooks/useStoreMetrics';
 import { useAdMetrics } from '@/hooks/useAdMetrics';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
 import { useGoogleAdsConnection } from '@/hooks/useGoogleAdsConnection';
+import { useTikTokAdsConnection } from '@/hooks/useTikTokAdsConnection';
 import { useFinanceSettings } from '@/hooks/useFinanceSettings';
 import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
 import { useProphitMetrics } from '@/hooks/useProphitMetrics';
@@ -54,14 +57,22 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const TikTokIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.45a8.16 8.16 0 0 0 4.77 1.52V6.55a4.85 4.85 0 0 1-1.84-.13z" fill="#000"/>
+  </svg>
+);
+
 const FinanceDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const dateRange = useFinanceDateRange();
   const storeMetrics = useStoreMetrics(dateRange.current, dateRange.previous);
   const metaAds = useAdMetrics(dateRange.current, dateRange.previous, 'meta');
   const googleAds = useAdMetrics(dateRange.current, dateRange.previous, 'google_ads');
+  const tiktokAds = useAdMetrics(dateRange.current, dateRange.previous, 'tiktok_ads');
   const metaConnection = useMetaAdsConnection();
   const googleConnection = useGoogleAdsConnection();
+  const tiktokConnection = useTikTokAdsConnection();
   const financeSettings = useFinanceSettings();
   const monthlyTargets = useMonthlyTargets(dateRange.current.start);
   // Prophit metrics (Contribution Margin + pacing + COGS + fees + MER/AMER)
@@ -69,66 +80,66 @@ const FinanceDashboardPage: React.FC = () => {
   // and the Growth Manager agent share the same numbers.
   const prophitMetrics = useProphitMetrics(dateRange.current, dateRange.previous);
 
-  // Combine Meta + Google Ads into a single AdMetricsResult for Contribution Margin
-  const combinedAdMetrics = React.useMemo(() => ({
-    current: {
-      spend: metaAds.current.spend + googleAds.current.spend,
-      impressions: metaAds.current.impressions + googleAds.current.impressions,
-      clicks: metaAds.current.clicks + googleAds.current.clicks,
-      conversions: metaAds.current.conversions + googleAds.current.conversions,
-      conversionValue: metaAds.current.conversionValue + googleAds.current.conversionValue,
-      purchases: metaAds.current.purchases + googleAds.current.purchases,
-      cpc: (metaAds.current.clicks + googleAds.current.clicks) > 0
-        ? (metaAds.current.spend + googleAds.current.spend) / (metaAds.current.clicks + googleAds.current.clicks)
-        : 0,
-      cpm: (metaAds.current.impressions + googleAds.current.impressions) > 0
-        ? ((metaAds.current.spend + googleAds.current.spend) / (metaAds.current.impressions + googleAds.current.impressions)) * 1000
-        : 0,
-      ctr: (metaAds.current.impressions + googleAds.current.impressions) > 0
-        ? ((metaAds.current.clicks + googleAds.current.clicks) / (metaAds.current.impressions + googleAds.current.impressions)) * 100
-        : 0,
-      roas: (metaAds.current.spend + googleAds.current.spend) > 0
-        ? (metaAds.current.conversionValue + googleAds.current.conversionValue) / (metaAds.current.spend + googleAds.current.spend)
-        : 0,
-      cpa: (metaAds.current.purchases + googleAds.current.purchases) > 0
-        ? (metaAds.current.spend + googleAds.current.spend) / (metaAds.current.purchases + googleAds.current.purchases)
-        : 0,
-      dailyData: (() => {
-        const map = new Map<string, { spend: number; roas: number; purchases: number }>();
-        for (const d of metaAds.current.dailyData) {
-          map.set(d.date, { spend: d.spend, roas: 0, purchases: d.purchases });
-        }
-        for (const d of googleAds.current.dailyData) {
-          const existing = map.get(d.date);
-          if (existing) {
-            existing.spend += d.spend;
-            existing.purchases += d.purchases;
-          } else {
-            map.set(d.date, { spend: d.spend, roas: 0, purchases: d.purchases });
-          }
-        }
-        return Array.from(map.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, vals]) => ({ date, ...vals }));
-      })(),
-    },
-    previous: {
-      spend: metaAds.previous.spend + googleAds.previous.spend,
-      impressions: metaAds.previous.impressions + googleAds.previous.impressions,
-      clicks: metaAds.previous.clicks + googleAds.previous.clicks,
-      conversions: metaAds.previous.conversions + googleAds.previous.conversions,
-      conversionValue: metaAds.previous.conversionValue + googleAds.previous.conversionValue,
-      purchases: metaAds.previous.purchases + googleAds.previous.purchases,
-      cpc: 0,
-      cpm: 0,
-      ctr: 0,
-      roas: 0,
-      cpa: 0,
-      dailyData: [],
-    },
-    changes: {} as Record<string, number>,
-    isLoading: metaAds.isLoading || googleAds.isLoading,
-  }), [metaAds, googleAds]);
+  // Combine Meta + Google + TikTok Ads into a single AdMetricsResult for Contribution Margin
+  const combinedAdMetrics = React.useMemo(() => {
+    const totalSpend = metaAds.current.spend + googleAds.current.spend + tiktokAds.current.spend;
+    const totalImpressions = metaAds.current.impressions + googleAds.current.impressions + tiktokAds.current.impressions;
+    const totalClicks = metaAds.current.clicks + googleAds.current.clicks + tiktokAds.current.clicks;
+    const totalPurchases = metaAds.current.purchases + googleAds.current.purchases + tiktokAds.current.purchases;
+    const totalConversionValue = metaAds.current.conversionValue + googleAds.current.conversionValue + tiktokAds.current.conversionValue;
+
+    return {
+      current: {
+        spend: totalSpend,
+        impressions: totalImpressions,
+        clicks: totalClicks,
+        conversions: metaAds.current.conversions + googleAds.current.conversions + tiktokAds.current.conversions,
+        conversionValue: totalConversionValue,
+        purchases: totalPurchases,
+        cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
+        cpm: totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0,
+        ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0,
+        roas: totalSpend > 0 ? totalConversionValue / totalSpend : 0,
+        cpa: totalPurchases > 0 ? totalSpend / totalPurchases : 0,
+        dailyData: (() => {
+          const map = new Map<string, { spend: number; roas: number; purchases: number }>();
+          const accumulate = (rows: typeof metaAds.current.dailyData) => {
+            for (const d of rows) {
+              const existing = map.get(d.date);
+              if (existing) {
+                existing.spend += d.spend;
+                existing.purchases += d.purchases;
+              } else {
+                map.set(d.date, { spend: d.spend, roas: 0, purchases: d.purchases });
+              }
+            }
+          };
+          accumulate(metaAds.current.dailyData);
+          accumulate(googleAds.current.dailyData);
+          accumulate(tiktokAds.current.dailyData);
+          return Array.from(map.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, vals]) => ({ date, ...vals }));
+        })(),
+      },
+      previous: {
+        spend: metaAds.previous.spend + googleAds.previous.spend + tiktokAds.previous.spend,
+        impressions: metaAds.previous.impressions + googleAds.previous.impressions + tiktokAds.previous.impressions,
+        clicks: metaAds.previous.clicks + googleAds.previous.clicks + tiktokAds.previous.clicks,
+        conversions: metaAds.previous.conversions + googleAds.previous.conversions + tiktokAds.previous.conversions,
+        conversionValue: metaAds.previous.conversionValue + googleAds.previous.conversionValue + tiktokAds.previous.conversionValue,
+        purchases: metaAds.previous.purchases + googleAds.previous.purchases + tiktokAds.previous.purchases,
+        cpc: 0,
+        cpm: 0,
+        ctr: 0,
+        roas: 0,
+        cpa: 0,
+        dailyData: [],
+      },
+      changes: {} as Record<string, number>,
+      isLoading: metaAds.isLoading || googleAds.isLoading || tiktokAds.isLoading,
+    };
+  }, [metaAds, googleAds, tiktokAds]);
 
   // CM + all derived metrics now come from the server-side Edge Function
   // (single source of truth shared with the Growth Manager).
@@ -147,7 +158,9 @@ const FinanceDashboardPage: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [tiktokModalOpen, setTiktokModalOpen] = useState(false);
   const [channelMetricsOpen, setChannelMetricsOpen] = useState(false);
+  const [tiktokBreakdownOpen, setTiktokBreakdownOpen] = useState(false);
 
   // Auto-open modals if returning from OAuth callback
   useEffect(() => {
@@ -156,6 +169,9 @@ const FinanceDashboardPage: React.FC = () => {
     }
     if (sessionStorage.getItem('google_ads_oauth_result')) {
       setGoogleModalOpen(true);
+    }
+    if (sessionStorage.getItem('tiktok_ads_oauth_result')) {
+      setTiktokModalOpen(true);
     }
   }, []);
 
@@ -181,6 +197,16 @@ const FinanceDashboardPage: React.FC = () => {
       clicks: googleAds.current.clicks,
       impressions: googleAds.current.impressions,
     },
+    {
+      source: 'TikTok Ads',
+      icon: <TikTokIcon />,
+      budget: null,
+      spend: tiktokAds.current.spend,
+      cv: tiktokAds.current.conversionValue,
+      roas: tiktokAds.current.roas,
+      clicks: tiktokAds.current.clicks,
+      impressions: tiktokAds.current.impressions,
+    },
   ];
 
   const handleSync = async () => {
@@ -192,6 +218,9 @@ const FinanceDashboardPage: React.FC = () => {
     }
     if (googleConnection.isConnected) {
       promises.push(googleConnection.syncMetrics(startStr, endStr));
+    }
+    if (tiktokConnection.isConnected) {
+      promises.push(tiktokConnection.syncMetrics(startStr, endStr));
     }
     try {
       await Promise.all(promises);
@@ -311,6 +340,45 @@ const FinanceDashboardPage: React.FC = () => {
               >
                 <GoogleIcon />
                 <span className="ml-1.5">Conectar Google</span>
+              </Button>
+            )}
+            {tiktokConnection.isConnected ? (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const startStr = format(dateRange.current.start, 'yyyy-MM-dd');
+                    const endStr = format(dateRange.current.end, 'yyyy-MM-dd');
+                    await tiktokConnection.syncMetrics(startStr, endStr);
+                  }}
+                  disabled={tiktokConnection.syncing}
+                >
+                  {tiktokConnection.syncing ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Sync TikTok
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTiktokModalOpen(true)}
+                  className="px-2"
+                  title="Configurar TikTok Ads"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                className="bg-black hover:bg-gray-800 text-white"
+                onClick={() => setTiktokModalOpen(true)}
+              >
+                <TikTokIcon />
+                <span className="ml-1.5">Conectar TikTok</span>
               </Button>
             )}
             <Button
@@ -442,6 +510,33 @@ const FinanceDashboardPage: React.FC = () => {
             </CollapsibleContent>
           </Collapsible>
         </section>
+
+        {/* ========== SECTION 6: TIKTOK ADS BREAKDOWN (Ad-level) ========== */}
+        {tiktokConnection.isConnected && (
+          <section>
+            <Collapsible open={tiktokBreakdownOpen} onOpenChange={setTiktokBreakdownOpen}>
+              <div className="flex items-center justify-between">
+                <CollapsibleTrigger asChild>
+                  <button className="flex items-center gap-2 group cursor-pointer">
+                    {tiktokBreakdownOpen
+                      ? <ChevronDown className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                      : <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                    }
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider group-hover:text-gray-700">
+                      TikTok Ads — Performance por creativo
+                    </h3>
+                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
+                      Ad-level
+                    </Badge>
+                  </button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent className="mt-4">
+                <TikTokAdBreakdownTable range={dateRange.current} />
+              </CollapsibleContent>
+            </Collapsible>
+          </section>
+        )}
       </div>
 
       {/* Modals */}
@@ -464,6 +559,11 @@ const FinanceDashboardPage: React.FC = () => {
         open={googleModalOpen}
         onOpenChange={setGoogleModalOpen}
         onSuccess={() => setGoogleModalOpen(false)}
+      />
+      <TikTokAdsConnectionModal
+        open={tiktokModalOpen}
+        onOpenChange={setTiktokModalOpen}
+        onSuccess={() => setTiktokModalOpen(false)}
       />
     </FinanceDashboardLayout>
   );

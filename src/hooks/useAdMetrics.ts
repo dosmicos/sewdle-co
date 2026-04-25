@@ -49,7 +49,7 @@ function calcChange(current: number, previous: number): number {
 async function fetchAdMetrics(
   orgId: string,
   dateRange: DateRange,
-  platform: 'meta' | 'google_ads'
+  platform: 'meta' | 'google_ads' | 'tiktok_ads'
 ): Promise<AdMetrics> {
   const startStr = format(dateRange.start, 'yyyy-MM-dd');
   const endStr = format(dateRange.end, 'yyyy-MM-dd');
@@ -131,7 +131,7 @@ async function fetchAdMetrics(
 export function useAdMetrics(
   currentRange: DateRange,
   previousRange: DateRange,
-  platform: 'meta' | 'google_ads' = 'meta'
+  platform: 'meta' | 'google_ads' | 'tiktok_ads' = 'meta'
 ): AdMetricsResult {
   const { currentOrganization } = useOrganization();
   const orgId = currentOrganization?.id;
