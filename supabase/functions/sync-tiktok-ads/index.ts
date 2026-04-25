@@ -37,6 +37,13 @@ const AD_METRICS = [
   "ctr",
   "conversion_rate",
   "cost_per_conversion",
+  // Purchase metrics — TikTok exposes Shopify CompletePayment events under
+  // total_purchase_* in the BASIC report (the complete_payment_* names are
+  // only available with custom EAPI configuration).
+  "total_purchase",
+  "total_purchase_value",
+  "cost_per_total_purchase",
+  "total_purchase_value_roas",
   "video_play_actions",
   "video_watched_2s",
   "video_watched_6s",
@@ -246,6 +253,14 @@ serve(async (req) => {
       AD_METRICS
     );
 
+    // Aggregate purchase totals per day from ad-level so we can merge them into
+    // ad_metrics_daily (which uses the AUCTION_ADVERTISER row that doesn't expose
+    // total_purchase* metrics).
+    const purchaseTotalsByDate = new Map<
+      string,
+      { purchases: number; conversionValue: number }
+    >();
+
     let syncedAdDays = 0;
     const adIdsSet = new Set<string>();
 
@@ -256,6 +271,23 @@ serve(async (req) => {
 
       const m = row.metrics;
       const date = row.dimensions.stat_time_day;
+      const spend = num(m.spend);
+      const purchases = int(m.total_purchase);
+      const conversionValue = num(m.total_purchase_value);
+      const roas =
+        num(m.total_purchase_value_roas) ||
+        (spend > 0 ? conversionValue / spend : 0);
+      const cpa =
+        num(m.cost_per_total_purchase) ||
+        (purchases > 0 ? spend / purchases : 0);
+
+      const existing = purchaseTotalsByDate.get(date) ?? {
+        purchases: 0,
+        conversionValue: 0,
+      };
+      existing.purchases += purchases;
+      existing.conversionValue += conversionValue;
+      purchaseTotalsByDate.set(date, existing);
 
       const { error: upErr } = await supabase
         .from("tiktok_ad_metrics_daily")
@@ -264,12 +296,12 @@ serve(async (req) => {
             organization_id: organizationId,
             tiktok_ad_id: adId,
             date,
-            spend: num(m.spend),
+            spend,
             impressions: int(m.impressions),
             clicks: int(m.clicks),
             conversions: int(m.conversion),
-            conversion_value: 0,
-            purchases: 0,
+            conversion_value: conversionValue,
+            purchases,
             video_views: int(m.video_play_actions),
             video_views_2s: int(m.video_watched_2s),
             video_views_6s: int(m.video_watched_6s),
@@ -281,8 +313,8 @@ serve(async (req) => {
             cpm: num(m.cpm),
             ctr: num(m.ctr),
             cvr: num(m.conversion_rate),
-            roas: 0,
-            cpa: 0,
+            roas,
+            cpa,
           },
           { onConflict: "organization_id,tiktok_ad_id,date" }
         );
@@ -301,6 +333,11 @@ serve(async (req) => {
       const date = row.dimensions.stat_time_day;
       const spend = num(m.spend);
 
+      const purchases = purchaseTotalsByDate.get(date)?.purchases ?? 0;
+      const conversionValue = purchaseTotalsByDate.get(date)?.conversionValue ?? 0;
+      const roas = spend > 0 ? conversionValue / spend : 0;
+      const cpa = purchases > 0 ? spend / purchases : 0;
+
       const { error: upErr } = await supabase
         .from("ad_metrics_daily")
         .upsert(
@@ -312,13 +349,13 @@ serve(async (req) => {
             impressions: int(m.impressions),
             clicks: int(m.clicks),
             conversions: int(m.conversion),
-            conversion_value: 0,
-            purchases: 0,
+            conversion_value: conversionValue,
+            purchases,
             cpc: num(m.cpc),
             cpm: num(m.cpm),
             ctr: num(m.ctr),
-            roas: 0,
-            cpa: 0,
+            roas,
+            cpa,
           },
           { onConflict: "organization_id,platform,date" }
         );
