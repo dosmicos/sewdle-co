@@ -57,6 +57,7 @@ const ContentPlannerPage = React.lazy(() => import("@/pages/ContentPlannerPage")
 const MetaAdsCallbackPage = React.lazy(() => import("@/pages/MetaAdsCallbackPage"));
 const GoogleAdsCallbackPage = React.lazy(() => import("@/pages/GoogleAdsCallbackPage"));
 const TikTokCallbackPage = React.lazy(() => import("@/pages/TikTokCallbackPage"));
+const TikTokAdsCallbackPage = React.lazy(() => import("@/pages/TikTokAdsCallbackPage"));
 const SocialAnalyticsPage = React.lazy(() => import("@/pages/SocialAnalyticsPage"));
 
 // Create QueryClient instance outside of component to prevent recreation
@@ -258,6 +259,7 @@ const FinanceAppContent = () => {
       <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
       <Route path="/google-ads-callback" element={<GoogleAdsCallbackPage />} />
       <Route path="/tiktok-callback" element={<TikTokCallbackPage />} />
+      <Route path="/tiktok-ads-callback" element={<TikTokAdsCallbackPage />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="/password-change" element={<PasswordChangePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -393,6 +395,7 @@ const AppContent = () => {
         <Route path="meta-callback" element={<MetaAdsCallbackPage />} />
         <Route path="google-ads-callback" element={<GoogleAdsCallbackPage />} />
         <Route path="tiktok-callback" element={<TikTokCallbackPage />} />
+        <Route path="tiktok-ads-callback" element={<TikTokAdsCallbackPage />} />
 
         <Route path="shopify" element={
           <PermissionRoute module="shopify" action="view">
