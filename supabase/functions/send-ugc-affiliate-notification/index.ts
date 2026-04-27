@@ -55,35 +55,35 @@ const TEMPLATE_DEFAULTS: Record<NotificationType, Setting> = {
     template_name: 'dosmicos_club_mamas_sale_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Club de Mamás Dosmicos: ¡vendiste con tu link, {{1}}! Acabas de ganar {{2}}. Tu saldo acumulado va en {{3}} y estás en el puesto #{{4}} esta semana. Sube en tu link todo el contenido que hayas creado sobre Dosmicos: {{5}}. Tu link de descuento: {{6}}',
+    sample_message: '💛 Club de Mamás Dosmicos: ¡vendiste con tu link, {{1}}! Acabas de ganar {{2}}. Tu saldo acumulado va en {{3}} y estás en el puesto #{{4}} esta semana. Sube en este link todo el contenido que hayas creado sobre Dosmicos: {{5}}. Queremos ver lo que creaste 💛',
   },
   first_sale: {
     notification_type: 'first_sale',
     template_name: 'dosmicos_club_mamas_first_sale_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Club de Mamás Dosmicos: {{1}}, ¡lograste tu primera venta con tu link! Ganaste {{2}} y tu saldo va en {{3}}. Si tienes foto, video o testimonio de lo que publicaste, súbelo en tu link: {{4}}. Tu link de descuento: {{5}}',
+    sample_message: '💛 Club de Mamás Dosmicos: {{1}}, ¡lograste tu primera venta con tu link! Ganaste {{2}} y tu saldo va en {{3}}. Si tienes foto, video o testimonio de lo que publicaste, súbelo aquí: {{4}}. Queremos ver lo que creaste 💛',
   },
   rank_top5: {
     notification_type: 'rank_top5',
     template_name: 'dosmicos_club_mamas_rank_top5_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '🏆 Club de Mamás Dosmicos: {{1}}, estás en el top 5 esta semana. Vas en el puesto #{{2}} con {{3}} en comisión. Sube en tu link tu mejor contenido de esta semana: {{4}}. Sigue compartiendo tu link de descuento: {{5}}',
+    sample_message: '🏆 Club de Mamás Dosmicos: {{1}}, estás en el top 5 esta semana. Vas en el puesto #{{2}} con {{3}} en comisión. Sube aquí tu mejor contenido de esta semana: {{4}}. Queremos ver lo que creaste 💛',
   },
   rank_proximity: {
     notification_type: 'rank_proximity',
     template_name: 'dosmicos_club_mamas_rank_proximity_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '👀 Club de Mamás Dosmicos: {{1}}, estás en el puesto #{{2}} esta semana. Te faltan aprox. {{3}} para entrar al top 5 y ya llevas {{4}} en comisión. Sube contenido nuevo en tu link: {{5}}. Tu link de descuento: {{6}}',
+    sample_message: '👀 Club de Mamás Dosmicos: {{1}}, estás en el puesto #{{2}} esta semana. Te faltan aprox. {{3}} para entrar al top 5 y ya llevas {{4}} en comisión. Sube contenido nuevo aquí: {{5}}. Queremos ver lo que creaste 💛',
   },
   weekly_challenge: {
     notification_type: 'weekly_challenge',
     template_name: 'dosmicos_club_mamas_weekly_challenge_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Reto Club de Mamás Dosmicos de la semana, {{1}}: {{2}}. Idea para crear: {{3}}. Cuando lo tengas, súbelo en tu link: {{4}}. Y compártelo con tu link de descuento: {{5}}',
+    sample_message: '💛 Reto Club de Mamás Dosmicos de la semana, {{1}}: {{2}}. Idea para crear: {{3}}. Cuando lo tengas, súbelo aquí: {{4}}. Queremos ver lo que creaste 💛',
   },
 };
 
@@ -148,8 +148,8 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
   const commission = formatCOP(numberValue(order.commission_amount));
 
   const primaryParams = notificationType === 'first_sale'
-    ? [creator.name, commission, pendingBalance, uploadLink, creatorLink]
-    : [creator.name, commission, pendingBalance, String(ranking.creatorRank || '-'), uploadLink, creatorLink];
+    ? [creator.name, commission, pendingBalance, uploadLink]
+    : [creator.name, commission, pendingBalance, String(ranking.creatorRank || '-'), uploadLink];
 
   const primaryPreview = fillSample(TEMPLATE_DEFAULTS[notificationType].sample_message || '', primaryParams);
   const primary = await maybeSendNotification(supabase, {
@@ -220,7 +220,7 @@ async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
     const link = row.link as DiscountLink;
     const creatorLink = buildCreatorLink(link);
     const uploadLink = await getOrCreateUploadLink(supabase, creator);
-    const params = [creator.name, challengeTitle, challengePrompt, uploadLink, creatorLink];
+    const params = [creator.name, challengeTitle, challengePrompt, uploadLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.weekly_challenge.sample_message || '', params);
     const result = await maybeSendNotification(supabase, {
       organizationId: org.id,
@@ -295,7 +295,7 @@ async function maybeSendRankNotification(supabase: any, args: {
   const uploadLink = await getOrCreateUploadLink(supabase, args.creator);
 
   if (creatorRank <= 5) {
-    const params = [args.creator.name, String(creatorRank), formatCOP(creatorWeekCommission), uploadLink, creatorLink];
+    const params = [args.creator.name, String(creatorRank), formatCOP(creatorWeekCommission), uploadLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.rank_top5.sample_message || '', params);
     return maybeSendNotification(supabase, {
       organizationId: args.organizationId,
@@ -313,7 +313,7 @@ async function maybeSendRankNotification(supabase: any, args: {
   }
 
   if (top5Gap !== null && top5Gap > 0 && top5Gap <= RANK_PROXIMITY_MAX_GAP_COP) {
-    const params = [args.creator.name, String(creatorRank), formatCOP(top5Gap), formatCOP(creatorWeekCommission), uploadLink, creatorLink];
+    const params = [args.creator.name, String(creatorRank), formatCOP(top5Gap), formatCOP(creatorWeekCommission), uploadLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.rank_proximity.sample_message || '', params);
     return maybeSendNotification(supabase, {
       organizationId: args.organizationId,
@@ -807,11 +807,11 @@ function fillSample(template: string, params: string[]): string {
 
 function sampleParamsFor(type: NotificationType): string[] {
   switch (type) {
-    case 'first_sale': return ['Ana', '$7.200', '$7.200', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'sale': return ['Ana', '$7.200', '$56.000', '3', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'rank_top5': return ['Ana', '3', '$56.000', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'rank_proximity': return ['Ana', '6', '$8.000', '$40.000', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'weekly_challenge': return ['Ana', '3 historias reales usando Dosmicos', 'Muestra cómo usas Dosmicos en la vida real, súbelo y cierra con tu link.', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
+    case 'first_sale': return ['Ana', '$7.200', '$7.200', 'https://upload.dosmicos.com/upload/demo'];
+    case 'sale': return ['Ana', '$7.200', '$56.000', '3', 'https://upload.dosmicos.com/upload/demo'];
+    case 'rank_top5': return ['Ana', '3', '$56.000', 'https://upload.dosmicos.com/upload/demo'];
+    case 'rank_proximity': return ['Ana', '6', '$8.000', '$40.000', 'https://upload.dosmicos.com/upload/demo'];
+    case 'weekly_challenge': return ['Ana', '3 historias reales usando Dosmicos', 'Muestra cómo usas Dosmicos en la vida real y súbelo en tu link.', 'https://upload.dosmicos.com/upload/demo'];
   }
 }
 
