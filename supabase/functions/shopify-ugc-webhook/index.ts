@@ -178,7 +178,7 @@ async function processOrder(body: string) {
     creatorId: link.creator_id,
   });
 
-  // Phase 1 dopamine loop: notify the creator via Dosmicos CMD WhatsApp templates.
+  // Phase 1 dopamine loop: notify the creator via Club de Mamás Dosmicos WhatsApp templates.
   // The notification function is safe to call before Meta templates are enabled: it logs
   // skipped_disabled/dry-run states instead of sending if settings are disabled.
   if (insertedOrder?.id) {

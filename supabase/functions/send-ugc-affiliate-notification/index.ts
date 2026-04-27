@@ -46,43 +46,44 @@ type AttributedOrder = {
 
 const DEFAULT_LANGUAGE = 'es_CO';
 const PUBLIC_LINK_BASE = 'https://ads.dosmicos.com/ugc';
+const UPLOAD_LINK_BASE = 'https://upload.dosmicos.com/upload';
 const RANK_PROXIMITY_MAX_GAP_COP = 50_000;
 
 const TEMPLATE_DEFAULTS: Record<NotificationType, Setting> = {
   sale: {
     notification_type: 'sale',
-    template_name: 'dosmicos_cmd_sale_v1',
+    template_name: 'dosmicos_club_mamas_sale_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Dosmicos CMD: ¡vendiste con tu link, {{1}}! Acabas de ganar {{2}}. Tu saldo acumulado va en {{3}} y estás en el puesto #{{4}} esta semana. Sigue compartiendo tu link: {{5}}',
+    sample_message: '💛 Club de Mamás Dosmicos: ¡vendiste con tu link, {{1}}! Acabas de ganar {{2}}. Tu saldo acumulado va en {{3}} y estás en el puesto #{{4}} esta semana. Sube el contenido que usaste o un video corto aquí para que podamos revisarlo para ADS: {{5}}. Tu link de descuento: {{6}}',
   },
   first_sale: {
     notification_type: 'first_sale',
-    template_name: 'dosmicos_cmd_first_sale_v1',
+    template_name: 'dosmicos_club_mamas_first_sale_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Dosmicos CMD: {{1}}, ¡lograste tu primera venta con tu link! Acabas de ganar {{2}} y tu saldo va en {{3}}. Esta es la prueba de que tu comunidad sí compra cuando recomiendas algo real. Comparte de nuevo tu link hoy: {{4}}',
+    sample_message: '💛 Club de Mamás Dosmicos: {{1}}, ¡lograste tu primera venta con tu link! Ganaste {{2}} y tu saldo va en {{3}}. Si tienes foto/video/testimonio de lo que publicaste, súbelo aquí para que podamos revisarlo para ADS: {{4}}. Tu link de descuento: {{5}}',
   },
   rank_top5: {
     notification_type: 'rank_top5',
-    template_name: 'dosmicos_cmd_rank_top5_v1',
+    template_name: 'dosmicos_club_mamas_rank_top5_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '🏆 Dosmicos CMD: {{1}}, estás en el top 5 esta semana. Vas en el puesto #{{2}} con {{3}} en comisión. Publica otra historia hoy y defiende tu lugar: {{4}}',
+    sample_message: '🏆 Club de Mamás Dosmicos: {{1}}, estás en el top 5 esta semana. Vas en el puesto #{{2}} con {{3}} en comisión. Sube tu mejor contenido aquí para que podamos revisarlo para ADS: {{4}}. Sigue compartiendo tu link: {{5}}',
   },
   rank_proximity: {
     notification_type: 'rank_proximity',
-    template_name: 'dosmicos_cmd_rank_proximity_v1',
+    template_name: 'dosmicos_club_mamas_rank_proximity_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '👀 Dosmicos CMD: {{1}}, estás en el puesto #{{2}} esta semana. Te faltan aprox. {{3}} para entrar al top 5. Ya llevas {{4}} en comisión. Comparte tu link hoy: {{5}}',
+    sample_message: '👀 Club de Mamás Dosmicos: {{1}}, estás en el puesto #{{2}} esta semana. Te faltan aprox. {{3}} para entrar al top 5 y ya llevas {{4}} en comisión. Sube contenido nuevo aquí: {{5}}. Tu link de descuento: {{6}}',
   },
   weekly_challenge: {
     notification_type: 'weekly_challenge',
-    template_name: 'dosmicos_cmd_weekly_challenge_v1',
+    template_name: 'dosmicos_club_mamas_weekly_challenge_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Reto Dosmicos CMD de la semana, {{1}}: {{2}}. Idea para publicar: {{3}}. Recuerda poner tu link para que tu comunidad reciba descuento y tú ganes comisión: {{4}}',
+    sample_message: '💛 Reto Club de Mamás Dosmicos de la semana, {{1}}: {{2}}. Idea para crear: {{3}}. Súbelo aquí para que podamos revisarlo para ADS: {{4}}. Y compártelo con tu link de descuento: {{5}}',
   },
 };
 
@@ -142,12 +143,13 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
 
   const ranking = await computeWeeklyRanking(supabase, order.organization_id, creator.id);
   const creatorLink = buildCreatorLink(link);
+  const uploadLink = await getOrCreateUploadLink(supabase, creator);
   const pendingBalance = formatCOP(numberValue(link.total_commission) - numberValue(link.total_paid_out));
   const commission = formatCOP(numberValue(order.commission_amount));
 
   const primaryParams = notificationType === 'first_sale'
-    ? [creator.name, commission, pendingBalance, creatorLink]
-    : [creator.name, commission, pendingBalance, String(ranking.creatorRank || '-'), creatorLink];
+    ? [creator.name, commission, pendingBalance, uploadLink, creatorLink]
+    : [creator.name, commission, pendingBalance, String(ranking.creatorRank || '-'), uploadLink, creatorLink];
 
   const primaryPreview = fillSample(TEMPLATE_DEFAULTS[notificationType].sample_message || '', primaryParams);
   const primary = await maybeSendNotification(supabase, {
@@ -164,6 +166,8 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
       shopify_order_number: order.shopify_order_number,
       order_total: numberValue(order.order_total),
       commission_amount: numberValue(order.commission_amount),
+      upload_link: uploadLink,
+      creator_link: creatorLink,
     },
   });
 
@@ -204,7 +208,7 @@ async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
   }
 
   const challengeTitle = body.challengeTitle || '3 historias reales usando Dosmicos';
-  const challengePrompt = body.challengePrompt || 'Muestra cómo usas Dosmicos en la vida real: frío, sueño, bebé que se destapa o salida familiar. Cierra con tu link.';
+  const challengePrompt = body.challengePrompt || 'Muestra cómo usas Dosmicos en la vida real: frío, sueño, bebé que se destapa o salida familiar. Súbelo a tu link de upload y compártelo con tu link de descuento.';
   const maxSend = Number(body.maxSend || 200);
   const periodStart = getBogotaWeekStartDate();
 
@@ -215,7 +219,8 @@ async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
     const creator = row.creator as Creator;
     const link = row.link as DiscountLink;
     const creatorLink = buildCreatorLink(link);
-    const params = [creator.name, challengeTitle, challengePrompt, creatorLink];
+    const uploadLink = await getOrCreateUploadLink(supabase, creator);
+    const params = [creator.name, challengeTitle, challengePrompt, uploadLink, creatorLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.weekly_challenge.sample_message || '', params);
     const result = await maybeSendNotification(supabase, {
       organizationId: org.id,
@@ -226,7 +231,7 @@ async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
       preview,
       dryRun,
       periodStart,
-      metadata: { challengeTitle, challengePrompt },
+      metadata: { challengeTitle, challengePrompt, upload_link: uploadLink, creator_link: creatorLink },
     });
     results.push({ creatorId: creator.id, name: creator.name, status: result.status, notificationId: result.notificationId, error: result.error });
   }
@@ -286,8 +291,11 @@ async function maybeSendRankNotification(supabase: any, args: {
   const { creatorRank, creatorWeekCommission, top5Gap, weekStart } = args.ranking;
   if (!creatorRank) return { status: 'skipped_no_rank' };
 
+  const creatorLink = buildCreatorLink(args.link);
+  const uploadLink = await getOrCreateUploadLink(supabase, args.creator);
+
   if (creatorRank <= 5) {
-    const params = [args.creator.name, String(creatorRank), formatCOP(creatorWeekCommission), buildCreatorLink(args.link)];
+    const params = [args.creator.name, String(creatorRank), formatCOP(creatorWeekCommission), uploadLink, creatorLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.rank_top5.sample_message || '', params);
     return maybeSendNotification(supabase, {
       organizationId: args.organizationId,
@@ -300,12 +308,12 @@ async function maybeSendRankNotification(supabase: any, args: {
       attributedOrderId: args.attributedOrderId,
       periodStart: weekStart,
       rank: creatorRank,
-      metadata: { week_commission: creatorWeekCommission },
+      metadata: { week_commission: creatorWeekCommission, upload_link: uploadLink, creator_link: creatorLink },
     });
   }
 
   if (top5Gap !== null && top5Gap > 0 && top5Gap <= RANK_PROXIMITY_MAX_GAP_COP) {
-    const params = [args.creator.name, String(creatorRank), formatCOP(top5Gap), formatCOP(creatorWeekCommission), buildCreatorLink(args.link)];
+    const params = [args.creator.name, String(creatorRank), formatCOP(top5Gap), formatCOP(creatorWeekCommission), uploadLink, creatorLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.rank_proximity.sample_message || '', params);
     return maybeSendNotification(supabase, {
       organizationId: args.organizationId,
@@ -318,7 +326,7 @@ async function maybeSendRankNotification(supabase: any, args: {
       attributedOrderId: args.attributedOrderId,
       periodStart: weekStart,
       rank: creatorRank,
-      metadata: { week_commission: creatorWeekCommission, gap_to_top5: top5Gap },
+      metadata: { week_commission: creatorWeekCommission, gap_to_top5: top5Gap, upload_link: uploadLink, creator_link: creatorLink },
     });
   }
 
@@ -729,6 +737,53 @@ async function fetchCmdCreatorsWithLinks(supabase: any, organizationId: string, 
   return rows;
 }
 
+async function getOrCreateUploadLink(supabase: any, creator: Creator): Promise<string> {
+  const now = new Date().toISOString();
+  const { data: existing, error: existingError } = await supabase
+    .from('ugc_upload_tokens')
+    .select('id, token')
+    .eq('creator_id', creator.id)
+    .eq('is_active', true)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) console.error('getOrCreateUploadLink existing error:', existingError);
+  if (existing?.token) return buildUploadLink(existing.token);
+
+  await supabase
+    .from('ugc_upload_tokens')
+    .update({ is_active: false })
+    .eq('creator_id', creator.id)
+    .eq('is_active', true);
+
+  const token = crypto.randomUUID().replaceAll('-', '').slice(0, 24);
+  const { data: created, error: createError } = await supabase
+    .from('ugc_upload_tokens')
+    .insert({
+      organization_id: creator.organization_id,
+      creator_id: creator.id,
+      token,
+      is_active: true,
+      expires_at: null,
+      max_uploads: null,
+    })
+    .select('token')
+    .single();
+
+  if (createError) {
+    console.error('getOrCreateUploadLink create error:', createError);
+    return `${UPLOAD_LINK_BASE}/pendiente`;
+  }
+
+  return buildUploadLink(created?.token || token);
+}
+
+function buildUploadLink(token: string): string {
+  return `${UPLOAD_LINK_BASE}/${token}`;
+}
+
 function buildCreatorLink(link: DiscountLink): string {
   return `${PUBLIC_LINK_BASE}/${link.redirect_token}`;
 }
@@ -752,11 +807,11 @@ function fillSample(template: string, params: string[]): string {
 
 function sampleParamsFor(type: NotificationType): string[] {
   switch (type) {
-    case 'first_sale': return ['Ana', '$7.200', '$7.200', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'sale': return ['Ana', '$7.200', '$56.000', '3', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'rank_top5': return ['Ana', '3', '$56.000', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'rank_proximity': return ['Ana', '6', '$8.000', '$40.000', 'https://ads.dosmicos.com/ugc/demo'];
-    case 'weekly_challenge': return ['Ana', '3 historias reales usando Dosmicos', 'Muestra cómo usas Dosmicos en la vida real y cierra con tu link.', 'https://ads.dosmicos.com/ugc/demo'];
+    case 'first_sale': return ['Ana', '$7.200', '$7.200', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
+    case 'sale': return ['Ana', '$7.200', '$56.000', '3', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
+    case 'rank_top5': return ['Ana', '3', '$56.000', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
+    case 'rank_proximity': return ['Ana', '6', '$8.000', '$40.000', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
+    case 'weekly_challenge': return ['Ana', '3 historias reales usando Dosmicos', 'Muestra cómo usas Dosmicos en la vida real, súbelo y cierra con tu link.', 'https://upload.dosmicos.com/upload/demo', 'https://ads.dosmicos.com/ugc/demo'];
   }
 }
 
