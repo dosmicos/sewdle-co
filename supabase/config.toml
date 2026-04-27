@@ -144,6 +144,9 @@ verify_jwt = false
 [functions.shopify-ugc-webhook]
 verify_jwt = false
 
+[functions.send-ugc-affiliate-notification]
+verify_jwt = false
+
 [functions.extract-brand]
 verify_jwt = false
 
